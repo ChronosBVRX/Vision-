@@ -44,9 +44,16 @@ const allQuery = (query, params = []) => {
 const initDB = async () => {
   await runQuery(`
     CREATE TABLE IF NOT EXISTS categories (
-      name TEXT PRIMARY KEY
+      name TEXT PRIMARY KEY,
+      type TEXT DEFAULT 'movie'
     )
   `);
+
+  try {
+    await runQuery(`ALTER TABLE categories ADD COLUMN type TEXT DEFAULT 'movie'`);
+  } catch (e) {
+    // Ignorar si la columna ya existe
+  }
 
   await runQuery(`
     CREATE TABLE IF NOT EXISTS sources (
@@ -72,10 +79,22 @@ const initDB = async () => {
       const rawData = fs.readFileSync(jsonDbPath, 'utf8');
       const jsonData = JSON.parse(rawData);
 
+      // Migrate all sources (sources, movieCatalog, seriesCatalog)
+      const allSources = [
+        ...(jsonData.sources || []),
+        ...(jsonData.movieCatalog || []),
+        ...(jsonData.seriesCatalog || [])
+      ];
+
       // Migrate Categories
       if (jsonData.categories) {
         for (const cat of jsonData.categories) {
-          await runQuery(`INSERT OR IGNORE INTO categories (name) VALUES (?)`, [cat]);
+          let catType = 'movie';
+          const firstSource = allSources.find(s => s.category === cat);
+          if (firstSource) {
+            catType = firstSource.type || 'movie';
+          }
+          await runQuery(`INSERT OR IGNORE INTO categories (name, type) VALUES (?, ?)`, [cat, catType]);
         }
       }
 

@@ -12,7 +12,7 @@ export default function Admin() {
   const [expandedCategory, setExpandedCategory] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [title, setTitle] = useState('');
-  const [type, setType] = useState('movie'); // 'movie' | 'tv' | 'series'
+  const [type, setType] = useState('movie'); // 'movie' | 'tv' | 'series' | 'anime_movie' | 'anime_series'
   const [category, setCategory] = useState('');
   const [poster, setPoster] = useState('');
   const [description, setDescription] = useState('');
@@ -21,6 +21,9 @@ export default function Admin() {
 
   // Category management state
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [categoriesDetailed, setCategoriesDetailed] = useState([]);
+  const [newCategoryType, setNewCategoryType] = useState('movie');
+  const [m3uType, setM3uType] = useState('tv');
 
   // M3U import state
   const [m3uUrl, setM3uUrl] = useState('');
@@ -38,6 +41,17 @@ export default function Admin() {
       fetchSources();
     }
   }, []);
+
+  useEffect(() => {
+    const matchingCats = categoriesDetailed.filter(c => c.type === type);
+    if (matchingCats.length > 0) {
+      if (!matchingCats.some(c => c.name === category)) {
+        setCategory(matchingCats[0].name);
+      }
+    } else {
+      setCategory('');
+    }
+  }, [type, categoriesDetailed]);
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -66,6 +80,7 @@ export default function Admin() {
       .then(data => {
         setSources(data.sources || []);
         setCategories(data.categories || []);
+        setCategoriesDetailed(data.categoriesDetailed || []);
         if (data.categories && data.categories.length > 0 && !category) {
           setCategory(data.categories[0]);
         }
@@ -177,7 +192,8 @@ export default function Admin() {
     setEditingId(null);
     setTitle('');
     setType('movie');
-    setCategory(categories[0] || '');
+    const firstMovieCat = categoriesDetailed.find(c => c.type === 'movie');
+    setCategory(firstMovieCat ? firstMovieCat.name : (categories[0] || ''));
     setPoster('');
     setDescription('');
     setTmdbId('');
@@ -192,7 +208,7 @@ export default function Admin() {
     fetch('/api/categories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newCategoryName.trim() })
+      body: JSON.stringify({ name: newCategoryName.trim(), type: newCategoryType })
     })
       .then(res => {
         if (!res.ok) throw new Error('La categoría ya existe o es inválida.');
@@ -243,7 +259,8 @@ export default function Admin() {
       body: JSON.stringify({
         url: m3uUrl || null,
         rawText: m3uRaw || null,
-        category: m3uCategory
+        category: m3uCategory,
+        type: m3uType
       })
     })
       .then(res => {
@@ -390,23 +407,34 @@ export default function Admin() {
         </button>
       </div>
 
-      {/* Tab Contents */}
-      {activeTab === 'list' && (
+          {activeTab === 'list' && (
         <div className="glass-panel form-card">
           <h3 className="section-title">Gestión de Fuentes (Agrupado por Proveedor/Página)</h3>
           <p className="text-muted" style={{ marginBottom: '16px' }}>
             Aquí puedes ver todos los elementos agrupados por su fuente de origen. Si eliminas una fuente, se borrarán todos los elementos que contiene de forma automática.
           </p>
 
-          <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '10px', marginBottom: '24px' }}>
+          <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '24px' }}>
             <input 
               type="text" 
               className="form-input" 
               placeholder="Nombre de la nueva fuente vacía (Ej: Mis Videos)"
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
-              style={{ flexGrow: 1 }}
+              style={{ flexGrow: 1, minWidth: '200px' }}
             />
+            <select
+              className="form-select"
+              value={newCategoryType}
+              onChange={(e) => setNewCategoryType(e.target.value)}
+              style={{ width: '220px' }}
+            >
+              <option value="movie">Películas (Cine)</option>
+              <option value="tv">Canales en Vivo (TV)</option>
+              <option value="series">Series de TV</option>
+              <option value="anime_movie">Anime (Películas)</option>
+              <option value="anime_series">Anime (Series)</option>
+            </select>
             <button type="submit" className="btn btn-primary">
               <Plus size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
               Crear Fuente Vacía
@@ -414,77 +442,101 @@ export default function Admin() {
           </form>
 
           <div className="admin-table-container">
-            {categories.length === 0 ? (
+            {categoriesDetailed.length === 0 ? (
               <p className="text-muted p-4 text-center">No hay fuentes cargadas aún.</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {categories.map((catName, i) => {
-                  const itemsInCat = sources.filter(s => s.category === catName);
-                  const isExpanded = expandedCategory === catName;
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {[
+                  { id: 'movie', label: '🎥 Películas (Cine)', color: '#3b82f6' },
+                  { id: 'series', label: '🎬 Series de TV', color: '#10b981' },
+                  { id: 'tv', label: '📺 Canales en Vivo (TV)', color: '#a855f7' },
+                  { id: 'anime', label: '🌸 Anime', color: '#ec4899', types: ['anime_movie', 'anime_series'] },
+                ].map(sec => {
+                  const catsInSec = categoriesDetailed.filter(c => {
+                    if (sec.types) return sec.types.includes(c.type);
+                    return c.type === sec.id;
+                  });
+
+                  if (catsInSec.length === 0) return null;
+
                   return (
-                    <div key={i} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <h4 style={{ margin: 0, color: '#fff' }}>{catName}</h4>
-                          <span className="card-badge" style={{ background: '#333' }}>{itemsInCat.length} elementos</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                          <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }} onClick={() => setExpandedCategory(isExpanded ? null : catName)}>
-                            {isExpanded ? 'Ocultar Elementos' : 'Ver Elementos'}
-                          </button>
-                          <button className="btn delete" style={{ padding: '6px 12px', fontSize: '0.8rem', background: 'rgba(255, 59, 48, 0.2)', color: '#ff3b30' }} onClick={() => handleDeleteCategory(catName)}>
-                            <Trash2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> Eliminar Fuente
-                          </button>
-                        </div>
+                    <div key={sec.id} style={{ borderLeft: `4px solid ${sec.color}`, paddingLeft: '12px', marginBottom: '10px' }}>
+                      <h4 style={{ color: sec.color, margin: '0 0 12px 0', fontSize: '1.1rem', fontWeight: 'bold' }}>{sec.label}</h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {catsInSec.map((cat, i) => {
+                          const itemsInCat = sources.filter(s => s.category === cat.name);
+                          const isExpanded = expandedCategory === cat.name;
+                          return (
+                            <div key={i} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                  <h5 style={{ margin: 0, color: '#fff', fontSize: '1rem' }}>{cat.name}</h5>
+                                  <span className="card-badge" style={{ background: 'rgba(255,255,255,0.1)', color: '#ccc' }}>{itemsInCat.length} elementos</span>
+                                  <span className="card-badge" style={{ background: `${sec.color}22`, color: sec.color, border: `1px solid ${sec.color}44` }}>
+                                    {cat.type === 'anime_movie' ? 'Anime (Cine)' : cat.type === 'anime_series' ? 'Anime (Serie)' : cat.type === 'movie' ? 'Cine' : cat.type === 'tv' ? 'TV' : 'Serie'}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                  <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }} onClick={() => setExpandedCategory(isExpanded ? null : cat.name)}>
+                                    {isExpanded ? 'Ocultar Elementos' : 'Ver Elementos'}
+                                  </button>
+                                  <button className="btn delete" style={{ padding: '6px 12px', fontSize: '0.8rem', background: 'rgba(255, 59, 48, 0.1)', color: '#ff3b30', border: '1px solid rgba(255, 59, 48, 0.2)' }} onClick={() => handleDeleteCategory(cat.name)}>
+                                    <Trash2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> Eliminar Fuente
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {isExpanded && (
+                                <div style={{ marginTop: '16px' }}>
+                                  {itemsInCat.length === 0 ? (
+                                    <p className="text-muted" style={{ fontSize: '0.9rem', margin: 0 }}>Esta fuente está vacía.</p>
+                                  ) : (
+                                    <table className="admin-table" style={{ fontSize: '0.9rem' }}>
+                                      <thead>
+                                        <tr>
+                                          <th>Poster</th>
+                                          <th>Título</th>
+                                          <th>Tipo</th>
+                                          <th>Servidores</th>
+                                          <th>Acciones</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {itemsInCat.map((item) => (
+                                          <tr key={item.id}>
+                                            <td>
+                                              <img src={item.poster} alt="" className="admin-thumb" style={{ width: '40px', height: '60px', objectFit: 'cover', borderRadius: '4px' }} />
+                                            </td>
+                                            <td style={{ fontWeight: 600, color: '#fff' }}>{item.title}</td>
+                                            <td>
+                                              <span className={`card-badge ${item.type}`}>
+                                                {item.type === 'tv' ? 'TV' : item.type === 'series' ? 'Serie' : item.type === 'movie' ? 'Cine' : item.type === 'anime_movie' ? 'Anime Cine' : 'Anime Serie'}
+                                              </span>
+                                            </td>
+                                            <td>{item.streams ? item.streams.length : 0}</td>
+                                            <td>
+                                              <div style={{ display: 'flex', gap: '10px' }}>
+                                                <button className="action-btn" onClick={() => handleEditSource(item)} title="Editar">
+                                                  <Edit2 size={16} />
+                                                </button>
+                                                <button className="action-btn delete" onClick={() => handleDeleteSource(item.id)} title="Eliminar">
+                                                  <Trash2 size={16} />
+                                                </button>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                      
-                      {isExpanded && (
-                        <div style={{ marginTop: '16px' }}>
-                          {itemsInCat.length === 0 ? (
-                            <p className="text-muted" style={{ fontSize: '0.9rem' }}>Esta fuente está vacía.</p>
-                          ) : (
-                            <table className="admin-table" style={{ fontSize: '0.9rem' }}>
-                              <thead>
-                                <tr>
-                                  <th>Poster</th>
-                                  <th>Título</th>
-                                  <th>Tipo</th>
-                                  <th>Servidores</th>
-                                  <th>Acciones</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {itemsInCat.map((item) => (
-                                  <tr key={item.id}>
-                                    <td>
-                                      <img src={item.poster} alt="" className="admin-thumb" style={{ width: '40px', height: '60px', objectFit: 'cover', borderRadius: '4px' }} />
-                                    </td>
-                                    <td style={{ fontWeight: 600, color: '#fff' }}>{item.title}</td>
-                                    <td>
-                                      <span className={`card-badge ${item.type}`}>
-                                        {item.type === 'tv' ? 'TV' : item.type === 'series' ? 'Serie' : 'Cine'}
-                                      </span>
-                                    </td>
-                                    <td>{item.streams ? item.streams.length : 0}</td>
-                                    <td>
-                                      <div style={{ display: 'flex', gap: '10px' }}>
-                                        <button className="action-btn" onClick={() => handleEditSource(item)} title="Editar">
-                                          <Edit2 size={16} />
-                                        </button>
-                                        <button className="action-btn delete" onClick={() => handleDeleteSource(item.id)} title="Eliminar">
-                                          <Trash2 size={16} />
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          )}
-                        </div>
-                      )}
                     </div>
-                  )
+                  );
                 })}
               </div>
             )}
@@ -512,6 +564,8 @@ export default function Admin() {
                     <option value="movie">Película</option>
                     <option value="tv">Canal de TV</option>
                     <option value="series">Serie de TV</option>
+                    <option value="anime_movie">Anime (Película)</option>
+                    <option value="anime_series">Anime (Serie)</option>
                   </select>
                 </div>
 
@@ -522,10 +576,25 @@ export default function Admin() {
                     value={category} 
                     onChange={(e) => setCategory(e.target.value)}
                   >
-                    {categories.map((cat, i) => (
-                      <option key={i} value={cat}>{cat}</option>
-                    ))}
+                    {categoriesDetailed.filter(cat => {
+                      if (editingId && cat.name === category) return true;
+                      return cat.type === type;
+                    }).length === 0 ? (
+                      <option value="">No hay fuentes de este tipo</option>
+                    ) : (
+                      categoriesDetailed.filter(cat => {
+                        if (editingId && cat.name === category) return true;
+                        return cat.type === type;
+                      }).map((cat, i) => (
+                        <option key={i} value={cat.name}>{cat.name}</option>
+                      ))
+                    )}
                   </select>
+                  {categoriesDetailed.filter(c => c.type === type).length === 0 && (
+                    <p style={{ color: '#ff453a', fontSize: '0.8rem', marginTop: '4px', margin: 0 }}>
+                      ⚠️ No hay ninguna fuente para este tipo. Ve a la pestaña "Gestión de Fuentes" para crear una.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -699,16 +768,34 @@ export default function Admin() {
           </p>
 
           <form onSubmit={handleImportM3U}>
-            <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label className="form-label">Nombre de la Fuente Destino</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={m3uCategory} 
-                onChange={(e) => setM3uCategory(e.target.value)}
-                placeholder="Ej: IPTV Latino"
-              />
-              <p className="text-muted" style={{ fontSize: '0.75rem' }}>
+            <div className="form-row" style={{ marginBottom: '16px' }}>
+              <div className="form-group">
+                <label className="form-label">Nombre de la Fuente Destino</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={m3uCategory} 
+                  onChange={(e) => setM3uCategory(e.target.value)}
+                  placeholder="Ej: IPTV Latino"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Tipo de Contenido de la Lista</label>
+                <select 
+                  className="form-select" 
+                  value={m3uType} 
+                  onChange={(e) => setM3uType(e.target.value)}
+                >
+                  <option value="tv">Canales de TV en Vivo</option>
+                  <option value="movie">Películas (Cine)</option>
+                  <option value="series">Series de TV</option>
+                  <option value="anime_movie">Anime (Películas)</option>
+                  <option value="anime_series">Anime (Series)</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '-8px' }}>
                 Si la lista contiene la etiqueta <code>group-title="..."</code>, se intentará usar el grupo original del canal en lugar de esta fuente por defecto.
               </p>
             </div>

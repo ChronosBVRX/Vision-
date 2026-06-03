@@ -100,11 +100,11 @@ let memDB = { categories: [], sources: [], movieCatalog: [], seriesCatalog: [], 
 // Inicializar SQLite y cargar en memoria para endpoints legacy
 async function initializeDB() {
   await initDB();
-  const cats = await allQuery('SELECT name FROM categories');
+  const cats = await allQuery('SELECT name, type FROM categories');
   const srcs = await allQuery('SELECT * FROM sources');
   const sets = await allQuery('SELECT * FROM settings');
 
-  memDB.categories = cats.map(c => c.name);
+  memDB.categories = cats.map(c => ({ name: c.name, type: c.type || 'movie' }));
   
   memDB.sources = [];
   memDB.movieCatalog = [];
@@ -152,7 +152,9 @@ function writeDB(data) {
   (async () => {
     try {
       for (const cat of data.categories || []) {
-        await runQuery(`INSERT OR IGNORE INTO categories (name) VALUES (?)`, [cat]);
+        const catName = typeof cat === 'string' ? cat : cat.name;
+        const catType = typeof cat === 'string' ? 'movie' : cat.type;
+        await runQuery(`INSERT OR REPLACE INTO categories (name, type) VALUES (?, ?)`, [catName, catType]);
       }
       
       const allSources = [
@@ -228,14 +230,14 @@ async function refreshLiveTVChannels() {
     
     // Track existing channels to avoid duplicates
     const existingIds = new Set(db.sources.map(s => s.id));
-    const existingCategories = new Set(db.categories);
+    const existingCategories = new Set(db.categories.map(c => typeof c === 'string' ? c : c.name));
 
     let newChannelsAdded = 0;
 
     for (const channel of parsedChannels) {
       // Add category if missing
       if (!existingCategories.has(channel.category)) {
-        db.categories.push(channel.category);
+        db.categories.push({ name: channel.category, type: 'tv' });
         existingCategories.add(channel.category);
       }
 
@@ -320,7 +322,7 @@ async function refreshMoviesAndSeries() {
     
     // Track existing items to avoid duplicates or update streams
     const existingMap = new Map(db.sources.map(s => [s.id, s]));
-    const existingCategories = new Set(db.categories);
+    const existingCategories = new Set(db.categories.map(c => typeof c === 'string' ? c : c.name));
 
     let newItemsAdded = 0;
     let itemsUpdated = 0;
@@ -328,7 +330,7 @@ async function refreshMoviesAndSeries() {
     for (const item of finalVODList) {
       // Add category if missing
       if (!existingCategories.has(item.category)) {
-        db.categories.push(item.category);
+        db.categories.push({ name: item.category, type: item.type || 'movie' });
         existingCategories.add(item.category);
       }
 
@@ -511,9 +513,22 @@ app.get('/api/sources', (req, res) => {
   }
 
   if (!includeCatalog) {
+    const categoriesSet = new Set();
+    (db.categories || []).forEach(c => {
+      categoriesSet.add(typeof c === 'string' ? c : c.name);
+    });
+    const categoriesDetailed = Array.from(categoriesSet).map(name => {
+      const found = (db.categories || []).find(c => (typeof c === 'string' ? c : c.name) === name);
+      return {
+        name,
+        type: found ? (typeof found === 'string' ? 'movie' : found.type) : 'movie'
+      };
+    });
     return res.json({
-      ...db,
-      sources: customSources
+      categories: Array.from(categoriesSet),
+      categoriesDetailed,
+      sources: customSources,
+      settings: db.settings
     });
   }
 
@@ -535,15 +550,27 @@ app.get('/api/sources', (req, res) => {
   ];
 
   // Compile a list of unique categories
-  const categoriesSet = new Set(db.categories || []);
+  const categoriesSet = new Set();
+  (db.categories || []).forEach(c => {
+    categoriesSet.add(typeof c === 'string' ? c : c.name);
+  });
   combinedSources.forEach(s => {
     if (s.category) {
       categoriesSet.add(s.category);
     }
   });
 
+  const categoriesDetailed = Array.from(categoriesSet).map(name => {
+    const found = (db.categories || []).find(c => (typeof c === 'string' ? c : c.name) === name);
+    return {
+      name,
+      type: found ? (typeof found === 'string' ? 'movie' : found.type) : 'movie'
+    };
+  });
+
   res.json({
     categories: Array.from(categoriesSet),
+    categoriesDetailed,
     sources: combinedSources,
     settings: db.settings
   });
@@ -670,19 +697,21 @@ app.delete('/api/sources/:id', (req, res) => {
 // Categories
 app.post('/api/categories', (req, res) => {
   const db = readDB();
-  const { name } = req.body;
+  const { name, type } = req.body;
 
   if (!name) {
     return res.status(400).json({ error: 'Category name is required' });
   }
 
-  if (db.categories.includes(name)) {
+  const exists = (db.categories || []).some(c => (typeof c === 'string' ? c : c.name).toLowerCase() === name.toLowerCase());
+  if (exists) {
     return res.status(400).json({ error: 'Category already exists' });
   }
 
-  db.categories.push(name);
+  db.categories.push({ name, type: type || 'movie' });
   writeDB(db);
-  res.status(201).json(db.categories);
+  const flatCats = db.categories.map(c => typeof c === 'string' ? c : c.name);
+  res.status(201).json(flatCats);
 });
 
 app.delete('/api/categories', (req, res) => {
@@ -694,7 +723,7 @@ app.delete('/api/categories', (req, res) => {
   }
 
   // Remove category from categories array
-  db.categories = db.categories.filter(c => c !== name);
+  db.categories = db.categories.filter(c => (typeof c === 'string' ? c : c.name) !== name);
   
   // Remove all sources that belong to this category
   db.sources = db.sources.filter(s => s.category !== name);
@@ -722,7 +751,8 @@ app.delete('/api/categories', (req, res) => {
   );
 
   writeDB(db);
-  res.json(db.categories);
+  const flatCats = db.categories.map(c => typeof c === 'string' ? c : c.name);
+  res.json(flatCats);
 });
 
 // Settings Endpoints
@@ -1174,7 +1204,9 @@ app.post('/api/seed-movies', async (req, res) => {
         { name: '2Embed', url: `https://www.2embed.cc/embed/${tmdbId}`, resolver: 'iframe' }
       ]
     };
-    if (!db.categories.includes(category)) db.categories.push(category);
+    if (!db.categories.some(c => (typeof c === 'string' ? c : c.name) === category)) {
+      db.categories.push({ name: category, type: type });
+    }
     db.sources.push(source);
     existingIds.add(id);
     added++;
@@ -1212,8 +1244,8 @@ app.post('/api/seed-plutotv-live', async (req, res) => {
 
     for (let source of newSources) {
       if (!existingIds.has(source.id)) {
-        if (!db.categories.includes(source.category)) {
-          db.categories.push(source.category);
+        if (!db.categories.some(c => (typeof c === 'string' ? c : c.name) === source.category)) {
+          db.categories.push({ name: source.category, type: 'tv' });
         }
         db.sources.push(source);
         existingIds.add(source.id);
@@ -1242,8 +1274,8 @@ app.post('/api/seed-plutotv-vod', async (req, res) => {
 
     for (let source of newSources) {
       if (!existingIds.has(source.id)) {
-        if (!db.categories.includes(source.category)) {
-          db.categories.push(source.category);
+        if (!db.categories.some(c => (typeof c === 'string' ? c : c.name) === source.category)) {
+          db.categories.push({ name: source.category, type: source.type || 'movie' });
         }
         db.sources.push(source);
         existingIds.add(source.id);
@@ -1743,8 +1775,9 @@ app.get('/api/proxy', async (req, res) => {
 
 // Import M3U playlists
 app.post('/api/import-m3u', async (req, res) => {
-  const { url, rawText, category } = req.body;
+  const { url, rawText, category, type } = req.body;
   let m3uContent = '';
+  const itemType = type || 'tv';
 
   if (url) {
     try {
@@ -1763,8 +1796,8 @@ app.post('/api/import-m3u', async (req, res) => {
   const db = readDB();
 
   // Ensure category exists
-  if (!db.categories.includes(targetCategory)) {
-    db.categories.push(targetCategory);
+  if (!db.categories.some(c => (typeof c === 'string' ? c : c.name) === targetCategory)) {
+    db.categories.push({ name: targetCategory, type: itemType });
   }
 
   // Simple M3U parser
@@ -1777,10 +1810,10 @@ app.post('/api/import-m3u', async (req, res) => {
     if (line.startsWith('#EXTINF:')) {
       currentSource = {
         id: 'iptv_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
-        type: 'tv',
+        type: itemType,
         category: targetCategory,
         poster: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=400',
-        description: 'Canal de TV importado vía playlist M3U.'
+        description: itemType === 'tv' ? 'Canal de TV importado vía playlist M3U.' : 'Contenido importado vía playlist M3U.'
       };
 
       const logoMatch = line.match(/tvg-logo="([^"]+)"/i);
@@ -1793,8 +1826,8 @@ app.post('/api/import-m3u', async (req, res) => {
         const groupName = groupMatch[1].trim();
         if (groupName) {
           currentSource.category = groupName;
-          if (!db.categories.includes(groupName)) {
-            db.categories.push(groupName);
+          if (!db.categories.some(c => (typeof c === 'string' ? c : c.name) === groupName)) {
+            db.categories.push({ name: groupName, type: itemType });
           }
         }
       }
