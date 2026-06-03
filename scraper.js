@@ -910,31 +910,40 @@ const CATALOG_SITES = [
     name: 'PelisPlus',
     movieUrls: ['https://www.pelisplushd.la/peliculas/', 'https://www.pelisplushd.la/estrenos/'],
     seriesUrls: ['https://www.pelisplushd.la/series/'],
-    pageFn: (base, p) => `${base}page/${p}/`
+    pageFn: (base, p) => `${base}?page/${p}`,
+    genreSelector: '.side-nav-menu a[href*="/generos/"]',
+    genreBase: 'https://www.pelisplushd.la'
   },
   {
     name: 'VerPelisTV',
     movieUrls: ['https://verpelistv.com/peliculas/', 'https://verpelistv.com/inicio/'],
     seriesUrls: ['https://verpelistv.com/series/'],
-    pageFn: (base, p) => `${base}page/${p}/`
+    pageFn: (base, p) => `${base}page/${p}/`,
+    genreSelector: 'a[href*="/genero/"], a[href*="/genre/"]',
+    genreBase: 'https://verpelistv.com'
   },
   {
     name: 'PelisOnline',
     movieUrls: ['https://pelisonline.ws/'],
-    seriesUrls: [], // PelisOnline has no series
-    pageFn: (base, p) => `${base}page/${p}/`
+    seriesUrls: [],
+    pageFn: (base, p) => `${base}page/${p}/`,
+    genreSelector: null
   },
   {
     name: 'PoseidonHD',
     movieUrls: ['https://www.poseidonhd2.co/peliculas/'],
     seriesUrls: ['https://www.poseidonhd2.co/series/'],
-    pageFn: (base, p) => `${base}page/${p}/`
+    pageFn: (base, p) => `${base}page/${p}/`,
+    genreSelector: 'a[href*="/genero/"]',
+    genreBase: 'https://www.poseidonhd2.co'
   },
   {
     name: 'Cuevana',
     movieUrls: ['https://cuevana3x.xyz/peliculas/'],
     seriesUrls: ['https://cuevana3x.xyz/series/'],
-    pageFn: (base, p) => `${base}page/${p}/`
+    pageFn: (base, p) => `${base}page/${p}/`,
+    genreSelector: 'nav a[href*="/genero/"], a[href*="/genero/"]',
+    genreBase: 'https://cuevana3x.xyz'
   }
 ];
 
@@ -961,6 +970,29 @@ function normalizeGenre(g) {
   if (!g) return null;
   const lower = g.toLowerCase().trim();
   return GENRE_MAP[lower] || (g.length > 1 ? g.charAt(0).toUpperCase() + g.slice(1) : null);
+}
+
+async function discoverGenreUrls(page, site) {
+  if (!site.genreSelector || !site.genreBase) return [];
+  try {
+    const genres = await page.evaluate((sel, base) => {
+      const links = [];
+      document.querySelectorAll(sel).forEach(a => {
+        let href = a.getAttribute('href');
+        if (!href) return;
+        if (href.startsWith('/')) href = base + href;
+        if (href.includes('/genero') || href.includes('/genre')) {
+          links.push(href);
+        }
+      });
+      return [...new Set(links)];
+    }, site.genreSelector, site.genreBase);
+    console.log(`[CatalogScraper] ${site.name}: ${genres.length} generos descubiertos`);
+    return genres;
+  } catch (e) {
+    console.log(`[CatalogScraper] ${site.name}: Error descubriendo generos: ${e.message.slice(0, 60)}`);
+    return [];
+  }
 }
 
 async function scrapeItemsFromPage(page, url, type, siteName) {
@@ -1155,7 +1187,7 @@ async function scrapeItemsFromPage(page, url, type, siteName) {
         });
       }
 
-      return res.slice(0, 30);
+      return res;
     }, siteName, type);
 
     for (const item of raw) {
@@ -1198,12 +1230,13 @@ async function scrapeItemsFromPage(page, url, type, siteName) {
   return items;
 }
 
-async function scrapeMovieCatalog(maxPagesPerUrl = 3) {
+async function scrapeMovieCatalog(maxPagesPerUrl = 5) {
   console.log('[CatalogScraper] ▶ Iniciando scraping de catálogo de películas y series...');
   let browser = null;
   const allMovies = [];
   const allSeries = [];
   const seenIds = new Set();
+  const scrapedGenreUrls = new Set();
 
   const addUnique = (items) => {
     for (const item of items) {
@@ -1219,6 +1252,25 @@ async function scrapeMovieCatalog(maxPagesPerUrl = 3) {
       }
     }
   };
+
+  async function scrapePagesForUrl(page, url, type, siteName, pageFn) {
+    let emptyPages = 0;
+    for (let p = 1; p <= maxPagesPerUrl; p++) {
+      const pageUrl = p === 1 ? url : pageFn(url, p);
+      const items = await scrapeItemsFromPage(page, pageUrl, type, siteName);
+      addUnique(items);
+      if (items.length === 0) {
+        emptyPages++;
+        console.log(`[CatalogScraper] ⚠ ${siteName} ${type}: pagina ${p} vacia (${emptyPages} consecutivas)`);
+        if (emptyPages >= 2) {
+          console.log(`[CatalogScraper] ⚠ ${siteName} ${type}: 2 paginas consecutivas vacias, cortando paginacion`);
+          break;
+        }
+      } else {
+        emptyPages = 0;
+      }
+    }
+  }
 
   try {
     browser = await puppeteer.launch({
@@ -1237,27 +1289,32 @@ async function scrapeMovieCatalog(maxPagesPerUrl = 3) {
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'es-MX,es;q=0.9,en;q=0.5' });
 
     for (const site of CATALOG_SITES) {
-      // Scrape movies
+      let discoveredGenres = [];
+
+      // Scrape movie pages
       for (const baseUrl of site.movieUrls) {
-        for (let p = 1; p <= maxPagesPerUrl; p++) {
-          if (site.name === 'PelisOnline' && p > 1) break; // PelisOnline doesn't support page pagination
-          
-          const url = p === 1 ? baseUrl : site.pageFn(baseUrl, p);
-          const items = await scrapeItemsFromPage(page, url, 'movie', site.name);
-          addUnique(items);
-          if (items.length < 3) break;
+        await scrapePagesForUrl(page, baseUrl, 'movie', site.name, site.pageFn);
+        // Descubrir generos desde la primera pagina del primer URL
+        if (discoveredGenres.length === 0) {
+          discoveredGenres = await discoverGenreUrls(page, site);
         }
       }
 
-      // Scrape series
+      // Scrape series pages
       for (const baseUrl of site.seriesUrls) {
-        if (site.name === 'PelisOnline') continue; // PelisOnline has no series
-        
-        for (let p = 1; p <= maxPagesPerUrl; p++) {
-          const url = p === 1 ? baseUrl : site.pageFn(baseUrl, p);
-          const items = await scrapeItemsFromPage(page, url, 'series', site.name);
-          addUnique(items);
-          if (items.length < 3) break;
+        await scrapePagesForUrl(page, baseUrl, 'series', site.name, site.pageFn);
+        if (discoveredGenres.length === 0) {
+          discoveredGenres = await discoverGenreUrls(page, site);
+        }
+      }
+
+      // Scrape genre/category pages
+      if (discoveredGenres.length > 0) {
+        console.log(`[CatalogScraper] ${site.name}: Scrapeando ${discoveredGenres.length} paginas de genero...`);
+        for (const genreUrl of discoveredGenres) {
+          if (scrapedGenreUrls.has(genreUrl)) continue;
+          scrapedGenreUrls.add(genreUrl);
+          await scrapePagesForUrl(page, genreUrl, 'movie', site.name, site.pageFn);
         }
       }
     }
@@ -1740,7 +1797,7 @@ async function scrapeEpisodesFromSeriesPage(seriesUrl, siteName) {
 // ANIME SCRAPER: AnimeFLV.net & AnimeFLV.one
 // ================================================================
 
-async function scrapeAnimeCatalog(maxPages = 2) {
+async function scrapeAnimeCatalog(maxPages = 3) {
   console.log('[AnimeScraper] ▶ Iniciando scraping de Anime (animeflv.net y animeflv.one)...');
   let browser = null;
   const animeMap = new Map();

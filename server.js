@@ -1357,7 +1357,7 @@ async function runCatalogSync() {
   catalogSyncInProgress = true;
   console.log('[CatalogWorker] Iniciando sincronización de catálogo...');
   try {
-    const result = await scrapeMovieCatalog(3);
+    const result = await scrapeMovieCatalog(5);
     const db = readDB();
     if (!db.movieCatalog) db.movieCatalog = [];
     if (!db.seriesCatalog) db.seriesCatalog = [];
