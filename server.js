@@ -86,7 +86,8 @@ const {
   scrapePlutoTVLive,
   scrapePlutoTVOnDemand,
   scrapeAnimeCatalog,
-  scrapeAnimeEpisodesFromSeriesPage
+  scrapeAnimeEpisodesFromSeriesPage,
+  scrapePlanetaPlayLive
 } = require('./scraper');
 
 const { db, initDB, allQuery, getQuery, runQuery } = require('./server/db/database');
@@ -1236,6 +1237,36 @@ app.post('/api/seed-plutotv-live', async (req, res) => {
     const newSources = await scrapePlutoTVLive();
     if (!newSources || newSources.length === 0) {
       return res.status(500).json({ success: false, message: 'No se encontraron canales de Pluto TV en vivo.' });
+    }
+
+    const db = readDB();
+    const existingIds = new Set(db.sources.map(s => s.id));
+    let added = 0;
+
+    for (let source of newSources) {
+      if (!existingIds.has(source.id)) {
+        if (!db.categories.some(c => (typeof c === 'string' ? c : c.name) === source.category)) {
+          db.categories.push({ name: source.category, type: 'tv' });
+        }
+        db.sources.push(source);
+        existingIds.add(source.id);
+        added++;
+      }
+    }
+
+    writeDB(db);
+    res.json({ success: true, added, total: db.sources.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/seed-planetaplay-live', async (req, res) => {
+  try {
+    const newSources = await scrapePlanetaPlayLive();
+    if (!newSources || newSources.length === 0) {
+      return res.status(500).json({ success: false, message: 'No se encontraron canales de Planeta Play en vivo.' });
     }
 
     const db = readDB();

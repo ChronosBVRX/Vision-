@@ -1406,6 +1406,141 @@ async function scrapePlutoTVOnDemand() {
     return [];
   }
 }
+
+async function scrapePlanetaPlayLive() {
+  console.log(`[PlanetaPlay] Iniciando importacion de TV en vivo...`);
+  let browser = null;
+  try {
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
+    });
+
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    await page.setViewport({ width: 1280, height: 800 });
+
+    console.log(`[PlanetaPlay] Navegando a la pagina principal...`);
+    await page.goto('https://planetaplay.com/', {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+
+    console.log(`[PlanetaPlay] Buscando URL del bundle JS...`);
+    const jsSrc = await page.evaluate(() => {
+      const scripts = Array.from(document.querySelectorAll('script'));
+      const mainScript = scripts.find(s => s.src && s.src.includes('/assets/index-') && s.src.endsWith('.js'));
+      return mainScript ? mainScript.src : null;
+    });
+
+    if (!jsSrc) {
+      throw new Error("No se encontro el script bundle de React/Vite.");
+    }
+    console.log(`[PlanetaPlay] Bundle encontrado: ${jsSrc}`);
+
+    console.log(`[PlanetaPlay] Descargando contenido del bundle...`);
+    const jsContent = await page.evaluate(async (url) => {
+      const resp = await fetch(url);
+      return resp.text();
+    }, jsSrc);
+
+    console.log(`[PlanetaPlay] Bundle descargado (Longitud: ${jsContent.length} bytes). Analizando canales...`);
+
+    let searchPos = 0;
+    let tvItems = [];
+
+    while (true) {
+      const index = jsContent.indexOf('"updatedAt"', searchPos);
+      if (index === -1) break;
+
+      let startQuote = -1;
+      for (let i = index - 1; i >= index - 1000 && i >= 0; i--) {
+        const char = jsContent[i];
+        if (char === '`') {
+          startQuote = i;
+          break;
+        }
+        if (char === '"' && jsContent[i+1] === '{') {
+          startQuote = i;
+          break;
+        }
+      }
+
+      if (startQuote !== -1) {
+        const quoteChar = jsContent[startQuote];
+        let endQuote = -1;
+        for (let i = startQuote + 1; i < jsContent.length; i++) {
+          if (jsContent[i] === quoteChar && jsContent[i-1] !== '\\') {
+            endQuote = i;
+            break;
+          }
+        }
+
+        if (endQuote !== -1) {
+          const jsonStr = jsContent.slice(startQuote + 1, endQuote);
+          try {
+            const unescaped = jsonStr.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t');
+            const parsed = JSON.parse(unescaped);
+            if (parsed.items && Array.isArray(parsed.items)) {
+              const hasTv = parsed.items.some(item => item.type === 'tv');
+              if (hasTv) {
+                tvItems = parsed.items.filter(item => item.type === 'tv');
+                console.log(`[PlanetaPlay] Se encontro el bloque de canales de TV en el bundle (canales: ${tvItems.length}).`);
+                break;
+              }
+            }
+          } catch (e) {
+            // Ignorar y seguir buscando
+          }
+        }
+      }
+      searchPos = index + 11;
+    }
+
+    if (tvItems.length === 0) {
+      throw new Error("No se encontraron canales de TV validos en el bundle JS.");
+    }
+
+    const importedSources = [];
+
+    for (const item of tvItems) {
+      if (!item.enabled) continue;
+
+      const categoryName = item.meta ? `Planeta Play - ${item.meta}` : 'Planeta Play - Live';
+      
+      importedSources.push({
+        id: `planetaplay_${item.id}`,
+        title: item.name,
+        type: 'tv',
+        category: categoryName,
+        poster: item.image || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=400',
+        description: item.description || `Canal de TV en vivo de la categoria Planeta Play - ${item.meta || 'General'}.`,
+        streams: [{
+          name: 'Planeta Play Stream',
+          url: item.url,
+          resolver: 'direct'
+        }]
+      });
+    }
+
+    console.log(`[PlanetaPlay] Importacion completada! Se procesaron ${importedSources.length} canales en vivo.`);
+    return importedSources;
+
+  } catch (err) {
+    console.error(`[PlanetaPlay] Error scrapeando TV en vivo: ${err.message}`);
+    return [];
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+}
+
 // Merge catalog exports into the main module.exports
 Object.assign(module.exports, {
   searchBraveForIPTVPlaylists,
@@ -1420,7 +1555,8 @@ Object.assign(module.exports, {
   scrapePlutoTVLive,
   scrapePlutoTVOnDemand,
   scrapeAnimeCatalog,
-  scrapeAnimeEpisodesFromSeriesPage
+  scrapeAnimeEpisodesFromSeriesPage,
+  scrapePlanetaPlayLive
 });
 
 /**

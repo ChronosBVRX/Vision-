@@ -98,12 +98,7 @@ const initDB = async () => {
         }
       }
 
-      // Migrate all sources (sources, movieCatalog, seriesCatalog)
-      const allSources = [
-        ...(jsonData.sources || []),
-        ...(jsonData.movieCatalog || []),
-        ...(jsonData.seriesCatalog || [])
-      ];
+
 
       for (const item of allSources) {
         // Ensure ID

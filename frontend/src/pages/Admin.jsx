@@ -892,6 +892,28 @@ export default function Admin() {
               >
                 Importar Pluto TV (Live TV)
               </button>
+              <button 
+                type="button" 
+                className="btn btn-secondary focusable"
+                style={{ width: '100%', marginTop: '8px', background: 'rgba(168,85,247,0.1)', color: '#a855f7', borderColor: '#a855f7' }}
+                onClick={() => {
+                  showAlert('info', 'Importando canales de Planeta Play en vivo...');
+                  fetch('/api/seed-planetaplay-live', { method: 'POST' })
+                    .then(res => res.json())
+                    .then(data => {
+                      if (data.success) {
+                        showAlert('success', `¡Importación exitosa! Se agregaron ${data.added} canales de Planeta Play.`);
+                      } else {
+                        showAlert('error', data.error || data.message || 'Error en la importación.');
+                      }
+                    })
+                    .catch(err => {
+                      showAlert('error', 'Error al conectar con el servidor: ' + err.message);
+                    });
+                }}
+              >
+                Importar Planeta Play (Live TV)
+              </button>
             </div>
 
             {/* Box for VOD Movies/Series */}
