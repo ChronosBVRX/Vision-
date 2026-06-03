@@ -1,4 +1,12 @@
-# Usar Node.js 20 como imagen base
+# 1. Etapa de compilación del frontend React
+FROM node:20-slim AS frontend-builder
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# 2. Etapa final del servidor Express + Chromium
 FROM node:20-slim
 
 # Instalar dependencias necesarias para Chromium y Puppeteer/Playwright
@@ -49,20 +57,21 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
-# Directorio de trabajo de la app
 WORKDIR /app
 
-# Copiar archivos de dependencias
+# Copiar dependencias del backend e instalar dependencias de producción
 COPY package*.json ./
-
-# Instalar solo dependencias de producción
 RUN npm ci --omit=dev
 
-# Copiar el resto del código del backend
+# Copiar el backend completo
 COPY . .
 
-# Puerto por el que escucha Express
+# Copiar el frontend compilado en la etapa 1 a la ruta correcta para Express
+COPY --from=frontend-builder /frontend/dist ./frontend/dist
+
+# Exponer el puerto de Express (5000 por defecto en .env)
 EXPOSE 5000
 
 # Arrancar la aplicación
 CMD ["node", "server.js"]
+
