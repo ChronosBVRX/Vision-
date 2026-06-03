@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import Plyr from 'plyr';
 import Hls from 'hls.js';
-import { X, Play, Pause, RefreshCw, Layers, RotateCcw, RotateCw, SkipForward, SkipBack, List, Globe as Globe2, Subtitles, Volume2, VolumeX, Maximize2, Minimize2, FastForward } from 'lucide-react';
+import { X, Play, Pause, RefreshCw, Layers, RotateCcw, RotateCw, SkipForward, SkipBack, List, Globe as Globe2, Subtitles, Volume2, VolumeX, Maximize2, Minimize2, FastForward, Search, Tv } from 'lucide-react';
 import 'plyr/dist/plyr.css';
 
 // BRANDING PRE-ROLL CONFIGURATION
@@ -12,6 +12,204 @@ const BRAND_INTRO_CONFIG = {
   playOnTV: false,                // Show on Live TV channels?
   playOnEpisodeChange: false      // Show on every episode change?
 };
+
+function getNormalizedTVCategory(channel) {
+  if (!channel) return 'Variedades / General';
+  
+  const title = (channel.title || '').toLowerCase();
+  const titleClean = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  
+  let cat = (channel.category || '').replace(/^(Planeta Play - |Pluto TV - |Canales - )/i, '').trim();
+  const catClean = cat.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  // 1. Anime
+  if (
+    titleClean.includes('anime') || 
+    titleClean.includes('animax') || 
+    titleClean.includes('locomotion') || 
+    titleClean.includes('otaku') ||
+    catClean.includes('anime')
+  ) {
+    return 'Anime';
+  }
+
+  // 2. Deportes
+  if (
+    titleClean.includes('espn') || 
+    titleClean.includes('fox sports') || 
+    titleClean.includes('sportv') ||
+    titleClean.includes('deportes') || 
+    titleClean.includes('sports') || 
+    titleClean.includes('tudn') ||
+    titleClean.includes('win sports') || 
+    titleClean.includes('golf') || 
+    titleClean.includes('f1') ||
+    titleClean.includes('ufc') || 
+    titleClean.includes('nba') || 
+    titleClean.includes('nascar') ||
+    titleClean.includes('bein') || 
+    titleClean.includes('tyc') || 
+    titleClean.includes('arena') ||
+    titleClean.includes('laliga') || 
+    titleClean.includes('futbol') || 
+    titleClean.includes('garage') ||
+    titleClean.includes('motorvision') || 
+    titleClean.includes('dazn') ||
+    titleClean.includes('wwe') ||
+    titleClean.includes('lucha libre') ||
+    titleClean.includes('mma') ||
+    titleClean.includes('combat') ||
+    titleClean.includes('eurosport') ||
+    titleClean.includes('directv sports') ||
+    titleClean.includes('dgo') ||
+    titleClean.includes('red bull') ||
+    titleClean.includes('redbull') ||
+    catClean.includes('deporte') ||
+    catClean.includes('sport')
+  ) {
+    return 'Deportes';
+  }
+
+  // 3. Kids / Infantil
+  if (
+    titleClean.includes('disney') || 
+    titleClean.includes('cartoon') || 
+    titleClean.includes('nickelodeon') ||
+    titleClean.includes('nick ') || 
+    titleClean.includes('discovery kids') || 
+    titleClean.includes('boing') ||
+    titleClean.includes('infantil') || 
+    titleClean.includes('kids') || 
+    titleClean.includes('baby') ||
+    titleClean.includes('toonline') || 
+    titleClean.includes('laika') ||
+    titleClean.includes('boomerang') ||
+    titleClean.includes('semillitas') ||
+    titleClean.includes('babyfirst') ||
+    titleClean.includes('doraemon') ||
+    titleClean.includes('peppa') ||
+    titleClean.includes('clan') ||
+    catClean.includes('kids') ||
+    catClean.includes('infantil')
+  ) {
+    return 'Kids / Infantil';
+  }
+
+  // 4. Cine & Series
+  if (
+    titleClean.includes('hbo') || 
+    titleClean.includes('cine') || 
+    titleClean.includes('pelicula') ||
+    titleClean.includes('movie') || 
+    titleClean.includes('tnt') || 
+    titleClean.includes('space') ||
+    titleClean.includes('amc') || 
+    titleClean.includes('axn') || 
+    titleClean.includes('fx') ||
+    titleClean.includes('fox channel') || 
+    titleClean.includes('star channel') || 
+    titleClean.includes('cinecanal') ||
+    titleClean.includes('golden') || 
+    titleClean.includes('multipremier') || 
+    titleClean.includes('studio universal') ||
+    titleClean.includes('paramount') || 
+    titleClean.includes('h&h') || 
+    titleClean.includes('universal tv') ||
+    titleClean.includes('cinemax') ||
+    titleClean.includes('warner') ||
+    titleClean.includes('sony') ||
+    titleClean.includes('comedy central') ||
+    titleClean.includes('syfy') ||
+    titleClean.includes('mgm') ||
+    titleClean.includes('film') ||
+    catClean.includes('cine') ||
+    catClean.includes('series') ||
+    catClean.includes('pelicula')
+  ) {
+    return 'Cine & Series';
+  }
+
+  // 5. Noticias
+  if (
+    titleClean.includes('cnn') || 
+    titleClean.includes('noticias') || 
+    titleClean.includes('news') ||
+    titleClean.includes('24 horas') || 
+    titleClean.includes('rt') || 
+    titleClean.includes('telesur') ||
+    titleClean.includes('dw') || 
+    titleClean.includes('prensa') || 
+    titleClean.includes('la nacion') ||
+    titleClean.includes('todo noticias') ||
+    titleClean.includes('euronews') ||
+    titleClean.includes('bloomberg') ||
+    titleClean.includes('c5n') ||
+    titleClean.includes('a24') ||
+    titleClean.includes('tn') ||
+    titleClean.includes('canal 26') ||
+    titleClean.includes('milenio') ||
+    titleClean.includes('forotv') ||
+    titleClean.includes('foro tv') ||
+    titleClean.includes('ntn24') ||
+    catClean.includes('noticias') ||
+    catClean.includes('news')
+  ) {
+    return 'Noticias';
+  }
+
+  // 6. Documentales
+  if (
+    titleClean.includes('discovery') || 
+    titleClean.includes('national geographic') ||
+    titleClean.includes('nat geo') || 
+    titleClean.includes('natgeo') ||
+    titleClean.includes('history') || 
+    titleClean.includes('animal planet') ||
+    titleClean.includes('documental') || 
+    titleClean.includes('biography') || 
+    titleClean.includes('investigation') ||
+    titleClean.includes('smithsonian') ||
+    titleClean.includes('odisea') ||
+    titleClean.includes('viajar') ||
+    titleClean.includes('ciencia') ||
+    titleClean.includes('nasa') ||
+    titleClean.includes('wild') ||
+    catClean.includes('documental') ||
+    catClean.includes('ciencia') ||
+    catClean.includes('investigacion')
+  ) {
+    return 'Documentales';
+  }
+
+  // 7. Música
+  if (
+    titleClean.includes('mtv') || 
+    titleClean.includes('musica') || 
+    titleClean.includes('music') ||
+    titleClean.includes('viva') || 
+    titleClean.includes('vh1') || 
+    titleClean.includes('htv') ||
+    titleClean.includes('telehit') ||
+    titleClean.includes('k-pop') ||
+    titleClean.includes('kpop') ||
+    titleClean.includes('concert') ||
+    catClean.includes('musica') ||
+    catClean.includes('music')
+  ) {
+    return 'Música';
+  }
+
+  if (
+    catClean === 'canales en vivo' || 
+    catClean === 'general' || 
+    catClean === 'importado' || 
+    !cat
+  ) {
+    return 'Variedades / General';
+  }
+
+  return cat;
+}
 
 export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, onPrevEpisode, channelList, onChannelChange }) {
   const [activeStreamIndex, setActiveStreamIndex] = useState(0);
@@ -40,6 +238,19 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   const [showEndScreen, setShowEndScreen] = useState(false);
   const channelInfoTimer = useRef(null);
   const guideRef = useRef(null);
+
+  // Live TV custom states
+  const isLive = useMemo(() => {
+    return localSource?.type === 'tv' || localSource?.type === 'sports' || localSource?.isSports;
+  }, [localSource]);
+
+  const [showZappingBanner, setShowZappingBanner] = useState(false);
+  const zappingTimer = useRef(null);
+  const [guideSearchQuery, setGuideSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const [showAudioPopup, setShowAudioPopup] = useState(false);
+  const [showSubtitlePopup, setShowSubtitlePopup] = useState(false);
+  const [showServerPopup, setShowServerPopup] = useState(false);
 
   // States for branding video
   const [showBrandIntro, setShowBrandIntro] = useState(
@@ -413,9 +624,52 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     }
   }, [showSeriesDrawer]);
 
+  // Trigger zapping banner on channel change
+  useEffect(() => {
+    if (isLive && localSource) {
+      setShowZappingBanner(true);
+      if (zappingTimer.current) clearTimeout(zappingTimer.current);
+      zappingTimer.current = setTimeout(() => {
+        setShowZappingBanner(false);
+      }, 3500);
+    }
+    return () => {
+      if (zappingTimer.current) clearTimeout(zappingTimer.current);
+    };
+  }, [localSource?.id, isLive]);
+
+  // Auto-close popups when controls are hidden
+  useEffect(() => {
+    if (!showControls) {
+      setShowAudioPopup(false);
+      setShowSubtitlePopup(false);
+      setShowServerPopup(false);
+    }
+  }, [showControls]);
+
+  // EPG list categories
+  const categories = useMemo(() => {
+    if (!channelList?.length) return ['Todos'];
+    const cats = new Set();
+    channelList.forEach(ch => {
+      cats.add(getNormalizedTVCategory(ch));
+    });
+    return ['Todos', ...Array.from(cats).sort()];
+  }, [channelList]);
+
+  // EPG list filtering
+  const filteredChannels = useMemo(() => {
+    if (!channelList?.length) return [];
+    return channelList.filter(ch => {
+      const titleMatch = (ch.title || '').toLowerCase().includes(guideSearchQuery.toLowerCase());
+      const catMatch = selectedCategory === 'Todos' || getNormalizedTVCategory(ch) === selectedCategory;
+      return titleMatch && catMatch;
+    });
+  }, [channelList, guideSearchQuery, selectedCategory]);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
-      const isTV = localSource.type === 'tv' && channelList?.length > 1;
+      const isTV = isLive && channelList?.length > 1;
       const activeEl = document.activeElement;
 
       // ── Brand Intro keys ────────────────────────────────────────
@@ -472,6 +726,37 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         return; // Block other keys during load
       }
 
+      // ── Audio/Subtitle/Server popups navigation ─────────────────
+      const isInPopup = activeEl?.closest('.player-popup-menu');
+      if (isInPopup) {
+        if (e.key === 'Escape' || e.key === 'Backspace') {
+          e.preventDefault(); e.stopPropagation();
+          setShowAudioPopup(false);
+          setShowSubtitlePopup(false);
+          setShowServerPopup(false);
+          // Focus the button that opened it
+          setTimeout(() => {
+            const btn = document.querySelector('.custom-player-buttons-row .control-btn');
+            if (btn) btn.focus();
+          }, 0);
+          return;
+        }
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault(); e.stopPropagation();
+          const items = Array.from(document.querySelectorAll('.player-popup-item'));
+          const cur = items.indexOf(activeEl);
+          const dir = e.key === 'ArrowDown' ? 1 : -1;
+          const next = (cur + dir + items.length) % items.length;
+          items[next]?.focus();
+          return;
+        }
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault(); e.stopPropagation();
+          activeEl.click();
+          return;
+        }
+      }
+
       // ── Series drawer navigation ────────────────────────────────
       const isInDrawer = activeEl?.closest('.player-series-drawer');
       if (localSource.isSeriesEpisode && isInDrawer) {
@@ -526,7 +811,26 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         const isInGuide = activeEl?.closest('.channel-guide-panel');
         
         if (!showControls) {
-          // Controls hidden → show them and focus first button
+          if (isTV) {
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              e.preventDefault();
+              e.stopPropagation();
+              if (e.key === 'ArrowUp') {
+                switchToPrevChannel();
+              } else {
+                switchToNextChannel();
+              }
+              return;
+            }
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowChannelGuide(true);
+              return;
+            }
+          }
+
+          // Controls hidden VOD → show them and focus first button
           e.preventDefault();
           e.stopPropagation();
           setShowControls(true);
@@ -538,10 +842,11 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
 
         // Controls visible → let special elements handle left/right natively
         const isSpecial = activeEl?.classList?.contains?.('custom-player-progress-bar-wrapper')
-                       || activeEl?.classList?.contains?.('volume-slider');
+                       || activeEl?.classList?.contains?.('volume-slider')
+                       || activeEl?.closest?.('.channel-category-tabs-container');
         if (isSpecial && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
           resetControlsTimer();
-          return; // Let the element's own handler process it (seek / volume)
+          return; // Let the element's own handler process it
         }
 
         // Navigate between focusable elements
@@ -568,36 +873,101 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
 
       // ── Channel guide mode ──────────────────────────────────────
       if (isTV && showChannelGuide) {
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-          e.preventDefault();
-          e.stopPropagation();
-          const items = guideRef.current?.querySelectorAll('.channel-guide-item');
-          const focused = document.activeElement;
-          if (items?.length) {
-            let idx = Array.from(items).indexOf(focused);
-            if (idx < 0) idx = currentChannelIndex;
-            idx = e.key === 'ArrowUp'
-              ? (idx - 1 + items.length) % items.length
-              : (idx + 1) % items.length;
-            items[idx]?.focus();
-            items[idx]?.scrollIntoView({ block: 'nearest' });
-          }
-          return;
-        }
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          e.stopPropagation();
-          const focused = document.activeElement;
-          if (focused?.classList.contains('channel-guide-item')) {
-            const idx = parseInt(focused.dataset.index);
-            if (!isNaN(idx) && channelList[idx]) jumpToChannel(channelList[idx]);
-          }
-          return;
-        }
-        if (e.key === 'Escape' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const isInSearch = activeEl?.classList.contains('channel-guide-search-input');
+        const isInCategories = activeEl?.closest('.channel-category-tabs-container');
+        const isInList = activeEl?.closest('.channel-guide-list');
+
+        if (e.key === 'Escape' || e.key === 'Backspace') {
           e.preventDefault();
           e.stopPropagation();
           setShowChannelGuide(false);
+          // Focus the guide list button
+          setTimeout(() => {
+            const btn = document.querySelector('.custom-player-buttons-row .control-btn');
+            if (btn) btn.focus();
+          }, 0);
+          return;
+        }
+
+        if (isInSearch) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault(); e.stopPropagation();
+            const activeTab = document.querySelector('.channel-category-tab.active') || document.querySelector('.channel-category-tab');
+            if (activeTab) activeTab.focus();
+            return;
+          }
+          if (e.key === 'Enter') {
+            return; // Let the input behave normally (accept enter/typing)
+          }
+        }
+
+        if (isInCategories) {
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            e.preventDefault(); e.stopPropagation();
+            const tabs = Array.from(document.querySelectorAll('.channel-category-tab'));
+            const cur = tabs.indexOf(activeEl);
+            const dir = e.key === 'ArrowRight' ? 1 : -1;
+            const next = (cur + dir + tabs.length) % tabs.length;
+            tabs[next]?.focus();
+            setSelectedCategory(tabs[next].dataset.category);
+            return;
+          }
+          if (e.key === 'ArrowDown') {
+            e.preventDefault(); e.stopPropagation();
+            const firstChannel = document.querySelector('.channel-guide-item');
+            if (firstChannel) firstChannel.focus();
+            return;
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault(); e.stopPropagation();
+            const searchInput = document.querySelector('.channel-guide-search-input');
+            if (searchInput) searchInput.focus();
+            return;
+          }
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault(); e.stopPropagation();
+            activeEl.click();
+            return;
+          }
+        }
+
+        if (isInList) {
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault(); e.stopPropagation();
+            const items = Array.from(document.querySelectorAll('.channel-guide-item'));
+            const cur = items.indexOf(activeEl);
+            if (cur === 0 && e.key === 'ArrowUp') {
+              // Move focus to category tabs
+              const activeTab = document.querySelector('.channel-category-tab.active') || document.querySelector('.channel-category-tab');
+              if (activeTab) activeTab.focus();
+              return;
+            }
+            const dir = e.key === 'ArrowDown' ? 1 : -1;
+            const next = (cur + dir + items.length) % items.length;
+            items[next]?.focus();
+            items[next]?.scrollIntoView({ block: 'nearest' });
+            return;
+          }
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            e.preventDefault(); e.stopPropagation();
+            // Switch categories via arrow keys inside list
+            const tabs = Array.from(document.querySelectorAll('.channel-category-tab'));
+            const activeTab = document.querySelector('.channel-category-tab.active');
+            const curIdx = tabs.indexOf(activeTab);
+            const dir = e.key === 'ArrowRight' ? 1 : -1;
+            const nextIdx = (curIdx + dir + tabs.length) % tabs.length;
+            setSelectedCategory(tabs[nextIdx].dataset.category);
+            return;
+          }
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault(); e.stopPropagation();
+            activeEl.click();
+            return;
+          }
+        }
+
+        // Fallback to avoid double bubble
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' '].includes(e.key)) {
           return;
         }
       }
@@ -1038,7 +1408,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
                 )}
               </>
             ) : (
-              localSource.type === 'tv' ? 'Canal en Vivo' : 'Película'
+              isLive ? (localSource.isSports ? 'Deportes en Vivo' : 'Canal en Vivo') : 'Película'
             )}
             {streams.length > 1 && ` • Servidor ${activeStreamIndex + 1} de ${streams.length}`}
           </div>
@@ -1074,7 +1444,8 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         <div className="custom-player-bottom-bar">
 
           {/* Progress bar (solo películas/series) */}
-          {localSource.type !== 'tv' && (
+          {/* Progress bar (solo películas/series) */}
+          {!isLive && (
             <div className="custom-player-progress-container">
               <span className="custom-player-time">{formatTime(currentTime)}</span>
               <div
@@ -1116,7 +1487,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             </button>
 
             {/* Seek backward 10s (no TV) */}
-            {localSource.type !== 'tv' && (
+            {!isLive && (
               <button className="control-btn focusable" tabIndex={0} onClick={() => {
                 if (videoRef.current) videoRef.current.currentTime = Math.max(0, (videoRef.current.currentTime || 0) - 10);
               }}>
@@ -1125,7 +1496,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             )}
 
             {/* Seek forward 10s (no TV) */}
-            {localSource.type !== 'tv' && (
+            {!isLive && (
               <button className="control-btn focusable" tabIndex={0} onClick={() => {
                 if (videoRef.current && duration) videoRef.current.currentTime = Math.min(duration, (videoRef.current.currentTime || 0) + 10);
               }}>
@@ -1152,16 +1523,16 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             )}
 
             {/* TV channel navigation */}
-            {localSource.type === 'tv' && channelList?.length > 1 && (
+            {isLive && channelList?.length > 1 && (
               <>
                 <span className="custom-player-time" style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Canales</span>
-                <button className="control-btn focusable" tabIndex={0} onClick={switchToPrevChannel}>
+                <button className="control-btn focusable" tabIndex={0} onClick={switchToPrevChannel} title="Canal Anterior">
                   <SkipBack size={20} />
                 </button>
-                <button className="control-btn focusable" tabIndex={0} onClick={switchToNextChannel}>
+                <button className="control-btn focusable" tabIndex={0} onClick={switchToNextChannel} title="Canal Siguiente">
                   <SkipForward size={20} />
                 </button>
-                <button className="control-btn focusable" tabIndex={0} onClick={() => setShowChannelGuide(true)}>
+                <button className="control-btn focusable" tabIndex={0} onClick={() => setShowChannelGuide(true)} title="Guía de Canales">
                   <List size={20} />
                 </button>
               </>
@@ -1169,27 +1540,48 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
 
             <div style={{ flexGrow: 1 }} />
 
-            {/* Volume (no TV) */}
-            {localSource.type !== 'tv' && (
-              <div className="volume-slider-wrapper">
-                <button className="control-btn focusable" tabIndex={0} onClick={toggleMute}>
-                  {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                </button>
-                <input
-                  type="range"
-                  className="volume-slider focusable"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={isMuted ? 0 : volume}
-                  onChange={(e) => changeVolume(parseFloat(e.target.value))}
-                  tabIndex={0}
-                />
-              </div>
+            {/* TV Audio/Subtitle/Server selectors */}
+            {isLive && (
+              <>
+                {streams.length > 1 && (
+                  <button className="control-btn focusable" tabIndex={0} onClick={() => { setShowServerPopup(!showServerPopup); setShowAudioPopup(false); setShowSubtitlePopup(false); }} title="Servidores">
+                    <Layers size={18} />
+                  </button>
+                )}
+                {availableAudioTracks.length > 0 && (
+                  <button className="control-btn focusable" tabIndex={0} onClick={() => { setShowAudioPopup(!showAudioPopup); setShowSubtitlePopup(false); setShowServerPopup(false); }} title="Audio">
+                    <Globe2 size={18} />
+                  </button>
+                )}
+                {availableSubtitleTracks.length > 0 && (
+                  <button className="control-btn focusable" tabIndex={0} onClick={() => { setShowSubtitlePopup(!showSubtitlePopup); setShowAudioPopup(false); setShowServerPopup(false); }} title="Subtítulos">
+                    <Subtitles size={18} />
+                  </button>
+                )}
+              </>
             )}
 
-            {/* Playback speed (no TV) */}
-            {localSource.type !== 'tv' && (
+            {/* Volume (VOD or direct Live HLS) */}
+            {(localSource.type !== 'tv' || (currentStream && currentStream.resolver === 'direct')) && (
+               <div className="volume-slider-wrapper">
+                 <button className="control-btn focusable" tabIndex={0} onClick={toggleMute}>
+                   {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                 </button>
+                 <input
+                   type="range"
+                   className="volume-slider focusable"
+                   min={0}
+                   max={1}
+                   step={0.05}
+                   value={isMuted ? 0 : volume}
+                   onChange={(e) => changeVolume(parseFloat(e.target.value))}
+                   tabIndex={0}
+                 />
+               </div>
+             )}
+
+            {/* Playback speed (no TV/live) */}
+            {!isLive && (
               <button className="control-btn focusable" tabIndex={0} onClick={() => {
                 const rates = [0.5, 0.75, 1, 1.25, 1.5, 2];
                 const idx = rates.indexOf(playbackRate);
@@ -1206,7 +1598,217 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             </button>
           </div>
         </div>
+
+        {/* ── Popups for Server, Audio, Subtitles ────────────────────── */}
+        {showServerPopup && streams.length > 1 && (
+          <div className="player-popup-menu focusable-container">
+            <div className="player-popup-header">Servidores</div>
+            {streams.map((stream, idx) => (
+              <button
+                key={idx}
+                className={`player-popup-item focusable ${activeStreamIndex === idx ? 'active' : ''}`}
+                tabIndex={0}
+                onClick={() => {
+                  setActiveStreamIndex(idx);
+                  setShowServerPopup(false);
+                }}
+              >
+                <span>{stream.name || `Servidor ${idx + 1}`}</span>
+                {activeStreamIndex === idx && <span style={{ color: 'var(--primary-light)' }}>✓</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {showAudioPopup && availableAudioTracks.length > 0 && (
+          <div className="player-popup-menu focusable-container">
+            <div className="player-popup-header">Idiomas de Audio</div>
+            {availableAudioTracks.map((track) => (
+              <button
+                key={track.id}
+                className={`player-popup-item focusable ${activeAudioTrack === track.id ? 'active' : ''}`}
+                tabIndex={0}
+                onClick={() => {
+                  if (hlsRef.current) hlsRef.current.audioTrack = track.id;
+                  setActiveAudioTrack(track.id);
+                  setShowAudioPopup(false);
+                }}
+              >
+                <span>{track.name || `Pista ${track.id + 1}`}</span>
+                {activeAudioTrack === track.id && <span style={{ color: 'var(--primary-light)' }}>✓</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {showSubtitlePopup && (
+          <div className="player-popup-menu focusable-container">
+            <div className="player-popup-header">Subtítulos</div>
+            <button
+              className={`player-popup-item focusable ${activeSubtitleTrack === -1 ? 'active' : ''}`}
+              tabIndex={0}
+              onClick={() => {
+                if (hlsRef.current) hlsRef.current.subtitleTrack = -1;
+                setActiveSubtitleTrack(-1);
+                setShowSubtitlePopup(false);
+              }}
+            >
+              <span>Desactivados</span>
+              {activeSubtitleTrack === -1 && <span style={{ color: 'var(--primary-light)' }}>✓</span>}
+            </button>
+            {availableSubtitleTracks.map((track) => (
+              <button
+                key={track.id}
+                className={`player-popup-item focusable ${activeSubtitleTrack === track.id ? 'active' : ''}`}
+                tabIndex={0}
+                onClick={() => {
+                  if (hlsRef.current) hlsRef.current.subtitleTrack = track.id;
+                  setActiveSubtitleTrack(track.id);
+                  setShowSubtitlePopup(false);
+                }}
+              >
+                <span>{track.name || track.lang || `Sub ${track.id + 1}`}</span>
+                {activeSubtitleTrack === track.id && <span style={{ color: 'var(--primary-light)' }}>✓</span>}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* ── Premium Zapping Channel Info Banner ──────────────────────────── */}
+      {isLive && showZappingBanner && (
+        <div className="channel-zapping-banner">
+          <div className="zap-logo-container">
+            {localSource.poster || localSource.thumbnailUrl || localSource.logo ? (
+              <img
+                src={localSource.poster || localSource.thumbnailUrl || localSource.logo}
+                alt={localSource.title}
+                className="zap-logo"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            ) : (
+              <Tv size={24} style={{ color: 'var(--primary-light)' }} />
+            )}
+          </div>
+          <div className="zap-info-col">
+            <div className="zap-num-title-row">
+              {currentChannelIndex >= 0 && (
+                <span className="zap-channel-num">
+                  {String(currentChannelIndex + 1).padStart(3, '0')}
+                </span>
+              )}
+              <h3 className="zap-channel-title">{localSource.title}</h3>
+            </div>
+            <div className="zap-meta-row">
+              <span className="zap-channel-cat">
+                {getNormalizedTVCategory(localSource)}
+              </span>
+              <span className="zap-stream-info">
+                {currentStream?.type === 'hls' ? 'HLS Direct' : (currentStream?.resolver || 'IPTV Direct')}
+              </span>
+              {currentStream?.name && (
+                <span className="zap-stream-info">
+                  Servidor: {currentStream.name}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="zap-live-indicator">
+            <span className="zap-live-dot" />
+            <span>En vivo</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Channel Guide Drawer (Mini-EPG) ────────────────────────── */}
+      {isLive && channelList && (
+        <div ref={guideRef} className={`player-channel-drawer ${showChannelGuide ? 'visible' : 'hidden'}`}>
+          <div className="player-drawer-header">
+            <h3 className="player-drawer-title">Guía de Canales</h3>
+            <button className="player-drawer-close focusable" tabIndex={0} onClick={() => setShowChannelGuide(false)}>
+              <X size={22} />
+            </button>
+          </div>
+
+          <div className="player-drawer-content" style={{ gap: '12px' }}>
+            {/* Search Input */}
+            <div className="channel-guide-search-wrapper">
+              <input
+                type="text"
+                className="channel-guide-search-input focusable"
+                placeholder="Buscar canal..."
+                value={guideSearchQuery}
+                onChange={(e) => setGuideSearchQuery(e.target.value)}
+                tabIndex={0}
+              />
+              <Search className="channel-guide-search-icon" size={16} />
+              {guideSearchQuery && (
+                <button
+                  className="channel-guide-search-clear"
+                  onClick={() => setGuideSearchQuery('')}
+                  title="Limpiar"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Category tabs */}
+            {categories.length > 1 && (
+              <div className="channel-category-tabs-container">
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    data-category={cat}
+                    className={`channel-category-tab focusable ${selectedCategory === cat ? 'active' : ''}`}
+                    tabIndex={0}
+                    onClick={() => setSelectedCategory(cat)}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Channel List */}
+            <div className="channel-guide-list">
+              {filteredChannels.map((ch, idx) => {
+                const isActive = localSource.id === ch.id;
+                const channelNum = String(idx + 1).padStart(3, '0');
+                const chLogo = ch.poster || ch.thumbnailUrl || ch.logo;
+                const chCat = getNormalizedTVCategory(ch);
+                return (
+                  <button
+                    key={ch.id || idx}
+                    className={`channel-guide-item focusable ${isActive ? 'active' : ''}`}
+                    tabIndex={0}
+                    onClick={() => jumpToChannel(ch)}
+                  >
+                    <span className="channel-guide-item-num">{channelNum}</span>
+                    <div className="channel-guide-item-logo">
+                      {chLogo ? (
+                        <img src={chLogo} alt={ch.title} onError={(e) => { e.target.style.display = 'none'; }} />
+                      ) : (
+                        <Tv size={14} />
+                      )}
+                    </div>
+                    <div className="channel-guide-item-title-col">
+                      <span className="channel-guide-item-name">{ch.title}</span>
+                      <span className="channel-guide-item-tag">{chCat}</span>
+                    </div>
+                    {isActive && <div className="channel-guide-item-active-dot" />}
+                  </button>
+                );
+              })}
+              {filteredChannels.length === 0 && (
+                <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '20px' }}>
+                  No se encontraron canales.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Series episode drawer ────────────────────────────────────── */}
       {localSource.isSeriesEpisode && localSource.seasons && (

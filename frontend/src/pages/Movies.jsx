@@ -228,18 +228,30 @@ export default function Movies({ contentType = 'movie' }) {
   const isMovie = contentType === 'movie';
   const pageTitle = isMovie ? 'Películas' : 'Series';
 
+  const normalizeCatalogItems = useCallback((items) => {
+    return (items || []).map(item => {
+      const normGenres = (item.genres || []).map(g => 
+        g.replace(/^(Pluto TV - |Planeta Play - |Canales - )/i, '').trim()
+      );
+      return {
+        ...item,
+        genres: normGenres
+      };
+    });
+  }, []);
+
   // Load catalog from backend
   const loadCatalog = useCallback(() => {
     setIsLoading(true);
     fetch(`/api/catalog/${contentType}`)
       .then(r => r.json())
       .then(data => {
-        setCatalog(data.items || []);
+        setCatalog(normalizeCatalogItems(data.items || []));
         if (data.syncing) setIsSyncing(true);
       })
       .catch(err => console.error('Catalog error:', err))
       .finally(() => setIsLoading(false));
-  }, [contentType]);
+  }, [contentType, normalizeCatalogItems]);
 
   useEffect(() => {
     loadCatalog();
@@ -255,7 +267,7 @@ export default function Movies({ contentType = 'movie' }) {
       fetch(`/api/catalog/${contentType}`)
         .then(r => r.json())
         .then(data => {
-          setCatalog(data.items || []);
+          setCatalog(normalizeCatalogItems(data.items || []));
           if (!data.syncing) {
             setIsSyncing(false);
             setSyncMsg(`¡Catálogo actualizado! ${data.total} títulos`);
@@ -265,7 +277,7 @@ export default function Movies({ contentType = 'movie' }) {
         });
     }, 8000);
     return () => clearInterval(interval);
-  }, [isSyncing, contentType]);
+  }, [isSyncing, contentType, normalizeCatalogItems]);
 
   // Trigger background sync
   const triggerSync = () => {

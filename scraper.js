@@ -1370,7 +1370,7 @@ async function scrapePlutoTVOnDemand() {
 
       let itemsProcessed = 0;
       for (let item of items) {
-        if (item.type !== 'movie') continue;
+        if (item.type !== 'movie' && item.type !== 'series') continue;
         if (itemsProcessed >= 20) break; // Límite de items por categoría
         itemsProcessed++;
 
@@ -1378,28 +1378,32 @@ async function scrapePlutoTVOnDemand() {
         if (!vodItemResp.data || vodItemResp.data.length === 0) continue;
         
         const vodItem = vodItemResp.data[0];
-        const path = vodItem.stitched.path || (vodItem.stitched.paths && vodItem.stitched.paths.find(e => e.type === 'hls')?.path) || false;
-        if (!path) continue;
+        
+        let path = false;
+        if (vodItem.type === 'movie') {
+          path = vodItem.stitched.path || (vodItem.stitched.paths && vodItem.stitched.paths.find(e => e.type === 'hls')?.path) || false;
+          if (!path) continue;
+        }
 
         const poster = vodItem.featuredImage ? vodItem.featuredImage.path : 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=400';
 
         importedSources.push({
           id: `plutovod_${vodItem._id}`,
           title: vodItem.name,
-          type: 'movie',
+          type: vodItem.type, // 'movie' or 'series'
           category: `Pluto TV - ${catname}`,
           poster,
-          description: vodItem.description || `Pelicula On Demand de Pluto TV`,
+          description: vodItem.description || `${vodItem.type === 'series' ? 'Serie' : 'Pelicula'} On Demand de Pluto TV`,
           streams: [{
             name: 'Pluto TV Stream',
-            url: `pluto-tv://${path}`,
+            url: vodItem.type === 'series' ? `pluto-tv://${vodItem._id}` : `pluto-tv://${path}`,
             resolver: 'direct'
           }]
         });
       }
     }
 
-    console.log(`[PlutoTV] Completado! Se importaron ${importedSources.length} peliculas VOD.`);
+    console.log(`[PlutoTV] Completado! Se importaron ${importedSources.length} peliculas/series VOD.`);
     return importedSources;
   } catch (err) {
     console.error(`[PlutoTV] Error scrapeando VOD: ${err.message}`);
@@ -1552,6 +1556,7 @@ Object.assign(module.exports, {
   OFFICIAL_IPTV_FALLBACKS,
   OFFICIAL_VOD_FALLBACKS,
   scrapeEpisodesFromSeriesPage,
+  getPlutoBootData,
   scrapePlutoTVLive,
   scrapePlutoTVOnDemand,
   scrapeAnimeCatalog,

@@ -8,7 +8,6 @@ import Admin from './pages/Admin';
 import Sports from './pages/Sports';
 import Movies from './pages/Movies';
 import Series from './pages/Series';
-import PlutoTV from './pages/PlutoTV';
 import useSpatialNavigation from './hooks/useSpatialNavigation';
 import logoImg from './assets/logo.png';
 
@@ -218,8 +217,6 @@ export default function App() {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
   const [sidebarOpen, setSidebarOpen]               = useState(false);
   const [tvSubmenuOpen, setTvSubmenuOpen]           = useState(false);
-  const [plutoSubmenuOpen, setPlutoSubmenuOpen]     = useState(false);
-  const [plutoTab, setPlutoTab]                     = useState('Todas');
   const [animeSubmenuOpen, setAnimeSubmenuOpen]     = useState(false);
   const [animeTab, setAnimeTab]                     = useState('Series');
   
@@ -384,42 +381,7 @@ export default function App() {
             <span>Series</span>
           </li>
 
-          {/* Pluto TV → expandable submenu */}
-          <li
-            className={`nav-item focusable ${currentPage === 'plutotv' ? 'active' : ''}`}
-            tabIndex={0}
-            style={{ display: 'flex', alignItems: 'center' }}
-            onClick={() => setPlutoSubmenuOpen(o => !o)}
-          >
-            <div style={{
-              width: 24, height: 24, borderRadius: '50%', background: '#ffcc00', 
-              color: 'black', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-              fontWeight: 'bold', fontSize: '12px'
-            }}>P</div>
-            <span style={{ flexGrow: 1, color: currentPage === 'plutotv' ? '#ffcc00' : 'inherit' }}>Pluto TV</span>
-            {plutoSubmenuOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </li>
 
-          {plutoSubmenuOpen && (
-            <>
-              <li
-                className={`nav-subitem focusable ${currentPage === 'plutotv' && plutoTab === 'Canales en Vivo' ? 'active' : ''}`}
-                tabIndex={0}
-                onClick={() => { setPlutoTab('Canales en Vivo'); selectPage('plutotv'); }}
-              >
-                <Tv size={16} />
-                TV en Vivo
-              </li>
-              <li
-                className={`nav-subitem focusable ${currentPage === 'plutotv' && plutoTab === 'Películas' ? 'active' : ''}`}
-                tabIndex={0}
-                onClick={() => { setPlutoTab('Películas'); selectPage('plutotv'); }}
-              >
-                <Film size={16} />
-                Películas o Series Bajo Demanda
-              </li>
-            </>
-          )}
 
           {/* Anime → expandable submenu */}
           <li
@@ -486,7 +448,6 @@ export default function App() {
         {currentPage === 'sports' && <Sports />}
         {currentPage === 'movies' && <Movies contentType="movie" />}
         {currentPage === 'series' && <Series />}
-        {currentPage === 'plutotv' && <PlutoTV initialTab={plutoTab} />}
         {currentPage === 'anime' && <Movies contentType={animeTab === 'Películas' ? 'anime_movie' : 'anime_series'} />}
       </main>
     </div>

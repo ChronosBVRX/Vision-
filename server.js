@@ -83,6 +83,7 @@ const {
   scrapeMovieCatalog,
   OFFICIAL_VOD_FALLBACKS,
   scrapeEpisodesFromSeriesPage,
+  getPlutoBootData,
   scrapePlutoTVLive,
   scrapePlutoTVOnDemand,
   scrapeAnimeCatalog,
@@ -458,7 +459,27 @@ app.get('/api/series/:id/episodes', async (req, res) => {
   
   try {
     let seasons = [];
-    if (siteName === 'AnimeFLV.net' || siteName === 'AnimeFLV.one') {
+    if (originUrl.startsWith('pluto-tv://')) {
+      const plutoId = seriesId.replace(/^plutovod_/, '');
+      const bootData = await getPlutoBootData();
+      const headers = {
+        Authorization: `Bearer ${bootData.sessionToken}`,
+        'X-Forwarded-For': '189.201.128.1' // PLUTO_REGION_IP
+      };
+      const axios = require('axios');
+      const resp = await axios.get(`https://service-vod.clusters.pluto.tv/v4/vod/series/${plutoId}/seasons?offset=0&limit=100`, { headers });
+      seasons = (resp.data.seasons || []).map(s => ({
+        title: `Temporada ${s.number}`,
+        episodes: (s.episodes || []).map(ep => {
+          const path = ep.stitched?.path || (ep.stitched?.paths && ep.stitched.paths.find(p => p.type === 'hls')?.path) || '';
+          return {
+            title: ep.name || `Episodio ${ep.number}`,
+            episodeNum: ep.number,
+            url: `pluto-tv://${path}`
+          };
+        }).filter(ep => ep.url !== 'pluto-tv://')
+      }));
+    } else if (siteName === 'AnimeFLV.net' || siteName === 'AnimeFLV.one') {
       seasons = await scrapeAnimeEpisodesFromSeriesPage(originUrl, siteName);
     } else {
       seasons = await scrapeEpisodesFromSeriesPage(originUrl, siteName);
@@ -1436,7 +1457,7 @@ app.get('/api/catalog/:type', (req, res) => {
   
   // Get custom sources of the same type and map them to catalog item shape
   const customItems = (db.sources || [])
-    .filter(s => s.type === type && !(s.id.startsWith('plutotv_') || s.id.startsWith('plutovod_')))
+    .filter(s => s.type === type)
     .map(s => ({
       ...s,
       genres: s.genres || (s.category ? [s.category] : ['General'])
