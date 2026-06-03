@@ -230,6 +230,7 @@ export default function Home({ selectedCategoryFilter }) {
 
   const resolvingRef = useRef(false);
   const pageRef      = useRef(null);
+  const emptyRef     = useRef(null);
 
   // Auto-focus close button when error overlay appears
   useEffect(() => {
@@ -265,6 +266,12 @@ export default function Home({ selectedCategoryFilter }) {
     }));
     return [...movies, ...series, ...normalizedSources];
   }, [movies, series, sources]);
+
+  useEffect(() => {
+    if (allContent.length === 0) {
+      setTimeout(() => emptyRef.current?.focus(), 100);
+    }
+  }, [allContent.length]);
 
   // ── Apply sidebar category filter ─────────────────────────────────────────
   const filteredContent = useMemo(() => {
@@ -620,9 +627,6 @@ export default function Home({ selectedCategoryFilter }) {
       </div>
     );
   }
-
-  const emptyRef = useRef(null);
-  useEffect(() => { if (allContent.length === 0) setTimeout(() => emptyRef.current?.focus(), 100); }, [allContent.length]);
 
   if (allContent.length === 0) {
     return (
