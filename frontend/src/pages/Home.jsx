@@ -5,67 +5,197 @@ import DetailsModal from '../components/DetailsModal';
 import { HeroBanner, CatalogRow, CatalogCard } from '../components/CatalogComponents';
 
 function getNormalizedTVCategory(channel) {
-  const title = (channel.title || '').toLowerCase();
-  let cat = (channel.category || '').replace(/^(Planeta Play - |Pluto TV - |Canales - )/i, '').trim();
-
-  const titleLower = title.toLowerCase();
+  if (!channel) return 'Variedades / General';
   
-  if (titleLower.includes('anime') || titleLower.includes('animax') || titleLower.includes('locomotion')) {
+  const title = (channel.title || '').toLowerCase();
+  const titleClean = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  
+  let cat = (channel.category || '').replace(/^(Planeta Play - |Pluto TV - |Canales - )/i, '').trim();
+  const catClean = cat.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  // 1. Anime
+  if (
+    titleClean.includes('anime') || 
+    titleClean.includes('animax') || 
+    titleClean.includes('locomotion') || 
+    titleClean.includes('otaku') ||
+    catClean.includes('anime')
+  ) {
     return 'Anime';
   }
+
+  // 2. Deportes
   if (
-    titleLower.includes('espn') || titleLower.includes('fox sports') || titleLower.includes('sportv') ||
-    titleLower.includes('deportes') || titleLower.includes('sports') || titleLower.includes('tudn') ||
-    titleLower.includes('win sports') || titleLower.includes('golf') || titleLower.includes('f1') ||
-    titleLower.includes('ufc') || titleLower.includes('nba') || titleLower.includes('nascar') ||
-    titleLower.includes('bein') || titleLower.includes('tyc') || titleLower.includes('arena') ||
-    titleLower.includes('laliga') || titleLower.includes('futbol') || titleLower.includes('garage') ||
-    titleLower.includes('motorvision') || titleLower.includes('dazn')
+    titleClean.includes('espn') || 
+    titleClean.includes('fox sports') || 
+    titleClean.includes('sportv') ||
+    titleClean.includes('deportes') || 
+    titleClean.includes('sports') || 
+    titleClean.includes('tudn') ||
+    titleClean.includes('win sports') || 
+    titleClean.includes('golf') || 
+    titleClean.includes('f1') ||
+    titleClean.includes('ufc') || 
+    titleClean.includes('nba') || 
+    titleClean.includes('nascar') ||
+    titleClean.includes('bein') || 
+    titleClean.includes('tyc') || 
+    titleClean.includes('arena') ||
+    titleClean.includes('laliga') || 
+    titleClean.includes('futbol') || 
+    titleClean.includes('garage') ||
+    titleClean.includes('motorvision') || 
+    titleClean.includes('dazn') ||
+    titleClean.includes('wwe') ||
+    titleClean.includes('lucha libre') ||
+    titleClean.includes('mma') ||
+    titleClean.includes('combat') ||
+    titleClean.includes('eurosport') ||
+    titleClean.includes('directv sports') ||
+    titleClean.includes('dgo') ||
+    titleClean.includes('red bull') ||
+    titleClean.includes('redbull') ||
+    catClean.includes('deporte') ||
+    catClean.includes('sport')
   ) {
     return 'Deportes';
   }
+
+  // 3. Kids / Infantil
   if (
-    titleLower.includes('disney') || titleLower.includes('cartoon') || titleLower.includes('nickelodeon') ||
-    titleLower.includes('nick ') || titleLower.includes('discovery kids') || titleLower.includes('boing') ||
-    titleLower.includes('infantil') || titleLower.includes('kids') || titleLower.includes('baby') ||
-    titleLower.includes('toonline') || titleLower.includes('laika')
+    titleClean.includes('disney') || 
+    titleClean.includes('cartoon') || 
+    titleClean.includes('nickelodeon') ||
+    titleClean.includes('nick ') || 
+    titleClean.includes('discovery kids') || 
+    titleClean.includes('boing') ||
+    titleClean.includes('infantil') || 
+    titleClean.includes('kids') || 
+    titleClean.includes('baby') ||
+    titleClean.includes('toonline') || 
+    titleClean.includes('laika') ||
+    titleClean.includes('boomerang') ||
+    titleClean.includes('semillitas') ||
+    titleClean.includes('babyfirst') ||
+    titleClean.includes('doraemon') ||
+    titleClean.includes('peppa') ||
+    titleClean.includes('clan') ||
+    catClean.includes('kids') ||
+    catClean.includes('infantil')
   ) {
     return 'Kids / Infantil';
   }
+
+  // 4. Cine & Series
   if (
-    titleLower.includes('hbo') || titleLower.includes('cine') || titleLower.includes('pelicula') ||
-    titleLower.includes('movie') || titleLower.includes('tnt') || titleLower.includes('space') ||
-    titleLower.includes('amc') || titleLower.includes('axn') || titleLower.includes('fx') ||
-    titleLower.includes('fox channel') || titleLower.includes('star channel') || titleLower.includes('cinecanal') ||
-    titleLower.includes('golden') || titleLower.includes('multipremier') || titleLower.includes('studio universal') ||
-    titleLower.includes('paramount') || titleLower.includes('h&h') || titleLower.includes('universal tv')
+    titleClean.includes('hbo') || 
+    titleClean.includes('cine') || 
+    titleClean.includes('pelicula') ||
+    titleClean.includes('movie') || 
+    titleClean.includes('tnt') || 
+    titleClean.includes('space') ||
+    titleClean.includes('amc') || 
+    titleClean.includes('axn') || 
+    titleClean.includes('fx') ||
+    titleClean.includes('fox channel') || 
+    titleClean.includes('star channel') || 
+    titleClean.includes('cinecanal') ||
+    titleClean.includes('golden') || 
+    titleClean.includes('multipremier') || 
+    titleClean.includes('studio universal') ||
+    titleClean.includes('paramount') || 
+    titleClean.includes('h&h') || 
+    titleClean.includes('universal tv') ||
+    titleClean.includes('cinemax') ||
+    titleClean.includes('warner') ||
+    titleClean.includes('sony') ||
+    titleClean.includes('comedy central') ||
+    titleClean.includes('syfy') ||
+    titleClean.includes('mgm') ||
+    titleClean.includes('film') ||
+    catClean.includes('cine') ||
+    catClean.includes('series') ||
+    catClean.includes('pelicula')
   ) {
     return 'Cine & Series';
   }
+
+  // 5. Noticias
   if (
-    titleLower.includes('cnn') || titleLower.includes('noticias') || titleLower.includes('news') ||
-    titleLower.includes('24 horas') || titleLower.includes('rt') || titleLower.includes('telesur') ||
-    titleLower.includes('dw') || titleLower.includes('prensa') || titleLower.includes('la nacion') ||
-    titleLower.includes('todo noticias')
+    titleClean.includes('cnn') || 
+    titleClean.includes('noticias') || 
+    titleClean.includes('news') ||
+    titleClean.includes('24 horas') || 
+    titleClean.includes('rt') || 
+    titleClean.includes('telesur') ||
+    titleClean.includes('dw') || 
+    titleClean.includes('prensa') || 
+    titleClean.includes('la nacion') ||
+    titleClean.includes('todo noticias') ||
+    titleClean.includes('euronews') ||
+    titleClean.includes('bloomberg') ||
+    titleClean.includes('c5n') ||
+    titleClean.includes('a24') ||
+    titleClean.includes('tn') ||
+    titleClean.includes('canal 26') ||
+    titleClean.includes('milenio') ||
+    titleClean.includes('forotv') ||
+    titleClean.includes('foro tv') ||
+    titleClean.includes('ntn24') ||
+    catClean.includes('noticias') ||
+    catClean.includes('news')
   ) {
     return 'Noticias';
   }
+
+  // 6. Documentales
   if (
-    titleLower.includes('discovery') || titleLower.includes('national geographic') ||
-    titleLower.includes('nat geo') || titleLower.includes('history') || titleLower.includes('animal planet') ||
-    titleLower.includes('documental') || titleLower.includes('biography') || titleLower.includes('investigation')
+    titleClean.includes('discovery') || 
+    titleClean.includes('national geographic') ||
+    titleClean.includes('nat geo') || 
+    titleClean.includes('natgeo') ||
+    titleClean.includes('history') || 
+    titleClean.includes('animal planet') ||
+    titleClean.includes('documental') || 
+    titleClean.includes('biography') || 
+    titleClean.includes('investigation') ||
+    titleClean.includes('smithsonian') ||
+    titleClean.includes('odisea') ||
+    titleClean.includes('viajar') ||
+    titleClean.includes('ciencia') ||
+    titleClean.includes('nasa') ||
+    titleClean.includes('wild') ||
+    catClean.includes('documental') ||
+    catClean.includes('ciencia') ||
+    catClean.includes('investigacion')
   ) {
     return 'Documentales';
   }
+
+  // 7. Música
   if (
-    titleLower.includes('mtv') || titleLower.includes('musica') || titleLower.includes('music') ||
-    titleLower.includes('viva') || titleLower.includes('vh1') || titleLower.includes('htv') ||
-    titleLower.includes('telehit')
+    titleClean.includes('mtv') || 
+    titleClean.includes('musica') || 
+    titleClean.includes('music') ||
+    titleClean.includes('viva') || 
+    titleClean.includes('vh1') || 
+    titleClean.includes('htv') ||
+    titleClean.includes('telehit') ||
+    titleClean.includes('k-pop') ||
+    titleClean.includes('kpop') ||
+    titleClean.includes('concert') ||
+    catClean.includes('musica') ||
+    catClean.includes('music')
   ) {
     return 'Música';
   }
 
-  if (cat.toLowerCase() === 'canales en vivo' || cat.toLowerCase() === 'general' || cat.toLowerCase() === 'importado' || !cat) {
+  if (
+    catClean === 'canales en vivo' || 
+    catClean === 'general' || 
+    catClean === 'importado' || 
+    !cat
+  ) {
     return 'Variedades / General';
   }
 
@@ -106,7 +236,7 @@ export default function Home({ selectedCategoryFilter }) {
     Promise.all([
       fetch('/api/catalog/movie').then(r => r.json()).catch(() => ({ items: [] })),
       fetch('/api/catalog/series').then(r => r.json()).catch(() => ({ items: [] })),
-      fetch('/api/sources').then(r => r.json()).catch(() => ({ sources: [] })),
+      fetch('/api/sources?includePlutoTV=true').then(r => r.json()).catch(() => ({ sources: [] })),
     ]).then(([moviesData, seriesData, sourcesData]) => {
       setMovies(moviesData.items || []);
       setSeries(seriesData.items || []);
