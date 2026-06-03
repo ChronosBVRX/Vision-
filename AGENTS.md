@@ -1,7 +1,7 @@
 # Vision+ — AGENTS.md
 
 > Archivo de contexto compartido entre opencode y Antigravity 2.0.
-> **Actualizado por última vez:** 02/06/2026 por opencode
+> **Actualizado por última vez:** 03/06/2026 por Antigravity
 
 ---
 
@@ -136,6 +136,21 @@ Vision+/
 - **Solución:**
   - `scraper.js:1507`: Actualizado `scrapeEpisodesFromSeriesPage` para extraer `thisSerie`, usar los nuevos nombres de propiedades (`number` en lugar de `episode_number`), y construir las URLs usando el `slug` del episodio si está presente, o construyéndolo dinámicamente con la ruta correcta (`/serie/.../temporada/.../episodio/...`).
   - `videoSourceResolver.js:237`: Añadida la compatibilidad con `episode` en `pageProps` y soporte para extraer el `cyberlocker` como nombre del servidor en caso de que sea un reproductor genérico.
+
+---
+
+## Modificaciones de Antigravity (03/06/2026)
+
+### Docker y Despliegue Automatizado
+- **Multi-stage Dockerfile & Compose:** Configuración de `Dockerfile` multi-stage y `docker-compose.yml` para compilar el frontend React, levantar el servidor Express y garantizar la persistencia del volumen de datos.
+- **Instructivo de Despliegue (`AGENT_SETUP.md`):** Creación del instructivo con instalación desatendida mediante winget (Git, Docker, Cloudflare), verificación del demonio docker, configuración de `.env` y levantamiento de túneles públicos Cloudflare.
+
+### Canales en Vivo & Mini-EPG
+- **Buscador y Categorías en Vivo:** Organización de canales en una cuadrícula con filtrado dinámico por categorías (incluyendo Pluto TV) y barra de búsqueda funcional.
+- **Optimización de Reproductor Live TV (Mini-EPG):** Controles optimizados para canales de TV en vivo que incluyen cambio rápido de canal (anterior/siguiente), selector de relación de aspecto, información de la calidad del flujo y guía de programación integrada (Mini-EPG) con navegación espacial totalmente adaptada a mandos a distancia.
+
+### Mantenimiento y Limpieza
+- **Limpieza de Archivos Temporales:** Eliminación de copias y respaldos temporales innecesarios para optimizar el almacenamiento de la base de datos local en formato JSON.
 
 ---
 
