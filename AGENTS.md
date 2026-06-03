@@ -71,7 +71,12 @@ Vision+/
 ## Convenciones / Reglas
 
 1. **No pisar código del otro agente** — usar comentarios `// [agente]` si es necesario delimitar
-2. **Commits frecuentes** — antes de cambiar de agente: `git add -A && git commit -m "avance: ..."`
+2. **Commits y pushes automáticos** — Al finalizar con éxito cualquier tarea, al corregir un bug o antes de finalizar su turno, el agente **debe** preparar los archivos, realizar un commit descriptivo y hacer `git push` a GitHub automáticamente:
+   ```bash
+   git add -A
+   git commit -m "avance: [Descripción corta]"
+   git push origin main
+   ```
 3. **database.json** — archivo compartido, NO editar manualmente, siempre via API
 4. **Nuevas funcionalidades** — registrar aquí abajo antes de empezar
 5. **Fuentes de contenido** — No agregar fuentes de películas o series (estas solo las puede agregar el usuario). Sí está permitido agregar fuentes de Deportes online.
