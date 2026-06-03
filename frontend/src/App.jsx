@@ -224,6 +224,20 @@ export default function App() {
 
   useEffect(() => { fetchCategories(); }, []);
 
+  // Auto-focus first submenu item when submenus open
+  useEffect(() => {
+    if (tvSubmenuOpen) setTimeout(() => {
+      const first = document.querySelector('.nav-subitem.focusable');
+      if (first) first.focus();
+    }, 50);
+  }, [tvSubmenuOpen]);
+  useEffect(() => {
+    if (animeSubmenuOpen) setTimeout(() => {
+      const first = document.querySelector('.nav-subitem.focusable');
+      if (first) first.focus();
+    }, 50);
+  }, [animeSubmenuOpen]);
+
   const fetchCategories = () => {
     fetch('/api/sources?includePlutoTV=true')
       .then(r => r.json())
@@ -318,7 +332,10 @@ export default function App() {
                 selectCategory('Canales en Vivo');
               }
             }}
-            onKeyDown={e => { if (e.key === 'Enter') { setTvSubmenuOpen(o => !o); selectCategory('Canales en Vivo'); } }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === 'ArrowRight') { setTvSubmenuOpen(true); selectCategory('Canales en Vivo'); }
+              if (e.key === 'ArrowLeft' && tvSubmenuOpen) { e.preventDefault(); e.stopPropagation(); setTvSubmenuOpen(false); }
+            }}
           >
             <Tv size={24} />
             <span style={{ flexGrow: 1 }}>Canales en Vivo</span>
@@ -389,6 +406,10 @@ export default function App() {
             tabIndex={0}
             style={{ display: 'flex', alignItems: 'center' }}
             onClick={() => setAnimeSubmenuOpen(o => !o)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === 'ArrowRight') setAnimeSubmenuOpen(true);
+              if (e.key === 'ArrowLeft' && animeSubmenuOpen) { e.preventDefault(); e.stopPropagation(); setAnimeSubmenuOpen(false); }
+            }}
           >
             <div style={{
               width: 24, height: 24, borderRadius: '50%', background: '#ff3366', 

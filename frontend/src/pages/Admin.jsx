@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Download, Upload, List, Film, Tv, PlusCircle, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Upload, List, Film, Tv, PlusCircle, CheckCircle, AlertCircle, RefreshCw, X } from 'lucide-react';
 
 export default function Admin() {
   const [sources, setSources] = useState([]);
@@ -331,9 +331,12 @@ export default function Admin() {
         <div className="glass-panel" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
           <h2 style={{ textAlign: 'center', marginBottom: '24px', color: '#fff' }}>Acceso Administrativo</h2>
           {alert && (
-            <div className={`alert-banner ${alert.type}`} style={{ marginBottom: '16px' }}>
+            <div className={`alert-banner ${alert.type}`} style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
               {alert.type === 'error' && <AlertCircle size={18} />}
-              <span>{alert.message}</span>
+              <span style={{ flex: 1 }}>{alert.message}</span>
+              <button className="focusable" tabIndex={0} onClick={() => setAlert(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '4px' }}>
+                <X size={16} />
+              </button>
             </div>
           )}
           <form onSubmit={handleLogin}>
@@ -348,7 +351,7 @@ export default function Admin() {
                 autoFocus
               />
             </div>
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+            <button type="submit" className="btn btn-primary focusable" tabIndex={0} style={{ width: '100%' }}>
               Entrar
             </button>
           </form>
@@ -361,45 +364,53 @@ export default function Admin() {
     <div>
       {/* Alert Banners */}
       {alert && (
-        <div className={`alert-banner ${alert.type}`}>
+        <div className={`alert-banner ${alert.type}`} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {alert.type === 'success' && <CheckCircle size={18} />}
           {alert.type === 'error' && <AlertCircle size={18} />}
           {alert.type === 'info' && <RefreshCw className="animate-spin" size={18} />}
-          <span>{alert.message}</span>
+          <span style={{ flex: 1 }}>{alert.message}</span>
+          <button className="focusable" tabIndex={0} onClick={() => setAlert(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '4px' }}>
+            <X size={16} />
+          </button>
         </div>
       )}
 
       <div className="tab-container" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
         <button 
-          className={`tab-btn ${activeTab === 'list' ? 'active' : ''}`}
+          className={`tab-btn focusable ${activeTab === 'list' ? 'active' : ''}`}
+          tabIndex={0}
           onClick={() => { setActiveTab('list'); resetSourceForm(); }}
         >
           <List size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
           Gestión de Fuentes
         </button>
         <button 
-          className={`tab-btn ${activeTab === 'add' ? 'active' : ''}`}
+          className={`tab-btn focusable ${activeTab === 'add' ? 'active' : ''}`}
+          tabIndex={0}
           onClick={() => { setActiveTab('add'); if (!editingId) resetSourceForm(); }}
         >
           <PlusCircle size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
           {editingId ? 'Editar Elemento' : 'Añadir Elemento Manual'}
         </button>
         <button 
-          className={`tab-btn ${activeTab === 'm3u' ? 'active' : ''}`}
+          className={`tab-btn focusable ${activeTab === 'm3u' ? 'active' : ''}`}
+          tabIndex={0}
           onClick={() => setActiveTab('m3u')}
         >
           <Download size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
           Importar Fuente M3U
         </button>
         <button 
-          className={`tab-btn ${activeTab === 'discovery' ? 'active' : ''}`}
+          className={`tab-btn focusable ${activeTab === 'discovery' ? 'active' : ''}`}
+          tabIndex={0}
           onClick={() => setActiveTab('discovery')}
         >
           <RefreshCw size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
           Descubrir Fuentes (Auto)
         </button>
         <button 
-          className="tab-btn"
+          className="tab-btn focusable"
+          tabIndex={0}
           style={{ marginLeft: 'auto', background: 'rgba(255, 59, 48, 0.1)', color: '#ff3b30' }}
           onClick={handleLogout}
         >
@@ -443,7 +454,12 @@ export default function Admin() {
 
           <div className="admin-table-container">
             {categoriesDetailed.length === 0 ? (
-              <p className="text-muted p-4 text-center">No hay fuentes cargadas aún.</p>
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                <p className="text-muted" style={{ marginBottom: '16px' }}>No hay fuentes cargadas aún.</p>
+                <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setActiveTab('add')}>
+                  <PlusCircle size={16} style={{ marginRight: '6px' }} />Añadir primera fuente
+                </button>
+              </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {[
@@ -477,10 +493,10 @@ export default function Admin() {
                                   </span>
                                 </div>
                                 <div style={{ display: 'flex', gap: '10px' }}>
-                                  <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }} onClick={() => setExpandedCategory(isExpanded ? null : cat.name)}>
+                                  <button className="btn btn-secondary focusable" tabIndex={0} style={{ padding: '6px 12px', fontSize: '0.8rem' }} onClick={() => setExpandedCategory(isExpanded ? null : cat.name)}>
                                     {isExpanded ? 'Ocultar Elementos' : 'Ver Elementos'}
                                   </button>
-                                  <button className="btn delete" style={{ padding: '6px 12px', fontSize: '0.8rem', background: 'rgba(255, 59, 48, 0.1)', color: '#ff3b30', border: '1px solid rgba(255, 59, 48, 0.2)' }} onClick={() => handleDeleteCategory(cat.name)}>
+                                  <button className="btn delete focusable" tabIndex={0} style={{ padding: '6px 12px', fontSize: '0.8rem', background: 'rgba(255, 59, 48, 0.1)', color: '#ff3b30', border: '1px solid rgba(255, 59, 48, 0.2)' }} onClick={() => handleDeleteCategory(cat.name)}>
                                     <Trash2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> Eliminar Fuente
                                   </button>
                                 </div>

@@ -21,6 +21,12 @@ export default function PlutoTV({ initialTab }) {
 
   const pageRef = useRef(null);
   const resolvingRef = useRef(false);
+  const resolveErrorBtnRef = useRef(null);
+
+  // Auto-focus close button when error appears
+  useEffect(() => {
+    if (resolveError) setTimeout(() => resolveErrorBtnRef.current?.focus(), 100);
+  }, [resolveError]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -181,8 +187,8 @@ export default function PlutoTV({ initialTab }) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'white' }}>
         <h2 style={{ marginBottom: '1rem' }}>Error</h2>
-        <p>{resolveError}</p>
-        <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => setResolveError(null)}>Regresar</button>
+        <p style={{ marginBottom: '1rem' }}>{resolveError}</p>
+        <button ref={resolveErrorBtnRef} className="btn btn-primary focusable" tabIndex={0} style={{ marginTop: '1rem' }} onClick={() => setResolveError(null)}>Regresar</button>
       </div>
     );
   }
@@ -226,10 +232,12 @@ export default function PlutoTV({ initialTab }) {
           <Search size={18} color="#ffcc00" />
           <input 
             type="text" 
+            className="focusable"
             placeholder="Buscar en Pluto TV..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{ background: 'transparent', border: 'none', color: 'white', outline: 'none', marginLeft: '10px' }}
+            tabIndex={0}
           />
         </div>
       </div>
@@ -238,7 +246,8 @@ export default function PlutoTV({ initialTab }) {
         {categories.map(cat => (
           <button 
             key={cat}
-            className={`tab-btn ${activeTab === cat ? 'active' : ''}`}
+            className={`tab-btn focusable ${activeTab === cat ? 'active' : ''}`}
+            tabIndex={0}
             style={{
               padding: '6px 16px',
               borderRadius: '20px',
@@ -272,13 +281,21 @@ export default function PlutoTV({ initialTab }) {
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
           <Loader size={48} className="spin-anim" style={{ color: '#ffcc00', marginBottom: '20px' }} />
           <h3>Sintonizando {activeItem?.title}...</h3>
-          <p style={{ color: '#aaa', marginTop: '10px' }}>Obteniendo token de Pluto TV</p>
+          <p style={{ color: '#aaa', marginTop: '10px', marginBottom: '20px' }}>Obteniendo token de Pluto TV</p>
+          <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => { setActiveItem(null); setIsResolving(false); }}>
+            Cancelar
+          </button>
         </div>
       )}
 
       <div className="catalog-rows" style={{ marginTop: '-80px', position: 'relative', zIndex: 10 }}>
         {rowKeys.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '50px', color: '#aaa' }}>No se encontraron resultados.</div>
+          <div style={{ textAlign: 'center', padding: '50px', color: '#aaa' }}>
+            <p style={{ marginBottom: '16px' }}>No se encontraron resultados.</p>
+            <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => { setSearchQuery(''); setActiveTab('Todas'); }}>
+              <X size={16} style={{ marginRight: '6px' }} />Limpiar filtros
+            </button>
+          </div>
         ) : (
           rowKeys.map((genre, rowIdx) => (
             <CatalogRow

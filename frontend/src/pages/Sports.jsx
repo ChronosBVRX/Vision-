@@ -28,6 +28,12 @@ export default function Sports() {
   const [resolveAttempts, setResolveAttempts] = useState([]);
   const [resolveError, setResolveError] = useState(null);
   const resolvingRef = useRef(false);
+  const resolveErrorBtnRef = useRef(null);
+
+  // Auto-focus close button when error overlay appears
+  useEffect(() => {
+    if (resolveError) setTimeout(() => resolveErrorBtnRef.current?.focus(), 100);
+  }, [resolveError]);
 
   // Polling reference for background updates
   const pollingIntervalRef = useRef(null);
@@ -329,7 +335,12 @@ export default function Sports() {
               <button className="btn btn-secondary focusable" tabIndex={0} onClick={handleForceRefresh}>Volver a intentar</button>
             </div>
           ) : filteredMatches.length === 0 ? (
-            <p className="text-muted text-center p-8">No hay partidos en curso o próximos que coincidan con la búsqueda.</p>
+            <div className="text-center p-8">
+              <p className="text-muted" style={{ marginBottom: '16px' }}>No hay partidos en curso o próximos que coincidan con la búsqueda.</p>
+              <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setSearchQuery('')}>
+                <X size={16} style={{ marginRight: '6px' }} />Limpiar búsqueda
+              </button>
+            </div>
           ) : (
             <div className="admin-table-container">
               <table className="admin-table">
@@ -419,8 +430,8 @@ export default function Sports() {
               </div>
             )}
             
-            <button className="btn btn-secondary" onClick={() => setResolveError(null)}>
-              Cerrar
+            <button ref={resolveErrorBtnRef} className="btn btn-secondary focusable" tabIndex={0} onClick={() => setResolveError(null)}>
+              <X size={18} /> Cerrar
             </button>
           </div>
         </div>

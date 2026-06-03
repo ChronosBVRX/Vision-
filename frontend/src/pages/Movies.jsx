@@ -35,6 +35,12 @@ export default function Movies({ contentType = 'movie' }) {
   const [resolveError, setResolveError] = useState(null);
   const pageRef = useRef(null);
   const resolvingRef = useRef(false);
+  const resolveErrorBtnRef = useRef(null);
+
+  // Auto-focus close button when error overlay appears
+  useEffect(() => {
+    if (resolveError) setTimeout(() => resolveErrorBtnRef.current?.focus(), 100);
+  }, [resolveError]);
 
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -471,6 +477,9 @@ export default function Movies({ contentType = 'movie' }) {
     );
   }
 
+  const emptyCatalogRef = useRef(null);
+  useEffect(() => { if (catalog.length === 0) setTimeout(() => emptyCatalogRef.current?.focus(), 100); }, [catalog.length]);
+
   // ── Empty state ─────────────────────────────────────────────────────────────
   if (catalog.length === 0) {
     return (
@@ -493,7 +502,7 @@ export default function Movies({ contentType = 'movie' }) {
             <span>{syncMsg || 'Sincronizando...'}</span>
           </div>
         ) : (
-          <button className="btn btn-primary catalog-sync-btn" onClick={triggerSync}>
+          <button ref={emptyCatalogRef} className="btn btn-primary catalog-sync-btn focusable" tabIndex={0} onClick={triggerSync}>
             <RefreshCw size={16} />
             Sincronizar Catálogo
           </button>
@@ -658,7 +667,7 @@ export default function Movies({ contentType = 'movie' }) {
               </div>
             )}
             
-            <button className="btn btn-secondary" onClick={() => setResolveError(null)}>
+            <button ref={resolveErrorBtnRef} className="btn btn-secondary focusable" tabIndex={0} onClick={() => setResolveError(null)}>
               <X size={18} /> Cerrar
             </button>
           </div>
@@ -723,7 +732,7 @@ export default function Movies({ contentType = 'movie' }) {
               ) : seriesError ? (
                 <div className="ep-selector-loading">
                   <p className="ep-error-msg">{seriesError}</p>
-                  <button className="btn btn-secondary" onClick={() => setActiveSeries(null)}>Volver</button>
+                  <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setActiveSeries(null)}>Volver</button>
                 </div>
               ) : seriesSeasons.length > 0 && seriesSeasons[selectedSeasonIdx] ? (
                 <div className="ep-grid">
@@ -741,7 +750,10 @@ export default function Movies({ contentType = 'movie' }) {
                 </div>
               ) : (
                 <div className="ep-selector-loading">
-                  <p style={{ color: 'var(--text-secondary)' }}>No hay episodios disponibles.</p>
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>No hay episodios disponibles.</p>
+                  <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setActiveSeries(null)}>
+                    <X size={16} style={{ marginRight: '6px' }} />Cerrar
+                  </button>
                 </div>
               )}
             </div>

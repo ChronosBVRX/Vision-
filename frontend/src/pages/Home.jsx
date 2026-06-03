@@ -226,9 +226,15 @@ export default function Home({ selectedCategoryFilter }) {
   const [seriesError, setSeriesError] = useState(null);
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState(0);
   const epSelectorRef = useRef(null);
+  const resolveErrorBtnRef = useRef(null);
 
   const resolvingRef = useRef(false);
   const pageRef      = useRef(null);
+
+  // Auto-focus close button when error overlay appears
+  useEffect(() => {
+    if (resolveError) setTimeout(() => resolveErrorBtnRef.current?.focus(), 100);
+  }, [resolveError]);
 
   // ── Load catalog movies, series AND live sources ───────────────────────────
   const loadAll = useCallback(() => {
@@ -615,13 +621,16 @@ export default function Home({ selectedCategoryFilter }) {
     );
   }
 
+  const emptyRef = useRef(null);
+  useEffect(() => { if (allContent.length === 0) setTimeout(() => emptyRef.current?.focus(), 100); }, [allContent.length]);
+
   if (allContent.length === 0) {
     return (
       <div className="catalog-empty">
         <div className="catalog-empty-icon"><Play size={80} /></div>
         <h2 className="catalog-empty-title">Sin contenido aún</h2>
         <p className="catalog-empty-sub">Ve a Películas y sincroniza el catálogo para ver contenido aquí.</p>
-        <button className="btn btn-primary catalog-sync-btn" onClick={loadAll}>
+        <button ref={emptyRef} className="btn btn-primary catalog-sync-btn focusable" tabIndex={0} onClick={loadAll}>
           <RefreshCw size={16} /> Reintentar
         </button>
       </div>
@@ -680,7 +689,10 @@ export default function Home({ selectedCategoryFilter }) {
           {tvGroupKeys.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
               <p style={{ fontSize: '1.2rem', marginBottom: '10px', fontWeight: 600 }}>No se encontraron canales.</p>
-              <p style={{ fontSize: '0.9rem' }}>Intenta con otro término de búsqueda.</p>
+              <p style={{ fontSize: '0.9rem', marginBottom: '20px' }}>Intenta con otro término de búsqueda.</p>
+              <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setTvSearchQuery('')}>
+                <X size={16} style={{ marginRight: '6px' }} />Limpiar búsqueda
+              </button>
             </div>
           ) : (
             tvGroupKeys.map(cat => (
@@ -749,7 +761,7 @@ export default function Home({ selectedCategoryFilter }) {
                 Error de Transmisión
               </h3>
               <p className="text-secondary" style={{ marginBottom: '20px', fontSize: '0.95rem' }}>{resolveError}</p>
-              <button className="btn btn-secondary focusable" onClick={() => setResolveError(null)}>
+              <button ref={resolveErrorBtnRef} className="btn btn-secondary focusable" tabIndex={0} onClick={() => setResolveError(null)}>
                 <X size={18} /> Cerrar
               </button>
             </div>
@@ -838,7 +850,7 @@ export default function Home({ selectedCategoryFilter }) {
                 ))}
               </div>
             )}
-            <button className="btn btn-secondary focusable" onClick={() => setResolveError(null)}>
+            <button ref={resolveErrorBtnRef} className="btn btn-secondary focusable" tabIndex={0} onClick={() => setResolveError(null)}>
               <X size={18} /> Cerrar
             </button>
           </div>
@@ -883,7 +895,7 @@ export default function Home({ selectedCategoryFilter }) {
               ) : seriesError ? (
                 <div className="ep-selector-loading">
                   <p className="ep-error-msg">{seriesError}</p>
-                  <button className="btn btn-secondary" onClick={() => setActiveSeries(null)}>Volver</button>
+                  <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setActiveSeries(null)}>Volver</button>
                 </div>
               ) : seriesSeasons.length > 0 && seriesSeasons[selectedSeasonIdx] ? (
                 <div className="ep-grid">
@@ -901,7 +913,10 @@ export default function Home({ selectedCategoryFilter }) {
                 </div>
               ) : (
                 <div className="ep-selector-loading">
-                  <p style={{ color: 'var(--text-secondary)' }}>No hay episodios disponibles.</p>
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>No hay episodios disponibles.</p>
+                  <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setActiveSeries(null)}>
+                    <X size={16} style={{ marginRight: '6px' }} />Cerrar
+                  </button>
                 </div>
               )}
             </div>

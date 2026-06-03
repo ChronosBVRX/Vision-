@@ -20,13 +20,19 @@ export default function useSpatialNavigation(isActive = true) {
       const keys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace'];
       if (!keys.includes(e.key)) return;
 
-      // ── VideoPlayer open → it handles ALL keys ──────────────────────
-      if (document.querySelector('.watch-overlay')) return;
+      // ── VideoPlayer open → it handles ALL keys in capture phase ────
+      // Only skip if a real VideoPlayer is active (has <video> or watch-header-overlay),
+      // not for resolver error/loading overlays that need keyboard navigation.
+      const wOverlay = document.querySelector('.watch-overlay');
+      if (wOverlay && (wOverlay.querySelector('video') || wOverlay.querySelector('.watch-header-overlay'))) return;
 
       const activeEl = document.activeElement;
 
       // ── Detect context ─────────────────────────────────────────────────
-      const activeModal  = document.querySelector('.details-modal-overlay, .video-overlay');
+      // Treat any .watch-overlay without a video player as an active overlay
+      const isVideoOverlay = wOverlay && (wOverlay.querySelector('video') || wOverlay.querySelector('.watch-header-overlay'));
+      const overlayContainer = isVideoOverlay ? null : wOverlay;
+      const activeModal  = overlayContainer || document.querySelector('.details-modal-overlay, .video-overlay');
       const activeInMain = activeEl ? !!activeEl.closest('.catalog-page, .main-content') : false;
       const activeInSidebar = activeEl ? !!activeEl.closest('.sidebar') : false;
 
@@ -40,9 +46,16 @@ export default function useSpatialNavigation(isActive = true) {
         return;
       }
 
-      // ── Backspace / Escape: return to sidebar ──────────────────────────
+      // ── Backspace / Escape: close overlay/modal or return to sidebar ──
       if (e.key === 'Backspace' || e.key === 'Escape') {
-        if (!activeModal) {
+        if (activeModal) {
+          // Try to close the overlay by clicking its close button
+          const closeBtn = activeModal.querySelector('.watch-close, .btn-secondary') || activeModal.querySelector('button');
+          if (closeBtn) {
+            e.preventDefault();
+            closeBtn.click();
+          }
+        } else {
           e.preventDefault();
           const firstSidebarItem = document.querySelector('.sidebar .focusable');
           if (firstSidebarItem) {
@@ -50,7 +63,6 @@ export default function useSpatialNavigation(isActive = true) {
             firstSidebarItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
         }
-        // Always let event bubble so modals can close themselves
         return;
       }
 
