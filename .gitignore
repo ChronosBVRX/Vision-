@@ -35,3 +35,10 @@ out/
 # Archivos del sistema operativo
 .DS_Store
 Thumbs.db
+
+# Excepciones para permitir desplegar tal cual el estado local en la otra PC
+!.env
+!frontend/.env
+!data/
+!data/database.sqlite
+
