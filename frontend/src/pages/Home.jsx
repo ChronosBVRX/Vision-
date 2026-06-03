@@ -1,8 +1,76 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Play, Star, Loader, X, RefreshCw } from 'lucide-react';
+import { Play, Star, Loader, X, RefreshCw, Search, Tv } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
 import DetailsModal from '../components/DetailsModal';
-import { HeroBanner, CatalogRow } from '../components/CatalogComponents';
+import { HeroBanner, CatalogRow, CatalogCard } from '../components/CatalogComponents';
+
+function getNormalizedTVCategory(channel) {
+  const title = (channel.title || '').toLowerCase();
+  let cat = (channel.category || '').replace(/^(Planeta Play - |Pluto TV - |Canales - )/i, '').trim();
+
+  const titleLower = title.toLowerCase();
+  
+  if (titleLower.includes('anime') || titleLower.includes('animax') || titleLower.includes('locomotion')) {
+    return 'Anime';
+  }
+  if (
+    titleLower.includes('espn') || titleLower.includes('fox sports') || titleLower.includes('sportv') ||
+    titleLower.includes('deportes') || titleLower.includes('sports') || titleLower.includes('tudn') ||
+    titleLower.includes('win sports') || titleLower.includes('golf') || titleLower.includes('f1') ||
+    titleLower.includes('ufc') || titleLower.includes('nba') || titleLower.includes('nascar') ||
+    titleLower.includes('bein') || titleLower.includes('tyc') || titleLower.includes('arena') ||
+    titleLower.includes('laliga') || titleLower.includes('futbol') || titleLower.includes('garage') ||
+    titleLower.includes('motorvision') || titleLower.includes('dazn')
+  ) {
+    return 'Deportes';
+  }
+  if (
+    titleLower.includes('disney') || titleLower.includes('cartoon') || titleLower.includes('nickelodeon') ||
+    titleLower.includes('nick ') || titleLower.includes('discovery kids') || titleLower.includes('boing') ||
+    titleLower.includes('infantil') || titleLower.includes('kids') || titleLower.includes('baby') ||
+    titleLower.includes('toonline') || titleLower.includes('laika')
+  ) {
+    return 'Kids / Infantil';
+  }
+  if (
+    titleLower.includes('hbo') || titleLower.includes('cine') || titleLower.includes('pelicula') ||
+    titleLower.includes('movie') || titleLower.includes('tnt') || titleLower.includes('space') ||
+    titleLower.includes('amc') || titleLower.includes('axn') || titleLower.includes('fx') ||
+    titleLower.includes('fox channel') || titleLower.includes('star channel') || titleLower.includes('cinecanal') ||
+    titleLower.includes('golden') || titleLower.includes('multipremier') || titleLower.includes('studio universal') ||
+    titleLower.includes('paramount') || titleLower.includes('h&h') || titleLower.includes('universal tv')
+  ) {
+    return 'Cine & Series';
+  }
+  if (
+    titleLower.includes('cnn') || titleLower.includes('noticias') || titleLower.includes('news') ||
+    titleLower.includes('24 horas') || titleLower.includes('rt') || titleLower.includes('telesur') ||
+    titleLower.includes('dw') || titleLower.includes('prensa') || titleLower.includes('la nacion') ||
+    titleLower.includes('todo noticias')
+  ) {
+    return 'Noticias';
+  }
+  if (
+    titleLower.includes('discovery') || titleLower.includes('national geographic') ||
+    titleLower.includes('nat geo') || titleLower.includes('history') || titleLower.includes('animal planet') ||
+    titleLower.includes('documental') || titleLower.includes('biography') || titleLower.includes('investigation')
+  ) {
+    return 'Documentales';
+  }
+  if (
+    titleLower.includes('mtv') || titleLower.includes('musica') || titleLower.includes('music') ||
+    titleLower.includes('viva') || titleLower.includes('vh1') || titleLower.includes('htv') ||
+    titleLower.includes('telehit')
+  ) {
+    return 'Música';
+  }
+
+  if (cat.toLowerCase() === 'canales en vivo' || cat.toLowerCase() === 'general' || cat.toLowerCase() === 'importado' || !cat) {
+    return 'Variedades / General';
+  }
+
+  return cat;
+}
 
 // ─── Home Page — Muestra películas del catálogo real + fuentes en vivo ─────────
 export default function Home({ selectedCategoryFilter }) {
@@ -11,6 +79,7 @@ export default function Home({ selectedCategoryFilter }) {
   const [series, setSeries]         = useState([]);   // from /api/catalog/series
   const [sources, setSources]       = useState([]);   // from /api/sources (TV/live)
   const [isLoading, setIsLoading]   = useState(true);
+  const [tvSearchQuery, setTvSearchQuery] = useState('');
 
   // ── Player / modal state ───────────────────────────────────────────────────
   const [activeItem, setActiveItem]         = useState(null);
@@ -65,12 +134,24 @@ export default function Home({ selectedCategoryFilter }) {
   const filteredContent = useMemo(() => {
     if (!selectedCategoryFilter || selectedCategoryFilter === 'all') return allContent;
     return allContent.filter(item => {
-      const catLower = (item.category || '').toLowerCase();
-      if (selectedCategoryFilter === 'Canales en Vivo')
-        return item.type === 'tv' || catLower.includes('canal');
+      if (selectedCategoryFilter === 'Canales en Vivo') {
+        return item.type === 'tv';
+      }
+      if (item.type === 'tv') {
+        const normCat = getNormalizedTVCategory(item);
+        return normCat === selectedCategoryFilter;
+      }
       return item.category === selectedCategoryFilter;
     });
   }, [allContent, selectedCategoryFilter]);
+
+  const isTVMode = useMemo(() => {
+    if (!selectedCategoryFilter) return false;
+    if (selectedCategoryFilter === 'Canales en Vivo') return true;
+    return allContent.some(item => item.type === 'tv' && getNormalizedTVCategory(item) === selectedCategoryFilter);
+  }, [selectedCategoryFilter, allContent]);
+
+  const tvChannels = useMemo(() => allContent.filter(item => item.type === 'tv'), [allContent]);
 
 
 
@@ -417,6 +498,150 @@ export default function Home({ selectedCategoryFilter }) {
     );
   }
 
+  if (isTVMode) {
+    let tvList = filteredContent.filter(item => item.type === 'tv');
+    if (tvSearchQuery.trim().length > 0) {
+      const q = tvSearchQuery.toLowerCase().trim();
+      tvList = tvList.filter(item => 
+        (item.title && item.title.toLowerCase().includes(q)) ||
+        (item.description && item.description.toLowerCase().includes(q))
+      );
+    }
+
+    const groupedTV = {};
+    tvList.forEach(channel => {
+      const cat = getNormalizedTVCategory(channel);
+      if (!groupedTV[cat]) groupedTV[cat] = [];
+      groupedTV[cat].push(channel);
+    });
+
+    const tvGroupKeys = Object.keys(groupedTV).sort();
+
+    return (
+      <div ref={pageRef} className="catalog-page catalog-page--no-hero">
+        
+        {/* TV SEARCH BAR */}
+        <div className="catalog-filter-bar" style={{ display: 'flex', justifyContent: 'center', marginBottom: '32px' }}>
+          <div className="catalog-search-wrapper" style={{ width: '100%', maxWidth: '600px' }}>
+            <input
+              type="text"
+              className="catalog-search-input focusable"
+              placeholder="Buscar canales en vivo por nombre..."
+              value={tvSearchQuery}
+              onChange={(e) => setTvSearchQuery(e.target.value)}
+              tabIndex={0}
+            />
+            <Search className="catalog-search-icon" size={18} />
+            {tvSearchQuery && (
+              <button 
+                className="catalog-search-clear focusable"
+                onClick={() => setTvSearchQuery('')}
+                tabIndex={0}
+                title="Limpiar búsqueda"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* TV CHANNELS GRID SECTIONS */}
+        <div className="catalog-grid-sections" style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
+          {tvGroupKeys.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
+              <p style={{ fontSize: '1.2rem', marginBottom: '10px', fontWeight: 600 }}>No se encontraron canales.</p>
+              <p style={{ fontSize: '0.9rem' }}>Intenta con otro término de búsqueda.</p>
+            </div>
+          ) : (
+            tvGroupKeys.map(cat => (
+              <div key={cat} className="tv-category-section">
+                <div className="catalog-grid-header" style={{ marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '8px' }}>
+                  <h2 style={{ fontSize: '1.4rem', color: '#fff', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Tv size={20} style={{ color: 'var(--primary-light)' }} />
+                    {cat}
+                  </h2>
+                  <span className="catalog-grid-count">
+                    {groupedTV[cat].length} {groupedTV[cat].length === 1 ? 'canal' : 'canales'}
+                  </span>
+                </div>
+                
+                <div className="catalog-grid">
+                  {groupedTV[cat].map((channel, idx) => (
+                    <CatalogCard
+                      key={`${channel.id}-${idx}`}
+                      item={channel}
+                      onPlay={handleDetails}
+                      onFocus={() => {}}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* DETAILS MODAL */}
+        {detailsItem && (
+          <DetailsModal
+            item={detailsItem}
+            onClose={() => setDetailsItem(null)}
+            onPlay={handlePlay}
+          />
+        )}
+
+        {/* RESOLVER LOADING OVERLAY */}
+        {(isResolving || (activeItem && activeItem.isResolving)) && (
+          <div className="watch-overlay" style={{ justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
+            <div style={{ textAlign: 'center', padding: '36px', maxWidth: '420px' }} className="glass-panel form-card">
+              <Loader className="spin-anim mx-auto mb-4" size={48} style={{ color: 'var(--primary-light)', marginBottom: '16px' }} />
+              <h3 style={{ fontSize: '1.4rem', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>
+                {activeItem?.title || 'Cargando...'}
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--primary-light)', marginBottom: '4px', fontWeight: 500 }}>
+                📡 Sintonizando señal en vivo...
+              </p>
+              <p className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '20px' }}>
+                Analizando transmisiones y omitiendo anuncios de origen
+              </p>
+              <button className="btn btn-secondary focusable" tabIndex={0}
+                onClick={() => { setActiveItem(null); setIsResolving(false); resolvingRef.current = false; }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* RESOLVER ERROR OVERLAY */}
+        {resolveError && (
+          <div className="watch-overlay" style={{ justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
+            <div style={{ textAlign: 'center', maxWidth: '550px', padding: '24px' }} className="glass-panel form-card">
+              <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent)', marginBottom: '12px' }}>
+                Error de Transmisión
+              </h3>
+              <p className="text-secondary" style={{ marginBottom: '20px', fontSize: '0.95rem' }}>{resolveError}</p>
+              <button className="btn btn-secondary focusable" onClick={() => setResolveError(null)}>
+                <X size={18} /> Cerrar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* VIDEO PLAYER */}
+        {activeItem && !activeItem.isResolving && (
+          <VideoPlayer
+            source={activeItem}
+            onClose={() => setActiveItem(null)}
+            onNext={playNext}
+            onNextEpisode={handleEpisodeChange}
+            onPrevEpisode={handleEpisodeChange}
+            channelList={tvList}
+            onChannelChange={handlePlay}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div ref={pageRef} className="catalog-page catalog-page--no-hero">
 
@@ -562,6 +787,8 @@ export default function Home({ selectedCategoryFilter }) {
           onNext={playNext}
           onNextEpisode={handleEpisodeChange}
           onPrevEpisode={handleEpisodeChange}
+          channelList={activeItem.type === 'tv' ? tvChannels : undefined}
+          onChannelChange={activeItem.type === 'tv' ? handlePlay : undefined}
         />
       )}
     </div>

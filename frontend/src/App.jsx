@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Home as HomeIcon, Settings, Film, Tv, Play, Menu, X,
   Globe, PlayCircle, ChevronDown, ChevronRight, Star, Layers
@@ -12,9 +12,19 @@ import PlutoTV from './pages/PlutoTV';
 import useSpatialNavigation from './hooks/useSpatialNavigation';
 import logoImg from './assets/logo.png';
 
+function getNormalizedTVCategoryName(catName) {
+  if (!catName) return 'Variedades / General';
+  let clean = catName.replace(/^(Planeta Play - |Pluto TV - |Canales - )/i, '').trim();
+  if (clean.toLowerCase() === 'canales en vivo' || clean.toLowerCase() === 'general' || clean.toLowerCase() === 'importado' || !clean) {
+    return 'Variedades / General';
+  }
+  return clean;
+}
+
 export default function App() {
   const [currentPage, setCurrentPage]               = useState('home');
   const [categories, setCategories]                 = useState([]);
+  const [categoriesDetailed, setCategoriesDetailed] = useState([]);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
   const [sidebarOpen, setSidebarOpen]               = useState(false);
   const [tvSubmenuOpen, setTvSubmenuOpen]           = useState(false);
@@ -22,7 +32,7 @@ export default function App() {
   const [plutoTab, setPlutoTab]                     = useState('Todas');
   const [animeSubmenuOpen, setAnimeSubmenuOpen]     = useState(false);
   const [animeTab, setAnimeTab]                     = useState('Series');
-
+  
   useSpatialNavigation(true);
 
   useEffect(() => { fetchCategories(); }, []);
@@ -30,7 +40,10 @@ export default function App() {
   const fetchCategories = () => {
     fetch('/api/sources')
       .then(r => r.json())
-      .then(data => setCategories(data.categories || []))
+      .then(data => {
+        setCategories(data.categories || []);
+        setCategoriesDetailed(data.categoriesDetailed || []);
+      })
       .catch(err => console.error('Error fetching categories:', err));
   };
 
@@ -56,10 +69,17 @@ export default function App() {
     }, 100);
   };
 
-  // TV channel subcategories
-  const tvCategories = categories.filter(c =>
-    c === 'Canales en Vivo' || c.startsWith('Canales -')
-  );
+  // TV channel subcategories (unified and cleaned up)
+  const tvCategories = useMemo(() => {
+    const set = new Set();
+    categoriesDetailed.forEach(c => {
+      if (c.type === 'tv') {
+        const norm = getNormalizedTVCategoryName(c.name);
+        set.add(norm);
+      }
+    });
+    return Array.from(set).sort();
+  }, [categoriesDetailed]);
 
   return (
     <div className="app-container">
@@ -118,17 +138,39 @@ export default function App() {
             {tvCategories.length > 1 && (tvSubmenuOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
           </li>
 
-          {tvSubmenuOpen && tvCategories.map((cat, i) => (
-            <li
-              key={i}
-              className={`nav-subitem focusable ${currentPage === 'home' && selectedCategoryFilter === cat ? 'active' : ''}`}
-              tabIndex={0}
-              onClick={() => selectCategory(cat)}
-              onKeyDown={e => { if (e.key === 'Enter') selectCategory(cat); }}
-            >
-              {cat === 'Canales en Vivo' ? '🌐 Todos' : cat.replace(/^Canales\s*-\s*/i, '')}
-            </li>
-          ))}
+          {tvSubmenuOpen && (
+            <>
+              <li
+                className={`nav-subitem focusable ${currentPage === 'home' && selectedCategoryFilter === 'Canales en Vivo' ? 'active' : ''}`}
+                tabIndex={0}
+                onClick={() => selectCategory('Canales en Vivo')}
+                onKeyDown={e => { if (e.key === 'Enter') selectCategory('Canales en Vivo'); }}
+              >
+                🌐 Todos
+              </li>
+              {tvCategories.filter(cat => cat !== 'Variedades / General').map((cat, i) => (
+                <li
+                  key={i}
+                  className={`nav-subitem focusable ${currentPage === 'home' && selectedCategoryFilter === cat ? 'active' : ''}`}
+                  tabIndex={0}
+                  onClick={() => selectCategory(cat)}
+                  onKeyDown={e => { if (e.key === 'Enter') selectCategory(cat); }}
+                >
+                  {cat}
+                </li>
+              ))}
+              {tvCategories.includes('Variedades / General') && (
+                <li
+                  className={`nav-subitem focusable ${currentPage === 'home' && selectedCategoryFilter === 'Variedades / General' ? 'active' : ''}`}
+                  tabIndex={0}
+                  onClick={() => selectCategory('Variedades / General')}
+                  onKeyDown={e => { if (e.key === 'Enter') selectCategory('Variedades / General'); }}
+                >
+                  Variedades / General
+                </li>
+              )}
+            </>
+          )}
 
           {/* Películas → goes to new Movies page */}
           <li
