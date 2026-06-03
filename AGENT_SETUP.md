@@ -1,39 +1,38 @@
-# Instrucciones de Despliegue para el Agente (Docker Local)
+# Instrucciones de Despliegue para el Agente (Nativo en Windows)
 
-> **Para el Agente Inteligente:** Lee este archivo completamente antes de empezar. Tu objetivo es automatizar la instalación de dependencias, la configuración del entorno y la puesta en marcha de **Vision+** mediante Docker en esta nueva máquina. Realiza todo lo que puedas mediante comandos y, si te encuentras con un bloqueo que requiere intervención física del usuario (como abrir un programa con interfaz gráfica por primera vez), notifícalo detalladamente.
+> **Para el Agente Inteligente:** Lee este archivo completamente antes de empezar. Tu objetivo es automatizar la instalación de dependencias, configuración de variables de entorno, compilación del frontend y puesta en marcha de **Vision+** de forma nativa en este sistema Windows. Realiza todo lo que puedas mediante comandos y, si necesitas intervención física del usuario (como abrir un instalador con interfaz gráfica o reiniciar la consola), notifícalo detalladamente.
 
 ---
 
-## 🛠️ Paso 1: Instalar dependencias del sistema usando `winget` (Windows)
+## 🛠️ Paso 1: Instalar dependencias del sistema usando `winget`
 
-Dado que estás en un entorno Windows, puedes intentar instalar Git y Docker Desktop utilizando el gestor de paquetes de Windows (`winget`) de forma desatendida. Ejecuta los siguientes comandos en PowerShell:
+Ejecuta los siguientes comandos en PowerShell de forma desatendida para instalar las herramientas requeridas:
 
 ### 1.1 Instalar Git:
 ```powershell
 winget install --id Git.Git -e --silent --accept-source-agreements --accept-package-agreements
 ```
 
-### 1.2 Instalar Docker Desktop:
+### 1.2 Instalar Node.js (LTS):
 ```powershell
-winget install --id Docker.DockerDesktop -e --silent --accept-source-agreements --accept-package-agreements
+winget install --id OpenJS.NodeJS.LTS -e --silent --accept-source-agreements --accept-package-agreements
 ```
-> *Nota: Después de instalar Docker Desktop, es posible que el usuario necesite reiniciar el equipo para activar WSL2 en la BIOS o características de virtualización de Windows. Si la instalación de Docker requiere reinicio, pídele al usuario que lo haga y que vuelva a abrir la terminal.*
+
+> ⚠️ **IMPORTANTE:** Después de instalar Node.js y Git, debes pedirle al usuario que **cierre y vuelva a abrir su terminal**. De lo contrario, los comandos `node` y `npm` no serán reconocidos en la sesión actual.
 
 ---
 
-## 🚀 Paso 2: Verificar que Docker esté activo
+## 🚀 Paso 2: Descargar el código y configurar el entorno
 
-Una vez instalado Docker, verifica si el servicio/demonio de Docker está corriendo en segundo plano:
+### 2.1 Descargar el código (si el usuario no lo ha hecho ya):
+Si no estás en la carpeta del repositorio clonado, clónalo:
 ```powershell
-docker info
+git clone https://github.com/ChronosBVRX/Vision-.git
+cd Vision-
 ```
-* **Si el comando falla o dice que no puede conectarse al demonio:** Pídele al usuario que **abra manualmente el programa "Docker Desktop"** desde el menú de inicio de Windows y que acepte los términos de servicio iniciales. Vuelve a comprobar con `docker info` hasta que responda con éxito.
 
----
-
-## 📝 Paso 3: Crear el archivo `.env` en la raíz del proyecto
-
-Crea un archivo llamado `.env` en el directorio raíz de `Vision+` con el siguiente contenido de producción:
+### 2.2 Crear el archivo `.env` en la raíz:
+Crea un archivo llamado `.env` en la raíz del proyecto con la siguiente configuración:
 
 ```env
 PORT=5000
@@ -48,43 +47,74 @@ PLUTO_VALIDATE_STREAMS=true
 
 ---
 
-## 📂 Paso 4: Configurar la Base de Datos (SQLite)
+## 📂 Paso 3: Configurar la Base de Datos (SQLite)
 
 1. Comprueba si existe la carpeta `data/` en la raíz del proyecto. Si no existe, créala.
 2. Pregúntale al usuario si tiene un respaldo físico del archivo `database.sqlite` (o la carpeta `data/`) de su otra PC que quiera usar.
-   * **Si sí:** Indícale la ruta exacta de la carpeta `data/` del proyecto para que pegue su archivo ahí.
-   * **Si no:** No te preocupes, la aplicación creará automáticamente una base de datos nueva e importará los canales y configuraciones base en el primer inicio.
+   * **Si sí:** Indícale que lo copie y pegue en la carpeta `data/` del proyecto.
+   * **Si no:** La aplicación creará automáticamente una base de datos SQLite limpia al iniciar por primera vez.
 
 ---
 
-## 🏗️ Paso 5: Compilar y levantar la aplicación con Docker Compose
+## 📦 Paso 4: Instalar dependencias del proyecto
 
-Ejecuta el siguiente comando en la raíz del proyecto para descargar las imágenes base, compilar el frontend React y arrancar el backend en segundo plano:
+Ejecuta la instalación de dependencias tanto del backend como del frontend:
 
 ```powershell
-docker compose up -d --build
-```
+# Instalar dependencias del Backend (raíz)
+npm install
 
-### 5.1 Verificar que los contenedores estén corriendo:
-```powershell
-docker ps
+# Instalar dependencias del Frontend
+npm install --prefix frontend
 ```
-Deberías ver el contenedor `vision-plus` activo y escuchando en el puerto `0.0.0.0:5000->5000/tcp`.
 
 ---
 
-## 🌐 Paso 6: Configurar acceso externo con Cloudflare Tunnels (Opcional)
+## 🏗️ Paso 5: Compilar el Frontend para Producción
 
-Si el usuario quiere compartir la app con sus amigos de forma gratuita y segura:
+Para que la aplicación consuma la menor cantidad de recursos (RAM y CPU) en la PC servidor, compila el frontend de React para que Express lo sirva de forma estática en el puerto 5000:
 
-### 6.1 Instalar cloudflared:
+```powershell
+npm run build --prefix frontend
+```
+
+---
+
+## 🏁 Paso 6: Arrancar el Servidor
+
+Arranca la aplicación en modo producción:
+
+```powershell
+npm start
+```
+La aplicación estará en línea y disponible en:
+👉 **`http://localhost:5000`**
+
+*(Nota: Si el usuario prefiere iniciar la app en modo desarrollo para debuggear con autoreload, puede ejecutar el comando `npm run dev` o hacer doble clic en el archivo `start.bat` de la raíz).*
+
+---
+
+## 🔄 Paso 7: Configurar Inicio Automático con Windows (Opcional)
+
+Si el usuario quiere que la aplicación se inicie sola al encender la PC (ideal para un servidor doméstico):
+
+1. Indícale que presione `Win + R`, escriba `shell:startup` y presione Enter. Esto abrirá la carpeta de Inicio de Windows.
+2. Pídele que cree un **Acceso Directo** (Shortcut) al archivo `start.bat` del proyecto y lo guarde dentro de esa carpeta.
+
+---
+
+## 🌐 Paso 8: Configurar acceso externo con Cloudflare Tunnels (Opcional)
+
+Para compartir la app de forma gratuita con sus 10 amigos sin abrir puertos en el router:
+
+### 8.1 Instalar cloudflared:
 ```powershell
 winget install --id Cloudflare.cloudflared -e --silent --accept-source-agreements --accept-package-agreements
 ```
 
-### 6.2 Iniciar el túnel rápido de prueba:
-Ejecuta el comando en una terminal persistente o en segundo plano:
+### 8.2 Levantar el túnel rápido de prueba:
+Ejecuta en una terminal secundaria o proceso persistente:
 ```powershell
 cloudflared tunnel --url http://localhost:5000
 ```
-Lee la salida del comando, busca la dirección pública `https://*.trycloudflare.com` generada y dásela al usuario para que pueda acceder a su aplicación desde cualquier lugar del mundo.
+Proporciónale al usuario la URL pública `https://*.trycloudflare.com` autogenerada que aparezca en la consola.
