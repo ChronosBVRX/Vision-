@@ -4023,6 +4023,55 @@ video::-moz-media-controls-enclosure {
   transform: none !important;
 }
 
+/* ── Smart TV: Unified Grid Sizes (3-4 rows visible) ─────────────────────────
+   On a 1080p TV (≈1920px viewport minus ~220px sidebar = ~1700px content width)
+   minmax(220px, 1fr) → ~7 columns → depending on card count, 3-4 rows visible.
+   All grids (movies, live-TV channels, sports) use the same column template so
+   cards look uniform across every section of the app.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* catalog-grid: películas, canales en vivo (Home TV mode + Movies page) */
+.is-smart-tv .catalog-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+  gap: 18px !important;
+}
+
+/* Force catalog-cards inside grid to fill the column fully and maintain poster ratio */
+.is-smart-tv .catalog-grid .catalog-card {
+  flex: none !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+.is-smart-tv .catalog-grid .catalog-card-poster {
+  width: 100% !important;
+  height: 0 !important;
+  padding-bottom: 148% !important; /* maintains ~2:3 poster ratio */
+  position: relative !important;
+}
+
+.is-smart-tv .catalog-grid .catalog-card-poster img {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+/* sports-grid: reduce card min-width to match catalog cards visually */
+.is-smart-tv .sports-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
+  gap: 18px !important;
+}
+
+/* ep-grid (episode selector): same column width family */
+.is-smart-tv .ep-grid {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+  gap: 10px !important;
+}
+
 
 
 
