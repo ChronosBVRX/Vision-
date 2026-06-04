@@ -93,6 +93,8 @@ npm run errors   # node read-logs.js --errors
 
 ## Convenciones / Reglas
 
+0. **⚠️ Leer errores del servidor antes de empezar** — Antes de iniciar cualquier tarea, el agente DEBE ejecutar `node read-logs.js --errors --json` o `node read-logs.js --errors` para conocer el estado actual del servidor y detectar errores activos. Si hay errores, priorizar su diagnóstico y solución.
+
 1. **No pisar código del otro agente** — usar comentarios `// [agente]` si es necesario delimitar
 2. **Commits y pushes automáticos** — Al finalizar con éxito cualquier tarea, al corregir un bug o antes de finalizar su turno, el agente **debe** preparar los archivos, realizar un commit descriptivo y hacer `git push` a GitHub automáticamente:
    ```bash
