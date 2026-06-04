@@ -1565,7 +1565,7 @@ let tmdbKeyValid = true;
 app.get('/api/metadata/:id', async (req, res) => {
   const { id } = req.params;
   const { title, type, year } = req.query;
-  const TMDB_KEY = process.env.TMDB_API_KEY || '8414ab200e50f3ab285b5145b2fef42c';
+  const TMDB_KEY = process.env.TMDB_API_KEY || '3905c909305d58a27f2de32e4b6038e7';
 
   try {
     const db = readDB();
