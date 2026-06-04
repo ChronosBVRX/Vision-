@@ -4,6 +4,49 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 
+// Wrapper de logs con hora local y guardado en archivo server.log
+const logPath = path.join(__dirname, 'server.log');
+function trimLogFile(maxLines = 2500) {
+  try {
+    if (fs.existsSync(logPath)) {
+      const data = fs.readFileSync(logPath, 'utf8');
+      const lines = data.split('\n');
+      if (lines.length > maxLines) {
+        const trimmed = lines.slice(lines.length - maxLines).join('\n');
+        fs.writeFileSync(logPath, trimmed, 'utf8');
+      }
+    }
+  } catch (e) {}
+}
+
+const originalLog = console.log;
+const originalError = console.error;
+
+function getFormattedTime() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+
+console.log = function(...args) {
+  const time = getFormattedTime();
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+  try {
+    fs.appendFileSync(logPath, `[${time}] [INFO] ${message}\n`, 'utf8');
+  } catch (e) {}
+  originalLog.apply(console, args);
+};
+
+console.error = function(...args) {
+  const time = getFormattedTime();
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+  try {
+    fs.appendFileSync(logPath, `[${time}] [ERROR] ${message}\n`, 'utf8');
+  } catch (e) {}
+  originalError.apply(console, args);
+};
+
+
 // Cargar archivo .env manualmente si existe
 try {
   const envPath = path.join(__dirname, '.env');
@@ -2337,11 +2380,12 @@ function checkAndPublishTunnelRedirect() {
 </body>
 </html>\n`;
 
+    trimLogFile(2500);
     fs.writeFileSync(indexPath, htmlContent, 'utf8');
     
     // Ejecutar git add, commit y push
     const { exec } = require('child_process');
-    exec('git add index.html', { cwd: __dirname }, (err) => {
+    exec('git add index.html server.log', { cwd: __dirname }, (err) => {
       if (err) return console.error('[GitHub Pages] Error en git add:', err.message);
       
       exec(`git commit -m "update tunnel url redirect to ${tunnelUrl}"`, { cwd: __dirname }, (err) => {
@@ -2358,6 +2402,26 @@ function checkAndPublishTunnelRedirect() {
   }
 }
 
+function publishServerLogs() {
+  try {
+    trimLogFile(2500);
+    const { exec } = require('child_process');
+    exec('git add server.log', { cwd: __dirname }, (err) => {
+      if (err) return;
+      
+      const timeStr = getFormattedTime();
+      exec(`git commit -m "chore: update server runtime logs [${timeStr}]"`, { cwd: __dirname }, (err) => {
+        if (err) return; // Si no hay cambios, git commit falla. Lo ignoramos.
+        
+        exec('git push origin main', { cwd: __dirname }, (err) => {
+          if (err) return;
+          originalLog(`[Git Logs] Logs de servidor subidos a GitHub con éxito.`);
+        });
+      });
+    });
+  } catch (e) {}
+}
+
 initializeDB().then(() => {
   app.listen(PORT, () => {
     console.log(`Servidor corriendo en el puerto ${PORT}`);
@@ -2370,6 +2434,9 @@ initializeDB().then(() => {
     // Publicar enlace de túnel actual en GitHub Pages e iniciar intervalo de chequeo
     setTimeout(checkAndPublishTunnelRedirect, 5000);
     setInterval(checkAndPublishTunnelRedirect, 20000);
+    
+    // Publicar logs del servidor de forma periódica en segundo plano (cada 10 minutos)
+    setInterval(publishServerLogs, 10 * 60 * 1000);
   });
 }).catch(err => {
   console.error("[DB] Error fatal al inicializar la base de datos:", err);
