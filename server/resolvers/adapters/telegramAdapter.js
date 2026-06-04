@@ -6,15 +6,15 @@
 const telegramAdapter = {
     name: 'telegramAdapter',
     
-    canHandle: (url) => {
-        return url && url.startsWith('telegram://');
+    canHandle: (source) => {
+        return source && source.url && source.url.startsWith('telegram://');
     },
     
-    resolve: async (url, options = {}) => {
+    resolve: async (source, options = {}) => {
         try {
             // Extraer el messageId
             // Ej: telegram://12345 -> 12345
-            const messageId = url.replace('telegram://', '').split('/')[0];
+            const messageId = source.url.replace('telegram://', '').split('/')[0];
             
             if (!messageId) {
                 throw new Error("Message ID no válido en la URL de Telegram");
@@ -31,7 +31,7 @@ const telegramAdapter = {
                 type: 'video/mp4' // Asumimos MP4 por ahora
             };
         } catch (error) {
-            console.error(`[telegramAdapter] Error resolviendo URL ${url}:`, error.message);
+            console.error(`[telegramAdapter] Error resolviendo URL ${source.url}:`, error.message);
             return null;
         }
     }
