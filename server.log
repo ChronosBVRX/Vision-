@@ -165,3 +165,22 @@
 [2026-06-04 15:03:30] [INFO] [Sniffer] Analisis finalizado para https://www.rojadirectahd.dev/verhttpswww.tarjetaroja.blog.php. Resultado: FALLIDO
 [2026-06-04 15:03:30] [INFO] [Server] Servidor ROJADIRECTAHD no retornó video válido.
 [2026-06-04 15:03:30] [INFO] [Server] Fallaron todos los servidores de Deportes en live resolve. Retornando error estricto sin iframe.
+[2026-06-04 15:39:36] [INFO] [API Sync] Iniciando actualización mediante la tarea programada VisionRepoAutoPull...
+[2026-06-04 15:39:36] [INFO] [API Sync] Tarea programada lanzada con éxito.
+[2026-06-04 15:39:46] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-04 15:39:48] [INFO] [DB] SQLite inicializado.
+[2026-06-04 15:39:48] [INFO] [DB] Memoria sincronizada: 474 sources, 382 pelis, 144 series.
+[2026-06-04 15:39:48] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-04 15:39:48] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-04 15:39:48] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-04 15:39:49] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-04 15:39:52] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-04 15:39:52] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-04 15:39:52] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-04 15:39:52] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-04 15:39:52] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-04 15:39:52] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-04 15:39:52] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-04 15:39:53] [INFO] [CatalogWorker] Catálogo existente: 382 películas, 144 series.
+[2026-06-04 15:39:53] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-04 15:39:53] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
