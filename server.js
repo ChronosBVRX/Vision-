@@ -94,7 +94,7 @@ const {
 const { db, initDB, allQuery, getQuery, runQuery } = require('./server/db/database');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 const DB_FILE = path.join(__dirname, 'database.json');
 
 let memDB = { categories: [], sources: [], movieCatalog: [], seriesCatalog: [], animeMovieCatalog: [], animeSeriesCatalog: [], settings: {} };
@@ -1965,6 +1965,105 @@ app.post('/api/scrape', async (req, res) => {
     console.error('Error scraping:', error);
     res.status(500).json({ error: 'Error al intentar analizar la página: ' + error.message });
   }
+});
+
+app.get('/api/status', (req, res) => {
+  let tunnelUrl = null;
+  let lastUpdate = 'No disponible';
+  let lastSyncCheck = 'No disponible';
+  let lastCommit = 'No disponible';
+
+  try {
+    const logPath = path.join(__dirname, 'tunnel.log');
+    if (fs.existsSync(logPath)) {
+      const logs = fs.readFileSync(logPath, 'utf8');
+      const match = logs.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
+      if (match) {
+        tunnelUrl = match[0];
+      }
+    }
+  } catch (e) {
+    console.error("Error reading tunnel.log:", e.message);
+  }
+
+  try {
+    const pathUpdate = path.join(__dirname, 'last_update.txt');
+    if (fs.existsSync(pathUpdate)) {
+      lastUpdate = fs.readFileSync(pathUpdate, 'utf8').trim();
+    }
+  } catch (e) {}
+
+  try {
+    const pathSync = path.join(__dirname, 'last_sync_check.txt');
+    if (fs.existsSync(pathSync)) {
+      lastSyncCheck = fs.readFileSync(pathSync, 'utf8').trim();
+    }
+  } catch (e) {}
+
+  try {
+    const pathCommit = path.join(__dirname, 'last_commit.txt');
+    if (fs.existsSync(pathCommit)) {
+      lastCommit = fs.readFileSync(pathCommit, 'utf8').trim();
+    }
+  } catch (e) {}
+
+  res.json({
+    online: true,
+    uptime: Math.floor(process.uptime()),
+    lastUpdate,
+    lastSyncCheck,
+    lastCommit,
+    tunnelUrl
+  });
+});
+
+app.post('/api/sync', (req, res) => {
+  const { exec } = require('child_process');
+  const batPath = path.join(__dirname, 'update_repo.bat');
+  
+  console.log('[API Sync] Ejecutando update_repo.bat...');
+  exec(`cmd.exe /c "${batPath}"`, (err, stdout, stderr) => {
+    if (err) {
+      console.error('[API Sync] Error al ejecutar:', err.message);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+    console.log('[API Sync] Sincronización completada exitosamente.');
+    res.json({ success: true, stdout, stderr });
+  });
+});
+
+app.post('/api/restart', (req, res) => {
+  console.log('[API Restart] Petición de reinicio recibida. Deteniendo proceso en 1 segundo...');
+  res.json({ success: true, message: "Reiniciando el servidor..." });
+  setTimeout(() => {
+    process.exit(0);
+  }, 1000);
+});
+
+app.post('/api/restart-tunnel', (req, res) => {
+  const { exec } = require('child_process');
+  console.log('[API Tunnel] Reiniciando túnel de Cloudflare...');
+  
+  exec('taskkill /f /im cloudflared.exe', (killErr) => {
+    setTimeout(() => {
+      try {
+        const logPath = path.join(__dirname, 'tunnel.log');
+        if (fs.existsSync(logPath)) {
+          fs.unlinkSync(logPath);
+        }
+      } catch (e) {}
+
+      const cmd = 'start "Cloudflare Tunnel" cmd /c "cloudflared tunnel --url http://localhost:5000 > tunnel.log 2>&1"';
+      exec(cmd, (startErr) => {
+        if (startErr) {
+          console.error('[API Tunnel] Error al iniciar:', startErr.message);
+          return res.status(500).json({ success: false, error: startErr.message });
+        }
+        console.log('[API Tunnel] Proceso de túnel lanzado.');
+        res.json({ success: true, message: "Túnel reiniciado. Espera unos segundos para la nueva URL." });
+      });
+    }, 1000);
+  });
 });
 
 initializeDB().then(() => {
