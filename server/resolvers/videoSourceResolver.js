@@ -75,15 +75,36 @@ async function extractStreamsFromMoviePage(pageUrl, siteName) {
   try {
     console.log(`[MoviePageParser] 🔍 Analizando página externa de ${siteName || 'Proveedor'}: ${pageUrl}`);
     
-    const response = await axiosGetWithRetry(pageUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'es-MX,es;q=0.9,en;q=0.5'
-      },
-      timeout: 12000
-    });
+    let html = '';
+    const isPoseidon = pageUrl.includes('poseidon') || (siteName && siteName.toLowerCase().includes('poseidon'));
+    
+    if (isPoseidon) {
+      const { fetchHtmlWithBrowser } = require('./browserFetcher');
+      html = await fetchHtmlWithBrowser(pageUrl);
+    } else {
+      try {
+        const response = await axiosGetWithRetry(pageUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'es-MX,es;q=0.9,en;q=0.5'
+          },
+          timeout: 12000
+        });
+        html = response.data;
+      } catch (axiosErr) {
+        const status = axiosErr.response?.status;
+        const shouldFallback = status === 403 || status === 429 || status === 503 || axiosErr.code === 'ECONNABORTED' || !axiosErr.response;
+        if (shouldFallback) {
+          console.warn(`[MoviePageParser] Axios falló (status: ${status || 'TIMEOUT/NETWORK'}). Reintentando con Playwright BrowserFetcher para ${pageUrl}...`);
+          const { fetchHtmlWithBrowser } = require('./browserFetcher');
+          html = await fetchHtmlWithBrowser(pageUrl);
+        } else {
+          throw axiosErr;
+        }
+      }
+    }
 
-    const $ = cheerio.load(response.data);
+    const $ = cheerio.load(html);
 
     // -- A) PELISPLUS STRUCTURE --
     if (siteName === 'PelisPlus' || pageUrl.includes('pelisplushd')) {

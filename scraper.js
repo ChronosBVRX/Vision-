@@ -1791,18 +1791,39 @@ async function scrapeEpisodesFromSeriesPage(seriesUrl, siteName) {
   console.log(`[CatalogScraper] Extrayendo episodios de serie en ${siteName}: ${seriesUrl}`);
   const seasons = [];
   try {
-    const axios = require('axios');
     const cheerio = require('cheerio');
+    let html = '';
     
-    const response = await axios.get(seriesUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'es-MX,es;q=0.9,en;q=0.5'
-      },
-      timeout: 10000
-    });
+    const isPoseidon = siteName === 'PoseidonHD' || seriesUrl.includes('poseidon');
     
-    const $ = cheerio.load(response.data);
+    if (isPoseidon) {
+      const { fetchHtmlWithBrowser } = require('./server/resolvers/browserFetcher');
+      html = await fetchHtmlWithBrowser(seriesUrl);
+    } else {
+      const axios = require('axios');
+      try {
+        const response = await axios.get(seriesUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'es-MX,es;q=0.9,en;q=0.5'
+          },
+          timeout: 10000
+        });
+        html = response.data;
+      } catch (axiosErr) {
+        const status = axiosErr.response?.status;
+        const shouldFallback = status === 403 || status === 429 || status === 503 || axiosErr.code === 'ECONNABORTED' || !axiosErr.response;
+        if (shouldFallback) {
+          console.warn(`[CatalogScraper] Axios falló para ${seriesUrl} (status: ${status || 'TIMEOUT/NETWORK'}). Reintentando con Playwright BrowserFetcher...`);
+          const { fetchHtmlWithBrowser } = require('./server/resolvers/browserFetcher');
+          html = await fetchHtmlWithBrowser(seriesUrl);
+        } else {
+          throw axiosErr;
+        }
+      }
+    }
+    
+    const $ = cheerio.load(html);
     
     if (siteName === 'PelisPlus') {
       // PelisPlus uses .tab-content with #season-1, #season-2 etc or #pills-vertical-1
