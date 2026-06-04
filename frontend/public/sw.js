@@ -34,18 +34,34 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network First for API calls, Network First (with cache fallback) for static assets.
-  // This avoids cache locking issues, loading the latest app version whenever online.
+  // Cache-First for catalog/sources API (instant load), Network-First for the rest
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const resClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
-          return response;
+    const isCachedEndpoint = url.pathname.startsWith('/api/catalog/') || url.pathname === '/api/sources';
+
+    if (isCachedEndpoint) {
+      event.respondWith(
+        caches.match(event.request).then((cached) => {
+          const fetchPromise = fetch(event.request).then((response) => {
+            if (response && response.status === 200) {
+              const resClone = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
+            }
+            return response;
+          }).catch(() => cached);
+          return cached || fetchPromise;
         })
-        .catch(() => caches.match(event.request))
-    );
+      );
+    } else {
+      event.respondWith(
+        fetch(event.request)
+          .then((response) => {
+            const resClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
+            return response;
+          })
+          .catch(() => caches.match(event.request))
+      );
+    }
   } else {
     event.respondWith(
       fetch(event.request)

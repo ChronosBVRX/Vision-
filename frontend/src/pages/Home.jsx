@@ -4,6 +4,7 @@ import VideoPlayer from '../components/VideoPlayer';
 import DetailsModal from '../components/DetailsModal';
 import { HeroBanner, CatalogRow, CatalogCard } from '../components/CatalogComponents';
 import LoadingScreen from '../components/LoadingScreen';
+import { useCatalog } from '../context/CatalogContext.jsx';
 
 function getNormalizedTVCategory(channel) {
   if (!channel) return 'Variedades / General';
@@ -205,12 +206,13 @@ function getNormalizedTVCategory(channel) {
 
 // ─── Home Page — Muestra películas del catálogo real + fuentes en vivo ─────────
 export default function Home({ selectedCategoryFilter }) {
-  // ── Catalog state ──────────────────────────────────────────────────────────
-  const [movies, setMovies]         = useState([]);   // from /api/catalog/movie
-  const [series, setSeries]         = useState([]);   // from /api/catalog/series
-  const [sources, setSources]       = useState([]);   // from /api/sources (TV/live)
+  const { movies, series, sources, loading: catalogLoading } = useCatalog();
   const [isLoading, setIsLoading]   = useState(true);
   const [tvSearchQuery, setTvSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (!catalogLoading) setIsLoading(false);
+  }, [catalogLoading]);
 
   // ── Player / modal state ───────────────────────────────────────────────────
   const [activeItem, setActiveItem]         = useState(null);
@@ -237,22 +239,6 @@ export default function Home({ selectedCategoryFilter }) {
   useEffect(() => {
     if (resolveError) setTimeout(() => resolveErrorBtnRef.current?.focus(), 100);
   }, [resolveError]);
-
-  // ── Load catalog movies, series AND live sources ───────────────────────────
-  const loadAll = useCallback(() => {
-    setIsLoading(true);
-    Promise.all([
-      fetch('/api/catalog/movie').then(r => r.json()).catch(() => ({ items: [] })),
-      fetch('/api/catalog/series').then(r => r.json()).catch(() => ({ items: [] })),
-      fetch('/api/sources?includePlutoTV=true').then(r => r.json()).catch(() => ({ sources: [] })),
-    ]).then(([moviesData, seriesData, sourcesData]) => {
-      setMovies(moviesData.items || []);
-      setSeries(seriesData.items || []);
-      setSources(sourcesData.sources || []);
-    }).finally(() => setIsLoading(false));
-  }, []);
-
-  useEffect(() => { loadAll(); }, [loadAll]);
 
   // ── Combine all content into one flat list ─────────────────────────────────
   const allContent = useMemo(() => {

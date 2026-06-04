@@ -43,12 +43,15 @@ function isAuthorized(url) {
 }
 
 /**
- * Sniffs video stream URLs by navigating to an authorized embed page in Playwright.
+ * Sniffs video stream URLs by navigating to an embed page in Playwright.
  * @param {string} targetUrl - The embed URL to sniff.
+ * @param {Object} [options] - Optional settings.
+ * @param {boolean} [options.bypassAuth=false] - Skip the authorized domain check (for fallback sniffing).
  * @returns {Promise<Object>} Object containing resolution results: { success: boolean, url: string, headers: Object, reason: string }
  */
-async function sniffAuthorizedEmbed(targetUrl) {
-  if (!isAuthorized(targetUrl)) {
+async function sniffAuthorizedEmbed(targetUrl, options = {}) {
+  const bypassAuth = options.bypassAuth || false;
+  if (!bypassAuth && !isAuthorized(targetUrl)) {
     console.log(`[BrowserResolver] ❌ Dominio no autorizado para: ${targetUrl}`);
     return { success: false, reason: 'NOT_AUTHORIZED_DOMAIN' };
   }

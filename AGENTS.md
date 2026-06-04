@@ -189,12 +189,56 @@ Vision+/
 
 ---
 
+## Modificaciones de opencode (04/06/2026)
+
+### Sistema de Caché Inteligente (3 capas)
+
+**Problema:** Cada navegación a Home/Movies/Series hacía 3-4 fetch frescos al backend. Sin caché client-side de ningún tipo.
+
+**Solución — 3 capas de caché:**
+
+1. **useCache hook** (`frontend/src/hooks/useCache.js`):
+   - Guarda respuestas API en localStorage con TTL configurable
+   - Muestra datos cacheados al instante en renders iniciales
+   - Refresca en background cuando el caché supera el 50% del TTL
+   - Fallo silencioso si localStorage está lleno
+
+2. **CatalogContext** (`frontend/src/context/CatalogContext.jsx`):
+   - Precarga movieCatalog, seriesCatalog y sources a nivel de App
+   - Provider envuelve la App en main.jsx
+   - Home.jsx lee datos del context — 0 fetches en navegación
+   - Movies.jsx usa useCache directo con su propio contentType
+
+3. **Server + Service Worker**:
+   - `server.js`: Cache-Control: public, max-age=300 en catalog y sources
+   - `sw.js`: Cache-First para /api/catalog/* y /api/sources
+
+**Archivos nuevos:**
+- `frontend/src/hooks/useCache.js` — hook de localStorage con TTL
+- `frontend/src/context/CatalogContext.jsx` — contexto de catálogo precargado
+
+**Archivos modificados:**
+- `frontend/src/main.jsx` — CatalogProvider envuelve App
+- `frontend/src/App.jsx` — usa useCatalog() en vez de fetchCategories()
+- `frontend/src/pages/Home.jsx` — usa useCatalog() — carga instantánea
+- `frontend/src/pages/Movies.jsx` — usa useCache() — carga instantánea
+- `server.js` — Cache-Control headers en catalog y sources
+- `frontend/public/sw.js` — Cache-First para catalog/sources
+
+### Cache TTL configurable desde Admin
+- Nuevos sliders en Admin (`discovery` tab) para ajustar TTL de catálogo (1-60 min) y sources (1-30 min)
+- Almacena preferencia en localStorage (vp_ttl_catalog, vp_ttl_sources)
+- useCache.js lee estos valores automáticamente
+- Botón para limpiar caché local y restablecer valores por defecto
+
+---
+
 ## Próximos pasos / Pendientes
 
 - [ ] Agregar autenticación básica al panel admin
 - [ ] Migrar database.json a SQLite
 - [ ] Refactorizar server.js en rutas modulares (separar concerns)
-- [ ] Cache de catálogo con TTL configurable
-- [ ] Modo offline / service worker
-- [ ] Home.jsx tiene un selector de episodios antiguo (todas las temporadas expandidas) — migrar al mismo diseño de Movies.jsx (pestañas + grilla)
-- [ ] Agregar soporte para `onNextEpisode`/`onPrevEpisode` callbacks desde Movies.jsx/Home.jsx al VideoPlayer (actualmente no se pasan, pero el VideoPlayer los usa internamente via `playEpisode(getNextEpisode())`)
+- [ ] ~~Cache de catálogo con TTL configurable~~ ✅ Hecho
+- [ ] ~~Modo offline / service worker~~ ✅ Cache-First implementado en SW
+- [ ] ~~Home.jsx tiene un selector de episodios antiguo~~ ✅ Ya estaba migrado (pestañas + grilla)
+- [ ] Agregar soporte para `onNextEpisode`/`onPrevEpisode` callbacks desde Movies.jsx/Home.jsx al VideoPlayer

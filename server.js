@@ -648,6 +648,7 @@ app.get('/api/sources', (req, res) => {
         type: found ? (typeof found === 'string' ? 'movie' : found.type) : 'movie'
       };
     });
+    res.set('Cache-Control', 'public, max-age=120');
     return res.json({
       categories: Array.from(categoriesSet),
       categoriesDetailed,
@@ -692,6 +693,7 @@ app.get('/api/sources', (req, res) => {
     };
   });
 
+  res.set('Cache-Control', 'public, max-age=120');
   res.json({
     categories: Array.from(categoriesSet),
     categoriesDetailed,
@@ -1581,6 +1583,7 @@ app.get('/api/catalog/:type', (req, res) => {
   if (type === 'movie' || type === 'series') syncing = catalogSyncInProgress;
   if (type === 'anime_movie' || type === 'anime_series') syncing = animeSyncInProgress;
 
+  res.set('Cache-Control', 'public, max-age=300');
   res.json({ items, total: items.length, syncing });
 });
 

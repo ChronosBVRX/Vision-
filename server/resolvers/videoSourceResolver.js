@@ -289,7 +289,7 @@ async function extractStreamsFromMoviePage(pageUrl, siteName) {
     }
     // -- E) ANIMEFLV STRUCTURE --
     else if ((siteName === 'AnimeFLV.net' || siteName === 'AnimeFLV.one' || pageUrl.includes('animeflv')) && !pageUrl.includes('jkanime')) {
-      let finalData = response.data;
+      let finalData = html;
       if (pageUrl.includes('/anime/')) {
         const match = finalData.match(/var episodes\s*=\s*(\[\[.+\]\]);/);
         if (match && match[1]) {
@@ -618,37 +618,40 @@ async function resolveBestVideoSource({
 
   console.log(`[Resolver] Total de opciones filtradas a evaluar: ${filteredOptions.length}`);
 
-  // -- 6. Evaluate candidates IN PARALLEL with concurrency limit (max 3) + 30s timeout --
+  // -- 6. Evaluate candidates IN PARALLEL (max 3) --
   console.log(`[Resolver] Lanzando ${Math.min(filteredOptions.length, 3)} opciones en paralelo (max 3)...`);
   let selectedOption = null;
   let resolvedStream = null;
 
-  // Helper: timeout promise that REJECTS after ms
-  const withTimeout = (ms) => new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`TIMEOUT_${ms}ms`)), ms)
-  );
-
-  // Limit concurrency to 3 to avoid RAM exhaustion from too many Playwright instances
+  // Per-adapter timeout prevents individual adapters from hanging indefinitely
+  const ADAPTER_TIMEOUT = 30000;
   const CONCURRENCY = 3;
   const candidates = filteredOptions.slice(0, CONCURRENCY);
+  const remainingCandidates = filteredOptions.slice(CONCURRENCY);
+
+  // Track actual results per adapter for accurate failure logging
+  const adapterResults = new Map();
+
+  // Helper: add per-adapter timeout
+  const withTimeout = (promise, ms) =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms))
+    ]);
 
   try {
-    // Promise.any — resolves with first SUCCESS, rejects (AggregateError) only when ALL fail
-    const result = await Promise.race([
-      Promise.any(
-        candidates.map(async (option) => {
-          console.log(`[Resolver] ▶ Probando en paralelo: [${option.language}] ${option.name}`);
-          let adapter = adapters.find(a => a.canHandle(option));
-          if (!adapter) adapter = fallbackAdapter;
-          const res = await adapter.resolve(option);
-          if (res.success) return { option, res };
-          // Must THROW (not return) for Promise.any to move to next candidate
-          throw new Error(`FAILED:${option.name}`);
-        })
-      ),
-      // Global hard timeout — prevents hanging if no candidate ever resolves
-      withTimeout(30000)
-    ]);
+    // Promise.any — resolves with first SUCCESS, rejects (AggregateError) when ALL fail
+    const result = await Promise.any(
+      candidates.map(async (option) => {
+        console.log(`[Resolver] ▶ Probando en paralelo: [${option.language}] ${option.name}`);
+        let adapter = adapters.find(a => a.canHandle(option));
+        if (!adapter) adapter = fallbackAdapter;
+        const res = await withTimeout(adapter.resolve(option), ADAPTER_TIMEOUT);
+        adapterResults.set(option, res);
+        if (res.success) return { option, res };
+        throw new Error(res.reason || 'SERVER_DOWN');
+      })
+    );
 
     selectedOption = result.option;
     resolvedStream = result.res.stream;
@@ -656,30 +659,65 @@ async function resolveBestVideoSource({
     console.log(`[Resolver] ✅ Primer éxito paralelo: ${selectedOption.name} -> ${resolvedStream.url}`);
 
     candidates.forEach(opt => {
+      const adapterRes = adapterResults.get(opt);
+      const isSuccess = opt === selectedOption;
       const attempt = {
         movieId,
         sourceName: opt.name,
         language: opt.language,
         server: opt.name,
-        status: opt === selectedOption ? 'SUCCESS' : 'ATTEMPTED',
-        reason: opt === selectedOption ? 'SUCCESS' : 'PARALLEL_RACE',
+        status: isSuccess ? 'SUCCESS' : (adapterRes ? 'FAILED' : 'ATTEMPTED'),
+        reason: isSuccess ? 'SUCCESS' : (adapterRes ? (adapterRes.reason || 'SERVER_DOWN') : 'PARALLEL_RACE'),
         timestamp: new Date()
       };
       attempts.push(attempt);
       saveAttemptLog(attempt);
     });
   } catch (err) {
-    // AggregateError = all failed; TIMEOUT_... = timed out; log and continue to fallback
-    const reason = err.name === 'AggregateError' ? 'Todos los servidores fallaron' : err.message;
-    console.warn(`[Resolver] ⚠️ Evaluación paralela terminó sin éxito: ${reason}`);
-    candidates.forEach(opt => {
+    // AggregateError = all parallel candidates failed
+    const reasons = err.errors ? err.errors.map(e => e.message).join('; ') : (err.message || 'Todos los servidores fallaron');
+    console.warn(`[Resolver] ⚠️ Evaluación paralela terminó sin éxito: ${reasons}`);
+
+    candidates.forEach((opt, i) => {
+      const adapterRes = adapterResults.get(opt);
+      const reason = adapterRes ? (adapterRes.reason || 'SERVER_DOWN') : (err.errors?.[i]?.message || 'SERVER_DOWN');
       const attempt = {
         movieId, sourceName: opt.name, language: opt.language, server: opt.name,
-        status: 'FAILED', reason: 'SERVER_DOWN', timestamp: new Date()
+        status: 'FAILED', reason, timestamp: new Date()
       };
       attempts.push(attempt);
       saveAttemptLog(attempt);
     });
+  }
+
+  // -- 6b. Sequential fallback for remaining candidates (4+) --
+  if (!resolvedStream && remainingCandidates.length > 0) {
+    console.log(`[Resolver] Intentando ${remainingCandidates.length} candidatos restantes secuencialmente...`);
+    for (const option of remainingCandidates) {
+      console.log(`[Resolver] ▶ Probando secuencial: [${option.language}] ${option.name}`);
+      let adapter = adapters.find(a => a.canHandle(option));
+      if (!adapter) adapter = fallbackAdapter;
+      let res = { success: false, reason: 'SERVER_DOWN' };
+      try {
+        res = await withTimeout(adapter.resolve(option), ADAPTER_TIMEOUT);
+      } catch (e) {
+        res = { success: false, reason: e.message || 'SERVER_DOWN' };
+      }
+      const attempt = {
+        movieId, sourceName: option.name, language: option.language, server: option.name,
+        status: res.success ? 'SUCCESS' : 'FAILED',
+        reason: res.success ? 'SUCCESS' : (res.reason || 'SERVER_DOWN'),
+        timestamp: new Date()
+      };
+      attempts.push(attempt);
+      saveAttemptLog(attempt);
+      if (res.success) {
+        selectedOption = option;
+        resolvedStream = res.stream;
+        console.log(`[Resolver] ✅ Éxito en candidato secuencial: ${option.name}`);
+        break;
+      }
+    }
   }
 
 

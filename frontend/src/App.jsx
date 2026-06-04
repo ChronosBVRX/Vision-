@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Home as HomeIcon, Settings, Film, Tv, Play, Menu, X,
   Globe, PlayCircle, ChevronDown, ChevronRight, Star, Layers
@@ -9,6 +9,7 @@ import Sports from './pages/Sports';
 import Movies from './pages/Movies';
 import Series from './pages/Series';
 import useSpatialNavigation from './hooks/useSpatialNavigation';
+import { useCatalog } from './context/CatalogContext.jsx';
 import logoImg from './assets/logo.png';
 
 function getNormalizedTVCategory(channel) {
@@ -211,18 +212,15 @@ function getNormalizedTVCategory(channel) {
 
 export default function App() {
   const [currentPage, setCurrentPage]               = useState('home');
-  const [categories, setCategories]                 = useState([]);
-  const [categoriesDetailed, setCategoriesDetailed] = useState([]);
-  const [sources, setSources]                       = useState([]);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
   const [sidebarOpen, setSidebarOpen]               = useState(false);
   const [tvSubmenuOpen, setTvSubmenuOpen]           = useState(false);
   const [animeSubmenuOpen, setAnimeSubmenuOpen]     = useState(false);
   const [animeTab, setAnimeTab]                     = useState('Series');
   
+  const { sources, categories, categoriesDetailed } = useCatalog();
+  
   useSpatialNavigation(true);
-
-  useEffect(() => { fetchCategories(); }, []);
 
   // Auto-focus first submenu item when submenus open
   useEffect(() => {
@@ -237,17 +235,6 @@ export default function App() {
       if (first) first.focus();
     }, 50);
   }, [animeSubmenuOpen]);
-
-  const fetchCategories = () => {
-    fetch('/api/sources?includePlutoTV=true')
-      .then(r => r.json())
-      .then(data => {
-        setCategories(data.categories || []);
-        setCategoriesDetailed(data.categoriesDetailed || []);
-        setSources(data.sources || []);
-      })
-      .catch(err => console.error('Error fetching categories:', err));
-  };
 
   const selectPage = (page) => {
     setCurrentPage(page);

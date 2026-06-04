@@ -30,6 +30,16 @@ export default function Admin() {
   const [m3uRaw, setM3uRaw] = useState('');
   const [m3uCategory, setM3uCategory] = useState('IPTV Importado');
 
+  // Cache TTL config
+  const [catalogTTL, setCatalogTTL] = useState(() => {
+    const saved = localStorage.getItem('vp_ttl_catalog');
+    return saved ? parseInt(saved, 10) : 10;
+  });
+  const [sourcesTTL, setSourcesTTL] = useState(() => {
+    const saved = localStorage.getItem('vp_ttl_sources');
+    return saved ? parseInt(saved, 10) : 5;
+  });
+
   // Basic Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authInput, setAuthInput] = useState('');
@@ -1032,6 +1042,69 @@ export default function Admin() {
               >
                 Sincronizar Catálogo de Anime
               </button>
+            </div>
+          </div>
+
+          {/* ── Cache & Performance Config ─────────────────────────────── */}
+          <div className="glass-panel" style={{ padding: '20px', marginTop: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)' }}>
+            <h4 style={{ color: '#fff', fontSize: '1.1rem', margin: '0 0 12px 0', fontWeight: 700 }}>⚡ Caché y Rendimiento</h4>
+            <p className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '16px', lineHeight: 1.5 }}>
+              Los datos del catálogo se guardan en localStorage del navegador para que las páginas carguen instantáneamente.
+              El caché se refresca automáticamente en segundo plano.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ color: '#ccc', fontSize: '0.85rem', display: 'block', marginBottom: '6px' }}>
+                  TTL Catálogo (películas/series): <strong>{catalogTTL} min</strong>
+                </label>
+                <input
+                  type="range" min="1" max="60" value={catalogTTL}
+                  onChange={e => { const v = Number(e.target.value); setCatalogTTL(v); localStorage.setItem('vp_ttl_catalog', v); }}
+                  style={{ width: '100%', accentColor: 'var(--primary-light)' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#888' }}>
+                  <span>1 min</span><span>60 min</span>
+                </div>
+              </div>
+              <div>
+                <label style={{ color: '#ccc', fontSize: '0.85rem', display: 'block', marginBottom: '6px' }}>
+                  TTL Fuentes (canales/sources): <strong>{sourcesTTL} min</strong>
+                </label>
+                <input
+                  type="range" min="1" max="30" value={sourcesTTL}
+                  onChange={e => { const v = Number(e.target.value); setSourcesTTL(v); localStorage.setItem('vp_ttl_sources', v); }}
+                  style={{ width: '100%', accentColor: 'var(--primary-light)' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#888' }}>
+                  <span>1 min</span><span>30 min</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-secondary focusable"
+                  tabIndex={0}
+                  onClick={() => {
+                    const keys = Object.keys(localStorage).filter(k => k.startsWith('vp_cache_'));
+                    keys.forEach(k => localStorage.removeItem(k));
+                    showAlert('success', `Caché limpiado (${keys.length} entradas). Recarga la página.`);
+                  }}
+                >
+                  🗑️ Limpiar Caché Local
+                </button>
+                <button
+                  className="btn btn-secondary focusable"
+                  tabIndex={0}
+                  onClick={() => {
+                    localStorage.removeItem('vp_ttl_catalog');
+                    localStorage.removeItem('vp_ttl_sources');
+                    setCatalogTTL(10);
+                    setSourcesTTL(5);
+                    showAlert('success', 'TTL restablecidos a valores por defecto.');
+                  }}
+                >
+                  ↩️ Restablecer Valores
+                </button>
+              </div>
             </div>
           </div>
         </div>

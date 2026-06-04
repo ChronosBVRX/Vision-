@@ -4,6 +4,7 @@ import VideoPlayer from '../components/VideoPlayer';
 import DetailsModal from '../components/DetailsModal';
 import { HeroBanner, CatalogRow, CatalogCard } from '../components/CatalogComponents';
 import LoadingScreen from '../components/LoadingScreen';
+import useCache from '../hooks/useCache';
 
 
 
@@ -18,6 +19,9 @@ const GENRE_ORDER = [
 
 // ─── Main Movies/Series Catalog Page ─────────────────────────────────────────
 export default function Movies({ contentType = 'movie' }) {
+  const { data: catalogData, loading: cacheLoading, refresh: refreshCache } = useCache(`catalog_${contentType}`, () =>
+    fetch(`/api/catalog/${contentType}`).then(r => r.json()), 10 * 60 * 1000
+  );
   const [catalog, setCatalog]       = useState([]);
   const [isLoading, setIsLoading]   = useState(true);
   const [isSyncing, setIsSyncing]   = useState(false);
@@ -254,21 +258,19 @@ export default function Movies({ contentType = 'movie' }) {
     });
   }, []);
 
-  // Load catalog from backend
-  const loadCatalog = useCallback(() => {
-    setIsLoading(true);
-    fetch(`/api/catalog/${contentType}`)
-      .then(r => r.json())
-      .then(data => {
-        setCatalog(normalizeCatalogItems(data.items || []));
-        if (data.syncing) setIsSyncing(true);
-      })
-      .catch(err => console.error('Catalog error:', err))
-      .finally(() => setIsLoading(false));
-  }, [contentType, normalizeCatalogItems]);
+  // Sync catalog from cache/background refresh
+  useEffect(() => {
+    if (!catalogData) return;
+    setCatalog(normalizeCatalogItems(catalogData.items || []));
+    if (catalogData.syncing) {
+      setIsSyncing(true);
+    } else {
+      setIsSyncing(false);
+    }
+    setIsLoading(false);
+  }, [catalogData, normalizeCatalogItems]);
 
   useEffect(() => {
-    loadCatalog();
     setActiveRow(0);
     setSearchQuery('');
     setSelectedGenre('Todos');
@@ -278,20 +280,23 @@ export default function Movies({ contentType = 'movie' }) {
   useEffect(() => {
     if (!isSyncing) return;
     const interval = setInterval(() => {
-      fetch(`/api/catalog/${contentType}`)
-        .then(r => r.json())
-        .then(data => {
-          setCatalog(normalizeCatalogItems(data.items || []));
-          if (!data.syncing) {
-            setIsSyncing(false);
-            setSyncMsg(`¡Catálogo actualizado! ${data.total} títulos`);
-            setTimeout(() => setSyncMsg(''), 4000);
-            clearInterval(interval);
-          }
-        });
+      refreshCache();
     }, 8000);
-    return () => clearInterval(interval);
-  }, [isSyncing, contentType, normalizeCatalogItems]);
+    const timeout = setTimeout(() => {
+      setIsSyncing(false);
+      setSyncMsg('La sincronización tomó demasiado tiempo.');
+      setTimeout(() => setSyncMsg(''), 4000);
+    }, 120000);
+    return () => { clearInterval(interval); clearTimeout(timeout); };
+  }, [isSyncing, refreshCache]);
+
+  // Show sync completion message when syncing stops
+  useEffect(() => {
+    if (!isSyncing && syncMsg && !syncMsg.includes('tomó')) {
+      setSyncMsg('¡Catálogo actualizado!');
+      setTimeout(() => setSyncMsg(''), 4000);
+    }
+  }, [isSyncing]);
 
   // Trigger background sync
   const triggerSync = () => {
