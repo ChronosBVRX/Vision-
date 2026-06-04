@@ -178,6 +178,7 @@ Vision+/
 - **Evitar Doble Decodificación (Decoder Deferral)**: Modificado `VideoPlayer.jsx` para no montar ni inicializar el video HLS/DASH principal hasta que finalice/se omita el pre-roll de marca, previniendo cuellos de botella en Smart TVs.
 - **Parche de Caja de Video Gris**: Ajustados estilos de fondo del reproductor a negro absoluto (`#000 !important`) para esconder la caja gris de renderizado nativo.
 - **Perfil de Estilos Reducidos para TV**: Desactivados todos los filtros de desenfoque (`backdrop-filter`) y simplificada la navegación espacial D-pad (eliminado `scale` y `translate` al enfocar) para lograr transiciones instantáneas y fluidas a 60 FPS en hardware de Smart TV de bajo costo.
+- **Capas del Reproductor y Foco (Z-Index y Visibilidad)**: Subido el `z-index` de los controles del reproductor a `1000` para evitar que queden ocultos detrás del plano de decodificación por hardware de la TV. Añadido `visibility: hidden` a las barras y cabeceras ocultas para evitar que los controles invisibles capturen el foco del control remoto por error.
 
 ---
 
