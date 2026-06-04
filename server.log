@@ -317,3 +317,94 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-04 15:47:17] [INFO] [CatalogWorker] Catálogo existente: 382 películas, 144 series.
 [2026-06-04 15:47:17] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
 [2026-06-04 15:47:17] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
+[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
+[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
+[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
+[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
+[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
+[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
+[2026-06-04 15:47:18] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-04 15:47:20] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://beaches-july-general-certificates.trycloudflare.com
+[2026-06-04 15:47:21] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
+[2026-06-04 15:47:21] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
+[2026-06-04 15:47:21] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
+[2026-06-04 15:47:21] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
+[2026-06-04 15:47:21] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 18
+[2026-06-04 15:47:21] [INFO] [SportsScraper] Escaneando un total de 23 espejos en paralelo...
+[2026-06-04 15:47:21] [ERROR] (node:8852) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-06-04 15:47:21] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo ENOTFOUND pirlotv3.pl)
+[2026-06-04 15:47:21] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
+[2026-06-04 15:47:21] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: getaddrinfo ENOTFOUND www.pirlotv3.sale)
+[2026-06-04 15:47:21] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
+[2026-06-04 15:47:21] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
+[2026-06-04 15:47:21] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
+[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
+[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
+[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
+[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
+[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 401)
+[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
+[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
+[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
+[2026-06-04 15:47:22] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://rojadirectahd.vip (24 partidos encontrados)
+[2026-06-04 15:47:22] [INFO] [SportsWorker] Buscando logotipos para 24 partidos...
+[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectahd.dev (Solo 24 partidos)
+[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectatvmas.com (Solo 23 partidos)
+[2026-06-04 15:47:23] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 14 partidos)
+[2026-06-04 15:47:23] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
+[2026-06-04 15:47:23] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
+[2026-06-04 15:47:23] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://rojadirectahd.vip
+[2026-06-04 15:47:24] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
+[2026-06-04 15:47:24] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 14 partidos)
+[2026-06-04 15:47:25] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
+[2026-06-04 15:47:43] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "catalog_poseidonhd_movie_eldrama" (Idioma pref: auto, Servidores excluidos: [])
+[2026-06-04 15:47:43] [INFO] [Resolver] Película encontrada: "El Drama"
+[2026-06-04 15:47:43] [INFO] [MoviePageParser] 🔍 Analizando página externa de PoseidonHD: https://www.poseidonhd2.co/pelicula/1325734/el-drama
+[2026-06-04 15:47:43] [INFO] [BrowserFetcher] 🌐 Cargando página con Playwright para evadir antibot: https://www.poseidonhd2.co/pelicula/1325734/el-drama
+[2026-06-04 15:47:48] [INFO] [BrowserFetcher] ✅ HTML cargado exitosamente. Longitud: 109642 bytes.
+[2026-06-04 15:47:49] [INFO] [Resolver] Página de detalle scrapeada: 10 opciones extraídas de https://www.poseidonhd2.co/pelicula/1325734/el-drama
+[2026-06-04 15:47:49] [INFO] [Resolver] Total de opciones filtradas a evaluar: 10
+[2026-06-04 15:47:49] [INFO] [Resolver] Lanzando 3 opciones en paralelo (max 3)...
+[2026-06-04 15:47:49] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-04 15:47:49] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j385eVxIrBa3fANhWCdQcTnvZCEA2K3x.x_9rgPQSsCR
+[2026-06-04 15:47:49] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j385eVxIrBa3fANhWCdQcTnvZCEA2K3x.x_9rgPQSsCR
+[2026-06-04 15:47:49] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-04 15:47:49] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=nvSrqGY5gls.ZEL93nL9MBLchPU7N5gJsn6QCo0G58M-
+[2026-06-04 15:47:49] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=nvSrqGY5gls.ZEL93nL9MBLchPU7N5gJsn6QCo0G58M-
+[2026-06-04 15:47:49] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-04 15:47:49] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0PLYGnJ6qldOkduhm4DVNxzjM_hcmFDJ96BhIUMmhSiW
+[2026-06-04 15:47:49] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0PLYGnJ6qldOkduhm4DVNxzjM_hcmFDJ96BhIUMmhSiW
+[2026-06-04 15:47:52] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
+[2026-06-04 15:47:52] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
+[2026-06-04 15:47:52] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
+[2026-06-04 15:47:53] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
+[2026-06-04 15:47:53] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
+[2026-06-04 15:47:53] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
+[2026-06-04 15:47:53] [INFO] [BrowserResolver] 🚫 Anuncio ignorado: https://amd-cdn-1.ffb7df5a878b59e42e257c042f54bed2.com/content/stream/agl/pinup_MX_preroll_ZEVS_1920kh1080_DiNERO.mp4
+[2026-06-04 15:47:53] [INFO] [BrowserResolver] 🚫 Anuncio ignorado: https://amd-cdn-1.ffb7df5a878b59e42e257c042f54bed2.com/content/stream/agl/pinup_MX_preroll_ZEVS_1920kh1080_DiNERO.mp4
+[2026-06-04 15:47:54] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
+[2026-06-04 15:47:54] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
+[2026-06-04 15:47:54] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
+[2026-06-04 15:47:57] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/VYizxAwVCLBcVR19cFEYKQ/hjkrhuihghfvu/1780652874/40568348/master.m3u8
+[2026-06-04 15:47:57] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/VYizxAwVCLBcVR19cFEYKQ/hjkrhuihghfvu/1780652874/40568348/master.m3u8
+[2026-06-04 15:47:57] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://callistanise.com/stream/VYizxAwVCLBcVR19cFEYKQ/hjkrhuihghfvu/1780652874/40568348/master.m3u8
+[2026-06-04 15:47:57] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8
+[2026-06-04 15:47:57] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8
+[2026-06-04 15:47:57] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8
+[2026-06-04 15:48:02] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8. Validando conectividad...
+[2026-06-04 15:48:02] [INFO] [SourceValidator] Probando HEAD para: https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8
+[2026-06-04 15:48:02] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://callistanise.com/stream/VYizxAwVCLBcVR19cFEYKQ/hjkrhuihghfvu/1780652874/40568348/master.m3u8. Validando conectividad...
+[2026-06-04 15:48:02] [INFO] [SourceValidator] Probando HEAD para: https://callistanise.com/stream/VYizxAwVCLBcVR19cFEYKQ/hjkrhuihghfvu/1780652874/40568348/master.m3u8
+[2026-06-04 15:48:03] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8
+[2026-06-04 15:48:03] [INFO] [Resolver] ✅ Primer éxito paralelo: player -> https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8
+[2026-06-04 15:48:03] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://callistanise.com/stream/VYizxAwVCLBcVR19cFEYKQ/hjkrhuihghfvu/1780652874/40568348/master.m3u8
+[2026-06-04 15:48:04] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0
+[2026-06-04 15:48:04] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0
+[2026-06-04 15:48:05] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0. Validando conectividad...
+[2026-06-04 15:48:05] [INFO] [SourceValidator] Probando HEAD para: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0
+[2026-06-04 15:48:05] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0
