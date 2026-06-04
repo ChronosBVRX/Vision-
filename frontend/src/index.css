@@ -3980,22 +3980,23 @@ video::-moz-media-controls-enclosure {
 }
 
 /* ── Smart TV Player Controls Overrides ──────────────────────────────────── */
-/* On Smart TVs the controls MUST always remain interactive even when "hidden"
-   so the D-pad can wake them back up. We reduce opacity instead of hiding them. */
+/* Controls are fully invisible when hidden (opacity 0), but since we removed
+   visibility:hidden they remain in the DOM — D-pad keydown still reaches them.
+   Pressing any D-pad key wakes them back up via the keydown handler. */
 
-/* Keep the header overlay always visible on Smart TV (just dimmed) */
+/* Header overlay: fully hidden, no translateY (causes rendering artifacts on TV) */
 .is-smart-tv .watch-header-overlay.hidden {
-  opacity: 0.08 !important;        /* barely visible but focusable */
-  transform: none !important;      /* no translateY (causes rendering artifacts on TV) */
-  pointer-events: none !important; /* clicks still pass through to video */
+  opacity: 0 !important;
+  transform: none !important;      /* no translateY on TV */
+  pointer-events: none !important;
 }
 
-/* Keep the controls overlay always interactive on Smart TV */
+/* Controls overlay: fully hidden but elements remain in DOM for keyboard access */
 .is-smart-tv .custom-player-overlay.hidden {
-  opacity: 0.06 !important;        /* near-invisible but still in layout */
+  opacity: 0 !important;
 }
 
-/* When controls overlay is hidden its children must NOT block touch/click to video */
+/* When controls overlay is hidden, children must NOT block touch/click to video */
 .is-smart-tv .custom-player-overlay.hidden * {
   pointer-events: none !important;
 }

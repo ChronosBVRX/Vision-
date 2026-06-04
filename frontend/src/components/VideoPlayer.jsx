@@ -999,15 +999,26 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       }
 
       // ── Escape / Backspace ─────────────────────────────────────
+      // UX: 1st press → hide controls (if visible). 2nd press within 2s → close player.
       if (e.key === 'Escape' || e.key === 'Backspace') {
         e.preventDefault();
         e.stopPropagation();
-        resetControlsTimer();
-        const now = Date.now();
-        if (now - backPressRef.current < 2000) {
-          onClose?.();
+
+        if (showControlsRef.current) {
+          // Controls are visible → hide them on first Back press
+          setShowControls(false);
+          showControlsRef.current = false;
+          if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+          // Reset the double-press countdown whenever we hide controls
+          backPressRef.current = Date.now();
         } else {
-          backPressRef.current = now;
+          // Controls already hidden → double-press closes the player
+          const now = Date.now();
+          if (now - backPressRef.current < 2000) {
+            onClose?.();
+          } else {
+            backPressRef.current = now;
+          }
         }
         return;
       }
