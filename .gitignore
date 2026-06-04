@@ -42,3 +42,11 @@ Thumbs.db
 !data/
 !data/database.sqlite
 
+# Android configurations and build outputs
+android/local.properties
+android/.gradle/
+android/app/build/
+android/build/
+*.apk
+!VisionPlus-TV.apk
+

@@ -59,7 +59,15 @@ public class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         
         // Cache settings
+        mWebView.clearCache(true);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        
+        // Viewport scale optimizations
+        settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setSupportZoom(false);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
         
         // Better rendering
         mWebView.setScrollbarFadingEnabled(true);
@@ -77,6 +85,20 @@ public class MainActivity extends Activity {
                 // Keep navigation within WebView
                 view.loadUrl(url);
                 return true;
+            }
+
+            @Override
+            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                showErrorPage(view);
+            }
+
+            @Override
+            public void onReceivedError(WebView view, android.webkit.WebResourceRequest request, android.webkit.WebResourceError error) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (request.isForMainFrame()) {
+                        showErrorPage(view);
+                    }
+                }
             }
         });
 
@@ -184,5 +206,22 @@ public class MainActivity extends Activity {
         }
 
         return super.dispatchKeyEvent(event);
+    }
+
+    private void showErrorPage(WebView view) {
+        String errorHtml = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>" +
+            "<style>" +
+            "body { background-color: #070709; color: #ffffff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }" +
+            "h2 { color: #e50914; font-size: 1.6rem; margin-bottom: 8px; font-weight: 700; }" +
+            "p { color: #a0a0a0; font-size: 0.95rem; margin-bottom: 24px; max-width: 80%; line-height: 1.5; }" +
+            ".btn { background-color: #7c3aed; color: #ffffff; border: none; padding: 12px 28px; font-size: 1rem; font-weight: bold; border-radius: 8px; cursor: pointer; outline: none; box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4); transition: background 0.2s, transform 0.2s; }" +
+            ".btn:focus, .btn:hover { background-color: #9061f9; box-shadow: 0 0 0 3px #ffffff; transform: scale(1.05); }" +
+            "</style></head><body>" +
+            "<h2>Error de Conexión</h2>" +
+            "<p>No se pudo conectar al servidor de Vision+. Verifica la conexión a Internet de tu TV e intenta de nuevo.</p>" +
+            "<button class='btn' onclick='window.location.reload()' autofocus>Reintentar Conexión</button>" +
+            "<script>setTimeout(function() { document.querySelector('.btn').focus(); }, 100);</script>" +
+            "</body></html>";
+        view.loadDataWithBaseURL("file:///android_asset/", errorHtml, "text/html", "UTF-8", null);
     }
 }

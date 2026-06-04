@@ -1,8 +1,7 @@
-const CACHE_NAME = 'vision-plus-v1';
+const CACHE_NAME = 'vision-plus-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  // Add other static assets here if necessary
 ];
 
 self.addEventListener('install', (event) => {
@@ -26,16 +25,17 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Solo interceptamos peticiones GET (no mutaciones ni video streaming en la medida de lo posible)
+  // Solo interceptamos peticiones GET
   if (event.request.method !== 'GET') return;
   
-  // Evitar cachear llamadas de API de streaming de video (.m3u8, .mp4, etc)
+  // Evitar cachear llamadas de API de streaming de video o imagenes
   const url = new URL(event.request.url);
-  if (url.pathname.includes('/api/proxy') || url.pathname.includes('/api/img-proxy') || url.pathname.endsWith('.m3u8')) {
+  if (url.pathname.includes('/api/proxy') || url.pathname.includes('/api/img-proxy') || url.pathname.endsWith('.m3u8') || url.pathname.endsWith('.mp4') || url.pathname.endsWith('.ts')) {
     return;
   }
 
-  // Network First for API calls, Cache First for static assets
+  // Network First for API calls, Network First (with cache fallback) for static assets.
+  // This avoids cache locking issues, loading the latest app version whenever online.
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request)
@@ -48,18 +48,23 @@ self.addEventListener('fetch', (event) => {
     );
   } else {
     event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
-        return cachedResponse || fetch(event.request).then((response) => {
-          const resClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const resClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
+          }
           return response;
-        });
-      }).catch(() => {
-        // Fallback para offline
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
-      })
+        })
+        .catch(() => {
+          return caches.match(event.request).then((cachedResponse) => {
+            if (cachedResponse) return cachedResponse;
+            // Fallback para offline
+            if (event.request.mode === 'navigate') {
+              return caches.match('/index.html');
+            }
+          });
+        })
     );
   }
 });

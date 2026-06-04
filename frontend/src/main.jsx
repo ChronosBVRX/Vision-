@@ -37,11 +37,26 @@ createRoot(document.getElementById('root')).render(
   </StrictMode>,
 )
 
-// Register Service Worker for offline capabilities
+// Register Service Worker for offline capabilities with auto-refresh on update
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then((registration) => {
       console.log('SW registered with scope:', registration.scope);
+      
+      // Auto-reload the app when a new Service Worker updates/installs successfully
+      registration.onupdatefound = () => {
+        const installingWorker = registration.installing;
+        if (installingWorker == null) return;
+        
+        installingWorker.onstatechange = () => {
+          if (installingWorker.state === 'installed') {
+            if (navigator.serviceWorker.controller) {
+              console.log('[Vision+] New version available. Refreshing page to apply updates.');
+              window.location.reload();
+            }
+          }
+        };
+      };
     }).catch((error) => {
       console.error('SW registration failed:', error);
     });
