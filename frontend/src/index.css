@@ -3850,4 +3850,83 @@ body.keyboard-mode * {
   pointer-events: none !important;
 }
 
+/* ====================================================================
+   SMART TV & LOW-SPEC DEVICE OPTIMIZATIONS
+   ========================================================================== */
+
+/* Force video elements to have a solid black background.
+   This avoids the browser showing a default grey video box before HLS/stream segments are fully loaded. */
+video,
+video.plyr-video,
+.plyr,
+.plyr__video-wrapper,
+.plyr video {
+  background: #000000 !important;
+  background-color: #000000 !important;
+}
+
+/* TV Specific Styles (Applied dynamically via .is-smart-tv root class) */
+.is-smart-tv *,
+.is-smart-tv *::before,
+.is-smart-tv *::after {
+  /* Disable heavy GPU-taxing backdrop-filters */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  
+  /* Make remote control focus transitions instant/linear to avoid D-pad lag */
+  transition-duration: 0.05s !important;
+  transition-timing-function: linear !important;
+}
+
+/* Simplify D-pad focus state on Smart TVs to prevent rendering & animation stutter */
+.is-smart-tv .focusable:focus {
+  transform: none !important;
+  box-shadow: 0 0 0 3px var(--primary-light) !important; /* solid simple outline, no blurred neon glow */
+}
+
+/* Simplify catalog cards focus (disable translate offsets and scale) */
+.is-smart-tv .card.focusable:focus,
+.is-smart-tv .catalog-card.focusable:focus {
+  transform: none !important;
+  box-shadow: 0 0 0 3px var(--primary-light) !important;
+}
+
+.is-smart-tv .watch-close.focusable:focus {
+  background: var(--accent) !important;
+  box-shadow: 0 0 0 3px #ffffff !important;
+  transform: none !important;
+}
+
+.is-smart-tv .control-btn.focusable:focus {
+  background: var(--primary) !important;
+  box-shadow: 0 0 0 3px var(--primary-light) !important;
+  transform: none !important;
+}
+
+/* Solid background fallbacks for overlay panels on TVs (since blur filters are disabled) */
+.is-smart-tv .glass-panel {
+  background: rgba(12, 13, 18, 0.96) !important;
+}
+
+.is-smart-tv .sidebar {
+  background: #08090d !important;
+}
+
+.is-smart-tv .details-modal-overlay {
+  background: rgba(0, 0, 0, 0.96) !important;
+}
+
+.is-smart-tv .player-popup-menu {
+  background: rgb(13, 17, 34) !important;
+}
+
+.is-smart-tv .player-channel-drawer,
+.is-smart-tv .player-series-drawer {
+  background: rgb(10, 14, 30) !important;
+}
+
+.is-smart-tv .channel-zapping-banner {
+  background: rgb(8, 10, 24) !important;
+}
+
 

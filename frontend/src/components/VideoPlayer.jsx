@@ -1322,7 +1322,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     return () => {
       destroyPlayer();
     };
-  }, [activeStreamIndex, currentStream, playerKey]);
+  }, [activeStreamIndex, currentStream, playerKey, showBrandIntro]);
 
   // Video event listeners (timeupdate, play, pause, etc.)
   useEffect(() => {
@@ -1348,7 +1348,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       video.removeEventListener('loadedmetadata', onLoadedMeta);
       video.removeEventListener('ended', onEnded);
     };
-  }, [currentStream, playerKey]);
+  }, [currentStream, playerKey, showBrandIntro]);
 
   // Helper functions for brand intro
   const handleBrandTimeUpdate = () => {
@@ -1581,12 +1581,14 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             />
           )
         ) : (
-          <video
-            ref={videoRef}
-            className="plyr-video"
-            playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          />
+          !showBrandIntro && (
+            <video
+              ref={videoRef}
+              className="plyr-video"
+              playsInline
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+          )
         )}
       </div>
 

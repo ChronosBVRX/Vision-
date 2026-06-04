@@ -173,6 +173,12 @@ Vision+/
 - **Gráficos Premium integrados:** Banner de Android TV de alta resolución generado por IA (`banner.png` de 320x180 px) y logotipo de launcher personalizado (`ic_launcher.png`).
 - **Archivo Resultante:** `VisionPlus-TV.apk` en la raíz del proyecto.
 
+### Optimización de Rendimiento en Smart TVs (04/06/2026)
+- **Detector de Smart TV**: Implementado sniffer de User Agent en `main.jsx` para aplicar la clase `.is-smart-tv` en el root del DOM.
+- **Evitar Doble Decodificación (Decoder Deferral)**: Modificado `VideoPlayer.jsx` para no montar ni inicializar el video HLS/DASH principal hasta que finalice/se omita el pre-roll de marca, previniendo cuellos de botella en Smart TVs.
+- **Parche de Caja de Video Gris**: Ajustados estilos de fondo del reproductor a negro absoluto (`#000 !important`) para esconder la caja gris de renderizado nativo.
+- **Perfil de Estilos Reducidos para TV**: Desactivados todos los filtros de desenfoque (`backdrop-filter`) y simplificada la navegación espacial D-pad (eliminado `scale` y `translate` al enfocar) para lograr transiciones instantáneas y fluidas a 60 FPS en hardware de Smart TV de bajo costo.
+
 ---
 
 ## Próximos pasos / Pendientes
