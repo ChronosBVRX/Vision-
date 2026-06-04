@@ -2196,16 +2196,18 @@ app.get('/api/status', (req, res) => {
 
 app.post('/api/sync', (req, res) => {
   const { exec } = require('child_process');
-  const batPath = path.join(__dirname, 'update_repo.bat');
   
-  console.log('[API Sync] Ejecutando update_repo.bat...');
-  exec(`cmd.exe /c "${batPath}"`, (err, stdout, stderr) => {
+  console.log('[API Sync] Iniciando actualización mediante la tarea programada VisionRepoAutoPull...');
+  exec('schtasks /Run /TN "VisionRepoAutoPull"', (err, stdout, stderr) => {
     if (err) {
-      console.error('[API Sync] Error al ejecutar:', err.message);
+      console.error('[API Sync] Error al lanzar la tarea programada:', err.message);
       return res.status(500).json({ success: false, error: err.message });
     }
-    console.log('[API Sync] Sincronización completada exitosamente.');
-    res.json({ success: true, stdout, stderr });
+    console.log('[API Sync] Tarea programada lanzada con éxito.');
+    res.json({ 
+      success: true, 
+      message: "Sincronización iniciada en segundo plano. El servidor se reiniciará automáticamente si hay actualizaciones pendientes." 
+    });
   });
 });
 
