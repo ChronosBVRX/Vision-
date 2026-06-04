@@ -1192,6 +1192,15 @@ app.post('/api/live/resolve', async (req, res) => {
     }
   }
 
+  if (type === 'sports' || type === 'sport') {
+    console.log(`[Server] Fallaron todos los servidores de Deportes en live resolve. Retornando error estricto sin iframe.`);
+    return res.json({
+      success: false,
+      error: "No se pudo sintonizar un flujo de video directo para este evento. Intente con otra opción o servidor.",
+      attempts
+    });
+  }
+
   console.log(`[Server] Fallaron todos los servidores en live resolve. Retornando fallback iframe.`);
   return res.json({
     success: true, // We return success: true so VideoPlayer can mount the iframe!
