@@ -2178,10 +2178,12 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             src={BRAND_INTRO_CONFIG.videoUrl}
             autoPlay
             playsInline
+            poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
             onEnded={handleBrandIntroEnded}
             onError={handleBrandIntroError}
             onTimeUpdate={handleBrandTimeUpdate}
             className="brand-intro-video"
+            style={{ background: '#000' }}
           />
 
           {canSkipBrand && (
