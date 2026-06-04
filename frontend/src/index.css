@@ -6,18 +6,26 @@
   --font-alt: 'Plus Jakarta Sans', sans-serif;
 
   /* Colors */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+/* --- DESIGN SYSTEM & VARIABLES --- */
+:root {
+  --font-main: 'Outfit', sans-serif;
+  --font-alt: 'Plus Jakarta Sans', sans-serif;
+
+  /* Colors */
   --bg-darkest: #040404; /* True black base for TV */
   --bg-main: #0a0a0a;
   --bg-card: #141414; /* Classic Netflix dark gray */
   --bg-card-hover: #1f1f1f;
   --bg-glass: rgba(0, 0, 0, 0.6);
   
-  --primary: #e50914; /* Netflix Red */
-  --primary-glow: rgba(229, 9, 20, 0.4);
-  --primary-light: #ff1e27;
+  --primary: #7c3aed; /* Vision+ Violet */
+  --primary-glow: rgba(124, 58, 237, 0.45);
+  --primary-light: #9d6bff;
   --secondary: #ffffff; /* Clean white */
   --secondary-glow: rgba(255, 255, 255, 0.2);
-  --accent: #b81d24; 
+  --accent: #5b21b6; 
   
   --text-primary: #ffffff;
   --text-secondary: #b3b3b3; /* Netflix gray text */
@@ -318,7 +326,7 @@ button, input, select, textarea {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(229, 9, 20, 0.8);
+  background: rgba(124, 58, 237, 0.85);
   color: var(--text-primary);
   padding: 4px 10px;
   border-radius: 2px;
@@ -978,7 +986,7 @@ button, input, select, textarea {
 /* Buttons inside watch/video controls also get the focus indicator */
 .watch-close.focusable:focus {
   background: var(--accent) !important;
-  box-shadow: 0 0 15px 4px rgba(244, 63, 94, 0.6) !important;
+  box-shadow: 0 0 15px 4px rgba(124, 58, 237, 0.6) !important;
 }
 
 /* --- CUSTOM TV PLAYER OVERLAY STYLES --- */
@@ -1468,7 +1476,7 @@ button, input, select, textarea {
   transition: all 0.2s;
 }
 .details-close-btn:hover, .details-close-btn:focus {
-  background: rgba(229,9,20,0.8);
+  background: rgba(124, 58, 237, 0.8);
   border-color: transparent;
   color: #fff;
   transform: scale(1.1);
@@ -1535,7 +1543,7 @@ button, input, select, textarea {
   letter-spacing: 0.8px;
   width: fit-content;
 }
-.details-badge.movie { background: rgba(229,9,20,0.8); color: #fff; }
+.details-badge.movie { background: rgba(124, 58, 237, 0.8); color: #fff; }
 .details-badge.series { background: rgba(59,130,246,0.8); color: #fff; }
 .details-badge.tv { background: rgba(16,185,129,0.8); color: #fff; }
 
@@ -3274,8 +3282,8 @@ button, input, select, textarea {
 }
 
 .btn-sports-action.primary {
-  background: rgba(229, 9, 20, 0.1);
-  border-color: rgba(229, 9, 20, 0.25);
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.28);
   color: var(--text-primary);
 }
 
@@ -3629,7 +3637,7 @@ button, input, select, textarea {
   width: 100%;
   height: 100%;
   min-height: 70vh;
-  background: radial-gradient(circle at center, rgba(229, 9, 20, 0.12) 0%, rgba(4, 4, 4, 1) 80%);
+  background: radial-gradient(circle at center, rgba(124, 58, 237, 0.12) 0%, rgba(4, 4, 4, 1) 80%);
   color: #ffffff;
   font-family: var(--font-main);
   animation: visionFadeIn 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
@@ -3649,7 +3657,7 @@ button, input, select, textarea {
   height: 100vh;
   z-index: 9999;
   backdrop-filter: blur(20px);
-  background: radial-gradient(circle at center, rgba(229, 9, 20, 0.15) 0%, rgba(0, 0, 0, 0.98) 75%);
+  background: radial-gradient(circle at center, rgba(124, 58, 237, 0.15) 0%, rgba(0, 0, 0, 0.98) 75%);
 }
 
 .vision-loading-container.player-mode {
@@ -3660,7 +3668,7 @@ button, input, select, textarea {
   bottom: 0;
   height: 100%;
   z-index: 1008;
-  background: radial-gradient(circle at center, rgba(229, 9, 20, 0.18) 0%, rgba(0, 0, 0, 1) 85%);
+  background: radial-gradient(circle at center, rgba(124, 58, 237, 0.18) 0%, rgba(0, 0, 0, 1) 85%);
 }
 
 /* Horizontal top indicator bar */
