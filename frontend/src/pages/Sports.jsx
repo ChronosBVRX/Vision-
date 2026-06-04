@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PlayCircle, Search, RefreshCw, AlertCircle, Play, Globe, Settings, Clock, Activity, Loader, X, Trophy } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
+import LoadingScreen from '../components/LoadingScreen';
 
 const getSportStyle = (sport) => {
   const norm = (sport || '').toLowerCase().trim();
@@ -518,27 +519,12 @@ export default function Sports() {
 
       {/* RESOLVER LOADING OVERLAY */}
       {(isResolving || (activeWatchSource && activeWatchSource.isResolving)) && (
-        <div className="watch-overlay" style={{ justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
-          <div style={{ textAlign: 'center', padding: '36px', maxWidth: '420px' }} className="glass-panel form-card">
-            <Loader className="spin-anim mx-auto mb-4" size={48} style={{ color: 'var(--primary-light)', marginBottom: '16px' }} />
-            <h3 style={{ fontSize: '1.4rem', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>
-              {activeWatchSource?.title || 'Sintonizando transmisión...'}
-            </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--primary-light)', marginBottom: '4px', fontWeight: 500 }}>
-              🔍 Buscando servidor más estable...
-            </p>
-            <p className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '20px' }}>
-              Evadiendo protección contra bots y resolviendo video directo
-            </p>
-            <button
-              className="btn btn-secondary focusable"
-              tabIndex={0}
-              onClick={() => { setActiveWatchSource(null); setIsResolving(false); }}
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
+        <LoadingScreen 
+          type="resolver" 
+          theme="sports"
+          title={activeWatchSource?.title || 'Sintonizando transmisión...'} 
+          onCancel={() => { setActiveWatchSource(null); setIsResolving(false); }} 
+        />
       )}
 
       {/* RESOLVER ERROR / DEBUG OVERLAY */}

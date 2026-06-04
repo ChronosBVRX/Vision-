@@ -1,7 +1,7 @@
 # Vision+ — AGENTS.md
 
 > Archivo de contexto compartido entre opencode y Antigravity 2.0.
-> **Actualizado por última vez:** 03/06/2026 por Antigravity
+> **Actualizado por última vez:** 04/06/2026 por Antigravity
 
 ---
 
@@ -151,6 +151,12 @@ Vision+/
 
 ### Mantenimiento y Limpieza
 - **Limpieza de Archivos Temporales:** Eliminación de copias y respaldos temporales innecesarios para optimizar el almacenamiento de la base de datos local en formato JSON.
+
+### Rediseño de Pantallas de Carga (04/06/2026)
+- **Componente Unificado LoadingScreen.jsx:** Creado un componente de pantalla de carga premium con soporte para tres modos: carga de catálogo (`catalog`), sintonizador en segundo plano (`resolver`) y búfer interno del reproductor (`player`).
+- **Carrusel de Confianza Dinámico:** Muestra mensajes en bucle (ej. evadiendo anuncios, conectando túnel seguro) que aumentan la confianza del usuario mientras sintoniza el flujo de video.
+- **Fondo de Transición Suave:** Estilizado con un gradiente radial oscuro que incluye un brillo de marca rojo (`#e50914`) al 12%-18% de opacidad sobre fondo negro verdadero, haciendo la transición del catálogo a la cortinilla (`brand-intro`) totalmente imperceptible y suave.
+- **Estilos Premium en index.css:** Añadidas clases y animaciones de spinner doble invertido, barra de carga y desvanecimiento suaves.
 
 ---
 

@@ -3,6 +3,7 @@ import Plyr from 'plyr';
 import Hls from 'hls.js';
 import { X, Play, Pause, RefreshCw, Layers, RotateCcw, RotateCw, SkipForward, SkipBack, List, Globe as Globe2, Subtitles, Volume2, VolumeX, Maximize2, Minimize2, FastForward, Search, Tv } from 'lucide-react';
 import 'plyr/dist/plyr.css';
+import LoadingScreen from './LoadingScreen';
 
 // BRANDING PRE-ROLL CONFIGURATION
 const BRAND_INTRO_CONFIG = {
@@ -2038,31 +2039,12 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
 
       {/* ── Loader overlay ─────────────────────────────────────────── */}
       {isLoading && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          background: '#000',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1008
-        }}>
-          <div className="watch-header" style={{ position: 'absolute', top: 0, left: 0, width: '100%', pointerEvents: 'none' }}>
-            <div className="watch-title">{localSource.title}</div>
-            <button ref={closeButtonRef} className="watch-close focusable" tabIndex={0} onClick={onClose} title="Cerrar Reproductor" style={{ pointerEvents: 'auto' }}>
-              <X size={20} />
-            </button>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <RefreshCw className="animate-spin text-muted mx-auto mb-4" size={48} style={{ color: 'var(--primary-light)', animation: 'spin 2s linear infinite' }} />
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#fff', marginBottom: '8px' }}>Sintonizando transmisión...</h3>
-            <p className="text-secondary">Buscando el servidor más estable y omitiendo anuncios de origen...</p>
-          </div>
-        </div>
+        <LoadingScreen
+          type="player"
+          title={localSource.title}
+          onClose={onClose}
+          closeButtonRef={closeButtonRef}
+        />
       )}
 
       {/* ── Brand Intro overlay ─────────────────────────────────────── */}
