@@ -4,46 +4,78 @@ import VideoPlayer from '../components/VideoPlayer';
 
 const getSportStyle = (sport) => {
   const norm = (sport || '').toLowerCase().trim();
-  if (norm.includes('baloncesto') || norm.includes('nba') || norm.includes('basket')) {
+  if (norm.includes('baloncesto') || norm.includes('nba') || norm.includes('basket') || norm.includes('basquet')) {
     return {
-      gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 50%, #9a3412 100%)',
+      gradient: 'linear-gradient(135deg, rgba(249, 115, 22, 0.25) 0%, rgba(234, 88, 12, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
       emoji: '🏀',
-      color: '#ea580c'
+      color: '#ea580c',
+      shadow: '0 8px 32px rgba(234, 88, 12, 0.15)'
     };
   }
-  if (norm.includes('formula') || norm.includes('f1') || norm.includes('moto') || norm.includes('carrera') || norm.includes('gp')) {
+  if (norm.includes('formula') || norm.includes('f1') || norm.includes('moto') || norm.includes('carrera') || norm.includes('gp') || norm.includes('automovilismo')) {
     return {
-      gradient: 'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #7f1d1d 100%)',
-      emoji: '🏎️',
-      color: '#dc2626'
+      gradient: 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(220, 38, 38, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
+      emoji: '🏁',
+      color: '#ef4444',
+      shadow: '0 8px 32px rgba(239, 68, 68, 0.15)'
     };
   }
   if (norm.includes('tenis') || norm.includes('tennis')) {
     return {
-      gradient: 'linear-gradient(135deg, #a3e635 0%, #84cc16 50%, #16a34a 100%)',
+      gradient: 'linear-gradient(135deg, rgba(132, 204, 22, 0.25) 0%, rgba(101, 163, 13, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
       emoji: '🎾',
-      color: '#84cc16'
+      color: '#84cc16',
+      shadow: '0 8px 32px rgba(132, 204, 22, 0.15)'
     };
   }
-  if (norm.includes('combate') || norm.includes('ufc') || norm.includes('box') || norm.includes('lucha')) {
+  if (norm.includes('combate') || norm.includes('ufc') || norm.includes('box') || norm.includes('lucha') || norm.includes('mma')) {
     return {
-      gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 50%, #1f2937 100%)',
+      gradient: 'linear-gradient(135deg, rgba(107, 114, 128, 0.25) 0%, rgba(75, 85, 99, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
       emoji: '🥊',
-      color: '#4b5563'
+      color: '#6b7280',
+      shadow: '0 8px 32px rgba(107, 114, 128, 0.15)'
+    };
+  }
+  if (norm.includes('beisbol') || norm.includes('baseball') || norm.includes('mlb')) {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(3, 105, 161, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
+      emoji: '⚾',
+      color: '#0284c7',
+      shadow: '0 8px 32px rgba(2, 132, 199, 0.15)'
+    };
+  }
+  if (norm.includes('americano') || norm.includes('nfl')) {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(109, 40, 217, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
+      emoji: '🏈',
+      color: '#8b5cf6',
+      shadow: '0 8px 32px rgba(139, 92, 246, 0.15)'
     };
   }
   if (norm.includes('futbol') || norm.includes('soccer')) {
     return {
-      gradient: 'linear-gradient(135deg, #34d399 0%, #10b981 50%, #047857 100%)',
+      gradient: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(4, 120, 87, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
       emoji: '⚽',
-      color: '#10b981'
+      color: '#10b981',
+      shadow: '0 8px 32px rgba(16, 185, 129, 0.15)'
     };
   }
   return {
-    gradient: 'linear-gradient(135deg, #818cf8 0%, #6366f1 50%, #3730a3 100%)',
+    gradient: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(79, 70, 229, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
     emoji: '🏆',
-    color: '#6366f1'
+    color: '#6366f1',
+    shadow: '0 8px 32px rgba(99, 102, 241, 0.15)'
   };
+};
+
+const getTeamInitialsBg = (teamName) => {
+  if (!teamName) return 'linear-gradient(135deg, #374151 0%, #111827 100%)';
+  let hash = 0;
+  for (let i = 0; i < teamName.length; i++) {
+    hash = teamName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash % 360);
+  return `linear-gradient(135deg, hsl(${hue}, 60%, 40%) 0%, hsl(${hue}, 70%, 18%) 100%)`;
 };
 
 export default function Sports() {
@@ -404,6 +436,7 @@ export default function Sports() {
                   style={{ background: styleInfo.gradient }}
                 >
                   <span className="sports-card-badge card-badge tv" style={{ background: styleInfo.color }}>
+                    <span style={{ marginRight: '4px' }}>{styleInfo.emoji}</span>
                     {match.sport}
                   </span>
                   <span className="sports-card-time">
@@ -412,29 +445,57 @@ export default function Sports() {
                   
                   {hasTeams ? (
                     <div className="sports-card-vs-logos">
-                      <div className="sports-card-team-logo-wrapper">
-                        {match.logo1 ? (
-                          <img src={match.logo1} alt={match.team1} className="sports-card-team-logo" />
-                        ) : (
-                          <div className="sports-card-team-initials">
-                            {match.team1 ? match.team1.slice(0, 3).toUpperCase() : '???'}
-                          </div>
-                        )}
+                      <div className="sports-card-team-col">
+                        <div className="sports-card-team-logo-wrapper">
+                          {match.logo1 ? (
+                            <img src={match.logo1} alt={match.team1} className="sports-card-team-logo" />
+                          ) : (
+                            <div 
+                              className="sports-card-team-initials" 
+                              style={{ 
+                                background: getTeamInitialsBg(match.team1), 
+                                width: '100%', 
+                                height: '100%', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center' 
+                              }}
+                            >
+                              {match.team1 ? match.team1.slice(0, 3).toUpperCase() : '???'}
+                            </div>
+                          )}
+                        </div>
+                        <span className="sports-card-team-name">{match.team1}</span>
                       </div>
+                      
                       <span className="sports-card-vs-text">VS</span>
-                      <div className="sports-card-team-logo-wrapper">
-                        {match.logo2 ? (
-                          <img src={match.logo2} alt={match.team2} className="sports-card-team-logo" />
-                        ) : (
-                          <div className="sports-card-team-initials">
-                            {match.team2 ? match.team2.slice(0, 3).toUpperCase() : '???'}
-                          </div>
-                        )}
+                      
+                      <div className="sports-card-team-col">
+                        <div className="sports-card-team-logo-wrapper">
+                          {match.logo2 ? (
+                            <img src={match.logo2} alt={match.team2} className="sports-card-team-logo" />
+                          ) : (
+                            <div 
+                              className="sports-card-team-initials" 
+                              style={{ 
+                                background: getTeamInitialsBg(match.team2), 
+                                width: '100%', 
+                                height: '100%', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center' 
+                              }}
+                            >
+                              {match.team2 ? match.team2.slice(0, 3).toUpperCase() : '???'}
+                            </div>
+                          )}
+                        </div>
+                        <span className="sports-card-team-name">{match.team2}</span>
                       </div>
                     </div>
                   ) : (
                     <div className="sports-card-icon-container">
-                      <span style={{ fontSize: '1.8rem' }}>{styleInfo.emoji}</span>
+                      <span style={{ fontSize: '2.2rem' }}>{styleInfo.emoji}</span>
                     </div>
                   )}
                 </div>

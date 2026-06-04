@@ -156,6 +156,151 @@ async function searchMirrorsOnWeb() {
 
 
 /**
+ * Detects the sport of the event based on its title and image alt text.
+ * @param {string} title The match title
+ * @param {string} rawAlt The image alt text from Rojadirecta row
+ * @returns {string} The detected sport
+ */
+function detectSport(title, rawAlt) {
+  const normTitle = (title || '').toLowerCase();
+  const normAlt = (rawAlt || '').toLowerCase().trim();
+
+  // 1. Check image alt attribute first
+  if (normAlt.includes('basket') || normAlt.includes('baloncesto') || normAlt.includes('nba')) return 'Baloncesto';
+  if (normAlt.includes('tenis') || normAlt.includes('tennis')) return 'Tenis';
+  if (normAlt.includes('formula') || normAlt.includes('f1') || normAlt.includes('gp') || normAlt.includes('moto') || normAlt.includes('carrera') || normAlt.includes('automovilismo')) return 'Automovilismo';
+  if (normAlt.includes('ufc') || normAlt.includes('box') || normAlt.includes('combate') || normAlt.includes('mma') || normAlt.includes('lucha')) return 'Combate';
+  if (normAlt.includes('futbol') || normAlt.includes('soccer')) return 'Fútbol';
+  if (normAlt.includes('beisbol') || normAlt.includes('baseball') || normAlt.includes('mlb')) return 'Béisbol';
+  if (normAlt.includes('nfl') || normAlt.includes('americano')) return 'Fútbol Americano';
+
+  // 2. Check title keywords
+  // Baloncesto
+  if (
+    normTitle.includes('nba') || 
+    normTitle.includes('basket') || 
+    normTitle.includes('baloncesto') || 
+    normTitle.includes('basketball') || 
+    normTitle.includes('spurs') || 
+    normTitle.includes('knicks') || 
+    normTitle.includes('lakers') || 
+    normTitle.includes('celtics') || 
+    normTitle.includes('bulls') || 
+    normTitle.includes('warriors') || 
+    normTitle.includes('baskonia') || 
+    normTitle.includes('joventut') || 
+    normTitle.includes('euroleague') || 
+    normTitle.includes('acb')
+  ) {
+    return 'Baloncesto';
+  }
+
+  // Béisbol
+  if (
+    normTitle.includes('mlb') || 
+    normTitle.includes('beisbol') || 
+    normTitle.includes('baseball') || 
+    normTitle.includes('yankees') || 
+    normTitle.includes('red sox') || 
+    normTitle.includes('braves') || 
+    normTitle.includes('blue jays') || 
+    normTitle.includes('cubs') || 
+    normTitle.includes('athletics') || 
+    normTitle.includes('astros') || 
+    normTitle.includes('pirates') || 
+    normTitle.includes('twins') || 
+    normTitle.includes('royals') || 
+    normTitle.includes('dodgers') || 
+    normTitle.includes('padres') || 
+    normTitle.includes('mets')
+  ) {
+    return 'Béisbol';
+  }
+
+  // Motor / Automovilismo
+  if (
+    normTitle.includes('f1') || 
+    normTitle.includes('formula 1') || 
+    normTitle.includes('formula1') || 
+    normTitle.includes('carrera') || 
+    normTitle.includes('gp') || 
+    normTitle.includes('grand prix') || 
+    normTitle.includes('moto') || 
+    normTitle.includes('motogp') || 
+    normTitle.includes('nascar') || 
+    normTitle.includes('indycar')
+  ) {
+    return 'Automovilismo';
+  }
+
+  // Tenis
+  if (
+    normTitle.includes('tenis') || 
+    normTitle.includes('tennis') || 
+    normTitle.includes('atp') || 
+    normTitle.includes('wta') || 
+    normTitle.includes('wimbledon') || 
+    normTitle.includes('roland garros') || 
+    normTitle.includes('open') || 
+    normTitle.includes('sabalenka') || 
+    normTitle.includes('shnaider') || 
+    normTitle.includes('alcaraz') || 
+    normTitle.includes('djokovic') || 
+    normTitle.includes('sinner') || 
+    normTitle.includes('nadal') || 
+    normTitle.includes('medvedev') || 
+    normTitle.includes('zverev') || 
+    normTitle.includes('tsitsipas') || 
+    normTitle.includes('ruud') || 
+    normTitle.includes('rublev') || 
+    normTitle.includes('dimitrov') || 
+    normTitle.includes('berrettini') || 
+    normTitle.includes('arnaldi') || 
+    normTitle.includes('cobolli') || 
+    normTitle.includes('aliassime') || 
+    normTitle.includes('auger') || 
+    normTitle.includes('korda') || 
+    normTitle.includes('khachanov') || 
+    normTitle.includes('musetti') || 
+    normTitle.includes('tiafoe') || 
+    normTitle.includes('de minaur') || 
+    normTitle.includes('kyrgios') || 
+    normTitle.includes('swiatek') || 
+    normTitle.includes('gauff') || 
+    normTitle.includes('rybakina') || 
+    normTitle.includes('jabeur')
+  ) {
+    return 'Tenis';
+  }
+
+  // Combate
+  if (
+    normTitle.includes('ufc') || 
+    normTitle.includes('box') || 
+    normTitle.includes('combate') || 
+    normTitle.includes('lucha') || 
+    normTitle.includes('mma') || 
+    normTitle.includes('wwe') || 
+    normTitle.includes('raw') || 
+    normTitle.includes('smackdown')
+  ) {
+    return 'Combate';
+  }
+
+  // NFL / Fútbol Americano
+  if (
+    normTitle.includes('nfl') || 
+    normTitle.includes('super bowl') || 
+    normTitle.includes('superbowl') || 
+    normTitle.includes('american football')
+  ) {
+    return 'Fútbol Americano';
+  }
+
+  return 'Fútbol'; // Fallback
+}
+
+/**
  * Scrapes the list of live/upcoming sports matches from a specific Rojadirecta domain,
  * grouping duplicate event listings into single match objects with multiple stream options.
  */
@@ -220,19 +365,8 @@ async function scrapeRojadirectaMatches(baseUrl) {
       const isMatchTitle = title.includes('vs') || title.includes(' - ') || title.includes(':') || title.includes(' v ');
 
       if (title && isMatchUrl && isMatchTitle && title.length > 5) {
-        let sport = 'Fútbol';
-        
-        const imgAlt = closestRow.find('img').attr('alt');
-        if (imgAlt) {
-          sport = imgAlt.trim();
-        } else {
-          const lowerTitle = title.toLowerCase();
-          if (lowerTitle.includes('nba') || lowerTitle.includes('basket') || lowerTitle.includes('baloncesto')) sport = 'Baloncesto';
-          else if (lowerTitle.includes('f1') || lowerTitle.includes('formula') || lowerTitle.includes('carrera')) sport = 'Fórmula 1';
-          else if (lowerTitle.includes('gp') || lowerTitle.includes('moto')) sport = 'MotoGP';
-          else if (lowerTitle.includes('tenis') || lowerTitle.includes('tennis')) sport = 'Tenis';
-          else if (lowerTitle.includes('ufc') || lowerTitle.includes('box') || lowerTitle.includes('combate')) sport = 'Combate';
-        }
+        const imgAlt = closestRow.find('img').attr('alt') || '';
+        const sport = detectSport(title, imgAlt);
 
         rawMatches.push({
           title,
