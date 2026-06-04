@@ -998,9 +998,9 @@ button, input, select, textarea {
 
 .watch-header-overlay.hidden {
   opacity: 0;
-  visibility: hidden;
   transform: translateY(-20px);
   pointer-events: none;
+  /* NOTE: intentionally NO visibility:hidden — buttons must remain focusable for D-pad nav */
 }
 
 .watch-header-overlay.visible {
@@ -1038,7 +1038,8 @@ button, input, select, textarea {
 
 .custom-player-overlay.hidden {
   opacity: 0;
-  visibility: hidden;
+  /* NOTE: intentionally NO visibility:hidden — buttons must remain focusable for D-pad nav */
+  /* pointer-events are controlled per child via .custom-player-overlay * rule below */
 }
 
 .custom-player-overlay.visible {
@@ -1048,6 +1049,11 @@ button, input, select, textarea {
 
 .custom-player-overlay * {
   pointer-events: auto;
+}
+
+/* When controls are hidden, disable pointer-events on ALL children so clicks pass through to video */
+.custom-player-overlay.hidden * {
+  pointer-events: none;
 }
 
 /* Center Play Button */
@@ -3932,5 +3938,50 @@ video.plyr-video,
 .is-smart-tv .channel-zapping-banner {
   background: rgb(8, 10, 24) !important;
 }
+
+/* ── Smart TV Player Controls Overrides ──────────────────────────────────── */
+/* On Smart TVs the controls MUST always remain interactive even when "hidden"
+   so the D-pad can wake them back up. We reduce opacity instead of hiding them. */
+
+/* Keep the header overlay always visible on Smart TV (just dimmed) */
+.is-smart-tv .watch-header-overlay.hidden {
+  opacity: 0.08 !important;        /* barely visible but focusable */
+  transform: none !important;      /* no translateY (causes rendering artifacts on TV) */
+  pointer-events: none !important; /* clicks still pass through to video */
+}
+
+/* Keep the controls overlay always interactive on Smart TV */
+.is-smart-tv .custom-player-overlay.hidden {
+  opacity: 0.06 !important;        /* near-invisible but still in layout */
+}
+
+/* When controls overlay is hidden its children must NOT block touch/click to video */
+.is-smart-tv .custom-player-overlay.hidden * {
+  pointer-events: none !important;
+}
+
+/* Restore pointer-events to buttons when the overlay is visible */
+.is-smart-tv .custom-player-overlay.visible * {
+  pointer-events: auto !important;
+}
+
+/* Make focused control buttons very obvious on Smart TV screens */
+.is-smart-tv .control-btn.focusable:focus,
+.is-smart-tv .control-btn:focus {
+  background: var(--primary) !important;
+  box-shadow: 0 0 0 4px #fff, 0 0 0 7px var(--primary-light) !important;
+  transform: none !important;
+  outline: none !important;
+  color: #fff !important;
+}
+
+/* Watch-close button big and obvious on TV */
+.is-smart-tv .watch-close:focus {
+  background: var(--accent) !important;
+  box-shadow: 0 0 0 4px #fff !important;
+  transform: none !important;
+}
+
+
 
 

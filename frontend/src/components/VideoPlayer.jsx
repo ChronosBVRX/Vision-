@@ -537,6 +537,12 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   const controlsTimeoutRef = useRef(null);
   const backPressRef = useRef(0);
   const containerRef = useRef(null);
+  // Keep a ref in sync with showControls so keydown handler (closure) always reads fresh value
+  const showControlsRef = useRef(true);
+  useEffect(() => { showControlsRef.current = showControls; }, [showControls]);
+  // Detect Smart TV environment
+  const isSmartTV = typeof window !== 'undefined' && window.isSmartTV === true;
+  const CONTROLS_TIMEOUT = isSmartTV ? 15000 : 5000;
 
   const toggleFullscreen = useCallback(() => {
     const el = containerRef.current;
@@ -573,12 +579,14 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
 
   const resetControlsTimer = () => {
     setShowControls(true);
+    showControlsRef.current = true;
     if (controlsTimeoutRef.current) {
       clearTimeout(controlsTimeoutRef.current);
     }
     controlsTimeoutRef.current = setTimeout(() => {
       setShowControls(false);
-    }, 5000);
+      showControlsRef.current = false;
+    }, CONTROLS_TIMEOUT);
   };
 
   useEffect(() => {
@@ -817,8 +825,10 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       // ── Arrow keys: navigate controls or show them ──────────────
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         const isInGuide = activeEl?.closest('.channel-guide-panel');
+        // Use ref to avoid stale closure — showControlsRef always has fresh value
+        const controlsCurrentlyVisible = showControlsRef.current;
         
-        if (!showControls) {
+        if (!controlsCurrentlyVisible) {
           if (isTV) {
             if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
               e.preventDefault();
@@ -841,10 +851,11 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
           // Controls hidden VOD → show them and focus first button
           e.preventDefault();
           e.stopPropagation();
-          setShowControls(true);
-          resetControlsTimer();
-          const firstBtn = document.querySelector('.custom-player-buttons-row .control-btn');
-          if (firstBtn) firstBtn.focus();
+          resetControlsTimer(); // This sets showControls(true) + updates ref
+          setTimeout(() => {
+            const firstBtn = document.querySelector('.custom-player-buttons-row .control-btn');
+            if (firstBtn) firstBtn.focus();
+          }, 50); // Small delay to let React re-render the visible overlay first
           return;
         }
 
@@ -1022,11 +1033,13 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       }
 
       // ── Any other key → show controls ─────────────────────────
-      if (!showControls) {
-        setShowControls(true); resetControlsTimer();
+      if (!showControlsRef.current) {
+        resetControlsTimer(); // sets showControls(true) + updates ref
         e.preventDefault(); e.stopPropagation();
-        const firstBtn = document.querySelector('.custom-player-buttons-row .control-btn');
-        if (firstBtn) firstBtn.focus();
+        setTimeout(() => {
+          const firstBtn = document.querySelector('.custom-player-buttons-row .control-btn');
+          if (firstBtn) firstBtn.focus();
+        }, 50);
         return;
       }
       resetControlsTimer();
@@ -1036,7 +1049,8 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [showControls, localSource.type, channelList, showChannelGuide, currentChannelIndex, switchToPrevChannel, switchToNextChannel, jumpToChannel]);
+  // showControls removed from deps — we use showControlsRef to avoid stale closures
+  }, [localSource.type, channelList, showChannelGuide, currentChannelIndex, switchToPrevChannel, switchToNextChannel, jumpToChannel]);
 
   const handleStreamError = async (errorMsg) => {
     console.error("[VideoPlayer] Stream error:", errorMsg);
