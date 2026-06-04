@@ -3875,6 +3875,44 @@ video.plyr-video,
   background-color: #000000 !important;
 }
 
+/* ── Suppress native browser video UI (poster, play button overlay) ──────────
+   The browser renders a native play button overlay over the video element before
+   the stream loads. These rules disable ALL native browser video UI chrome.  */
+
+/* Hide native browser controls & media overlays (Blink/WebKit/Gecko) */
+video::-webkit-media-controls,
+video::-webkit-media-controls-enclosure,
+video::-webkit-media-controls-panel,
+video::-webkit-media-controls-overlay-play-button,
+video::-webkit-media-controls-start-playback-button,
+video::--webkit-media-controls-play-button {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Firefox media controls */
+video::-moz-media-controls,
+video::-moz-media-controls-enclosure {
+  display: none !important;
+}
+
+/* Plyr poster overlay (white background with play icon before stream loads) */
+.plyr__poster,
+.plyr--video .plyr__poster,
+.plyr__control--overlaid,
+.plyr--video.plyr--stopped .plyr__poster {
+  background-color: #000 !important;
+  background-image: none !important;
+  display: none !important;
+}
+
+/* Plyr loading spinner (we have our own) */
+.plyr--video .plyr__progress__buffer {
+  background: rgba(255,255,255,0.1) !important;
+}
+
+
 /* TV Specific Styles (Applied dynamically via .is-smart-tv root class) */
 .is-smart-tv *,
 .is-smart-tv *::before,

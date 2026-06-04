@@ -537,9 +537,14 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   const controlsTimeoutRef = useRef(null);
   const backPressRef = useRef(0);
   const containerRef = useRef(null);
-  // Keep a ref in sync with showControls so keydown handler (closure) always reads fresh value
+  // Keep refs in sync with states so keydown handler (closure) always reads fresh values
   const showControlsRef = useRef(true);
   useEffect(() => { showControlsRef.current = showControls; }, [showControls]);
+  // isLoading ref — critical: the keydown handler is registered once (closure), 
+  // so without this ref it would keep seeing the initial isLoading=false value
+  // and for movies after brand intro it would incorrectly block key handling.
+  const isLoadingRef = useRef(isLoading);
+  useEffect(() => { isLoadingRef.current = isLoading; }, [isLoading]);
   // Detect Smart TV environment
   const isSmartTV = typeof window !== 'undefined' && window.isSmartTV === true;
   const CONTROLS_TIMEOUT = isSmartTV ? 15000 : 5000;
@@ -689,7 +694,8 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       const activeEl = document.activeElement;
 
       // ── Brand Intro keys ────────────────────────────────────────
-      if (showBrandIntro) {
+      // Use ref to avoid stale closure — handler is registered once but showBrandIntro changes
+      if (showBrandIntroRef.current) {
         if (e.key === 'Escape' || e.key === 'Backspace') {
           e.preventDefault(); e.stopPropagation();
           onClose?.();
@@ -728,7 +734,8 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       }
 
       // ── Loader keys ─────────────────────────────────────────────
-      if (isLoading) {
+      // Use ref to avoid stale closure — isLoading changes after streams resolve
+      if (isLoadingRef.current) {
         if (e.key === 'Escape' || e.key === 'Backspace') {
           e.preventDefault(); e.stopPropagation();
           onClose?.();
@@ -1600,7 +1607,9 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
               ref={videoRef}
               className="plyr-video"
               playsInline
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              preload="none"
+              poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+              style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
             />
           )
         )}
