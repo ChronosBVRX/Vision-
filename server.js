@@ -2234,13 +2234,118 @@ app.post('/api/restart-tunnel', (req, res) => {
   });
 });
 
+let lastPublishedUrl = null;
+
+function checkAndPublishTunnelRedirect() {
+  try {
+    const logPath = path.join(__dirname, 'tunnel.log');
+    if (!fs.existsSync(logPath)) return;
+    
+    const logs = fs.readFileSync(logPath, 'utf8');
+    const match = logs.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
+    if (!match) return;
+    
+    const tunnelUrl = match[0];
+    if (tunnelUrl === lastPublishedUrl) return;
+    
+    console.log(`[GitHub Pages] Nuevo túnel detectado: ${tunnelUrl}. Actualizando redirect...`);
+    lastPublishedUrl = tunnelUrl;
+    
+    const indexPath = path.join(__dirname, 'index.html');
+    const htmlContent = `<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redireccionando a Vision+</title>
+    <meta http-equiv="refresh" content="0; url=\${tunnelUrl}">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0d0b14;
+            color: #f3f1f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 2.5rem;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            backdrop-filter: blur(16px);
+            max-width: 400px;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(124, 77, 255, 0.1);
+            border-top: 3px solid #7c4dff;
+            border-radius: 50%;
+            margin: 0 auto 1.5rem;
+            animation: spin 1s linear infinite;
+        }
+        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        p { color: #9c97aa; font-size: 0.95rem; margin-bottom: 1.5rem; }
+        a {
+            color: #b388ff;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        a:hover { text-decoration: underline; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+    <script>
+        window.location.replace("\${tunnelUrl}");
+    </script>
+</head>
+<body>
+    <div class="card">
+        <div class="spinner"></div>
+        <h1>Redireccionando a Vision+</h1>
+        <p>Cargando tu servidor multimedia inteligente...</p>
+        <a href="\${tunnelUrl}">Haz clic aquí si no eres redirigido automáticamente</a>
+    </div>
+</body>
+</html>\n`;
+
+    fs.writeFileSync(indexPath, htmlContent, 'utf8');
+    
+    // Ejecutar git add, commit y push
+    const { exec } = require('child_process');
+    exec('git add index.html', { cwd: __dirname }, (err) => {
+      if (err) return console.error('[GitHub Pages] Error en git add:', err.message);
+      
+      exec(`git commit -m "update tunnel url redirect to \${tunnelUrl}"`, { cwd: __dirname }, (err) => {
+        if (err) return console.error('[GitHub Pages] Error en git commit:', err.message);
+        
+        exec('git push origin main', { cwd: __dirname }, (err) => {
+          if (err) return console.error('[GitHub Pages] Error en git push:', err.message);
+          console.log(`[GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: \${tunnelUrl}`);
+        });
+      });
+    });
+  } catch (e) {
+    console.error('[GitHub Pages] Error:', e.message);
+  }
+}
+
 initializeDB().then(() => {
   app.listen(PORT, () => {
     console.log(`Servidor corriendo en el puerto ${PORT}`);
-    // Inicializar cache de deportes en segundo plano al arrancar el servidor
+    
+    // Inicializar cache de deportes en segundo plano
     refreshSportsCache().catch(err => {
       console.error("[Startup] Error al inicializar cache de deportes:", err.message);
     });
+
+    // Publicar enlace de túnel actual en GitHub Pages e iniciar intervalo de chequeo
+    setTimeout(checkAndPublishTunnelRedirect, 5000);
+    setInterval(checkAndPublishTunnelRedirect, 20000);
   });
 }).catch(err => {
   console.error("[DB] Error fatal al inicializar la base de datos:", err);
