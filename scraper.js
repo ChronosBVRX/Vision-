@@ -4,13 +4,12 @@ const puppeteer = require('puppeteer');
 
 // Predefined fallback mirrors in case search engine discovery fails
 const CANDIDATE_DOMAINS = [
-  "https://www.rojadirectatv.me",
-  "https://www.rojadirecta.watch",
-  "https://www.rojadirectatv.top",
-  "https://www.rojadirecta.me",
-  "https://www.tarjetarojatv.org",
+  "https://www.rojadirectatvmas.com",
+  "https://www.rojadirecta.lt",
+  "https://www.pirlotvhd.re",
   "https://www.tarjetarojatv.net",
-  "https://www.rojadirecta.click"
+  "https://www.rojadirecta.watch",
+  "https://www.pirlotv.us"
 ];
 
 /**
@@ -51,6 +50,7 @@ function getStreamName(url, index) {
  * Each entry is the base pattern used to build the site: operator.
  * To update mirrors, just edit this list — no other logic needs to change.
  * ─────────────────────────────────────────────────────────────────────────────
+ * Note: These are also used as fallback keywords for matching discovered domains.
  */
 const SPORTS_ALLOWED_DOMAINS = [
   'rojadirectatv.me',
@@ -70,83 +70,86 @@ const SPORTS_ALLOWED_DOMAINS = [
   'sportsonline.si',
   'futbollibre.net',
   'pelotalibre.net',
+  'rojadirectatvmas.com',
+  'tarjetarojatvmas.com',
+  'pirlotvhd.re',
+  'pirlotvhd.com.co',
+  'pirlotvs.com',
+  'tarjetarojas.com'
 ];
 
 /**
- * Builds a Brave Search URL that restricts results to the allowed sports domains
- * using "site:domain1 OR site:domain2 ..." operators appended to the query term.
- *
- * @param {string} queryTerm   The base search keyword (e.g. "rojadirecta" / "pirlo tv")
- * @param {string[]} domains   The allow-listed domains to restrict to
- * @returns {string}           Full Brave Search URL
- */
-function buildSiteRestrictedQuery(queryTerm, domains) {
-  const siteOps = domains.map(d => `site:${d}`).join(' OR ');
-  const fullQuery = `${queryTerm} (${siteOps})`;
-  return `https://search.brave.com/search?q=${encodeURIComponent(fullQuery)}`;
-}
-
-/**
- * Performs a Brave Search restricted to the SPORTS_ALLOWED_DOMAINS allow-list,
- * returning only domains from that list. Falls back to CANDIDATE_DOMAINS.
+ * Performs a Brave Search and extracts potential active mirrors based on keyword matching
+ * and blacklisting. Uses Puppeteer to avoid Cloudflare/bot blocks.
  */
 async function searchMirrorsOnWeb() {
-  console.log(`[SportsScraper] Buscando espejos activos con búsqueda restringida a dominios permitidos...`);
+  console.log(`[SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...`);
   const discoveredDomains = new Set();
+  
+  const searchTerms = ['rojadirecta', 'pirlo tv', 'tarjeta roja'];
+  const keywords = ['rojadirecta', 'tarjetaroja', 'pirlotv', 'futbollibre', 'pelotalibre', 'verfutbol', 'sportsonline', 'pirlotvonline', 'tarjetarojas'];
+  const blacklist = ['play.google.com', 'youtube.com', 'instagram.com', 'wikipedia.org', 'facebook.com', 'twitter.com', 'tudn.com', 'pinterest.com', 'github.com', 'reddit.com'];
 
-  // Keywords that help find the right type of page on these sites
-  const searchTerms = ['rojadirecta', 'pirlo tv', 'tarjeta roja', 'ver futbol'];
+  let browser = null;
+  try {
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
 
-  const searchUrls = searchTerms.map(term => ({
-    term,
-    url: buildSiteRestrictedQuery(term, SPORTS_ALLOWED_DOMAINS)
-  }));
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    await page.setViewport({ width: 1280, height: 800 });
 
-  console.log(`[SportsScraper] Queries generadas con site: restriction a ${SPORTS_ALLOWED_DOMAINS.length} dominios:`);
-  searchUrls.forEach(s => console.log(`  → ${s.url}`));
+    for (const term of searchTerms) {
+      try {
+        const searchUrl = `https://search.brave.com/search?q=${encodeURIComponent(term)}`;
+        console.log(`[SportsScraper] Consultando Brave Search para: "${term}"...`);
+        await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
+        await new Promise(r => setTimeout(r, 1500));
+        
+        const html = await page.content();
+        const $ = cheerio.load(html);
 
-  for (const item of searchUrls) {
-    try {
-      const response = await axios.get(item.url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-          'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
-        },
-        timeout: 8000
-      });
+        $('a').each((i, el) => {
+          const href = $(el).attr('href');
+          if (!href || !href.startsWith('http')) return;
 
-      const $ = cheerio.load(response.data);
+          try {
+            const domainUrl = new URL(href);
+            const hostname = domainUrl.hostname.replace(/^www\./, '').toLowerCase();
+            const fullOrigin = `${domainUrl.protocol}//${domainUrl.hostname}`;
 
-      $('a').each((i, el) => {
-        let href = $(el).attr('href');
-        if (!href || !href.startsWith('http')) return;
+            // Check if hostname contains blacklisted domains
+            const isBlacklisted = blacklist.some(bl => hostname.includes(bl));
+            if (isBlacklisted) return;
 
-        try {
-          const domainUrl = new URL(href);
-          const hostname = domainUrl.hostname.replace(/^www\./, '').toLowerCase();
-          const fullOrigin = `${domainUrl.protocol}//${domainUrl.hostname}`;
+            // Check if hostname matches any allowed domains or key matching patterns
+            const matchesAllowed = SPORTS_ALLOWED_DOMAINS.some(allowed => hostname === allowed || hostname.endsWith(`.${allowed}`));
+            const matchesKeyword = keywords.some(kw => hostname.includes(kw));
 
-          // Only add if it's in our allow-list (direct match or subdomain match)
-          const isAllowed = SPORTS_ALLOWED_DOMAINS.some(allowed =>
-            hostname === allowed || hostname.endsWith(`.${allowed}`)
-          );
-
-          if (isAllowed) {
-            discoveredDomains.add(fullOrigin);
-            console.log(`[SportsScraper] Dominio permitido encontrado: ${fullOrigin} (query: "${item.term}")`);
+            if (matchesAllowed || matchesKeyword) {
+              discoveredDomains.add(fullOrigin);
+              console.log(`[SportsScraper] Dominio descubierto: ${fullOrigin} (query: "${term}")`);
+            }
+          } catch (e) {
+            // Invalid URL
           }
-        } catch (e) {
-          // Invalid URL
-        }
-      });
-    } catch (error) {
-      console.error(`[SportsScraper] Error en búsqueda site-restricted para "${item.term}":`, error.message);
+        });
+      } catch (err) {
+        console.error(`[SportsScraper] Error buscando "${term}":`, err.message);
+      }
+    }
+  } catch (error) {
+    console.error("[SportsScraper] Error de Puppeteer en búsqueda de espejos:", error.message);
+  } finally {
+    if (browser) {
+      await browser.close();
     }
   }
 
   const results = Array.from(discoveredDomains);
-  console.log(`[SportsScraper] Búsqueda site-restricted finalizada. Dominios de la lista encontrados: ${results.length}`);
+  console.log(`[SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: ${results.length}`);
   return results;
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PlayCircle, Search, RefreshCw, AlertCircle, Play, Globe, Settings, Clock, Activity, Loader } from 'lucide-react';
+import { PlayCircle, Search, RefreshCw, AlertCircle, Play, Globe, Settings, Clock, Activity, Loader, X } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
 
 export default function Sports() {

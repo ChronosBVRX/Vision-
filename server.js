@@ -780,7 +780,7 @@ app.delete('/api/categories', (req, res) => {
 // Settings Endpoints
 app.get('/api/settings', (req, res) => {
   const db = readDB();
-  res.json(db.settings || { rojadirectaUrl: "https://www.rojadirectatv.me" });
+  res.json(db.settings || { rojadirectaUrl: "https://www.rojadirectatvmas.com" });
 });
 
 app.post('/api/settings', (req, res) => {
