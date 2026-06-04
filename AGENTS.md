@@ -62,6 +62,29 @@ Vision+/
 | Selector episodios TV (Movies.jsx) | ✅ | Pestañas temporada + grilla episodios, navegable con mando |
 | Navegación episodios en reproductor | ✅ | Botones Anterior/Siguiente + drawer lateral con lista completa |
 
+## Sistema de Logs
+
+El servidor escribe todos los logs en `server.log` con formato `[fecha] [LEVEL] [Modulo] mensaje`.
+Este archivo se sincroniza a GitHub cada 10 minutos desde el servidor de producción.
+
+**Para leer logs desde dev:**
+```bash
+git pull origin main          # baja el server.log más reciente
+node read-logs.js --errors    # solo errores
+node read-logs.js --last 30   # últimas 30 líneas
+node read-logs.js --module Resolver --errors  # errores de un módulo
+node read-logs.js --since "2026-06-04 15:00"  # desde una hora
+node read-logs.js --search "ENOTFOUND"        # buscar texto
+node read-logs.js --json --errors             # salida JSON para agents
+node read-logs.js --watch                     # tail -f (sigue el archivo)
+```
+
+**Shorthands:**
+```bash
+npm run logs     # node read-logs.js
+npm run errors   # node read-logs.js --errors
+```
+
 ## Dependencias principales
 
 **Backend:** express, axios, cheerio, puppeteer, playwright, cors, youtube-dl-exec
@@ -69,6 +92,8 @@ Vision+/
 **Sin BD:** usa JSON plano (`database.json`) — ~8425 líneas actualmente
 
 ## Convenciones / Reglas
+
+0. **⚠️ Leer errores del servidor antes de empezar** — Antes de iniciar cualquier tarea, el agente DEBE ejecutar `node read-logs.js --errors --json` o `node read-logs.js --errors` para conocer el estado actual del servidor y detectar errores activos. Si hay errores, priorizar su diagnóstico y solución.
 
 1. **No pisar código del otro agente** — usar comentarios `// [agente]` si es necesario delimitar
 2. **Commits y pushes automáticos** — Al finalizar con éxito cualquier tarea, al corregir un bug o antes de finalizar su turno, el agente **debe** preparar los archivos, realizar un commit descriptivo y hacer `git push` a GitHub automáticamente:
