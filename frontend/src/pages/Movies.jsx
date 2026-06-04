@@ -36,6 +36,13 @@ export default function Movies({ contentType = 'movie' }) {
   const pageRef = useRef(null);
   const resolvingRef = useRef(false);
   const resolveErrorBtnRef = useRef(null);
+  const emptyCatalogRef = useRef(null);
+
+  useEffect(() => {
+    if (catalog.length === 0) {
+      setTimeout(() => emptyCatalogRef.current?.focus(), 100);
+    }
+  }, [catalog.length]);
 
   // Auto-focus close button when error overlay appears
   useEffect(() => {
@@ -476,9 +483,6 @@ export default function Movies({ contentType = 'movie' }) {
       </div>
     );
   }
-
-  const emptyCatalogRef = useRef(null);
-  useEffect(() => { if (catalog.length === 0) setTimeout(() => emptyCatalogRef.current?.focus(), 100); }, [catalog.length]);
 
   // ── Empty state ─────────────────────────────────────────────────────────────
   if (catalog.length === 0) {
