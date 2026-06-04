@@ -1,7 +1,7 @@
 # Vision+ — AGENTS.md
 
 > Archivo de contexto compartido entre opencode y Antigravity 2.0.
-> **Actualizado por última vez:** 04/06/2026 por Antigravity
+> **Actualizado por última vez:** 04/06/2026 por Antigravity (sesión tarde)
 
 ---
 
@@ -179,6 +179,13 @@ Vision+/
 - **Parche de Caja de Video Gris**: Ajustados estilos de fondo del reproductor a negro absoluto (`#000 !important`) para esconder la caja gris de renderizado nativo.
 - **Perfil de Estilos Reducidos para TV**: Desactivados todos los filtros de desenfoque (`backdrop-filter`) y simplificada la navegación espacial D-pad (eliminado `scale` y `translate` al enfocar) para lograr transiciones instantáneas y fluidas a 60 FPS en hardware de Smart TV de bajo costo.
 - **Capas del Reproductor y Foco (Z-Index y Visibilidad)**: Subido el `z-index` de los controles del reproductor a `1000` para evitar que queden ocultos detrás del plano de decodificación por hardware de la TV. Añadido `visibility: hidden` a las barras y cabeceras ocultas para evitar que los controles invisibles capturen el foco del control remoto por error.
+
+### Unificación de Grids y Tarjetas en Smart TV (04/06/2026, sesión tarde)
+- **Compactación del Layout Horizontal (`.catalog-rows`)**: Reducida la altura de las tarjetas de poster a `155px` (manteniendo proporción 2:3) y comprimidos los márgenes y títulos de fila para permitir **3 a 4 filas visibles simultáneamente** en una pantalla típica de Smart TV (720p/1080p).
+- **Uniformidad de Grillas (`.catalog-grid`, `.sports-grid`, `.ep-grid`)**: Ajustados los `minmax` de todas las grillas en el modo `.is-smart-tv` para asegurar coherencia visual. Las tarjetas de catálogo dentro de la grilla ahora llenan el 100% de la columna manteniendo su aspect ratio.
+- **Corrección Definitiva del Foco (Outline sin Layout Shift)**:
+  - **Problema:** Las tarjetas escalaban al enfocarse (`transform: scale()`) y su brillo exterior desbordaba la tarjeta, provocando parpadeos y solapamientos en dispositivos de gama baja.
+  - **Solución Técnica:** Se eliminó cualquier `transform` y `box-shadow` al hacer focus en modo TV. Se implementó un sólido `outline: 3px solid var(--primary-light)` junto con `outline-offset: 2px` y `overflow: hidden` en el box de la tarjeta. El outline no suma tamaño al elemento (no afecta el layout) garantizando transiciones de D-pad perfectas y sin temblores en la pantalla.
 
 ---
 
