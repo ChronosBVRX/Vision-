@@ -2258,7 +2258,7 @@ function checkAndPublishTunnelRedirect() {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Redireccionando a Vision+</title>
-    <meta http-equiv="refresh" content="0; url=\${tunnelUrl}">
+    <meta http-equiv="refresh" content="0; url=${tunnelUrl}">
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -2300,7 +2300,7 @@ function checkAndPublishTunnelRedirect() {
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
     <script>
-        window.location.replace("\${tunnelUrl}");
+        window.location.replace("${tunnelUrl}");
     </script>
 </head>
 <body>
@@ -2308,7 +2308,7 @@ function checkAndPublishTunnelRedirect() {
         <div class="spinner"></div>
         <h1>Redireccionando a Vision+</h1>
         <p>Cargando tu servidor multimedia inteligente...</p>
-        <a href="\${tunnelUrl}">Haz clic aquí si no eres redirigido automáticamente</a>
+        <a href="${tunnelUrl}">Haz clic aquí si no eres redirigido automáticamente</a>
     </div>
 </body>
 </html>\n`;
@@ -2320,12 +2320,12 @@ function checkAndPublishTunnelRedirect() {
     exec('git add index.html', { cwd: __dirname }, (err) => {
       if (err) return console.error('[GitHub Pages] Error en git add:', err.message);
       
-      exec(`git commit -m "update tunnel url redirect to \${tunnelUrl}"`, { cwd: __dirname }, (err) => {
+      exec(`git commit -m "update tunnel url redirect to ${tunnelUrl}"`, { cwd: __dirname }, (err) => {
         if (err) return console.error('[GitHub Pages] Error en git commit:', err.message);
         
         exec('git push origin main', { cwd: __dirname }, (err) => {
           if (err) return console.error('[GitHub Pages] Error en git push:', err.message);
-          console.log(`[GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: \${tunnelUrl}`);
+          console.log(`[GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: ${tunnelUrl}`);
         });
       });
     });
