@@ -2077,7 +2077,13 @@ app.post('/api/scrape', async (req, res) => {
 });
 
 initializeDB().then(() => {
-  app.listen(PORT, () => { console.log(`Servidor corriendo en el puerto ${PORT}`); });
+  app.listen(PORT, () => {
+    console.log(`Servidor corriendo en el puerto ${PORT}`);
+    // Inicializar cache de deportes en segundo plano al arrancar el servidor
+    refreshSportsCache().catch(err => {
+      console.error("[Startup] Error al inicializar cache de deportes:", err.message);
+    });
+  });
 }).catch(err => {
   console.error("[DB] Error fatal al inicializar la base de datos:", err);
   process.exit(1);
