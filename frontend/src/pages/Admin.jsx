@@ -297,7 +297,7 @@ export default function Admin() {
     const isShow = type === 'series';
     const apiType = isShow ? 'tv' : 'movie';
     
-    fetch(`https://api.themoviedb.org/3/${apiType}/${tmdbId}?api_key=8414ab200e50f3ab285b5145b2fef42c&language=es-ES`)
+    fetch(`https://api.themoviedb.org/3/${apiType}/${tmdbId}?api_key=3905c909305d58a27f2de32e4b6038e7&language=es-ES`)
       .then(res => {
         if (!res.ok) throw new Error('No se encontró contenido con ese ID en TMDB.');
         return res.json();

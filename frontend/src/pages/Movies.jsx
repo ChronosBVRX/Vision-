@@ -3,6 +3,7 @@ import { Play, RefreshCw, Film, Tv, Loader, X, Search } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
 import DetailsModal from '../components/DetailsModal';
 import { HeroBanner, CatalogRow, CatalogCard } from '../components/CatalogComponents';
+import LoadingScreen from '../components/LoadingScreen';
 
 
 
@@ -36,6 +37,13 @@ export default function Movies({ contentType = 'movie' }) {
   const pageRef = useRef(null);
   const resolvingRef = useRef(false);
   const resolveErrorBtnRef = useRef(null);
+  const emptyCatalogRef = useRef(null);
+
+  useEffect(() => {
+    if (catalog.length === 0) {
+      setTimeout(() => emptyCatalogRef.current?.focus(), 100);
+    }
+  }, [catalog.length]);
 
   // Auto-focus close button when error overlay appears
   useEffect(() => {
@@ -465,20 +473,9 @@ export default function Movies({ contentType = 'movie' }) {
     if (idx >= 0 && idx < catalog.length - 1) handlePlay(catalog[idx + 1]);
   }, [activeItem, catalog, handlePlay]);
 
-  // ── Loading state ───────────────────────────────────────────────────────────
   if (isLoading) {
-    return (
-      <div className="catalog-loading">
-        <div className="catalog-loading-icon">
-          <Loader size={52} className="spin-anim" />
-        </div>
-        <p className="catalog-loading-text">Cargando {pageTitle}...</p>
-      </div>
-    );
+    return <LoadingScreen type="catalog" title={`Cargando ${pageTitle}...`} />;
   }
-
-  const emptyCatalogRef = useRef(null);
-  useEffect(() => { if (catalog.length === 0) setTimeout(() => emptyCatalogRef.current?.focus(), 100); }, [catalog.length]);
 
   // ── Empty state ─────────────────────────────────────────────────────────────
   if (catalog.length === 0) {
@@ -622,27 +619,11 @@ export default function Movies({ contentType = 'movie' }) {
 
       {/* ── RESOLVER LOADING OVERLAY ──────────────────────────────────────── */}
       {(isResolving || (activeItem && activeItem.isResolving)) && (
-        <div className="watch-overlay" style={{ justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
-          <div style={{ textAlign: 'center', padding: '36px', maxWidth: '420px' }} className="glass-panel form-card">
-            <Loader className="spin-anim mx-auto mb-4" size={48} style={{ color: 'var(--primary-light)', marginBottom: '16px' }} />
-            <h3 style={{ fontSize: '1.4rem', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>
-              {activeItem?.title || 'Cargando película...'}
-            </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--primary-light)', marginBottom: '4px', fontWeight: 500 }}>
-              🔍 Buscando fuente en Español Latino...
-            </p>
-            <p className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '20px' }}>
-              Analizando servidores y omitiendo anuncios de origen
-            </p>
-            <button
-              className="btn btn-secondary focusable"
-              tabIndex={0}
-              onClick={() => { setActiveItem(null); setIsResolving(false); }}
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
+        <LoadingScreen 
+          type="resolver" 
+          title={activeItem?.title || `Cargando ${pageTitle.toLowerCase()}...`} 
+          onCancel={() => { setActiveItem(null); setIsResolving(false); }} 
+        />
       )}
 
       {/* ── RESOLVER ERROR / DEBUG OVERLAY ────────────────────────────────── */}

@@ -1,3 +1,4 @@
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -375,6 +376,60 @@ async function refreshMoviesAndSeries() {
   }
 }
 
+// Helper functions for team logo enrichment
+async function getTeamLogo(teamName) {
+  if (!teamName || teamName.length < 2) return null;
+  try {
+    const cleanName = encodeURIComponent(teamName.trim());
+    const res = await axios.get(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${cleanName}`, { timeout: 2000 });
+    if (res.data && res.data.teams && res.data.teams.length > 0) {
+      return res.data.teams[0].strBadge || null;
+    }
+  } catch (err) {
+    // Fail silently
+  }
+  return null;
+}
+
+function getTeamsFromTitle(title) {
+  let parts = [];
+  if (title.toLowerCase().includes(' vs ')) {
+    parts = title.split(/ vs /i);
+  } else if (title.toLowerCase().includes(' v ')) {
+    parts = title.split(/ v /i);
+  } else if (title.includes(' - ')) {
+    parts = title.split(' - ');
+  }
+  return parts.map(p => p.replace(/en vivo/i, '').replace(/live/i, '').trim()).filter(p => p.length > 0);
+}
+
+async function enrichMatchesWithLogos(matches) {
+  console.log(`[SportsWorker] Buscando logotipos para ${matches.length} partidos...`);
+  try {
+    const enriched = await Promise.all(matches.map(async (match) => {
+      const teams = getTeamsFromTitle(match.title);
+      if (teams.length >= 2) {
+        const [logo1, logo2] = await Promise.all([
+          getTeamLogo(teams[0]),
+          getTeamLogo(teams[1])
+        ]);
+        return {
+          ...match,
+          team1: teams[0],
+          team2: teams[1],
+          logo1,
+          logo2
+        };
+      }
+      return match;
+    }));
+    return enriched;
+  } catch (e) {
+    console.error("[SportsWorker] Fallo al enriquecer logotipos:", e.message);
+    return matches;
+  }
+}
+
 // Function to refresh sports cache
 async function refreshSportsCache() {
   if (sportsCache.loading) return;
@@ -384,7 +439,11 @@ async function refreshSportsCache() {
 
   try {
     const result = await discoverActiveMirror();
-    sportsCache.matches = result.matches;
+    
+    // Enrich matches with official team logos from TheSportsDB
+    const enrichedMatches = await enrichMatchesWithLogos(result.matches);
+    
+    sportsCache.matches = enrichedMatches;
     sportsCache.activeUrl = result.activeUrl;
     sportsCache.lastUpdated = new Date();
     sportsCache.loading = false;
@@ -780,7 +839,7 @@ app.delete('/api/categories', (req, res) => {
 // Settings Endpoints
 app.get('/api/settings', (req, res) => {
   const db = readDB();
-  res.json(db.settings || { rojadirectaUrl: "https://www.rojadirectatv.me" });
+  res.json(db.settings || { rojadirectaUrl: "https://www.rojadirectatvmas.com" });
 });
 
 app.post('/api/settings', (req, res) => {
@@ -1520,12 +1579,52 @@ app.post('/api/catalog/clear', (req, res) => {
   res.json({ success: true, message: 'Catálogo limpiado.' });
 });
 
+// Helper to clean search titles for TMDB API search
+function cleanTitle(rawTitle) {
+  if (!rawTitle) return { title: '', year: null };
+  let title = rawTitle;
+  
+  // Extract year if present (e.g., "(2023)" or "2023")
+  let year = null;
+  const yearMatch = title.match(/\b(19\d\d|20\d\d)\b/);
+  if (yearMatch) {
+    year = yearMatch[1];
+  }
+  
+  // Strip out brackets and their contents: [Dual Latino], [1080p], etc.
+  title = title.replace(/\[[^\]]+\]/g, ' ');
+  // Strip out parentheses and their contents: (2023), (Dual), etc.
+  title = title.replace(/\([^)]+\)/g, ' ');
+  
+  // Strip out common quality/audio/host keywords
+  const keywords = [
+    /\bdual\b/gi, /\blatino\b/gi, /\blat\b/gi, /\bcastellano\b/gi, /\bespañol\b/gi,
+    /\bsubtitulado\b/gi, /\bsub\b/gi, /\benglish\b/gi, /\bingles\b/gi,
+    /\b1080p\b/gi, /\b720p\b/gi, /\b4k\b/gi, /\b2160p\b/gi, /\bhd\b/gi, /\bbluray\b/gi,
+    /\bwebrip\b/gi, /\bhdrip\b/gi, /\bdvdrip\b/gi, /\bx264\b/gi, /\bx265\b/gi,
+    /\bh264\b/gi, /\bh265\b/gi, /\bmkv\b/gi, /\bmp4\b/gi, /\byts\b/gi,
+    /\bcompleta\b/gi, /\bseason\b/gi, /\btemporada\b/gi
+  ];
+  
+  keywords.forEach(pattern => {
+    title = title.replace(pattern, ' ');
+  });
+  
+  // Clean up whitespace
+  title = title.replace(/\s+/g, ' ').trim();
+  
+  return { title, year };
+}
+
+// Dynamic flag to disable TMDB integration if the key is invalid (e.g. 401 Unauthorized)
+let tmdbKeyValid = true;
+
 // GET /api/metadata/:id — Returns enriched metadata for a movie/series item
 // Uses TMDB if TMDB_API_KEY is set and item has tmdbId, otherwise returns stored data
 app.get('/api/metadata/:id', async (req, res) => {
   const { id } = req.params;
   const { title, type, year } = req.query;
-  const TMDB_KEY = process.env.TMDB_API_KEY || '';
+  const TMDB_KEY = process.env.TMDB_API_KEY || '3905c909305d58a27f2de32e4b6038e7';
 
   try {
     const db = readDB();
@@ -1551,14 +1650,20 @@ app.get('/api/metadata/:id', async (req, res) => {
       languages: ['Español Latino', 'Inglés'],
       resolution: '4K Ultra HD',
       tmdbId: item?.tmdbId || null,
+      backdrop: item?.backdrop || '',
+      tagline: '',
+      director: '',
+      production: '',
+      cast: [],
+      youtubeId: '',
     };
 
-    // If we have TMDB key and a tmdbId, fetch real data
-    if (TMDB_KEY && base.tmdbId) {
+    // If we have TMDB key, it is marked valid, and has tmdbId, fetch real data
+    if (TMDB_KEY && tmdbKeyValid && base.tmdbId) {
       try {
         const tmdbType = base.type === 'series' ? 'tv' : 'movie';
         const tmdbRes = await axios.get(
-          `https://api.themoviedb.org/3/${tmdbType}/${base.tmdbId}?api_key=${TMDB_KEY}&language=es-MX`,
+          `https://api.themoviedb.org/3/${tmdbType}/${base.tmdbId}?api_key=${TMDB_KEY}&language=es-MX&append_to_response=credits,videos`,
           { timeout: 6000 }
         );
         const t = tmdbRes.data;
@@ -1570,6 +1675,28 @@ app.get('/api/metadata/:id', async (req, res) => {
           base.genres = (t.genres || []).map(g => g.name).slice(0, 4);
           base.duration = t.runtime || (t.episode_run_time && t.episode_run_time[0]) || base.duration;
           if (t.poster_path) base.poster = `https://image.tmdb.org/t/p/w500${t.poster_path}`;
+          if (t.backdrop_path) base.backdrop = `https://image.tmdb.org/t/p/w1280${t.backdrop_path}`;
+          base.tagline = t.tagline || '';
+          base.production = (t.production_companies || []).slice(0, 2).map(p => p.name).join(', ');
+
+          // Get director/creator
+          if (base.type === 'series' || base.type === 'anime_series') {
+            base.director = (t.created_by || []).map(c => c.name).join(', ');
+          } else {
+            base.director = (t.credits?.crew || []).filter(c => c.job === 'Director').map(c => c.name).join(', ');
+          }
+
+          // Get cast
+          base.cast = (t.credits?.cast || []).slice(0, 6).map(c => ({
+            name: c.name,
+            character: c.character,
+            profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null
+          }));
+
+          // Get YouTube trailer
+          const trailer = (t.videos?.results || []).find(v => v.site === 'YouTube' && v.type === 'Trailer') || (t.videos?.results || []).find(v => v.site === 'YouTube');
+          if (trailer) base.youtubeId = trailer.key;
+
           // Languages from spoken_languages
           if (t.spoken_languages && t.spoken_languages.length > 0) {
             const langMap = { es: 'Español Latino', en: 'Inglés', pt: 'Portugués', fr: 'Francés', de: 'Alemán', it: 'Italiano' };
@@ -1578,16 +1705,26 @@ app.get('/api/metadata/:id', async (req, res) => {
         }
       } catch (tmdbErr) {
         console.warn(`[Metadata] TMDB fetch failed for tmdbId ${base.tmdbId}:`, tmdbErr.message);
+        if (tmdbErr.response && tmdbErr.response.status === 401) {
+          console.warn('[Metadata] ⚠️ La clave de TMDB no es válida (401). Configura TMDB_API_KEY en tu archivo .env para habilitar detalles de reparto y tráileres. Desactivando consultas a TMDB temporalmente.');
+          tmdbKeyValid = false;
+        }
       }
-    } else if (TMDB_KEY && (base.title || title)) {
+    } else if (TMDB_KEY && tmdbKeyValid && (base.title || title)) {
       // Search TMDB by title
       try {
-        const searchTitle = base.title || title;
+        const rawSearchTitle = base.title || title;
+        const cleaned = cleanTitle(rawSearchTitle);
+        const searchTitle = cleaned.title || rawSearchTitle;
+        const searchYear = cleaned.year || base.year || year || '';
         const tmdbType = base.type === 'series' ? 'tv' : 'movie';
-        const searchRes = await axios.get(
-          `https://api.themoviedb.org/3/search/${tmdbType}?api_key=${TMDB_KEY}&query=${encodeURIComponent(searchTitle)}&language=es-MX`,
-          { timeout: 6000 }
-        );
+        
+        let searchUrl = `https://api.themoviedb.org/3/search/${tmdbType}?api_key=${TMDB_KEY}&query=${encodeURIComponent(searchTitle)}&language=es-MX`;
+        if (searchYear) {
+          searchUrl += `&year=${searchYear}`;
+        }
+        
+        const searchRes = await axios.get(searchUrl, { timeout: 6000 });
         const results = searchRes.data?.results || [];
         if (results.length > 0) {
           const t = results[0];
@@ -1596,21 +1733,52 @@ app.get('/api/metadata/:id', async (req, res) => {
           base.rating = t.vote_average ? parseFloat(t.vote_average.toFixed(1)) : base.rating;
           base.tmdbId = t.id;
           if (t.poster_path && !base.poster) base.poster = `https://image.tmdb.org/t/p/w500${t.poster_path}`;
-          // Fetch full details for duration/genres
+          if (t.backdrop_path) base.backdrop = `https://image.tmdb.org/t/p/w1280${t.backdrop_path}`;
+
+          // Fetch full details for duration/genres/credits/videos
           try {
             const detailRes = await axios.get(
-              `https://api.themoviedb.org/3/${tmdbType}/${t.id}?api_key=${TMDB_KEY}&language=es-MX`,
+              `https://api.themoviedb.org/3/${tmdbType}/${t.id}?api_key=${TMDB_KEY}&language=es-MX&append_to_response=credits,videos`,
               { timeout: 6000 }
             );
             const d = detailRes.data;
             if (d) {
               base.genres = (d.genres || []).map(g => g.name).slice(0, 4);
               base.duration = d.runtime || (d.episode_run_time && d.episode_run_time[0]) || base.duration;
+              base.tagline = d.tagline || '';
+              base.production = (d.production_companies || []).slice(0, 2).map(p => p.name).join(', ');
+              
+              // Get director/creator
+              if (base.type === 'series' || base.type === 'anime_series') {
+                base.director = (d.created_by || []).map(c => c.name).join(', ');
+              } else {
+                base.director = (d.credits?.crew || []).filter(c => c.job === 'Director').map(c => c.name).join(', ');
+              }
+              
+              // Get cast
+              base.cast = (d.credits?.cast || []).slice(0, 6).map(c => ({
+                name: c.name,
+                character: c.character,
+                profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null
+              }));
+
+              // Get YouTube trailer
+              const trailer = (d.videos?.results || []).find(v => v.site === 'YouTube' && v.type === 'Trailer') || (d.videos?.results || []).find(v => v.site === 'YouTube');
+              if (trailer) base.youtubeId = trailer.key;
             }
-          } catch(e) {}
+          } catch(e) {
+            if (e.response && e.response.status === 401) {
+              console.warn('[Metadata] ⚠️ La clave de TMDB no es válida (401). Configura TMDB_API_KEY en tu archivo .env para habilitar detalles de reparto y tráileres. Desactivando consultas a TMDB.');
+              tmdbKeyValid = false;
+            }
+          }
         }
       } catch (searchErr) {
         console.warn(`[Metadata] TMDB search failed for "${base.title}":`, searchErr.message);
+        if (searchErr.response && searchErr.response.status === 401) {
+          console.warn('[Metadata] ⚠️ La clave de TMDB no es válida (401). Configura TMDB_API_KEY en tu archivo .env para habilitar detalles de reparto y tráileres. Desactivando consultas a TMDB.');
+          tmdbKeyValid = false;
+        }
       }
     }
 
@@ -2067,7 +2235,13 @@ app.post('/api/restart-tunnel', (req, res) => {
 });
 
 initializeDB().then(() => {
-  app.listen(PORT, () => { console.log(`Servidor corriendo en el puerto ${PORT}`); });
+  app.listen(PORT, () => {
+    console.log(`Servidor corriendo en el puerto ${PORT}`);
+    // Inicializar cache de deportes en segundo plano al arrancar el servidor
+    refreshSportsCache().catch(err => {
+      console.error("[Startup] Error al inicializar cache de deportes:", err.message);
+    });
+  });
 }).catch(err => {
   console.error("[DB] Error fatal al inicializar la base de datos:", err);
   process.exit(1);

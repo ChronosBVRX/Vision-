@@ -3,6 +3,7 @@ import { Play, Star, Loader, X, RefreshCw, Search, Tv } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
 import DetailsModal from '../components/DetailsModal';
 import { HeroBanner, CatalogRow, CatalogCard } from '../components/CatalogComponents';
+import LoadingScreen from '../components/LoadingScreen';
 
 function getNormalizedTVCategory(channel) {
   if (!channel) return 'Variedades / General';
@@ -620,12 +621,7 @@ export default function Home({ selectedCategoryFilter }) {
   }, [activeSeries]);
 
   if (isLoading) {
-    return (
-      <div className="catalog-loading">
-        <div className="catalog-loading-icon"><Loader size={52} className="spin-anim" /></div>
-        <p className="catalog-loading-text">Cargando contenido...</p>
-      </div>
-    );
+    return <LoadingScreen type="catalog" title="Cargando contenido..." />;
   }
 
   if (allContent.length === 0) {
@@ -737,24 +733,11 @@ export default function Home({ selectedCategoryFilter }) {
 
         {/* RESOLVER LOADING OVERLAY */}
         {(isResolving || (activeItem && activeItem.isResolving)) && (
-          <div className="watch-overlay" style={{ justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
-            <div style={{ textAlign: 'center', padding: '36px', maxWidth: '420px' }} className="glass-panel form-card">
-              <Loader className="spin-anim mx-auto mb-4" size={48} style={{ color: 'var(--primary-light)', marginBottom: '16px' }} />
-              <h3 style={{ fontSize: '1.4rem', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>
-                {activeItem?.title || 'Cargando...'}
-              </h3>
-              <p style={{ fontSize: '0.85rem', color: 'var(--primary-light)', marginBottom: '4px', fontWeight: 500 }}>
-                📡 Sintonizando señal en vivo...
-              </p>
-              <p className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '20px' }}>
-                Analizando transmisiones y omitiendo anuncios de origen
-              </p>
-              <button className="btn btn-secondary focusable" tabIndex={0}
-                onClick={() => { setActiveItem(null); setIsResolving(false); resolvingRef.current = false; }}>
-                Cancelar
-              </button>
-            </div>
-          </div>
+          <LoadingScreen 
+            type="resolver" 
+            title={activeItem?.title || 'Cargando canal...'} 
+            onCancel={() => { setActiveItem(null); setIsResolving(false); resolvingRef.current = false; }} 
+          />
         )}
 
         {/* RESOLVER ERROR OVERLAY */}
@@ -817,24 +800,11 @@ export default function Home({ selectedCategoryFilter }) {
 
       {/* ── RESOLVER LOADING OVERLAY ──────────────────────────────────────── */}
       {(isResolving || (activeItem && activeItem.isResolving)) && (
-        <div className="watch-overlay" style={{ justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
-          <div style={{ textAlign: 'center', padding: '36px', maxWidth: '420px' }} className="glass-panel form-card">
-            <Loader className="spin-anim mx-auto mb-4" size={48} style={{ color: 'var(--primary-light)', marginBottom: '16px' }} />
-            <h3 style={{ fontSize: '1.4rem', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>
-              {activeItem?.title || 'Cargando...'}
-            </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--primary-light)', marginBottom: '4px', fontWeight: 500 }}>
-              🔍 Buscando fuente en Español Latino...
-            </p>
-            <p className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '20px' }}>
-              Analizando servidores y omitiendo anuncios de origen
-            </p>
-            <button className="btn btn-secondary focusable" tabIndex={0}
-              onClick={() => { setActiveItem(null); setIsResolving(false); resolvingRef.current = false; }}>
-              Cancelar
-            </button>
-          </div>
-        </div>
+        <LoadingScreen 
+          type="resolver" 
+          title={activeItem?.title || 'Cargando contenido...'} 
+          onCancel={() => { setActiveItem(null); setIsResolving(false); resolvingRef.current = false; }} 
+        />
       )}
 
       {/* ── RESOLVER ERROR OVERLAY ────────────────────────────────────────── */}

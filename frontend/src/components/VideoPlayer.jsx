@@ -3,6 +3,7 @@ import Plyr from 'plyr';
 import Hls from 'hls.js';
 import { X, Play, Pause, RefreshCw, Layers, RotateCcw, RotateCw, SkipForward, SkipBack, List, Globe as Globe2, Subtitles, Volume2, VolumeX, Maximize2, Minimize2, FastForward, Search, Tv } from 'lucide-react';
 import 'plyr/dist/plyr.css';
+import LoadingScreen from './LoadingScreen';
 
 // BRANDING PRE-ROLL CONFIGURATION
 const BRAND_INTRO_CONFIG = {
@@ -507,6 +508,12 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       setErrorText(null);
     }
 
+    if (source?.selectedStreamIndex !== undefined) {
+      setActiveStreamIndex(source.selectedStreamIndex);
+    } else {
+      setActiveStreamIndex(0);
+    }
+
     if (source?.isSeriesEpisode) {
       setActiveEpisode(source.currentEpisode || null);
       setCountdownActive(false);
@@ -525,6 +532,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   const videoRef = useRef(null);
   const playerRef = useRef(null);
   const hlsRef = useRef(null);
+  const dashRef = useRef(null);
   const closeButtonRef = useRef(null);
   const controlsTimeoutRef = useRef(null);
   const backPressRef = useRef(0);
@@ -1162,11 +1170,12 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     destroyPlayer();
 
     const isHls = currentStream.url.toLowerCase().includes('.m3u8');
+    const isDash = currentStream.url.toLowerCase().includes('.mpd');
     // Extract referer from headers if available
     const referer = currentStream.referer || (currentStream.headers && (currentStream.headers.referer || currentStream.headers.Referer));
     
-    // Use proxy for all remote HTTP streams to bypass CORS, except localhost
-    const streamUrl = currentStream.url.startsWith('http') && !currentStream.url.includes('localhost')
+    // Use proxy for all remote HTTP streams to bypass CORS, except localhost and DASH (.mpd)
+    const streamUrl = currentStream.url.startsWith('http') && !currentStream.url.includes('localhost') && !isDash
       ? `/api/proxy?url=${encodeURIComponent(currentStream.url)}${referer ? `&referer=${encodeURIComponent(referer)}` : ''}`
       : currentStream.url;
 
@@ -1238,6 +1247,64 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         if (!showBrandIntroRef.current) {
           playerRef.current.play().catch(() => {});
         }
+      }
+    } else if (isDash) {
+      const initDash = () => {
+        if (!window.dashjs) {
+          console.error("[VideoPlayer] dash.js no está cargado");
+          handleStreamError("El reproductor de DASH no se pudo cargar.");
+          return;
+        }
+        try {
+          const dashPlayer = window.dashjs.MediaPlayer().create();
+          dashRef.current = dashPlayer;
+          
+          if (referer) {
+            dashPlayer.updateSettings({
+              streaming: {
+                xhr: {
+                  headers: {
+                    'Referer': referer
+                  }
+                }
+              }
+            });
+          }
+
+          dashPlayer.initialize(video, streamUrl, !showBrandIntroRef.current);
+          
+          playerRef.current = new Plyr(video, {
+            controls: [], // Hide native controls
+            autoplay: !showBrandIntroRef.current
+          });
+          
+          if (!showBrandIntroRef.current) {
+            playerRef.current.play().catch((e) => {
+              console.log("Autoplay blocked by browser:", e);
+            });
+          }
+        } catch (err) {
+          console.error("[VideoPlayer] Error al inicializar dash.js:", err);
+          handleStreamError("Error al iniciar la reproducción de DASH.");
+        }
+      };
+
+      if (window.dashjs) {
+        initDash();
+      } else {
+        console.log("[VideoPlayer] Cargando dash.js desde CDN...");
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/dashjs/4.7.4/dash.all.min.js';
+        script.async = true;
+        script.onload = () => {
+          console.log("[VideoPlayer] dash.js cargado correctamente");
+          initDash();
+        };
+        script.onerror = () => {
+          console.error("[VideoPlayer] Error al cargar dash.js desde CDN");
+          handleStreamError("No se pudo cargar el reproductor de DASH.");
+        };
+        document.head.appendChild(script);
       }
     } else {
       video.src = streamUrl;
@@ -1348,10 +1415,72 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
+    if (dashRef.current) {
+      try {
+        dashRef.current.destroy();
+      } catch (e) {}
+      dashRef.current = null;
+    }
   };
 
   const handleSourceChange = (index) => {
     setActiveStreamIndex(index);
+  };
+
+  const switchToOriginalStream = async (idx) => {
+    if (!localSource.originalStreams || !localSource.originalStreams[idx]) return;
+    const selectedStream = localSource.originalStreams[idx];
+    
+    setIsLoading(true);
+    setErrorText(`Sintonizando ${selectedStream.name || `Servidor ${idx + 1}`}...`);
+    setShowServerPopup(false);
+
+    try {
+      const res = await fetch(`/api/live/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          streams: [selectedStream],
+          type: localSource.type
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        const updatedSource = {
+          ...localSource,
+          selectedLanguage: data.selectedLanguage,
+          selectedServer: data.selectedServer,
+          selectedStreamIndex: idx,
+          streams: [
+            {
+              name: data.selectedServer,
+              url: data.stream.url,
+              type: data.stream.type,
+              headers: data.stream.headers || {},
+              quality: data.stream.quality || "auto",
+              resolver: data.stream.resolver || "direct"
+            }
+          ],
+          attempts: data.attempts || []
+        };
+        destroyPlayer();
+        setRetryCount(0);
+        setActiveStreamIndex(idx);
+        setLocalSource(updatedSource);
+        setTimeout(() => {
+          setIsLoading(false);
+          setErrorText(null);
+          setPlayerKey(prev => prev + 1);
+        }, 1000);
+      } else {
+        setIsLoading(false);
+        setErrorText(`No se pudo sintonizar este servidor: ${data.error || 'error desconocido'}`);
+      }
+    } catch (err) {
+      console.error("[VideoPlayer] Error switching stream:", err);
+      setIsLoading(false);
+      setErrorText("Error de red al sintonizar este servidor.");
+    }
   };
 
   const getEmbedUrl = () => {
@@ -1381,9 +1510,31 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             <X size={20} />
           </button>
         </div>
-        <div style={{ textAlign: 'center', maxWidth: '450px', padding: '24px' }} className="glass-panel form-card">
+        <div style={{ textAlign: 'center', maxWidth: '500px', padding: '24px' }} className="glass-panel form-card">
           <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent)', marginBottom: '12px' }}>Error de Conexión</h3>
           <p className="text-secondary" style={{ marginBottom: '20px', fontSize: '0.95rem' }}>{errorText}</p>
+          
+          {localSource.originalStreams && localSource.originalStreams.length > 1 && (
+            <div style={{ marginBottom: '20px', textAlign: 'left' }}>
+              <p style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
+                Intentar con otro servidor/enlace disponible:
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '160px', overflowY: 'auto', paddingRight: '4px' }}>
+                {localSource.originalStreams.map((stream, idx) => (
+                  <button
+                    key={idx}
+                    className={`btn-sports-action focusable ${activeStreamIndex === idx ? 'primary' : ''}`}
+                    style={{ justifyContent: 'flex-start', width: '100%', padding: '8px 12px', fontSize: '0.85rem' }}
+                    tabIndex={0}
+                    onClick={() => switchToOriginalStream(idx)}
+                  >
+                    <span>{stream.name || `Servidor ${idx + 1}`}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <button className="btn btn-secondary focusable" tabIndex={0} onClick={onClose}>Cerrar</button>
         </div>
       </div>
@@ -1543,7 +1694,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             {/* TV Audio/Subtitle/Server selectors */}
             {isLive && (
               <>
-                {streams.length > 1 && (
+                {(streams.length > 1 || (localSource.originalStreams && localSource.originalStreams.length > 1)) && (
                   <button className="control-btn focusable" tabIndex={0} onClick={() => { setShowServerPopup(!showServerPopup); setShowAudioPopup(false); setShowSubtitlePopup(false); }} title="Servidores">
                     <Layers size={18} />
                   </button>
@@ -1600,23 +1751,30 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         </div>
 
         {/* ── Popups for Server, Audio, Subtitles ────────────────────── */}
-        {showServerPopup && streams.length > 1 && (
+        {showServerPopup && (streams.length > 1 || (localSource.originalStreams && localSource.originalStreams.length > 1)) && (
           <div className="player-popup-menu focusable-container">
             <div className="player-popup-header">Servidores</div>
-            {streams.map((stream, idx) => (
-              <button
-                key={idx}
-                className={`player-popup-item focusable ${activeStreamIndex === idx ? 'active' : ''}`}
-                tabIndex={0}
-                onClick={() => {
-                  setActiveStreamIndex(idx);
-                  setShowServerPopup(false);
-                }}
-              >
-                <span>{stream.name || `Servidor ${idx + 1}`}</span>
-                {activeStreamIndex === idx && <span style={{ color: 'var(--primary-light)' }}>✓</span>}
-              </button>
-            ))}
+            {(localSource.originalStreams || streams).map((stream, idx) => {
+              const isActive = activeStreamIndex === idx;
+              return (
+                <button
+                  key={idx}
+                  className={`player-popup-item focusable ${isActive ? 'active' : ''}`}
+                  tabIndex={0}
+                  onClick={() => {
+                    if (localSource.originalStreams) {
+                      switchToOriginalStream(idx);
+                    } else {
+                      setActiveStreamIndex(idx);
+                      setShowServerPopup(false);
+                    }
+                  }}
+                >
+                  <span>{stream.name || `Servidor ${idx + 1}`}</span>
+                  {isActive && <span style={{ color: 'var(--primary-light)' }}>✓</span>}
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -1972,31 +2130,12 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
 
       {/* ── Loader overlay ─────────────────────────────────────────── */}
       {isLoading && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          background: '#000',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1008
-        }}>
-          <div className="watch-header" style={{ position: 'absolute', top: 0, left: 0, width: '100%', pointerEvents: 'none' }}>
-            <div className="watch-title">{localSource.title}</div>
-            <button ref={closeButtonRef} className="watch-close focusable" tabIndex={0} onClick={onClose} title="Cerrar Reproductor" style={{ pointerEvents: 'auto' }}>
-              <X size={20} />
-            </button>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <RefreshCw className="animate-spin text-muted mx-auto mb-4" size={48} style={{ color: 'var(--primary-light)', animation: 'spin 2s linear infinite' }} />
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#fff', marginBottom: '8px' }}>Sintonizando transmisión...</h3>
-            <p className="text-secondary">Buscando el servidor más estable y omitiendo anuncios de origen...</p>
-          </div>
-        </div>
+        <LoadingScreen
+          type="player"
+          title={localSource.title}
+          onClose={onClose}
+          closeButtonRef={closeButtonRef}
+        />
       )}
 
       {/* ── Brand Intro overlay ─────────────────────────────────────── */}

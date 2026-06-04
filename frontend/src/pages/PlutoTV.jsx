@@ -3,6 +3,7 @@ import { Play, Loader, Tv, Film, Search } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
 import DetailsModal from '../components/DetailsModal';
 import { HeroBanner, CatalogRow } from '../components/CatalogComponents';
+import LoadingScreen from '../components/LoadingScreen';
 
 export default function PlutoTV({ initialTab }) {
   const [catalog, setCatalog] = useState([]);
@@ -210,14 +211,7 @@ export default function PlutoTV({ initialTab }) {
   }
 
   if (isLoading) {
-    return (
-      <div className="catalog-loading">
-        <div className="catalog-loading-icon">
-          <Loader size={52} className="spin-anim" />
-        </div>
-        <p className="catalog-loading-text">Cargando Pluto TV...</p>
-      </div>
-    );
+    return <LoadingScreen type="catalog" title="Cargando Pluto TV..." />;
   }
 
   const currentFeatured = featuredItems[featIdx] || catalog[0];
@@ -278,14 +272,11 @@ export default function PlutoTV({ initialTab }) {
 
       {/* Resolving Overlay */}
       {isResolving && (
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-          <Loader size={48} className="spin-anim" style={{ color: '#ffcc00', marginBottom: '20px' }} />
-          <h3>Sintonizando {activeItem?.title}...</h3>
-          <p style={{ color: '#aaa', marginTop: '10px', marginBottom: '20px' }}>Obteniendo token de Pluto TV</p>
-          <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => { setActiveItem(null); setIsResolving(false); }}>
-            Cancelar
-          </button>
-        </div>
+        <LoadingScreen 
+          type="resolver" 
+          title={activeItem?.title || 'Sintonizando Pluto TV...'} 
+          onCancel={() => { setActiveItem(null); setIsResolving(false); }} 
+        />
       )}
 
       <div className="catalog-rows" style={{ marginTop: '-80px', position: 'relative', zIndex: 10 }}>

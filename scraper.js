@@ -1,16 +1,16 @@
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const axios = require('axios');
 const cheerio = require('cheerio');
 const puppeteer = require('puppeteer');
 
 // Predefined fallback mirrors in case search engine discovery fails
 const CANDIDATE_DOMAINS = [
-  "https://www.rojadirectatv.me",
-  "https://www.rojadirecta.watch",
-  "https://www.rojadirectatv.top",
-  "https://www.rojadirecta.me",
-  "https://www.tarjetarojatv.org",
+  "https://www.rojadirectatvmas.com",
+  "https://www.rojadirecta.lt",
+  "https://www.pirlotvhd.re",
   "https://www.tarjetarojatv.net",
-  "https://www.rojadirecta.click"
+  "https://www.rojadirecta.watch",
+  "https://www.pirlotv.us"
 ];
 
 /**
@@ -51,6 +51,7 @@ function getStreamName(url, index) {
  * Each entry is the base pattern used to build the site: operator.
  * To update mirrors, just edit this list — no other logic needs to change.
  * ─────────────────────────────────────────────────────────────────────────────
+ * Note: These are also used as fallback keywords for matching discovered domains.
  */
 const SPORTS_ALLOWED_DOMAINS = [
   'rojadirectatv.me',
@@ -70,86 +71,234 @@ const SPORTS_ALLOWED_DOMAINS = [
   'sportsonline.si',
   'futbollibre.net',
   'pelotalibre.net',
+  'rojadirectatvmas.com',
+  'tarjetarojatvmas.com',
+  'pirlotvhd.re',
+  'pirlotvhd.com.co',
+  'pirlotvs.com',
+  'tarjetarojas.com'
 ];
 
 /**
- * Builds a Brave Search URL that restricts results to the allowed sports domains
- * using "site:domain1 OR site:domain2 ..." operators appended to the query term.
- *
- * @param {string} queryTerm   The base search keyword (e.g. "rojadirecta" / "pirlo tv")
- * @param {string[]} domains   The allow-listed domains to restrict to
- * @returns {string}           Full Brave Search URL
- */
-function buildSiteRestrictedQuery(queryTerm, domains) {
-  const siteOps = domains.map(d => `site:${d}`).join(' OR ');
-  const fullQuery = `${queryTerm} (${siteOps})`;
-  return `https://search.brave.com/search?q=${encodeURIComponent(fullQuery)}`;
-}
-
-/**
- * Performs a Brave Search restricted to the SPORTS_ALLOWED_DOMAINS allow-list,
- * returning only domains from that list. Falls back to CANDIDATE_DOMAINS.
+ * Performs a Brave Search and extracts potential active mirrors based on keyword matching
+ * and blacklisting. Uses Puppeteer to avoid Cloudflare/bot blocks.
  */
 async function searchMirrorsOnWeb() {
-  console.log(`[SportsScraper] Buscando espejos activos con búsqueda restringida a dominios permitidos...`);
+  console.log(`[SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...`);
   const discoveredDomains = new Set();
+  
+  const searchTerms = ['rojadirecta', 'pirlo tv', 'tarjeta roja'];
+  const keywords = ['rojadirecta', 'tarjetaroja', 'pirlotv', 'futbollibre', 'pelotalibre', 'verfutbol', 'sportsonline', 'pirlotvonline', 'tarjetarojas'];
+  const blacklist = ['play.google.com', 'youtube.com', 'instagram.com', 'wikipedia.org', 'facebook.com', 'twitter.com', 'tudn.com', 'pinterest.com', 'github.com', 'reddit.com'];
 
-  // Keywords that help find the right type of page on these sites
-  const searchTerms = ['rojadirecta', 'pirlo tv', 'tarjeta roja', 'ver futbol'];
+  let browser = null;
+  try {
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
 
-  const searchUrls = searchTerms.map(term => ({
-    term,
-    url: buildSiteRestrictedQuery(term, SPORTS_ALLOWED_DOMAINS)
-  }));
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    await page.setViewport({ width: 1280, height: 800 });
 
-  console.log(`[SportsScraper] Queries generadas con site: restriction a ${SPORTS_ALLOWED_DOMAINS.length} dominios:`);
-  searchUrls.forEach(s => console.log(`  → ${s.url}`));
+    for (const term of searchTerms) {
+      try {
+        const searchUrl = `https://search.brave.com/search?q=${encodeURIComponent(term)}`;
+        console.log(`[SportsScraper] Consultando Brave Search para: "${term}"...`);
+        await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
+        await new Promise(r => setTimeout(r, 1500));
+        
+        const html = await page.content();
+        const $ = cheerio.load(html);
 
-  for (const item of searchUrls) {
-    try {
-      const response = await axios.get(item.url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-          'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
-        },
-        timeout: 8000
-      });
+        $('a').each((i, el) => {
+          const href = $(el).attr('href');
+          if (!href || !href.startsWith('http')) return;
 
-      const $ = cheerio.load(response.data);
+          try {
+            const domainUrl = new URL(href);
+            const hostname = domainUrl.hostname.replace(/^www\./, '').toLowerCase();
+            const fullOrigin = `${domainUrl.protocol}//${domainUrl.hostname}`;
 
-      $('a').each((i, el) => {
-        let href = $(el).attr('href');
-        if (!href || !href.startsWith('http')) return;
+            // Check if hostname contains blacklisted domains
+            const isBlacklisted = blacklist.some(bl => hostname.includes(bl));
+            if (isBlacklisted) return;
 
-        try {
-          const domainUrl = new URL(href);
-          const hostname = domainUrl.hostname.replace(/^www\./, '').toLowerCase();
-          const fullOrigin = `${domainUrl.protocol}//${domainUrl.hostname}`;
+            // Check if hostname matches any allowed domains or key matching patterns
+            const matchesAllowed = SPORTS_ALLOWED_DOMAINS.some(allowed => hostname === allowed || hostname.endsWith(`.${allowed}`));
+            const matchesKeyword = keywords.some(kw => hostname.includes(kw));
 
-          // Only add if it's in our allow-list (direct match or subdomain match)
-          const isAllowed = SPORTS_ALLOWED_DOMAINS.some(allowed =>
-            hostname === allowed || hostname.endsWith(`.${allowed}`)
-          );
-
-          if (isAllowed) {
-            discoveredDomains.add(fullOrigin);
-            console.log(`[SportsScraper] Dominio permitido encontrado: ${fullOrigin} (query: "${item.term}")`);
+            if (matchesAllowed || matchesKeyword) {
+              discoveredDomains.add(fullOrigin);
+              console.log(`[SportsScraper] Dominio descubierto: ${fullOrigin} (query: "${term}")`);
+            }
+          } catch (e) {
+            // Invalid URL
           }
-        } catch (e) {
-          // Invalid URL
-        }
-      });
-    } catch (error) {
-      console.error(`[SportsScraper] Error en búsqueda site-restricted para "${item.term}":`, error.message);
+        });
+      } catch (err) {
+        console.error(`[SportsScraper] Error buscando "${term}":`, err.message);
+      }
+    }
+  } catch (error) {
+    console.error("[SportsScraper] Error de Puppeteer en búsqueda de espejos:", error.message);
+  } finally {
+    if (browser) {
+      await browser.close();
     }
   }
 
   const results = Array.from(discoveredDomains);
-  console.log(`[SportsScraper] Búsqueda site-restricted finalizada. Dominios de la lista encontrados: ${results.length}`);
+  console.log(`[SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: ${results.length}`);
   return results;
 }
 
+
+/**
+ * Detects the sport of the event based on its title and image alt text.
+ * @param {string} title The match title
+ * @param {string} rawAlt The image alt text from Rojadirecta row
+ * @returns {string} The detected sport
+ */
+function detectSport(title, rawAlt) {
+  const normTitle = (title || '').toLowerCase();
+  const normAlt = (rawAlt || '').toLowerCase().trim();
+
+  // 1. Check image alt attribute first
+  if (normAlt.includes('basket') || normAlt.includes('baloncesto') || normAlt.includes('nba')) return 'Baloncesto';
+  if (normAlt.includes('tenis') || normAlt.includes('tennis')) return 'Tenis';
+  if (normAlt.includes('formula') || normAlt.includes('f1') || normAlt.includes('gp') || normAlt.includes('moto') || normAlt.includes('carrera') || normAlt.includes('automovilismo')) return 'Automovilismo';
+  if (normAlt.includes('ufc') || normAlt.includes('box') || normAlt.includes('combate') || normAlt.includes('mma') || normAlt.includes('lucha')) return 'Combate';
+  if (normAlt.includes('futbol') || normAlt.includes('soccer')) return 'Fútbol';
+  if (normAlt.includes('beisbol') || normAlt.includes('baseball') || normAlt.includes('mlb')) return 'Béisbol';
+  if (normAlt.includes('nfl') || normAlt.includes('americano')) return 'Fútbol Americano';
+
+  // 2. Check title keywords
+  // Baloncesto
+  if (
+    normTitle.includes('nba') || 
+    normTitle.includes('basket') || 
+    normTitle.includes('baloncesto') || 
+    normTitle.includes('basketball') || 
+    normTitle.includes('spurs') || 
+    normTitle.includes('knicks') || 
+    normTitle.includes('lakers') || 
+    normTitle.includes('celtics') || 
+    normTitle.includes('bulls') || 
+    normTitle.includes('warriors') || 
+    normTitle.includes('baskonia') || 
+    normTitle.includes('joventut') || 
+    normTitle.includes('euroleague') || 
+    normTitle.includes('acb')
+  ) {
+    return 'Baloncesto';
+  }
+
+  // Béisbol
+  if (
+    normTitle.includes('mlb') || 
+    normTitle.includes('beisbol') || 
+    normTitle.includes('baseball') || 
+    normTitle.includes('yankees') || 
+    normTitle.includes('red sox') || 
+    normTitle.includes('braves') || 
+    normTitle.includes('blue jays') || 
+    normTitle.includes('cubs') || 
+    normTitle.includes('athletics') || 
+    normTitle.includes('astros') || 
+    normTitle.includes('pirates') || 
+    normTitle.includes('twins') || 
+    normTitle.includes('royals') || 
+    normTitle.includes('dodgers') || 
+    normTitle.includes('padres') || 
+    normTitle.includes('mets')
+  ) {
+    return 'Béisbol';
+  }
+
+  // Motor / Automovilismo
+  if (
+    normTitle.includes('f1') || 
+    normTitle.includes('formula 1') || 
+    normTitle.includes('formula1') || 
+    normTitle.includes('carrera') || 
+    normTitle.includes('gp') || 
+    normTitle.includes('grand prix') || 
+    normTitle.includes('moto') || 
+    normTitle.includes('motogp') || 
+    normTitle.includes('nascar') || 
+    normTitle.includes('indycar')
+  ) {
+    return 'Automovilismo';
+  }
+
+  // Tenis
+  if (
+    normTitle.includes('tenis') || 
+    normTitle.includes('tennis') || 
+    normTitle.includes('atp') || 
+    normTitle.includes('wta') || 
+    normTitle.includes('wimbledon') || 
+    normTitle.includes('roland garros') || 
+    normTitle.includes('open') || 
+    normTitle.includes('sabalenka') || 
+    normTitle.includes('shnaider') || 
+    normTitle.includes('alcaraz') || 
+    normTitle.includes('djokovic') || 
+    normTitle.includes('sinner') || 
+    normTitle.includes('nadal') || 
+    normTitle.includes('medvedev') || 
+    normTitle.includes('zverev') || 
+    normTitle.includes('tsitsipas') || 
+    normTitle.includes('ruud') || 
+    normTitle.includes('rublev') || 
+    normTitle.includes('dimitrov') || 
+    normTitle.includes('berrettini') || 
+    normTitle.includes('arnaldi') || 
+    normTitle.includes('cobolli') || 
+    normTitle.includes('aliassime') || 
+    normTitle.includes('auger') || 
+    normTitle.includes('korda') || 
+    normTitle.includes('khachanov') || 
+    normTitle.includes('musetti') || 
+    normTitle.includes('tiafoe') || 
+    normTitle.includes('de minaur') || 
+    normTitle.includes('kyrgios') || 
+    normTitle.includes('swiatek') || 
+    normTitle.includes('gauff') || 
+    normTitle.includes('rybakina') || 
+    normTitle.includes('jabeur')
+  ) {
+    return 'Tenis';
+  }
+
+  // Combate
+  if (
+    normTitle.includes('ufc') || 
+    normTitle.includes('box') || 
+    normTitle.includes('combate') || 
+    normTitle.includes('lucha') || 
+    normTitle.includes('mma') || 
+    normTitle.includes('wwe') || 
+    normTitle.includes('raw') || 
+    normTitle.includes('smackdown')
+  ) {
+    return 'Combate';
+  }
+
+  // NFL / Fútbol Americano
+  if (
+    normTitle.includes('nfl') || 
+    normTitle.includes('super bowl') || 
+    normTitle.includes('superbowl') || 
+    normTitle.includes('american football')
+  ) {
+    return 'Fútbol Americano';
+  }
+
+  return 'Fútbol'; // Fallback
+}
 
 /**
  * Scrapes the list of live/upcoming sports matches from a specific Rojadirecta domain,
@@ -216,19 +365,8 @@ async function scrapeRojadirectaMatches(baseUrl) {
       const isMatchTitle = title.includes('vs') || title.includes(' - ') || title.includes(':') || title.includes(' v ');
 
       if (title && isMatchUrl && isMatchTitle && title.length > 5) {
-        let sport = 'Fútbol';
-        
-        const imgAlt = closestRow.find('img').attr('alt');
-        if (imgAlt) {
-          sport = imgAlt.trim();
-        } else {
-          const lowerTitle = title.toLowerCase();
-          if (lowerTitle.includes('nba') || lowerTitle.includes('basket') || lowerTitle.includes('baloncesto')) sport = 'Baloncesto';
-          else if (lowerTitle.includes('f1') || lowerTitle.includes('formula') || lowerTitle.includes('carrera')) sport = 'Fórmula 1';
-          else if (lowerTitle.includes('gp') || lowerTitle.includes('moto')) sport = 'MotoGP';
-          else if (lowerTitle.includes('tenis') || lowerTitle.includes('tennis')) sport = 'Tenis';
-          else if (lowerTitle.includes('ufc') || lowerTitle.includes('box') || lowerTitle.includes('combate')) sport = 'Combate';
-        }
+        const imgAlt = closestRow.find('img').attr('alt') || '';
+        const sport = detectSport(title, imgAlt);
 
         rawMatches.push({
           title,
@@ -341,13 +479,16 @@ async function sniffVideoUrl(targetUrl) {
   try {
     browser = await puppeteer.launch({
       headless: true,
+      ignoreHTTPSErrors: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
         '--disable-gpu',
-        '--mute-audio'
+        '--mute-audio',
+        '--ignore-certificate-errors',
+        '--ignore-certificate-errors-spki-list'
       ]
     });
 
@@ -384,11 +525,17 @@ async function sniffVideoUrl(targetUrl) {
         return;
       }
 
-      // Sniff outgoing media request URLs (.m3u8, .mp4)
-      if (
+      // Sniff outgoing media request URLs (.m3u8, .mp4, .mpd)
+      const isStream = 
         lowerUrl.includes('.m3u8') || 
-        (lowerUrl.includes('.mp4') && !lowerUrl.includes('ads') && !lowerUrl.includes('loader'))
-      ) {
+        lowerUrl.includes('.mpd') ||
+        lowerUrl.includes('/manifest') ||
+        (lowerUrl.includes('.mp4') && !lowerUrl.includes('ads') && !lowerUrl.includes('loader')) ||
+        lowerUrl.includes('/playlist.m3u8') ||
+        lowerUrl.includes('.m3u8?') ||
+        lowerUrl.includes('.mpd?');
+
+      if (isStream) {
         console.log(`[Sniffer] ¡Video detectado en peticion de red! -> ${url}`);
         const headers = req.headers();
         console.log(`[Sniffer] Headers detectados:`, headers);
@@ -403,11 +550,13 @@ async function sniffVideoUrl(targetUrl) {
     page.on('response', (res) => {
       const url = res.url();
       const headers = res.headers();
-      const contentType = headers['content-type'] || '';
+      const contentType = (headers['content-type'] || '').toLowerCase();
       
       if (
         contentType.includes('application/x-mpegurl') || 
         contentType.includes('application/vnd.apple.mpegurl') || 
+        contentType.includes('application/dash+xml') ||
+        contentType.includes('video/mpd') ||
         (contentType.includes('video/mp4') && !url.includes('ads'))
       ) {
         console.log(`[Sniffer] ¡Video detectado en respuesta Content-Type! -> ${url} (${contentType})`);
@@ -430,9 +579,22 @@ async function sniffVideoUrl(targetUrl) {
       console.log(`[Sniffer] Nota: Goto completo o excedio tiempo en ${targetUrl}`);
     }
 
-    // Wait and poll for up to 8 seconds for the scripts to decode window._econfig and fetch stream
+    // Esperar a que se carguen los scripts e intentar clics automáticos en el centro de la pantalla
+    await new Promise(resolve => setTimeout(resolve, 2500));
+    try {
+      console.log(`[Sniffer] Realizando clics simulados para iniciar reproducción...`);
+      await page.mouse.click(640, 360);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await page.mouse.click(640, 360);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await page.mouse.click(640, 360);
+    } catch (clickErr) {
+      console.warn(`[Sniffer] Advertencia al cliquear:`, clickErr.message);
+    }
+
+    // Wait and poll for up to 10 seconds for the scripts to decode window._econfig and fetch stream
     const startTime = Date.now();
-    while (Date.now() - startTime < 8000) {
+    while (Date.now() - startTime < 10000) {
       if (detectedVideoUrl) break;
       await new Promise(resolve => setTimeout(resolve, 500));
     }

@@ -1,6 +1,83 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PlayCircle, Search, RefreshCw, AlertCircle, Play, Globe, Settings, Clock, Activity, Loader } from 'lucide-react';
+import { PlayCircle, Search, RefreshCw, AlertCircle, Play, Globe, Settings, Clock, Activity, Loader, X, Trophy } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
+import LoadingScreen from '../components/LoadingScreen';
+
+const getSportStyle = (sport) => {
+  const norm = (sport || '').toLowerCase().trim();
+  if (norm.includes('baloncesto') || norm.includes('nba') || norm.includes('basket') || norm.includes('basquet')) {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(249, 115, 22, 0.25) 0%, rgba(234, 88, 12, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
+      emoji: '🏀',
+      color: '#ea580c',
+      shadow: '0 8px 32px rgba(234, 88, 12, 0.15)'
+    };
+  }
+  if (norm.includes('formula') || norm.includes('f1') || norm.includes('moto') || norm.includes('carrera') || norm.includes('gp') || norm.includes('automovilismo')) {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(220, 38, 38, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
+      emoji: '🏁',
+      color: '#ef4444',
+      shadow: '0 8px 32px rgba(239, 68, 68, 0.15)'
+    };
+  }
+  if (norm.includes('tenis') || norm.includes('tennis')) {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(132, 204, 22, 0.25) 0%, rgba(101, 163, 13, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
+      emoji: '🎾',
+      color: '#84cc16',
+      shadow: '0 8px 32px rgba(132, 204, 22, 0.15)'
+    };
+  }
+  if (norm.includes('combate') || norm.includes('ufc') || norm.includes('box') || norm.includes('lucha') || norm.includes('mma')) {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(107, 114, 128, 0.25) 0%, rgba(75, 85, 99, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
+      emoji: '🥊',
+      color: '#6b7280',
+      shadow: '0 8px 32px rgba(107, 114, 128, 0.15)'
+    };
+  }
+  if (norm.includes('beisbol') || norm.includes('baseball') || norm.includes('mlb')) {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(3, 105, 161, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
+      emoji: '⚾',
+      color: '#0284c7',
+      shadow: '0 8px 32px rgba(2, 132, 199, 0.15)'
+    };
+  }
+  if (norm.includes('americano') || norm.includes('nfl')) {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(109, 40, 217, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
+      emoji: '🏈',
+      color: '#8b5cf6',
+      shadow: '0 8px 32px rgba(139, 92, 246, 0.15)'
+    };
+  }
+  if (norm.includes('futbol') || norm.includes('soccer')) {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(4, 120, 87, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
+      emoji: '⚽',
+      color: '#10b981',
+      shadow: '0 8px 32px rgba(16, 185, 129, 0.15)'
+    };
+  }
+  return {
+    gradient: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(79, 70, 229, 0.05) 60%, rgba(13, 17, 34, 0.95) 100%)',
+    emoji: '🏆',
+    color: '#6366f1',
+    shadow: '0 8px 32px rgba(99, 102, 241, 0.15)'
+  };
+};
+
+const getTeamInitialsBg = (teamName) => {
+  if (!teamName) return 'linear-gradient(135deg, #374151 0%, #111827 100%)';
+  let hash = 0;
+  for (let i = 0; i < teamName.length; i++) {
+    hash = teamName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash % 360);
+  return `linear-gradient(135deg, hsl(${hue}, 60%, 40%) 0%, hsl(${hue}, 70%, 18%) 100%)`;
+};
 
 export default function Sports() {
   const [matches, setMatches] = useState([]);
@@ -178,6 +255,7 @@ export default function Sports() {
             provider: "live-resolver",
             selectedLanguage: data.selectedLanguage,
             selectedServer: data.selectedServer,
+            selectedStreamIndex: match.streams ? match.streams.findIndex(s => (s.name || `Servidor ${match.streams.indexOf(s) + 1}`) === data.selectedServer) : 0,
             originalStreams: match.streams,
             streams: [
               {
@@ -222,45 +300,44 @@ export default function Sports() {
   return (
     <div>
       {/* Header and status bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-        <div>
-          <h2 className="section-title" style={{ margin: 0, display: 'inline-block' }}>Deportes en Vivo</h2>
+      <div className="sports-header-panel">
+        <div className="sports-header-left">
+          <div className="sports-title-container">
+            <Trophy className="sports-header-icon" size={26} />
+            <h2 className="sports-page-title">Deportes en Vivo</h2>
+          </div>
           {activeMirror && (
-            <span 
-              className="card-badge tv" 
-              style={{ 
-                marginLeft: '12px', 
-                position: 'static', 
-                display: 'inline-flex', 
-                alignItems: 'center', 
-                gap: '4px',
-                fontSize: '0.75rem',
-                border: '1px solid rgba(6, 182, 212, 0.3)',
-                background: 'rgba(6, 182, 212, 0.05)'
-              }}
-            >
-              <Activity size={10} /> Espejo Activo: {activeMirror.replace('https://', '')}
-            </span>
+            <div className="sports-mirror-badge">
+              <span className="status-dot"></span>
+              <span className="badge-text">
+                Espejo Activo: <strong className="mirror-domain">{activeMirror.replace(/^https?:\/\/(www\.)?/, '')}</strong>
+              </span>
+            </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div className="sports-header-right">
           {lastUpdated && (
-            <span className="text-muted" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Clock size={12} /> Act. {getFormattedTime(lastUpdated)}
+            <span className="sports-update-time">
+              <Clock size={14} /> Act. {getFormattedTime(lastUpdated)}
             </span>
           )}
-          <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setSettingsOpen(!settingsOpen)} title="Configurar espejos">
-            <Settings size={18} /> Configurar
+          <button 
+            className="btn-sports-action focusable" 
+            tabIndex={0} 
+            onClick={() => setSettingsOpen(!settingsOpen)} 
+            title="Configurar dominios espejo"
+          >
+            <Settings size={16} />
+            <span>Configurar</span>
           </button>
           <button 
-            className="btn btn-primary focusable" 
+            className="btn-sports-action primary focusable" 
             tabIndex={0}
             onClick={handleForceRefresh} 
             disabled={isRefreshing || loadingMatches}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
-            {isRefreshing ? 'Actualizando...' : 'Refrescar'}
+            <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+            <span>{isRefreshing ? 'Actualizando...' : 'Refrescar'}</span>
           </button>
         </div>
       </div>
@@ -286,10 +363,10 @@ export default function Sports() {
               </p>
             </div>
             <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
-              <button type="submit" className="btn btn-primary focusable" tabIndex={0} disabled={savingSettings}>
+              <button type="submit" className="btn-sports-action primary focusable" tabIndex={0} disabled={savingSettings}>
                 {savingSettings ? 'Guardando...' : 'Guardar y Recargar'}
               </button>
-              <button type="button" className="btn btn-secondary focusable" tabIndex={0} onClick={() => setSettingsOpen(false)}>
+              <button type="button" className="btn-sports-action focusable" tabIndex={0} onClick={() => setSettingsOpen(false)}>
                 Cancelar
               </button>
             </div>
@@ -298,114 +375,169 @@ export default function Sports() {
       )}
 
       {/* Search Input */}
-      <div className="search-container">
-        <Search className="search-icon" size={20} />
-        <input
-          type="text"
-          placeholder="Busca eventos, equipos o deportes..."
-          className="search-input focusable"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-      </div>
-
-      {/* Main Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '30px' }}>
-        
-        {/* Matches Schedule */}
-        <div className="glass-panel form-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 className="section-title" style={{ margin: 0 }}>Agenda del Día</h3>
-            {isRefreshing && (
-              <span className="text-muted animate-pulse" style={{ fontSize: '0.8rem', color: 'var(--secondary)' }}>
-                Buscando streams nuevos de fondo...
-              </span>
-            )}
-          </div>
-          
-          {loadingMatches ? (
-            <div className="text-center p-12">
-              <RefreshCw className="animate-spin text-muted mx-auto mb-4" size={32} />
-              <p className="text-secondary">Cargando agenda deportiva...</p>
-            </div>
-          ) : error && matches.length === 0 ? (
-            <div className="text-center p-8 text-red-500">
-              <AlertCircle className="mx-auto mb-3" size={36} />
-              <p style={{ fontWeight: 600, marginBottom: '10px' }}>{error}</p>
-              <button className="btn btn-secondary focusable" tabIndex={0} onClick={handleForceRefresh}>Volver a intentar</button>
-            </div>
-          ) : filteredMatches.length === 0 ? (
-            <div className="text-center p-8">
-              <p className="text-muted" style={{ marginBottom: '16px' }}>No hay partidos en curso o próximos que coincidan con la búsqueda.</p>
-              <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setSearchQuery('')}>
-                <X size={16} style={{ marginRight: '6px' }} />Limpiar búsqueda
-              </button>
-            </div>
-          ) : (
-            <div className="admin-table-container">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Hora</th>
-                    <th>Deporte</th>
-                    <th>Evento / Partido</th>
-                    <th style={{ textAlign: 'right' }}>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredMatches.map((match) => {
-                    return (
-                      <tr key={match.id}>
-                        <td style={{ fontWeight: 'bold', color: 'var(--secondary)' }}>{match.time}</td>
-                        <td>
-                          <span className={`card-badge tv`} style={{ fontSize: '0.65rem' }}>
-                            {match.sport}
-                          </span>
-                        </td>
-                        <td style={{ fontWeight: 600, color: '#fff' }}>{match.title}</td>
-                        <td style={{ textAlign: 'right' }}>
-                          <button 
-                            className="btn btn-secondary focusable" 
-                            tabIndex={0}
-                            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-                            onClick={() => handleSelectMatch(match)}
-                          >
-                            <Play fill="none" size={12} /> Reproducir
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+      <div className="sports-search-container">
+        <div className="sports-search-wrapper">
+          <Search className="sports-search-icon" size={20} />
+          <input
+            type="text"
+            placeholder="Busca eventos, equipos o deportes..."
+            className="sports-search-input focusable"
+            tabIndex={0}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button 
+              className="sports-search-clear focusable" 
+              tabIndex={0}
+              onClick={() => setSearchQuery('')}
+              title="Limpiar búsqueda"
+            >
+              <X size={16} />
+            </button>
           )}
         </div>
       </div>
 
+      {/* Matches Schedule Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', marginTop: '10px' }}>
+        <h3 className="section-title" style={{ margin: 0 }}>Agenda del Día</h3>
+        {isRefreshing && (
+          <span className="text-muted animate-pulse" style={{ fontSize: '0.85rem', color: 'var(--secondary)', fontWeight: 600 }}>
+            Buscando transmisiones en segundo plano...
+          </span>
+        )}
+      </div>
+
+      {loadingMatches ? (
+        <div className="text-center p-12 glass-panel" style={{ borderRadius: 'var(--radius-lg)' }}>
+          <RefreshCw className="animate-spin text-muted mx-auto mb-4" size={36} />
+          <p className="text-secondary" style={{ fontSize: '1rem' }}>Cargando agenda de partidos...</p>
+        </div>
+      ) : error && matches.length === 0 ? (
+        <div className="text-center p-12 glass-panel" style={{ borderRadius: 'var(--radius-lg)', color: 'var(--accent)' }}>
+          <AlertCircle className="mx-auto mb-4" size={48} />
+          <p style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: '16px' }}>{error}</p>
+          <button className="btn btn-secondary focusable" tabIndex={0} onClick={handleForceRefresh}>
+            Volver a intentar
+          </button>
+        </div>
+      ) : filteredMatches.length === 0 ? (
+        <div className="text-center p-12 glass-panel" style={{ borderRadius: 'var(--radius-lg)' }}>
+          <Trophy className="text-muted mx-auto mb-4" size={48} />
+          <p className="text-secondary" style={{ marginBottom: '20px', fontSize: '1rem' }}>
+            No hay partidos programados que coincidan con la búsqueda.
+          </p>
+          <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setSearchQuery('')}>
+            Limpiar búsqueda
+          </button>
+        </div>
+      ) : (
+        <div className="sports-grid">
+          {filteredMatches.map((match) => {
+            const styleInfo = getSportStyle(match.sport);
+            const hasTeams = match.team1 || match.team2;
+            return (
+              <div 
+                key={match.id} 
+                className="sports-card focusable"
+                tabIndex={0}
+                onClick={() => handleSelectMatch(match)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectMatch(match); } }}
+              >
+                <div 
+                  className="sports-card-banner"
+                  style={{ background: styleInfo.gradient }}
+                >
+                  <span className="sports-card-badge card-badge tv" style={{ background: styleInfo.color }}>
+                    <span style={{ marginRight: '4px' }}>{styleInfo.emoji}</span>
+                    {match.sport}
+                  </span>
+                  <span className="sports-card-time">
+                    {match.time}
+                  </span>
+                  
+                  {hasTeams ? (
+                    <div className="sports-card-vs-logos">
+                      <div className="sports-card-team-col">
+                        <div className="sports-card-team-logo-wrapper">
+                          {match.logo1 ? (
+                            <img src={match.logo1} alt={match.team1} className="sports-card-team-logo" />
+                          ) : (
+                            <div 
+                              className="sports-card-team-initials" 
+                              style={{ 
+                                background: getTeamInitialsBg(match.team1), 
+                                width: '100%', 
+                                height: '100%', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center' 
+                              }}
+                            >
+                              {match.team1 ? match.team1.slice(0, 3).toUpperCase() : '???'}
+                            </div>
+                          )}
+                        </div>
+                        <span className="sports-card-team-name">{match.team1}</span>
+                      </div>
+                      
+                      <span className="sports-card-vs-text">VS</span>
+                      
+                      <div className="sports-card-team-col">
+                        <div className="sports-card-team-logo-wrapper">
+                          {match.logo2 ? (
+                            <img src={match.logo2} alt={match.team2} className="sports-card-team-logo" />
+                          ) : (
+                            <div 
+                              className="sports-card-team-initials" 
+                              style={{ 
+                                background: getTeamInitialsBg(match.team2), 
+                                width: '100%', 
+                                height: '100%', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center' 
+                              }}
+                            >
+                              {match.team2 ? match.team2.slice(0, 3).toUpperCase() : '???'}
+                            </div>
+                          )}
+                        </div>
+                        <span className="sports-card-team-name">{match.team2}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="sports-card-icon-container">
+                      <span style={{ fontSize: '2.2rem' }}>{styleInfo.emoji}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="sports-card-content">
+                  <h3 className="sports-card-title">{match.title}</h3>
+                  <div className="sports-card-footer">
+                    <span className="sports-card-streams-count">
+                      {match.streams ? `${match.streams.length} servidores` : 'Sin señal'}
+                    </span>
+                    <span className="sports-card-action">
+                      <Play size={12} fill="currentColor" /> Ver Transmisión
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* RESOLVER LOADING OVERLAY */}
       {(isResolving || (activeWatchSource && activeWatchSource.isResolving)) && (
-        <div className="watch-overlay" style={{ justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
-          <div style={{ textAlign: 'center', padding: '36px', maxWidth: '420px' }} className="glass-panel form-card">
-            <Loader className="spin-anim mx-auto mb-4" size={48} style={{ color: 'var(--primary-light)', marginBottom: '16px' }} />
-            <h3 style={{ fontSize: '1.4rem', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>
-              {activeWatchSource?.title || 'Sintonizando transmisión...'}
-            </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--primary-light)', marginBottom: '4px', fontWeight: 500 }}>
-              🔍 Buscando servidor más estable...
-            </p>
-            <p className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '20px' }}>
-              Evadiendo protección contra bots y resolviendo video directo
-            </p>
-            <button
-              className="btn btn-secondary focusable"
-              tabIndex={0}
-              onClick={() => { setActiveWatchSource(null); setIsResolving(false); }}
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
+        <LoadingScreen 
+          type="resolver" 
+          theme="sports"
+          title={activeWatchSource?.title || 'Sintonizando transmisión...'} 
+          onCancel={() => { setActiveWatchSource(null); setIsResolving(false); }} 
+        />
       )}
 
       {/* RESOLVER ERROR / DEBUG OVERLAY */}
@@ -442,6 +574,21 @@ export default function Sports() {
         <VideoPlayer
           source={activeWatchSource}
           onClose={() => setActiveWatchSource(null)}
+          channelList={filteredMatches.map(m => ({
+            id: m.id,
+            title: m.title,
+            group: m.sport || 'Deportes',
+            category: m.sport || 'Deportes',
+            streams: m.streams,
+            type: 'sports',
+            isSports: true
+          }))}
+          onChannelChange={(ch) => {
+            const match = filteredMatches.find(m => m.id === ch.id);
+            if (match) {
+              handleSelectMatch(match);
+            }
+          }}
         />
       )}
     </div>

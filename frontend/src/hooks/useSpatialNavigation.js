@@ -85,7 +85,7 @@ export default function useSpatialNavigation(isActive = true) {
           } else {
             navigateSpatially(e.key, activeEl, sidebarItems);
           }
-        } else if (document.querySelector('.catalog-grid')) {
+        } else if (document.querySelector('.catalog-grid, .sports-grid')) {
           // If we are in grid view (search / category filter active), handle ArrowUp/Down spatially!
           e.preventDefault();
           navigateSpatially(e.key, activeEl, getFocusables(null));
