@@ -470,3 +470,22 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-04 16:12:24] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 14 partidos)
 [2026-06-04 16:12:24] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
 [2026-06-04 16:12:26] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv.online (Failed to scrape matches from https://www.pirlotv.online: timeout of 5000ms exceeded)
+[2026-06-04 16:54:16] [INFO] [API Sync] Iniciando actualización mediante la tarea programada VisionRepoAutoPull...
+[2026-06-04 16:54:16] [INFO] [API Sync] Tarea programada lanzada con éxito.
+[2026-06-04 16:54:27] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-04 16:54:29] [INFO] [DB] SQLite inicializado.
+[2026-06-04 16:54:29] [INFO] [DB] Memoria sincronizada: 474 sources, 382 pelis, 144 series.
+[2026-06-04 16:54:29] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-04 16:54:29] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-04 16:54:29] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-04 16:54:30] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-04 16:54:34] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-04 16:54:34] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-04 16:54:34] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-04 16:54:34] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-04 16:54:34] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-04 16:54:34] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-04 16:54:34] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-04 16:54:34] [INFO] [CatalogWorker] Catálogo existente: 382 películas, 144 series.
+[2026-06-04 16:54:34] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-04 16:54:34] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
