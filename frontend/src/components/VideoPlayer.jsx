@@ -1012,26 +1012,25 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       }
 
       // ── Escape / Backspace ─────────────────────────────────────
-      // UX: 1st press → hide controls (if visible). 2nd press within 2s → close player.
+      // UX: 1st press → show controls (if hidden). 2nd press within 2s → close player.
       if (e.key === 'Escape' || e.key === 'Backspace') {
         e.preventDefault();
         e.stopPropagation();
 
-        if (showControlsRef.current) {
-          // Controls are visible → hide them on first Back press
-          setShowControls(false);
-          showControlsRef.current = false;
-          if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-          // Reset the double-press countdown whenever we hide controls
-          backPressRef.current = Date.now();
+        const now = Date.now();
+
+        if (!showControlsRef.current) {
+          // Controls hidden → show them on first press
+          resetControlsTimer();
+          backPressRef.current = now;
+        } else if (backPressRef.current > 0 && now - backPressRef.current < 2000) {
+          // Controls visible + second press within 2s → close player
+          backPressRef.current = 0;
+          onClose?.();
+          return;
         } else {
-          // Controls already hidden → double-press closes the player
-          const now = Date.now();
-          if (now - backPressRef.current < 2000) {
-            onClose?.();
-          } else {
-            backPressRef.current = now;
-          }
+          // Controls visible, timer expired or first time → restart timer
+          backPressRef.current = now;
         }
         return;
       }
@@ -1446,8 +1445,9 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
           if (introCloseBtn) introCloseBtn.focus();
         }
       }, 100);
-    } else if (!isLoading && !errorText && closeButtonRef.current) {
-      closeButtonRef.current.focus();
+    } else if (!isLoading && !errorText) {
+      const playBtn = document.querySelector('.custom-player-buttons-row .control-btn');
+      if (playBtn) playBtn.focus();
     }
   }, [showBrandIntro, canSkipBrand, isLoading, errorText, currentStream]);
 

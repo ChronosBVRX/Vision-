@@ -11,6 +11,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -185,23 +186,44 @@ public class MainActivity extends Activity {
                 return true;
             }
 
-            // Inject Escape and Backspace events into the WebView page
-            // This allows the web app to catch them and close details modals/players
-            mWebView.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));", null);
-            mWebView.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', keyCode: 8, bubbles: true }));", null);
+            // Check if the player overlay is visible in the web page
+            mWebView.evaluateJavascript(
+                "(function() { return document.querySelector('.watch-overlay') !== null; })()",
+                new ValueCallback<String>() {
+                    @Override
+                    public void onReceiveValue(String value) {
+                        boolean playerVisible = "true".equals(value);
 
-            // Toast / Double press exit mechanism
-            long currentTime = System.currentTimeMillis();
-            if (currentTime - lastBackPressTime < 2000) {
-                if (backToast != null) {
-                    backToast.cancel();
+                        if (playerVisible) {
+                            // Player is active — dispatch Escape/Backspace to the page
+                            // and let JS handle the back navigation (show controls first, exit on second press)
+                            mWebView.evaluateJavascript(
+                                "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));" +
+                                "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', keyCode: 8, bubbles: true }));",
+                                null
+                            );
+                            // Reset exit timer so the toast doesn't show
+                            lastBackPressTime = 0;
+                            if (backToast != null) {
+                                backToast.cancel();
+                            }
+                        } else {
+                            // Player not active — use double-back-exit for the app
+                            long currentTime = System.currentTimeMillis();
+                            if (currentTime - lastBackPressTime < 2000) {
+                                if (backToast != null) {
+                                    backToast.cancel();
+                                }
+                                finish();
+                            } else {
+                                backToast = Toast.makeText(MainActivity.this, "Presiona ATRÁS nuevamente para salir", Toast.LENGTH_SHORT);
+                                backToast.show();
+                                lastBackPressTime = currentTime;
+                            }
+                        }
+                    }
                 }
-                finish();
-            } else {
-                backToast = Toast.makeText(this, "Presiona ATRÁS nuevamente para salir", Toast.LENGTH_SHORT);
-                backToast.show();
-                lastBackPressTime = currentTime;
-            }
+            );
             return true;
         }
 

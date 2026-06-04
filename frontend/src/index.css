@@ -4155,6 +4155,36 @@ video::-moz-media-controls-enclosure {
   gap: 8px !important;
 }
 
+/* ── Smart TV: Layout Containment (evita reflow en cadena al navegar) ────────
+   contain: layout → el focus/outline de una tarjeta no afecta el layout de vecinas
+   contain: style  → estilos de un elemento no escapan a sus hermanos
+   ─────────────────────────────────────────────────────────────────────────── */
+.is-smart-tv .catalog-card {
+  contain: layout style !important;
+}
 
+.is-smart-tv .sports-card {
+  contain: layout style !important;
+}
 
+.is-smart-tv .episode-card {
+  contain: layout style !important;
+}
+
+.is-smart-tv .catalog-row-track {
+  contain: layout style paint !important;
+}
+
+/* ── Smart TV: Remove all will-change (consume GPU memory innecesaria) ────── */
+.is-smart-tv * {
+  will-change: auto !important;
+}
+
+/* ── Smart TV: Desactivar hover en catálogo (causa repaints al navegar) ──── */
+.is-smart-tv .catalog-card:hover {
+  transform: none !important;
+}
+.is-smart-tv .catalog-card-overlay {
+  display: none !important;
+}
 
