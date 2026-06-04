@@ -1,3 +1,4 @@
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const axios = require('axios');
 const cheerio = require('cheerio');
 const puppeteer = require('puppeteer');
@@ -344,13 +345,16 @@ async function sniffVideoUrl(targetUrl) {
   try {
     browser = await puppeteer.launch({
       headless: true,
+      ignoreHTTPSErrors: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
         '--disable-gpu',
-        '--mute-audio'
+        '--mute-audio',
+        '--ignore-certificate-errors',
+        '--ignore-certificate-errors-spki-list'
       ]
     });
 
@@ -387,11 +391,17 @@ async function sniffVideoUrl(targetUrl) {
         return;
       }
 
-      // Sniff outgoing media request URLs (.m3u8, .mp4)
-      if (
+      // Sniff outgoing media request URLs (.m3u8, .mp4, .mpd)
+      const isStream = 
         lowerUrl.includes('.m3u8') || 
-        (lowerUrl.includes('.mp4') && !lowerUrl.includes('ads') && !lowerUrl.includes('loader'))
-      ) {
+        lowerUrl.includes('.mpd') ||
+        lowerUrl.includes('/manifest') ||
+        (lowerUrl.includes('.mp4') && !lowerUrl.includes('ads') && !lowerUrl.includes('loader')) ||
+        lowerUrl.includes('/playlist.m3u8') ||
+        lowerUrl.includes('.m3u8?') ||
+        lowerUrl.includes('.mpd?');
+
+      if (isStream) {
         console.log(`[Sniffer] ¡Video detectado en peticion de red! -> ${url}`);
         const headers = req.headers();
         console.log(`[Sniffer] Headers detectados:`, headers);
@@ -406,11 +416,13 @@ async function sniffVideoUrl(targetUrl) {
     page.on('response', (res) => {
       const url = res.url();
       const headers = res.headers();
-      const contentType = headers['content-type'] || '';
+      const contentType = (headers['content-type'] || '').toLowerCase();
       
       if (
         contentType.includes('application/x-mpegurl') || 
         contentType.includes('application/vnd.apple.mpegurl') || 
+        contentType.includes('application/dash+xml') ||
+        contentType.includes('video/mpd') ||
         (contentType.includes('video/mp4') && !url.includes('ads'))
       ) {
         console.log(`[Sniffer] ¡Video detectado en respuesta Content-Type! -> ${url} (${contentType})`);
@@ -433,9 +445,22 @@ async function sniffVideoUrl(targetUrl) {
       console.log(`[Sniffer] Nota: Goto completo o excedio tiempo en ${targetUrl}`);
     }
 
-    // Wait and poll for up to 8 seconds for the scripts to decode window._econfig and fetch stream
+    // Esperar a que se carguen los scripts e intentar clics automáticos en el centro de la pantalla
+    await new Promise(resolve => setTimeout(resolve, 2500));
+    try {
+      console.log(`[Sniffer] Realizando clics simulados para iniciar reproducción...`);
+      await page.mouse.click(640, 360);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await page.mouse.click(640, 360);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await page.mouse.click(640, 360);
+    } catch (clickErr) {
+      console.warn(`[Sniffer] Advertencia al cliquear:`, clickErr.message);
+    }
+
+    // Wait and poll for up to 10 seconds for the scripts to decode window._econfig and fetch stream
     const startTime = Date.now();
-    while (Date.now() - startTime < 8000) {
+    while (Date.now() - startTime < 10000) {
       if (detectedVideoUrl) break;
       await new Promise(resolve => setTimeout(resolve, 500));
     }

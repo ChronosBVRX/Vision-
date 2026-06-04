@@ -525,6 +525,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   const videoRef = useRef(null);
   const playerRef = useRef(null);
   const hlsRef = useRef(null);
+  const dashRef = useRef(null);
   const closeButtonRef = useRef(null);
   const controlsTimeoutRef = useRef(null);
   const backPressRef = useRef(0);
@@ -1162,11 +1163,12 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     destroyPlayer();
 
     const isHls = currentStream.url.toLowerCase().includes('.m3u8');
+    const isDash = currentStream.url.toLowerCase().includes('.mpd');
     // Extract referer from headers if available
     const referer = currentStream.referer || (currentStream.headers && (currentStream.headers.referer || currentStream.headers.Referer));
     
-    // Use proxy for all remote HTTP streams to bypass CORS, except localhost
-    const streamUrl = currentStream.url.startsWith('http') && !currentStream.url.includes('localhost')
+    // Use proxy for all remote HTTP streams to bypass CORS, except localhost and DASH (.mpd)
+    const streamUrl = currentStream.url.startsWith('http') && !currentStream.url.includes('localhost') && !isDash
       ? `/api/proxy?url=${encodeURIComponent(currentStream.url)}${referer ? `&referer=${encodeURIComponent(referer)}` : ''}`
       : currentStream.url;
 
@@ -1238,6 +1240,64 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         if (!showBrandIntroRef.current) {
           playerRef.current.play().catch(() => {});
         }
+      }
+    } else if (isDash) {
+      const initDash = () => {
+        if (!window.dashjs) {
+          console.error("[VideoPlayer] dash.js no está cargado");
+          handleStreamError("El reproductor de DASH no se pudo cargar.");
+          return;
+        }
+        try {
+          const dashPlayer = window.dashjs.MediaPlayer().create();
+          dashRef.current = dashPlayer;
+          
+          if (referer) {
+            dashPlayer.updateSettings({
+              streaming: {
+                xhr: {
+                  headers: {
+                    'Referer': referer
+                  }
+                }
+              }
+            });
+          }
+
+          dashPlayer.initialize(video, streamUrl, !showBrandIntroRef.current);
+          
+          playerRef.current = new Plyr(video, {
+            controls: [], // Hide native controls
+            autoplay: !showBrandIntroRef.current
+          });
+          
+          if (!showBrandIntroRef.current) {
+            playerRef.current.play().catch((e) => {
+              console.log("Autoplay blocked by browser:", e);
+            });
+          }
+        } catch (err) {
+          console.error("[VideoPlayer] Error al inicializar dash.js:", err);
+          handleStreamError("Error al iniciar la reproducción de DASH.");
+        }
+      };
+
+      if (window.dashjs) {
+        initDash();
+      } else {
+        console.log("[VideoPlayer] Cargando dash.js desde CDN...");
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/dashjs/4.7.4/dash.all.min.js';
+        script.async = true;
+        script.onload = () => {
+          console.log("[VideoPlayer] dash.js cargado correctamente");
+          initDash();
+        };
+        script.onerror = () => {
+          console.error("[VideoPlayer] Error al cargar dash.js desde CDN");
+          handleStreamError("No se pudo cargar el reproductor de DASH.");
+        };
+        document.head.appendChild(script);
       }
     } else {
       video.src = streamUrl;
@@ -1347,6 +1407,12 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
+    }
+    if (dashRef.current) {
+      try {
+        dashRef.current.destroy();
+      } catch (e) {}
+      dashRef.current = null;
     }
   };
 
