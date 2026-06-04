@@ -339,7 +339,7 @@ export default function App() {
               }
             }}
             onKeyDown={e => {
-              if (e.key === 'Enter' || e.key === 'ArrowRight') { setTvSubmenuOpen(true); selectCategory('Canales en Vivo'); }
+              if (e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); setTvSubmenuOpen(true); selectCategory('Canales en Vivo'); }
               if (e.key === 'ArrowLeft' && tvSubmenuOpen) { e.preventDefault(); e.stopPropagation(); setTvSubmenuOpen(false); }
             }}
           >
@@ -413,7 +413,7 @@ export default function App() {
             style={{ display: 'flex', alignItems: 'center' }}
             onClick={() => setAnimeSubmenuOpen(o => !o)}
             onKeyDown={e => {
-              if (e.key === 'Enter' || e.key === 'ArrowRight') setAnimeSubmenuOpen(true);
+              if (e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); setAnimeSubmenuOpen(true); }
               if (e.key === 'ArrowLeft' && animeSubmenuOpen) { e.preventDefault(); e.stopPropagation(); setAnimeSubmenuOpen(false); }
             }}
           >
