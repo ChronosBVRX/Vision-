@@ -161,6 +161,11 @@ Vision+/
 ### Retracción de Submenús en Menú Lateral (04/06/2026)
 - **Cierre inteligente al hacer click/navegar:** Actualizados los handlers de navegación y de selección de categorías en `App.jsx` para colapsar los submenús de Canales en Vivo y Anime tan pronto como el usuario selecciona una subcategoría o cambia a otra sección de la aplicación (como Películas, Deportes o Admin). Esto evita el scroll excesivo y mantiene la barra lateral en su formato compacto original.
 
+### Evasión de Bloqueos Antibot (PoseidonHD — 04/06/2026)
+- **Nuevo browserFetcher.js:** Módulo que utiliza Playwright Chromium con bloqueo de recursos estáticos/anuncios y evasión antibot (ocultar `navigator.webdriver` e inyectar configuraciones limpias) para extraer HTML de páginas protegidas.
+- **Integración con fallback en Scraper y Resolvers:** Actualizadas las funciones de resolución de streams (`videoSourceResolver.js`) y de catalogación (`scraper.js`) para procesar a PoseidonHD directamente con el nuevo extractor. Para otras fuentes, si `axios` es bloqueado por bot check (403, 429, 503), se realiza un reintento/fallback automático mediante el navegador virtual.
+- **Sniffer invisible:** Añadidos argumentos anti-detección en `browserResolver.js` para asegurar que el sniffer de streams no sea bloqueado por protecciones en los servidores de hosting (como Voe o Streamwish).
+
 ---
 
 ## Próximos pasos / Pendientes
