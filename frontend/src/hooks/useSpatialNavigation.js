@@ -13,6 +13,75 @@ import { useEffect } from 'react';
  * 5. Modal open → focus trapped inside modal only.
  */
 export default function useSpatialNavigation(isActive = true) {
+  // ── Keyboard / Mouse mode detection ───────────────────────────────
+  useEffect(() => {
+    if (!isActive) return;
+
+    let isKeyboardMode = false;
+    let lastMouseX = null;
+    let lastMouseY = null;
+    const threshold = 15;
+
+    const enterKeyboardMode = () => {
+      if (isKeyboardMode) return;
+      isKeyboardMode = true;
+      document.body.classList.add('keyboard-mode');
+      document.body.classList.remove('mouse-mode');
+    };
+
+    const enterMouseMode = () => {
+      if (!isKeyboardMode) return;
+      isKeyboardMode = false;
+      document.body.classList.remove('keyboard-mode');
+      document.body.classList.add('mouse-mode');
+      lastMouseX = null;
+      lastMouseY = null;
+    };
+
+    const handleKeyDownGlobal = (e) => {
+      const navKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace'];
+      if (navKeys.includes(e.key)) {
+        enterKeyboardMode();
+      }
+    };
+
+    const handleMouseMoveGlobal = (e) => {
+      if (!isKeyboardMode) return;
+
+      const x = e.screenX || e.clientX;
+      const y = e.screenY || e.clientY;
+
+      if (lastMouseX === null || lastMouseY === null) {
+        lastMouseX = x;
+        lastMouseY = y;
+        return;
+      }
+
+      const dist = Math.sqrt(Math.pow(x - lastMouseX, 2) + Math.pow(y - lastMouseY, 2));
+      if (dist > threshold) {
+        enterMouseMode();
+      }
+    };
+
+    const handleTouchStartGlobal = () => {
+      enterMouseMode();
+    };
+
+    window.addEventListener('keydown', handleKeyDownGlobal, true);
+    window.addEventListener('mousemove', handleMouseMoveGlobal, true);
+    window.addEventListener('touchstart', handleTouchStartGlobal, true);
+
+    // Initial state: start in mouse-mode
+    document.body.classList.add('mouse-mode');
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDownGlobal, true);
+      window.removeEventListener('mousemove', handleMouseMoveGlobal, true);
+      window.removeEventListener('touchstart', handleTouchStartGlobal, true);
+      document.body.classList.remove('keyboard-mode', 'mouse-mode');
+    };
+  }, [isActive]);
+
   useEffect(() => {
     if (!isActive) return;
 

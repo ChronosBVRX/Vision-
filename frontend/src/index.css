@@ -3839,3 +3839,15 @@ button, input, select, textarea {
   10%, 90% { opacity: 1; transform: translateY(0); }
 }
 
+/* ====================================================================
+   KEYBOARD/REMOTE CONTROL NAVIGATION MODE (TV/MOBILE)
+   ========================================================================== */
+body.keyboard-mode, body.keyboard-mode * {
+  cursor: none !important;
+}
+
+body.keyboard-mode * {
+  pointer-events: none !important;
+}
+
+

@@ -167,7 +167,10 @@ export function CatalogRow({ id, title, items, isActive, onPlay, onFocus, onItem
       id={id}
       className={`catalog-row ${isActive ? 'catalog-row--active' : ''}`}
       onFocus={onFocus}
-      onMouseEnter={onFocus}
+      onMouseEnter={() => {
+        if (document.body.classList.contains('keyboard-mode')) return;
+        onFocus?.();
+      }}
     >
       <h2 className="catalog-row-title">{title}</h2>
       <div className="catalog-row-wrapper">
@@ -197,7 +200,10 @@ export function CatalogCard({ item, onPlay, onFocus }) {
       aria-label={`Reproducir ${item.title}`}
       onClick={() => onPlay(item)}
       onFocus={onFocus}
-      onMouseEnter={onFocus}
+      onMouseEnter={() => {
+        if (document.body.classList.contains('keyboard-mode')) return;
+        onFocus?.();
+      }}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPlay(item); } }}
     >
       <div className="catalog-card-poster">
