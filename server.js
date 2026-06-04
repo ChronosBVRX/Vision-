@@ -1557,6 +1557,9 @@ function cleanTitle(rawTitle) {
   return { title, year };
 }
 
+// Dynamic flag to disable TMDB integration if the key is invalid (e.g. 401 Unauthorized)
+let tmdbKeyValid = true;
+
 // GET /api/metadata/:id — Returns enriched metadata for a movie/series item
 // Uses TMDB if TMDB_API_KEY is set and item has tmdbId, otherwise returns stored data
 app.get('/api/metadata/:id', async (req, res) => {
@@ -1596,8 +1599,8 @@ app.get('/api/metadata/:id', async (req, res) => {
       youtubeId: '',
     };
 
-    // If we have TMDB key and a tmdbId, fetch real data
-    if (TMDB_KEY && base.tmdbId) {
+    // If we have TMDB key, it is marked valid, and has tmdbId, fetch real data
+    if (TMDB_KEY && tmdbKeyValid && base.tmdbId) {
       try {
         const tmdbType = base.type === 'series' ? 'tv' : 'movie';
         const tmdbRes = await axios.get(
@@ -1643,8 +1646,12 @@ app.get('/api/metadata/:id', async (req, res) => {
         }
       } catch (tmdbErr) {
         console.warn(`[Metadata] TMDB fetch failed for tmdbId ${base.tmdbId}:`, tmdbErr.message);
+        if (tmdbErr.response && tmdbErr.response.status === 401) {
+          console.warn('[Metadata] ⚠️ La clave de TMDB no es válida (401). Configura TMDB_API_KEY en tu archivo .env para habilitar detalles de reparto y tráileres. Desactivando consultas a TMDB temporalmente.');
+          tmdbKeyValid = false;
+        }
       }
-    } else if (TMDB_KEY && (base.title || title)) {
+    } else if (TMDB_KEY && tmdbKeyValid && (base.title || title)) {
       // Search TMDB by title
       try {
         const rawSearchTitle = base.title || title;
@@ -1700,10 +1707,19 @@ app.get('/api/metadata/:id', async (req, res) => {
               const trailer = (d.videos?.results || []).find(v => v.site === 'YouTube' && v.type === 'Trailer') || (d.videos?.results || []).find(v => v.site === 'YouTube');
               if (trailer) base.youtubeId = trailer.key;
             }
-          } catch(e) {}
+          } catch(e) {
+            if (e.response && e.response.status === 401) {
+              console.warn('[Metadata] ⚠️ La clave de TMDB no es válida (401). Configura TMDB_API_KEY en tu archivo .env para habilitar detalles de reparto y tráileres. Desactivando consultas a TMDB.');
+              tmdbKeyValid = false;
+            }
+          }
         }
       } catch (searchErr) {
         console.warn(`[Metadata] TMDB search failed for "${base.title}":`, searchErr.message);
+        if (searchErr.response && searchErr.response.status === 401) {
+          console.warn('[Metadata] ⚠️ La clave de TMDB no es válida (401). Configura TMDB_API_KEY en tu archivo .env para habilitar detalles de reparto y tráileres. Desactivando consultas a TMDB.');
+          tmdbKeyValid = false;
+        }
       }
     }
 
