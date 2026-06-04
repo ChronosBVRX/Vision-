@@ -508,6 +508,12 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       setErrorText(null);
     }
 
+    if (source?.selectedStreamIndex !== undefined) {
+      setActiveStreamIndex(source.selectedStreamIndex);
+    } else {
+      setActiveStreamIndex(0);
+    }
+
     if (source?.isSeriesEpisode) {
       setActiveEpisode(source.currentEpisode || null);
       setCountdownActive(false);
@@ -1421,6 +1427,62 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     setActiveStreamIndex(index);
   };
 
+  const switchToOriginalStream = async (idx) => {
+    if (!localSource.originalStreams || !localSource.originalStreams[idx]) return;
+    const selectedStream = localSource.originalStreams[idx];
+    
+    setIsLoading(true);
+    setErrorText(`Sintonizando ${selectedStream.name || `Servidor ${idx + 1}`}...`);
+    setShowServerPopup(false);
+
+    try {
+      const res = await fetch(`/api/live/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          streams: [selectedStream],
+          type: localSource.type
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        const updatedSource = {
+          ...localSource,
+          selectedLanguage: data.selectedLanguage,
+          selectedServer: data.selectedServer,
+          selectedStreamIndex: idx,
+          streams: [
+            {
+              name: data.selectedServer,
+              url: data.stream.url,
+              type: data.stream.type,
+              headers: data.stream.headers || {},
+              quality: data.stream.quality || "auto",
+              resolver: data.stream.resolver || "direct"
+            }
+          ],
+          attempts: data.attempts || []
+        };
+        destroyPlayer();
+        setRetryCount(0);
+        setActiveStreamIndex(idx);
+        setLocalSource(updatedSource);
+        setTimeout(() => {
+          setIsLoading(false);
+          setErrorText(null);
+          setPlayerKey(prev => prev + 1);
+        }, 1000);
+      } else {
+        setIsLoading(false);
+        setErrorText(`No se pudo sintonizar este servidor: ${data.error || 'error desconocido'}`);
+      }
+    } catch (err) {
+      console.error("[VideoPlayer] Error switching stream:", err);
+      setIsLoading(false);
+      setErrorText("Error de red al sintonizar este servidor.");
+    }
+  };
+
   const getEmbedUrl = () => {
     if (!currentStream) return '';
     
@@ -1448,9 +1510,31 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             <X size={20} />
           </button>
         </div>
-        <div style={{ textAlign: 'center', maxWidth: '450px', padding: '24px' }} className="glass-panel form-card">
+        <div style={{ textAlign: 'center', maxWidth: '500px', padding: '24px' }} className="glass-panel form-card">
           <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent)', marginBottom: '12px' }}>Error de Conexión</h3>
           <p className="text-secondary" style={{ marginBottom: '20px', fontSize: '0.95rem' }}>{errorText}</p>
+          
+          {localSource.originalStreams && localSource.originalStreams.length > 1 && (
+            <div style={{ marginBottom: '20px', textAlign: 'left' }}>
+              <p style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
+                Intentar con otro servidor/enlace disponible:
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '160px', overflowY: 'auto', paddingRight: '4px' }}>
+                {localSource.originalStreams.map((stream, idx) => (
+                  <button
+                    key={idx}
+                    className={`btn-sports-action focusable ${activeStreamIndex === idx ? 'primary' : ''}`}
+                    style={{ justifyContent: 'flex-start', width: '100%', padding: '8px 12px', fontSize: '0.85rem' }}
+                    tabIndex={0}
+                    onClick={() => switchToOriginalStream(idx)}
+                  >
+                    <span>{stream.name || `Servidor ${idx + 1}`}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <button className="btn btn-secondary focusable" tabIndex={0} onClick={onClose}>Cerrar</button>
         </div>
       </div>
@@ -1610,7 +1694,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             {/* TV Audio/Subtitle/Server selectors */}
             {isLive && (
               <>
-                {streams.length > 1 && (
+                {(streams.length > 1 || (localSource.originalStreams && localSource.originalStreams.length > 1)) && (
                   <button className="control-btn focusable" tabIndex={0} onClick={() => { setShowServerPopup(!showServerPopup); setShowAudioPopup(false); setShowSubtitlePopup(false); }} title="Servidores">
                     <Layers size={18} />
                   </button>
@@ -1667,23 +1751,30 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         </div>
 
         {/* ── Popups for Server, Audio, Subtitles ────────────────────── */}
-        {showServerPopup && streams.length > 1 && (
+        {showServerPopup && (streams.length > 1 || (localSource.originalStreams && localSource.originalStreams.length > 1)) && (
           <div className="player-popup-menu focusable-container">
             <div className="player-popup-header">Servidores</div>
-            {streams.map((stream, idx) => (
-              <button
-                key={idx}
-                className={`player-popup-item focusable ${activeStreamIndex === idx ? 'active' : ''}`}
-                tabIndex={0}
-                onClick={() => {
-                  setActiveStreamIndex(idx);
-                  setShowServerPopup(false);
-                }}
-              >
-                <span>{stream.name || `Servidor ${idx + 1}`}</span>
-                {activeStreamIndex === idx && <span style={{ color: 'var(--primary-light)' }}>✓</span>}
-              </button>
-            ))}
+            {(localSource.originalStreams || streams).map((stream, idx) => {
+              const isActive = activeStreamIndex === idx;
+              return (
+                <button
+                  key={idx}
+                  className={`player-popup-item focusable ${isActive ? 'active' : ''}`}
+                  tabIndex={0}
+                  onClick={() => {
+                    if (localSource.originalStreams) {
+                      switchToOriginalStream(idx);
+                    } else {
+                      setActiveStreamIndex(idx);
+                      setShowServerPopup(false);
+                    }
+                  }}
+                >
+                  <span>{stream.name || `Servidor ${idx + 1}`}</span>
+                  {isActive && <span style={{ color: 'var(--primary-light)' }}>✓</span>}
+                </button>
+              );
+            })}
           </div>
         )}
 

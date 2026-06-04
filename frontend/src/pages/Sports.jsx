@@ -255,6 +255,7 @@ export default function Sports() {
             provider: "live-resolver",
             selectedLanguage: data.selectedLanguage,
             selectedServer: data.selectedServer,
+            selectedStreamIndex: match.streams ? match.streams.findIndex(s => (s.name || `Servidor ${match.streams.indexOf(s) + 1}`) === data.selectedServer) : 0,
             originalStreams: match.streams,
             streams: [
               {
@@ -573,6 +574,21 @@ export default function Sports() {
         <VideoPlayer
           source={activeWatchSource}
           onClose={() => setActiveWatchSource(null)}
+          channelList={filteredMatches.map(m => ({
+            id: m.id,
+            title: m.title,
+            group: m.sport || 'Deportes',
+            category: m.sport || 'Deportes',
+            streams: m.streams,
+            type: 'sports',
+            isSports: true
+          }))}
+          onChannelChange={(ch) => {
+            const match = filteredMatches.find(m => m.id === ch.id);
+            if (match) {
+              handleSelectMatch(match);
+            }
+          }}
         />
       )}
     </div>
