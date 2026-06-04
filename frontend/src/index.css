@@ -4023,20 +4023,71 @@ video::-moz-media-controls-enclosure {
   transform: none !important;
 }
 
-/* ── Smart TV: Unified Grid Sizes (3-4 rows visible) ─────────────────────────
-   On a 1080p TV (≈1920px viewport minus ~220px sidebar = ~1700px content width)
-   minmax(220px, 1fr) → ~7 columns → depending on card count, 3-4 rows visible.
-   All grids (movies, live-TV channels, sports) use the same column template so
-   cards look uniform across every section of the app.
+/* ── Smart TV: Compact Catalog Rows (3-4 filas visibles en pantalla) ─────────
+   Presupuesto por fila en TV 720/1080p (~900px altura de contenido disponible):
+     título de fila : ~28px
+     poster tarjeta : 140px  (antes 268px)
+     meta debajo    : ~20px
+     margen/gap     : ~14px
+     TOTAL          : ~202px  →  ~4 filas en pantalla sin scroll
    ─────────────────────────────────────────────────────────────────────────── */
 
-/* catalog-grid: películas, canales en vivo (Home TV mode + Movies page) */
-.is-smart-tv .catalog-grid {
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
-  gap: 18px !important;
+/* Filas horizontales: reducir gap entre filas */
+.is-smart-tv .catalog-rows {
+  gap: 4px !important;
 }
 
-/* Force catalog-cards inside grid to fill the column fully and maintain poster ratio */
+.is-smart-tv .catalog-row {
+  margin-bottom: 4px !important;
+}
+
+/* Título de cada fila más compacto */
+.is-smart-tv .catalog-row-title {
+  font-size: 0.95rem !important;
+  padding-top: 8px !important;
+  padding-bottom: 4px !important;
+}
+
+/* Tarjeta horizontal: ancho y alto reducidos para que quepan 3-4 filas */
+.is-smart-tv .catalog-row-track .catalog-card,
+.is-smart-tv .catalog-rows .catalog-card {
+  flex: 0 0 105px !important;
+}
+
+.is-smart-tv .catalog-row-track .catalog-card-poster,
+.is-smart-tv .catalog-rows .catalog-card-poster {
+  width: 105px !important;
+  height: 155px !important;  /* ratio 2:3 */
+}
+
+/* Meta texto más pequeño para no ocupar espacio extra */
+.is-smart-tv .catalog-rows .catalog-card-title {
+  font-size: 0.72rem !important;
+}
+.is-smart-tv .catalog-rows .catalog-card-genre {
+  font-size: 0.62rem !important;
+}
+.is-smart-tv .catalog-rows .catalog-card-meta {
+  padding: 4px 2px 2px !important;
+}
+
+/* Padding lateral del track más compacto en TV */
+.is-smart-tv .catalog-row-track {
+  padding-bottom: 10px !important;
+  gap: 8px !important;
+}
+
+/* ── Smart TV: Unified Grid Sizes (3-4 filas visibles) ───────────────────────
+   catalog-grid: películas, canales en vivo (Home TV mode + Movies page)
+   minmax(150px,1fr) en una TV 1080p con ~1700px de ancho de contenido
+   → ~11 columnas → 3-4 filas visibles con cards de tamaño consistente.
+   ─────────────────────────────────────────────────────────────────────────── */
+.is-smart-tv .catalog-grid {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+  gap: 12px !important;
+}
+
+/* catalog-cards en grid: llenan la columna y mantienen ratio 2:3 */
 .is-smart-tv .catalog-grid .catalog-card {
   flex: none !important;
   width: 100% !important;
@@ -4047,7 +4098,7 @@ video::-moz-media-controls-enclosure {
 .is-smart-tv .catalog-grid .catalog-card-poster {
   width: 100% !important;
   height: 0 !important;
-  padding-bottom: 148% !important; /* maintains ~2:3 poster ratio */
+  padding-bottom: 148% !important; /* ratio 2:3 */
   position: relative !important;
 }
 
@@ -4060,16 +4111,25 @@ video::-moz-media-controls-enclosure {
   object-fit: cover !important;
 }
 
-/* sports-grid: reduce card min-width to match catalog cards visually */
+/* sports-grid: tamaño coherente con el catalog-grid */
 .is-smart-tv .sports-grid {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
-  gap: 18px !important;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+  gap: 14px !important;
 }
 
-/* ep-grid (episode selector): same column width family */
+/* sports-card: altura reducida para ver más filas */
+.is-smart-tv .sports-card {
+  height: 190px !important;
+}
+
+.is-smart-tv .sports-card-banner {
+  height: 100px !important;
+}
+
+/* ep-grid (selector de episodios): mismo ancho de familia */
 .is-smart-tv .ep-grid {
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
-  gap: 10px !important;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+  gap: 8px !important;
 }
 
 
