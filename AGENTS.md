@@ -166,6 +166,13 @@ Vision+/
 - **Integración con fallback en Scraper y Resolvers:** Actualizadas las funciones de resolución de streams (`videoSourceResolver.js`) y de catalogación (`scraper.js`) para procesar a PoseidonHD directamente con el nuevo extractor. Para otras fuentes, si `axios` es bloqueado por bot check (403, 429, 503), se realiza un reintento/fallback automático mediante el navegador virtual.
 - **Sniffer invisible:** Añadidos argumentos anti-detección en `browserResolver.js` para asegurar que el sniffer de streams no sea bloqueado por protecciones en los servidores de hosting (como Voe o Streamwish).
 
+### Compilación de APK para Android TV (04/06/2026)
+- **Estructura del Proyecto Nativo (`android/`):** Wrapper WebView nativo de Android usando Gradle 8.14.3 y AGP 8.10.0, apuntando a `compileSdk = 34` y `targetSdk = 34`.
+- **Mapeo Inteligente de Controles:** El WebView recibe los eventos del D-Pad y los pasa a la aplicación web. El botón físico **ATRÁS** se intercepta para disparar eventos `Escape`/`Backspace` al DOM de la página para interactuar con modales/reproductores web de manera fluida sin salir de la app, e implementa doble pulsación en 2 segundos para salir.
+- **Soporte Fullscreen:** WebChromeClient personalizado que atrapa las solicitudes de pantalla completa de HTML5 de forma nativa para reproducir películas, series y canales.
+- **Gráficos Premium integrados:** Banner de Android TV de alta resolución generado por IA (`banner.png` de 320x180 px) y logotipo de launcher personalizado (`ic_launcher.png`).
+- **Archivo Resultante:** `VisionPlus-TV.apk` en la raíz del proyecto.
+
 ---
 
 ## Próximos pasos / Pendientes
