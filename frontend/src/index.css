@@ -6,14 +6,6 @@
   --font-alt: 'Plus Jakarta Sans', sans-serif;
 
   /* Colors */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-
-/* --- DESIGN SYSTEM & VARIABLES --- */
-:root {
-  --font-main: 'Outfit', sans-serif;
-  --font-alt: 'Plus Jakarta Sans', sans-serif;
-
-  /* Colors */
   --bg-darkest: #040404; /* True black base for TV */
   --bg-main: #0a0a0a;
   --bg-card: #141414; /* Classic Netflix dark gray */
