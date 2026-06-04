@@ -2197,16 +2197,29 @@ app.get('/api/status', (req, res) => {
 app.post('/api/sync', (req, res) => {
   const { exec } = require('child_process');
   
+  // Escribir archivo flag para forzar la actualización en update_repo.bat
+  try {
+    fs.writeFileSync(path.join(__dirname, 'force_update.flag'), 'force', 'utf8');
+  } catch (writeErr) {
+    console.error('[API Sync] Error al crear force_update.flag:', writeErr.message);
+  }
+  
   console.log('[API Sync] Iniciando actualización mediante la tarea programada VisionRepoAutoPull...');
   exec('schtasks /Run /TN "VisionRepoAutoPull"', (err, stdout, stderr) => {
     if (err) {
       console.error('[API Sync] Error al lanzar la tarea programada:', err.message);
+      // Eliminar el flag si falló la invocación
+      try {
+        if (fs.existsSync(path.join(__dirname, 'force_update.flag'))) {
+          fs.unlinkSync(path.join(__dirname, 'force_update.flag'));
+        }
+      } catch (e) {}
       return res.status(500).json({ success: false, error: err.message });
     }
     console.log('[API Sync] Tarea programada lanzada con éxito.');
     res.json({ 
       success: true, 
-      message: "Sincronización iniciada en segundo plano. El servidor se reiniciará automáticamente si hay actualizaciones pendientes." 
+      message: "Sincronización forzada iniciada en segundo plano. El servidor se reiniciará automáticamente para aplicar las actualizaciones." 
     });
   });
 });
