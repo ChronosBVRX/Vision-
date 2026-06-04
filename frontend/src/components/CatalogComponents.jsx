@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Play, Star } from 'lucide-react';
 import TrailerPlayer from './TrailerPlayer';
 
@@ -106,7 +106,7 @@ export function HeroBanner({ item, totalItems, currentIndex, onIndexChange, onPl
 }
 
 // ─── Horizontal Genre Row ─────────────────────────────────────────────────────
-export function CatalogRow({ id, title, items, isActive, onPlay, onFocus, onItemFocus }) {
+export const CatalogRow = memo(function CatalogRow({ id, title, items, isActive, onPlay, onFocus, onItemFocus }) {
   const trackRef   = useRef(null);
   const [focusIdx, setFocusIdx] = useState(0);
   const [canLeft, setCanLeft]   = useState(false);
@@ -189,10 +189,10 @@ export function CatalogRow({ id, title, items, isActive, onPlay, onFocus, onItem
       </div>
     </section>
   );
-}
+});
 
 // ─── Individual Movie / Series Card ──────────────────────────────────────────
-export function CatalogCard({ item, onPlay, onFocus }) {
+export const CatalogCard = memo(function CatalogCard({ item, onPlay, onFocus }) {
   const [imgErr, setImgErr] = useState(false);
 
   return (
@@ -246,4 +246,4 @@ export function CatalogCard({ item, onPlay, onFocus }) {
       </div>
     </div>
   );
-}
+});
