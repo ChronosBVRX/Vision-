@@ -3928,17 +3928,38 @@ video::-moz-media-controls-enclosure {
   transition-timing-function: linear !important;
 }
 
-/* Simplify D-pad focus state on Smart TVs to prevent rendering & animation stutter */
-.is-smart-tv .focusable:focus {
+/* ── Smart TV: Focus Reset (sin escala, sin glow, sin layout shift) ──────────
+   Usamos outline en vez de box-shadow para que el indicador de foco NO ocupe
+   espacio en el layout (outline está fuera del box model) y no empuje tarjetas
+   vecinas. Transform siempre a none para que la tarjeta no agrande su área.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Regla base: todos los focusable en Smart TV no escalan ni brillan */
+.is-smart-tv .focusable:focus,
+.is-smart-tv .focusable:focus-visible {
   transform: none !important;
-  box-shadow: 0 0 0 3px var(--primary-light) !important; /* solid simple outline, no blurred neon glow */
+  box-shadow: none !important;
+  outline: 3px solid var(--primary-light) !important;
+  outline-offset: 2px !important;
 }
 
-/* Simplify catalog cards focus (disable translate offsets and scale) */
+/* catalog-card: el card base también tiene :hover/:focus con scale — anularlo todo */
+.is-smart-tv .catalog-card,
+.is-smart-tv .card {
+  overflow: hidden !important; /* el outline NO se clipea, pero evita que el poster se desborde */
+}
+
+.is-smart-tv .catalog-card:hover,
+.is-smart-tv .catalog-card:focus,
+.is-smart-tv .catalog-card.focusable:focus,
+.is-smart-tv .catalog-card.focusable:focus-visible,
 .is-smart-tv .card.focusable:focus,
-.is-smart-tv .catalog-card.focusable:focus {
+.is-smart-tv .card:focus {
   transform: none !important;
-  box-shadow: 0 0 0 3px var(--primary-light) !important;
+  box-shadow: none !important;
+  outline: 3px solid var(--primary-light) !important;
+  outline-offset: 2px !important;
+  z-index: 5 !important; /* no tan alto para no solapar toda la fila */
 }
 
 .is-smart-tv .watch-close.focusable:focus {
