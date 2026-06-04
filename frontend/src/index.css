@@ -3923,9 +3923,11 @@ video::-moz-media-controls-enclosure {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   
-  /* Make remote control focus transitions instant/linear to avoid D-pad lag */
-  transition-duration: 0.05s !important;
-  transition-timing-function: linear !important;
+  /* Eliminate all transition delay on TV — focus must be instantaneous */
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  transition-delay: 0s !important;
+  animation-delay: 0s !important;
 }
 
 /* ── Smart TV: Focus Reset (sin escala, sin glow, sin layout shift) ──────────

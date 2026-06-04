@@ -122,6 +122,8 @@ export function CatalogRow({ id, title, items, isActive, onPlay, onFocus, onItem
   // Navigate card-by-card with ArrowLeft / ArrowRight when row is active
   useEffect(() => {
     if (!isActive) return;
+    const isTV = typeof window !== 'undefined' && window.isSmartTV;
+    const scrollOpt = { behavior: isTV ? 'auto' : 'smooth', block: 'nearest', inline: 'center' };
     const handler = (e) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       if (!trackRef.current?.contains(document.activeElement)) return;
@@ -141,7 +143,7 @@ export function CatalogRow({ id, title, items, isActive, onPlay, onFocus, onItem
           ? Math.max(0, currentIdx - 1)
           : Math.min(cards.length - 1, currentIdx + 1);
         cards[next]?.focus();
-        cards[next]?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        cards[next]?.scrollIntoView(scrollOpt);
         return next;
       });
     };
@@ -152,11 +154,12 @@ export function CatalogRow({ id, title, items, isActive, onPlay, onFocus, onItem
   // Reset focus index and focus first card when row becomes active
   useEffect(() => {
     if (!isActive) return;
+    const isTV = typeof window !== 'undefined' && window.isSmartTV;
     setFocusIdx(0);
     const cards = Array.from(trackRef.current?.querySelectorAll('.catalog-card') || []);
     if (cards.length > 0) {
       cards[0].focus();
-      cards[0].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+      cards[0].scrollIntoView({ behavior: isTV ? 'auto' : 'smooth', block: 'nearest', inline: 'start' });
     }
   }, [isActive]);
 

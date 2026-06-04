@@ -332,6 +332,8 @@ export default function Movies({ contentType = 'movie' }) {
   // ── TV keyboard navigation ─────────────────────────────────────────────────
   useEffect(() => {
     if (activeItem || activeSeries) return;
+    const isTV = typeof window !== 'undefined' && window.isSmartTV;
+    const scrollOpt = { behavior: isTV ? 'auto' : 'smooth', block: 'nearest' };
     const handleKey = (e) => {
       const activeEl = document.activeElement;
       const inSidebar = activeEl && !!activeEl.closest('.sidebar');
@@ -360,18 +362,18 @@ export default function Movies({ contentType = 'movie' }) {
               const topBarItems = Array.from(document.querySelectorAll('.catalog-filter-bar .focusable'));
               if (topBarItems.length > 0) {
                 topBarItems[0].focus();
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                window.scrollTo({ top: 0, behavior: isTV ? 'auto' : 'smooth' });
               }
               return 0;
             }
             const next = prev - 1;
             const el = document.getElementById(`crow-${next}`);
-            el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            el?.scrollIntoView(scrollOpt);
             return next;
           } else {
             const next = Math.min(rowKeys.length - 1, prev + 1);
             const el = document.getElementById(`crow-${next}`);
-            el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            el?.scrollIntoView(scrollOpt);
             return next;
           }
         });

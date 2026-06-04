@@ -352,12 +352,13 @@ export default function Home({ selectedCategoryFilter }) {
 
       if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
         e.preventDefault();
+        const isTV = typeof window !== 'undefined' && window.isSmartTV;
         setActiveRow(prev => {
           const next = e.key === 'ArrowUp'
             ? Math.max(0, prev - 1)
             : Math.min(rowKeys.length - 1, prev + 1);
           const el = document.getElementById(`home-crow-${next}`);
-          el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          el?.scrollIntoView({ behavior: isTV ? 'auto' : 'smooth', block: 'nearest' });
           return next;
         });
       }

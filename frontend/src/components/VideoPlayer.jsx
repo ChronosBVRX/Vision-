@@ -545,6 +545,9 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   // and for movies after brand intro it would incorrectly block key handling.
   const isLoadingRef = useRef(isLoading);
   useEffect(() => { isLoadingRef.current = isLoading; }, [isLoading]);
+  // Throttle ref for Smart TV — prevents rapid key repeat from queuing expensive ops
+  const lastKeyTimeRef = useRef(0);
+  const KEY_THROTTLE_MS = isSmartTV ? 120 : 0;
   // Detect Smart TV environment
   const isSmartTV = typeof window !== 'undefined' && window.isSmartTV === true;
   const CONTROLS_TIMEOUT = isSmartTV ? 15000 : 5000;
@@ -690,6 +693,17 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // ── Smart TV throttle: skip rapid key repeats ────────────────
+      if (isSmartTV && KEY_THROTTLE_MS > 0) {
+        const now = performance.now();
+        if (now - lastKeyTimeRef.current < KEY_THROTTLE_MS) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        lastKeyTimeRef.current = now;
+      }
+
       const isTV = isLive && channelList?.length > 1;
       const activeEl = document.activeElement;
 
@@ -881,8 +895,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         const player = document.querySelector('.watch-overlay');
         if (!player) return;
         const focusables = Array.from(player.querySelectorAll('.focusable')).filter(el => {
-          const rect = el.getBoundingClientRect();
-          return rect.width > 0 && rect.height > 0 && !el.disabled;
+          return el.offsetParent !== null && !el.disabled;
         });
         if (focusables.length === 0) return;
         const curIdx = focusables.indexOf(activeEl);
