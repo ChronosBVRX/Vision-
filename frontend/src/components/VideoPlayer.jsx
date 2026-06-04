@@ -1366,7 +1366,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     return () => {
       destroyPlayer();
     };
-  }, [activeStreamIndex, currentStream, playerKey, showBrandIntro]);
+  }, [activeStreamIndex, currentStream, playerKey]);
 
   // Video event listeners (timeupdate, play, pause, etc.)
   useEffect(() => {
@@ -1392,7 +1392,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       video.removeEventListener('loadedmetadata', onLoadedMeta);
       video.removeEventListener('ended', onEnded);
     };
-  }, [currentStream, playerKey, showBrandIntro]);
+  }, [currentStream, playerKey]);
 
   // Helper functions for brand intro
   const handleBrandTimeUpdate = () => {
@@ -1617,25 +1617,21 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       {/* ── Video element ─────────────────────────────────────────── */}
       <div className="player-wrapper">
         {currentStream && currentStream.resolver !== 'direct' ? (
-          !showBrandIntro && (
-            <iframe
-              src={getEmbedUrl()}
-              allow="autoplay; fullscreen"
-              allowFullScreen
-              style={{ width: '100%', height: '100%', border: 'none' }}
-            />
-          )
+          <iframe
+            src={getEmbedUrl()}
+            allow="autoplay; fullscreen"
+            allowFullScreen
+            style={{ width: '100%', height: '100%', border: 'none' }}
+          />
         ) : (
-          !showBrandIntro && (
-            <video
-              ref={videoRef}
-              className="plyr-video"
-              playsInline
-              preload="none"
-              poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-              style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
-            />
-          )
+          <video
+            ref={videoRef}
+            className="plyr-video"
+            playsInline
+            preload="none"
+            poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+            style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+          />
         )}
       </div>
 
