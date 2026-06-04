@@ -1,6 +1,50 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PlayCircle, Search, RefreshCw, AlertCircle, Play, Globe, Settings, Clock, Activity, Loader, X } from 'lucide-react';
+import { PlayCircle, Search, RefreshCw, AlertCircle, Play, Globe, Settings, Clock, Activity, Loader, X, Trophy } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
+
+const getSportStyle = (sport) => {
+  const norm = (sport || '').toLowerCase().trim();
+  if (norm.includes('baloncesto') || norm.includes('nba') || norm.includes('basket')) {
+    return {
+      gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 50%, #9a3412 100%)',
+      emoji: '🏀',
+      color: '#ea580c'
+    };
+  }
+  if (norm.includes('formula') || norm.includes('f1') || norm.includes('moto') || norm.includes('carrera') || norm.includes('gp')) {
+    return {
+      gradient: 'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #7f1d1d 100%)',
+      emoji: '🏎️',
+      color: '#dc2626'
+    };
+  }
+  if (norm.includes('tenis') || norm.includes('tennis')) {
+    return {
+      gradient: 'linear-gradient(135deg, #a3e635 0%, #84cc16 50%, #16a34a 100%)',
+      emoji: '🎾',
+      color: '#84cc16'
+    };
+  }
+  if (norm.includes('combate') || norm.includes('ufc') || norm.includes('box') || norm.includes('lucha')) {
+    return {
+      gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 50%, #1f2937 100%)',
+      emoji: '🥊',
+      color: '#4b5563'
+    };
+  }
+  if (norm.includes('futbol') || norm.includes('soccer')) {
+    return {
+      gradient: 'linear-gradient(135deg, #34d399 0%, #10b981 50%, #047857 100%)',
+      emoji: '⚽',
+      color: '#10b981'
+    };
+  }
+  return {
+    gradient: 'linear-gradient(135deg, #818cf8 0%, #6366f1 50%, #3730a3 100%)',
+    emoji: '🏆',
+    color: '#6366f1'
+  };
+};
 
 export default function Sports() {
   const [matches, setMatches] = useState([]);
@@ -309,79 +353,81 @@ export default function Sports() {
         />
       </div>
 
-      {/* Main Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '30px' }}>
-        
-        {/* Matches Schedule */}
-        <div className="glass-panel form-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 className="section-title" style={{ margin: 0 }}>Agenda del Día</h3>
-            {isRefreshing && (
-              <span className="text-muted animate-pulse" style={{ fontSize: '0.8rem', color: 'var(--secondary)' }}>
-                Buscando streams nuevos de fondo...
-              </span>
-            )}
-          </div>
-          
-          {loadingMatches ? (
-            <div className="text-center p-12">
-              <RefreshCw className="animate-spin text-muted mx-auto mb-4" size={32} />
-              <p className="text-secondary">Cargando agenda deportiva...</p>
-            </div>
-          ) : error && matches.length === 0 ? (
-            <div className="text-center p-8 text-red-500">
-              <AlertCircle className="mx-auto mb-3" size={36} />
-              <p style={{ fontWeight: 600, marginBottom: '10px' }}>{error}</p>
-              <button className="btn btn-secondary focusable" tabIndex={0} onClick={handleForceRefresh}>Volver a intentar</button>
-            </div>
-          ) : filteredMatches.length === 0 ? (
-            <div className="text-center p-8">
-              <p className="text-muted" style={{ marginBottom: '16px' }}>No hay partidos en curso o próximos que coincidan con la búsqueda.</p>
-              <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setSearchQuery('')}>
-                <X size={16} style={{ marginRight: '6px' }} />Limpiar búsqueda
-              </button>
-            </div>
-          ) : (
-            <div className="admin-table-container">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Hora</th>
-                    <th>Deporte</th>
-                    <th>Evento / Partido</th>
-                    <th style={{ textAlign: 'right' }}>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredMatches.map((match) => {
-                    return (
-                      <tr key={match.id}>
-                        <td style={{ fontWeight: 'bold', color: 'var(--secondary)' }}>{match.time}</td>
-                        <td>
-                          <span className={`card-badge tv`} style={{ fontSize: '0.65rem' }}>
-                            {match.sport}
-                          </span>
-                        </td>
-                        <td style={{ fontWeight: 600, color: '#fff' }}>{match.title}</td>
-                        <td style={{ textAlign: 'right' }}>
-                          <button 
-                            className="btn btn-secondary focusable" 
-                            tabIndex={0}
-                            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-                            onClick={() => handleSelectMatch(match)}
-                          >
-                            <Play fill="none" size={12} /> Reproducir
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+      {/* Matches Schedule Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', marginTop: '10px' }}>
+        <h3 className="section-title" style={{ margin: 0 }}>Agenda del Día</h3>
+        {isRefreshing && (
+          <span className="text-muted animate-pulse" style={{ fontSize: '0.85rem', color: 'var(--secondary)', fontWeight: 600 }}>
+            Buscando transmisiones en segundo plano...
+          </span>
+        )}
       </div>
+
+      {loadingMatches ? (
+        <div className="text-center p-12 glass-panel" style={{ borderRadius: 'var(--radius-lg)' }}>
+          <RefreshCw className="animate-spin text-muted mx-auto mb-4" size={36} />
+          <p className="text-secondary" style={{ fontSize: '1rem' }}>Cargando agenda de partidos...</p>
+        </div>
+      ) : error && matches.length === 0 ? (
+        <div className="text-center p-12 glass-panel" style={{ borderRadius: 'var(--radius-lg)', color: 'var(--accent)' }}>
+          <AlertCircle className="mx-auto mb-4" size={48} />
+          <p style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: '16px' }}>{error}</p>
+          <button className="btn btn-secondary focusable" tabIndex={0} onClick={handleForceRefresh}>
+            Volver a intentar
+          </button>
+        </div>
+      ) : filteredMatches.length === 0 ? (
+        <div className="text-center p-12 glass-panel" style={{ borderRadius: 'var(--radius-lg)' }}>
+          <Trophy className="text-muted mx-auto mb-4" size={48} />
+          <p className="text-secondary" style={{ marginBottom: '20px', fontSize: '1rem' }}>
+            No hay partidos programados que coincidan con la búsqueda.
+          </p>
+          <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setSearchQuery('')}>
+            Limpiar búsqueda
+          </button>
+        </div>
+      ) : (
+        <div className="sports-grid">
+          {filteredMatches.map((match) => {
+            const styleInfo = getSportStyle(match.sport);
+            return (
+              <div 
+                key={match.id} 
+                className="sports-card focusable"
+                tabIndex={0}
+                onClick={() => handleSelectMatch(match)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectMatch(match); } }}
+              >
+                <div 
+                  className="sports-card-banner"
+                  style={{ background: styleInfo.gradient }}
+                >
+                  <span className="sports-card-badge card-badge tv" style={{ background: styleInfo.color }}>
+                    {match.sport}
+                  </span>
+                  <span className="sports-card-time">
+                    {match.time}
+                  </span>
+                  <div className="sports-card-icon-container">
+                    <span style={{ fontSize: '1.8rem' }}>{styleInfo.emoji}</span>
+                  </div>
+                </div>
+                <div className="sports-card-content">
+                  <h3 className="sports-card-title">{match.title}</h3>
+                  <div className="sports-card-footer">
+                    <span className="sports-card-streams-count">
+                      {match.streams ? `${match.streams.length} servidores` : 'Sin señal'}
+                    </span>
+                    <span className="sports-card-action">
+                      <Play size={12} fill="currentColor" /> Ver Transmisión
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* RESOLVER LOADING OVERLAY */}
       {(isResolving || (activeWatchSource && activeWatchSource.isResolving)) && (
