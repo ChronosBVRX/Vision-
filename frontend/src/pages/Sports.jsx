@@ -390,6 +390,7 @@ export default function Sports() {
         <div className="sports-grid">
           {filteredMatches.map((match) => {
             const styleInfo = getSportStyle(match.sport);
+            const hasTeams = match.team1 || match.team2;
             return (
               <div 
                 key={match.id} 
@@ -408,9 +409,34 @@ export default function Sports() {
                   <span className="sports-card-time">
                     {match.time}
                   </span>
-                  <div className="sports-card-icon-container">
-                    <span style={{ fontSize: '1.8rem' }}>{styleInfo.emoji}</span>
-                  </div>
+                  
+                  {hasTeams ? (
+                    <div className="sports-card-vs-logos">
+                      <div className="sports-card-team-logo-wrapper">
+                        {match.logo1 ? (
+                          <img src={match.logo1} alt={match.team1} className="sports-card-team-logo" />
+                        ) : (
+                          <div className="sports-card-team-initials">
+                            {match.team1 ? match.team1.slice(0, 3).toUpperCase() : '???'}
+                          </div>
+                        )}
+                      </div>
+                      <span className="sports-card-vs-text">VS</span>
+                      <div className="sports-card-team-logo-wrapper">
+                        {match.logo2 ? (
+                          <img src={match.logo2} alt={match.team2} className="sports-card-team-logo" />
+                        ) : (
+                          <div className="sports-card-team-initials">
+                            {match.team2 ? match.team2.slice(0, 3).toUpperCase() : '???'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="sports-card-icon-container">
+                      <span style={{ fontSize: '1.8rem' }}>{styleInfo.emoji}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="sports-card-content">
                   <h3 className="sports-card-title">{match.title}</h3>

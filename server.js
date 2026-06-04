@@ -375,6 +375,60 @@ async function refreshMoviesAndSeries() {
   }
 }
 
+// Helper functions for team logo enrichment
+async function getTeamLogo(teamName) {
+  if (!teamName || teamName.length < 2) return null;
+  try {
+    const cleanName = encodeURIComponent(teamName.trim());
+    const res = await axios.get(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${cleanName}`, { timeout: 2000 });
+    if (res.data && res.data.teams && res.data.teams.length > 0) {
+      return res.data.teams[0].strBadge || null;
+    }
+  } catch (err) {
+    // Fail silently
+  }
+  return null;
+}
+
+function getTeamsFromTitle(title) {
+  let parts = [];
+  if (title.toLowerCase().includes(' vs ')) {
+    parts = title.split(/ vs /i);
+  } else if (title.toLowerCase().includes(' v ')) {
+    parts = title.split(/ v /i);
+  } else if (title.includes(' - ')) {
+    parts = title.split(' - ');
+  }
+  return parts.map(p => p.replace(/en vivo/i, '').replace(/live/i, '').trim()).filter(p => p.length > 0);
+}
+
+async function enrichMatchesWithLogos(matches) {
+  console.log(`[SportsWorker] Buscando logotipos para ${matches.length} partidos...`);
+  try {
+    const enriched = await Promise.all(matches.map(async (match) => {
+      const teams = getTeamsFromTitle(match.title);
+      if (teams.length >= 2) {
+        const [logo1, logo2] = await Promise.all([
+          getTeamLogo(teams[0]),
+          getTeamLogo(teams[1])
+        ]);
+        return {
+          ...match,
+          team1: teams[0],
+          team2: teams[1],
+          logo1,
+          logo2
+        };
+      }
+      return match;
+    }));
+    return enriched;
+  } catch (e) {
+    console.error("[SportsWorker] Fallo al enriquecer logotipos:", e.message);
+    return matches;
+  }
+}
+
 // Function to refresh sports cache
 async function refreshSportsCache() {
   if (sportsCache.loading) return;
@@ -384,7 +438,11 @@ async function refreshSportsCache() {
 
   try {
     const result = await discoverActiveMirror();
-    sportsCache.matches = result.matches;
+    
+    // Enrich matches with official team logos from TheSportsDB
+    const enrichedMatches = await enrichMatchesWithLogos(result.matches);
+    
+    sportsCache.matches = enrichedMatches;
     sportsCache.activeUrl = result.activeUrl;
     sportsCache.lastUpdated = new Date();
     sportsCache.loading = false;
