@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Home as HomeIcon, Settings, Film, Tv, Play, Menu, X,
   Globe, PlayCircle, ChevronDown, ChevronRight, Star, Layers

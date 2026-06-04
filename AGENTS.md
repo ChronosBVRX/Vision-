@@ -1,7 +1,7 @@
 # Vision+ — AGENTS.md
 
 > Archivo de contexto compartido entre opencode y Antigravity 2.0.
-> **Actualizado por última vez:** 04/06/2026 por Antigravity (sesión tarde)
+> **Actualizado por última vez:** 04/06/2026 por opencode (sesión noche)
 
 ---
 
@@ -93,18 +93,75 @@ npm run errors   # node read-logs.js --errors
 
 ## Convenciones / Reglas
 
-0. **⚠️ Leer errores del servidor antes de empezar** — Antes de iniciar cualquier tarea, el agente DEBE ejecutar `node read-logs.js --errors --json` o `node read-logs.js --errors` para conocer el estado actual del servidor y detectar errores activos. Si hay errores, priorizar su diagnóstico y solución.
+### 🔒 Sistema de locks — Nunca editar el mismo archivo al mismo tiempo
 
-1. **No pisar código del otro agente** — usar comentarios `// [agente]` si es necesario delimitar
-2. **Commits y pushes automáticos** — Al finalizar con éxito cualquier tarea, al corregir un bug o antes de finalizar su turno, el agente **debe** preparar los archivos, realizar un commit descriptivo y hacer `git push` a GitHub automáticamente:
-   ```bash
-   git add -A
-   git commit -m "avance: [Descripción corta]"
-   git push origin main
-   ```
-3. **database.json** — archivo compartido, NO editar manualmente, siempre via API
-4. **Nuevas funcionalidades** — registrar aquí abajo antes de empezar
-5. **Fuentes de contenido** — No agregar fuentes de películas o series (estas solo las puede agregar el usuario). Sí está permitido agregar fuentes de Deportes online.
+Para evitar conflictos entre agents, usar el sistema de lock:
+
+```bash
+# Antes de empezar: verificar que el archivo no esté bloqueado
+node agent-lock.js check server.js
+
+# Adquirir lock al empezar
+node agent-lock.js acquire opencode server.js "Refactor rutas API"
+
+# Liberar al terminar (antes del commit)
+node agent-lock.js release
+
+# Ver lock actual
+node agent-lock.js status
+```
+
+Si `check` devuelve `locked: true` con otro agente, **NO EDITAR ESE ARCHIVO**. Esperar a que termine o coordinar con el usuario.
+
+### 🆔 Identidad de cada agente
+
+Usar el nombre exacto en comentarios y commits:
+- **opencode** — agente principal de desarrollo
+- **antigravity** — agente de infraestructura y despliegue
+
+Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
+
+### 📋 Workflow obligatorio para cada agente
+
+**Antes de empezar cualquier tarea:**
+1. `git pull origin main` — asegurar código más reciente
+2. `node agent-lock.js status` — verificar que no haya locks activos
+3. Si el archivo a editar tiene lock de otro agente → **detenerse y avisar al usuario**
+4. `node read-logs.js --errors --json` — leer errores activos del servidor
+5. Si hay errores → priorizar su diagnóstico y solución antes de nueva funcionalidad
+6. `node agent-lock.js acquire <agente> <archivo> "<tarea>"` — bloquear el archivo
+
+**Mientras se trabaja:**
+- No modificar archivos fuera del alcance de la tarea
+- `database.json` NUNCA se edita manualmente, solo via API
+- Usar `console.log("[Modulo] mensaje")` en server.js para que quede en server.log
+
+**Antes de hacer commit:**
+1. `node agent-lock.js release` — liberar el lock
+2. `git status` — verificar que solo están los archivos intencionados
+3. `git diff --stat` — revisar que no hay cambios accidentales
+4. Verificar que NO se incluye `database.json` ni `agent.lock` en el commit
+5. Verificar que no se incluyen secretos/API keys
+6. Hacer commit descriptivo y push
+
+**Formato de commits:**
+- `feat:` — nueva funcionalidad
+- `fix:` — corrección de bug
+- `refactor:` — refactorización
+- `chore:` — tareas de mantenimiento/logs
+- `docs:` — documentación
+- Ejemplo: `fix: PoseidonHD no cargaba episodios — cambiar thisSeries por thisSerie`
+
+### 🚫 Qué NO hacer
+- No editar `database.json` manualmente (siempre via API)
+- No editar archivos con lock activo de otro agente
+- No hacer commits sin liberar el lock primero
+- No incluir secretos, API keys, .env en commits
+
+### ✅ Qué hacer al finalizar
+- Commit y push automático con mensaje descriptivo
+- Si la tarea queda incompleta, dejarlo claro en el mensaje del commit
+- Las tareas completadas se marcan en la sección "Próximos pasos" abajo
 
 ---
 
@@ -256,6 +313,27 @@ npm run errors   # node read-logs.js --errors
 - useCache.js lee estos valores automáticamente
 - Botón para limpiar caché local y restablecer valores por defecto
 
+### Sistema de Locks entre agents (04/06/2026)
+- `agent-lock.js` — Script para adquirir/liberar/verificar locks sobre archivos
+- Evita que opencode y antigravity editen el mismo archivo simultáneamente
+- Lock se almacena en `agent.lock` (ignorado por git)
+- Uso: `node agent-lock.js acquire <agente> <archivo> "<tarea>"`
+- Si hay lock de otro agente, el script ABORTA la operación
+
+### Utilidad read-logs.js (04/06/2026)
+- `read-logs.js` — Visor de server.log con filtros: --errors, --module, --since, --search, --json
+- `npm run logs` / `npm run errors` como shorthands
+- Documentado en AGENTS.md para que agents lo usen automáticamente
+
+### Workflow robusto multi-agente (04/06/2026)
+- Reglas completas en Convenciones/Reglas:
+  - 🔒 Sistema de locks obligatorio antes de editar
+  - 🆔 Identidad de cada agente (opencode / antigravity)
+  - 📋 Checklist pre-tarea: git pull → check locks → leer errores → acquire lock
+  - 📋 Checklist pre-commit: release lock → git status → diff → sin secrets → push
+  - 🚫 Qué NO hacer: no editar database.json, no archivos con lock ajeno, no commits sin liberar
+  - ✅ Formato estandarizado de commits (feat/fix/refactor/chore/docs)
+
 ---
 
 ## Próximos pasos / Pendientes
@@ -267,3 +345,6 @@ npm run errors   # node read-logs.js --errors
 - [ ] ~~Modo offline / service worker~~ ✅ Cache-First implementado en SW
 - [ ] ~~Home.jsx tiene un selector de episodios antiguo~~ ✅ Ya estaba migrado (pestañas + grilla)
 - [ ] Agregar soporte para `onNextEpisode`/`onPrevEpisode` callbacks desde Movies.jsx/Home.jsx al VideoPlayer
+- [ ] ~~Sistema de locks entre agents~~ ✅ `agent-lock.js` implementado
+- [ ] ~~Utilidad: read-logs.js con filtros~~ ✅ Creado + npm scripts
+- [ ] ~~Workflow multi-agente documentado~~ ✅ Reglas completas en AGENTS.md
