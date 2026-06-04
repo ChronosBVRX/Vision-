@@ -1,14 +1,34 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Plus, X, Star, Clock, Calendar, Globe, Tv, Film, MonitorPlay, ChevronRight } from 'lucide-react';
 
-// ─── Resolution Badge Color ────────────────────────────────────────────────────
+// ─── Badge Color for Resolution ────────────────────────────────────────────────
 function resolutionColor(res = '') {
   if (res.includes('4K')) return 'linear-gradient(135deg, #a855f7, #7c3aed)';
   if (res.includes('1080')) return 'linear-gradient(135deg, #3b82f6, #1d4ed8)';
   return 'linear-gradient(135deg, #10b981, #059669)';
 }
 
-// ─── Skeleton block ───────────────────────────────────────────────────────────
+// ─── Youtube Icon Component ───────────────────────────────────────────────────
+function YoutubeIcon(props) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      stroke="currentColor"
+      strokeWidth="2"
+      fill="none"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z" />
+      <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" fill="currentColor" />
+    </svg>
+  );
+}
+
+// ─── Skeleton Loader Block ─────────────────────────────────────────────────────
 function Skeleton({ width = '100%', height = '1em', style = {} }) {
   return (
     <div style={{
@@ -22,10 +42,11 @@ function Skeleton({ width = '100%', height = '1em', style = {} }) {
   );
 }
 
-// ─── Main Modal ───────────────────────────────────────────────────────────────
+// ─── Main Details Modal ────────────────────────────────────────────────────────
 export default function DetailsModal({ item, onClose, onPlay }) {
-  const [meta, setMeta]           = useState(null);
+  const [meta, setMeta]             = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showTrailer, setShowTrailer] = useState(false);
   const playButtonRef             = useRef(null);
 
   // Fetch real metadata from backend
@@ -33,6 +54,7 @@ export default function DetailsModal({ item, onClose, onPlay }) {
     if (!item) return;
     setIsLoading(true);
     setMeta(null);
+    setShowTrailer(false);
     try {
       const params = new URLSearchParams({
         title: item.title || '',
@@ -44,7 +66,6 @@ export default function DetailsModal({ item, onClose, onPlay }) {
       if (data.success && data.metadata) {
         setMeta(data.metadata);
       } else {
-        // Fallback to item data
         setMeta({
           ...item,
           languages: ['Español Latino', 'Inglés'],
@@ -67,23 +88,34 @@ export default function DetailsModal({ item, onClose, onPlay }) {
 
   useEffect(() => { fetchMetadata(); }, [fetchMetadata]);
 
-  // ESC / Backspace to close
+  // ESC / Backspace to close modal or trailer overlay
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' || e.key === 'Backspace') onClose();
+      if (e.key === 'Escape' || e.key === 'Backspace') {
+        if (showTrailer) {
+          setShowTrailer(false);
+        } else {
+          onClose();
+        }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, showTrailer]);
 
   if (!item) return null;
 
   const typeLabel = item.type === 'tv' ? 'TV en Vivo' : item.type === 'series' ? 'Serie' : 'Película';
   const TypeIcon  = item.type === 'tv' ? Tv : item.type === 'series' ? Tv : Film;
+  
+  // Use landscape backdrop for header/card background, fallback to poster
+  const backdrop  = meta?.backdrop || item.backdrop || '';
   const poster    = meta?.poster || item.poster || '';
-  const bgStyle   = poster
-    ? { backgroundImage: `url(${poster})` }
-    : { background: 'linear-gradient(135deg, #0d1122 0%, #1a0d40 100%)' };
+  const bgStyle   = backdrop
+    ? { backgroundImage: `url(${backdrop})` }
+    : poster
+      ? { backgroundImage: `url(${poster})` }
+      : { background: 'linear-gradient(135deg, #0d1122 0%, #1a0d40 100%)' };
 
   const formatDuration = (min) => {
     if (!min) return null;
@@ -99,7 +131,7 @@ export default function DetailsModal({ item, onClose, onPlay }) {
 
       <div className="details-modal-card">
 
-        {/* ── Poster / Background ────────────────────────────────────────── */}
+        {/* ── Backdrop / Background ────────────────────────────────────────── */}
         <div className="details-modal-bg" style={bgStyle}>
           <div className="details-modal-bg-overlay" />
         </div>
@@ -124,13 +156,18 @@ export default function DetailsModal({ item, onClose, onPlay }) {
           <div className="details-info-col">
 
             {/* Type badge */}
-            <span className={`details-badge ${item.type}`} style={{ marginBottom: '10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <span className={`details-badge ${item.type}`} style={{ marginBottom: '6px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
               <TypeIcon size={13} />
               {typeLabel}
             </span>
 
             {/* Title */}
             <h1 className="details-title">{item.title}</h1>
+
+            {/* Tagline */}
+            {!isLoading && meta?.tagline && (
+              <p className="details-tagline">"{meta.tagline}"</p>
+            )}
 
             {/* Meta row */}
             <div className="details-meta-row">
@@ -142,25 +179,21 @@ export default function DetailsModal({ item, onClose, onPlay }) {
                 </>
               ) : (
                 <>
-                  {/* Resolution */}
                   <span className="details-meta-badge" style={{ background: resolutionColor(meta?.resolution), color: '#fff', fontWeight: 700, letterSpacing: '0.5px', fontSize: '0.72rem' }}>
                     <MonitorPlay size={12} /> {meta?.resolution || 'HD'}
                   </span>
-                  {/* Rating */}
                   {(meta?.rating || item.rating) && (
                     <span className="details-meta-badge" style={{ background: 'rgba(250,204,21,0.15)', color: '#fbbf24', border: '1px solid rgba(250,204,21,0.3)' }}>
                       <Star size={12} fill="currentColor" />
                       {parseFloat(meta?.rating || item.rating).toFixed(1)}
                     </span>
                   )}
-                  {/* Year */}
                   {(meta?.year || item.year) && (
                     <span className="details-meta-badge">
                       <Calendar size={12} />
                       {meta?.year || item.year}
                     </span>
                   )}
-                  {/* Duration */}
                   {meta?.duration && (
                     <span className="details-meta-badge">
                       <Clock size={12} />
@@ -182,6 +215,24 @@ export default function DetailsModal({ item, onClose, onPlay }) {
               )}
             </div>
 
+            {/* Crew / Details */}
+            {!isLoading && (meta?.director || meta?.production) && (
+              <div className="details-crew-info">
+                {meta.director && (
+                  <div>
+                    <span className="details-label-dim">Director/Creador: </span>
+                    <span className="details-value-highlight">{meta.director}</span>
+                  </div>
+                )}
+                {meta.production && (
+                  <div>
+                    <span className="details-label-dim">Productora: </span>
+                    <span className="details-value-highlight">{meta.production}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Synopsis */}
             <div className="details-synopsis-block">
               <h3 className="details-synopsis-label">Sinopsis</h3>
@@ -198,6 +249,30 @@ export default function DetailsModal({ item, onClose, onPlay }) {
                 </p>
               )}
             </div>
+
+            {/* Reparto Principal */}
+            {!isLoading && meta?.cast && meta.cast.length > 0 && (
+              <div className="details-cast-block">
+                <h3 className="details-synopsis-label">Reparto Principal</h3>
+                <div className="details-cast-list">
+                  {meta.cast.map((actor, idx) => (
+                    <div key={idx} className="details-cast-card">
+                      {actor.profile_path ? (
+                        <img src={actor.profile_path} alt={actor.name} className="details-cast-avatar" />
+                      ) : (
+                        <div className="details-cast-avatar-placeholder">
+                          {actor.name ? actor.name.charAt(0) : '?'}
+                        </div>
+                      )}
+                      <div className="details-cast-names">
+                        <span className="details-cast-name">{actor.name}</span>
+                        <span className="details-cast-role">{actor.character}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Languages & Availability */}
             <div className="details-availability-block">
@@ -226,6 +301,17 @@ export default function DetailsModal({ item, onClose, onPlay }) {
                 <ChevronRight size={16} style={{ marginLeft: '4px', opacity: 0.7 }} />
               </button>
 
+              {!isLoading && meta?.youtubeId && (
+                <button
+                  className="btn btn-secondary btn-large focusable details-trailer-btn"
+                  onClick={() => setShowTrailer(true)}
+                  title="Ver Tráiler"
+                >
+                  <YoutubeIcon style={{ color: '#ef4444' }} />
+                  <span>Tráiler</span>
+                </button>
+              )}
+
               <button className="btn btn-secondary btn-icon focusable" title="Agregar a Mi Lista">
                 <Plus size={22} />
               </button>
@@ -233,6 +319,29 @@ export default function DetailsModal({ item, onClose, onPlay }) {
 
           </div>
         </div>
+
+        {/* YouTube Trailer Overlay */}
+        {showTrailer && meta?.youtubeId && (
+          <div className="details-trailer-overlay">
+            <button
+              className="details-trailer-close focusable"
+              onClick={() => setShowTrailer(false)}
+              aria-label="Cerrar Tráiler"
+            >
+              <X size={20} />
+              <span>Cerrar Tráiler</span>
+            </button>
+            <iframe
+              src={`https://www.youtube.com/embed/${meta.youtubeId}?autoplay=1&controls=1&rel=0&modestbranding=1`}
+              title="Tráiler oficial"
+              className="details-trailer-iframe"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              frameBorder="0"
+            ></iframe>
+          </div>
+        )}
+
       </div>
     </div>
   );
