@@ -62,6 +62,29 @@ Vision+/
 | Selector episodios TV (Movies.jsx) | ✅ | Pestañas temporada + grilla episodios, navegable con mando |
 | Navegación episodios en reproductor | ✅ | Botones Anterior/Siguiente + drawer lateral con lista completa |
 
+## Sistema de Logs
+
+El servidor escribe todos los logs en `server.log` con formato `[fecha] [LEVEL] [Modulo] mensaje`.
+Este archivo se sincroniza a GitHub cada 10 minutos desde el servidor de producción.
+
+**Para leer logs desde dev:**
+```bash
+git pull origin main          # baja el server.log más reciente
+node read-logs.js --errors    # solo errores
+node read-logs.js --last 30   # últimas 30 líneas
+node read-logs.js --module Resolver --errors  # errores de un módulo
+node read-logs.js --since "2026-06-04 15:00"  # desde una hora
+node read-logs.js --search "ENOTFOUND"        # buscar texto
+node read-logs.js --json --errors             # salida JSON para agents
+node read-logs.js --watch                     # tail -f (sigue el archivo)
+```
+
+**Shorthands:**
+```bash
+npm run logs     # node read-logs.js
+npm run errors   # node read-logs.js --errors
+```
+
 ## Dependencias principales
 
 **Backend:** express, axios, cheerio, puppeteer, playwright, cors, youtube-dl-exec
