@@ -1170,3 +1170,117 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-04 17:26:32] [INFO] [CatalogWorker] Catálogo existente: 382 películas, 144 series.
 [2026-06-04 17:26:32] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
 [2026-06-04 17:26:32] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
+[2026-06-04 17:26:32] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-04 17:26:32] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-04 17:26:32] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-04 17:26:32] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-04 17:26:32] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-04 17:26:32] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-04 17:26:32] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-04 17:26:35] [ERROR] (node:4140) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-06-04 17:26:36] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-04 17:26:36] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-04 17:26:36] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-04 17:26:36] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
+[2026-06-04 17:26:36] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
+[2026-06-04 17:26:36] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
+[2026-06-04 17:26:36] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
+[2026-06-04 17:26:36] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
+[2026-06-04 17:26:36] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
+[2026-06-04 17:26:36] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-04 17:26:36] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-04 17:26:38] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://beaches-july-general-certificates.trycloudflare.com
+[2026-06-04 17:26:39] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "plutovod_5e5d74ec7255220014448432" (Idioma pref: auto, Servidores excluidos: [])
+[2026-06-04 17:26:39] [INFO] [Resolver] Película encontrada: "La Mujer de Oro"
+[2026-06-04 17:26:39] [INFO] [Resolver] Total de opciones filtradas a evaluar: 1
+[2026-06-04 17:26:39] [INFO] [Resolver] Lanzando 1 opciones en paralelo (max 3)...
+[2026-06-04 17:26:39] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] Pluto TV Stream
+[2026-06-04 17:26:39] [INFO] [Resolver] ❌ Fallaron todos los candidatos. Intentando búsqueda personalizada...
+[2026-06-04 17:26:41] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
+[2026-06-04 17:26:41] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
+[2026-06-04 17:26:41] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
+[2026-06-04 17:26:41] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
+[2026-06-04 17:26:41] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 18
+[2026-06-04 17:26:41] [INFO] [SportsScraper] Escaneando un total de 23 espejos en paralelo...
+[2026-06-04 17:26:41] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: getaddrinfo ENOTFOUND www.pirlotv3.sale)
+[2026-06-04 17:26:41] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
+[2026-06-04 17:26:41] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
+[2026-06-04 17:26:42] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
+[2026-06-04 17:26:42] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
+[2026-06-04 17:26:42] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 401)
+[2026-06-04 17:26:42] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
+[2026-06-04 17:26:42] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
+[2026-06-04 17:26:42] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
+[2026-06-04 17:26:42] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
+[2026-06-04 17:26:42] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
+[2026-06-04 17:26:42] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://rojadirectahd.vip (24 partidos encontrados)
+[2026-06-04 17:26:42] [INFO] [SportsWorker] Buscando logotipos para 24 partidos...
+[2026-06-04 17:26:42] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
+[2026-06-04 17:26:42] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo EAI_AGAIN pirlotv3.pl)
+[2026-06-04 17:26:43] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectahd.dev (Solo 24 partidos)
+[2026-06-04 17:26:43] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectatvmas.com (Solo 23 partidos)
+[2026-06-04 17:26:43] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
+[2026-06-04 17:26:43] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
+[2026-06-04 17:26:43] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
+[2026-06-04 17:26:43] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 14 partidos)
+[2026-06-04 17:26:43] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://rojadirectahd.vip
+[2026-06-04 17:26:44] [INFO] [Resolver] Búsqueda personalizada devolvió 7 URLs. Evaluando...
+[2026-06-04 17:26:44] [ERROR] [API Resolve] Error al resolver película plutovod_5e5d74ec7255220014448432: url.startsWith is not a function
+[2026-06-04 17:26:44] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 14 partidos)
+[2026-06-04 17:26:44] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
+[2026-06-04 17:26:46] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
+[2026-06-04 17:26:52] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "catalog_poseidonhd_movie_elefantesfantasmas" (Idioma pref: auto, Servidores excluidos: [])
+[2026-06-04 17:26:52] [INFO] [Resolver] Película encontrada: "Elefantes fantasmas"
+[2026-06-04 17:26:52] [INFO] [MoviePageParser] 🔍 Analizando página externa de PoseidonHD: https://www.poseidonhd2.co/pelicula/1451867/elefantes-fantasmas
+[2026-06-04 17:26:52] [INFO] [BrowserFetcher] 🌐 Cargando página con Playwright para evadir antibot: https://www.poseidonhd2.co/pelicula/1451867/elefantes-fantasmas
+[2026-06-04 17:26:55] [INFO] [BrowserFetcher] ✅ HTML cargado exitosamente. Longitud: 101241 bytes.
+[2026-06-04 17:26:55] [INFO] [Resolver] Página de detalle scrapeada: 10 opciones extraídas de https://www.poseidonhd2.co/pelicula/1451867/elefantes-fantasmas
+[2026-06-04 17:26:55] [INFO] [Resolver] Total de opciones filtradas a evaluar: 10
+[2026-06-04 17:26:55] [INFO] [Resolver] Lanzando 3 opciones en paralelo (max 3)...
+[2026-06-04 17:26:55] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-04 17:26:55] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-04 17:26:55] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-04 17:26:55] [INFO] [Resolver] Intentando 7 candidatos restantes secuencialmente...
+[2026-06-04 17:26:55] [INFO] [Resolver] ▶ Probando secuencial: [Español Latino] player
+[2026-06-04 17:26:55] [ERROR] [API Resolve] Error al resolver película catalog_poseidonhd_movie_elefantesfantasmas: url.startsWith is not a function
+[2026-06-04 17:30:31] [INFO] [Server] Iniciando live resolve para 1 opciones... (Excluyendo: [])
+[2026-06-04 17:30:31] [INFO] [Server] Probando servidor 1/1: Pluto TV Stream (pluto-tv:///stitch/hls/channel/6870072ca9d5c45c3e9466f1/master.m3u8)
+[2026-06-04 17:30:31] [INFO] [Server] Redirigiendo a plutoAdapter...
+[2026-06-04 17:30:31] [INFO] [plutoAdapter] ⚡ Resolviendo stream dinamico de Pluto TV: pluto-tv:///stitch/hls/channel/6870072ca9d5c45c3e9466f1/master.m3u8
+[2026-06-04 17:30:31] [INFO] [SourceValidator] Probando HEAD para: https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/channel/6870072ca9d5c45c3e9466f1/master.m3u8?advertisingId=&appName=web&appVersion=7.9.0-a9cca6b89aea4dc0998b92a51989d2adb9a9025d&app_name=web&clientDeviceType=0&clientID=vision-plus-pluto-client-vkmmz&clientModelNumber=1.0.0&country=MX&deviceDNT=false&deviceId=vision-plus-pluto-client-vkmmz&deviceLat=19.5200&deviceLon=-99.2000&deviceMake=Chrome&deviceModel=web&deviceType=web&deviceVersion=16.2.0&marketingRegion=VE&serverSideAds=true&sessionID=6086c605-606d-11f1-b3f2-26702f63adce&sid=6086c605-606d-11f1-b3f2-26702f63adce&userId=&jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6IjA5Y2RmMmI0LTdiOGMtNGVkNi1iMjkzLWYzZWM4YjY1ZWI2YiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI2MDg2YzYwNS02MDZkLTExZjEtYjNmMi0yNjcwMmY2M2FkY2UiLCJjbGllbnRJUCI6IjE4OS4yMDEuMTI4LjEiLCJjaXR5IjoiTGEgTW9yYSIsInBvc3RhbENvZGUiOiI1NDA5MCIsImNvdW50cnkiOiJNWCIsImRtYSI6MCwiYWN0aXZlUmVnaW9uIjoiVkUiLCJkZXZpY2VMYXQiOjE5LjUyMDAwMDQ1Nzc2MzY3MiwiZGV2aWNlTG9uIjotOTkuMTk5OTk2OTQ4MjQyMTksInByZWZlcnJlZExhbmd1YWdlIjoiZW4iLCJkZXZpY2VUeXBlIjoid2ViIiwiZGV2aWNlVmVyc2lvbiI6IjE2LjIuMCIsImRldmljZU1ha2UiOiJDaHJvbWUiLCJkZXZpY2VNb2RlbCI6IndlYiIsImFwcE5hbWUiOiJ3ZWIiLCJhcHBWZXJzaW9uIjoiNy45LjAtYTljY2E2Yjg5YWVhNGRjMDk5OGI5MmE1MTk4OWQyYWRiOWE5MDI1ZCIsImNsaWVudElEIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXZrbW16IiwiY21BdWRpZW5jZUlEIjoiIiwiaXNDbGllbnRETlQiOmZhbHNlLCJ1c2VySUQiOiIiLCJsb2dMZXZlbCI6IkRFRkFVTFQiLCJ0aW1lWm9uZSI6IkFtZXJpY2EvTWV4aWNvX0NpdHkiLCJzZXJ2ZXJTaWRlQWRzIjp0cnVlLCJlMmVCZWFjb25zIjpmYWxzZSwiZmVhdHVyZXMiOnsibXVsdGlQb2RBZHMiOnsiY29ob3J0IjoiIiwiZW5hYmxlZCI6dHJ1ZX0sInN0aXRjaGVyRGFzaE5nIjp7ImZsYXR0ZW5CYXNlVXJsIjp0cnVlfSwic3RpdGNoZXJIbHNOZyI6eyJkZW11eGVkQXVkaW8iOiJqaXQifX0sImZtc1BhcmFtcyI6eyJmd1ZjSUQyIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXZrbW16IiwiZndWY0lEMkNvcHBhIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXZrbW16IiwiY3VzdG9tUGFyYW1zIjp7ImZtc19saXZlcmFtcF9pZGwiOiIiLCJmbXNfZW1haWxoYXNoIjoiIiwiZm1zX3N1YnNjcmliZXJpZCI6IiIsImZtc19pZmEiOiIiLCJmbXNfaWRmdiI6IiIsImZtc191c2VyaWQiOiJ2aXNpb24tcGx1cy1wbHV0by1jbGllbnQtdmttbXoiLCJmbXNfdmNpZDJ0eXBlIjoidXNlcmlkIiwiZm1zX3JhbXBfaWQiOiIiLCJmbXNfaGhfcmFtcF9pZCI6IiIsImZtc19iaWRpZHR5cGUiOiIiLCJfZndfM1BfVUlEIjoiIiwiZm1zX3J1bGVpZCI6IjEwMDE0LDEwMDE2LDEwMDIxLDEwMDA5LDEwMDE1LDEwMDIwLDEwMDIzLDEwMDAwLDEwMDEzIn19LCJzZXNzaW9uU3RhcnRUaW1lIjoxNzgwNjE1ODMxMjM0LCJpc3MiOiJib290LnBsdXRvLnR2Iiwic3ViIjoicHJpOnYxOnBsdXRvOmRldmljZXM6VkU6ZG1semFXOXVMWEJzZFhNdGNHeDFkRzh0WTJ4cFpXNTBMWFpyYlcxNiIsImF1ZCI6IioucGx1dG8udHYiLCJleHAiOjE3ODA3MDIyMzEsImlhdCI6MTc4MDYxNTgzMSwianRpIjoiNjM3ZjNlNTEtOTkzMy00YTBkLTliODItZDkwZGNhYWFiYTUxIn0.FQmTk4mDuAat7pG7nqQ7VuCGiRic3fh2EZDHhlPzhUc&masterJWTPassthrough=true
+[2026-06-04 17:30:31] [INFO] [SourceValidator] HEAD falló: Request failed with status code 405. Intentando GET parcial...
+[2026-06-04 17:30:31] [INFO] [SourceValidator] Probando GET con rango de bytes para: https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/channel/6870072ca9d5c45c3e9466f1/master.m3u8?advertisingId=&appName=web&appVersion=7.9.0-a9cca6b89aea4dc0998b92a51989d2adb9a9025d&app_name=web&clientDeviceType=0&clientID=vision-plus-pluto-client-vkmmz&clientModelNumber=1.0.0&country=MX&deviceDNT=false&deviceId=vision-plus-pluto-client-vkmmz&deviceLat=19.5200&deviceLon=-99.2000&deviceMake=Chrome&deviceModel=web&deviceType=web&deviceVersion=16.2.0&marketingRegion=VE&serverSideAds=true&sessionID=6086c605-606d-11f1-b3f2-26702f63adce&sid=6086c605-606d-11f1-b3f2-26702f63adce&userId=&jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6IjA5Y2RmMmI0LTdiOGMtNGVkNi1iMjkzLWYzZWM4YjY1ZWI2YiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI2MDg2YzYwNS02MDZkLTExZjEtYjNmMi0yNjcwMmY2M2FkY2UiLCJjbGllbnRJUCI6IjE4OS4yMDEuMTI4LjEiLCJjaXR5IjoiTGEgTW9yYSIsInBvc3RhbENvZGUiOiI1NDA5MCIsImNvdW50cnkiOiJNWCIsImRtYSI6MCwiYWN0aXZlUmVnaW9uIjoiVkUiLCJkZXZpY2VMYXQiOjE5LjUyMDAwMDQ1Nzc2MzY3MiwiZGV2aWNlTG9uIjotOTkuMTk5OTk2OTQ4MjQyMTksInByZWZlcnJlZExhbmd1YWdlIjoiZW4iLCJkZXZpY2VUeXBlIjoid2ViIiwiZGV2aWNlVmVyc2lvbiI6IjE2LjIuMCIsImRldmljZU1ha2UiOiJDaHJvbWUiLCJkZXZpY2VNb2RlbCI6IndlYiIsImFwcE5hbWUiOiJ3ZWIiLCJhcHBWZXJzaW9uIjoiNy45LjAtYTljY2E2Yjg5YWVhNGRjMDk5OGI5MmE1MTk4OWQyYWRiOWE5MDI1ZCIsImNsaWVudElEIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXZrbW16IiwiY21BdWRpZW5jZUlEIjoiIiwiaXNDbGllbnRETlQiOmZhbHNlLCJ1c2VySUQiOiIiLCJsb2dMZXZlbCI6IkRFRkFVTFQiLCJ0aW1lWm9uZSI6IkFtZXJpY2EvTWV4aWNvX0NpdHkiLCJzZXJ2ZXJTaWRlQWRzIjp0cnVlLCJlMmVCZWFjb25zIjpmYWxzZSwiZmVhdHVyZXMiOnsibXVsdGlQb2RBZHMiOnsiY29ob3J0IjoiIiwiZW5hYmxlZCI6dHJ1ZX0sInN0aXRjaGVyRGFzaE5nIjp7ImZsYXR0ZW5CYXNlVXJsIjp0cnVlfSwic3RpdGNoZXJIbHNOZyI6eyJkZW11eGVkQXVkaW8iOiJqaXQifX0sImZtc1BhcmFtcyI6eyJmd1ZjSUQyIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXZrbW16IiwiZndWY0lEMkNvcHBhIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXZrbW16IiwiY3VzdG9tUGFyYW1zIjp7ImZtc19saXZlcmFtcF9pZGwiOiIiLCJmbXNfZW1haWxoYXNoIjoiIiwiZm1zX3N1YnNjcmliZXJpZCI6IiIsImZtc19pZmEiOiIiLCJmbXNfaWRmdiI6IiIsImZtc191c2VyaWQiOiJ2aXNpb24tcGx1cy1wbHV0by1jbGllbnQtdmttbXoiLCJmbXNfdmNpZDJ0eXBlIjoidXNlcmlkIiwiZm1zX3JhbXBfaWQiOiIiLCJmbXNfaGhfcmFtcF9pZCI6IiIsImZtc19iaWRpZHR5cGUiOiIiLCJfZndfM1BfVUlEIjoiIiwiZm1zX3J1bGVpZCI6IjEwMDE0LDEwMDE2LDEwMDIxLDEwMDA5LDEwMDE1LDEwMDIwLDEwMDIzLDEwMDAwLDEwMDEzIn19LCJzZXNzaW9uU3RhcnRUaW1lIjoxNzgwNjE1ODMxMjM0LCJpc3MiOiJib290LnBsdXRvLnR2Iiwic3ViIjoicHJpOnYxOnBsdXRvOmRldmljZXM6VkU6ZG1semFXOXVMWEJzZFhNdGNHeDFkRzh0WTJ4cFpXNTBMWFpyYlcxNiIsImF1ZCI6IioucGx1dG8udHYiLCJleHAiOjE3ODA3MDIyMzEsImlhdCI6MTc4MDYxNTgzMSwianRpIjoiNjM3ZjNlNTEtOTkzMy00YTBkLTliODItZDkwZGNhYWFiYTUxIn0.FQmTk4mDuAat7pG7nqQ7VuCGiRic3fh2EZDHhlPzhUc&masterJWTPassthrough=true
+[2026-06-04 17:30:32] [INFO] [SourceValidator] GET parcial exitoso. Content-Type: application/x-mpegurl; charset=utf-8, Final URL: https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/channel/6870072ca9d5c45c3e9466f1/master.m3u8?advertisingId=&appName=web&appVersion=7.9.0-a9cca6b89aea4dc0998b92a51989d2adb9a9025d&app_name=web&clientDeviceType=0&clientID=vision-plus-pluto-client-vkmmz&clientModelNumber=1.0.0&country=MX&deviceDNT=false&deviceId=vision-plus-pluto-client-vkmmz&deviceLat=19.5200&deviceLon=-99.2000&deviceMake=Chrome&deviceModel=web&deviceType=web&deviceVersion=16.2.0&marketingRegion=VE&serverSideAds=true&sessionID=6086c605-606d-11f1-b3f2-26702f63adce&sid=6086c605-606d-11f1-b3f2-26702f63adce&userId=&jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6IjA5Y2RmMmI0LTdiOGMtNGVkNi1iMjkzLWYzZWM4YjY1ZWI2YiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI2MDg2YzYwNS02MDZkLTExZjEtYjNmMi0yNjcwMmY2M2FkY2UiLCJjbGllbnRJUCI6IjE4OS4yMDEuMTI4LjEiLCJjaXR5IjoiTGEgTW9yYSIsInBvc3RhbENvZGUiOiI1NDA5MCIsImNvdW50cnkiOiJNWCIsImRtYSI6MCwiYWN0aXZlUmVnaW9uIjoiVkUiLCJkZXZpY2VMYXQiOjE5LjUyMDAwMDQ1Nzc2MzY3MiwiZGV2aWNlTG9uIjotOTkuMTk5OTk2OTQ4MjQyMTksInByZWZlcnJlZExhbmd1YWdlIjoiZW4iLCJkZXZpY2VUeXBlIjoid2ViIiwiZGV2aWNlVmVyc2lvbiI6IjE2LjIuMCIsImRldmljZU1ha2UiOiJDaHJvbWUiLCJkZXZpY2VNb2RlbCI6IndlYiIsImFwcE5hbWUiOiJ3ZWIiLCJhcHBWZXJzaW9uIjoiNy45LjAtYTljY2E2Yjg5YWVhNGRjMDk5OGI5MmE1MTk4OWQyYWRiOWE5MDI1ZCIsImNsaWVudElEIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXZrbW16IiwiY21BdWRpZW5jZUlEIjoiIiwiaXNDbGllbnRETlQiOmZhbHNlLCJ1c2VySUQiOiIiLCJsb2dMZXZlbCI6IkRFRkFVTFQiLCJ0aW1lWm9uZSI6IkFtZXJpY2EvTWV4aWNvX0NpdHkiLCJzZXJ2ZXJTaWRlQWRzIjp0cnVlLCJlMmVCZWFjb25zIjpmYWxzZSwiZmVhdHVyZXMiOnsibXVsdGlQb2RBZHMiOnsiY29ob3J0IjoiIiwiZW5hYmxlZCI6dHJ1ZX0sInN0aXRjaGVyRGFzaE5nIjp7ImZsYXR0ZW5CYXNlVXJsIjp0cnVlfSwic3RpdGNoZXJIbHNOZyI6eyJkZW11eGVkQXVkaW8iOiJqaXQifX0sImZtc1BhcmFtcyI6eyJmd1ZjSUQyIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXZrbW16IiwiZndWY0lEMkNvcHBhIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXZrbW16IiwiY3VzdG9tUGFyYW1zIjp7ImZtc19saXZlcmFtcF9pZGwiOiIiLCJmbXNfZW1haWxoYXNoIjoiIiwiZm1zX3N1YnNjcmliZXJpZCI6IiIsImZtc19pZmEiOiIiLCJmbXNfaWRmdiI6IiIsImZtc191c2VyaWQiOiJ2aXNpb24tcGx1cy1wbHV0by1jbGllbnQtdmttbXoiLCJmbXNfdmNpZDJ0eXBlIjoidXNlcmlkIiwiZm1zX3JhbXBfaWQiOiIiLCJmbXNfaGhfcmFtcF9pZCI6IiIsImZtc19iaWRpZHR5cGUiOiIiLCJfZndfM1BfVUlEIjoiIiwiZm1zX3J1bGVpZCI6IjEwMDE0LDEwMDE2LDEwMDIxLDEwMDA5LDEwMDE1LDEwMDIwLDEwMDIzLDEwMDAwLDEwMDEzIn19LCJzZXNzaW9uU3RhcnRUaW1lIjoxNzgwNjE1ODMxMjM0LCJpc3MiOiJib290LnBsdXRvLnR2Iiwic3ViIjoicHJpOnYxOnBsdXRvOmRldmljZXM6VkU6ZG1semFXOXVMWEJzZFhNdGNHeDFkRzh0WTJ4cFpXNTBMWFpyYlcxNiIsImF1ZCI6IioucGx1dG8udHYiLCJleHAiOjE3ODA3MDIyMzEsImlhdCI6MTc4MDYxNTgzMSwianRpIjoiNjM3ZjNlNTEtOTkzMy00YTBkLTliODItZDkwZGNhYWFiYTUxIn0.FQmTk4mDuAat7pG7nqQ7VuCGiRic3fh2EZDHhlPzhUc&masterJWTPassthrough=true
+[2026-06-04 17:35:01] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "catalog_poseidonhd_movie_missyouloveyou" (Idioma pref: auto, Servidores excluidos: [])
+[2026-06-04 17:35:01] [INFO] [Resolver] Película encontrada: "Miss You, Love You"
+[2026-06-04 17:35:01] [INFO] [MoviePageParser] 🔍 Analizando página externa de PoseidonHD: https://www.poseidonhd2.co/pelicula/1232667/miss-you-love-you
+[2026-06-04 17:35:01] [INFO] [BrowserFetcher] 🌐 Cargando página con Playwright para evadir antibot: https://www.poseidonhd2.co/pelicula/1232667/miss-you-love-you
+[2026-06-04 17:35:04] [INFO] [BrowserFetcher] ✅ HTML cargado exitosamente. Longitud: 92988 bytes.
+[2026-06-04 17:35:04] [INFO] [Resolver] Página de detalle scrapeada: 5 opciones extraídas de https://www.poseidonhd2.co/pelicula/1232667/miss-you-love-you
+[2026-06-04 17:35:04] [INFO] [Resolver] Total de opciones filtradas a evaluar: 5
+[2026-06-04 17:35:04] [INFO] [Resolver] Lanzando 3 opciones en paralelo (max 3)...
+[2026-06-04 17:35:04] [INFO] [Resolver] ▶ Probando en paralelo: [Inglés] player
+[2026-06-04 17:35:04] [INFO] [Resolver] ▶ Probando en paralelo: [Inglés] player
+[2026-06-04 17:35:04] [INFO] [Resolver] ▶ Probando en paralelo: [Inglés] player
+[2026-06-04 17:35:04] [INFO] [Resolver] Intentando 2 candidatos restantes secuencialmente...
+[2026-06-04 17:35:04] [INFO] [Resolver] ▶ Probando secuencial: [Inglés] player
+[2026-06-04 17:35:04] [ERROR] [API Resolve] Error al resolver película catalog_poseidonhd_movie_missyouloveyou: url.startsWith is not a function
+[2026-06-04 17:35:32] [INFO] [API Restart] Petición de reinicio recibida. Deteniendo proceso en 1 segundo...
+[2026-06-04 17:35:38] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-04 17:35:40] [INFO] [DB] SQLite inicializado.
+[2026-06-04 17:35:40] [INFO] [DB] Memoria sincronizada: 474 sources, 382 pelis, 144 series.
+[2026-06-04 17:35:40] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-04 17:35:40] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-04 17:35:40] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-04 17:35:41] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-04 17:35:43] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-04 17:35:43] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-04 17:35:43] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-04 17:35:43] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-04 17:35:43] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-04 17:35:43] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-04 17:35:43] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-04 17:35:45] [INFO] [CatalogWorker] Catálogo existente: 382 películas, 144 series.
+[2026-06-04 17:35:45] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-04 17:35:45] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
