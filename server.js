@@ -136,6 +136,7 @@ const {
 } = require('./scraper');
 
 const { db, initDB, allQuery, getQuery, runQuery } = require('./server/db/database');
+const { initTelegramClient, streamTelegramFile, syncTelegramChannel } = require('./server/telegramClient');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -2190,6 +2191,11 @@ app.post('/api/scrape', async (req, res) => {
   }
 });
 
+app.get('/api/stream/telegram/:messageId', async (req, res) => {
+  const { messageId } = req.params;
+  await streamTelegramFile(messageId, req, res);
+});
+
 app.get('/api/status', (req, res) => {
   let tunnelUrl = null;
   let lastUpdate = 'No disponible';
@@ -2425,7 +2431,12 @@ function publishServerLogs() {
   } catch (e) {}
 }
 
-initializeDB().then(() => {
+initializeDB().then(async () => {
+  await initTelegramClient();
+  // Sincronizar telegram en el arranque y luego cada hora
+  syncTelegramChannel();
+  setInterval(syncTelegramChannel, 60 * 60 * 1000);
+
   app.listen(PORT, () => {
     console.log(`Servidor corriendo en el puerto ${PORT}`);
     

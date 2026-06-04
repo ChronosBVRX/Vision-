@@ -29,8 +29,10 @@ const directFileAdapter = require('./adapters/directFileAdapter');
 const authorizedEmbedAdapter = require('./adapters/authorizedEmbedAdapter');
 const plutoAdapter = require('./adapters/plutoAdapter');
 const fallbackAdapter = require('./adapters/fallbackAdapter');
+const telegramAdapter = require('./adapters/telegramAdapter');
 
 const adapters = [
+  telegramAdapter,
   plutoAdapter,
   directFileAdapter,
   authorizedEmbedAdapter,

@@ -17,9 +17,11 @@
     "cheerio": "^1.2.0",
     "cors": "^2.8.5",
     "express": "^4.19.2",
+    "input": "^1.0.1",
     "playwright": "^1.60.0",
     "puppeteer": "^25.1.0",
     "sqlite3": "^6.0.1",
+    "telegram": "^2.26.22",
     "youtube-dl-exec": "^3.1.7"
   },
   "devDependencies": {
