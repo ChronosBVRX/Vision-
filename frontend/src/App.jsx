@@ -252,6 +252,8 @@ export default function App() {
   const selectPage = (page) => {
     setCurrentPage(page);
     setSidebarOpen(false);
+    setTvSubmenuOpen(false);
+    setAnimeSubmenuOpen(false);
     if (page !== 'home') setSelectedCategoryFilter('all');
     if (document.activeElement) document.activeElement.blur();
     setTimeout(() => {
@@ -264,6 +266,10 @@ export default function App() {
     setSelectedCategoryFilter(cat);
     setCurrentPage('home');
     setSidebarOpen(false);
+    if (cat !== 'Canales en Vivo') {
+      setTvSubmenuOpen(false);
+    }
+    setAnimeSubmenuOpen(false);
     if (document.activeElement) document.activeElement.blur();
     setTimeout(() => {
       const firstMainItem = document.querySelector('.main-content .focusable');

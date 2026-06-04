@@ -158,6 +158,9 @@ Vision+/
 - **Fondo de Transición Suave:** Estilizado con un gradiente radial oscuro que incluye un brillo de marca rojo (`#e50914`) al 12%-18% de opacidad sobre fondo negro verdadero, haciendo la transición del catálogo a la cortinilla (`brand-intro`) totalmente imperceptible y suave.
 - **Estilos Premium en index.css:** Añadidas clases y animaciones de spinner doble invertido, barra de carga y desvanecimiento suaves.
 
+### Retracción de Submenús en Menú Lateral (04/06/2026)
+- **Cierre inteligente al hacer click/navegar:** Actualizados los handlers de navegación y de selección de categorías en `App.jsx` para colapsar los submenús de Canales en Vivo y Anime tan pronto como el usuario selecciona una subcategoría o cambia a otra sección de la aplicación (como Películas, Deportes o Admin). Esto evita el scroll excesivo y mantiene la barra lateral en su formato compacto original.
+
 ---
 
 ## Próximos pasos / Pendientes
