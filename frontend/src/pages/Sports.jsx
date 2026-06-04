@@ -299,45 +299,44 @@ export default function Sports() {
   return (
     <div>
       {/* Header and status bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-        <div>
-          <h2 className="section-title" style={{ margin: 0, display: 'inline-block' }}>Deportes en Vivo</h2>
+      <div className="sports-header-panel">
+        <div className="sports-header-left">
+          <div className="sports-title-container">
+            <Trophy className="sports-header-icon" size={26} />
+            <h2 className="sports-page-title">Deportes en Vivo</h2>
+          </div>
           {activeMirror && (
-            <span 
-              className="card-badge tv" 
-              style={{ 
-                marginLeft: '12px', 
-                position: 'static', 
-                display: 'inline-flex', 
-                alignItems: 'center', 
-                gap: '4px',
-                fontSize: '0.75rem',
-                border: '1px solid rgba(6, 182, 212, 0.3)',
-                background: 'rgba(6, 182, 212, 0.05)'
-              }}
-            >
-              <Activity size={10} /> Espejo Activo: {activeMirror.replace('https://', '')}
-            </span>
+            <div className="sports-mirror-badge">
+              <span className="status-dot"></span>
+              <span className="badge-text">
+                Espejo Activo: <strong className="mirror-domain">{activeMirror.replace(/^https?:\/\/(www\.)?/, '')}</strong>
+              </span>
+            </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div className="sports-header-right">
           {lastUpdated && (
-            <span className="text-muted" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Clock size={12} /> Act. {getFormattedTime(lastUpdated)}
+            <span className="sports-update-time">
+              <Clock size={14} /> Act. {getFormattedTime(lastUpdated)}
             </span>
           )}
-          <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => setSettingsOpen(!settingsOpen)} title="Configurar espejos">
-            <Settings size={18} /> Configurar
+          <button 
+            className="btn-sports-action focusable" 
+            tabIndex={0} 
+            onClick={() => setSettingsOpen(!settingsOpen)} 
+            title="Configurar dominios espejo"
+          >
+            <Settings size={16} />
+            <span>Configurar</span>
           </button>
           <button 
-            className="btn btn-primary focusable" 
+            className="btn-sports-action primary focusable" 
             tabIndex={0}
             onClick={handleForceRefresh} 
             disabled={isRefreshing || loadingMatches}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
-            {isRefreshing ? 'Actualizando...' : 'Refrescar'}
+            <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+            <span>{isRefreshing ? 'Actualizando...' : 'Refrescar'}</span>
           </button>
         </div>
       </div>
@@ -363,10 +362,10 @@ export default function Sports() {
               </p>
             </div>
             <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
-              <button type="submit" className="btn btn-primary focusable" tabIndex={0} disabled={savingSettings}>
+              <button type="submit" className="btn-sports-action primary focusable" tabIndex={0} disabled={savingSettings}>
                 {savingSettings ? 'Guardando...' : 'Guardar y Recargar'}
               </button>
-              <button type="button" className="btn btn-secondary focusable" tabIndex={0} onClick={() => setSettingsOpen(false)}>
+              <button type="button" className="btn-sports-action focusable" tabIndex={0} onClick={() => setSettingsOpen(false)}>
                 Cancelar
               </button>
             </div>
@@ -375,15 +374,28 @@ export default function Sports() {
       )}
 
       {/* Search Input */}
-      <div className="search-container">
-        <Search className="search-icon" size={20} />
-        <input
-          type="text"
-          placeholder="Busca eventos, equipos o deportes..."
-          className="search-input focusable"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
+      <div className="sports-search-container">
+        <div className="sports-search-wrapper">
+          <Search className="sports-search-icon" size={20} />
+          <input
+            type="text"
+            placeholder="Busca eventos, equipos o deportes..."
+            className="sports-search-input focusable"
+            tabIndex={0}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button 
+              className="sports-search-clear focusable" 
+              tabIndex={0}
+              onClick={() => setSearchQuery('')}
+              title="Limpiar búsqueda"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Matches Schedule Header */}
