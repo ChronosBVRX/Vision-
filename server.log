@@ -59,3 +59,7 @@
 [2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.rojadirecta.watch (Failed to scrape matches from https://www.rojadirecta.watch: timeout of 5000ms exceeded)
 [2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv.us (Failed to scrape matches from https://www.pirlotv.us: timeout of 5000ms exceeded)
 [2026-06-04 13:20:45] [ERROR] [SportsWorker] Error al actualizar cache de deportes: No se encontro ningun espejo de Rojadirecta activo o con partidos validos online.
+[2026-06-04 15:00:28] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "catalog_poseidonhd_movie_milkysubwaythegalacticlimite" (Idioma pref: auto, Servidores excluidos: [])
+[2026-06-04 15:00:28] [INFO] [Resolver] Película encontrada: "Milky☆Subway: The Galactic Limited Express - La película"
+[2026-06-04 15:00:28] [INFO] [MoviePageParser] 🔍 Analizando página externa de PoseidonHD: https://www.poseidonhd2.co/pelicula/1598785/milkysubway-the-galactic-limited-express-la-pelicula
+[2026-06-04 15:00:28] [INFO] [BrowserFetcher] 🌐 Cargando página con Playwright para evadir antibot: https://www.poseidonhd2.co/pelicula/1598785/milkysubway-the-galactic-limited-express-la-pelicula
