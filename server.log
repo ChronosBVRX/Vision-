@@ -408,3 +408,20 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-04 15:48:05] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0. Validando conectividad...
 [2026-06-04 15:48:05] [INFO] [SourceValidator] Probando HEAD para: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0
 [2026-06-04 15:48:05] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0
+[2026-06-04 16:12:10] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-04 16:12:12] [INFO] [DB] SQLite inicializado.
+[2026-06-04 16:12:12] [INFO] [DB] Memoria sincronizada: 474 sources, 382 pelis, 144 series.
+[2026-06-04 16:12:12] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-04 16:12:12] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-04 16:12:12] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-04 16:12:13] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-04 16:12:16] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-04 16:12:16] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-04 16:12:16] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-04 16:12:16] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-04 16:12:16] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-04 16:12:16] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-04 16:12:16] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-04 16:12:17] [INFO] [CatalogWorker] Catálogo existente: 382 películas, 144 series.
+[2026-06-04 16:12:17] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-04 16:12:17] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
