@@ -15,3 +15,47 @@
 [2026-06-04 13:20:33] [INFO] [CatalogWorker] Catálogo existente: 382 películas, 144 series.
 [2026-06-04 13:20:33] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
 [2026-06-04 13:20:33] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
+[2026-06-04 13:20:35] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-04 13:20:35] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-04 13:20:35] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-04 13:20:35] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
+[2026-06-04 13:20:35] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
+[2026-06-04 13:20:35] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
+[2026-06-04 13:20:35] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
+[2026-06-04 13:20:35] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
+[2026-06-04 13:20:35] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
+[2026-06-04 13:20:35] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvhd.re (query: "pirlo tv")
+[2026-06-04 13:20:35] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-04 13:20:39] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://beaches-july-general-certificates.trycloudflare.com
+[2026-06-04 13:20:39] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
+[2026-06-04 13:20:39] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
+[2026-06-04 13:20:39] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
+[2026-06-04 13:20:39] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
+[2026-06-04 13:20:40] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 19
+[2026-06-04 13:20:40] [INFO] [SportsScraper] Escaneando un total de 23 espejos en paralelo...
+[2026-06-04 13:20:40] [ERROR] (node:14680) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-06-04 13:20:44] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo ENOTFOUND pirlotv3.pl)
+[2026-06-04 13:20:44] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://rojadirectaplay.com (Failed to scrape matches from https://rojadirectaplay.com: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.rojadirecta.lt (Failed to scrape matches from https://www.rojadirecta.lt: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.rojadirectahd.dev (Failed to scrape matches from https://www.rojadirectahd.dev: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://rojadirectatv.net (Failed to scrape matches from https://rojadirectatv.net: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://rojadirectahd.vip (Failed to scrape matches from https://rojadirectahd.vip: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotvhd.su (Failed to scrape matches from https://pirlotvhd.su: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv.online (Failed to scrape matches from https://www.pirlotv.online: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotvhd.com.co (Failed to scrape matches from https://pirlotvhd.com.co: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.click (Failed to scrape matches from https://www.pirlotv3.click: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotvs.com (Failed to scrape matches from https://pirlotvs.com: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvhd.re (Failed to scrape matches from https://www.pirlotvhd.re: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://rojadirectamas.com (Failed to scrape matches from https://rojadirectamas.com: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatvmas.com (Failed to scrape matches from https://tarjetarojatvmas.com: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojas.com (Failed to scrape matches from https://tarjetarojas.com: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.rojadirectatvmas.com (Failed to scrape matches from https://www.rojadirectatvmas.com: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.tarjetarojatv.net (Failed to scrape matches from https://www.tarjetarojatv.net: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.rojadirecta.watch (Failed to scrape matches from https://www.rojadirecta.watch: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv.us (Failed to scrape matches from https://www.pirlotv.us: timeout of 5000ms exceeded)
+[2026-06-04 13:20:45] [ERROR] [SportsWorker] Error al actualizar cache de deportes: No se encontro ningun espejo de Rojadirecta activo o con partidos validos online.
