@@ -28,12 +28,14 @@ async function axiosGetWithRetry(url, options = {}, retries = 2, delay = 1000) {
 const directFileAdapter = require('./adapters/directFileAdapter');
 const authorizedEmbedAdapter = require('./adapters/authorizedEmbedAdapter');
 const plutoAdapter = require('./adapters/plutoAdapter');
+const planetaplayAdapter = require('./adapters/planetaplayAdapter');
 const fallbackAdapter = require('./adapters/fallbackAdapter');
 const telegramAdapter = require('./adapters/telegramAdapter');
 
 const adapters = [
   telegramAdapter,
   plutoAdapter,
+  planetaplayAdapter,
   directFileAdapter,
   authorizedEmbedAdapter,
   fallbackAdapter
