@@ -2497,3 +2497,12 @@ error: failed to push some refs to 'https://github.com/ChronosBVRX/Vision-.git'
 [2026-06-05 10:30:37] [INFO] [33m[2026-06-05T10:30:37.119] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 10:30:37] [INFO] [33m[2026-06-05T10:30:37.216] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-05 10:30:37] [INFO] [33m[2026-06-05T10:30:37.216] [INFO] - [Handling reconnect!][0m
+[2026-06-05 10:32:07] [INFO] [33m[2026-06-05T10:32:07.313] [INFO] - [connection closed][0m
+[2026-06-05 10:32:07] [INFO] [35m[2026-06-05T10:32:07.314] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 10:32:07] [ERROR] {}
+[2026-06-05 10:32:08] [INFO] [33m[2026-06-05T10:32:08.328] [INFO] - [Started reconnecting][0m
+[2026-06-05 10:32:08] [INFO] [35m[2026-06-05T10:32:08.329] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 10:32:08] [INFO] [33m[2026-06-05T10:32:08.331] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 10:32:08] [INFO] [33m[2026-06-05T10:32:08.332] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 10:32:08] [INFO] [33m[2026-06-05T10:32:08.415] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 10:32:08] [INFO] [33m[2026-06-05T10:32:08.416] [INFO] - [Handling reconnect!][0m
