@@ -144,7 +144,8 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 3. `git diff --stat` — revisar que no hay cambios accidentales
 4. Verificar que NO se incluye `database.json` ni `agent.lock` en el commit
 5. Verificar que no se incluyen secretos/API keys
-6. Hacer commit descriptivo y push
+6. Avanzar la versión del proyecto en `package.json` sumando 1 al último dígito (ej. 1.0.01, 1.0.02)
+7. Hacer commit descriptivo incluyendo la versión y push
 
 **Formato de commits:**
 - `feat:` — nueva funcionalidad
@@ -152,7 +153,7 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 - `refactor:` — refactorización
 - `chore:` — tareas de mantenimiento/logs
 - `docs:` — documentación
-- Ejemplo: `fix: PoseidonHD no cargaba episodios — cambiar thisSeries por thisSerie`
+- Ejemplo: `fix: PoseidonHD no cargaba episodios — cambiar thisSeries por thisSerie (v1.0.01)`
 
 ### 🚫 Qué NO hacer
 - No editar `database.json` manualmente (siempre via API)
