@@ -1,532 +1,3 @@
-[2026-06-05 01:51:12] [INFO] [33m[2026-06-05T01:51:12.147] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:51:12] [INFO] [33m[2026-06-05T01:51:12.219] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:51:12] [INFO] [33m[2026-06-05T01:51:12.219] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:52:42] [INFO] [33m[2026-06-05T01:52:42.290] [INFO] - [connection closed][0m
-[2026-06-05 01:52:42] [INFO] [35m[2026-06-05T01:52:42.291] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:52:42] [ERROR] {}
-[2026-06-05 01:52:43] [INFO] [33m[2026-06-05T01:52:43.298] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:52:43] [INFO] [35m[2026-06-05T01:52:43.298] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:52:43] [INFO] [33m[2026-06-05T01:52:43.299] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:52:43] [INFO] [33m[2026-06-05T01:52:43.299] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:52:43] [INFO] [33m[2026-06-05T01:52:43.392] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:52:43] [INFO] [33m[2026-06-05T01:52:43.393] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:54:13] [INFO] [33m[2026-06-05T01:54:13.485] [INFO] - [connection closed][0m
-[2026-06-05 01:54:13] [INFO] [35m[2026-06-05T01:54:13.486] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:54:13] [ERROR] {}
-[2026-06-05 01:54:14] [INFO] [33m[2026-06-05T01:54:14.495] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:54:14] [INFO] [35m[2026-06-05T01:54:14.495] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:54:14] [INFO] [33m[2026-06-05T01:54:14.496] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:54:14] [INFO] [33m[2026-06-05T01:54:14.496] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:54:14] [INFO] [33m[2026-06-05T01:54:14.588] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:54:14] [INFO] [33m[2026-06-05T01:54:14.588] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:55:44] [INFO] [33m[2026-06-05T01:55:44.679] [INFO] - [connection closed][0m
-[2026-06-05 01:55:44] [INFO] [35m[2026-06-05T01:55:44.680] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:55:44] [ERROR] {}
-[2026-06-05 01:55:45] [INFO] [33m[2026-06-05T01:55:45.692] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:55:45] [INFO] [35m[2026-06-05T01:55:45.693] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:55:45] [INFO] [33m[2026-06-05T01:55:45.693] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:55:45] [INFO] [33m[2026-06-05T01:55:45.694] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:55:45] [INFO] [33m[2026-06-05T01:55:45.768] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:55:45] [INFO] [33m[2026-06-05T01:55:45.769] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:57:15] [INFO] [33m[2026-06-05T01:57:15.841] [INFO] - [connection closed][0m
-[2026-06-05 01:57:15] [INFO] [35m[2026-06-05T01:57:15.841] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:57:15] [ERROR] {}
-[2026-06-05 01:57:16] [INFO] [33m[2026-06-05T01:57:16.843] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:57:16] [INFO] [35m[2026-06-05T01:57:16.844] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:57:16] [INFO] [33m[2026-06-05T01:57:16.844] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:57:16] [INFO] [33m[2026-06-05T01:57:16.845] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:57:16] [INFO] [33m[2026-06-05T01:57:16.919] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:57:16] [INFO] [33m[2026-06-05T01:57:16.920] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:58:47] [INFO] [33m[2026-06-05T01:58:47.647] [INFO] - [connection closed][0m
-[2026-06-05 01:58:47] [INFO] [35m[2026-06-05T01:58:47.648] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:58:47] [ERROR] {}
-[2026-06-05 01:58:48] [INFO] [33m[2026-06-05T01:58:48.655] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:58:48] [INFO] [35m[2026-06-05T01:58:48.656] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:58:48] [INFO] [33m[2026-06-05T01:58:48.656] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:58:48] [INFO] [33m[2026-06-05T01:58:48.657] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:58:48] [INFO] [33m[2026-06-05T01:58:48.730] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:58:48] [INFO] [33m[2026-06-05T01:58:48.731] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:00:18] [INFO] [33m[2026-06-05T02:00:18.803] [INFO] - [connection closed][0m
-[2026-06-05 02:00:18] [INFO] [35m[2026-06-05T02:00:18.803] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:00:18] [ERROR] {}
-[2026-06-05 02:00:19] [INFO] [33m[2026-06-05T02:00:19.809] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:00:19] [INFO] [35m[2026-06-05T02:00:19.809] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:00:19] [INFO] [33m[2026-06-05T02:00:19.810] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:00:19] [INFO] [33m[2026-06-05T02:00:19.810] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:00:19] [INFO] [33m[2026-06-05T02:00:19.884] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:00:19] [INFO] [33m[2026-06-05T02:00:19.884] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:01:49] [INFO] [33m[2026-06-05T02:01:49.962] [INFO] - [connection closed][0m
-[2026-06-05 02:01:49] [INFO] [35m[2026-06-05T02:01:49.962] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:01:49] [ERROR] {}
-[2026-06-05 02:01:50] [INFO] [33m[2026-06-05T02:01:50.970] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:01:50] [INFO] [35m[2026-06-05T02:01:50.970] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:01:50] [INFO] [33m[2026-06-05T02:01:50.971] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:01:50] [INFO] [33m[2026-06-05T02:01:50.971] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:01:51] [INFO] [33m[2026-06-05T02:01:51.044] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:01:51] [INFO] [33m[2026-06-05T02:01:51.044] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:03:06] [INFO] [HealthCheck] ✅ 30 enlaces verificados y puntuados.
-[2026-06-05 02:03:21] [INFO] [33m[2026-06-05T02:03:21.117] [INFO] - [connection closed][0m
-[2026-06-05 02:03:21] [INFO] [35m[2026-06-05T02:03:21.117] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:03:21] [ERROR] {}
-[2026-06-05 02:03:22] [INFO] [33m[2026-06-05T02:03:22.121] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:03:22] [INFO] [35m[2026-06-05T02:03:22.122] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:03:22] [INFO] [33m[2026-06-05T02:03:22.122] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:03:22] [INFO] [33m[2026-06-05T02:03:22.123] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:03:22] [INFO] [33m[2026-06-05T02:03:22.196] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:03:22] [INFO] [33m[2026-06-05T02:03:22.197] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:04:52] [INFO] [33m[2026-06-05T02:04:52.269] [INFO] - [connection closed][0m
-[2026-06-05 02:04:52] [INFO] [35m[2026-06-05T02:04:52.270] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:04:52] [ERROR] {}
-[2026-06-05 02:04:53] [INFO] [33m[2026-06-05T02:04:53.271] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:04:53] [INFO] [35m[2026-06-05T02:04:53.272] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:04:53] [INFO] [33m[2026-06-05T02:04:53.272] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:04:53] [INFO] [33m[2026-06-05T02:04:53.272] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:04:53] [INFO] [33m[2026-06-05T02:04:53.351] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:04:53] [INFO] [33m[2026-06-05T02:04:53.352] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:06:23] [INFO] [33m[2026-06-05T02:06:23.424] [INFO] - [connection closed][0m
-[2026-06-05 02:06:23] [INFO] [35m[2026-06-05T02:06:23.425] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:06:23] [ERROR] {}
-[2026-06-05 02:06:24] [INFO] [33m[2026-06-05T02:06:24.426] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:06:24] [INFO] [35m[2026-06-05T02:06:24.427] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:06:24] [INFO] [33m[2026-06-05T02:06:24.427] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:06:24] [INFO] [33m[2026-06-05T02:06:24.428] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:06:24] [INFO] [33m[2026-06-05T02:06:24.503] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:06:24] [INFO] [33m[2026-06-05T02:06:24.504] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:07:54] [INFO] [33m[2026-06-05T02:07:54.577] [INFO] - [connection closed][0m
-[2026-06-05 02:07:54] [INFO] [35m[2026-06-05T02:07:54.578] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:07:54] [ERROR] {}
-[2026-06-05 02:07:55] [INFO] [33m[2026-06-05T02:07:55.588] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:07:55] [INFO] [35m[2026-06-05T02:07:55.588] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:07:55] [INFO] [33m[2026-06-05T02:07:55.589] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:07:55] [INFO] [33m[2026-06-05T02:07:55.589] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:07:55] [INFO] [33m[2026-06-05T02:07:55.684] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:07:55] [INFO] [33m[2026-06-05T02:07:55.685] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:09:25] [INFO] [33m[2026-06-05T02:09:25.779] [INFO] - [connection closed][0m
-[2026-06-05 02:09:25] [INFO] [35m[2026-06-05T02:09:25.779] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:09:25] [ERROR] {}
-[2026-06-05 02:09:26] [INFO] [33m[2026-06-05T02:09:26.784] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:09:26] [INFO] [35m[2026-06-05T02:09:26.785] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:09:26] [INFO] [33m[2026-06-05T02:09:26.785] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:09:26] [INFO] [33m[2026-06-05T02:09:26.785] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:09:26] [INFO] [33m[2026-06-05T02:09:26.862] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:09:26] [INFO] [33m[2026-06-05T02:09:26.862] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:10:56] [INFO] [33m[2026-06-05T02:10:56.934] [INFO] - [connection closed][0m
-[2026-06-05 02:10:56] [INFO] [35m[2026-06-05T02:10:56.934] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:10:56] [ERROR] {}
-[2026-06-05 02:10:57] [INFO] [33m[2026-06-05T02:10:57.944] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:10:57] [INFO] [35m[2026-06-05T02:10:57.945] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:10:57] [INFO] [33m[2026-06-05T02:10:57.945] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:10:57] [INFO] [33m[2026-06-05T02:10:57.946] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:10:58] [INFO] [33m[2026-06-05T02:10:58.039] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:10:58] [INFO] [33m[2026-06-05T02:10:58.040] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:12:28] [INFO] [33m[2026-06-05T02:12:28.130] [INFO] - [connection closed][0m
-[2026-06-05 02:12:28] [INFO] [35m[2026-06-05T02:12:28.130] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:12:28] [ERROR] {}
-[2026-06-05 02:12:29] [INFO] [33m[2026-06-05T02:12:29.135] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:12:29] [INFO] [35m[2026-06-05T02:12:29.135] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:12:29] [INFO] [33m[2026-06-05T02:12:29.136] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:12:29] [INFO] [33m[2026-06-05T02:12:29.136] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:12:29] [INFO] [33m[2026-06-05T02:12:29.233] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:12:29] [INFO] [33m[2026-06-05T02:12:29.234] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:13:59] [INFO] [33m[2026-06-05T02:13:59.305] [INFO] - [connection closed][0m
-[2026-06-05 02:13:59] [INFO] [35m[2026-06-05T02:13:59.305] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:13:59] [ERROR] {}
-[2026-06-05 02:14:00] [INFO] [33m[2026-06-05T02:14:00.313] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:14:00] [INFO] [35m[2026-06-05T02:14:00.313] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:14:00] [INFO] [33m[2026-06-05T02:14:00.314] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:14:00] [INFO] [33m[2026-06-05T02:14:00.314] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:14:00] [INFO] [33m[2026-06-05T02:14:00.408] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:14:00] [INFO] [33m[2026-06-05T02:14:00.409] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:15:30] [INFO] [33m[2026-06-05T02:15:30.500] [INFO] - [connection closed][0m
-[2026-06-05 02:15:30] [INFO] [35m[2026-06-05T02:15:30.501] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:15:30] [ERROR] {}
-[2026-06-05 02:15:31] [INFO] [33m[2026-06-05T02:15:31.517] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:15:31] [INFO] [35m[2026-06-05T02:15:31.517] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:15:31] [INFO] [33m[2026-06-05T02:15:31.518] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:15:31] [INFO] [33m[2026-06-05T02:15:31.518] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:15:31] [INFO] [33m[2026-06-05T02:15:31.611] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:15:31] [INFO] [33m[2026-06-05T02:15:31.611] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:17:01] [INFO] [33m[2026-06-05T02:17:01.703] [INFO] - [connection closed][0m
-[2026-06-05 02:17:01] [INFO] [35m[2026-06-05T02:17:01.704] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:17:01] [ERROR] {}
-[2026-06-05 02:17:02] [INFO] [33m[2026-06-05T02:17:02.710] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:17:02] [INFO] [35m[2026-06-05T02:17:02.711] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:17:02] [INFO] [33m[2026-06-05T02:17:02.711] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:17:02] [INFO] [33m[2026-06-05T02:17:02.711] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:17:02] [INFO] [33m[2026-06-05T02:17:02.784] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:17:02] [INFO] [33m[2026-06-05T02:17:02.784] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:18:32] [INFO] [33m[2026-06-05T02:18:32.855] [INFO] - [connection closed][0m
-[2026-06-05 02:18:32] [INFO] [35m[2026-06-05T02:18:32.856] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:18:32] [ERROR] {}
-[2026-06-05 02:18:33] [INFO] [33m[2026-06-05T02:18:33.866] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:18:33] [INFO] [35m[2026-06-05T02:18:33.866] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:18:33] [INFO] [33m[2026-06-05T02:18:33.867] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:18:33] [INFO] [33m[2026-06-05T02:18:33.867] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:18:33] [INFO] [33m[2026-06-05T02:18:33.941] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:18:33] [INFO] [33m[2026-06-05T02:18:33.941] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:20:04] [INFO] [33m[2026-06-05T02:20:04.017] [INFO] - [connection closed][0m
-[2026-06-05 02:20:04] [INFO] [35m[2026-06-05T02:20:04.018] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:20:04] [ERROR] {}
-[2026-06-05 02:20:05] [INFO] [33m[2026-06-05T02:20:05.028] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:20:05] [INFO] [35m[2026-06-05T02:20:05.028] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:20:05] [INFO] [33m[2026-06-05T02:20:05.029] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:20:05] [INFO] [33m[2026-06-05T02:20:05.029] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:20:05] [INFO] [33m[2026-06-05T02:20:05.103] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:20:05] [INFO] [33m[2026-06-05T02:20:05.103] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:21:35] [INFO] [33m[2026-06-05T02:21:35.176] [INFO] - [connection closed][0m
-[2026-06-05 02:21:35] [INFO] [35m[2026-06-05T02:21:35.177] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:21:35] [ERROR] {}
-[2026-06-05 02:21:36] [INFO] [33m[2026-06-05T02:21:36.189] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:21:36] [INFO] [35m[2026-06-05T02:21:36.190] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:21:36] [INFO] [33m[2026-06-05T02:21:36.191] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:21:36] [INFO] [33m[2026-06-05T02:21:36.191] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:21:36] [INFO] [33m[2026-06-05T02:21:36.283] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:21:36] [INFO] [33m[2026-06-05T02:21:36.283] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:23:06] [INFO] [33m[2026-06-05T02:23:06.373] [INFO] - [connection closed][0m
-[2026-06-05 02:23:06] [INFO] [35m[2026-06-05T02:23:06.374] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:23:06] [ERROR] {}
-[2026-06-05 02:23:07] [INFO] [33m[2026-06-05T02:23:07.387] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:23:07] [INFO] [35m[2026-06-05T02:23:07.387] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:23:07] [INFO] [33m[2026-06-05T02:23:07.387] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:23:07] [INFO] [33m[2026-06-05T02:23:07.388] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:23:07] [INFO] [33m[2026-06-05T02:23:07.480] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:23:07] [INFO] [33m[2026-06-05T02:23:07.480] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:24:37] [INFO] [33m[2026-06-05T02:24:37.574] [INFO] - [connection closed][0m
-[2026-06-05 02:24:37] [INFO] [35m[2026-06-05T02:24:37.575] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:24:37] [ERROR] {}
-[2026-06-05 02:24:38] [INFO] [33m[2026-06-05T02:24:38.590] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:24:38] [INFO] [35m[2026-06-05T02:24:38.591] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:24:38] [INFO] [33m[2026-06-05T02:24:38.592] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:24:38] [INFO] [33m[2026-06-05T02:24:38.592] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:24:38] [INFO] [33m[2026-06-05T02:24:38.684] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:24:38] [INFO] [33m[2026-06-05T02:24:38.684] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:26:08] [INFO] [33m[2026-06-05T02:26:08.779] [INFO] - [connection closed][0m
-[2026-06-05 02:26:08] [INFO] [35m[2026-06-05T02:26:08.780] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:26:08] [ERROR] {}
-[2026-06-05 02:26:09] [INFO] [33m[2026-06-05T02:26:09.793] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:26:09] [INFO] [35m[2026-06-05T02:26:09.794] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:26:09] [INFO] [33m[2026-06-05T02:26:09.794] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:26:09] [INFO] [33m[2026-06-05T02:26:09.795] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:26:09] [INFO] [33m[2026-06-05T02:26:09.879] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:26:09] [INFO] [33m[2026-06-05T02:26:09.880] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:27:39] [INFO] [33m[2026-06-05T02:27:39.953] [INFO] - [connection closed][0m
-[2026-06-05 02:27:39] [INFO] [35m[2026-06-05T02:27:39.953] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:27:39] [ERROR] {}
-[2026-06-05 02:27:40] [INFO] [33m[2026-06-05T02:27:40.969] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:27:40] [INFO] [35m[2026-06-05T02:27:40.969] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:27:40] [INFO] [33m[2026-06-05T02:27:40.970] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:27:40] [INFO] [33m[2026-06-05T02:27:40.970] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:27:41] [INFO] [33m[2026-06-05T02:27:41.043] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:27:41] [INFO] [33m[2026-06-05T02:27:41.043] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:29:11] [INFO] [33m[2026-06-05T02:29:11.115] [INFO] - [connection closed][0m
-[2026-06-05 02:29:11] [INFO] [35m[2026-06-05T02:29:11.115] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:29:11] [ERROR] {}
-[2026-06-05 02:29:12] [INFO] [33m[2026-06-05T02:29:12.130] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:29:12] [INFO] [35m[2026-06-05T02:29:12.130] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:29:12] [INFO] [33m[2026-06-05T02:29:12.131] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:29:12] [INFO] [33m[2026-06-05T02:29:12.131] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:29:12] [INFO] [33m[2026-06-05T02:29:12.237] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:29:12] [INFO] [33m[2026-06-05T02:29:12.238] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:30:42] [INFO] [33m[2026-06-05T02:30:42.332] [INFO] - [connection closed][0m
-[2026-06-05 02:30:42] [INFO] [35m[2026-06-05T02:30:42.333] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:30:42] [ERROR] {}
-[2026-06-05 02:30:43] [INFO] [33m[2026-06-05T02:30:43.340] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:30:43] [INFO] [35m[2026-06-05T02:30:43.341] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:30:43] [INFO] [33m[2026-06-05T02:30:43.341] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:30:43] [INFO] [33m[2026-06-05T02:30:43.342] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:30:43] [INFO] [33m[2026-06-05T02:30:43.439] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:30:43] [INFO] [33m[2026-06-05T02:30:43.439] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:32:13] [INFO] [33m[2026-06-05T02:32:13.539] [INFO] - [connection closed][0m
-[2026-06-05 02:32:13] [INFO] [35m[2026-06-05T02:32:13.539] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:32:13] [ERROR] {}
-[2026-06-05 02:32:14] [INFO] [33m[2026-06-05T02:32:14.549] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:32:14] [INFO] [35m[2026-06-05T02:32:14.550] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:32:14] [INFO] [33m[2026-06-05T02:32:14.550] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:32:14] [INFO] [33m[2026-06-05T02:32:14.551] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:32:14] [INFO] [33m[2026-06-05T02:32:14.642] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:32:14] [INFO] [33m[2026-06-05T02:32:14.643] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:33:44] [INFO] [33m[2026-06-05T02:33:44.737] [INFO] - [connection closed][0m
-[2026-06-05 02:33:44] [INFO] [35m[2026-06-05T02:33:44.738] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:33:44] [ERROR] {}
-[2026-06-05 02:33:45] [INFO] [33m[2026-06-05T02:33:45.744] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:33:45] [INFO] [35m[2026-06-05T02:33:45.744] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:33:45] [INFO] [33m[2026-06-05T02:33:45.745] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:33:45] [INFO] [33m[2026-06-05T02:33:45.745] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:33:45] [INFO] [33m[2026-06-05T02:33:45.841] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:33:45] [INFO] [33m[2026-06-05T02:33:45.842] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:35:15] [INFO] [33m[2026-06-05T02:35:15.935] [INFO] - [connection closed][0m
-[2026-06-05 02:35:15] [INFO] [35m[2026-06-05T02:35:15.936] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:35:15] [ERROR] {}
-[2026-06-05 02:35:16] [INFO] [33m[2026-06-05T02:35:16.942] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:35:16] [INFO] [35m[2026-06-05T02:35:16.942] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:35:16] [INFO] [33m[2026-06-05T02:35:16.943] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:35:16] [INFO] [33m[2026-06-05T02:35:16.943] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:35:17] [INFO] [33m[2026-06-05T02:35:17.019] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:35:17] [INFO] [33m[2026-06-05T02:35:17.019] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:36:47] [INFO] [33m[2026-06-05T02:36:47.092] [INFO] - [connection closed][0m
-[2026-06-05 02:36:47] [INFO] [35m[2026-06-05T02:36:47.093] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:36:47] [ERROR] {}
-[2026-06-05 02:36:48] [INFO] [33m[2026-06-05T02:36:48.107] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:36:48] [INFO] [35m[2026-06-05T02:36:48.107] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:36:48] [INFO] [33m[2026-06-05T02:36:48.108] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:36:48] [INFO] [33m[2026-06-05T02:36:48.108] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:36:48] [INFO] [33m[2026-06-05T02:36:48.201] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:36:48] [INFO] [33m[2026-06-05T02:36:48.202] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:38:18] [INFO] [33m[2026-06-05T02:38:18.293] [INFO] - [connection closed][0m
-[2026-06-05 02:38:18] [INFO] [35m[2026-06-05T02:38:18.294] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:38:18] [ERROR] {}
-[2026-06-05 02:38:19] [INFO] [33m[2026-06-05T02:38:19.309] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:38:19] [INFO] [35m[2026-06-05T02:38:19.309] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:38:19] [INFO] [33m[2026-06-05T02:38:19.310] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:38:19] [INFO] [33m[2026-06-05T02:38:19.310] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:38:19] [INFO] [33m[2026-06-05T02:38:19.437] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:38:19] [INFO] [33m[2026-06-05T02:38:19.437] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:39:49] [INFO] [33m[2026-06-05T02:39:49.531] [INFO] - [connection closed][0m
-[2026-06-05 02:39:49] [INFO] [35m[2026-06-05T02:39:49.531] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:39:49] [ERROR] {}
-[2026-06-05 02:39:50] [INFO] [33m[2026-06-05T02:39:50.541] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:39:50] [INFO] [35m[2026-06-05T02:39:50.542] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:39:50] [INFO] [33m[2026-06-05T02:39:50.542] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:39:50] [INFO] [33m[2026-06-05T02:39:50.543] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:39:50] [INFO] [33m[2026-06-05T02:39:50.636] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:39:50] [INFO] [33m[2026-06-05T02:39:50.636] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:41:20] [INFO] [33m[2026-06-05T02:41:20.727] [INFO] - [connection closed][0m
-[2026-06-05 02:41:20] [INFO] [35m[2026-06-05T02:41:20.728] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:41:20] [ERROR] {}
-[2026-06-05 02:41:21] [INFO] [33m[2026-06-05T02:41:21.745] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:41:21] [INFO] [35m[2026-06-05T02:41:21.745] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:41:21] [INFO] [33m[2026-06-05T02:41:21.746] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:41:21] [INFO] [33m[2026-06-05T02:41:21.746] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:41:21] [INFO] [33m[2026-06-05T02:41:21.819] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:41:21] [INFO] [33m[2026-06-05T02:41:21.820] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:42:51] [INFO] [33m[2026-06-05T02:42:51.892] [INFO] - [connection closed][0m
-[2026-06-05 02:42:51] [INFO] [35m[2026-06-05T02:42:51.892] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:42:51] [ERROR] {}
-[2026-06-05 02:42:52] [INFO] [33m[2026-06-05T02:42:52.903] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:42:52] [INFO] [35m[2026-06-05T02:42:52.903] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:42:52] [INFO] [33m[2026-06-05T02:42:52.904] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:42:52] [INFO] [33m[2026-06-05T02:42:52.904] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:42:53] [INFO] [33m[2026-06-05T02:42:53.000] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:42:53] [INFO] [33m[2026-06-05T02:42:53.001] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:44:23] [INFO] [33m[2026-06-05T02:44:23.092] [INFO] - [connection closed][0m
-[2026-06-05 02:44:23] [INFO] [35m[2026-06-05T02:44:23.092] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:44:23] [ERROR] {}
-[2026-06-05 02:44:24] [INFO] [33m[2026-06-05T02:44:24.101] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:44:24] [INFO] [35m[2026-06-05T02:44:24.102] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:44:24] [INFO] [33m[2026-06-05T02:44:24.102] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:44:24] [INFO] [33m[2026-06-05T02:44:24.103] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:44:24] [INFO] [33m[2026-06-05T02:44:24.176] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:44:24] [INFO] [33m[2026-06-05T02:44:24.177] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:45:54] [INFO] [33m[2026-06-05T02:45:54.252] [INFO] - [connection closed][0m
-[2026-06-05 02:45:54] [INFO] [35m[2026-06-05T02:45:54.253] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:45:54] [ERROR] {}
-[2026-06-05 02:45:55] [INFO] [33m[2026-06-05T02:45:55.256] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:45:55] [INFO] [35m[2026-06-05T02:45:55.257] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:45:55] [INFO] [33m[2026-06-05T02:45:55.257] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:45:55] [INFO] [33m[2026-06-05T02:45:55.258] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:45:55] [INFO] [33m[2026-06-05T02:45:55.329] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:45:55] [INFO] [33m[2026-06-05T02:45:55.330] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:47:25] [INFO] [33m[2026-06-05T02:47:25.400] [INFO] - [connection closed][0m
-[2026-06-05 02:47:25] [INFO] [35m[2026-06-05T02:47:25.401] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:47:25] [ERROR] {}
-[2026-06-05 02:47:26] [INFO] [33m[2026-06-05T02:47:26.415] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:47:26] [INFO] [35m[2026-06-05T02:47:26.416] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:47:26] [INFO] [33m[2026-06-05T02:47:26.416] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:47:26] [INFO] [33m[2026-06-05T02:47:26.417] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:47:26] [INFO] [33m[2026-06-05T02:47:26.512] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:47:26] [INFO] [33m[2026-06-05T02:47:26.512] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:48:56] [INFO] [33m[2026-06-05T02:48:56.603] [INFO] - [connection closed][0m
-[2026-06-05 02:48:56] [INFO] [35m[2026-06-05T02:48:56.604] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:48:56] [ERROR] {}
-[2026-06-05 02:48:57] [INFO] [33m[2026-06-05T02:48:57.607] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:48:57] [INFO] [35m[2026-06-05T02:48:57.608] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:48:57] [INFO] [33m[2026-06-05T02:48:57.608] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:48:57] [INFO] [33m[2026-06-05T02:48:57.608] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:48:57] [INFO] [33m[2026-06-05T02:48:57.703] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:48:57] [INFO] [33m[2026-06-05T02:48:57.704] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:50:27] [INFO] [33m[2026-06-05T02:50:27.775] [INFO] - [connection closed][0m
-[2026-06-05 02:50:27] [INFO] [35m[2026-06-05T02:50:27.776] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:50:27] [ERROR] {}
-[2026-06-05 02:50:28] [INFO] [33m[2026-06-05T02:50:28.782] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:50:28] [INFO] [35m[2026-06-05T02:50:28.782] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:50:28] [INFO] [33m[2026-06-05T02:50:28.783] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:50:28] [INFO] [33m[2026-06-05T02:50:28.783] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:50:28] [INFO] [33m[2026-06-05T02:50:28.856] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:50:28] [INFO] [33m[2026-06-05T02:50:28.857] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:51:58] [INFO] [33m[2026-06-05T02:51:58.929] [INFO] - [connection closed][0m
-[2026-06-05 02:51:58] [INFO] [35m[2026-06-05T02:51:58.930] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:51:58] [ERROR] {}
-[2026-06-05 02:51:59] [INFO] [33m[2026-06-05T02:51:59.942] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:51:59] [INFO] [35m[2026-06-05T02:51:59.942] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:51:59] [INFO] [33m[2026-06-05T02:51:59.943] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:51:59] [INFO] [33m[2026-06-05T02:51:59.943] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:52:00] [INFO] [33m[2026-06-05T02:52:00.060] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:52:00] [INFO] [33m[2026-06-05T02:52:00.060] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:53:30] [INFO] [33m[2026-06-05T02:53:30.153] [INFO] - [connection closed][0m
-[2026-06-05 02:53:30] [INFO] [35m[2026-06-05T02:53:30.154] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:53:30] [ERROR] {}
-[2026-06-05 02:53:31] [INFO] [33m[2026-06-05T02:53:31.160] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:53:31] [INFO] [35m[2026-06-05T02:53:31.160] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:53:31] [INFO] [33m[2026-06-05T02:53:31.161] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:53:31] [INFO] [33m[2026-06-05T02:53:31.161] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:53:31] [INFO] [33m[2026-06-05T02:53:31.253] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:53:31] [INFO] [33m[2026-06-05T02:53:31.254] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:55:01] [INFO] [33m[2026-06-05T02:55:01.350] [INFO] - [connection closed][0m
-[2026-06-05 02:55:01] [INFO] [35m[2026-06-05T02:55:01.351] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:55:01] [ERROR] {}
-[2026-06-05 02:55:02] [INFO] [33m[2026-06-05T02:55:02.362] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:55:02] [INFO] [35m[2026-06-05T02:55:02.362] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:55:02] [INFO] [33m[2026-06-05T02:55:02.363] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:55:02] [INFO] [33m[2026-06-05T02:55:02.363] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:55:02] [INFO] [33m[2026-06-05T02:55:02.436] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:55:02] [INFO] [33m[2026-06-05T02:55:02.436] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:56:32] [INFO] [33m[2026-06-05T02:56:32.513] [INFO] - [connection closed][0m
-[2026-06-05 02:56:32] [INFO] [35m[2026-06-05T02:56:32.514] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:56:32] [ERROR] {}
-[2026-06-05 02:56:33] [INFO] [33m[2026-06-05T02:56:33.527] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:56:33] [INFO] [35m[2026-06-05T02:56:33.528] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:56:33] [INFO] [33m[2026-06-05T02:56:33.528] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:56:33] [INFO] [33m[2026-06-05T02:56:33.529] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:56:33] [INFO] [33m[2026-06-05T02:56:33.675] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:56:33] [INFO] [33m[2026-06-05T02:56:33.675] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:58:03] [INFO] [33m[2026-06-05T02:58:03.767] [INFO] - [connection closed][0m
-[2026-06-05 02:58:03] [INFO] [35m[2026-06-05T02:58:03.767] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:58:03] [ERROR] {}
-[2026-06-05 02:58:04] [INFO] [33m[2026-06-05T02:58:04.768] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:58:04] [INFO] [35m[2026-06-05T02:58:04.769] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:58:04] [INFO] [33m[2026-06-05T02:58:04.769] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:58:04] [INFO] [33m[2026-06-05T02:58:04.770] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:58:04] [INFO] [33m[2026-06-05T02:58:04.843] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:58:04] [INFO] [33m[2026-06-05T02:58:04.844] [INFO] - [Handling reconnect!][0m
-[2026-06-05 02:59:34] [INFO] [33m[2026-06-05T02:59:34.915] [INFO] - [connection closed][0m
-[2026-06-05 02:59:34] [INFO] [35m[2026-06-05T02:59:34.916] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 02:59:34] [ERROR] {}
-[2026-06-05 02:59:35] [INFO] [33m[2026-06-05T02:59:35.928] [INFO] - [Started reconnecting][0m
-[2026-06-05 02:59:35] [INFO] [35m[2026-06-05T02:59:35.928] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 02:59:35] [INFO] [33m[2026-06-05T02:59:35.929] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:59:35] [INFO] [33m[2026-06-05T02:59:35.929] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 02:59:36] [INFO] [33m[2026-06-05T02:59:36.021] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 02:59:36] [INFO] [33m[2026-06-05T02:59:36.022] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:01:06] [INFO] [33m[2026-06-05T03:01:06.115] [INFO] - [connection closed][0m
-[2026-06-05 03:01:06] [INFO] [35m[2026-06-05T03:01:06.115] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:01:06] [ERROR] {}
-[2026-06-05 03:01:07] [INFO] [33m[2026-06-05T03:01:07.131] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:01:07] [INFO] [35m[2026-06-05T03:01:07.131] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:01:07] [INFO] [33m[2026-06-05T03:01:07.132] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:01:07] [INFO] [33m[2026-06-05T03:01:07.132] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:01:07] [INFO] [33m[2026-06-05T03:01:07.226] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:01:07] [INFO] [33m[2026-06-05T03:01:07.227] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:02:37] [INFO] [33m[2026-06-05T03:02:37.322] [INFO] - [connection closed][0m
-[2026-06-05 03:02:37] [INFO] [35m[2026-06-05T03:02:37.322] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:02:37] [ERROR] {}
-[2026-06-05 03:02:38] [INFO] [33m[2026-06-05T03:02:38.338] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:02:38] [INFO] [35m[2026-06-05T03:02:38.339] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:02:38] [INFO] [33m[2026-06-05T03:02:38.339] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:02:38] [INFO] [33m[2026-06-05T03:02:38.340] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:02:38] [INFO] [33m[2026-06-05T03:02:38.417] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:02:38] [INFO] [33m[2026-06-05T03:02:38.417] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:04:08] [INFO] [33m[2026-06-05T03:04:08.494] [INFO] - [connection closed][0m
-[2026-06-05 03:04:08] [INFO] [35m[2026-06-05T03:04:08.494] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:04:08] [ERROR] {}
-[2026-06-05 03:04:09] [INFO] [33m[2026-06-05T03:04:09.504] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:04:09] [INFO] [35m[2026-06-05T03:04:09.504] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:04:09] [INFO] [33m[2026-06-05T03:04:09.505] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:04:09] [INFO] [33m[2026-06-05T03:04:09.505] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:04:09] [INFO] [33m[2026-06-05T03:04:09.578] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:04:09] [INFO] [33m[2026-06-05T03:04:09.578] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:05:39] [INFO] [33m[2026-06-05T03:05:39.650] [INFO] - [connection closed][0m
-[2026-06-05 03:05:39] [INFO] [35m[2026-06-05T03:05:39.650] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:05:39] [ERROR] {}
-[2026-06-05 03:05:40] [INFO] [33m[2026-06-05T03:05:40.657] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:05:40] [INFO] [35m[2026-06-05T03:05:40.658] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:05:40] [INFO] [33m[2026-06-05T03:05:40.658] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:05:40] [INFO] [33m[2026-06-05T03:05:40.659] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:05:40] [INFO] [33m[2026-06-05T03:05:40.751] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:05:40] [INFO] [33m[2026-06-05T03:05:40.752] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:07:10] [INFO] [33m[2026-06-05T03:07:10.843] [INFO] - [connection closed][0m
-[2026-06-05 03:07:10] [INFO] [35m[2026-06-05T03:07:10.844] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:07:10] [ERROR] {}
-[2026-06-05 03:07:11] [INFO] [33m[2026-06-05T03:07:11.851] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:07:11] [INFO] [35m[2026-06-05T03:07:11.851] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:07:11] [INFO] [33m[2026-06-05T03:07:11.852] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:07:11] [INFO] [33m[2026-06-05T03:07:11.852] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:07:11] [INFO] [33m[2026-06-05T03:07:11.946] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:07:11] [INFO] [33m[2026-06-05T03:07:11.946] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:08:42] [INFO] [33m[2026-06-05T03:08:42.020] [INFO] - [connection closed][0m
-[2026-06-05 03:08:42] [INFO] [35m[2026-06-05T03:08:42.021] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:08:42] [ERROR] {}
-[2026-06-05 03:08:43] [INFO] [33m[2026-06-05T03:08:43.037] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:08:43] [INFO] [35m[2026-06-05T03:08:43.037] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:08:43] [INFO] [33m[2026-06-05T03:08:43.038] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:08:43] [INFO] [33m[2026-06-05T03:08:43.038] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:08:43] [INFO] [33m[2026-06-05T03:08:43.111] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:08:43] [INFO] [33m[2026-06-05T03:08:43.112] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:10:13] [INFO] [33m[2026-06-05T03:10:13.183] [INFO] - [connection closed][0m
-[2026-06-05 03:10:13] [INFO] [35m[2026-06-05T03:10:13.183] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:10:13] [ERROR] {}
-[2026-06-05 03:10:14] [INFO] [33m[2026-06-05T03:10:14.198] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:10:14] [INFO] [35m[2026-06-05T03:10:14.198] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:10:14] [INFO] [33m[2026-06-05T03:10:14.199] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:10:14] [INFO] [33m[2026-06-05T03:10:14.199] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:10:14] [INFO] [33m[2026-06-05T03:10:14.292] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:10:14] [INFO] [33m[2026-06-05T03:10:14.293] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:11:44] [INFO] [33m[2026-06-05T03:11:44.386] [INFO] - [connection closed][0m
-[2026-06-05 03:11:44] [INFO] [35m[2026-06-05T03:11:44.387] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:11:44] [ERROR] {}
-[2026-06-05 03:11:45] [INFO] [33m[2026-06-05T03:11:45.394] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:11:45] [INFO] [35m[2026-06-05T03:11:45.395] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:11:45] [INFO] [33m[2026-06-05T03:11:45.395] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:11:45] [INFO] [33m[2026-06-05T03:11:45.395] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:11:45] [INFO] [33m[2026-06-05T03:11:45.467] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:11:45] [INFO] [33m[2026-06-05T03:11:45.467] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:13:15] [INFO] [33m[2026-06-05T03:13:15.539] [INFO] - [connection closed][0m
-[2026-06-05 03:13:15] [INFO] [35m[2026-06-05T03:13:15.540] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:13:15] [ERROR] {}
-[2026-06-05 03:13:16] [INFO] [33m[2026-06-05T03:13:16.551] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:13:16] [INFO] [35m[2026-06-05T03:13:16.552] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:13:16] [INFO] [33m[2026-06-05T03:13:16.552] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:13:16] [INFO] [33m[2026-06-05T03:13:16.553] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:13:16] [INFO] [33m[2026-06-05T03:13:16.627] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:13:16] [INFO] [33m[2026-06-05T03:13:16.627] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:14:46] [INFO] [33m[2026-06-05T03:14:46.700] [INFO] - [connection closed][0m
-[2026-06-05 03:14:46] [INFO] [35m[2026-06-05T03:14:46.701] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:14:46] [ERROR] {}
-[2026-06-05 03:14:47] [INFO] [33m[2026-06-05T03:14:47.702] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:14:47] [INFO] [35m[2026-06-05T03:14:47.703] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:14:47] [INFO] [33m[2026-06-05T03:14:47.703] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:14:47] [INFO] [33m[2026-06-05T03:14:47.703] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:14:47] [INFO] [33m[2026-06-05T03:14:47.775] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:14:47] [INFO] [33m[2026-06-05T03:14:47.776] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:16:17] [INFO] [33m[2026-06-05T03:16:17.847] [INFO] - [connection closed][0m
-[2026-06-05 03:16:17] [INFO] [35m[2026-06-05T03:16:17.848] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:16:17] [ERROR] {}
-[2026-06-05 03:16:18] [INFO] [33m[2026-06-05T03:16:18.855] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:16:18] [INFO] [35m[2026-06-05T03:16:18.855] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:16:18] [INFO] [33m[2026-06-05T03:16:18.856] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:16:18] [INFO] [33m[2026-06-05T03:16:18.856] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:16:18] [INFO] [33m[2026-06-05T03:16:18.934] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:16:18] [INFO] [33m[2026-06-05T03:16:18.935] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:17:49] [INFO] [33m[2026-06-05T03:17:49.008] [INFO] - [connection closed][0m
-[2026-06-05 03:17:49] [INFO] [35m[2026-06-05T03:17:49.009] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:17:49] [ERROR] {}
-[2026-06-05 03:17:50] [INFO] [33m[2026-06-05T03:17:50.013] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:17:50] [INFO] [35m[2026-06-05T03:17:50.013] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:17:50] [INFO] [33m[2026-06-05T03:17:50.014] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:17:50] [INFO] [33m[2026-06-05T03:17:50.014] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:17:50] [INFO] [33m[2026-06-05T03:17:50.088] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:17:50] [INFO] [33m[2026-06-05T03:17:50.089] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:19:20] [INFO] [33m[2026-06-05T03:19:20.162] [INFO] - [connection closed][0m
-[2026-06-05 03:19:20] [INFO] [35m[2026-06-05T03:19:20.162] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:19:20] [ERROR] {}
-[2026-06-05 03:19:21] [INFO] [33m[2026-06-05T03:19:21.168] [INFO] - [Started reconnecting][0m
-[2026-06-05 03:19:21] [INFO] [35m[2026-06-05T03:19:21.169] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 03:19:21] [INFO] [33m[2026-06-05T03:19:21.169] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:19:21] [INFO] [33m[2026-06-05T03:19:21.170] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 03:19:21] [INFO] [33m[2026-06-05T03:19:21.243] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 03:19:21] [INFO] [33m[2026-06-05T03:19:21.244] [INFO] - [Handling reconnect!][0m
-[2026-06-05 03:20:51] [INFO] [33m[2026-06-05T03:20:51.317] [INFO] - [connection closed][0m
-[2026-06-05 03:20:51] [INFO] [35m[2026-06-05T03:20:51.318] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 03:20:51] [ERROR] {}
 [2026-06-05 03:20:52] [INFO] [33m[2026-06-05T03:20:52.327] [INFO] - [Started reconnecting][0m
 [2026-06-05 03:20:52] [INFO] [35m[2026-06-05T03:20:52.328] [WARN] - [[Reconnect] Closing current connection...][0m
 [2026-06-05 03:20:52] [INFO] [33m[2026-06-05T03:20:52.328] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
@@ -2504,3 +1975,525 @@
 [2026-06-05 08:07:52] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
 [2026-06-05 08:07:52] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
 [2026-06-05 08:07:52] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-05 08:07:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-05 08:07:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-05 08:07:55] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-05 08:07:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
+[2026-06-05 08:07:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
+[2026-06-05 08:07:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
+[2026-06-05 08:07:55] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
+[2026-06-05 08:07:55] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
+[2026-06-05 08:07:55] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
+[2026-06-05 08:07:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.uno (query: "pirlo tv")
+[2026-06-05 08:07:55] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-05 08:07:57] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
+[2026-06-05 08:07:57] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
+[2026-06-05 08:07:57] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
+[2026-06-05 08:07:57] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
+[2026-06-05 08:07:59] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://attitudes-onto-certified-whole.trycloudflare.com
+[2026-06-05 08:07:59] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 19
+[2026-06-05 08:07:59] [INFO] [SportsScraper] Escaneando un total de 24 espejos en paralelo...
+[2026-06-05 08:08:00] [ERROR] (node:17512) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-06-05 08:08:00] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
+[2026-06-05 08:08:00] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
+[2026-06-05 08:08:00] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: getaddrinfo ENOTFOUND www.pirlotv3.sale)
+[2026-06-05 08:08:00] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
+[2026-06-05 08:08:00] [INFO] [SportsScraper] Candidato rechazado: https://pirlotv.uno (Solo 0 partidos)
+[2026-06-05 08:08:00] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
+[2026-06-05 08:08:01] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
+[2026-06-05 08:08:01] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 401)
+[2026-06-05 08:08:01] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
+[2026-06-05 08:08:01] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
+[2026-06-05 08:08:01] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
+[2026-06-05 08:08:01] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://www.rojadirectatvmas.com (37 partidos encontrados)
+[2026-06-05 08:08:01] [INFO] [SportsWorker] Buscando logotipos para 37 partidos...
+[2026-06-05 08:08:01] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
+[2026-06-05 08:08:01] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo EAI_AGAIN pirlotv3.pl)
+[2026-06-05 08:08:01] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
+[2026-06-05 08:08:01] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectahd.dev (Solo 38 partidos)
+[2026-06-05 08:08:01] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectahd.vip (Solo 38 partidos)
+[2026-06-05 08:08:03] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
+[2026-06-05 08:08:03] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://www.rojadirectatvmas.com
+[2026-06-05 08:08:03] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
+[2026-06-05 08:08:03] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
+[2026-06-05 08:08:03] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 17 partidos)
+[2026-06-05 08:08:03] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 17 partidos)
+[2026-06-05 08:08:03] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
+[2026-06-05 08:08:10] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-05 08:08:13] [INFO] [DB] SQLite inicializado.
+[2026-06-05 08:08:13] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-05 08:08:13] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-05 08:08:13] [INFO] [33m[2026-06-05T08:08:13.547] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-05 08:08:13] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-05 08:08:13] [INFO] [33m[2026-06-05T08:08:13.558] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:08:13] [INFO] [33m[2026-06-05T08:08:13.639] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:08:13] [INFO] [33m[2026-06-05T08:08:13.641] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-05 08:08:13] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
+[2026-06-05 08:08:13] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-05 08:08:13] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-05 08:08:13] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-05 08:08:15] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-05 08:08:18] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-05 08:08:18] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-05 08:08:18] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-05 08:08:18] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-05 08:08:18] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-05 08:08:18] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-05 08:08:18] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-05 08:08:18] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-05 08:08:18] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-05 08:08:18] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
+[2026-06-05 08:08:21] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-05 08:08:21] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-05 08:08:21] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-05 08:08:21] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
+[2026-06-05 08:08:21] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
+[2026-06-05 08:08:21] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
+[2026-06-05 08:08:21] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
+[2026-06-05 08:08:21] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
+[2026-06-05 08:08:21] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
+[2026-06-05 08:08:21] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.uno (query: "pirlo tv")
+[2026-06-05 08:08:21] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-05 08:08:54] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-05 08:08:56] [INFO] [DB] SQLite inicializado.
+[2026-06-05 08:08:56] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-05 08:08:56] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-05 08:08:56] [INFO] [33m[2026-06-05T08:08:56.367] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-05 08:08:56] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-05 08:08:56] [INFO] [33m[2026-06-05T08:08:56.373] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:08:56] [INFO] [33m[2026-06-05T08:08:56.473] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:08:56] [INFO] [33m[2026-06-05T08:08:56.475] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-05 08:08:56] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
+[2026-06-05 08:08:56] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-05 08:08:56] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-05 08:08:56] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-05 08:08:58] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-05 08:09:00] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-05 08:09:00] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-05 08:09:00] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-05 08:09:00] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-05 08:09:00] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-05 08:09:00] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-05 08:09:00] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-05 08:09:01] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-05 08:09:01] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-05 08:09:01] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
+[2026-06-05 08:09:03] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-05 08:09:03] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-05 08:09:03] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-05 08:09:03] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
+[2026-06-05 08:09:03] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
+[2026-06-05 08:09:03] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
+[2026-06-05 08:09:03] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
+[2026-06-05 08:09:03] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
+[2026-06-05 08:09:03] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
+[2026-06-05 08:09:03] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.uno (query: "pirlo tv")
+[2026-06-05 08:09:03] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-05 08:09:04] [ERROR] [GitHub Pages] Error al publicar automáticamente: Command failed: git push origin main
+To https://github.com/ChronosBVRX/Vision-.git
+ ! [rejected]        main -> main (fetch first)
+error: failed to push some refs to 'https://github.com/ChronosBVRX/Vision-.git'
+hint: Updates were rejected because the remote contains work that you do not
+hint: have locally. This is usually caused by another repository pushing to
+hint: the same ref. If you want to integrate the remote changes, use
+hint: 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+
+[2026-06-05 08:09:05] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
+[2026-06-05 08:09:05] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
+[2026-06-05 08:09:05] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
+[2026-06-05 08:09:05] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 19
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Escaneando un total de 24 espejos en paralelo...
+[2026-06-05 08:09:06] [ERROR] (node:10780) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: getaddrinfo ENOTFOUND www.pirlotv3.sale)
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://pirlotv.uno (Solo 0 partidos)
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 525)
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
+[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
+[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
+[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
+[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
+[2026-06-05 08:09:07] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://www.rojadirectahd.dev (38 partidos encontrados)
+[2026-06-05 08:09:07] [INFO] [SportsWorker] Buscando logotipos para 38 partidos...
+[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectahd.vip (Solo 38 partidos)
+[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo EAI_AGAIN pirlotv3.pl)
+[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectatvmas.com (Solo 37 partidos)
+[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
+[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 17 partidos)
+[2026-06-05 08:09:08] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://www.rojadirectahd.dev
+[2026-06-05 08:09:08] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 17 partidos)
+[2026-06-05 08:09:08] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
+[2026-06-05 08:09:09] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
+[2026-06-05 08:09:10] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
+[2026-06-05 08:09:37] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-05 08:09:41] [INFO] [DB] SQLite inicializado.
+[2026-06-05 08:09:41] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-05 08:09:41] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-05 08:09:41] [INFO] [33m[2026-06-05T08:09:41.537] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-05 08:09:41] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-05 08:09:41] [INFO] [33m[2026-06-05T08:09:41.548] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:09:41] [INFO] [33m[2026-06-05T08:09:41.633] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:09:41] [INFO] [33m[2026-06-05T08:09:41.637] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-05 08:09:41] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
+[2026-06-05 08:09:41] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-05 08:09:41] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-05 08:09:41] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-05 08:09:43] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-05 08:09:46] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-05 08:09:46] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-05 08:09:46] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-05 08:09:46] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-05 08:09:46] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-05 08:09:46] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-05 08:09:46] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-05 08:09:46] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-05 08:09:46] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-05 08:09:46] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
+[2026-06-05 08:10:35] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-05 08:10:38] [INFO] [DB] SQLite inicializado.
+[2026-06-05 08:10:38] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-05 08:10:38] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-05 08:10:38] [INFO] [33m[2026-06-05T08:10:38.869] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-05 08:10:38] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-05 08:10:38] [INFO] [33m[2026-06-05T08:10:38.881] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:10:38] [INFO] [33m[2026-06-05T08:10:38.979] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:10:39] [INFO] [33m[2026-06-05T08:10:39.008] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-05 08:10:39] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
+[2026-06-05 08:10:39] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-05 08:10:39] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-05 08:10:39] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-05 08:10:40] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-05 08:10:43] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-05 08:10:43] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-05 08:10:43] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-05 08:10:43] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-05 08:10:43] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-05 08:10:43] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-05 08:10:43] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-05 08:10:43] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-05 08:10:43] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-05 08:10:44] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
+[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
+[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
+[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
+[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
+[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
+[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
+[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.uno (query: "pirlo tv")
+[2026-06-05 08:10:46] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-05 08:19:50] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-05 08:19:52] [INFO] [DB] SQLite inicializado.
+[2026-06-05 08:19:52] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-05 08:19:52] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-05 08:19:52] [INFO] [33m[2026-06-05T08:19:52.992] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-05 08:19:52] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-05 08:19:52] [INFO] [33m[2026-06-05T08:19:52.999] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:19:53] [INFO] [31m[2026-06-05T08:19:53.004] [ERROR] - [WebSocket connection failed attempt: 1][0m
+[2026-06-05 08:19:53] [ERROR] {"errno":-4062,"code":"ENETUNREACH","syscall":"connect","address":"149.154.175.52","port":80}
+[2026-06-05 08:19:54] [INFO] [33m[2026-06-05T08:19:54.007] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:19:54] [INFO] [31m[2026-06-05T08:19:54.009] [ERROR] - [WebSocket connection failed attempt: 2][0m
+[2026-06-05 08:19:54] [ERROR] {"errno":-4062,"code":"ENETUNREACH","syscall":"connect","address":"149.154.175.52","port":80}
+[2026-06-05 08:19:55] [INFO] [33m[2026-06-05T08:19:55.023] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:19:55] [INFO] [31m[2026-06-05T08:19:55.025] [ERROR] - [WebSocket connection failed attempt: 3][0m
+[2026-06-05 08:19:55] [ERROR] {"errno":-4062,"code":"ENETUNREACH","syscall":"connect","address":"149.154.175.52","port":80}
+[2026-06-05 08:19:56] [INFO] [33m[2026-06-05T08:19:56.036] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:19:56] [INFO] [31m[2026-06-05T08:19:56.039] [ERROR] - [WebSocket connection failed attempt: 4][0m
+[2026-06-05 08:19:56] [ERROR] {"errno":-4062,"code":"ENETUNREACH","syscall":"connect","address":"149.154.175.52","port":80}
+[2026-06-05 08:19:57] [INFO] [33m[2026-06-05T08:19:57.224] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:19:57] [INFO] [31m[2026-06-05T08:19:57.333] [ERROR] - [WebSocket connection failed attempt: 5][0m
+[2026-06-05 08:19:57] [ERROR] {"errno":-4062,"code":"ENETUNREACH","syscall":"connect","address":"149.154.175.52","port":80}
+[2026-06-05 08:19:57] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-05 08:19:57] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-05 08:19:58] [INFO] [TelegramClient] ¡Conectado exitosamente!
+[2026-06-05 08:19:58] [INFO] [TelegramSync] Buscando videos en el canal: -1001813174603
+[2026-06-05 08:19:58] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-05 08:19:58] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-05 08:19:58] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-05 08:20:01] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-05 08:20:01] [ERROR] [SportsScraper] Error buscando "rojadirecta": net::ERR_NAME_NOT_RESOLVED at https://search.brave.com/search?q=rojadirecta
+[2026-06-05 08:20:01] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-05 08:20:01] [ERROR] [SportsScraper] Error buscando "pirlo tv": net::ERR_NAME_NOT_RESOLVED at https://search.brave.com/search?q=pirlo%20tv
+[2026-06-05 08:20:01] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-05 08:20:01] [ERROR] [SportsScraper] Error buscando "tarjeta roja": net::ERR_NAME_NOT_RESOLVED at https://search.brave.com/search?q=tarjeta%20roja
+[2026-06-05 08:20:01] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 0
+[2026-06-05 08:20:01] [INFO] [SportsScraper] Escaneando un total de 6 espejos en paralelo...
+[2026-06-05 08:20:02] [ERROR] (node:10972) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-06-05 08:20:02] [INFO] [SportsScraper] Candidato caido/invalido: https://www.rojadirecta.lt (Failed to scrape matches from https://www.rojadirecta.lt: getaddrinfo ENOTFOUND www.rojadirecta.lt)
+[2026-06-05 08:20:02] [INFO] [SportsScraper] Candidato caido/invalido: https://www.rojadirectatvmas.com (Failed to scrape matches from https://www.rojadirectatvmas.com: getaddrinfo ENOTFOUND www.rojadirectatvmas.com)
+[2026-06-05 08:20:02] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvhd.re (Failed to scrape matches from https://www.pirlotvhd.re: getaddrinfo ENOTFOUND www.pirlotvhd.re)
+[2026-06-05 08:20:02] [INFO] [SportsScraper] Candidato caido/invalido: https://www.tarjetarojatv.net (Failed to scrape matches from https://www.tarjetarojatv.net: getaddrinfo ENOTFOUND www.tarjetarojatv.net)
+[2026-06-05 08:20:02] [INFO] [SportsScraper] Candidato caido/invalido: https://www.rojadirecta.watch (Failed to scrape matches from https://www.rojadirecta.watch: getaddrinfo ENOTFOUND www.rojadirecta.watch)
+[2026-06-05 08:20:02] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv.us (Failed to scrape matches from https://www.pirlotv.us: getaddrinfo ENOTFOUND www.pirlotv.us)
+[2026-06-05 08:20:02] [ERROR] [SportsWorker] Error al actualizar cache de deportes: No se encontro ningun espejo de Rojadirecta activo o con partidos validos online.
+[2026-06-05 08:20:03] [INFO] [GitHub Pages] Nuevo túnel detectado: https://api.trycloudflare.com. Actualizando redirect...
+[2026-06-05 08:20:04] [ERROR] [GitHub Pages] Error al publicar automáticamente: Command failed: git push origin main
+fatal: unable to access 'https://github.com/ChronosBVRX/Vision-.git/': Could not resolve host: github.com
+
+[2026-06-05 08:20:37] [ERROR] {}
+[2026-06-05 08:22:33] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-05 08:22:35] [INFO] [DB] SQLite inicializado.
+[2026-06-05 08:22:35] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-05 08:22:35] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-05 08:22:35] [INFO] [33m[2026-06-05T08:22:35.534] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-05 08:22:35] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-05 08:22:35] [INFO] [33m[2026-06-05T08:22:35.542] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:22:35] [INFO] [33m[2026-06-05T08:22:35.623] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:22:35] [INFO] [33m[2026-06-05T08:22:35.625] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-05 08:22:35] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
+[2026-06-05 08:22:35] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-05 08:22:35] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-05 08:22:35] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-05 08:22:36] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-05 08:22:39] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-05 08:22:39] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-05 08:22:39] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-05 08:22:39] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-05 08:22:39] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-05 08:22:39] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-05 08:22:39] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-05 08:22:40] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-05 08:22:40] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-05 08:22:40] [INFO] [GitHub Pages] Nuevo túnel detectado: https://api.trycloudflare.com. Actualizando redirect...
+[2026-06-05 08:22:41] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-05 08:22:41] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-05 08:22:41] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-05 08:22:41] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
+[2026-06-05 08:22:41] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
+[2026-06-05 08:22:41] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
+[2026-06-05 08:22:41] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
+[2026-06-05 08:22:41] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
+[2026-06-05 08:22:41] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
+[2026-06-05 08:22:41] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.info (query: "pirlo tv")
+[2026-06-05 08:22:41] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-05 08:22:43] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://api.trycloudflare.com
+[2026-06-05 08:22:43] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
+[2026-06-05 08:22:43] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
+[2026-06-05 08:22:43] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
+[2026-06-05 08:22:43] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
+[2026-06-05 08:22:44] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 19
+[2026-06-05 08:22:44] [INFO] [SportsScraper] Escaneando un total de 24 espejos en paralelo...
+[2026-06-05 08:22:44] [ERROR] (node:14812) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-06-05 08:22:44] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
+[2026-06-05 08:22:44] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: getaddrinfo ENOTFOUND www.pirlotv3.sale)
+[2026-06-05 08:22:44] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
+[2026-06-05 08:22:44] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
+[2026-06-05 08:22:44] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
+[2026-06-05 08:22:45] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 401)
+[2026-06-05 08:22:45] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
+[2026-06-05 08:22:45] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
+[2026-06-05 08:22:45] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
+[2026-06-05 08:22:45] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
+[2026-06-05 08:22:45] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
+[2026-06-05 08:22:45] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://www.rojadirectatvmas.com (37 partidos encontrados)
+[2026-06-05 08:22:45] [INFO] [SportsWorker] Buscando logotipos para 37 partidos...
+[2026-06-05 08:22:45] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
+[2026-06-05 08:22:45] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
+[2026-06-05 08:22:45] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectahd.vip (Solo 38 partidos)
+[2026-06-05 08:22:45] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectahd.dev (Solo 38 partidos)
+[2026-06-05 08:22:45] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
+[2026-06-05 08:22:46] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
+[2026-06-05 08:22:46] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 17 partidos)
+[2026-06-05 08:22:46] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://www.rojadirectatvmas.com
+[2026-06-05 08:22:46] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.info (Solo 38 partidos)
+[2026-06-05 08:22:46] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 17 partidos)
+[2026-06-05 08:22:46] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo EAI_AGAIN pirlotv3.pl)
+[2026-06-05 08:22:47] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
+[2026-06-05 08:22:49] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
+[2026-06-05 08:24:07] [INFO] [33m[2026-06-05T08:24:07.394] [INFO] - [connection closed][0m
+[2026-06-05 08:24:07] [INFO] [35m[2026-06-05T08:24:07.396] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 08:24:07] [ERROR] {}
+[2026-06-05 08:24:08] [INFO] [33m[2026-06-05T08:24:08.401] [INFO] - [Started reconnecting][0m
+[2026-06-05 08:24:08] [INFO] [35m[2026-06-05T08:24:08.402] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 08:24:08] [INFO] [33m[2026-06-05T08:24:08.404] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:24:08] [INFO] [33m[2026-06-05T08:24:08.405] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:24:08] [INFO] [33m[2026-06-05T08:24:08.500] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:24:08] [INFO] [33m[2026-06-05T08:24:08.501] [INFO] - [Handling reconnect!][0m
+[2026-06-05 08:25:19] [INFO] [API Sync] Iniciando actualización mediante la tarea programada VisionRepoAutoPull...
+[2026-06-05 08:25:19] [INFO] [API Sync] Tarea programada lanzada con éxito.
+[2026-06-05 08:25:35] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-05 08:25:37] [INFO] [DB] SQLite inicializado.
+[2026-06-05 08:25:37] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-05 08:25:37] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-05 08:25:37] [INFO] [33m[2026-06-05T08:25:37.893] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-05 08:25:37] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-05 08:25:37] [INFO] [33m[2026-06-05T08:25:37.900] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:25:38] [INFO] [33m[2026-06-05T08:25:38.001] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:25:38] [INFO] [33m[2026-06-05T08:25:38.003] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-05 08:25:38] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
+[2026-06-05 08:25:38] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-05 08:25:38] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-05 08:25:38] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-05 08:25:39] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-05 08:25:41] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-05 08:25:41] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-05 08:25:41] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-05 08:25:41] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-05 08:25:41] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-05 08:25:41] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-05 08:25:41] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-05 08:25:42] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-05 08:25:42] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-05 08:25:43] [INFO] [GitHub Pages] Nuevo túnel detectado: https://api.trycloudflare.com. Actualizando redirect...
+[2026-06-05 08:25:43] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-05 08:25:43] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-05 08:25:43] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-05 08:25:43] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
+[2026-06-05 08:25:43] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
+[2026-06-05 08:25:43] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
+[2026-06-05 08:25:43] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
+[2026-06-05 08:25:43] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
+[2026-06-05 08:25:43] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.info (query: "pirlo tv")
+[2026-06-05 08:25:43] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-05 08:25:46] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
+[2026-06-05 08:25:46] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
+[2026-06-05 08:25:46] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
+[2026-06-05 08:25:46] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
+[2026-06-05 08:25:47] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://api.trycloudflare.com
+[2026-06-05 08:25:47] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 18
+[2026-06-05 08:25:47] [INFO] [SportsScraper] Escaneando un total de 23 espejos en paralelo...
+[2026-06-05 08:25:47] [ERROR] (node:16600) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-06-05 08:25:47] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
+[2026-06-05 08:25:47] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
+[2026-06-05 08:25:47] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
+[2026-06-05 08:25:47] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
+[2026-06-05 08:25:47] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 401)
+[2026-06-05 08:25:47] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
+[2026-06-05 08:25:47] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
+[2026-06-05 08:25:47] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
+[2026-06-05 08:25:48] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
+[2026-06-05 08:25:48] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
+[2026-06-05 08:25:48] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
+[2026-06-05 08:25:48] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
+[2026-06-05 08:25:48] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo EAI_AGAIN pirlotv3.pl)
+[2026-06-05 08:25:48] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://rojadirectahd.vip (38 partidos encontrados)
+[2026-06-05 08:25:48] [INFO] [SportsWorker] Buscando logotipos para 38 partidos...
+[2026-06-05 08:25:48] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectahd.dev (Solo 38 partidos)
+[2026-06-05 08:25:48] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectatvmas.com (Solo 37 partidos)
+[2026-06-05 08:25:49] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
+[2026-06-05 08:25:49] [INFO] [API Tunnel] Reiniciando túnel de Cloudflare...
+[2026-06-05 08:25:49] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 17 partidos)
+[2026-06-05 08:25:49] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 17 partidos)
+[2026-06-05 08:25:49] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://rojadirectahd.vip
+[2026-06-05 08:25:49] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
+[2026-06-05 08:25:50] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
+[2026-06-05 08:25:50] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.info (Solo 38 partidos)
+[2026-06-05 08:25:51] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
+[2026-06-05 08:25:58] [INFO] [GitHub Pages] Nuevo túnel detectado: https://role-chemicals-women-hidden.trycloudflare.com. Actualizando redirect...
+[2026-06-05 08:26:01] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://role-chemicals-women-hidden.trycloudflare.com
+[2026-06-05 08:26:11] [INFO] [API Publish Tunnel] Publicando enlace manualmente: https://role-chemicals-women-hidden.trycloudflare.com
+[2026-06-05 08:27:09] [INFO] [33m[2026-06-05T08:27:09.397] [INFO] - [connection closed][0m
+[2026-06-05 08:27:09] [INFO] [35m[2026-06-05T08:27:09.398] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 08:27:09] [ERROR] {}
+[2026-06-05 08:27:10] [INFO] [33m[2026-06-05T08:27:10.411] [INFO] - [Started reconnecting][0m
+[2026-06-05 08:27:10] [INFO] [35m[2026-06-05T08:27:10.413] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 08:27:10] [INFO] [33m[2026-06-05T08:27:10.418] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:27:10] [INFO] [33m[2026-06-05T08:27:10.420] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:27:10] [INFO] [33m[2026-06-05T08:27:10.520] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:27:10] [INFO] [33m[2026-06-05T08:27:10.522] [INFO] - [Handling reconnect!][0m
+[2026-06-05 08:27:28] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "catalog_poseidonhd_movie_elagentesecreto" (Idioma pref: auto, Servidores excluidos: [])
+[2026-06-05 08:27:28] [INFO] [Resolver] Película encontrada: "El agente secreto"
+[2026-06-05 08:27:28] [INFO] [MoviePageParser] 🔍 Analizando página externa de PoseidonHD: https://www.poseidonhd2.co/pelicula/1220564/el-agente-secreto
+[2026-06-05 08:27:28] [INFO] [BrowserFetcher] 🌐 Cargando página con Playwright para evadir antibot: https://www.poseidonhd2.co/pelicula/1220564/el-agente-secreto
+[2026-06-05 08:27:35] [INFO] [BrowserFetcher] ✅ HTML cargado exitosamente. Longitud: 106385 bytes.
+[2026-06-05 08:27:35] [INFO] [Resolver] Página de detalle scrapeada: 10 opciones extraídas de https://www.poseidonhd2.co/pelicula/1220564/el-agente-secreto
+[2026-06-05 08:27:35] [INFO] [Resolver] Total de opciones filtradas a evaluar: 10
+[2026-06-05 08:27:35] [INFO] [Resolver] Lanzando 3 opciones en paralelo (max 3)...
+[2026-06-05 08:27:35] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-05 08:27:35] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j0VW56qNqDRQwSpaNLkqvjFVzeV0N49HgffJ0ecpLhEn
+[2026-06-05 08:27:35] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j0VW56qNqDRQwSpaNLkqvjFVzeV0N49HgffJ0ecpLhEn
+[2026-06-05 08:27:35] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-05 08:27:35] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=nvSrqGY5gls.ZEL93nL9MLT_Ae4cunYH0ZwoGtZXwBs-
+[2026-06-05 08:27:35] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=nvSrqGY5gls.ZEL93nL9MLT_Ae4cunYH0ZwoGtZXwBs-
+[2026-06-05 08:27:35] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-05 08:27:35] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0ILmvsRqSBpDf54WqQLYrCkbUZb3MVAxCrtKoYFw95o2
+[2026-06-05 08:27:35] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0ILmvsRqSBpDf54WqQLYrCkbUZb3MVAxCrtKoYFw95o2
+[2026-06-05 08:27:44] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
+[2026-06-05 08:27:44] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
+[2026-06-05 08:27:44] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
+[2026-06-05 08:27:44] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
+[2026-06-05 08:27:44] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
+[2026-06-05 08:27:44] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
+[2026-06-05 08:27:45] [INFO] [BrowserResolver] 🚫 Anuncio ignorado: https://amd-cdn-1.ffb7df5a878b59e42e257c042f54bed2.com/content/stream/agl/1xbet_mx_1920x1080_rituals.mp4
+[2026-06-05 08:27:45] [INFO] [BrowserResolver] 🚫 Anuncio ignorado: https://amd-cdn-1.ffb7df5a878b59e42e257c042f54bed2.com/content/stream/agl/pinup_preroll_rocketman_1920h1080_dinero_mx.mp4
+[2026-06-05 08:27:45] [INFO] [BrowserResolver] 🚫 Anuncio ignorado: https://amd-cdn-1.ffb7df5a878b59e42e257c042f54bed2.com/content/stream/agl/pinup_preroll_rocketman_1920h1080_dinero_mx.mp4
+[2026-06-05 08:27:45] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
+[2026-06-05 08:27:45] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
+[2026-06-05 08:27:45] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
+[2026-06-05 08:27:48] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/4r-rL4ModyVaJ6aVTA70TQ/hjkrhuihghfvu/1780712866/41399774/master.m3u8
+[2026-06-05 08:27:48] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/4r-rL4ModyVaJ6aVTA70TQ/hjkrhuihghfvu/1780712866/41399774/master.m3u8
+[2026-06-05 08:27:48] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://callistanise.com/stream/4r-rL4ModyVaJ6aVTA70TQ/hjkrhuihghfvu/1780712866/41399774/master.m3u8
+[2026-06-05 08:27:48] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://playnixes.com/stream/KZbDyCZ0yI6vextJIwNRFw/kjhhiuahiuhgihdf/1780712866/72226535/master.m3u8
+[2026-06-05 08:27:48] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://playnixes.com/stream/KZbDyCZ0yI6vextJIwNRFw/kjhhiuahiuhgihdf/1780712866/72226535/master.m3u8
+[2026-06-05 08:27:49] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://playnixes.com/stream/KZbDyCZ0yI6vextJIwNRFw/kjhhiuahiuhgihdf/1780712866/72226535/master.m3u8
+[2026-06-05 08:27:49] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://callistanise.com/stream/4r-rL4ModyVaJ6aVTA70TQ/hjkrhuihghfvu/1780712866/41399774/master.m3u8. Validando conectividad...
+[2026-06-05 08:27:49] [INFO] [SourceValidator] Probando HEAD para: https://callistanise.com/stream/4r-rL4ModyVaJ6aVTA70TQ/hjkrhuihghfvu/1780712866/41399774/master.m3u8
+[2026-06-05 08:27:49] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://playnixes.com/stream/KZbDyCZ0yI6vextJIwNRFw/kjhhiuahiuhgihdf/1780712866/72226535/master.m3u8. Validando conectividad...
+[2026-06-05 08:27:49] [INFO] [SourceValidator] Probando HEAD para: https://playnixes.com/stream/KZbDyCZ0yI6vextJIwNRFw/kjhhiuahiuhgihdf/1780712866/72226535/master.m3u8
+[2026-06-05 08:27:50] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://callistanise.com/stream/4r-rL4ModyVaJ6aVTA70TQ/hjkrhuihghfvu/1780712866/41399774/master.m3u8
+[2026-06-05 08:27:50] [INFO] [Resolver] ✅ Primer éxito paralelo: player -> https://callistanise.com/stream/4r-rL4ModyVaJ6aVTA70TQ/hjkrhuihghfvu/1780712866/41399774/master.m3u8
+[2026-06-05 08:27:50] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://playnixes.com/stream/KZbDyCZ0yI6vextJIwNRFw/kjhhiuahiuhgihdf/1780712866/72226535/master.m3u8
+[2026-06-05 08:27:55] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/10/11338/2jai45200efr_x/master.m3u8?t=vDQD1S02HGZ59ucNeHZLcFo_SRNs3P0aNnFAesQicr8&s=1780669673&e=10800&f=56694467&srv=1070&asn=8151&sp=5500&p=0
+[2026-06-05 08:27:55] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/10/11338/2jai45200efr_x/master.m3u8?t=vDQD1S02HGZ59ucNeHZLcFo_SRNs3P0aNnFAesQicr8&s=1780669673&e=10800&f=56694467&srv=1070&asn=8151&sp=5500&p=0
+[2026-06-05 08:27:55] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/10/11338/2jai45200efr_x/master.m3u8?t=vDQD1S02HGZ59ucNeHZLcFo_SRNs3P0aNnFAesQicr8&s=1780669673&e=10800&f=56694467&srv=1070&asn=8151&sp=5500&p=0. Validando conectividad...
+[2026-06-05 08:27:55] [INFO] [SourceValidator] Probando HEAD para: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/10/11338/2jai45200efr_x/master.m3u8?t=vDQD1S02HGZ59ucNeHZLcFo_SRNs3P0aNnFAesQicr8&s=1780669673&e=10800&f=56694467&srv=1070&asn=8151&sp=5500&p=0
+[2026-06-05 08:27:56] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/10/11338/2jai45200efr_x/master.m3u8?t=vDQD1S02HGZ59ucNeHZLcFo_SRNs3P0aNnFAesQicr8&s=1780669673&e=10800&f=56694467&srv=1070&asn=8151&sp=5500&p=0
+[2026-06-05 08:28:40] [INFO] [33m[2026-06-05T08:28:40.598] [INFO] - [connection closed][0m
+[2026-06-05 08:28:40] [INFO] [35m[2026-06-05T08:28:40.598] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 08:28:40] [ERROR] {}
+[2026-06-05 08:28:41] [INFO] [33m[2026-06-05T08:28:41.605] [INFO] - [Started reconnecting][0m
+[2026-06-05 08:28:41] [INFO] [35m[2026-06-05T08:28:41.606] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 08:28:41] [INFO] [33m[2026-06-05T08:28:41.607] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:28:41] [INFO] [33m[2026-06-05T08:28:41.608] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:28:41] [INFO] [33m[2026-06-05T08:28:41.701] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:28:41] [INFO] [33m[2026-06-05T08:28:41.702] [INFO] - [Handling reconnect!][0m
+[2026-06-05 08:30:11] [INFO] [33m[2026-06-05T08:30:11.809] [INFO] - [connection closed][0m
+[2026-06-05 08:30:11] [INFO] [35m[2026-06-05T08:30:11.810] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 08:30:11] [ERROR] {}
+[2026-06-05 08:30:12] [INFO] [33m[2026-06-05T08:30:12.813] [INFO] - [Started reconnecting][0m
+[2026-06-05 08:30:12] [INFO] [35m[2026-06-05T08:30:12.814] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 08:30:12] [INFO] [33m[2026-06-05T08:30:12.815] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:30:12] [INFO] [33m[2026-06-05T08:30:12.816] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:30:12] [INFO] [33m[2026-06-05T08:30:12.894] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:30:12] [INFO] [33m[2026-06-05T08:30:12.895] [INFO] - [Handling reconnect!][0m
+[2026-06-05 08:31:42] [INFO] [33m[2026-06-05T08:31:42.987] [INFO] - [connection closed][0m
+[2026-06-05 08:31:42] [INFO] [35m[2026-06-05T08:31:42.987] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 08:31:42] [ERROR] {}
+[2026-06-05 08:31:43] [INFO] [33m[2026-06-05T08:31:43.992] [INFO] - [Started reconnecting][0m
+[2026-06-05 08:31:43] [INFO] [35m[2026-06-05T08:31:43.993] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 08:31:43] [INFO] [33m[2026-06-05T08:31:43.995] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:31:43] [INFO] [33m[2026-06-05T08:31:43.996] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:31:44] [INFO] [33m[2026-06-05T08:31:44.070] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:31:44] [INFO] [33m[2026-06-05T08:31:44.071] [INFO] - [Handling reconnect!][0m
+[2026-06-05 08:33:14] [INFO] [33m[2026-06-05T08:33:14.144] [INFO] - [connection closed][0m
+[2026-06-05 08:33:14] [INFO] [35m[2026-06-05T08:33:14.145] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 08:33:14] [ERROR] {}
+[2026-06-05 08:33:15] [INFO] [33m[2026-06-05T08:33:15.162] [INFO] - [Started reconnecting][0m
+[2026-06-05 08:33:15] [INFO] [35m[2026-06-05T08:33:15.163] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 08:33:15] [INFO] [33m[2026-06-05T08:33:15.164] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:33:15] [INFO] [33m[2026-06-05T08:33:15.169] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:33:15] [INFO] [33m[2026-06-05T08:33:15.244] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:33:15] [INFO] [33m[2026-06-05T08:33:15.245] [INFO] - [Handling reconnect!][0m
+[2026-06-05 08:34:45] [INFO] [33m[2026-06-05T08:34:45.324] [INFO] - [connection closed][0m
+[2026-06-05 08:34:45] [INFO] [35m[2026-06-05T08:34:45.325] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 08:34:45] [ERROR] {}
+[2026-06-05 08:34:46] [INFO] [33m[2026-06-05T08:34:46.335] [INFO] - [Started reconnecting][0m
+[2026-06-05 08:34:46] [INFO] [35m[2026-06-05T08:34:46.336] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 08:34:46] [INFO] [33m[2026-06-05T08:34:46.338] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:34:46] [INFO] [33m[2026-06-05T08:34:46.340] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:34:46] [INFO] [33m[2026-06-05T08:34:46.416] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:34:46] [INFO] [33m[2026-06-05T08:34:46.418] [INFO] - [Handling reconnect!][0m
