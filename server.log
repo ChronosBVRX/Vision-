@@ -1483,3 +1483,17 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-04 18:16:02] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://www.rojadirectahd.dev
 [2026-06-04 18:16:03] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
 [2026-06-04 18:16:05] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
+[2026-06-04 18:31:06] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "catalog_poseidonhd_movie_noteolvidar" (Idioma pref: auto, Servidores excluidos: [])
+[2026-06-04 18:31:06] [INFO] [Resolver] Película encontrada: "No te olvidaré"
+[2026-06-04 18:31:06] [INFO] [MoviePageParser] 🔍 Analizando página externa de PoseidonHD: https://www.poseidonhd2.co/pelicula/1367642/no-te-olvidare
+[2026-06-04 18:31:06] [INFO] [BrowserFetcher] 🌐 Cargando página con Playwright para evadir antibot: https://www.poseidonhd2.co/pelicula/1367642/no-te-olvidare
+[2026-06-04 18:31:12] [INFO] [BrowserFetcher] ✅ HTML cargado exitosamente. Longitud: 115192 bytes.
+[2026-06-04 18:31:12] [INFO] [Resolver] Página de detalle scrapeada: 16 opciones extraídas de https://www.poseidonhd2.co/pelicula/1367642/no-te-olvidare
+[2026-06-04 18:31:12] [INFO] [Resolver] Total de opciones filtradas a evaluar: 16
+[2026-06-04 18:31:12] [INFO] [Resolver] Lanzando 3 opciones en paralelo (max 3)...
+[2026-06-04 18:31:12] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-04 18:31:12] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-04 18:31:12] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-04 18:31:12] [INFO] [Resolver] Intentando 13 candidatos restantes secuencialmente...
+[2026-06-04 18:31:12] [INFO] [Resolver] ▶ Probando secuencial: [Español Latino] player
+[2026-06-04 18:31:12] [ERROR] [API Resolve] Error al resolver película catalog_poseidonhd_movie_noteolvidar: url.startsWith is not a function
