@@ -106,6 +106,24 @@
                 if (p) p.innerHTML = 'La conexión está tardando más de lo normal.<br>Puedes intentar abrir el enlace directamente:';
             }
         }, 10000);
+
+        // Bridge: re-envía eventos de teclado al iframe (APK Android TV envía Escape aquí)
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'GoBack' || e.keyCode === 27 || e.keyCode === 8 || e.keyCode === 461) {
+                const frame = document.getElementById('app-frame');
+                if (frame && frame.contentWindow) {
+                    frame.contentWindow.postMessage({
+                        type: 'FORWARD_KEYDOWN',
+                        key: e.key,
+                        code: e.code,
+                        keyCode: e.keyCode,
+                        which: e.which,
+                        bubbles: true,
+                        cancelable: true
+                    }, '*');
+                }
+            }
+        });
     </script>
 </body>
 </html>
