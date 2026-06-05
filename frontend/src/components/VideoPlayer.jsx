@@ -1219,8 +1219,8 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     // Extract referer from headers if available
     const referer = currentStream.referer || (currentStream.headers && (currentStream.headers.referer || currentStream.headers.Referer));
     
-    // Use proxy for all remote HTTP streams to bypass CORS, except localhost and DASH (.mpd)
-    const streamUrl = currentStream.url.startsWith('http') && !currentStream.url.includes('localhost') && !isDash
+    // [antigravity] Use proxy for all remote HTTP streams to bypass CORS, except localhost, DASH (.mpd) and known CORS-supporting hosts like fubohd.com
+    const streamUrl = currentStream.url.startsWith('http') && !currentStream.url.includes('localhost') && !isDash && !currentStream.url.includes('fubohd.com')
       ? `/api/proxy?url=${encodeURIComponent(currentStream.url)}${referer ? `&referer=${encodeURIComponent(referer)}` : ''}`
       : currentStream.url;
 
