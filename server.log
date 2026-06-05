@@ -2390,3 +2390,19 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-04 19:24:35] [INFO] [API Publish Tunnel] Publicando enlace manualmente: https://attitudes-onto-certified-whole.trycloudflare.com
 [2026-06-04 19:24:35] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
 [2026-06-04 19:24:35] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
+[2026-06-04 19:24:36] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
+[2026-06-04 19:24:36] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
+[2026-06-04 19:24:36] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://www.rojadirectahd.dev (24 partidos encontrados)
+[2026-06-04 19:24:36] [INFO] [SportsWorker] Buscando logotipos para 24 partidos...
+[2026-06-04 19:24:36] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectahd.vip (Solo 24 partidos)
+[2026-06-04 19:24:36] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo EAI_AGAIN pirlotv3.pl)
+[2026-06-04 19:24:36] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectatvmas.com (Solo 23 partidos)
+[2026-06-04 19:24:36] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 14 partidos)
+[2026-06-04 19:24:36] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
+[2026-06-04 19:24:36] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
+[2026-06-04 19:24:37] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 14 partidos)
+[2026-06-04 19:24:37] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
+[2026-06-04 19:24:37] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://www.rojadirectahd.dev
+[2026-06-04 19:24:37] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
+[2026-06-04 19:24:40] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv.online (Failed to scrape matches from https://www.pirlotv.online: timeout of 5000ms exceeded)
+[2026-06-04 19:29:41] [INFO] [API Publish Tunnel] Publicando enlace manualmente: https://attitudes-onto-certified-whole.trycloudflare.com
