@@ -510,6 +510,8 @@ async function resolveBestVideoSource({
   excludeServers = [],
   debug = false
 }) {
+  // Safety wrapper: catch any unexpected error and return clean failure
+  try {
   console.log(`[Resolver] ▶ Iniciando resolución automática para movieId: "${movieId}" (Idioma pref: ${preferredLanguage}, Servidores excluidos: [${excludeServers.join(', ')}])`);
   
   const attempts = [];
@@ -635,11 +637,13 @@ async function resolveBestVideoSource({
   const adapterResults = new Map();
 
   // Helper: add per-adapter timeout
-  const withTimeout = (promise, ms) =>
-    Promise.race([
+  const withTimeout = (promise, ms) => {
+    let timer;
+    return Promise.race([
       promise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms))
-    ]);
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('TIMEOUT')), ms); })
+    ]).finally(() => clearTimeout(timer));
+  };
 
   try {
     // Promise.any — resolves with first SUCCESS, rejects (AggregateError) when ALL fail
@@ -784,6 +788,15 @@ async function resolveBestVideoSource({
     attempts,
     candidates: filteredOptions
   };
+  } catch (fatalErr) {
+    console.error(`[Resolver] CRASH en resolveBestVideoSource para "${movieId}":`, fatalErr.stack || fatalErr.message);
+    return {
+      success: false,
+      movieId,
+      error: "Error interno del resolvedor: " + fatalErr.message,
+      attempts: []
+    };
+  }
 }
 
 module.exports = {

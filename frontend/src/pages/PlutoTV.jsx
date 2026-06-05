@@ -88,21 +88,41 @@ export default function PlutoTV({ initialTab }) {
     setResolveError(null);
     setActiveItem({ ...item, isResolving: true });
 
-    fetch(`/api/movies/${item.id}/resolve?lang=auto`)
-      .then(r => r.json())
+    const resolvePlay = (asLegacy = false) => {
+      const url = asLegacy
+        ? `/api/movies/${item.id}/resolve?lang=auto`
+        : `/api/movies/${item.id}/play?lang=auto`;
+      return fetch(url).then(r => r.json());
+    };
+
+    resolvePlay(false)
       .then(data => {
         if (data.success) {
+          const alt = data.alternatives || [];
           setActiveItem({
             id: item.id, title: item.title, type: item.type, poster: item.poster,
             provider: "internal-resolver",
-            streams: [{ name: data.selectedServer, url: data.stream.url, type: data.stream.type, headers: data.stream.headers || {}, quality: data.stream.quality || "auto", resolver: "direct" }]
+            streams: [{ name: data.selectedServer, url: data.stream.url, type: data.stream.type || 'video/mp4', headers: data.stream.headers || {}, quality: data.stream.quality || "auto", resolver: "direct" },
+              ...alt.filter(a => a.url && a.server !== data.selectedServer).map(a => ({ name: `${a.server}`, url: a.url, type: 'video/mp4', headers: {}, quality: a.quality || 'HD', resolver: 'direct' }))],
+            alternatives: alt
           });
         } else {
-          setActiveItem(null);
-          setResolveError(data.error || "No hay fuentes reproducibles disponibles.");
+          resolvePlay(true).then(legacy => {
+            if (legacy.success) {
+              setActiveItem({
+                id: item.id, title: item.title, type: item.type, poster: item.poster,
+                provider: "internal-resolver",
+                streams: [{ name: legacy.selectedServer, url: legacy.stream.url, type: legacy.stream.type, headers: legacy.stream.headers || {}, quality: legacy.stream.quality || "auto", resolver: "direct" }],
+                alternatives: []
+              });
+            } else {
+              setActiveItem(null);
+              setResolveError(legacy.error || data.error || "No hay fuentes reproducibles disponibles.");
+            }
+          });
         }
       })
-      .catch(() => { setActiveItem(null); setResolveError("Error de conexión al resolver la fuente."); })
+      .catch(() => { resolvePlay(true).catch(() => { setActiveItem(null); setResolveError("Error de conexión al resolver la fuente."); }); })
       .finally(() => { setIsResolving(false); resolvingRef.current = false; });
   }, []);
 

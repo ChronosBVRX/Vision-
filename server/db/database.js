@@ -71,6 +71,101 @@ const initDB = async () => {
     )
   `);
 
+  // ── New normalized schema: movies + movie_links ──
+  await runQuery(`
+    CREATE TABLE IF NOT EXISTS movies (
+      id TEXT PRIMARY KEY,
+      tmdb_id INTEGER UNIQUE,
+      imdb_id TEXT,
+      title TEXT NOT NULL,
+      year INTEGER,
+      type TEXT DEFAULT 'movie',
+      poster TEXT,
+      backdrop TEXT,
+      description TEXT,
+      rating REAL,
+      genres TEXT,
+      duration INTEGER,
+      languages TEXT,
+      cast_cache TEXT,
+      director TEXT,
+      youtube_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await runQuery(`
+    CREATE TABLE IF NOT EXISTS movie_links (
+      id TEXT PRIMARY KEY,
+      movie_id TEXT NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+      source_website TEXT NOT NULL,
+      server_name TEXT NOT NULL,
+      url TEXT NOT NULL,
+      language TEXT DEFAULT 'Español Latino',
+      resolver TEXT DEFAULT 'iframe',
+      quality TEXT DEFAULT 'HD',
+      score INTEGER DEFAULT 100,
+      latency_ms INTEGER DEFAULT 0,
+      last_checked DATETIME,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(movie_id, url)
+    )
+  `);
+
+  await runQuery(`CREATE INDEX IF NOT EXISTS idx_movie_links_movie_id ON movie_links(movie_id)`);
+  await runQuery(`CREATE INDEX IF NOT EXISTS idx_movie_links_score ON movie_links(score DESC)`);
+  await runQuery(`CREATE INDEX IF NOT EXISTS idx_movie_links_active ON movie_links(is_active)`);
+
+  // ── Migrate existing sources into new schema ──
+  try {
+    const moviesCount = await getQuery(`SELECT COUNT(*) as count FROM movies`);
+    if (moviesCount.count === 0) {
+      console.log('[DB] Migrando fuentes existentes al nuevo schema movies/movie_links...');
+      const srcRows = await allQuery(`SELECT * FROM sources WHERE type IN ('movie', 'series')`);
+      let migrated = 0;
+      for (const row of srcRows) {
+        try {
+          const data = JSON.parse(row.data);
+          if (!data.title) continue;
+          const movieId = data.id || `mv_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+          const tmdbId = data.tmdbId || null;
+          await runQuery(`
+            INSERT OR IGNORE INTO movies (id, tmdb_id, title, year, type, poster, backdrop, description, rating, genres, duration, languages, director, youtube_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            movieId, tmdbId, data.title, data.year || null, data.type || 'movie',
+            data.poster || '', data.backdrop || '', data.description || '',
+            data.rating || null, JSON.stringify(data.genres || []), data.duration || null,
+            JSON.stringify(data.languages || []), data.director || '', data.youtubeId || ''
+          ]);
+          // Migrate streams to movie_links
+          const streams = data.streams || [];
+          for (const stream of streams) {
+            if (!stream.url) continue;
+            const linkId = `link_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+            const serverName = stream.name || 'Desconocido';
+            await runQuery(`
+              INSERT OR IGNORE INTO movie_links (id, movie_id, source_website, server_name, url, language, resolver, quality)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              linkId, movieId, data.siteName || 'Legacy', serverName, stream.url,
+              stream.language || 'Español Latino', stream.resolver || 'iframe',
+              stream.quality || 'HD'
+            ]);
+          }
+          migrated++;
+        } catch (e) {
+          console.warn(`[DB] Error migrando source ${row.id}: ${e.message}`);
+        }
+      }
+      console.log(`[DB] Migración a nuevo schema completada: ${migrated} películas/series migradas.`);
+    }
+  } catch (e) {
+    console.warn(`[DB] Error en migración a nuevo schema: ${e.message}`);
+  }
+
   // Check if we need to migrate from database.json
   const sourcesCount = await getQuery(`SELECT COUNT(*) as count FROM sources`);
   if (sourcesCount.count === 0 && fs.existsSync(jsonDbPath)) {

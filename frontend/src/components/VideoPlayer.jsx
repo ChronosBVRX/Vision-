@@ -212,7 +212,7 @@ function getNormalizedTVCategory(channel) {
   return cat;
 }
 
-export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, onPrevEpisode, channelList, onChannelChange }) {
+export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, onPrevEpisode, channelList, onChannelChange, onSourceChange }) {
   const [activeStreamIndex, setActiveStreamIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [errorText, setErrorText] = useState(source && source.available === false ? source.unavailableReason : null);
@@ -252,6 +252,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   const [showAudioPopup, setShowAudioPopup] = useState(false);
   const [showSubtitlePopup, setShowSubtitlePopup] = useState(false);
   const [showServerPopup, setShowServerPopup] = useState(false);
+  const [showVODServerPopup, setShowVODServerPopup] = useState(false);
 
   // States for branding video
   const [showBrandIntro, setShowBrandIntro] = useState(
@@ -1776,6 +1777,13 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
                </div>
              )}
 
+            {/* VOD Server alternatives */}
+            {!isLive && source?.alternatives && source.alternatives.length > 0 && (
+              <button className="control-btn focusable" tabIndex={0} onClick={() => { setShowVODServerPopup(!showVODServerPopup); }} title="Servidores alternativos">
+                <Layers size={18} />
+              </button>
+            )}
+
             {/* Playback speed (no TV/live) */}
             {!isLive && (
               <button className="control-btn focusable" tabIndex={0} onClick={() => {
@@ -1841,6 +1849,37 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
                 {activeAudioTrack === track.id && <span style={{ color: 'var(--primary-light)' }}>✓</span>}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* ── VOD Server Alternatives Popup ──────────────────────── */}
+        {showVODServerPopup && source?.alternatives && source.alternatives.length > 0 && (
+          <div className="player-popup-menu focusable-container">
+            <div className="player-popup-header">Servidores Alternativos</div>
+            {source.alternatives.map((alt, idx) => {
+              const isActive = alt.server === source.selectedServer;
+              return (
+                <button
+                  key={idx}
+                  className={`player-popup-item focusable ${isActive ? 'active' : ''}`}
+                  tabIndex={0}
+                  onClick={() => {
+                    if (!isActive) {
+                      onSourceChange?.({
+                        ...source,
+                        selectedServer: alt.server,
+                        streams: [{ name: alt.server, url: alt.url, type: 'video/mp4', headers: {}, quality: alt.quality || 'HD', resolver: 'direct' }]
+                      });
+                    }
+                    setShowVODServerPopup(false);
+                  }}
+                >
+                  <span>{alt.server} {alt.language ? `(${alt.language})` : ''}</span>
+                  <small style={{ color: 'var(--text-muted)', marginLeft: 8 }}>{alt.score ? `Score: ${alt.score}` : ''}</small>
+                  {isActive && <span style={{ color: 'var(--primary-light)', marginLeft: 8 }}>✓</span>}
+                </button>
+              );
+            })}
           </div>
         )}
 

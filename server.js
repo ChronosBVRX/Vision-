@@ -137,6 +137,7 @@ const {
 
 const { db, initDB, allQuery, getQuery, runQuery } = require('./server/db/database');
 const { initTelegramClient, streamTelegramFile, syncTelegramChannel } = require('./server/telegramClient');
+const { upsertMovie, upsertMovieLink, searchTMDB, reportFailedLink } = require('./server/db/movieLinksStore');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -185,6 +186,10 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Serve frontend static files in production
 app.use(express.static(path.join(__dirname, 'frontend/dist')));
 app.use(express.static(path.join(__dirname, 'frontend/public')));
+
+// Mount normalized movie store routes
+const playRoutes = require('./server/routes/play');
+app.use('/api', playRoutes);
 
 // Helper to read database
 function readDB() {
@@ -407,6 +412,42 @@ async function refreshMoviesAndSeries() {
       }
     }
 
+    // Also populate normalized movie_links store
+    for (const item of finalVODList) {
+      try {
+        const tmdbInfo = await searchTMDB(item.title, item.year, item.type);
+        const movie = await upsertMovie({
+          title: item.title,
+          year: item.year,
+          type: item.type,
+          tmdbId: tmdbInfo?.tmdb_id || null,
+          poster: tmdbInfo?.poster || item.poster,
+          backdrop: tmdbInfo?.backdrop || '',
+          description: tmdbInfo?.description || item.description || '',
+          rating: tmdbInfo?.rating || null,
+          genres: item.genres || [],
+          duration: item.duration || null,
+          languages: item.languages || ['Español Latino']
+        });
+        if (movie && item.streams) {
+          for (const stream of item.streams) {
+            if (stream.url) {
+              await upsertMovieLink(movie.id, {
+                sourceWebsite: item.siteName || stream.name || 'VOD',
+                serverName: stream.name || 'Servidor',
+                url: stream.url,
+                language: stream.language || 'Español Latino',
+                resolver: stream.resolver || 'direct',
+                quality: stream.quality || 'HD'
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`[VODWorker] Error normalizando "${item.title}": ${e.message}`);
+      }
+    }
+
     if (newItemsAdded > 0 || itemsUpdated > 0) {
       writeDB(db);
       console.log(`[VODWorker] Importación exitosa! Se añadieron ${newItemsAdded} ítems nuevos y se actualizaron ${itemsUpdated} existentes.`);
@@ -533,7 +574,7 @@ app.get('/api/movies/:id/resolve', async (req, res) => {
     // Always return 200 with result payload so the frontend can read status & attempts easily
     res.json(result);
   } catch (err) {
-    console.error(`[API Resolve] Error al resolver película ${movieId}:`, err.message);
+    console.error(`[API Resolve] Error al resolver película ${movieId}:`, err.stack || err.message);
     res.status(500).json({
       success: false,
       movieId,
@@ -1500,6 +1541,45 @@ async function runCatalogSync() {
     [...db.movieCatalog].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 20).forEach(m => { m.featured = true; });
     [...db.seriesCatalog].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 10).forEach(s => { s.featured = true; });
 
+    // Also populate normalized movie_links store
+    const allItems = [...result.movies.map(m => ({ ...m, type: 'movie' })), ...result.series.map(s => ({ ...s, type: 'series' }))];
+    for (const item of allItems) {
+      try {
+        const tmdbInfo = await searchTMDB(item.title, item.year, item.type);
+        const movie = await upsertMovie({
+          title: item.title,
+          year: item.year,
+          type: item.type,
+          tmdbId: tmdbInfo?.tmdb_id || null,
+          poster: tmdbInfo?.poster || item.poster,
+          backdrop: tmdbInfo?.backdrop || '',
+          description: tmdbInfo?.description || item.description || '',
+          rating: tmdbInfo?.rating || item.rating || null,
+          genres: item.genres || [],
+          duration: item.duration || null,
+          languages: item.languages || ['Español Latino'],
+          director: item.director || '',
+          youtubeId: item.youtubeId || ''
+        });
+        if (movie && item.streams) {
+          for (const stream of item.streams) {
+            if (stream.url) {
+              await upsertMovieLink(movie.id, {
+                sourceWebsite: item.siteName || 'Catalog',
+                serverName: stream.name || 'Servidor',
+                url: stream.url,
+                language: stream.language || 'Español Latino',
+                resolver: stream.resolver || 'iframe',
+                quality: stream.quality || 'HD'
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`[CatalogWorker] Error normalizando "${item.title}": ${e.message}`);
+      }
+    }
+
     writeDB(db);
     console.log(`[CatalogWorker] ✅ Sync completado. Películas: +${addedMovies} (total ${db.movieCatalog.length}), Series: +${addedSeries} (total ${db.seriesCatalog.length})`);
   } catch (e) {
@@ -2451,6 +2531,17 @@ initializeDB().then(async () => {
     
     // Publicar logs del servidor de forma periódica en segundo plano (cada 10 minutos)
     setInterval(publishServerLogs, 10 * 60 * 1000);
+
+    // Health check de enlaces cada 6 horas
+    const { runHealthCheck } = require('./server/db/movieLinksStore');
+    setInterval(async () => {
+      try {
+        const checked = await runHealthCheck(30);
+        if (checked > 0) console.log(`[HealthCheck] ✅ ${checked} enlaces verificados y puntuados.`);
+      } catch (e) {
+        console.warn(`[HealthCheck] Error: ${e.message}`);
+      }
+    }, 6 * 60 * 60 * 1000);
   });
 }).catch(err => {
   console.error("[DB] Error fatal al inicializar la base de datos:", err);

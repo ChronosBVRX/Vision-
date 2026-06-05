@@ -13,6 +13,7 @@ let isConnected = false;
 
 // Conecta el cliente
 async function initTelegramClient() {
+  console.log(`[TelegramClient] Iniciando con API_ID: ${apiId}, HASH: ${apiHash ? "SET" : "NOT SET"}`);
   if (!apiId || !apiHash) {
     console.warn("[TelegramClient] API_ID y API_HASH no configurados. Saltando inicio.");
     return false;

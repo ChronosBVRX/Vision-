@@ -139,10 +139,40 @@ export default function Movies({ contentType = 'movie' }) {
     // Show a transient loading overlay (item with isResolving flag)
     setActiveItem({ ...item, isResolving: true });
 
-    fetch(`/api/movies/${item.id}/resolve?lang=auto&debug=true`)
-      .then(r => r.json())
+    // Try normalized play endpoint first, fall back to legacy resolve
+    const resolvePlay = (retryAsLegacy = false) => {
+      const endpoint = retryAsLegacy
+        ? `/api/movies/${item.id}/resolve?lang=auto&debug=true`
+        : `/api/movies/${item.id}/play?lang=auto`;
+      return fetch(endpoint).then(r => r.json());
+    };
+
+    resolvePlay()
       .then(data => {
         if (data.success) {
+          const altServers = data.alternatives || [];
+          const streams = [
+            {
+              name: data.selectedServer,
+              url: data.stream.url,
+              type: data.stream.type || 'video/mp4',
+              headers: data.stream.headers || {},
+              quality: data.stream.quality || 'auto',
+              resolver: data.stream.resolver || 'direct'
+            },
+            // Add alternatives as fallback streams
+            ...altServers
+              .filter(a => a.url && a.server !== data.selectedServer)
+              .map(a => ({
+                name: `${a.server} (${a.source || 'alt'})`,
+                url: a.url,
+                type: 'video/mp4',
+                headers: {},
+                quality: a.quality || 'HD',
+                resolver: 'direct'
+              }))
+          ];
+
           const playableSource = {
             id: item.id,
             title: item.title,
@@ -151,33 +181,77 @@ export default function Movies({ contentType = 'movie' }) {
             provider: "internal-resolver",
             selectedLanguage: data.selectedLanguage,
             selectedServer: data.selectedServer,
-            streams: [
-              {
-                name: data.selectedServer,
-                url: data.stream.url,
-                type: data.stream.type,
-                headers: data.stream.headers || {},
-                quality: data.stream.quality || "auto",
-                resolver: "direct"
-              }
-            ],
+            streams,
+            alternatives: altServers,
             attempts: data.attempts || []
           };
           setActiveItem(playableSource);
           setIsResolving(false);
         } else {
-          // Resolution failed — show error, never fall back to sandboxed iframes
-          setActiveItem(null);
-          setIsResolving(false);
-          setResolveError(data.error || "No hay fuentes reproducibles disponibles en este momento.");
-          setResolveAttempts(data.attempts || []);
+          // Try legacy resolve as fallback
+          resolvePlay(true).then(legacyData => {
+            if (legacyData.success) {
+              const playableSource = {
+                id: item.id,
+                title: item.title,
+                type: item.type,
+                poster: item.poster,
+                provider: "internal-resolver",
+                selectedLanguage: legacyData.selectedLanguage,
+                selectedServer: legacyData.selectedServer,
+                streams: [
+                  {
+                    name: legacyData.selectedServer,
+                    url: legacyData.stream.url,
+                    type: legacyData.stream.type,
+                    headers: legacyData.stream.headers || {},
+                    quality: legacyData.stream.quality || "auto",
+                    resolver: "direct"
+                  }
+                ],
+                alternatives: [],
+                attempts: legacyData.attempts || []
+              };
+              setActiveItem(playableSource);
+              setIsResolving(false);
+            } else {
+              setActiveItem(null);
+              setIsResolving(false);
+              setResolveError(legacyData.error || data.error || "No hay fuentes reproducibles disponibles en este momento.");
+              setResolveAttempts(legacyData.attempts || data.attempts || []);
+            }
+          }).catch(err => {
+            setActiveItem(null);
+            setIsResolving(false);
+            setResolveError("Error de conexión al resolver la fuente. Intenta de nuevo.");
+          });
         }
       })
       .catch(err => {
         console.error("Resolution error:", err);
-        setActiveItem(null);
-        setIsResolving(false);
-        setResolveError("Error de conexión al resolver la fuente. Intenta de nuevo.");
+        resolvePlay(true).then(legacyData => {
+          if (legacyData.success) {
+            setActiveItem({
+              id: item.id, title: item.title, type: item.type, poster: item.poster,
+              provider: "internal-resolver",
+              selectedLanguage: legacyData.selectedLanguage,
+              selectedServer: legacyData.selectedServer,
+              streams: [{ name: legacyData.selectedServer, url: legacyData.stream.url, type: legacyData.stream.type, headers: legacyData.stream.headers || {}, quality: legacyData.stream.quality || "auto", resolver: "direct" }],
+              alternatives: [],
+              attempts: legacyData.attempts || []
+            });
+            setIsResolving(false);
+          } else {
+            setActiveItem(null);
+            setIsResolving(false);
+            setResolveError(legacyData.error || "Error de conexión al resolver la fuente. Intenta de nuevo.");
+            setResolveAttempts(legacyData.attempts || []);
+          }
+        }).catch(() => {
+          setActiveItem(null);
+          setIsResolving(false);
+          setResolveError("Error de conexión al resolver la fuente. Intenta de nuevo.");
+        });
       })
       .finally(() => {
         setIsResolving(false);
@@ -473,6 +547,11 @@ export default function Movies({ contentType = 'movie' }) {
     return () => window.removeEventListener('keydown', handleKey, true);
   }, [activeSeries]);
 
+  // ── Handle source change (server switch) ───────────────────────────────────
+  const handleSourceChange = useCallback((updatedSource) => {
+    setActiveItem(updatedSource);
+  }, []);
+
   // ── Handle play next ────────────────────────────────────────────────────────
   const playNext = useCallback(() => {
     if (!activeItem) return;
@@ -679,6 +758,7 @@ export default function Movies({ contentType = 'movie' }) {
           onNext={playNext}
           onNextEpisode={setActiveItem}
           onPrevEpisode={setActiveItem}
+          onSourceChange={handleSourceChange}
         />
       )}
 

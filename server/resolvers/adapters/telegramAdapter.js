@@ -17,7 +17,7 @@ const telegramAdapter = {
             const messageId = source.url.replace('telegram://', '').split('/')[0];
             
             if (!messageId) {
-                throw new Error("Message ID no válido en la URL de Telegram");
+                return { success: false, reason: 'INVALID_MESSAGE_ID', details: 'Message ID no válido en la URL de Telegram' };
             }
             
             // La URL final que el reproductor (frontend) usará
@@ -25,14 +25,18 @@ const telegramAdapter = {
             const streamUrl = `/api/stream/telegram/${messageId}`;
             
             return {
-                url: streamUrl,
-                quality: '1080p', // O la que detectemos
-                isM3U8: false,    // Servimos un mp4 directo vía HTTP Range
-                type: 'video/mp4' // Asumimos MP4 por ahora
+                success: true,
+                stream: {
+                    url: streamUrl,
+                    type: 'video/mp4',
+                    headers: {},
+                    quality: '1080p',
+                    isM3U8: false
+                }
             };
         } catch (error) {
             console.error(`[telegramAdapter] Error resolviendo URL ${source.url}:`, error.message);
-            return null;
+            return { success: false, reason: 'TELEGRAM_RESOLVE_ERROR', details: error.message };
         }
     }
 };
