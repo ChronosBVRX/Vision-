@@ -1,32 +1,3 @@
-[2026-06-05 05:16:24] [INFO] [33m[2026-06-05T05:16:24.170] [INFO] - [Started reconnecting][0m
-[2026-06-05 05:16:24] [INFO] [35m[2026-06-05T05:16:24.171] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 05:16:24] [INFO] [33m[2026-06-05T05:16:24.171] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 05:16:24] [INFO] [33m[2026-06-05T05:16:24.172] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 05:16:24] [INFO] [33m[2026-06-05T05:16:24.245] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 05:16:24] [INFO] [33m[2026-06-05T05:16:24.246] [INFO] - [Handling reconnect!][0m
-[2026-06-05 05:17:54] [INFO] [33m[2026-06-05T05:17:54.312] [INFO] - [connection closed][0m
-[2026-06-05 05:17:54] [INFO] [35m[2026-06-05T05:17:54.312] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 05:17:54] [ERROR] {}
-[2026-06-05 05:17:55] [INFO] [33m[2026-06-05T05:17:55.327] [INFO] - [Started reconnecting][0m
-[2026-06-05 05:17:55] [INFO] [35m[2026-06-05T05:17:55.328] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 05:17:55] [INFO] [33m[2026-06-05T05:17:55.328] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 05:17:55] [INFO] [33m[2026-06-05T05:17:55.329] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 05:17:55] [INFO] [33m[2026-06-05T05:17:55.420] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 05:17:55] [INFO] [33m[2026-06-05T05:17:55.421] [INFO] - [Handling reconnect!][0m
-[2026-06-05 05:19:25] [INFO] [33m[2026-06-05T05:19:25.509] [INFO] - [connection closed][0m
-[2026-06-05 05:19:25] [INFO] [35m[2026-06-05T05:19:25.510] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 05:19:25] [ERROR] {}
-[2026-06-05 05:19:26] [INFO] [33m[2026-06-05T05:19:26.515] [INFO] - [Started reconnecting][0m
-[2026-06-05 05:19:26] [INFO] [35m[2026-06-05T05:19:26.516] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 05:19:26] [INFO] [33m[2026-06-05T05:19:26.516] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 05:19:26] [INFO] [33m[2026-06-05T05:19:26.516] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 05:19:26] [INFO] [33m[2026-06-05T05:19:26.596] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 05:19:26] [INFO] [33m[2026-06-05T05:19:26.596] [INFO] - [Handling reconnect!][0m
-[2026-06-05 05:20:56] [INFO] [33m[2026-06-05T05:20:56.664] [INFO] - [connection closed][0m
-[2026-06-05 05:20:56] [INFO] [35m[2026-06-05T05:20:56.664] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 05:20:56] [ERROR] {}
-[2026-06-05 05:20:57] [INFO] [33m[2026-06-05T05:20:57.675] [INFO] - [Started reconnecting][0m
-[2026-06-05 05:20:57] [INFO] [35m[2026-06-05T05:20:57.676] [WARN] - [[Reconnect] Closing current connection...][0m
 [2026-06-05 05:20:57] [INFO] [33m[2026-06-05T05:20:57.676] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 05:20:57] [INFO] [33m[2026-06-05T05:20:57.677] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 05:20:57] [INFO] [33m[2026-06-05T05:20:57.770] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
@@ -2497,3 +2468,32 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-05 09:52:45] [INFO] [33m[2026-06-05T09:52:45.747] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-05 09:52:45] [INFO] [33m[2026-06-05T09:52:45.748] [INFO] - [Handling reconnect!][0m
 [2026-06-05 09:54:02] [INFO] [API Publish Tunnel] Publicando enlace manualmente: https://constitutional-wed-desperate-valentine.trycloudflare.com
+[2026-06-05 09:54:05] [ERROR] [API Publish Tunnel] Error al publicar: Command failed: git push origin main
+To https://github.com/ChronosBVRX/Vision-.git
+ ! [rejected]        main -> main (fetch first)
+error: failed to push some refs to 'https://github.com/ChronosBVRX/Vision-.git'
+hint: Updates were rejected because the remote contains work that you do not
+hint: have locally. This is usually caused by another repository pushing to
+hint: the same ref. If you want to integrate the remote changes, use
+hint: 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+
+[2026-06-05 09:54:15] [INFO] [33m[2026-06-05T09:54:15.824] [INFO] - [connection closed][0m
+[2026-06-05 09:54:15] [INFO] [35m[2026-06-05T09:54:15.825] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 09:54:15] [ERROR] {}
+[2026-06-05 09:54:16] [INFO] [33m[2026-06-05T09:54:16.833] [INFO] - [Started reconnecting][0m
+[2026-06-05 09:54:16] [INFO] [35m[2026-06-05T09:54:16.839] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 09:54:16] [INFO] [33m[2026-06-05T09:54:16.840] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 09:54:16] [INFO] [33m[2026-06-05T09:54:16.842] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 09:54:16] [INFO] [33m[2026-06-05T09:54:16.937] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 09:54:16] [INFO] [33m[2026-06-05T09:54:16.938] [INFO] - [Handling reconnect!][0m
+[2026-06-05 09:55:47] [INFO] [33m[2026-06-05T09:55:47.042] [INFO] - [connection closed][0m
+[2026-06-05 09:55:47] [INFO] [35m[2026-06-05T09:55:47.054] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 09:55:47] [ERROR] {}
+[2026-06-05 09:55:48] [INFO] [33m[2026-06-05T09:55:48.096] [INFO] - [Started reconnecting][0m
+[2026-06-05 09:55:48] [INFO] [35m[2026-06-05T09:55:48.097] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 09:55:48] [INFO] [33m[2026-06-05T09:55:48.098] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 09:55:48] [INFO] [33m[2026-06-05T09:55:48.099] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 09:55:48] [INFO] [33m[2026-06-05T09:55:48.579] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 09:55:48] [INFO] [33m[2026-06-05T09:55:48.580] [INFO] - [Handling reconnect!][0m
+[2026-06-05 09:55:55] [INFO] [API Publish Tunnel] Publicando enlace manualmente: https://constitutional-wed-desperate-valentine.trycloudflare.com
