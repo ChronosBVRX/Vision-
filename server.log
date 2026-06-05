@@ -1,66 +1,3 @@
-[2026-06-04 20:09:14] [INFO] [33m[2026-06-04T20:09:14.006] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:09:14] [INFO] [33m[2026-06-04T20:09:14.083] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 20:09:14] [INFO] [33m[2026-06-04T20:09:14.084] [INFO] - [Handling reconnect!][0m
-[2026-06-04 20:09:20] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "plutovod_5fbfce0b861be7001a6bf8a5" (Idioma pref: auto, Servidores excluidos: [])
-[2026-06-04 20:09:20] [INFO] [Resolver] Película encontrada: "Al calor de las armas"
-[2026-06-04 20:09:20] [INFO] [Resolver] Total de opciones filtradas a evaluar: 1
-[2026-06-04 20:09:20] [INFO] [Resolver] Lanzando 1 opciones en paralelo (max 3)...
-[2026-06-04 20:09:20] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] Pluto TV Stream
-[2026-06-04 20:09:20] [INFO] [plutoAdapter] ⚡ Resolviendo stream dinamico de Pluto TV: pluto-tv:///stitch/hls/episode/5fbfce0b861be7001a6bf8a5/master.m3u8
-[2026-06-04 20:09:20] [INFO] [SourceValidator] Probando HEAD para: https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/episode/5fbfce0b861be7001a6bf8a5/master.m3u8?advertisingId=&appName=web&appVersion=7.9.0-a9cca6b89aea4dc0998b92a51989d2adb9a9025d&app_name=web&clientDeviceType=0&clientID=vision-plus-pluto-client-tf2vi&clientModelNumber=1.0.0&country=MX&deviceDNT=false&deviceId=vision-plus-pluto-client-tf2vi&deviceLat=19.5200&deviceLon=-99.2000&deviceMake=Chrome&deviceModel=web&deviceType=web&deviceVersion=16.2.0&marketingRegion=VE&serverSideAds=true&sessionID=90221918-6083-11f1-af01-12223f8883b1&sid=90221918-6083-11f1-af01-12223f8883b1&userId=&jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6IjA5Y2RmMmI0LTdiOGMtNGVkNi1iMjkzLWYzZWM4YjY1ZWI2YiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI5MDIyMTkxOC02MDgzLTExZjEtYWYwMS0xMjIyM2Y4ODgzYjEiLCJjbGllbnRJUCI6IjE4OS4yMDEuMTI4LjEiLCJjaXR5IjoiTGEgTW9yYSIsInBvc3RhbENvZGUiOiI1NDA5MCIsImNvdW50cnkiOiJNWCIsImRtYSI6MCwiYWN0aXZlUmVnaW9uIjoiVkUiLCJkZXZpY2VMYXQiOjE5LjUyMDAwMDQ1Nzc2MzY3MiwiZGV2aWNlTG9uIjotOTkuMTk5OTk2OTQ4MjQyMTksInByZWZlcnJlZExhbmd1YWdlIjoiZW4iLCJkZXZpY2VUeXBlIjoid2ViIiwiZGV2aWNlVmVyc2lvbiI6IjE2LjIuMCIsImRldmljZU1ha2UiOiJDaHJvbWUiLCJkZXZpY2VNb2RlbCI6IndlYiIsImFwcE5hbWUiOiJ3ZWIiLCJhcHBWZXJzaW9uIjoiNy45LjAtYTljY2E2Yjg5YWVhNGRjMDk5OGI5MmE1MTk4OWQyYWRiOWE5MDI1ZCIsImNsaWVudElEIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXRmMnZpIiwiY21BdWRpZW5jZUlEIjoiIiwiaXNDbGllbnRETlQiOmZhbHNlLCJ1c2VySUQiOiIiLCJsb2dMZXZlbCI6IkRFRkFVTFQiLCJ0aW1lWm9uZSI6IkFtZXJpY2EvTWV4aWNvX0NpdHkiLCJzZXJ2ZXJTaWRlQWRzIjp0cnVlLCJlMmVCZWFjb25zIjpmYWxzZSwiZmVhdHVyZXMiOnsibXVsdGlQb2RBZHMiOnsiY29ob3J0IjoiIiwiZW5hYmxlZCI6dHJ1ZX0sInN0aXRjaGVyRGFzaE5nIjp7ImZsYXR0ZW5CYXNlVXJsIjp0cnVlfSwic3RpdGNoZXJIbHNOZyI6eyJkZW11eGVkQXVkaW8iOiJqaXQifX0sImZtc1BhcmFtcyI6eyJmd1ZjSUQyIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXRmMnZpIiwiZndWY0lEMkNvcHBhIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXRmMnZpIiwiY3VzdG9tUGFyYW1zIjp7ImZtc19saXZlcmFtcF9pZGwiOiIiLCJmbXNfZW1haWxoYXNoIjoiIiwiZm1zX3N1YnNjcmliZXJpZCI6IiIsImZtc19pZmEiOiIiLCJmbXNfaWRmdiI6IiIsImZtc191c2VyaWQiOiJ2aXNpb24tcGx1cy1wbHV0by1jbGllbnQtdGYydmkiLCJmbXNfdmNpZDJ0eXBlIjoidXNlcmlkIiwiZm1zX3JhbXBfaWQiOiIiLCJmbXNfaGhfcmFtcF9pZCI6IiIsImZtc19iaWRpZHR5cGUiOiIiLCJfZndfM1BfVUlEIjoiIiwiZm1zX3J1bGVpZCI6IjEwMDIwLDEwMDIxLDEwMDIzLDEwMDAwLDEwMDA5LDEwMDEzLDEwMDE2LDEwMDE1LDEwMDE0In19LCJzZXNzaW9uU3RhcnRUaW1lIjoxNzgwNjI1MzYwMDMzLCJpc3MiOiJib290LnBsdXRvLnR2Iiwic3ViIjoicHJpOnYxOnBsdXRvOmRldmljZXM6VkU6ZG1semFXOXVMWEJzZFhNdGNHeDFkRzh0WTJ4cFpXNTBMWFJtTW5acCIsImF1ZCI6IioucGx1dG8udHYiLCJleHAiOjE3ODA3MTE3NjAsImlhdCI6MTc4MDYyNTM2MCwianRpIjoiNDk1NDM5OGItZWJkMy00MWQyLTgzNjAtNDM1N2RhZTcyODY5In0.LmrV5-H1-PEZxk7YGEfTigALJ3GgmSZrZn4jJQ1htWM&masterJWTPassthrough=true
-[2026-06-04 20:09:20] [INFO] [SourceValidator] HEAD falló: Request failed with status code 405. Intentando GET parcial...
-[2026-06-04 20:09:20] [INFO] [SourceValidator] Probando GET con rango de bytes para: https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/episode/5fbfce0b861be7001a6bf8a5/master.m3u8?advertisingId=&appName=web&appVersion=7.9.0-a9cca6b89aea4dc0998b92a51989d2adb9a9025d&app_name=web&clientDeviceType=0&clientID=vision-plus-pluto-client-tf2vi&clientModelNumber=1.0.0&country=MX&deviceDNT=false&deviceId=vision-plus-pluto-client-tf2vi&deviceLat=19.5200&deviceLon=-99.2000&deviceMake=Chrome&deviceModel=web&deviceType=web&deviceVersion=16.2.0&marketingRegion=VE&serverSideAds=true&sessionID=90221918-6083-11f1-af01-12223f8883b1&sid=90221918-6083-11f1-af01-12223f8883b1&userId=&jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6IjA5Y2RmMmI0LTdiOGMtNGVkNi1iMjkzLWYzZWM4YjY1ZWI2YiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI5MDIyMTkxOC02MDgzLTExZjEtYWYwMS0xMjIyM2Y4ODgzYjEiLCJjbGllbnRJUCI6IjE4OS4yMDEuMTI4LjEiLCJjaXR5IjoiTGEgTW9yYSIsInBvc3RhbENvZGUiOiI1NDA5MCIsImNvdW50cnkiOiJNWCIsImRtYSI6MCwiYWN0aXZlUmVnaW9uIjoiVkUiLCJkZXZpY2VMYXQiOjE5LjUyMDAwMDQ1Nzc2MzY3MiwiZGV2aWNlTG9uIjotOTkuMTk5OTk2OTQ4MjQyMTksInByZWZlcnJlZExhbmd1YWdlIjoiZW4iLCJkZXZpY2VUeXBlIjoid2ViIiwiZGV2aWNlVmVyc2lvbiI6IjE2LjIuMCIsImRldmljZU1ha2UiOiJDaHJvbWUiLCJkZXZpY2VNb2RlbCI6IndlYiIsImFwcE5hbWUiOiJ3ZWIiLCJhcHBWZXJzaW9uIjoiNy45LjAtYTljY2E2Yjg5YWVhNGRjMDk5OGI5MmE1MTk4OWQyYWRiOWE5MDI1ZCIsImNsaWVudElEIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXRmMnZpIiwiY21BdWRpZW5jZUlEIjoiIiwiaXNDbGllbnRETlQiOmZhbHNlLCJ1c2VySUQiOiIiLCJsb2dMZXZlbCI6IkRFRkFVTFQiLCJ0aW1lWm9uZSI6IkFtZXJpY2EvTWV4aWNvX0NpdHkiLCJzZXJ2ZXJTaWRlQWRzIjp0cnVlLCJlMmVCZWFjb25zIjpmYWxzZSwiZmVhdHVyZXMiOnsibXVsdGlQb2RBZHMiOnsiY29ob3J0IjoiIiwiZW5hYmxlZCI6dHJ1ZX0sInN0aXRjaGVyRGFzaE5nIjp7ImZsYXR0ZW5CYXNlVXJsIjp0cnVlfSwic3RpdGNoZXJIbHNOZyI6eyJkZW11eGVkQXVkaW8iOiJqaXQifX0sImZtc1BhcmFtcyI6eyJmd1ZjSUQyIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXRmMnZpIiwiZndWY0lEMkNvcHBhIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXRmMnZpIiwiY3VzdG9tUGFyYW1zIjp7ImZtc19saXZlcmFtcF9pZGwiOiIiLCJmbXNfZW1haWxoYXNoIjoiIiwiZm1zX3N1YnNjcmliZXJpZCI6IiIsImZtc19pZmEiOiIiLCJmbXNfaWRmdiI6IiIsImZtc191c2VyaWQiOiJ2aXNpb24tcGx1cy1wbHV0by1jbGllbnQtdGYydmkiLCJmbXNfdmNpZDJ0eXBlIjoidXNlcmlkIiwiZm1zX3JhbXBfaWQiOiIiLCJmbXNfaGhfcmFtcF9pZCI6IiIsImZtc19iaWRpZHR5cGUiOiIiLCJfZndfM1BfVUlEIjoiIiwiZm1zX3J1bGVpZCI6IjEwMDIwLDEwMDIxLDEwMDIzLDEwMDAwLDEwMDA5LDEwMDEzLDEwMDE2LDEwMDE1LDEwMDE0In19LCJzZXNzaW9uU3RhcnRUaW1lIjoxNzgwNjI1MzYwMDMzLCJpc3MiOiJib290LnBsdXRvLnR2Iiwic3ViIjoicHJpOnYxOnBsdXRvOmRldmljZXM6VkU6ZG1semFXOXVMWEJzZFhNdGNHeDFkRzh0WTJ4cFpXNTBMWFJtTW5acCIsImF1ZCI6IioucGx1dG8udHYiLCJleHAiOjE3ODA3MTE3NjAsImlhdCI6MTc4MDYyNTM2MCwianRpIjoiNDk1NDM5OGItZWJkMy00MWQyLTgzNjAtNDM1N2RhZTcyODY5In0.LmrV5-H1-PEZxk7YGEfTigALJ3GgmSZrZn4jJQ1htWM&masterJWTPassthrough=true
-[2026-06-04 20:09:21] [INFO] [SourceValidator] GET parcial exitoso. Content-Type: application/x-mpegurl, Final URL: https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/episode/5fbfce0b861be7001a6bf8a5/master.m3u8?advertisingId=&appName=web&appVersion=7.9.0-a9cca6b89aea4dc0998b92a51989d2adb9a9025d&app_name=web&clientDeviceType=0&clientID=vision-plus-pluto-client-tf2vi&clientModelNumber=1.0.0&country=MX&deviceDNT=false&deviceId=vision-plus-pluto-client-tf2vi&deviceLat=19.5200&deviceLon=-99.2000&deviceMake=Chrome&deviceModel=web&deviceType=web&deviceVersion=16.2.0&marketingRegion=VE&serverSideAds=true&sessionID=90221918-6083-11f1-af01-12223f8883b1&sid=90221918-6083-11f1-af01-12223f8883b1&userId=&jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6IjA5Y2RmMmI0LTdiOGMtNGVkNi1iMjkzLWYzZWM4YjY1ZWI2YiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI5MDIyMTkxOC02MDgzLTExZjEtYWYwMS0xMjIyM2Y4ODgzYjEiLCJjbGllbnRJUCI6IjE4OS4yMDEuMTI4LjEiLCJjaXR5IjoiTGEgTW9yYSIsInBvc3RhbENvZGUiOiI1NDA5MCIsImNvdW50cnkiOiJNWCIsImRtYSI6MCwiYWN0aXZlUmVnaW9uIjoiVkUiLCJkZXZpY2VMYXQiOjE5LjUyMDAwMDQ1Nzc2MzY3MiwiZGV2aWNlTG9uIjotOTkuMTk5OTk2OTQ4MjQyMTksInByZWZlcnJlZExhbmd1YWdlIjoiZW4iLCJkZXZpY2VUeXBlIjoid2ViIiwiZGV2aWNlVmVyc2lvbiI6IjE2LjIuMCIsImRldmljZU1ha2UiOiJDaHJvbWUiLCJkZXZpY2VNb2RlbCI6IndlYiIsImFwcE5hbWUiOiJ3ZWIiLCJhcHBWZXJzaW9uIjoiNy45LjAtYTljY2E2Yjg5YWVhNGRjMDk5OGI5MmE1MTk4OWQyYWRiOWE5MDI1ZCIsImNsaWVudElEIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXRmMnZpIiwiY21BdWRpZW5jZUlEIjoiIiwiaXNDbGllbnRETlQiOmZhbHNlLCJ1c2VySUQiOiIiLCJsb2dMZXZlbCI6IkRFRkFVTFQiLCJ0aW1lWm9uZSI6IkFtZXJpY2EvTWV4aWNvX0NpdHkiLCJzZXJ2ZXJTaWRlQWRzIjp0cnVlLCJlMmVCZWFjb25zIjpmYWxzZSwiZmVhdHVyZXMiOnsibXVsdGlQb2RBZHMiOnsiY29ob3J0IjoiIiwiZW5hYmxlZCI6dHJ1ZX0sInN0aXRjaGVyRGFzaE5nIjp7ImZsYXR0ZW5CYXNlVXJsIjp0cnVlfSwic3RpdGNoZXJIbHNOZyI6eyJkZW11eGVkQXVkaW8iOiJqaXQifX0sImZtc1BhcmFtcyI6eyJmd1ZjSUQyIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXRmMnZpIiwiZndWY0lEMkNvcHBhIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXRmMnZpIiwiY3VzdG9tUGFyYW1zIjp7ImZtc19saXZlcmFtcF9pZGwiOiIiLCJmbXNfZW1haWxoYXNoIjoiIiwiZm1zX3N1YnNjcmliZXJpZCI6IiIsImZtc19pZmEiOiIiLCJmbXNfaWRmdiI6IiIsImZtc191c2VyaWQiOiJ2aXNpb24tcGx1cy1wbHV0by1jbGllbnQtdGYydmkiLCJmbXNfdmNpZDJ0eXBlIjoidXNlcmlkIiwiZm1zX3JhbXBfaWQiOiIiLCJmbXNfaGhfcmFtcF9pZCI6IiIsImZtc19iaWRpZHR5cGUiOiIiLCJfZndfM1BfVUlEIjoiIiwiZm1zX3J1bGVpZCI6IjEwMDIwLDEwMDIxLDEwMDIzLDEwMDAwLDEwMDA5LDEwMDEzLDEwMDE2LDEwMDE1LDEwMDE0In19LCJzZXNzaW9uU3RhcnRUaW1lIjoxNzgwNjI1MzYwMDMzLCJpc3MiOiJib290LnBsdXRvLnR2Iiwic3ViIjoicHJpOnYxOnBsdXRvOmRldmljZXM6VkU6ZG1semFXOXVMWEJzZFhNdGNHeDFkRzh0WTJ4cFpXNTBMWFJtTW5acCIsImF1ZCI6IioucGx1dG8udHYiLCJleHAiOjE3ODA3MTE3NjAsImlhdCI6MTc4MDYyNTM2MCwianRpIjoiNDk1NDM5OGItZWJkMy00MWQyLTgzNjAtNDM1N2RhZTcyODY5In0.LmrV5-H1-PEZxk7YGEfTigALJ3GgmSZrZn4jJQ1htWM&masterJWTPassthrough=true
-[2026-06-04 20:09:21] [INFO] [Resolver] ✅ Primer éxito paralelo: Pluto TV Stream -> https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/episode/5fbfce0b861be7001a6bf8a5/master.m3u8?advertisingId=&appName=web&appVersion=7.9.0-a9cca6b89aea4dc0998b92a51989d2adb9a9025d&app_name=web&clientDeviceType=0&clientID=vision-plus-pluto-client-tf2vi&clientModelNumber=1.0.0&country=MX&deviceDNT=false&deviceId=vision-plus-pluto-client-tf2vi&deviceLat=19.5200&deviceLon=-99.2000&deviceMake=Chrome&deviceModel=web&deviceType=web&deviceVersion=16.2.0&marketingRegion=VE&serverSideAds=true&sessionID=90221918-6083-11f1-af01-12223f8883b1&sid=90221918-6083-11f1-af01-12223f8883b1&userId=&jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6IjA5Y2RmMmI0LTdiOGMtNGVkNi1iMjkzLWYzZWM4YjY1ZWI2YiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI5MDIyMTkxOC02MDgzLTExZjEtYWYwMS0xMjIyM2Y4ODgzYjEiLCJjbGllbnRJUCI6IjE4OS4yMDEuMTI4LjEiLCJjaXR5IjoiTGEgTW9yYSIsInBvc3RhbENvZGUiOiI1NDA5MCIsImNvdW50cnkiOiJNWCIsImRtYSI6MCwiYWN0aXZlUmVnaW9uIjoiVkUiLCJkZXZpY2VMYXQiOjE5LjUyMDAwMDQ1Nzc2MzY3MiwiZGV2aWNlTG9uIjotOTkuMTk5OTk2OTQ4MjQyMTksInByZWZlcnJlZExhbmd1YWdlIjoiZW4iLCJkZXZpY2VUeXBlIjoid2ViIiwiZGV2aWNlVmVyc2lvbiI6IjE2LjIuMCIsImRldmljZU1ha2UiOiJDaHJvbWUiLCJkZXZpY2VNb2RlbCI6IndlYiIsImFwcE5hbWUiOiJ3ZWIiLCJhcHBWZXJzaW9uIjoiNy45LjAtYTljY2E2Yjg5YWVhNGRjMDk5OGI5MmE1MTk4OWQyYWRiOWE5MDI1ZCIsImNsaWVudElEIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXRmMnZpIiwiY21BdWRpZW5jZUlEIjoiIiwiaXNDbGllbnRETlQiOmZhbHNlLCJ1c2VySUQiOiIiLCJsb2dMZXZlbCI6IkRFRkFVTFQiLCJ0aW1lWm9uZSI6IkFtZXJpY2EvTWV4aWNvX0NpdHkiLCJzZXJ2ZXJTaWRlQWRzIjp0cnVlLCJlMmVCZWFjb25zIjpmYWxzZSwiZmVhdHVyZXMiOnsibXVsdGlQb2RBZHMiOnsiY29ob3J0IjoiIiwiZW5hYmxlZCI6dHJ1ZX0sInN0aXRjaGVyRGFzaE5nIjp7ImZsYXR0ZW5CYXNlVXJsIjp0cnVlfSwic3RpdGNoZXJIbHNOZyI6eyJkZW11eGVkQXVkaW8iOiJqaXQifX0sImZtc1BhcmFtcyI6eyJmd1ZjSUQyIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXRmMnZpIiwiZndWY0lEMkNvcHBhIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LXRmMnZpIiwiY3VzdG9tUGFyYW1zIjp7ImZtc19saXZlcmFtcF9pZGwiOiIiLCJmbXNfZW1haWxoYXNoIjoiIiwiZm1zX3N1YnNjcmliZXJpZCI6IiIsImZtc19pZmEiOiIiLCJmbXNfaWRmdiI6IiIsImZtc191c2VyaWQiOiJ2aXNpb24tcGx1cy1wbHV0by1jbGllbnQtdGYydmkiLCJmbXNfdmNpZDJ0eXBlIjoidXNlcmlkIiwiZm1zX3JhbXBfaWQiOiIiLCJmbXNfaGhfcmFtcF9pZCI6IiIsImZtc19iaWRpZHR5cGUiOiIiLCJfZndfM1BfVUlEIjoiIiwiZm1zX3J1bGVpZCI6IjEwMDIwLDEwMDIxLDEwMDIzLDEwMDAwLDEwMDA5LDEwMDEzLDEwMDE2LDEwMDE1LDEwMDE0In19LCJzZXNzaW9uU3RhcnRUaW1lIjoxNzgwNjI1MzYwMDMzLCJpc3MiOiJib290LnBsdXRvLnR2Iiwic3ViIjoicHJpOnYxOnBsdXRvOmRldmljZXM6VkU6ZG1semFXOXVMWEJzZFhNdGNHeDFkRzh0WTJ4cFpXNTBMWFJtTW5acCIsImF1ZCI6IioucGx1dG8udHYiLCJleHAiOjE3ODA3MTE3NjAsImlhdCI6MTc4MDYyNTM2MCwianRpIjoiNDk1NDM5OGItZWJkMy00MWQyLTgzNjAtNDM1N2RhZTcyODY5In0.LmrV5-H1-PEZxk7YGEfTigALJ3GgmSZrZn4jJQ1htWM&masterJWTPassthrough=true
-[2026-06-04 20:10:44] [INFO] [33m[2026-06-04T20:10:44.149] [INFO] - [connection closed][0m
-[2026-06-04 20:10:44] [INFO] [35m[2026-06-04T20:10:44.149] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 20:10:44] [ERROR] {}
-[2026-06-04 20:10:45] [INFO] [33m[2026-06-04T20:10:45.164] [INFO] - [Started reconnecting][0m
-[2026-06-04 20:10:45] [INFO] [35m[2026-06-04T20:10:45.165] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 20:10:45] [INFO] [33m[2026-06-04T20:10:45.165] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:10:45] [INFO] [33m[2026-06-04T20:10:45.166] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:10:45] [INFO] [33m[2026-06-04T20:10:45.262] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 20:10:45] [INFO] [33m[2026-06-04T20:10:45.263] [INFO] - [Handling reconnect!][0m
-[2026-06-04 20:12:15] [INFO] [33m[2026-06-04T20:12:15.350] [INFO] - [connection closed][0m
-[2026-06-04 20:12:15] [INFO] [35m[2026-06-04T20:12:15.350] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 20:12:15] [ERROR] {}
-[2026-06-04 20:12:16] [INFO] [33m[2026-06-04T20:12:16.359] [INFO] - [Started reconnecting][0m
-[2026-06-04 20:12:16] [INFO] [35m[2026-06-04T20:12:16.360] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 20:12:16] [INFO] [33m[2026-06-04T20:12:16.360] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:12:16] [INFO] [33m[2026-06-04T20:12:16.361] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:12:16] [INFO] [33m[2026-06-04T20:12:16.462] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 20:12:16] [INFO] [33m[2026-06-04T20:12:16.462] [INFO] - [Handling reconnect!][0m
-[2026-06-04 20:13:46] [INFO] [33m[2026-06-04T20:13:46.541] [INFO] - [connection closed][0m
-[2026-06-04 20:13:46] [INFO] [35m[2026-06-04T20:13:46.542] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 20:13:46] [ERROR] {}
-[2026-06-04 20:13:47] [INFO] [33m[2026-06-04T20:13:47.556] [INFO] - [Started reconnecting][0m
-[2026-06-04 20:13:47] [INFO] [35m[2026-06-04T20:13:47.557] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 20:13:47] [INFO] [33m[2026-06-04T20:13:47.557] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:13:47] [INFO] [33m[2026-06-04T20:13:47.558] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:13:47] [INFO] [33m[2026-06-04T20:13:47.650] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 20:13:47] [INFO] [33m[2026-06-04T20:13:47.653] [INFO] - [Handling reconnect!][0m
-[2026-06-04 20:14:30] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "catalog_pelisplus_movie_unsecretomgico" (Idioma pref: auto, Servidores excluidos: [])
-[2026-06-04 20:14:30] [INFO] [Resolver] Película encontrada: "Un secreto mágico"
-[2026-06-04 20:14:30] [INFO] [MoviePageParser] 🔍 Analizando página externa de PelisPlus: https://www.pelisplushd.la/pelicula/un-secreto-magico
-[2026-06-04 20:14:30] [INFO] [Resolver] Página de detalle scrapeada: 6 opciones extraídas de https://www.pelisplushd.la/pelicula/un-secreto-magico
-[2026-06-04 20:14:30] [INFO] [Resolver] Total de opciones filtradas a evaluar: 6
-[2026-06-04 20:14:30] [INFO] [Resolver] Lanzando 3 opciones en paralelo (max 3)...
-[2026-06-04 20:14:30] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] streamwish
-[2026-06-04 20:14:30] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://streamwish.to/e/no6piwseouth
-[2026-06-04 20:14:30] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://streamwish.to/e/no6piwseouth
-[2026-06-04 20:14:30] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] voesx
-[2026-06-04 20:14:30] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://voe.sx/e/fdra9faflqmc
-[2026-06-04 20:14:30] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://voe.sx/e/fdra9faflqmc
-[2026-06-04 20:14:30] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] vidhide
-[2026-06-04 20:14:30] [INFO] [fallbackAdapter] ⚠️ Evaluando fuente restante: https://vidhidepro.com/v/u59f6c7kz439
-[2026-06-04 20:14:30] [INFO] [fallbackAdapter] 🌐 Intentando sniffing genérico con Playwright...
-[2026-06-04 20:14:30] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://vidhidepro.com/v/u59f6c7kz439
-[2026-06-04 20:14:36] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 20:14:36] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 20:14:36] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://ugc-cdn-caching-n3onxj7ixldkjwtbh5.cloudwindow-route.com/engine/hls2/01/17295/hc6b7ai1syje_,n,.urlset/master.m3u8?t=wOkis0ZXA7dIqqe72-EhvAIqsEaAYl4bmaoAPDGiKfE&s=1780625673&e=14400&f=86540674&node=w8oQtbGzlnpHpjVdAxkrsHCuM1EFlTmP72nR7PvOUAw=&i=187.173&sp=2500&asn=8151&q=n&rq=s67kBoQGAPI0fRCxI8OyVdEOKHKn4KrVLsOqTAoN
-[2026-06-04 20:14:36] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://jessicayeahcatch.com/engine/jwplayer/jwplayer6/c4585c1c9c1a4486eb650df09e3a4657.gif?h=-1672018932&e=pa&n=7672193601132431&aid=SDtULpKyEeWwxnBWgb9%2BiQ&amp=0&at=1&c=-1&ccp=0&cp=0&d=0&eb=0&ed=6&emi=aw0ac46yieun&i=0&lid=1yxstcpuvfv9&lsa=set&mt=0&pbd=1&pbr=1&pgi=13l9517k47m7&ph=3&pid=fdra9faflqmc&pii=0&pl=720&plc=1&pli=32u9481q53t9&pp=hlsjs&prc=1&ps=3&pss=1&pt=Watch%20307723--b8221750-5f0a-4208-bd0e-38ce6f21e31c--qszw--2717965-voesx.mp4%20-%20VOE%20%7C%20Content%20Delivery%20Network%20(CDN)%20%26%20Video%20Cloud&pu=https%3A%2F%2Fjessicayeahcatch.com%2Fe%2Ffdra9faflqmc&pv=8.40.2&pyc=0&s=1&sdk=0&stc=1&stpe=0&t=307723--b8221750-5f0a-4208-bd0e-38ce6f21e31c--qszw--2717965-voesx.mp4&tv=4.0.9&vb=1&vi=1&vl=90&wd=1280&ab=0&cme=0&flc=0&lng=en&mu=https%3A%2F%2Fugc-cdn-caching-n3onxj7ixldkjwtbh5.cloudwindow-route.com%2Fengine%2Fhls2%2F01%2F17295%2Fhc6b7ai1syje_%2Cn%2C.urlset%2Fmaster.m3u8%3Ft%3DwOkis0ZXA7dIqqe72-EhvAIqsEaAYl4bmaoAPDGiKfE%26s%3D1780625673%26e%3D14400%26f%3D86540674%26node%3Dw8oQtbGzlnpHpjVdAxkrsHCuM1EFlTmP72nR7PvOUAw%3D%26i%3D187.173%26sp%3D2500%26asn%3D8151%26q%3Dn%26rq%3Ds67kBoQGAPI0fRCxI8OyVdEOKHKn4KrVLsOqTAoN&pd=1&pdr=https%3A%2F%2Fvoe.sx%2F&plng=en&pni=0&pr=4&tb=0&vd=0&sa=1780625676029
-[2026-06-04 20:14:36] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 20:14:36] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
 [2026-06-04 20:14:37] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/d6AdkU90KZOOVKfHTPoKAQ/hjkrhuihghfvu/1780668875/41399943/master.m3u8
 [2026-06-04 20:14:37] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://ugc-cdn-caching-n3onxj7ixldkjwtbh5.cloudwindow-route.com/engine/hls2/01/17295/hc6b7ai1syje_,n,.urlset/index-v1-a1.m3u8?t=wOkis0ZXA7dIqqe72-EhvAIqsEaAYl4bmaoAPDGiKfE&s=1780625673&e=14400&f=86540674&node=w8oQtbGzlnpHpjVdAxkrsHCuM1EFlTmP72nR7PvOUAw=&i=187.173&sp=2500&asn=8151&q=n&rq=s67kBoQGAPI0fRCxI8OyVdEOKHKn4KrVLsOqTAoN
 [2026-06-04 20:14:37] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/d6AdkU90KZOOVKfHTPoKAQ/hjkrhuihghfvu/1780668875/41399943/master.m3u8
@@ -2497,3 +2434,66 @@
 [2026-06-05 02:01:51] [INFO] [33m[2026-06-05T02:01:51.044] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-05 02:01:51] [INFO] [33m[2026-06-05T02:01:51.044] [INFO] - [Handling reconnect!][0m
 [2026-06-05 02:03:06] [INFO] [HealthCheck] ✅ 30 enlaces verificados y puntuados.
+[2026-06-05 02:03:21] [INFO] [33m[2026-06-05T02:03:21.117] [INFO] - [connection closed][0m
+[2026-06-05 02:03:21] [INFO] [35m[2026-06-05T02:03:21.117] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 02:03:21] [ERROR] {}
+[2026-06-05 02:03:22] [INFO] [33m[2026-06-05T02:03:22.121] [INFO] - [Started reconnecting][0m
+[2026-06-05 02:03:22] [INFO] [35m[2026-06-05T02:03:22.122] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 02:03:22] [INFO] [33m[2026-06-05T02:03:22.122] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:03:22] [INFO] [33m[2026-06-05T02:03:22.123] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:03:22] [INFO] [33m[2026-06-05T02:03:22.196] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 02:03:22] [INFO] [33m[2026-06-05T02:03:22.197] [INFO] - [Handling reconnect!][0m
+[2026-06-05 02:04:52] [INFO] [33m[2026-06-05T02:04:52.269] [INFO] - [connection closed][0m
+[2026-06-05 02:04:52] [INFO] [35m[2026-06-05T02:04:52.270] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 02:04:52] [ERROR] {}
+[2026-06-05 02:04:53] [INFO] [33m[2026-06-05T02:04:53.271] [INFO] - [Started reconnecting][0m
+[2026-06-05 02:04:53] [INFO] [35m[2026-06-05T02:04:53.272] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 02:04:53] [INFO] [33m[2026-06-05T02:04:53.272] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:04:53] [INFO] [33m[2026-06-05T02:04:53.272] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:04:53] [INFO] [33m[2026-06-05T02:04:53.351] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 02:04:53] [INFO] [33m[2026-06-05T02:04:53.352] [INFO] - [Handling reconnect!][0m
+[2026-06-05 02:06:23] [INFO] [33m[2026-06-05T02:06:23.424] [INFO] - [connection closed][0m
+[2026-06-05 02:06:23] [INFO] [35m[2026-06-05T02:06:23.425] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 02:06:23] [ERROR] {}
+[2026-06-05 02:06:24] [INFO] [33m[2026-06-05T02:06:24.426] [INFO] - [Started reconnecting][0m
+[2026-06-05 02:06:24] [INFO] [35m[2026-06-05T02:06:24.427] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 02:06:24] [INFO] [33m[2026-06-05T02:06:24.427] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:06:24] [INFO] [33m[2026-06-05T02:06:24.428] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:06:24] [INFO] [33m[2026-06-05T02:06:24.503] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 02:06:24] [INFO] [33m[2026-06-05T02:06:24.504] [INFO] - [Handling reconnect!][0m
+[2026-06-05 02:07:54] [INFO] [33m[2026-06-05T02:07:54.577] [INFO] - [connection closed][0m
+[2026-06-05 02:07:54] [INFO] [35m[2026-06-05T02:07:54.578] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 02:07:54] [ERROR] {}
+[2026-06-05 02:07:55] [INFO] [33m[2026-06-05T02:07:55.588] [INFO] - [Started reconnecting][0m
+[2026-06-05 02:07:55] [INFO] [35m[2026-06-05T02:07:55.588] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 02:07:55] [INFO] [33m[2026-06-05T02:07:55.589] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:07:55] [INFO] [33m[2026-06-05T02:07:55.589] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:07:55] [INFO] [33m[2026-06-05T02:07:55.684] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 02:07:55] [INFO] [33m[2026-06-05T02:07:55.685] [INFO] - [Handling reconnect!][0m
+[2026-06-05 02:09:25] [INFO] [33m[2026-06-05T02:09:25.779] [INFO] - [connection closed][0m
+[2026-06-05 02:09:25] [INFO] [35m[2026-06-05T02:09:25.779] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 02:09:25] [ERROR] {}
+[2026-06-05 02:09:26] [INFO] [33m[2026-06-05T02:09:26.784] [INFO] - [Started reconnecting][0m
+[2026-06-05 02:09:26] [INFO] [35m[2026-06-05T02:09:26.785] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 02:09:26] [INFO] [33m[2026-06-05T02:09:26.785] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:09:26] [INFO] [33m[2026-06-05T02:09:26.785] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:09:26] [INFO] [33m[2026-06-05T02:09:26.862] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 02:09:26] [INFO] [33m[2026-06-05T02:09:26.862] [INFO] - [Handling reconnect!][0m
+[2026-06-05 02:10:56] [INFO] [33m[2026-06-05T02:10:56.934] [INFO] - [connection closed][0m
+[2026-06-05 02:10:56] [INFO] [35m[2026-06-05T02:10:56.934] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 02:10:56] [ERROR] {}
+[2026-06-05 02:10:57] [INFO] [33m[2026-06-05T02:10:57.944] [INFO] - [Started reconnecting][0m
+[2026-06-05 02:10:57] [INFO] [35m[2026-06-05T02:10:57.945] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 02:10:57] [INFO] [33m[2026-06-05T02:10:57.945] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:10:57] [INFO] [33m[2026-06-05T02:10:57.946] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:10:58] [INFO] [33m[2026-06-05T02:10:58.039] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 02:10:58] [INFO] [33m[2026-06-05T02:10:58.040] [INFO] - [Handling reconnect!][0m
+[2026-06-05 02:12:28] [INFO] [33m[2026-06-05T02:12:28.130] [INFO] - [connection closed][0m
+[2026-06-05 02:12:28] [INFO] [35m[2026-06-05T02:12:28.130] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 02:12:28] [ERROR] {}
+[2026-06-05 02:12:29] [INFO] [33m[2026-06-05T02:12:29.135] [INFO] - [Started reconnecting][0m
+[2026-06-05 02:12:29] [INFO] [35m[2026-06-05T02:12:29.135] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 02:12:29] [INFO] [33m[2026-06-05T02:12:29.136] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:12:29] [INFO] [33m[2026-06-05T02:12:29.136] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:12:29] [INFO] [33m[2026-06-05T02:12:29.233] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 02:12:29] [INFO] [33m[2026-06-05T02:12:29.234] [INFO] - [Handling reconnect!][0m
