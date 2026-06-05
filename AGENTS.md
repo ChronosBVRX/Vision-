@@ -1,7 +1,7 @@
 # Vision+ — AGENTS.md
 
 > Archivo de contexto compartido entre opencode y Antigravity 2.0.
-> **Actualizado por última vez:** 04/06/2026 por opencode (sesión noche)
+> **Actualizado por última vez:** 05/06/2026 por antigravity (sesión tarde)
 
 ---
 
@@ -131,16 +131,15 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 
 ### 📋 Workflow obligatorio para cada agente
 
-**Regla de Espejo en Vivo:** Todos los agentes (EXCEPTO el agente del servidor remoto) deben cerciorarse de lanzar y mantener corriendo en segundo plano el comando `npm run sync` al iniciar su sesión, para garantizar que todos los cambios se inyecten automáticamente al servidor remoto.
+**Desactivación del Espejo en Vivo:** El desarrollo se realiza directamente en el servidor. Ya no se debe ejecutar `npm run sync` ni usar los scripts de sincronización (`direct-sync.js`, `watch-sync.js`).
 
 **Regla de Build Obligatorio:** Cada vez que se haga **cualquier cambio en el código** (frontend, backend, config, versión), el agente DEBE:
-  1. Recompilar el frontend con `npm run build --prefix frontend` (para que Vite inyecte la nueva versión y los cambios en `frontend/dist/`)
-  2. Si `watch-sync.js` no está corriendo, hacer commit + push manual para que `server-sync.js` en el servidor remoto lo detecte y aplique los cambios
+  1. Recompilar el frontend con `npm run build --prefix frontend` (para que Vite compile los archivos del cliente en `frontend/dist/` e inyecte la nueva versión en el bundle).
 
-**¿Por qué?** La versión (`VITE_APP_VERSION`) se inyecta en tiempo de build desde `package.json`. Si no se rebuild, el servidor remoto sigue sirviendo el bundle viejo con la versión anterior. El Bootloader mostraría una versión incorrecta.
+**¿Por qué?** La versión (`VITE_APP_VERSION`) se inyecta en tiempo de build desde `package.json`. Si no se recompila el frontend, el servidor sirve el bundle viejo con la versión anterior y el Bootloader mostraría una versión incorrecta.
 
 **Antes de empezar cualquier tarea:**
-0. **CORRER EL SERVIDOR SIEMPRE:** Debes ejecutar `npm run dev` (o `npm run sync` en su defecto) en segundo plano **antes de hacer cualquier otra cosa**. Es una regla estricta ordenada por el usuario.
+0. **CORRER EL SERVIDOR SIEMPRE:** Debes ejecutar `npm run dev` en segundo plano **antes de hacer cualquier otra cosa**. Es una regla estricta ordenada por el usuario.
 1. `git pull origin main` — asegurar código más reciente
 2. `node agent-lock.js status` — verificar que no haya locks activos
 3. Si el archivo a editar tiene lock de otro agente → **detenerse y avisar al usuario**
@@ -364,6 +363,10 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 - **Componente `<Bootloader />`:** Implementado en React que detiene el uso de la interfaz hasta que `CatalogContext` termina de precargar toda la data.
 - **Experiencia de Usuario:** Agregado gradiente radial rojo, animación de carga, tiempo mínimo de retención (2000ms) para evitar destellos rápidos, y transición suave (fade-out) hacia la app.
 - **Versión Dinámica:** Vite inyecta automáticamente la versión del `package.json` mediante `VITE_APP_VERSION` para mostrarla en el splash screen.
+
+### Desactivación de Sincronización a Servidor Remoto (05/06/2026)
+- **Eliminación del flujo Sync:** Se eliminó la regla de sincronización a otra PC (espejo en vivo) debido a que el entorno de desarrollo ahora reside directamente en el servidor.
+- **Simplificación del Workflow:** Se adaptaron las reglas del workflow para evitar el uso del comando `npm run sync` y de los scripts de sincronización (`direct-sync.js`, `watch-sync.js`), manteniendo la compilación del frontend y el ciclo de desarrollo directo en el servidor.
 
 ---
 
