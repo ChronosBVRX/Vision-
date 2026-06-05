@@ -1405,3 +1405,36 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-04 18:03:11] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 14 partidos)
 [2026-06-04 18:03:11] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
 [2026-06-04 18:03:13] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
+[2026-06-04 18:15:17] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "catalog_poseidonhd_movie_forgivenessgirl" (Idioma pref: auto, Servidores excluidos: [])
+[2026-06-04 18:15:17] [INFO] [Resolver] Película encontrada: "Forgiveness Girl"
+[2026-06-04 18:15:17] [INFO] [MoviePageParser] 🔍 Analizando página externa de PoseidonHD: https://www.poseidonhd2.co/pelicula/1587195/forgiveness-girl
+[2026-06-04 18:15:17] [INFO] [BrowserFetcher] 🌐 Cargando página con Playwright para evadir antibot: https://www.poseidonhd2.co/pelicula/1587195/forgiveness-girl
+[2026-06-04 18:15:23] [INFO] [BrowserFetcher] ✅ HTML cargado exitosamente. Longitud: 70144 bytes.
+[2026-06-04 18:15:23] [INFO] [Resolver] Página de detalle scrapeada: 5 opciones extraídas de https://www.poseidonhd2.co/pelicula/1587195/forgiveness-girl
+[2026-06-04 18:15:23] [INFO] [Resolver] Total de opciones filtradas a evaluar: 5
+[2026-06-04 18:15:23] [INFO] [Resolver] Lanzando 3 opciones en paralelo (max 3)...
+[2026-06-04 18:15:23] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-04 18:15:23] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-04 18:15:23] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
+[2026-06-04 18:15:23] [INFO] [Resolver] Intentando 2 candidatos restantes secuencialmente...
+[2026-06-04 18:15:23] [INFO] [Resolver] ▶ Probando secuencial: [Español Latino] player
+[2026-06-04 18:15:23] [ERROR] [API Resolve] Error al resolver película catalog_poseidonhd_movie_forgivenessgirl: url.startsWith is not a function
+[2026-06-04 18:15:37] [INFO] [API Sync] Iniciando actualización mediante la tarea programada VisionRepoAutoPull...
+[2026-06-04 18:15:37] [INFO] [API Sync] Tarea programada lanzada con éxito.
+[2026-06-04 18:15:48] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-04 18:15:51] [INFO] [DB] SQLite inicializado.
+[2026-06-04 18:15:51] [INFO] [DB] Memoria sincronizada: 474 sources, 382 pelis, 144 series.
+[2026-06-04 18:15:51] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-04 18:15:51] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-04 18:15:51] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-04 18:15:52] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-04 18:15:54] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-04 18:15:54] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-04 18:15:54] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-04 18:15:54] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-04 18:15:54] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-04 18:15:54] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-04 18:15:54] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-04 18:15:56] [INFO] [CatalogWorker] Catálogo existente: 382 películas, 144 series.
+[2026-06-04 18:15:56] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-04 18:15:56] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
