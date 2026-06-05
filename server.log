@@ -1,57 +1,3 @@
-[2026-06-04 19:36:47] [INFO] [Sniffer] Analisis finalizado para https://www.rojadirectahd.dev/ver/univision-deportes.php. Resultado: EXITO
-[2026-06-04 19:36:47] [INFO] [Server] Video detectado: https://98ca2.streameasthd.net/max1/tracks-v1a1/mono.m3u8?ip=187.173.128.107&token=e56152481d01b17f12d5dd7d9321f6c1a46a4d59-93-1780668402-1780614402. Referer: https://streamtp-x-y-z.ws/. Verificando conectividad...
-[2026-06-04 19:36:47] [INFO] [Server] ¡Validación HEAD exitosa! Status: 200
-[2026-06-04 19:36:47] [INFO] [Server] ¡Éxito! Servidor ROJADIRECTAHD validado en: https://98ca2.streameasthd.net/max1/tracks-v1a1/mono.m3u8?ip=187.173.128.107&token=e56152481d01b17f12d5dd7d9321f6c1a46a4d59-93-1780668402-1780614402
-[2026-06-04 19:37:46] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "catalog_poseidonhd_movie_latregua" (Idioma pref: auto, Servidores excluidos: [])
-[2026-06-04 19:37:46] [INFO] [Resolver] Película encontrada: "La tregua"
-[2026-06-04 19:37:46] [INFO] [MoviePageParser] 🔍 Analizando página externa de PoseidonHD: https://www.poseidonhd2.co/pelicula/1434973/la-tregua
-[2026-06-04 19:37:46] [INFO] [BrowserFetcher] 🌐 Cargando página con Playwright para evadir antibot: https://www.poseidonhd2.co/pelicula/1434973/la-tregua
-[2026-06-04 19:37:49] [INFO] [BrowserFetcher] ✅ HTML cargado exitosamente. Longitud: 93930 bytes.
-[2026-06-04 19:37:50] [INFO] [Resolver] Página de detalle scrapeada: 5 opciones extraídas de https://www.poseidonhd2.co/pelicula/1434973/la-tregua
-[2026-06-04 19:37:50] [INFO] [Resolver] Total de opciones filtradas a evaluar: 5
-[2026-06-04 19:37:50] [INFO] [Resolver] Lanzando 3 opciones en paralelo (max 3)...
-[2026-06-04 19:37:50] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
-[2026-06-04 19:37:50] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j99F9c5WXufB7mkP8eW86PhwnL67TzB9yixvsjKNdqjl
-[2026-06-04 19:37:50] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j99F9c5WXufB7mkP8eW86PhwnL67TzB9yixvsjKNdqjl
-[2026-06-04 19:37:50] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
-[2026-06-04 19:37:50] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=nvSrqGY5gls.ZEL93nL9MABv4Peu9IUdm.mu5UJe9Zw-
-[2026-06-04 19:37:50] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=nvSrqGY5gls.ZEL93nL9MABv4Peu9IUdm.mu5UJe9Zw-
-[2026-06-04 19:37:50] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
-[2026-06-04 19:37:50] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0DWz50vF1yy3NfajELBCm869vKcehVsjzAoNEKGc8eJC
-[2026-06-04 19:37:50] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0DWz50vF1yy3NfajELBCm869vKcehVsjzAoNEKGc8eJC
-[2026-06-04 19:37:53] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 19:37:53] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 19:37:53] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 19:37:54] [INFO] [BrowserResolver] 🚫 Anuncio ignorado: https://amd-cdn-1.ffb7df5a878b59e42e257c042f54bed2.com/content/stream/agl/1xbet_mx_1920x1080_rituals.mp4
-[2026-06-04 19:37:54] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 19:37:54] [INFO] [BrowserResolver] 🚫 Anuncio ignorado: https://amd-cdn-1.ffb7df5a878b59e42e257c042f54bed2.com/content/stream/agl/1xbet_mx_1920x1080_rituals.mp4
-[2026-06-04 19:37:54] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 19:37:54] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 19:37:54] [INFO] [BrowserResolver] 🚫 Anuncio ignorado: https://amd-cdn-1.ffb7df5a878b59e42e257c042f54bed2.com/content/stream/agl/1xbet_mx_1920x1080_respect.mp4
-[2026-06-04 19:37:55] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 19:37:55] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 19:37:55] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 19:37:58] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/9Ef7FgwUiusyafu9TsaXIA/hjkrhuihghfvu/1780666675/41290271/master.m3u8
-[2026-06-04 19:37:58] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/9Ef7FgwUiusyafu9TsaXIA/hjkrhuihghfvu/1780666675/41290271/master.m3u8
-[2026-06-04 19:37:58] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://callistanise.com/stream/9Ef7FgwUiusyafu9TsaXIA/hjkrhuihghfvu/1780666675/41290271/master.m3u8
-[2026-06-04 19:38:00] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://hgplaycdn.com/stream/gCetVb1WHGViGkFqKQLOjA/kjhhiuahiuhgihdf/1780666676/72120604/master.m3u8
-[2026-06-04 19:38:00] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://hgplaycdn.com/stream/gCetVb1WHGViGkFqKQLOjA/kjhhiuahiuhgihdf/1780666676/72120604/master.m3u8
-[2026-06-04 19:38:00] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://hgplaycdn.com/stream/gCetVb1WHGViGkFqKQLOjA/kjhhiuahiuhgihdf/1780666676/72120604/master.m3u8
-[2026-06-04 19:38:05] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://callistanise.com/stream/9Ef7FgwUiusyafu9TsaXIA/hjkrhuihghfvu/1780666675/41290271/master.m3u8. Validando conectividad...
-[2026-06-04 19:38:05] [INFO] [SourceValidator] Probando HEAD para: https://callistanise.com/stream/9Ef7FgwUiusyafu9TsaXIA/hjkrhuihghfvu/1780666675/41290271/master.m3u8
-[2026-06-04 19:38:06] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://hgplaycdn.com/stream/gCetVb1WHGViGkFqKQLOjA/kjhhiuahiuhgihdf/1780666676/72120604/master.m3u8. Validando conectividad...
-[2026-06-04 19:38:06] [INFO] [SourceValidator] Probando HEAD para: https://hgplaycdn.com/stream/gCetVb1WHGViGkFqKQLOjA/kjhhiuahiuhgihdf/1780666676/72120604/master.m3u8
-[2026-06-04 19:38:06] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://callistanise.com/stream/9Ef7FgwUiusyafu9TsaXIA/hjkrhuihghfvu/1780666675/41290271/master.m3u8
-[2026-06-04 19:38:06] [INFO] [Resolver] ✅ Primer éxito paralelo: player -> https://callistanise.com/stream/9Ef7FgwUiusyafu9TsaXIA/hjkrhuihghfvu/1780666675/41290271/master.m3u8
-[2026-06-04 19:38:06] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/02/11328/ihd0cdqqkkcw_x/master.m3u8?t=JKleKT9CjKUdErsW5yq7LTeK1fcT1y6oERPlkFmFIOM&s=1780623484&e=10800&f=56641691&srv=1060&asn=8151&sp=5500&p=0
-[2026-06-04 19:38:06] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://hgplaycdn.com/stream/gCetVb1WHGViGkFqKQLOjA/kjhhiuahiuhgihdf/1780666676/72120604/master.m3u8
-[2026-06-04 19:38:06] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/02/11328/ihd0cdqqkkcw_x/master.m3u8?t=JKleKT9CjKUdErsW5yq7LTeK1fcT1y6oERPlkFmFIOM&s=1780623484&e=10800&f=56641691&srv=1060&asn=8151&sp=5500&p=0
-[2026-06-04 19:38:07] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/02/11328/ihd0cdqqkkcw_x/master.m3u8?t=JKleKT9CjKUdErsW5yq7LTeK1fcT1y6oERPlkFmFIOM&s=1780623484&e=10800&f=56641691&srv=1060&asn=8151&sp=5500&p=0. Validando conectividad...
-[2026-06-04 19:38:07] [INFO] [SourceValidator] Probando HEAD para: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/02/11328/ihd0cdqqkkcw_x/master.m3u8?t=JKleKT9CjKUdErsW5yq7LTeK1fcT1y6oERPlkFmFIOM&s=1780623484&e=10800&f=56641691&srv=1060&asn=8151&sp=5500&p=0
-[2026-06-04 19:38:08] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/02/11328/ihd0cdqqkkcw_x/master.m3u8?t=JKleKT9CjKUdErsW5yq7LTeK1fcT1y6oERPlkFmFIOM&s=1780623484&e=10800&f=56641691&srv=1060&asn=8151&sp=5500&p=0
-[2026-06-04 19:39:49] [INFO] [Server] Iniciando live resolve para 1 opciones... (Excluyendo: [])
-[2026-06-04 19:39:49] [INFO] [Server] Probando servidor 1/1: Pluto TV Stream (pluto-tv:///stitch/hls/channel/5ee92e72fb286e0007285fec/master.m3u8)
-[2026-06-04 19:39:49] [INFO] [Server] Redirigiendo a plutoAdapter...
 [2026-06-04 19:39:49] [INFO] [plutoAdapter] ⚡ Resolviendo stream dinamico de Pluto TV: pluto-tv:///stitch/hls/channel/5ee92e72fb286e0007285fec/master.m3u8
 [2026-06-04 19:39:50] [INFO] [SourceValidator] Probando HEAD para: https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/channel/5ee92e72fb286e0007285fec/master.m3u8?advertisingId=&appName=web&appVersion=7.9.0-a9cca6b89aea4dc0998b92a51989d2adb9a9025d&app_name=web&clientDeviceType=0&clientID=vision-plus-pluto-client-as8fi&clientModelNumber=1.0.0&country=MX&deviceDNT=false&deviceId=vision-plus-pluto-client-as8fi&deviceLat=19.5200&deviceLon=-99.2000&deviceMake=Chrome&deviceModel=web&deviceType=web&deviceVersion=16.2.0&marketingRegion=VE&serverSideAds=true&sessionID=70ba6601-607f-11f1-abe4-9280f014cb99&sid=70ba6601-607f-11f1-abe4-9280f014cb99&userId=&jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6IjA5Y2RmMmI0LTdiOGMtNGVkNi1iMjkzLWYzZWM4YjY1ZWI2YiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI3MGJhNjYwMS02MDdmLTExZjEtYWJlNC05MjgwZjAxNGNiOTkiLCJjbGllbnRJUCI6IjE4OS4yMDEuMTI4LjEiLCJjaXR5IjoiTGEgTW9yYSIsInBvc3RhbENvZGUiOiI1NDA5MCIsImNvdW50cnkiOiJNWCIsImRtYSI6MCwiYWN0aXZlUmVnaW9uIjoiVkUiLCJkZXZpY2VMYXQiOjE5LjUyMDAwMDQ1Nzc2MzY3MiwiZGV2aWNlTG9uIjotOTkuMTk5OTk2OTQ4MjQyMTksInByZWZlcnJlZExhbmd1YWdlIjoiZW4iLCJkZXZpY2VUeXBlIjoid2ViIiwiZGV2aWNlVmVyc2lvbiI6IjE2LjIuMCIsImRldmljZU1ha2UiOiJDaHJvbWUiLCJkZXZpY2VNb2RlbCI6IndlYiIsImFwcE5hbWUiOiJ3ZWIiLCJhcHBWZXJzaW9uIjoiNy45LjAtYTljY2E2Yjg5YWVhNGRjMDk5OGI5MmE1MTk4OWQyYWRiOWE5MDI1ZCIsImNsaWVudElEIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWFzOGZpIiwiY21BdWRpZW5jZUlEIjoiIiwiaXNDbGllbnRETlQiOmZhbHNlLCJ1c2VySUQiOiIiLCJsb2dMZXZlbCI6IkRFRkFVTFQiLCJ0aW1lWm9uZSI6IkFtZXJpY2EvTWV4aWNvX0NpdHkiLCJzZXJ2ZXJTaWRlQWRzIjp0cnVlLCJlMmVCZWFjb25zIjpmYWxzZSwiZmVhdHVyZXMiOnsibXVsdGlQb2RBZHMiOnsiY29ob3J0IjoiIiwiZW5hYmxlZCI6dHJ1ZX0sInN0aXRjaGVyRGFzaE5nIjp7ImZsYXR0ZW5CYXNlVXJsIjp0cnVlfSwic3RpdGNoZXJIbHNOZyI6eyJkZW11eGVkQXVkaW8iOiJqaXQifX0sImZtc1BhcmFtcyI6eyJmd1ZjSUQyIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWFzOGZpIiwiZndWY0lEMkNvcHBhIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWFzOGZpIiwiY3VzdG9tUGFyYW1zIjp7ImZtc19saXZlcmFtcF9pZGwiOiIiLCJmbXNfZW1haWxoYXNoIjoiIiwiZm1zX3N1YnNjcmliZXJpZCI6IiIsImZtc19pZmEiOiIiLCJmbXNfaWRmdiI6IiIsImZtc191c2VyaWQiOiJ2aXNpb24tcGx1cy1wbHV0by1jbGllbnQtYXM4ZmkiLCJmbXNfdmNpZDJ0eXBlIjoidXNlcmlkIiwiZm1zX3JhbXBfaWQiOiIiLCJmbXNfaGhfcmFtcF9pZCI6IiIsImZtc19iaWRpZHR5cGUiOiIiLCJfZndfM1BfVUlEIjoiIiwiZm1zX3J1bGVpZCI6IjEwMDEzLDEwMDE0LDEwMDE2LDEwMDIxLDEwMDIzLDEwMDAwLDEwMDA5LDEwMDE1LDEwMDIwIn19LCJzZXNzaW9uU3RhcnRUaW1lIjoxNzgwNjIzNTg5MzU3LCJpc3MiOiJib290LnBsdXRvLnR2Iiwic3ViIjoicHJpOnYxOnBsdXRvOmRldmljZXM6VkU6ZG1semFXOXVMWEJzZFhNdGNHeDFkRzh0WTJ4cFpXNTBMV0Z6T0dacCIsImF1ZCI6IioucGx1dG8udHYiLCJleHAiOjE3ODA3MDk5ODksImlhdCI6MTc4MDYyMzU4OSwianRpIjoiMTRhZmQ1OGUtNTc3YS00YzAyLWI2NDUtOTVhMmFjYmY3ODA3In0.NRh78RPXcCJJtcT0HkxNzCy1zAA5zMiXL5JzP0wuILo&masterJWTPassthrough=true
 [2026-06-04 19:39:50] [INFO] [SourceValidator] HEAD falló: Request failed with status code 405. Intentando GET parcial...
@@ -2497,3 +2443,57 @@ Mía es una mujer embarazada que, junto a su marido, huye de un país totalitari
 [2026-06-05 00:42:49] [INFO] [33m[2026-06-05T00:42:49.163] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 00:42:49] [INFO] [33m[2026-06-05T00:42:49.255] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-05 00:42:49] [INFO] [33m[2026-06-05T00:42:49.256] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:44:19] [INFO] [33m[2026-06-05T00:44:19.346] [INFO] - [connection closed][0m
+[2026-06-05 00:44:19] [INFO] [35m[2026-06-05T00:44:19.347] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:44:19] [ERROR] {}
+[2026-06-05 00:44:20] [INFO] [33m[2026-06-05T00:44:20.354] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:44:20] [INFO] [35m[2026-06-05T00:44:20.355] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:44:20] [INFO] [33m[2026-06-05T00:44:20.355] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:44:20] [INFO] [33m[2026-06-05T00:44:20.356] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:44:20] [INFO] [33m[2026-06-05T00:44:20.435] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:44:20] [INFO] [33m[2026-06-05T00:44:20.436] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:45:50] [INFO] [33m[2026-06-05T00:45:50.508] [INFO] - [connection closed][0m
+[2026-06-05 00:45:50] [INFO] [35m[2026-06-05T00:45:50.509] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:45:50] [ERROR] {}
+[2026-06-05 00:45:51] [INFO] [33m[2026-06-05T00:45:51.510] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:45:51] [INFO] [35m[2026-06-05T00:45:51.511] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:45:51] [INFO] [33m[2026-06-05T00:45:51.511] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:45:51] [INFO] [33m[2026-06-05T00:45:51.512] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:45:51] [INFO] [33m[2026-06-05T00:45:51.590] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:45:51] [INFO] [33m[2026-06-05T00:45:51.590] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:47:21] [INFO] [33m[2026-06-05T00:47:21.684] [INFO] - [connection closed][0m
+[2026-06-05 00:47:21] [INFO] [35m[2026-06-05T00:47:21.685] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:47:21] [ERROR] {}
+[2026-06-05 00:47:22] [INFO] [33m[2026-06-05T00:47:22.692] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:47:22] [INFO] [35m[2026-06-05T00:47:22.693] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:47:22] [INFO] [33m[2026-06-05T00:47:22.693] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:47:22] [INFO] [33m[2026-06-05T00:47:22.694] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:47:22] [INFO] [33m[2026-06-05T00:47:22.768] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:47:22] [INFO] [33m[2026-06-05T00:47:22.769] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:48:52] [INFO] [33m[2026-06-05T00:48:52.841] [INFO] - [connection closed][0m
+[2026-06-05 00:48:52] [INFO] [35m[2026-06-05T00:48:52.842] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:48:52] [ERROR] {}
+[2026-06-05 00:48:53] [INFO] [33m[2026-06-05T00:48:53.846] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:48:53] [INFO] [35m[2026-06-05T00:48:53.846] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:48:53] [INFO] [33m[2026-06-05T00:48:53.847] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:48:53] [INFO] [33m[2026-06-05T00:48:53.847] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:48:53] [INFO] [33m[2026-06-05T00:48:53.924] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:48:53] [INFO] [33m[2026-06-05T00:48:53.925] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:50:24] [INFO] [33m[2026-06-05T00:50:24.002] [INFO] - [connection closed][0m
+[2026-06-05 00:50:24] [INFO] [35m[2026-06-05T00:50:24.003] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:50:24] [ERROR] {}
+[2026-06-05 00:50:25] [INFO] [33m[2026-06-05T00:50:25.006] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:50:25] [INFO] [35m[2026-06-05T00:50:25.007] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:50:25] [INFO] [33m[2026-06-05T00:50:25.007] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:50:25] [INFO] [33m[2026-06-05T00:50:25.008] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:50:25] [INFO] [33m[2026-06-05T00:50:25.084] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:50:25] [INFO] [33m[2026-06-05T00:50:25.084] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:51:55] [INFO] [33m[2026-06-05T00:51:55.240] [INFO] - [connection closed][0m
+[2026-06-05 00:51:55] [INFO] [35m[2026-06-05T00:51:55.241] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:51:55] [ERROR] {}
+[2026-06-05 00:51:56] [INFO] [33m[2026-06-05T00:51:56.251] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:51:56] [INFO] [35m[2026-06-05T00:51:56.251] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:51:56] [INFO] [33m[2026-06-05T00:51:56.252] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:51:56] [INFO] [33m[2026-06-05T00:51:56.252] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:51:56] [INFO] [33m[2026-06-05T00:51:56.324] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:51:56] [INFO] [33m[2026-06-05T00:51:56.325] [INFO] - [Handling reconnect!][0m
