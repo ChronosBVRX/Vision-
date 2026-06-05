@@ -134,12 +134,12 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 **Desactivación del Espejo en Vivo:** El desarrollo se realiza directamente en el servidor. Ya no se debe ejecutar `npm run sync` ni usar los scripts de sincronización (`direct-sync.js`, `watch-sync.js`).
 
 **Regla de Build Obligatorio:** Cada vez que se haga **cualquier cambio en el código** (frontend, backend, config, versión), el agente DEBE:
-  1. Recompilar el frontend con `npm run build --prefix frontend` (para que Vite compile los archivos del cliente en `frontend/dist/` e inyecte la nueva versión en el bundle).
+  1. Recompilar el frontend. En Windows, si la directiva de ejecución de PowerShell bloquea los scripts de Node/npm (`npm.ps1`), se debe forzar mediante `cmd.exe /c` (ej: `cmd.exe /c "npm run build --prefix frontend"`). Esto compilará los archivos del cliente en `frontend/dist/` e inyectará la nueva versión en el bundle.
 
 **¿Por qué?** La versión (`VITE_APP_VERSION`) se inyecta en tiempo de build desde `package.json`. Si no se recompila el frontend, el servidor sirve el bundle viejo con la versión anterior y el Bootloader mostraría una versión incorrecta.
 
 **Antes de empezar cualquier tarea:**
-0. **CORRER EL SERVIDOR SIEMPRE:** Debes ejecutar `npm run dev` en segundo plano **antes de hacer cualquier otra cosa**. Es una regla estricta ordenada por el usuario.
+0. **CORRER EL SERVIDOR SIEMPRE:** Debes ejecutar el servidor en segundo plano **antes de hacer cualquier otra cosa**. En Windows, si la directiva de ejecución bloquea los comandos, usa `cmd.exe /c` (ej: `cmd.exe /c "npm run dev"`). Es una regla estricta ordenada por el usuario.
 1. `git pull origin main` — asegurar código más reciente
 2. `node agent-lock.js status` — verificar que no haya locks activos
 3. Si el archivo a editar tiene lock de otro agente → **detenerse y avisar al usuario**
@@ -151,7 +151,7 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 - No modificar archivos fuera del alcance de la tarea
 - `database.json` NUNCA se edita manualmente, solo via API
 - Usar `console.log("[Modulo] mensaje")` en server.js para que quede en server.log
-- **Rebuild el frontend** después de cualquier cambio en código o versión: `npm run build --prefix frontend`
+- **Rebuild el frontend** después de cualquier cambio en código o versión: `npm run build --prefix frontend` (en Windows: `cmd.exe /c "npm run build --prefix frontend"` si es necesario).
 - Si `watch-sync.js` no está corriendo, hacer commit + push manual tras cada cambio significativo
 
 **Antes de hacer commit:**
@@ -287,6 +287,15 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 - **Corrección Definitiva del Foco (Outline sin Layout Shift)**:
   - **Problema:** Las tarjetas escalaban al enfocarse (`transform: scale()`) y su brillo exterior desbordaba la tarjeta, provocando parpadeos y solapamientos en dispositivos de gama baja.
   - **Solución Técnica:** Se eliminó cualquier `transform` y `box-shadow` al hacer focus en modo TV. Se implementó un sólido `outline: 3px solid var(--primary-light)` junto con `outline-offset: 2px` y `overflow: hidden` en el box de la tarjeta. El outline no suma tamaño al elemento (no afecta el layout) garantizando transiciones de D-pad perfectas y sin temblores en la pantalla.
+
+---
+
+## Modificaciones de opencode (05/06/2026) — Tunnel auto-publish + redirect
+
+- **`index.html` ahora usa redirect (sin iframe):** Se eliminó el iframe cross-origin que impedía el back button. Ahora hace `window.location.href` directo al túnel.
+- **`publishTunnelUrl()` en server.js:** Cambiada la plantilla HTML de iframe a redirect (`TUNNEL_HTML_TEMPLATE`).
+- **Auto-publish funcional:** `checkAndPublishTunnelRedirect()` cada 20s detecta cambios en `tunnel.log` y publica automáticamente a GitHub (commit+push) el `index.html` actualizado con el nuevo túnel.
+- **Botón manual en status.html:** "Publicar Túnel en GitHub" llama a `/api/publish-tunnel`.
 
 ---
 
