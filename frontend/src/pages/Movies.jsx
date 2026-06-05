@@ -419,7 +419,7 @@ export default function Movies({ contentType = 'movie' }) {
         e.stopPropagation();
       }
 
-      if (e.key === 'Escape' || e.key === 'Backspace') {
+      if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') {
         setActiveSeries(null);
         return;
       }
