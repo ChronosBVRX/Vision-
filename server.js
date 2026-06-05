@@ -2281,6 +2281,7 @@ app.get('/api/status', (req, res) => {
   let lastUpdate = 'No disponible';
   let lastSyncCheck = 'No disponible';
   let lastCommit = 'No disponible';
+  let lastRemoteCommit = 'No disponible';
 
   try {
     const logPath = path.join(__dirname, 'tunnel.log');
@@ -2316,12 +2317,20 @@ app.get('/api/status', (req, res) => {
     }
   } catch (e) {}
 
+  try {
+    const pathRemoteCommit = path.join(__dirname, 'last_remote_commit.txt');
+    if (fs.existsSync(pathRemoteCommit)) {
+      lastRemoteCommit = fs.readFileSync(pathRemoteCommit, 'utf8').trim();
+    }
+  } catch (e) {}
+
   res.json({
     online: true,
     uptime: Math.floor(process.uptime()),
     lastUpdate,
     lastSyncCheck,
     lastCommit,
+    lastRemoteCommit,
     tunnelUrl
   });
 });

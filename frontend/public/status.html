@@ -546,9 +546,15 @@
     <main class="dashboard-card">
       <!-- Status Header -->
       <div class="status-row">
-        <div id="statusBadge" class="status-badge">
-          <div class="pulse-dot"></div>
-          <span id="statusText">Online</span>
+        <div style="display: flex; gap: 0.75rem; align-items: center;">
+          <div id="statusBadge" class="status-badge">
+            <div class="pulse-dot"></div>
+            <span id="statusText">Online</span>
+          </div>
+          <div id="codeBadge" class="status-badge" style="background: rgba(124, 77, 255, 0.1); border-color: rgba(124, 77, 255, 0.2); color: #b388ff; box-shadow: 0 0 15px rgba(124, 77, 255, 0.1); padding: 0.5rem 1rem;">
+            <svg class="icon" viewBox="0 0 24 24" style="width: 14px; height: 14px;"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 15V9a4 4 0 0 0-4-4H9"/><path d="M6 9v6"/></svg>
+            <span id="codeBadgeText" style="font-size: 0.85rem; font-weight: 600;">Verificando...</span>
+          </div>
         </div>
         <div class="uptime-text">
           Uptime: <span id="uptimeValue">0h 0m 0s</span>
@@ -577,12 +583,19 @@
           <div id="lastSyncCheckValue" class="detail-value">---</div>
         </div>
         
-        <!-- Commit card spanning 2 columns -->
-        <div class="detail-item commit-box">
-          <div class="detail-label">Último commit local (Código)</div>
+        <div class="detail-item">
+          <div class="detail-label">Versión Local (Servidor)</div>
           <div class="commit-value">
             <svg class="icon git-icon" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 15V9a4 4 0 0 0-4-4H9"/><path d="M6 9v6"/></svg>
-            <span id="lastCommitValue">Cargando información del repositorio...</span>
+            <span id="lastCommitValue">Cargando versión del servidor...</span>
+          </div>
+        </div>
+
+        <div class="detail-item">
+          <div class="detail-label">Versión en GitHub (Remoto)</div>
+          <div class="commit-value">
+            <svg class="icon git-icon" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 15V9a4 4 0 0 0-4-4H9"/><path d="M6 9v6"/></svg>
+            <span id="lastRemoteCommitValue">Cargando versión remota...</span>
           </div>
         </div>
       </div>
@@ -638,6 +651,9 @@
     const lastUpdateValue = document.getElementById('lastUpdateValue');
     const lastSyncCheckValue = document.getElementById('lastSyncCheckValue');
     const lastCommitValue = document.getElementById('lastCommitValue');
+    const lastRemoteCommitValue = document.getElementById('lastRemoteCommitValue');
+    const codeBadge = document.getElementById('codeBadge');
+    const codeBadgeText = document.getElementById('codeBadgeText');
     const syncBtn = document.getElementById('syncBtn');
     const syncIcon = document.getElementById('syncIcon');
     const copyBtn = document.getElementById('copyBtn');
@@ -687,6 +703,30 @@
         lastUpdateValue.textContent = data.lastUpdate || 'Desconocido';
         lastSyncCheckValue.textContent = data.lastSyncCheck || 'Desconocido';
         lastCommitValue.textContent = data.lastCommit || 'Desconocido';
+        lastRemoteCommitValue.textContent = data.lastRemoteCommit || 'Desconocido';
+
+        // Comparar hashes de commit
+        const localHash = data.lastCommit ? data.lastCommit.split(' - ')[0].trim() : '';
+        const remoteHash = data.lastRemoteCommit ? data.lastRemoteCommit.split(' - ')[0].trim() : '';
+
+        if (localHash && remoteHash && localHash !== 'No disponible' && remoteHash !== 'No disponible' && localHash !== 'Desconocido' && remoteHash !== 'Desconocido') {
+          if (localHash === remoteHash) {
+            codeBadge.style.background = 'rgba(0, 230, 118, 0.1)';
+            codeBadge.style.borderColor = 'rgba(0, 230, 118, 0.2)';
+            codeBadge.style.color = '#00e676';
+            codeBadgeText.textContent = 'Código al día';
+          } else {
+            codeBadge.style.background = 'rgba(255, 145, 0, 0.1)';
+            codeBadge.style.borderColor = 'rgba(255, 145, 0, 0.2)';
+            codeBadge.style.color = '#ff9100';
+            codeBadgeText.textContent = 'Actualización disponible';
+          }
+        } else {
+          codeBadge.style.background = 'rgba(124, 77, 255, 0.1)';
+          codeBadge.style.borderColor = 'rgba(124, 77, 255, 0.2)';
+          codeBadge.style.color = '#b388ff';
+          codeBadgeText.textContent = 'Desconocido';
+        }
         
         // Enlace del Túnel Cloudflare
         if (data.tunnelUrl) {
@@ -707,6 +747,12 @@
         tunnelUrlLink.textContent = 'Servidor inaccesible.';
         tunnelUrlLink.removeAttribute('href');
         openAppBtn.disabled = true;
+
+        // Code badge offline status
+        codeBadge.style.background = 'rgba(255, 23, 68, 0.1)';
+        codeBadge.style.borderColor = 'rgba(255, 23, 68, 0.2)';
+        codeBadge.style.color = '#ff1744';
+        codeBadgeText.textContent = 'Desconectado';
 
         // Si el servidor se apaga repentinamente sin orden de reinicio previa
         if (!isRebooting) {
