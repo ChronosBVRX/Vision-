@@ -1,57 +1,3 @@
-[2026-06-04 18:51:14] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectatvmas.com (Solo 23 partidos)
-[2026-06-04 18:51:14] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
-[2026-06-04 18:51:14] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
-[2026-06-04 18:51:15] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 14 partidos)
-[2026-06-04 18:51:15] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 14 partidos)
-[2026-06-04 18:51:15] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
-[2026-06-04 18:51:15] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://rojadirectahd.vip
-[2026-06-04 18:51:15] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
-[2026-06-04 18:51:17] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 18:51:17] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 18:51:17] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 18:51:17] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv.online (Failed to scrape matches from https://www.pirlotv.online: timeout of 5000ms exceeded)
-[2026-06-04 18:51:18] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 18:51:18] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 18:51:18] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 18:51:19] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 18:51:19] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 18:51:19] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 18:51:20] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/MTvWAHOGE8s_-mmuhKLucA/hjkrhuihghfvu/1780663878/41671565/master.m3u8
-[2026-06-04 18:51:20] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/MTvWAHOGE8s_-mmuhKLucA/hjkrhuihghfvu/1780663878/41671565/master.m3u8
-[2026-06-04 18:51:21] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/MTvWAHOGE8s_-mmuhKLucA/hjkrhuihghfvu/1780663878/41671565/index-v1-a1.m3u8
-[2026-06-04 18:51:21] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://callistanise.com/stream/MTvWAHOGE8s_-mmuhKLucA/hjkrhuihghfvu/1780663878/41671565/master.m3u8
-[2026-06-04 18:51:21] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://playnixes.com/stream/pfFhyktm3T3iKL1bkHinDQ/kjhhiuahiuhgihdf/1780663879/72505184/master.m3u8
-[2026-06-04 18:51:21] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://playnixes.com/stream/pfFhyktm3T3iKL1bkHinDQ/kjhhiuahiuhgihdf/1780663879/72505184/master.m3u8
-[2026-06-04 18:51:21] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://playnixes.com/stream/pfFhyktm3T3iKL1bkHinDQ/kjhhiuahiuhgihdf/1780663879/72505184/master.m3u8
-[2026-06-04 18:51:22] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://callistanise.com/stream/MTvWAHOGE8s_-mmuhKLucA/hjkrhuihghfvu/1780663878/41671565/master.m3u8. Validando conectividad...
-[2026-06-04 18:51:22] [INFO] [SourceValidator] Probando HEAD para: https://callistanise.com/stream/MTvWAHOGE8s_-mmuhKLucA/hjkrhuihghfvu/1780663878/41671565/master.m3u8
-[2026-06-04 18:51:22] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://playnixes.com/stream/pfFhyktm3T3iKL1bkHinDQ/kjhhiuahiuhgihdf/1780663879/72505184/master.m3u8. Validando conectividad...
-[2026-06-04 18:51:22] [INFO] [SourceValidator] Probando HEAD para: https://playnixes.com/stream/pfFhyktm3T3iKL1bkHinDQ/kjhhiuahiuhgihdf/1780663879/72505184/master.m3u8
-[2026-06-04 18:51:23] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://callistanise.com/stream/MTvWAHOGE8s_-mmuhKLucA/hjkrhuihghfvu/1780663878/41671565/master.m3u8
-[2026-06-04 18:51:23] [INFO] [Resolver] ✅ Primer éxito paralelo: player -> https://callistanise.com/stream/MTvWAHOGE8s_-mmuhKLucA/hjkrhuihghfvu/1780663878/41671565/master.m3u8
-[2026-06-04 18:51:23] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://playnixes.com/stream/pfFhyktm3T3iKL1bkHinDQ/kjhhiuahiuhgihdf/1780663879/72505184/master.m3u8
-[2026-06-04 18:51:25] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/09/11425/klxk0o4980ec_x/master.m3u8?t=JS6cOWXYbbWclyClBH2MJD0A_G3IBERlxwGiXpySnZ4&s=1780620683&e=10800&f=57127710&srv=1075&asn=212238&sp=5500&p=0
-[2026-06-04 18:51:25] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/09/11425/klxk0o4980ec_x/master.m3u8?t=JS6cOWXYbbWclyClBH2MJD0A_G3IBERlxwGiXpySnZ4&s=1780620683&e=10800&f=57127710&srv=1075&asn=212238&sp=5500&p=0
-[2026-06-04 18:51:25] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/09/11425/klxk0o4980ec_x/master.m3u8?t=JS6cOWXYbbWclyClBH2MJD0A_G3IBERlxwGiXpySnZ4&s=1780620683&e=10800&f=57127710&srv=1075&asn=212238&sp=5500&p=0. Validando conectividad...
-[2026-06-04 18:51:25] [INFO] [SourceValidator] Probando HEAD para: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/09/11425/klxk0o4980ec_x/master.m3u8?t=JS6cOWXYbbWclyClBH2MJD0A_G3IBERlxwGiXpySnZ4&s=1780620683&e=10800&f=57127710&srv=1075&asn=212238&sp=5500&p=0
-[2026-06-04 18:51:26] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/09/11425/klxk0o4980ec_x/master.m3u8?t=JS6cOWXYbbWclyClBH2MJD0A_G3IBERlxwGiXpySnZ4&s=1780620683&e=10800&f=57127710&srv=1075&asn=212238&sp=5500&p=0
-[2026-06-04 18:59:13] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "catalog_poseidonhd_movie_fourmothers" (Idioma pref: auto, Servidores excluidos: [])
-[2026-06-04 18:59:13] [INFO] [Resolver] Película encontrada: "Four Mothers"
-[2026-06-04 18:59:13] [INFO] [MoviePageParser] 🔍 Analizando página externa de PoseidonHD: https://www.poseidonhd2.co/pelicula/1081196/four-mothers
-[2026-06-04 18:59:13] [INFO] [BrowserFetcher] 🌐 Cargando página con Playwright para evadir antibot: https://www.poseidonhd2.co/pelicula/1081196/four-mothers
-[2026-06-04 18:59:17] [INFO] [BrowserFetcher] ✅ HTML cargado exitosamente. Longitud: 83789 bytes.
-[2026-06-04 18:59:17] [INFO] [Resolver] Página de detalle scrapeada: 13 opciones extraídas de https://www.poseidonhd2.co/pelicula/1081196/four-mothers
-[2026-06-04 18:59:17] [INFO] [Resolver] Total de opciones filtradas a evaluar: 13
-[2026-06-04 18:59:17] [INFO] [Resolver] Lanzando 3 opciones en paralelo (max 3)...
-[2026-06-04 18:59:17] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
-[2026-06-04 18:59:17] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5jxgYnEI9h1453FfyZZPeJUXp3u7VPKy7FIaeBe7Ilbj.
-[2026-06-04 18:59:17] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5jxgYnEI9h1453FfyZZPeJUXp3u7VPKy7FIaeBe7Ilbj.
-[2026-06-04 18:59:17] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
-[2026-06-04 18:59:17] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=nvSrqGY5gls.ZEL93nL9MImLRPg3w6d4rHIPCxJ0vvM-
-[2026-06-04 18:59:17] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=nvSrqGY5gls.ZEL93nL9MImLRPg3w6d4rHIPCxJ0vvM-
-[2026-06-04 18:59:17] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
-[2026-06-04 18:59:17] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0PYKboIrGiiknsouYD.YasW2LE9P746hpZ8AP9sK59st
-[2026-06-04 18:59:17] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0PYKboIrGiiknsouYD.YasW2LE9P746hpZ8AP9sK59st
 [2026-06-04 18:59:20] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
 [2026-06-04 18:59:20] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
 [2026-06-04 18:59:20] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
@@ -2497,3 +2443,57 @@ Mía es una mujer embarazada que, junto a su marido, huye de un país totalitari
 [2026-06-04 22:42:45] [INFO] [33m[2026-06-04T22:42:45.810] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-04 22:42:45] [INFO] [33m[2026-06-04T22:42:45.903] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-04 22:42:45] [INFO] [33m[2026-06-04T22:42:45.903] [INFO] - [Handling reconnect!][0m
+[2026-06-04 22:44:15] [INFO] [33m[2026-06-04T22:44:15.990] [INFO] - [connection closed][0m
+[2026-06-04 22:44:15] [INFO] [35m[2026-06-04T22:44:15.990] [WARN] - [Connection closed while receiving data][0m
+[2026-06-04 22:44:15] [ERROR] {}
+[2026-06-04 22:44:17] [INFO] [33m[2026-06-04T22:44:17.006] [INFO] - [Started reconnecting][0m
+[2026-06-04 22:44:17] [INFO] [35m[2026-06-04T22:44:17.007] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-04 22:44:17] [INFO] [33m[2026-06-04T22:44:17.007] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 22:44:17] [INFO] [33m[2026-06-04T22:44:17.007] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 22:44:17] [INFO] [33m[2026-06-04T22:44:17.099] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 22:44:17] [INFO] [33m[2026-06-04T22:44:17.100] [INFO] - [Handling reconnect!][0m
+[2026-06-04 22:45:47] [INFO] [33m[2026-06-04T22:45:47.197] [INFO] - [connection closed][0m
+[2026-06-04 22:45:47] [INFO] [35m[2026-06-04T22:45:47.198] [WARN] - [Connection closed while receiving data][0m
+[2026-06-04 22:45:47] [ERROR] {}
+[2026-06-04 22:45:48] [INFO] [33m[2026-06-04T22:45:48.211] [INFO] - [Started reconnecting][0m
+[2026-06-04 22:45:48] [INFO] [35m[2026-06-04T22:45:48.212] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-04 22:45:48] [INFO] [33m[2026-06-04T22:45:48.212] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 22:45:48] [INFO] [33m[2026-06-04T22:45:48.213] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 22:45:48] [INFO] [33m[2026-06-04T22:45:48.339] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 22:45:48] [INFO] [33m[2026-06-04T22:45:48.339] [INFO] - [Handling reconnect!][0m
+[2026-06-04 22:47:18] [INFO] [33m[2026-06-04T22:47:18.428] [INFO] - [connection closed][0m
+[2026-06-04 22:47:18] [INFO] [35m[2026-06-04T22:47:18.429] [WARN] - [Connection closed while receiving data][0m
+[2026-06-04 22:47:18] [ERROR] {}
+[2026-06-04 22:47:19] [INFO] [33m[2026-06-04T22:47:19.434] [INFO] - [Started reconnecting][0m
+[2026-06-04 22:47:19] [INFO] [35m[2026-06-04T22:47:19.434] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-04 22:47:19] [INFO] [33m[2026-06-04T22:47:19.435] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 22:47:19] [INFO] [33m[2026-06-04T22:47:19.435] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 22:47:19] [INFO] [33m[2026-06-04T22:47:19.530] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 22:47:19] [INFO] [33m[2026-06-04T22:47:19.531] [INFO] - [Handling reconnect!][0m
+[2026-06-04 22:48:49] [INFO] [33m[2026-06-04T22:48:49.623] [INFO] - [connection closed][0m
+[2026-06-04 22:48:49] [INFO] [35m[2026-06-04T22:48:49.624] [WARN] - [Connection closed while receiving data][0m
+[2026-06-04 22:48:49] [ERROR] {}
+[2026-06-04 22:48:50] [INFO] [33m[2026-06-04T22:48:50.639] [INFO] - [Started reconnecting][0m
+[2026-06-04 22:48:50] [INFO] [35m[2026-06-04T22:48:50.640] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-04 22:48:50] [INFO] [33m[2026-06-04T22:48:50.640] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 22:48:50] [INFO] [33m[2026-06-04T22:48:50.641] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 22:48:50] [INFO] [33m[2026-06-04T22:48:50.733] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 22:48:50] [INFO] [33m[2026-06-04T22:48:50.734] [INFO] - [Handling reconnect!][0m
+[2026-06-04 22:50:20] [INFO] [33m[2026-06-04T22:50:20.825] [INFO] - [connection closed][0m
+[2026-06-04 22:50:20] [INFO] [35m[2026-06-04T22:50:20.826] [WARN] - [Connection closed while receiving data][0m
+[2026-06-04 22:50:20] [ERROR] {}
+[2026-06-04 22:50:21] [INFO] [33m[2026-06-04T22:50:21.827] [INFO] - [Started reconnecting][0m
+[2026-06-04 22:50:21] [INFO] [35m[2026-06-04T22:50:21.827] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-04 22:50:21] [INFO] [33m[2026-06-04T22:50:21.828] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 22:50:21] [INFO] [33m[2026-06-04T22:50:21.828] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 22:50:21] [INFO] [33m[2026-06-04T22:50:21.921] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 22:50:21] [INFO] [33m[2026-06-04T22:50:21.921] [INFO] - [Handling reconnect!][0m
+[2026-06-04 22:51:52] [INFO] [33m[2026-06-04T22:51:52.011] [INFO] - [connection closed][0m
+[2026-06-04 22:51:52] [INFO] [35m[2026-06-04T22:51:52.012] [WARN] - [Connection closed while receiving data][0m
+[2026-06-04 22:51:52] [ERROR] {}
+[2026-06-04 22:51:53] [INFO] [33m[2026-06-04T22:51:53.026] [INFO] - [Started reconnecting][0m
+[2026-06-04 22:51:53] [INFO] [35m[2026-06-04T22:51:53.027] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-04 22:51:53] [INFO] [33m[2026-06-04T22:51:53.027] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 22:51:53] [INFO] [33m[2026-06-04T22:51:53.028] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 22:51:53] [INFO] [33m[2026-06-04T22:51:53.119] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 22:51:53] [INFO] [33m[2026-06-04T22:51:53.120] [INFO] - [Handling reconnect!][0m
