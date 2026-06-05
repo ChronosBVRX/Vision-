@@ -2497,3 +2497,21 @@ error: failed to push some refs to 'https://github.com/ChronosBVRX/Vision-.git'
 [2026-06-05 10:41:15] [INFO] [33m[2026-06-05T10:41:15.506] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 10:41:15] [INFO] [33m[2026-06-05T10:41:15.595] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-05 10:41:15] [INFO] [33m[2026-06-05T10:41:15.597] [INFO] - [Handling reconnect!][0m
+[2026-06-05 10:42:45] [INFO] [33m[2026-06-05T10:42:45.685] [INFO] - [connection closed][0m
+[2026-06-05 10:42:45] [INFO] [35m[2026-06-05T10:42:45.688] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 10:42:45] [ERROR] {}
+[2026-06-05 10:42:46] [INFO] [33m[2026-06-05T10:42:46.706] [INFO] - [Started reconnecting][0m
+[2026-06-05 10:42:46] [INFO] [35m[2026-06-05T10:42:46.709] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 10:42:46] [INFO] [33m[2026-06-05T10:42:46.712] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 10:42:46] [INFO] [33m[2026-06-05T10:42:46.716] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 10:42:46] [INFO] [33m[2026-06-05T10:42:46.823] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 10:42:46] [INFO] [33m[2026-06-05T10:42:46.826] [INFO] - [Handling reconnect!][0m
+[2026-06-05 10:44:16] [INFO] [33m[2026-06-05T10:44:16.910] [INFO] - [connection closed][0m
+[2026-06-05 10:44:16] [INFO] [35m[2026-06-05T10:44:16.913] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 10:44:16] [ERROR] {}
+[2026-06-05 10:44:17] [INFO] [33m[2026-06-05T10:44:17.930] [INFO] - [Started reconnecting][0m
+[2026-06-05 10:44:17] [INFO] [35m[2026-06-05T10:44:17.934] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 10:44:17] [INFO] [33m[2026-06-05T10:44:17.937] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 10:44:17] [INFO] [33m[2026-06-05T10:44:17.943] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 10:44:18] [INFO] [33m[2026-06-05T10:44:18.034] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 10:44:18] [INFO] [33m[2026-06-05T10:44:18.037] [INFO] - [Handling reconnect!][0m
