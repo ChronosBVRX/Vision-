@@ -236,6 +236,13 @@ export default function App() {
     }, 50);
   }, [animeSubmenuOpen]);
 
+  // Listen for sidebar-open event from useSpatialNavigation
+  useEffect(() => {
+    const handleSidebarOpen = () => setSidebarOpen(true);
+    window.addEventListener('sidebar-open', handleSidebarOpen);
+    return () => window.removeEventListener('sidebar-open', handleSidebarOpen);
+  }, []);
+
   const selectPage = (page) => {
     setCurrentPage(page);
     setSidebarOpen(false);
@@ -279,7 +286,16 @@ export default function App() {
     <div className="app-container">
 
       {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-      <aside className={`sidebar`} tabIndex={-1}>
+      <aside 
+        className={`sidebar ${sidebarOpen ? 'open' : ''}`} 
+        tabIndex={-1}
+        onFocus={() => setSidebarOpen(true)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) {
+            setSidebarOpen(false);
+          }
+        }}
+      >
         {/* Logo */}
         <div className="logo">
           <img src={logoImg} alt="Vision+" />
