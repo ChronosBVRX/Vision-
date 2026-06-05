@@ -2213,3 +2213,74 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-04 19:12:17] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
 [2026-06-04 19:12:17] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
 [2026-06-04 19:12:18] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
+[2026-06-04 19:12:19] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-04 19:12:19] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-04 19:12:19] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-04 19:12:19] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
+[2026-06-04 19:12:19] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
+[2026-06-04 19:12:19] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
+[2026-06-04 19:12:19] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
+[2026-06-04 19:12:19] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
+[2026-06-04 19:12:19] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
+[2026-06-04 19:12:19] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-04 19:12:19] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-04 19:12:22] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
+[2026-06-04 19:12:22] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
+[2026-06-04 19:12:22] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
+[2026-06-04 19:12:22] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
+[2026-06-04 19:12:22] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 18
+[2026-06-04 19:12:22] [INFO] [SportsScraper] Escaneando un total de 23 espejos en paralelo...
+[2026-06-04 19:12:22] [ERROR] (node:15744) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-06-04 19:12:22] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: getaddrinfo ENOTFOUND www.pirlotv3.sale)
+[2026-06-04 19:12:22] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
+[2026-06-04 19:12:22] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
+[2026-06-04 19:12:22] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://beaches-july-general-certificates.trycloudflare.com
+[2026-06-04 19:12:23] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
+[2026-06-04 19:12:23] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
+[2026-06-04 19:12:23] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 401)
+[2026-06-04 19:12:23] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
+[2026-06-04 19:12:23] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
+[2026-06-04 19:12:23] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
+[2026-06-04 19:12:23] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
+[2026-06-04 19:12:23] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
+[2026-06-04 19:12:23] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
+[2026-06-04 19:12:24] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://rojadirectahd.vip (24 partidos encontrados)
+[2026-06-04 19:12:24] [INFO] [SportsWorker] Buscando logotipos para 24 partidos...
+[2026-06-04 19:12:24] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectahd.dev (Solo 24 partidos)
+[2026-06-04 19:12:24] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo EAI_AGAIN pirlotv3.pl)
+[2026-06-04 19:12:24] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectatvmas.com (Solo 23 partidos)
+[2026-06-04 19:12:24] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
+[2026-06-04 19:12:25] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
+[2026-06-04 19:12:25] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 14 partidos)
+[2026-06-04 19:12:25] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
+[2026-06-04 19:12:25] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://rojadirectahd.vip
+[2026-06-04 19:12:25] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
+[2026-06-04 19:12:25] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 14 partidos)
+[2026-06-04 19:12:27] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
+[2026-06-04 19:16:05] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-04 19:16:08] [INFO] [DB] SQLite inicializado.
+[2026-06-04 19:16:08] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-04 19:16:08] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-04 19:16:08] [INFO] [33m[2026-06-04T19:16:08.317] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-04 19:16:08] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-04 19:16:08] [INFO] [33m[2026-06-04T19:16:08.325] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 19:16:08] [INFO] [33m[2026-06-04T19:16:08.416] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 19:16:08] [INFO] [33m[2026-06-04T19:16:08.417] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-04 19:16:08] [INFO] [TelegramClient] ¡Conectado exitosamente!
+[2026-06-04 19:16:08] [INFO] [TelegramSync] Buscando videos en el canal: -1001813174603
+[2026-06-04 19:16:08] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-04 19:16:08] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-04 19:16:08] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-04 19:16:09] [INFO] [TelegramSync] Sincronización completada. Se añadieron 0 películas nuevas.
+[2026-06-04 19:16:10] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-04 19:16:13] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-04 19:16:13] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-04 19:16:13] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-04 19:16:13] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-04 19:16:13] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-04 19:16:13] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-04 19:16:13] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-04 19:16:13] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-04 19:16:13] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-04 19:16:13] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
