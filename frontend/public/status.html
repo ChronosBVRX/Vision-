@@ -236,6 +236,32 @@
       background: rgba(255,255,255,0.05);
     }
 
+    .input-group {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      width: 100%;
+    }
+
+    .form-input {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-main);
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.3s;
+    }
+
+    .form-input:focus {
+      border-color: var(--accent-color);
+      box-shadow: 0 0 10px rgba(124, 77, 255, 0.2);
+      background: rgba(0, 0, 0, 0.3);
+    }
+
     /* Grid Layout for details */
     .details-grid {
       display: grid;
@@ -572,6 +598,22 @@
         </div>
       </div>
 
+      <!-- Tunnel Publishing Controls -->
+      <div class="section-title" style="margin-top: 2rem;">Publicar Túnel en GitHub</div>
+      <div class="tunnel-card" style="margin-bottom: 2rem;">
+        <div class="tunnel-title">Actualizar index.html en GitHub Pages</div>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; line-height: 1.4;">
+          Fuerza la actualización de index.html con el túnel seleccionado para que se cargue de forma fija e invisible (iframe) en GitHub Pages.
+        </p>
+        <div class="input-group">
+          <input type="text" id="customTunnelInput" class="form-input" placeholder="https://ejemplo.trycloudflare.com (Vacío para el activo)">
+          <button id="publishTunnelBtn" class="btn btn-primary" style="flex: 0 0 auto; width: auto; padding: 0.75rem 1.25rem;">
+            <svg id="publishIcon" class="icon" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            Publicar
+          </button>
+        </div>
+      </div>
+
       <!-- Details Grid -->
       <div class="details-grid">
         <div class="detail-item">
@@ -664,6 +706,9 @@
     const overlayTitle = document.getElementById('overlayTitle');
     const overlayMessage = document.getElementById('overlayMessage');
     const toast = document.getElementById('toast');
+    const customTunnelInput = document.getElementById('customTunnelInput');
+    const publishTunnelBtn = document.getElementById('publishTunnelBtn');
+    const publishIcon = document.getElementById('publishIcon');
 
     let cachedTunnelUrl = '';
     let isRebooting = false;
@@ -808,6 +853,37 @@
       } finally {
         syncIcon.classList.remove('spin');
         syncBtn.disabled = false;
+        loadStatus();
+      }
+    });
+
+    // Publicar túnel manualmente a GitHub
+    publishTunnelBtn.addEventListener('click', async () => {
+      const customUrl = customTunnelInput.value.trim();
+      
+      publishTunnelBtn.disabled = true;
+      publishIcon.classList.add('spin');
+      showToast('Publicando túnel en GitHub Pages...');
+      
+      try {
+        const res = await fetch('/api/publish-tunnel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customUrl })
+        });
+        
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(data.message || 'Túnel publicado con éxito');
+          customTunnelInput.value = ''; // Limpiar input tras éxito
+        } else {
+          showToast(data.error || 'Error al publicar el túnel');
+        }
+      } catch (err) {
+        showToast('Error de conexión al intentar publicar el túnel');
+      } finally {
+        publishIcon.classList.remove('spin');
+        publishTunnelBtn.disabled = false;
         loadStatus();
       }
     });

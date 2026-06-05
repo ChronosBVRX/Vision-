@@ -2399,44 +2399,92 @@ app.post('/api/restart-tunnel', (req, res) => {
   });
 });
 
+app.post('/api/publish-tunnel', (req, res) => {
+  const { customUrl } = req.body;
+  let urlToPublish = customUrl;
+
+  if (!urlToPublish) {
+    try {
+      const logPath = path.join(__dirname, 'tunnel.log');
+      if (fs.existsSync(logPath)) {
+        const logs = fs.readFileSync(logPath, 'utf8');
+        const match = logs.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
+        if (match) {
+          urlToPublish = match[0];
+        }
+      }
+    } catch (e) {
+      console.error('[API Publish Tunnel] Error reading tunnel.log:', e.message);
+    }
+  }
+
+  if (!urlToPublish) {
+    return res.status(400).json({ success: false, error: 'No se pudo detectar un túnel activo y no se proporcionó una URL personalizada.' });
+  }
+
+  console.log(`[API Publish Tunnel] Publicando enlace manualmente: ${urlToPublish}`);
+  
+  publishTunnelUrl(urlToPublish, (err) => {
+    if (err) {
+      console.error('[API Publish Tunnel] Error al publicar:', err.message);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+    lastPublishedUrl = urlToPublish;
+    res.json({ success: true, message: `Túnel publicado con éxito en GitHub: ${urlToPublish}` });
+  });
+});
+
 let lastPublishedUrl = null;
 
-function checkAndPublishTunnelRedirect() {
+function publishTunnelUrl(tunnelUrl, callback) {
   try {
-    const logPath = path.join(__dirname, 'tunnel.log');
-    if (!fs.existsSync(logPath)) return;
-    
-    const logs = fs.readFileSync(logPath, 'utf8');
-    const match = logs.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
-    if (!match) return;
-    
-    const tunnelUrl = match[0];
-    if (tunnelUrl === lastPublishedUrl) return;
-    
-    console.log(`[GitHub Pages] Nuevo túnel detectado: ${tunnelUrl}. Actualizando redirect...`);
-    lastPublishedUrl = tunnelUrl;
-    
     const indexPath = path.join(__dirname, 'index.html');
     const htmlContent = `<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redireccionando a Vision+</title>
-    <meta http-equiv="refresh" content="0; url=${tunnelUrl}">
+    <title>Vision+</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
             background-color: #0d0b14;
-            color: #f3f1f6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        iframe {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            z-index: 9999;
+            background-color: #0d0b14;
+        }
+        .loader-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            margin: 0;
-            text-align: center;
+            background-color: #0d0b14;
+            z-index: 9998;
+            transition: opacity 0.5s ease;
         }
-        .card {
+        .loader-card {
+            text-align: center;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.08);
             padding: 2.5rem;
@@ -2454,7 +2502,7 @@ function checkAndPublishTunnelRedirect() {
             margin: 0 auto 1.5rem;
             animation: spin 1s linear infinite;
         }
-        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #f3f1f6; }
         p { color: #9c97aa; font-size: 0.95rem; margin-bottom: 1.5rem; }
         a {
             color: #b388ff;
@@ -2464,39 +2512,90 @@ function checkAndPublishTunnelRedirect() {
         a:hover { text-decoration: underline; }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
-    <script>
-        window.location.replace("${tunnelUrl}");
-    </script>
 </head>
 <body>
-    <div class="card">
-        <div class="spinner"></div>
-        <h1>Redireccionando a Vision+</h1>
-        <p>Cargando tu servidor multimedia inteligente...</p>
-        <a href="${tunnelUrl}">Haz clic aquí si no eres redirigido automáticamente</a>
+    <div id="loader" class="loader-container">
+        <div class="loader-card">
+            <div class="spinner"></div>
+            <h1>Cargando Vision+</h1>
+            <p>Conectando con tu servidor inteligente...</p>
+            <a href="${tunnelUrl}" target="_blank">Haz clic aquí para abrir directamente</a>
+        </div>
     </div>
+    <iframe src="${tunnelUrl}" 
+            id="app-frame"
+            allowfullscreen="true" 
+            webkitallowfullscreen="true" 
+            mozallowfullscreen="true" 
+            allow="autoplay; encrypted-media; picture-in-picture; clipboard-write; microphone; camera; geolocation" 
+            referrerpolicy="strict-origin-when-cross-origin">
+    </iframe>
+    <script>
+        const iframe = document.getElementById('app-frame');
+        const loader = document.getElementById('loader');
+        
+        iframe.onload = function() {
+            loader.style.opacity = 0;
+            setTimeout(() => {
+                loader.style.display = 'none';
+            }, 500);
+        };
+
+        setTimeout(() => {
+            if (loader.style.display !== 'none') {
+                const p = loader.querySelector('p');
+                if (p) p.innerHTML = 'La conexión está tardando más de lo normal.<br>Puedes intentar abrir el enlace directamente:';
+            }
+        }, 10000);
+    </script>
 </body>
 </html>\n`;
 
     trimLogFile(2500);
     fs.writeFileSync(indexPath, htmlContent, 'utf8');
     
-    // Ejecutar git add, commit y push
     const { exec } = require('child_process');
     exec('git add index.html server.log', { cwd: __dirname }, (err) => {
-      if (err) return console.error('[GitHub Pages] Error en git add:', err.message);
+      if (err) {
+        if (callback) callback(err);
+        return;
+      }
       
       exec(`git commit -m "update tunnel url redirect to ${tunnelUrl}"`, { cwd: __dirname }, (err) => {
-        if (err) return console.error('[GitHub Pages] Error en git commit:', err.message);
-        
-        exec('git push origin main', { cwd: __dirname }, (err) => {
-          if (err) return console.error('[GitHub Pages] Error en git push:', err.message);
-          console.log(`[GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: ${tunnelUrl}`);
+        exec('git push origin main', { cwd: __dirname }, (pushErr) => {
+          if (callback) callback(pushErr);
         });
       });
     });
   } catch (e) {
-    console.error('[GitHub Pages] Error:', e.message);
+    if (callback) callback(e);
+  }
+}
+
+function checkAndPublishTunnelRedirect() {
+  try {
+    const logPath = path.join(__dirname, 'tunnel.log');
+    if (!fs.existsSync(logPath)) return;
+    
+    const logs = fs.readFileSync(logPath, 'utf8');
+    const match = logs.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
+    if (!match) return;
+    
+    const tunnelUrl = match[0];
+    if (tunnelUrl === lastPublishedUrl) return;
+    
+    console.log(`[GitHub Pages] Nuevo túnel detectado: ${tunnelUrl}. Actualizando redirect...`);
+    lastPublishedUrl = tunnelUrl;
+    
+    publishTunnelUrl(tunnelUrl, (err) => {
+      if (err) {
+        console.error('[GitHub Pages] Error al publicar automáticamente:', err.message);
+      } else {
+        console.log(`[GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: ${tunnelUrl}`);
+      }
+    });
+  } catch (e) {
+    console.error('[GitHub Pages] Error en checkAndPublishTunnelRedirect:', e.message);
   }
 }
 
