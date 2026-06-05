@@ -47,6 +47,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  touch-action: manipulation;
   scrollbar-width: thin;
   scrollbar-color: var(--border-color) transparent;
 }
@@ -130,6 +131,17 @@ button, input, select, textarea {
 .sidebar:focus-within, .sidebar:hover {
   transform: translateX(0);
   box-shadow: 20px 0 50px rgba(0,0,0,0.9);
+}
+
+/* Mobile: sidebar solo se abre con hamburguesa, no con hover/focus */
+.is-mobile .sidebar:hover,
+.is-mobile .sidebar:focus-within {
+  transform: translateX(-100%);
+}
+.is-mobile .sidebar.open,
+.is-mobile .sidebar.open:hover,
+.is-mobile .sidebar.open:focus-within {
+  transform: translateX(0);
 }
 
 .main-content {
@@ -1414,6 +1426,31 @@ button, input, select, textarea {
   .catalog-row-track { padding-left: 20px; padding-right: 20px; gap: 8px; }
   .catalog-sync-bar { padding-left: 20px; }
   .catalog-hero-dots { right: 20px; bottom: 16px; }
+}
+@media (max-width: 480px) {
+  .catalog-card { flex: 0 0 100px; }
+  .catalog-card-poster { width: 100px; height: 150px; }
+  .catalog-card-title { font-size: 0.7rem; }
+  .catalog-hero { height: 40vh; min-height: 240px; }
+  .catalog-hero-title { font-size: 1.3rem; }
+  .catalog-hero-content { padding: 0 14px 24px; }
+  .catalog-hero-desc { font-size: 0.75rem; -webkit-line-clamp: 2; }
+  .catalog-hero-tags { gap: 4px; }
+  .catalog-hero-tags .catalog-tag { font-size: 0.6rem; padding: 1px 8px; }
+  .catalog-row-title, .catalog-footer { padding-left: 14px; padding-right: 14px; font-size: 1rem; }
+  .catalog-row-track { padding-left: 14px; padding-right: 14px; gap: 6px; }
+  .catalog-row-showall { margin-left: 14px; margin-right: 14px; }
+  .catalog-row-group .catalog-grid { padding: 0 14px 14px; }
+  .catalog-grid { padding: 0 14px 40px; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .catalog-sync-bar { padding-left: 14px; font-size: 0.7rem; }
+  .catalog-hero-dots { right: 14px; bottom: 12px; gap: 4px; }
+  .catalog-hero-dot { width: 6px; height: 6px; }
+  .catalog-btn-play { font-size: 0.8rem; padding: 8px 18px; }
+  .catalog-btn-play svg { width: 16px; height: 16px; }
+  .catalog-filter-bar { padding: 10px 14px; flex-direction: column; gap: 8px; }
+  .catalog-search-wrapper input { font-size: 0.85rem; padding: 8px 32px 8px 12px; }
+  .catalog-genre-chips-container { gap: 4px; }
+  .catalog-genre-chip-pill { font-size: 0.7rem; padding: 4px 10px; }
 }
 
 
@@ -3396,7 +3433,7 @@ button, input, select, textarea {
    ========================================================================== */
 .sports-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 28px;
   padding: 10px 0 60px 0;
 }

@@ -287,6 +287,16 @@ export default function App() {
     <Bootloader>
       <div className="app-container">
 
+        {/* ── Mobile hamburger ──────────────────────────────────────────────── */}
+        <button
+          className="mobile-menu-toggle focusable"
+          tabIndex={0}
+          onClick={() => setSidebarOpen(o => !o)}
+          aria-label="Menú"
+        >
+          {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
+        </button>
+
         {/* ── Sidebar ──────────────────────────────────────────────────────── */}
       <aside 
         className={`sidebar ${sidebarOpen ? 'open' : ''}`} 

@@ -18,6 +18,15 @@
     window.location.search.includes('googletv=1');
 
   window.isSmartTV = isTV;
+
+  // Mobile detection
+  const isMobile = !isTV && /mobile|iphone|ipod|android.*mobile|blackberry|iemobile|opera.mobi|mini|touch/i.test(ua);
+  window.isMobile = isMobile;
+  if (isMobile) {
+    document.documentElement.classList.add('is-mobile');
+    console.log('[Vision+] Mobile environment detected.');
+  }
+
   if (isTV) {
     document.documentElement.classList.add('is-smart-tv');
     console.log('[Vision+] TV environment detected. UA:', navigator.userAgent.substring(0, 120));
