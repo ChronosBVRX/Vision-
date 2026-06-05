@@ -2331,3 +2331,31 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-04 19:16:23] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
 [2026-06-04 19:17:15] [INFO] [API Tunnel] Reiniciando túnel de Cloudflare...
 [2026-06-04 19:17:28] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
+[2026-06-04 19:17:32] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://attitudes-onto-certified-whole.trycloudflare.com
+[2026-06-04 19:23:08] [INFO] [API Restart] Petición de reinicio recibida. Deteniendo proceso en 1 segundo...
+[2026-06-04 19:24:22] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-04 19:24:24] [INFO] [DB] SQLite inicializado.
+[2026-06-04 19:24:24] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-04 19:24:24] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-04 19:24:24] [INFO] [33m[2026-06-04T19:24:24.572] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-04 19:24:24] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-04 19:24:24] [INFO] [33m[2026-06-04T19:24:24.584] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 19:24:24] [INFO] [33m[2026-06-04T19:24:24.681] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 19:24:24] [INFO] [33m[2026-06-04T19:24:24.683] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-04 19:24:24] [INFO] [TelegramClient] ¡Conectado exitosamente!
+[2026-06-04 19:24:24] [INFO] [TelegramSync] Buscando videos en el canal: -1001813174603
+[2026-06-04 19:24:24] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-04 19:24:24] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-04 19:24:24] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-04 19:24:26] [INFO] [TelegramSync] Sincronización completada. Se añadieron 0 películas nuevas.
+[2026-06-04 19:24:26] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-04 19:24:29] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-04 19:24:29] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-04 19:24:29] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-04 19:24:29] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-04 19:24:29] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-04 19:24:29] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-04 19:24:29] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-04 19:24:29] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-04 19:24:29] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-04 19:24:29] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
