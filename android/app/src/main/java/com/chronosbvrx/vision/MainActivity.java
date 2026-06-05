@@ -186,17 +186,22 @@ public class MainActivity extends Activity {
                 return true;
             }
 
-            // Check if the player overlay is visible in the web page
+            // Check if we should dispatch Back to the webview or handle app exit
             mWebView.evaluateJavascript(
-                "(function() { return document.querySelector('.watch-overlay') !== null || document.querySelector('video') !== null; })()",
+                "(function() { " +
+                "  if (document.querySelector('.watch-overlay') || document.querySelector('video')) return true;" +
+                "  if (document.querySelector('.details-modal-overlay')) return true;" +
+                "  if (document.querySelector('.ep-selector-overlay')) return true;" +
+                "  if (document.activeElement && document.activeElement.closest('.sidebar')) return false;" +
+                "  return true;" +
+                "})()",
                 new ValueCallback<String>() {
                     @Override
                     public void onReceiveValue(String value) {
-                        boolean playerVisible = "true".equals(value);
+                        boolean shouldHandleBack = "true".equals(value);
 
-                        if (playerVisible) {
-                            // Player is active — dispatch ONLY Escape to the page
-                            // and let JS handle the back navigation (close instantly on TV)
+                        if (shouldHandleBack) {
+                            // Dispatch Escape to the page so it can close modals or focus the sidebar
                             mWebView.evaluateJavascript(
                                 "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));",
                                 null
@@ -207,7 +212,7 @@ public class MainActivity extends Activity {
                                 backToast.cancel();
                             }
                         } else {
-                            // Player not active — use double-back-exit for the app
+                            // Focus is already in the sidebar (or we want to exit) — use double-back-exit for the app
                             long currentTime = System.currentTimeMillis();
                             if (currentTime - lastBackPressTime < 2000) {
                                 if (backToast != null) {
