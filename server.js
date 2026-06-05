@@ -1,5 +1,6 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
@@ -179,6 +180,7 @@ async function initializeDB() {
 }
 
 // DB Initialization moved to bottom before app.listen
+app.use(compression({ level: 6, threshold: 256 })); // Brotli/gzip compresión
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));

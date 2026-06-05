@@ -1,13 +1,13 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, Suspense, lazy } from 'react';
 import {
   Home as HomeIcon, Settings, Film, Tv, Play, Menu, X,
   Globe, PlayCircle, ChevronDown, ChevronRight, Star, Layers
 } from 'lucide-react';
 import Home from './pages/Home';
-import Admin from './pages/Admin';
-import Sports from './pages/Sports';
 import Movies from './pages/Movies';
 import Series from './pages/Series';
+const Admin = lazy(() => import('./pages/Admin'));
+const Sports = lazy(() => import('./pages/Sports'));
 import useSpatialNavigation from './hooks/useSpatialNavigation';
 import { useCatalog } from './context/CatalogContext.jsx';
 import logoImg from './assets/logo.png';
@@ -470,17 +470,19 @@ export default function App() {
 
       {/* ── Main Content ──────────────────────────────────────────────────── */}
       <main className="main-content">
-        {currentPage === 'home' && (
-          <Home
-            selectedCategoryFilter={selectedCategoryFilter}
-            setSelectedCategoryFilter={setSelectedCategoryFilter}
-          />
-        )}
-        {currentPage === 'admin' && <Admin />}
-        {currentPage === 'sports' && <Sports />}
-        {currentPage === 'movies' && <Movies contentType="movie" />}
-        {currentPage === 'series' && <Series />}
-        {currentPage === 'anime' && <Movies contentType={animeTab === 'Películas' ? 'anime_movie' : 'anime_series'} />}
+        <Suspense fallback={<div className="page-loading"><div className="spin-anim" style={{width:36,height:36,borderWidth:3}} /></div>}>
+          {currentPage === 'home' && (
+            <Home
+              selectedCategoryFilter={selectedCategoryFilter}
+              setSelectedCategoryFilter={setSelectedCategoryFilter}
+            />
+          )}
+          {currentPage === 'admin' && <Admin />}
+          {currentPage === 'sports' && <Sports />}
+          {currentPage === 'movies' && <Movies contentType="movie" />}
+          {currentPage === 'series' && <Series />}
+          {currentPage === 'anime' && <Movies contentType={animeTab === 'Películas' ? 'anime_movie' : 'anime_series'} />}
+        </Suspense>
       </main>
     </div>
     </Bootloader>

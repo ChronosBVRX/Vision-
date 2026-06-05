@@ -5,6 +5,7 @@ import DetailsModal from '../components/DetailsModal';
 import { HeroBanner, CatalogRow, CatalogCard } from '../components/CatalogComponents';
 import LoadingScreen from '../components/LoadingScreen';
 import { useCatalog } from '../context/CatalogContext.jsx';
+import useDebounce from '../hooks/useDebounce';
 
 function getNormalizedTVCategory(channel) {
   if (!channel) return 'Variedades / General';
@@ -209,6 +210,7 @@ export default function Home({ selectedCategoryFilter }) {
   const { movies, series, sources, loading: catalogLoading } = useCatalog();
   const [isLoading, setIsLoading]   = useState(true);
   const [tvSearchQuery, setTvSearchQuery] = useState('');
+  const debouncedTvSearch = useDebounce(tvSearchQuery, 300);
 
   useEffect(() => {
     if (!catalogLoading) setIsLoading(false);
@@ -638,8 +640,8 @@ export default function Home({ selectedCategoryFilter }) {
 
   if (isTVMode) {
     let tvList = filteredContent.filter(item => item.type === 'tv');
-    if (tvSearchQuery.trim().length > 0) {
-      const q = tvSearchQuery.toLowerCase().trim();
+    if (debouncedTvSearch.trim().length > 0) {
+      const q = debouncedTvSearch.toLowerCase().trim();
       tvList = tvList.filter(item => 
         (item.title && item.title.toLowerCase().includes(q)) ||
         (item.description && item.description.toLowerCase().includes(q))

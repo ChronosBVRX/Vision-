@@ -5,6 +5,7 @@ import DetailsModal from '../components/DetailsModal';
 import { HeroBanner, CatalogRow, CatalogCard } from '../components/CatalogComponents';
 import LoadingScreen from '../components/LoadingScreen';
 import useCache from '../hooks/useCache';
+import useDebounce from '../hooks/useDebounce';
 
 
 
@@ -56,6 +57,7 @@ export default function Movies({ contentType = 'movie' }) {
 
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedQuery = useDebounce(searchQuery, 300);
   const [selectedGenre, setSelectedGenre] = useState('Todos');
 
   // Dynamic genres lists
@@ -80,8 +82,8 @@ export default function Movies({ contentType = 'movie' }) {
     if (selectedGenre !== 'Todos') {
       result = result.filter(item => item.genres && item.genres.includes(selectedGenre));
     }
-    if (searchQuery.trim().length > 0) {
-      const q = searchQuery.toLowerCase().trim();
+    const q = debouncedQuery.trim().toLowerCase();
+    if (q.length > 0) {
       result = result.filter(item => 
         (item.title && item.title.toLowerCase().includes(q)) ||
         (item.description && item.description.toLowerCase().includes(q)) ||
@@ -89,7 +91,7 @@ export default function Movies({ contentType = 'movie' }) {
       );
     }
     return result;
-  }, [catalog, selectedGenre, searchQuery]);
+  }, [catalog, selectedGenre, debouncedQuery]);
 
   const isFilteringOrSearching = selectedGenre !== 'Todos' || searchQuery.trim().length > 0;
 
