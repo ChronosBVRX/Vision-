@@ -9,18 +9,20 @@ const isTV = typeof window !== 'undefined' && window.isSmartTV === true;
  * Spatial navigation hook for Smart TV remote controls.
  *
  * Performance optimizations for Smart TV:
- *  - Throttle: max 1 navigation cycle per 100ms
- *  - Cached focusables: only re-query DOM when layout could have changed
- *  - Batch getBoundingClientRect: single layout thrash per cycle
+ *  - VideoPlayer check BEFORE throttle (prevents conflicting double-processing)
+ *  - Throttle: max 1 navigation cycle per 100ms (TV) / 40ms (browser)
+ *  - MutationObserver-based cache invalidation (only on real DOM changes)
+ *  - Batch getBoundingClientRect: ALL rects calculated before the scoring loop
  *  - No smooth scroll on TV (instant scroll)
  *  - Passive listeners for mouse events
  */
 export default function useSpatialNavigation(isActive = true) {
   const focusableCache = useRef([]);
   const sidebarCache   = useRef([]);
-  const cacheVersion   = useRef(0);
+  const cacheValid     = useRef(false);
   const lastNavTime    = useRef(0);
   const throttleMs     = isTV ? 100 : 40;
+  const mutationObserver = useRef(null);
 
   // ── Keyboard / Mouse mode detection ───────────────────────────────
   useEffect(() => {
@@ -88,13 +90,28 @@ export default function useSpatialNavigation(isActive = true) {
   useEffect(() => {
     if (!isActive) return;
 
+    // ── MutationObserver: invalidate cache only on real DOM changes ──
+    // This is much more efficient than invalidating on every keydown.
     const invalidateCache = () => {
-      cacheVersion.current += 1;
+      cacheValid.current = false;
+      focusableCache.current = [];
+      sidebarCache.current = [];
     };
 
+    mutationObserver.current = new MutationObserver(() => {
+      invalidateCache();
+    });
+    mutationObserver.current.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'hidden', 'disabled'],
+    });
+
     const getCachedFocusables = (restrictTo) => {
-      if (cacheVersion.current === 0 || !focusableCache.current.length) {
+      if (!cacheValid.current || !focusableCache.current.length) {
         focusableCache.current = queryFocusables(null);
+        cacheValid.current = true;
       }
       if (!restrictTo) return focusableCache.current;
       // filter — avoid full DOM re-query
@@ -102,7 +119,7 @@ export default function useSpatialNavigation(isActive = true) {
     };
 
     const getCachedSidebar = () => {
-      if (cacheVersion.current === 0 || !sidebarCache.current.length) {
+      if (!cacheValid.current || !sidebarCache.current.length) {
         sidebarCache.current = queryFocusables(document.querySelector('.sidebar'));
       }
       return sidebarCache.current;
@@ -110,6 +127,15 @@ export default function useSpatialNavigation(isActive = true) {
 
     const handleKeyDown = (e) => {
       if (!NAV_KEYS.has(e.key)) return;
+
+      // ── CRITICAL FIX: Check if VideoPlayer is open BEFORE throttle ──
+      // If VideoPlayer is active, it handles ALL keys in capture phase.
+      // We must bail out immediately, BEFORE applying our throttle,
+      // so both systems don't compete and the throttle doesn't eat the event.
+      const wOverlay = document.querySelector('.watch-overlay');
+      if (wOverlay && (wOverlay.querySelector('video') || wOverlay.querySelector('.watch-header-overlay'))) {
+        return; // VideoPlayer takes full control
+      }
 
       // ── Throttle: skip if too soon since last navigation ──────────
       const now = performance.now();
@@ -120,18 +146,10 @@ export default function useSpatialNavigation(isActive = true) {
       }
       lastNavTime.current = now;
 
-      // Invalidate cache — DOM may have changed (modal, scroll, etc.)
-      invalidateCache();
-
-      // ── VideoPlayer open → it handles ALL keys in capture phase ────
-      const wOverlay = document.querySelector('.watch-overlay');
-      if (wOverlay && (wOverlay.querySelector('video') || wOverlay.querySelector('.watch-header-overlay'))) return;
-
       const activeEl = document.activeElement;
 
-      const isVideoOverlay = wOverlay && (wOverlay.querySelector('video') || wOverlay.querySelector('.watch-header-overlay'));
-      const overlayContainer = isVideoOverlay ? null : wOverlay;
-      const activeModal  = overlayContainer || document.querySelector('.details-modal-overlay, .video-overlay');
+      const overlayContainer = wOverlay || null;
+      const activeModal = overlayContainer || document.querySelector('.details-modal-overlay, .video-overlay');
       const activeInSidebar = activeEl ? activeEl.closest('.sidebar') : false;
 
       // ── Enter: click focused element ───────────────────────────────
@@ -221,18 +239,10 @@ export default function useSpatialNavigation(isActive = true) {
       if (!activeEl || !pool.includes(activeEl)) {
         if (pool.length > 0) {
           const target = pool[0];
-          // Scroll container into view before focusing
-          if (isTV) {
-            const container = target.closest('.catalog-row-track, .catalog-grid, .main-content');
-            if (container) {
-              const tRect = target.getBoundingClientRect();
-              const cRect = container.getBoundingClientRect();
-              if (tRect.top < cRect.top || tRect.bottom > cRect.bottom) {
-                target.scrollIntoView({ behavior: 'auto', block: 'nearest' });
-              }
-            }
-          }
           target.focus();
+          if (isTV) {
+            target.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+          }
         }
         return;
       }
@@ -253,6 +263,10 @@ export default function useSpatialNavigation(isActive = true) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       clearTimeout(timer);
+      if (mutationObserver.current) {
+        mutationObserver.current.disconnect();
+        mutationObserver.current = null;
+      }
     };
   }, [isActive]);
 }
@@ -270,13 +284,25 @@ function queryFocusables(restrictTo) {
   });
 }
 
+/**
+ * navigateSpatially — PERFORMANCE OPTIMIZED VERSION
+ *
+ * Key optimization: All getBoundingClientRect() calls are batched BEFORE
+ * the scoring loop. Reading layout properties inside a loop causes the
+ * browser to reflow the entire page on each read (layout thrashing).
+ * By pre-reading all rects into an array first, we trigger ONE reflow
+ * and then do pure math in the loop — much faster on low-end TV hardware.
+ */
 function navigateSpatially(key, activeEl, focusables) {
   if (!activeEl || !focusables.includes(activeEl)) {
     if (focusables.length > 0) focusables[0].focus();
     return;
   }
 
-  const aRect = activeEl.getBoundingClientRect();
+  // ── PRE-BATCH all rects in ONE layout read (avoids layout thrashing) ──
+  const rects = focusables.map(el => el.getBoundingClientRect());
+  const aIdx = focusables.indexOf(activeEl);
+  const aRect = rects[aIdx];
   const aCX = aRect.left + aRect.width / 2;
   const aCY = aRect.top + aRect.height / 2;
 
@@ -284,10 +310,9 @@ function navigateSpatially(key, activeEl, focusables) {
   let bestScore = Infinity;
 
   for (let i = 0; i < focusables.length; i++) {
-    const c = focusables[i];
-    if (c === activeEl) continue;
+    if (i === aIdx) continue;
 
-    const cRect = c.getBoundingClientRect();
+    const cRect = rects[i]; // Read from pre-batched array — no reflow!
     const cCX = cRect.left + cRect.width / 2;
     const cCY = cRect.top + cRect.height / 2;
     const dx = cCX - aCX;
@@ -324,7 +349,7 @@ function navigateSpatially(key, activeEl, focusables) {
 
     if (score < bestScore) {
       bestScore = score;
-      best = c;
+      best = focusables[i];
     }
   }
 

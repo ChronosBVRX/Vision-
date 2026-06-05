@@ -4188,3 +4188,62 @@ video::-moz-media-controls-enclosure {
   display: none !important;
 }
 
+/* ── Smart TV: Eliminar transiciones residuales en el reproductor ── */
+.is-smart-tv .watch-overlay,
+.is-smart-tv .custom-player-overlay,
+.is-smart-tv .watch-header-overlay,
+.is-smart-tv .custom-player-buttons-row,
+.is-smart-tv .custom-player-progress-bar-wrapper {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* ── Smart TV: GPU compositing layer para controles del reproductor ──
+   Promovemos los controles a su propia capa GPU para que los cambios de
+   opacidad (mostrar/ocultar) no provoquen un repaint del canvas de video */
+.is-smart-tv .custom-player-overlay {
+  will-change: opacity;
+  transform: translateZ(0);
+}
+
+/* ── Smart TV: content-visibility para filas fuera de pantalla ──
+   El browser omite el layout/paint de filas no visibles, reduciendo el
+   tiempo de respuesta del D-Pad en catálogos con 100+ elementos */
+.is-smart-tv .catalog-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 200px;
+}
+
+/* ── Smart TV: Sidebar sin scrollbar visible (ocupa espacio) ── */
+.is-smart-tv .sidebar {
+  overflow: hidden !important;
+  overflow-y: auto !important;
+  scrollbar-width: none !important;
+}
+.is-smart-tv .sidebar::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* ── Smart TV: Foco de alta visibilidad en listas (guía, episodios, popups) ── */
+.is-smart-tv .channel-guide-item:focus,
+.is-smart-tv .player-episode-item:focus,
+.is-smart-tv .player-popup-item:focus {
+  outline: 3px solid #ffffff !important;
+  outline-offset: -2px !important;
+  background: rgba(124, 58, 237, 0.4) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* ── Smart TV: Sports cards sin efectos hover ── */
+.is-smart-tv .sports-card:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+.is-smart-tv .sports-card:focus,
+.is-smart-tv .sports-card.focusable:focus {
+  transform: none !important;
+  outline: 3px solid var(--primary-light) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}

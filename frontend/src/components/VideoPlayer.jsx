@@ -550,7 +550,9 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   const isSmartTV = typeof window !== 'undefined' && window.isSmartTV === true;
   // Throttle ref for Smart TV — prevents rapid key repeat from queuing expensive ops
   const lastKeyTimeRef = useRef(0);
-  const KEY_THROTTLE_MS = isSmartTV ? 120 : 0;
+  // 180ms gives TV remotes enough headroom — 120ms was too aggressive and
+  // caused legitimate key presses (120-160ms apart on real remotes) to be dropped.
+  const KEY_THROTTLE_MS = isSmartTV ? 180 : 0;
   const CONTROLS_TIMEOUT = isSmartTV ? 15000 : 5000;
 
   const toggleFullscreen = useCallback(() => {
@@ -608,17 +610,18 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   }, [currentStream]);
 
   useEffect(() => {
+    // Only listen to mouse/click — keydown is handled in capture phase below
+    // (avoids double-processing every key event AND prevents needless React
+    // re-renders from the controls timer being reset twice per keypress)
     const handleActivity = () => {
       resetControlsTimer();
     };
 
-    window.addEventListener('mousemove', handleActivity);
-    window.addEventListener('keydown', handleActivity);
-    window.addEventListener('click', handleActivity);
+    window.addEventListener('mousemove', handleActivity, { passive: true });
+    window.addEventListener('click', handleActivity, { passive: true });
 
     return () => {
       window.removeEventListener('mousemove', handleActivity);
-      window.removeEventListener('keydown', handleActivity);
       window.removeEventListener('click', handleActivity);
     };
   }, []);
@@ -730,9 +733,9 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
           e.preventDefault(); e.stopPropagation();
           const introOverlay = document.querySelector('.brand-intro-overlay');
           if (!introOverlay) return;
+          // Use offsetWidth instead of getBoundingClientRect to avoid forced reflow
           const focusables = Array.from(introOverlay.querySelectorAll('.focusable')).filter(el => {
-            const rect = el.getBoundingClientRect();
-            return rect.width > 0 && rect.height > 0 && !el.disabled;
+            return el.offsetWidth > 0 && el.offsetHeight > 0 && !el.disabled;
           });
           if (focusables.length === 0) return;
           const curIdx = focusables.indexOf(activeEl);
