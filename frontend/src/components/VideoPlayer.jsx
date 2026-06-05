@@ -1018,6 +1018,11 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         e.preventDefault();
         e.stopPropagation();
 
+        if (isSmartTV) {
+          onClose?.();
+          return;
+        }
+
         const now = Date.now();
 
         if (!showControlsRef.current) {

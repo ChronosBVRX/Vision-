@@ -188,18 +188,17 @@ public class MainActivity extends Activity {
 
             // Check if the player overlay is visible in the web page
             mWebView.evaluateJavascript(
-                "(function() { return document.querySelector('.watch-overlay') !== null; })()",
+                "(function() { return document.querySelector('.watch-overlay') !== null || document.querySelector('video') !== null; })()",
                 new ValueCallback<String>() {
                     @Override
                     public void onReceiveValue(String value) {
                         boolean playerVisible = "true".equals(value);
 
                         if (playerVisible) {
-                            // Player is active — dispatch Escape/Backspace to the page
-                            // and let JS handle the back navigation (show controls first, exit on second press)
+                            // Player is active — dispatch ONLY Escape to the page
+                            // and let JS handle the back navigation (close instantly on TV)
                             mWebView.evaluateJavascript(
-                                "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));" +
-                                "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', keyCode: 8, bubbles: true }));",
+                                "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));",
                                 null
                             );
                             // Reset exit timer so the toast doesn't show

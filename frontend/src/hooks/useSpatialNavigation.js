@@ -260,8 +260,7 @@ export default function useSpatialNavigation(isActive = true) {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function isVisible(el) {
-  const rect = el.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0 && !el.disabled;
+  return el.offsetWidth > 0 && el.offsetHeight > 0 && !el.disabled;
 }
 
 function queryFocusables(restrictTo) {
