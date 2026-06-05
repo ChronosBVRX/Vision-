@@ -91,7 +91,7 @@ export default function DetailsModal({ item, onClose, onPlay }) {
   // ESC / Backspace to close modal or trailer overlay
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' || e.key === 'Backspace') {
+      if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') {
         if (showTrailer) {
           setShowTrailer(false);
         } else {
