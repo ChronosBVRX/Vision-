@@ -22,6 +22,37 @@
     document.documentElement.classList.add('is-smart-tv');
     console.log('[Vision+] TV environment detected. UA:', navigator.userAgent.substring(0, 120));
     console.log('[Vision+] Applying performance optimization classes.');
+
+    // HACK: Evitar que el botón Atrás cierre el navegador en Google TV / Chromecast
+    window.history.pushState({ noExit: true }, '');
+    window.addEventListener('popstate', (event) => {
+      console.log('[Vision+] TV Back button intercepted via popstate');
+      // Restaurar el estado falso para atrapar el próximo "Atrás"
+      window.history.pushState({ noExit: true }, '');
+      
+      // Disparar evento Escape/Backspace globalmente para que los modales/reproductores lo capturen
+      const escEvent = new KeyboardEvent('keydown', {
+        key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true
+      });
+      document.dispatchEvent(escEvent);
+    });
+
+    // Fallback: prevenir la acción por defecto del Backspace/GoBack en teclados de TV
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' || e.key === 'GoBack' || e.keyCode === 461 || e.keyCode === 8) {
+        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+        if (activeTag !== 'input' && activeTag !== 'textarea') {
+          // Si no es un campo de texto, detenemos el Backspace para evitar salida del navegador
+          // (React aún procesará el evento porque React maneja sus propios listeners globales,
+          // pero el preventDefault detiene la navegación del motor del navegador).
+          e.preventDefault();
+          
+          if (e.key === 'GoBack' || e.keyCode === 461) {
+             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true, cancelable: true }));
+          }
+        }
+      }
+    }, { capture: true });
   }
 })();
 
