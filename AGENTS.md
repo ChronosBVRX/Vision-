@@ -93,6 +93,14 @@ npm run errors   # node read-logs.js --errors
 
 ## Convenciones / Reglas
 
+### 📌 Versión visible en Bootloader — Toda modificación incrementa la versión
+
+**REGLA OBLIGATORIA:** Cada vez que un agente haga cualquier cambio en el código (fix, feat, refactor, chore), DEBE incrementar la versión en `package.json` sumando 1 al último dígito (ej. `1.0.02` → `1.0.03`).
+
+**¿Por qué?** El `Bootloader.jsx` muestra `v{version}` en la pantalla de carga. La versión se inyecta automáticamente desde `package.json` via `VITE_APP_VERSION` en `vite.config.js:8`. Sin este bump, no hay forma de saber qué versión del código se está ejecutando realmente en el servidor.
+
+**Verificación:** `grep '"version"' package.json`
+
 ### 🔒 Sistema de locks — Nunca editar el mismo archivo al mismo tiempo
 
 Para evitar conflictos entre agents, usar el sistema de lock:
@@ -123,7 +131,16 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 
 ### 📋 Workflow obligatorio para cada agente
 
+**Regla de Espejo en Vivo:** Todos los agentes (EXCEPTO el agente del servidor remoto) deben cerciorarse de lanzar y mantener corriendo en segundo plano el comando `npm run sync` al iniciar su sesión, para garantizar que todos los cambios se inyecten automáticamente al servidor remoto.
+
+**Regla de Build Obligatorio:** Cada vez que se haga **cualquier cambio en el código** (frontend, backend, config, versión), el agente DEBE:
+  1. Recompilar el frontend con `npm run build --prefix frontend` (para que Vite inyecte la nueva versión y los cambios en `frontend/dist/`)
+  2. Si `watch-sync.js` no está corriendo, hacer commit + push manual para que `server-sync.js` en el servidor remoto lo detecte y aplique los cambios
+
+**¿Por qué?** La versión (`VITE_APP_VERSION`) se inyecta en tiempo de build desde `package.json`. Si no se rebuild, el servidor remoto sigue sirviendo el bundle viejo con la versión anterior. El Bootloader mostraría una versión incorrecta.
+
 **Antes de empezar cualquier tarea:**
+0. **CORRER EL SERVIDOR SIEMPRE:** Debes ejecutar `npm run dev` (o `npm run sync` en su defecto) en segundo plano **antes de hacer cualquier otra cosa**. Es una regla estricta ordenada por el usuario.
 1. `git pull origin main` — asegurar código más reciente
 2. `node agent-lock.js status` — verificar que no haya locks activos
 3. Si el archivo a editar tiene lock de otro agente → **detenerse y avisar al usuario**
@@ -135,14 +152,17 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 - No modificar archivos fuera del alcance de la tarea
 - `database.json` NUNCA se edita manualmente, solo via API
 - Usar `console.log("[Modulo] mensaje")` en server.js para que quede en server.log
+- **Rebuild el frontend** después de cualquier cambio en código o versión: `npm run build --prefix frontend`
+- Si `watch-sync.js` no está corriendo, hacer commit + push manual tras cada cambio significativo
 
 **Antes de hacer commit:**
 1. `node agent-lock.js release` — liberar el lock
-2. `git status` — verificar que solo están los archivos intencionados
-3. `git diff --stat` — revisar que no hay cambios accidentales
-4. Verificar que NO se incluye `database.json` ni `agent.lock` en el commit
-5. Verificar que no se incluyen secretos/API keys
-6. Hacer commit descriptivo y push
+2. **AVANZAR VERSIÓN:** Incrementar `package.json` → `version` sumando 1 al último dígito (ej. 1.0.02 → 1.0.03). Verificar con `grep '"version"' package.json`
+3. `git status` — verificar que solo están los archivos intencionados
+4. `git diff --stat` — revisar que no hay cambios accidentales
+5. Verificar que NO se incluye `database.json` ni `agent.lock` en el commit
+6. Verificar que no se incluyen secretos/API keys
+7. Hacer commit descriptivo incluyendo la versión y push
 
 **Formato de commits:**
 - `feat:` — nueva funcionalidad
@@ -150,7 +170,7 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 - `refactor:` — refactorización
 - `chore:` — tareas de mantenimiento/logs
 - `docs:` — documentación
-- Ejemplo: `fix: PoseidonHD no cargaba episodios — cambiar thisSeries por thisSerie`
+- Ejemplo: `fix: PoseidonHD no cargaba episodios — cambiar thisSeries por thisSerie (v1.0.01)`
 
 ### 🚫 Qué NO hacer
 - No editar `database.json` manualmente (siempre via API)
@@ -334,6 +354,17 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
   - 🚫 Qué NO hacer: no editar database.json, no archivos con lock ajeno, no commits sin liberar
   - ✅ Formato estandarizado de commits (feat/fix/refactor/chore/docs)
 
+## Modificaciones de Antigravity (05/06/2026)
+
+### Sincronización Inicial a Servidor Remoto
+- **Script `initial-sync.js`:** Creado para realizar una transferencia masiva inicial de todos los archivos locales hacia la ruta de red remota configurada en `.env`, omitiendo node_modules, android, bases de datos y carpetas git.
+- **Validación del Mirror:** Confirmado que `direct-sync.js` copia instantáneamente archivos de código y distribuciones compiladas de React (`frontend/dist`) hacia el servidor en vivo.
+
+### Bootloader Premium (Pantalla de Carga)
+- **Componente `<Bootloader />`:** Implementado en React que detiene el uso de la interfaz hasta que `CatalogContext` termina de precargar toda la data.
+- **Experiencia de Usuario:** Agregado gradiente radial rojo, animación de carga, tiempo mínimo de retención (2000ms) para evitar destellos rápidos, y transición suave (fade-out) hacia la app.
+- **Versión Dinámica:** Vite inyecta automáticamente la versión del `package.json` mediante `VITE_APP_VERSION` para mostrarla en el splash screen.
+
 ---
 
 ## Próximos pasos / Pendientes
@@ -348,3 +379,4 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 - [ ] ~~Sistema de locks entre agents~~ ✅ `agent-lock.js` implementado
 - [ ] ~~Utilidad: read-logs.js con filtros~~ ✅ Creado + npm scripts
 - [ ] ~~Workflow multi-agente documentado~~ ✅ Reglas completas en AGENTS.md
+- [x] ~~**Configurar Enlace en Vivo (direct-sync)**: (Para opencode) El usuario ha solicitado un espejo EN VIVO...~~ ✅ Completado por antigravity (script initial-sync y comprobación de mirror)

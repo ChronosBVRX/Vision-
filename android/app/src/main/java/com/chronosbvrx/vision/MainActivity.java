@@ -11,7 +11,6 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
-import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -186,43 +185,26 @@ public class MainActivity extends Activity {
                 return true;
             }
 
-            // Check if the player overlay is visible in the web page
+            // Dispatch GoBack keydown to the WebView.
+            // main.jsx catches GoBack (keyCode 461) and converts it to Escape.
+            // This matches what Android TV remotes generate natively.
             mWebView.evaluateJavascript(
-                "(function() { return document.querySelector('.watch-overlay') !== null || document.querySelector('video') !== null; })()",
-                new ValueCallback<String>() {
-                    @Override
-                    public void onReceiveValue(String value) {
-                        boolean playerVisible = "true".equals(value);
-
-                        if (playerVisible) {
-                            // Player is active — dispatch ONLY Escape to the page
-                            // and let JS handle the back navigation (close instantly on TV)
-                            mWebView.evaluateJavascript(
-                                "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));",
-                                null
-                            );
-                            // Reset exit timer so the toast doesn't show
-                            lastBackPressTime = 0;
-                            if (backToast != null) {
-                                backToast.cancel();
-                            }
-                        } else {
-                            // Player not active — use double-back-exit for the app
-                            long currentTime = System.currentTimeMillis();
-                            if (currentTime - lastBackPressTime < 2000) {
-                                if (backToast != null) {
-                                    backToast.cancel();
-                                }
-                                finish();
-                            } else {
-                                backToast = Toast.makeText(MainActivity.this, "Presiona ATRÁS nuevamente para salir", Toast.LENGTH_SHORT);
-                                backToast.show();
-                                lastBackPressTime = currentTime;
-                            }
-                        }
-                    }
-                }
+                "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'GoBack', code: 'GoBack', keyCode: 461, bubbles: true }));",
+                null
             );
+
+            // Double-back-exit: 2 presses within 3 seconds
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - lastBackPressTime < 3000 && lastBackPressTime > 0) {
+                if (backToast != null) {
+                    backToast.cancel();
+                }
+                finish();
+            } else {
+                lastBackPressTime = currentTime;
+                backToast = Toast.makeText(MainActivity.this, "Presiona ATRÁS nuevamente para salir", Toast.LENGTH_SHORT);
+                backToast.show();
+            }
             return true;
         }
 
