@@ -11,6 +11,7 @@ import Series from './pages/Series';
 import useSpatialNavigation from './hooks/useSpatialNavigation';
 import { useCatalog } from './context/CatalogContext.jsx';
 import logoImg from './assets/logo.png';
+import Bootloader from './components/Bootloader.jsx';
 
 function getNormalizedTVCategory(channel) {
   if (!channel) return 'Variedades / General';
@@ -283,9 +284,10 @@ export default function App() {
   }, [sources]);
 
   return (
-    <div className="app-container">
+    <Bootloader>
+      <div className="app-container">
 
-      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+        {/* ── Sidebar ──────────────────────────────────────────────────────── */}
       <aside 
         className={`sidebar ${sidebarOpen ? 'open' : ''}`} 
         tabIndex={-1}
@@ -481,5 +483,6 @@ export default function App() {
         {currentPage === 'anime' && <Movies contentType={animeTab === 'Películas' ? 'anime_movie' : 'anime_series'} />}
       </main>
     </div>
+    </Bootloader>
   );
 }
