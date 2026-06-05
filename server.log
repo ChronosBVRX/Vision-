@@ -1,102 +1,3 @@
- ! [rejected]        main -> main (fetch first)
-error: failed to push some refs to 'https://github.com/ChronosBVRX/Vision-.git'
-hint: Updates were rejected because the remote contains work that you do not
-hint: have locally. This is usually caused by another repository pushing to
-hint: the same ref. If you want to integrate the remote changes, use
-hint: 'git pull' before pushing again.
-hint: See the 'Note about fast-forwards' in 'git push --help' for details.
-
-[2026-06-05 08:09:05] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
-[2026-06-05 08:09:05] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
-[2026-06-05 08:09:05] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
-[2026-06-05 08:09:05] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 19
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Escaneando un total de 24 espejos en paralelo...
-[2026-06-05 08:09:06] [ERROR] (node:10780) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
-(Use `node --trace-warnings ...` to show where the warning was created)
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: getaddrinfo ENOTFOUND www.pirlotv3.sale)
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://pirlotv.uno (Solo 0 partidos)
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 525)
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
-[2026-06-05 08:09:06] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
-[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
-[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
-[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
-[2026-06-05 08:09:07] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://www.rojadirectahd.dev (38 partidos encontrados)
-[2026-06-05 08:09:07] [INFO] [SportsWorker] Buscando logotipos para 38 partidos...
-[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectahd.vip (Solo 38 partidos)
-[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo EAI_AGAIN pirlotv3.pl)
-[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectatvmas.com (Solo 37 partidos)
-[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
-[2026-06-05 08:09:07] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 17 partidos)
-[2026-06-05 08:09:08] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://www.rojadirectahd.dev
-[2026-06-05 08:09:08] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 17 partidos)
-[2026-06-05 08:09:08] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
-[2026-06-05 08:09:09] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
-[2026-06-05 08:09:10] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
-[2026-06-05 08:09:37] [INFO] [Env] Variables de entorno cargadas correctamente.
-[2026-06-05 08:09:41] [INFO] [DB] SQLite inicializado.
-[2026-06-05 08:09:41] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
-[2026-06-05 08:09:41] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
-[2026-06-05 08:09:41] [INFO] [33m[2026-06-05T08:09:41.537] [INFO] - [Running gramJS version 2.26.21][0m
-[2026-06-05 08:09:41] [INFO] [TelegramClient] Conectando a Telegram...
-[2026-06-05 08:09:41] [INFO] [33m[2026-06-05T08:09:41.548] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 08:09:41] [INFO] [33m[2026-06-05T08:09:41.633] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 08:09:41] [INFO] [33m[2026-06-05T08:09:41.637] [INFO] - [Using LAYER 198 for initial connect][0m
-[2026-06-05 08:09:41] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
-[2026-06-05 08:09:41] [INFO] Servidor corriendo en el puerto 5000
-[2026-06-05 08:09:41] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
-[2026-06-05 08:09:41] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
-[2026-06-05 08:09:43] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
-[2026-06-05 08:09:46] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
-[2026-06-05 08:09:46] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
-[2026-06-05 08:09:46] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
-[2026-06-05 08:09:46] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
-[2026-06-05 08:09:46] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
-[2026-06-05 08:09:46] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
-[2026-06-05 08:09:46] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
-[2026-06-05 08:09:46] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
-[2026-06-05 08:09:46] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
-[2026-06-05 08:09:46] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
-[2026-06-05 08:10:35] [INFO] [Env] Variables de entorno cargadas correctamente.
-[2026-06-05 08:10:38] [INFO] [DB] SQLite inicializado.
-[2026-06-05 08:10:38] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
-[2026-06-05 08:10:38] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
-[2026-06-05 08:10:38] [INFO] [33m[2026-06-05T08:10:38.869] [INFO] - [Running gramJS version 2.26.21][0m
-[2026-06-05 08:10:38] [INFO] [TelegramClient] Conectando a Telegram...
-[2026-06-05 08:10:38] [INFO] [33m[2026-06-05T08:10:38.881] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 08:10:38] [INFO] [33m[2026-06-05T08:10:38.979] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 08:10:39] [INFO] [33m[2026-06-05T08:10:39.008] [INFO] - [Using LAYER 198 for initial connect][0m
-[2026-06-05 08:10:39] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
-[2026-06-05 08:10:39] [INFO] Servidor corriendo en el puerto 5000
-[2026-06-05 08:10:39] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
-[2026-06-05 08:10:39] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
-[2026-06-05 08:10:40] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
-[2026-06-05 08:10:43] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
-[2026-06-05 08:10:43] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
-[2026-06-05 08:10:43] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
-[2026-06-05 08:10:43] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
-[2026-06-05 08:10:43] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
-[2026-06-05 08:10:43] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
-[2026-06-05 08:10:43] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
-[2026-06-05 08:10:43] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
-[2026-06-05 08:10:43] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
-[2026-06-05 08:10:44] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
-[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
-[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
-[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
-[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
-[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
-[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
-[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
-[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
-[2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
 [2026-06-05 08:10:46] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.uno (query: "pirlo tv")
 [2026-06-05 08:10:46] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
 [2026-06-05 08:19:50] [INFO] [Env] Variables de entorno cargadas correctamente.
@@ -2497,3 +2398,102 @@ error: Please commit or stash them.
 [2026-06-05 10:45:45] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
 [2026-06-05 10:45:45] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
 [2026-06-05 10:45:45] [INFO] [GitHub Pages] Nuevo túnel detectado: https://begin-vegas-lime-sherman.trycloudflare.com. Actualizando redirect...
+[2026-06-05 10:45:47] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-05 10:45:47] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-05 10:45:47] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
+[2026-06-05 10:45:47] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-05 10:45:47] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
+[2026-06-05 10:45:47] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
+[2026-06-05 10:45:47] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
+[2026-06-05 10:45:47] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
+[2026-06-05 10:45:47] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
+[2026-06-05 10:45:47] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-05 10:45:49] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
+[2026-06-05 10:45:49] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
+[2026-06-05 10:45:49] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
+[2026-06-05 10:45:49] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
+[2026-06-05 10:45:50] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 18
+[2026-06-05 10:45:50] [INFO] [SportsScraper] Escaneando un total de 23 espejos en paralelo...
+[2026-06-05 10:45:50] [ERROR] (node:11432) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-06-05 10:45:50] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
+[2026-06-05 10:45:50] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: getaddrinfo ENOTFOUND www.pirlotv3.sale)
+[2026-06-05 10:45:50] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
+[2026-06-05 10:45:50] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://begin-vegas-lime-sherman.trycloudflare.com
+[2026-06-05 10:45:50] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
+[2026-06-05 10:45:50] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
+[2026-06-05 10:45:51] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 525)
+[2026-06-05 10:45:51] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
+[2026-06-05 10:45:51] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
+[2026-06-05 10:45:51] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
+[2026-06-05 10:45:51] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
+[2026-06-05 10:45:51] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://www.rojadirectatvmas.com (37 partidos encontrados)
+[2026-06-05 10:45:51] [INFO] [SportsWorker] Buscando logotipos para 37 partidos...
+[2026-06-05 10:45:51] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
+[2026-06-05 10:45:51] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo EAI_AGAIN pirlotv3.pl)
+[2026-06-05 10:45:51] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
+[2026-06-05 10:45:51] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectahd.dev (Solo 38 partidos)
+[2026-06-05 10:45:51] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectahd.vip (Solo 38 partidos)
+[2026-06-05 10:45:52] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
+[2026-06-05 10:45:52] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
+[2026-06-05 10:45:52] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
+[2026-06-05 10:45:52] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 17 partidos)
+[2026-06-05 10:45:52] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://www.rojadirectatvmas.com
+[2026-06-05 10:45:52] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
+[2026-06-05 10:45:53] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 17 partidos)
+[2026-06-05 10:45:55] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
+[2026-06-05 10:47:12] [INFO] [33m[2026-06-05T10:47:12.526] [INFO] - [connection closed][0m
+[2026-06-05 10:47:12] [INFO] [35m[2026-06-05T10:47:12.530] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 10:47:12] [ERROR] {}
+[2026-06-05 10:47:13] [INFO] [33m[2026-06-05T10:47:13.547] [INFO] - [Started reconnecting][0m
+[2026-06-05 10:47:13] [INFO] [35m[2026-06-05T10:47:13.548] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 10:47:13] [INFO] [33m[2026-06-05T10:47:13.550] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 10:47:13] [INFO] [33m[2026-06-05T10:47:13.554] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 10:47:13] [INFO] [33m[2026-06-05T10:47:13.683] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 10:47:13] [INFO] [33m[2026-06-05T10:47:13.685] [INFO] - [Handling reconnect!][0m
+[2026-06-05 10:48:31] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "plutovod_5e0a2bfcbe8fa6764e87710e" (Idioma pref: auto, Servidores excluidos: [])
+[2026-06-05 10:48:31] [INFO] [Resolver] Película encontrada: "Bring it on"
+[2026-06-05 10:48:31] [INFO] [Resolver] Total de opciones filtradas a evaluar: 1
+[2026-06-05 10:48:31] [INFO] [Resolver] Lanzando 1 opciones en paralelo (max 3)...
+[2026-06-05 10:48:31] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] Pluto TV Stream
+[2026-06-05 10:48:31] [INFO] [plutoAdapter] ⚡ Resolviendo stream dinamico de Pluto TV: pluto-tv:///stitch/hls/episode/5e0a2bfcbe8fa6764e87710e/master.m3u8
+[2026-06-05 10:48:31] [INFO] [SourceValidator] Probando HEAD para: https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/episode/5e0a2bfcbe8fa6764e87710e/master.m3u8?advertisingId=&appName=web&appVersion=7.9.0-a9cca6b89aea4dc0998b92a51989d2adb9a9025d&app_name=web&clientDeviceType=0&clientID=vision-plus-pluto-client-ewqei&clientModelNumber=1.0.0&country=MX&deviceDNT=false&deviceId=vision-plus-pluto-client-ewqei&deviceLat=19.5200&deviceLon=-99.2000&deviceMake=Chrome&deviceModel=web&deviceType=web&deviceVersion=16.2.0&marketingRegion=VE&serverSideAds=true&sessionID=61fb0907-60fe-11f1-a838-9abc4d132ad2&sid=61fb0907-60fe-11f1-a838-9abc4d132ad2&userId=&jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6IjJhMDMwMjAxLWE3Y2UtNDhiYS1hMmI2LTRlZDQ1MDhmMmIzZSIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI2MWZiMDkwNy02MGZlLTExZjEtYTgzOC05YWJjNGQxMzJhZDIiLCJjbGllbnRJUCI6IjE4OS4yMDEuMTI4LjEiLCJjaXR5IjoiTGEgTW9yYSIsInBvc3RhbENvZGUiOiI1NDA5MCIsImNvdW50cnkiOiJNWCIsImRtYSI6MCwiYWN0aXZlUmVnaW9uIjoiVkUiLCJkZXZpY2VMYXQiOjE5LjUyMDAwMDQ1Nzc2MzY3MiwiZGV2aWNlTG9uIjotOTkuMTk5OTk2OTQ4MjQyMTksInByZWZlcnJlZExhbmd1YWdlIjoiZW4iLCJkZXZpY2VUeXBlIjoid2ViIiwiZGV2aWNlVmVyc2lvbiI6IjE2LjIuMCIsImRldmljZU1ha2UiOiJDaHJvbWUiLCJkZXZpY2VNb2RlbCI6IndlYiIsImFwcE5hbWUiOiJ3ZWIiLCJhcHBWZXJzaW9uIjoiNy45LjAtYTljY2E2Yjg5YWVhNGRjMDk5OGI5MmE1MTk4OWQyYWRiOWE5MDI1ZCIsImNsaWVudElEIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWV3cWVpIiwiY21BdWRpZW5jZUlEIjoiIiwiaXNDbGllbnRETlQiOmZhbHNlLCJ1c2VySUQiOiIiLCJsb2dMZXZlbCI6IkRFRkFVTFQiLCJ0aW1lWm9uZSI6IkFtZXJpY2EvTWV4aWNvX0NpdHkiLCJzZXJ2ZXJTaWRlQWRzIjp0cnVlLCJlMmVCZWFjb25zIjpmYWxzZSwiZmVhdHVyZXMiOnsibXVsdGlQb2RBZHMiOnsiY29ob3J0IjoiIiwiZW5hYmxlZCI6dHJ1ZX0sInN0aXRjaGVyRGFzaE5nIjp7ImZsYXR0ZW5CYXNlVXJsIjp0cnVlfSwic3RpdGNoZXJIbHNOZyI6eyJkZW11eGVkQXVkaW8iOiJqaXQifX0sImZtc1BhcmFtcyI6eyJmd1ZjSUQyIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWV3cWVpIiwiZndWY0lEMkNvcHBhIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWV3cWVpIiwiY3VzdG9tUGFyYW1zIjp7ImZtc19saXZlcmFtcF9pZGwiOiIiLCJmbXNfZW1haWxoYXNoIjoiIiwiZm1zX3N1YnNjcmliZXJpZCI6IiIsImZtc19pZmEiOiIiLCJmbXNfaWRmdiI6IiIsImZtc191c2VyaWQiOiJ2aXNpb24tcGx1cy1wbHV0by1jbGllbnQtZXdxZWkiLCJmbXNfdmNpZDJ0eXBlIjoidXNlcmlkIiwiZm1zX3JhbXBfaWQiOiIiLCJmbXNfaGhfcmFtcF9pZCI6IiIsImZtc19iaWRpZHR5cGUiOiIiLCJfZndfM1BfVUlEIjoiIiwiZm1zX3J1bGVpZCI6IjEwMDAwLDEwMDA5LDEwMDEzLDEwMDE0LDEwMDE2LDEwMDE1LDEwMDIxLDEwMDIzLDEwMDIwIn19LCJzZXNzaW9uU3RhcnRUaW1lIjoxNzgwNjc4MTEwNjk5LCJpc3MiOiJib290LnBsdXRvLnR2Iiwic3ViIjoicHJpOnYxOnBsdXRvOmRldmljZXM6VkU6ZG1semFXOXVMWEJzZFhNdGNHeDFkRzh0WTJ4cFpXNTBMV1YzY1dWcCIsImF1ZCI6IioucGx1dG8udHYiLCJleHAiOjE3ODA3NjQ1MTAsImlhdCI6MTc4MDY3ODExMCwianRpIjoiMzRmNjk4OGYtZmNmYy00YzY5LWExNDEtOGNhNmZmZmRmNjRlIn0.-KQiAJ5EJObsEoWuewkk1faSsclc7l1TooFgc6-Zx1M&masterJWTPassthrough=true
+[2026-06-05 10:48:31] [INFO] [SourceValidator] HEAD falló: Request failed with status code 405. Intentando GET parcial...
+[2026-06-05 10:48:31] [INFO] [SourceValidator] Probando GET con rango de bytes para: https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/episode/5e0a2bfcbe8fa6764e87710e/master.m3u8?advertisingId=&appName=web&appVersion=7.9.0-a9cca6b89aea4dc0998b92a51989d2adb9a9025d&app_name=web&clientDeviceType=0&clientID=vision-plus-pluto-client-ewqei&clientModelNumber=1.0.0&country=MX&deviceDNT=false&deviceId=vision-plus-pluto-client-ewqei&deviceLat=19.5200&deviceLon=-99.2000&deviceMake=Chrome&deviceModel=web&deviceType=web&deviceVersion=16.2.0&marketingRegion=VE&serverSideAds=true&sessionID=61fb0907-60fe-11f1-a838-9abc4d132ad2&sid=61fb0907-60fe-11f1-a838-9abc4d132ad2&userId=&jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6IjJhMDMwMjAxLWE3Y2UtNDhiYS1hMmI2LTRlZDQ1MDhmMmIzZSIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI2MWZiMDkwNy02MGZlLTExZjEtYTgzOC05YWJjNGQxMzJhZDIiLCJjbGllbnRJUCI6IjE4OS4yMDEuMTI4LjEiLCJjaXR5IjoiTGEgTW9yYSIsInBvc3RhbENvZGUiOiI1NDA5MCIsImNvdW50cnkiOiJNWCIsImRtYSI6MCwiYWN0aXZlUmVnaW9uIjoiVkUiLCJkZXZpY2VMYXQiOjE5LjUyMDAwMDQ1Nzc2MzY3MiwiZGV2aWNlTG9uIjotOTkuMTk5OTk2OTQ4MjQyMTksInByZWZlcnJlZExhbmd1YWdlIjoiZW4iLCJkZXZpY2VUeXBlIjoid2ViIiwiZGV2aWNlVmVyc2lvbiI6IjE2LjIuMCIsImRldmljZU1ha2UiOiJDaHJvbWUiLCJkZXZpY2VNb2RlbCI6IndlYiIsImFwcE5hbWUiOiJ3ZWIiLCJhcHBWZXJzaW9uIjoiNy45LjAtYTljY2E2Yjg5YWVhNGRjMDk5OGI5MmE1MTk4OWQyYWRiOWE5MDI1ZCIsImNsaWVudElEIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWV3cWVpIiwiY21BdWRpZW5jZUlEIjoiIiwiaXNDbGllbnRETlQiOmZhbHNlLCJ1c2VySUQiOiIiLCJsb2dMZXZlbCI6IkRFRkFVTFQiLCJ0aW1lWm9uZSI6IkFtZXJpY2EvTWV4aWNvX0NpdHkiLCJzZXJ2ZXJTaWRlQWRzIjp0cnVlLCJlMmVCZWFjb25zIjpmYWxzZSwiZmVhdHVyZXMiOnsibXVsdGlQb2RBZHMiOnsiY29ob3J0IjoiIiwiZW5hYmxlZCI6dHJ1ZX0sInN0aXRjaGVyRGFzaE5nIjp7ImZsYXR0ZW5CYXNlVXJsIjp0cnVlfSwic3RpdGNoZXJIbHNOZyI6eyJkZW11eGVkQXVkaW8iOiJqaXQifX0sImZtc1BhcmFtcyI6eyJmd1ZjSUQyIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWV3cWVpIiwiZndWY0lEMkNvcHBhIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWV3cWVpIiwiY3VzdG9tUGFyYW1zIjp7ImZtc19saXZlcmFtcF9pZGwiOiIiLCJmbXNfZW1haWxoYXNoIjoiIiwiZm1zX3N1YnNjcmliZXJpZCI6IiIsImZtc19pZmEiOiIiLCJmbXNfaWRmdiI6IiIsImZtc191c2VyaWQiOiJ2aXNpb24tcGx1cy1wbHV0by1jbGllbnQtZXdxZWkiLCJmbXNfdmNpZDJ0eXBlIjoidXNlcmlkIiwiZm1zX3JhbXBfaWQiOiIiLCJmbXNfaGhfcmFtcF9pZCI6IiIsImZtc19iaWRpZHR5cGUiOiIiLCJfZndfM1BfVUlEIjoiIiwiZm1zX3J1bGVpZCI6IjEwMDAwLDEwMDA5LDEwMDEzLDEwMDE0LDEwMDE2LDEwMDE1LDEwMDIxLDEwMDIzLDEwMDIwIn19LCJzZXNzaW9uU3RhcnRUaW1lIjoxNzgwNjc4MTEwNjk5LCJpc3MiOiJib290LnBsdXRvLnR2Iiwic3ViIjoicHJpOnYxOnBsdXRvOmRldmljZXM6VkU6ZG1semFXOXVMWEJzZFhNdGNHeDFkRzh0WTJ4cFpXNTBMV1YzY1dWcCIsImF1ZCI6IioucGx1dG8udHYiLCJleHAiOjE3ODA3NjQ1MTAsImlhdCI6MTc4MDY3ODExMCwianRpIjoiMzRmNjk4OGYtZmNmYy00YzY5LWExNDEtOGNhNmZmZmRmNjRlIn0.-KQiAJ5EJObsEoWuewkk1faSsclc7l1TooFgc6-Zx1M&masterJWTPassthrough=true
+[2026-06-05 10:48:32] [INFO] [SourceValidator] GET parcial exitoso. Content-Type: application/x-mpegurl, Final URL: https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/episode/5e0a2bfcbe8fa6764e87710e/master.m3u8?advertisingId=&appName=web&appVersion=7.9.0-a9cca6b89aea4dc0998b92a51989d2adb9a9025d&app_name=web&clientDeviceType=0&clientID=vision-plus-pluto-client-ewqei&clientModelNumber=1.0.0&country=MX&deviceDNT=false&deviceId=vision-plus-pluto-client-ewqei&deviceLat=19.5200&deviceLon=-99.2000&deviceMake=Chrome&deviceModel=web&deviceType=web&deviceVersion=16.2.0&marketingRegion=VE&serverSideAds=true&sessionID=61fb0907-60fe-11f1-a838-9abc4d132ad2&sid=61fb0907-60fe-11f1-a838-9abc4d132ad2&userId=&jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6IjJhMDMwMjAxLWE3Y2UtNDhiYS1hMmI2LTRlZDQ1MDhmMmIzZSIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI2MWZiMDkwNy02MGZlLTExZjEtYTgzOC05YWJjNGQxMzJhZDIiLCJjbGllbnRJUCI6IjE4OS4yMDEuMTI4LjEiLCJjaXR5IjoiTGEgTW9yYSIsInBvc3RhbENvZGUiOiI1NDA5MCIsImNvdW50cnkiOiJNWCIsImRtYSI6MCwiYWN0aXZlUmVnaW9uIjoiVkUiLCJkZXZpY2VMYXQiOjE5LjUyMDAwMDQ1Nzc2MzY3MiwiZGV2aWNlTG9uIjotOTkuMTk5OTk2OTQ4MjQyMTksInByZWZlcnJlZExhbmd1YWdlIjoiZW4iLCJkZXZpY2VUeXBlIjoid2ViIiwiZGV2aWNlVmVyc2lvbiI6IjE2LjIuMCIsImRldmljZU1ha2UiOiJDaHJvbWUiLCJkZXZpY2VNb2RlbCI6IndlYiIsImFwcE5hbWUiOiJ3ZWIiLCJhcHBWZXJzaW9uIjoiNy45LjAtYTljY2E2Yjg5YWVhNGRjMDk5OGI5MmE1MTk4OWQyYWRiOWE5MDI1ZCIsImNsaWVudElEIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWV3cWVpIiwiY21BdWRpZW5jZUlEIjoiIiwiaXNDbGllbnRETlQiOmZhbHNlLCJ1c2VySUQiOiIiLCJsb2dMZXZlbCI6IkRFRkFVTFQiLCJ0aW1lWm9uZSI6IkFtZXJpY2EvTWV4aWNvX0NpdHkiLCJzZXJ2ZXJTaWRlQWRzIjp0cnVlLCJlMmVCZWFjb25zIjpmYWxzZSwiZmVhdHVyZXMiOnsibXVsdGlQb2RBZHMiOnsiY29ob3J0IjoiIiwiZW5hYmxlZCI6dHJ1ZX0sInN0aXRjaGVyRGFzaE5nIjp7ImZsYXR0ZW5CYXNlVXJsIjp0cnVlfSwic3RpdGNoZXJIbHNOZyI6eyJkZW11eGVkQXVkaW8iOiJqaXQifX0sImZtc1BhcmFtcyI6eyJmd1ZjSUQyIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWV3cWVpIiwiZndWY0lEMkNvcHBhIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWV3cWVpIiwiY3VzdG9tUGFyYW1zIjp7ImZtc19saXZlcmFtcF9pZGwiOiIiLCJmbXNfZW1haWxoYXNoIjoiIiwiZm1zX3N1YnNjcmliZXJpZCI6IiIsImZtc19pZmEiOiIiLCJmbXNfaWRmdiI6IiIsImZtc191c2VyaWQiOiJ2aXNpb24tcGx1cy1wbHV0by1jbGllbnQtZXdxZWkiLCJmbXNfdmNpZDJ0eXBlIjoidXNlcmlkIiwiZm1zX3JhbXBfaWQiOiIiLCJmbXNfaGhfcmFtcF9pZCI6IiIsImZtc19iaWRpZHR5cGUiOiIiLCJfZndfM1BfVUlEIjoiIiwiZm1zX3J1bGVpZCI6IjEwMDAwLDEwMDA5LDEwMDEzLDEwMDE0LDEwMDE2LDEwMDE1LDEwMDIxLDEwMDIzLDEwMDIwIn19LCJzZXNzaW9uU3RhcnRUaW1lIjoxNzgwNjc4MTEwNjk5LCJpc3MiOiJib290LnBsdXRvLnR2Iiwic3ViIjoicHJpOnYxOnBsdXRvOmRldmljZXM6VkU6ZG1semFXOXVMWEJzZFhNdGNHeDFkRzh0WTJ4cFpXNTBMV1YzY1dWcCIsImF1ZCI6IioucGx1dG8udHYiLCJleHAiOjE3ODA3NjQ1MTAsImlhdCI6MTc4MDY3ODExMCwianRpIjoiMzRmNjk4OGYtZmNmYy00YzY5LWExNDEtOGNhNmZmZmRmNjRlIn0.-KQiAJ5EJObsEoWuewkk1faSsclc7l1TooFgc6-Zx1M&masterJWTPassthrough=true
+[2026-06-05 10:48:32] [INFO] [Resolver] ✅ Primer éxito paralelo: Pluto TV Stream -> https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/episode/5e0a2bfcbe8fa6764e87710e/master.m3u8?advertisingId=&appName=web&appVersion=7.9.0-a9cca6b89aea4dc0998b92a51989d2adb9a9025d&app_name=web&clientDeviceType=0&clientID=vision-plus-pluto-client-ewqei&clientModelNumber=1.0.0&country=MX&deviceDNT=false&deviceId=vision-plus-pluto-client-ewqei&deviceLat=19.5200&deviceLon=-99.2000&deviceMake=Chrome&deviceModel=web&deviceType=web&deviceVersion=16.2.0&marketingRegion=VE&serverSideAds=true&sessionID=61fb0907-60fe-11f1-a838-9abc4d132ad2&sid=61fb0907-60fe-11f1-a838-9abc4d132ad2&userId=&jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6IjJhMDMwMjAxLWE3Y2UtNDhiYS1hMmI2LTRlZDQ1MDhmMmIzZSIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI2MWZiMDkwNy02MGZlLTExZjEtYTgzOC05YWJjNGQxMzJhZDIiLCJjbGllbnRJUCI6IjE4OS4yMDEuMTI4LjEiLCJjaXR5IjoiTGEgTW9yYSIsInBvc3RhbENvZGUiOiI1NDA5MCIsImNvdW50cnkiOiJNWCIsImRtYSI6MCwiYWN0aXZlUmVnaW9uIjoiVkUiLCJkZXZpY2VMYXQiOjE5LjUyMDAwMDQ1Nzc2MzY3MiwiZGV2aWNlTG9uIjotOTkuMTk5OTk2OTQ4MjQyMTksInByZWZlcnJlZExhbmd1YWdlIjoiZW4iLCJkZXZpY2VUeXBlIjoid2ViIiwiZGV2aWNlVmVyc2lvbiI6IjE2LjIuMCIsImRldmljZU1ha2UiOiJDaHJvbWUiLCJkZXZpY2VNb2RlbCI6IndlYiIsImFwcE5hbWUiOiJ3ZWIiLCJhcHBWZXJzaW9uIjoiNy45LjAtYTljY2E2Yjg5YWVhNGRjMDk5OGI5MmE1MTk4OWQyYWRiOWE5MDI1ZCIsImNsaWVudElEIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWV3cWVpIiwiY21BdWRpZW5jZUlEIjoiIiwiaXNDbGllbnRETlQiOmZhbHNlLCJ1c2VySUQiOiIiLCJsb2dMZXZlbCI6IkRFRkFVTFQiLCJ0aW1lWm9uZSI6IkFtZXJpY2EvTWV4aWNvX0NpdHkiLCJzZXJ2ZXJTaWRlQWRzIjp0cnVlLCJlMmVCZWFjb25zIjpmYWxzZSwiZmVhdHVyZXMiOnsibXVsdGlQb2RBZHMiOnsiY29ob3J0IjoiIiwiZW5hYmxlZCI6dHJ1ZX0sInN0aXRjaGVyRGFzaE5nIjp7ImZsYXR0ZW5CYXNlVXJsIjp0cnVlfSwic3RpdGNoZXJIbHNOZyI6eyJkZW11eGVkQXVkaW8iOiJqaXQifX0sImZtc1BhcmFtcyI6eyJmd1ZjSUQyIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWV3cWVpIiwiZndWY0lEMkNvcHBhIjoidmlzaW9uLXBsdXMtcGx1dG8tY2xpZW50LWV3cWVpIiwiY3VzdG9tUGFyYW1zIjp7ImZtc19saXZlcmFtcF9pZGwiOiIiLCJmbXNfZW1haWxoYXNoIjoiIiwiZm1zX3N1YnNjcmliZXJpZCI6IiIsImZtc19pZmEiOiIiLCJmbXNfaWRmdiI6IiIsImZtc191c2VyaWQiOiJ2aXNpb24tcGx1cy1wbHV0by1jbGllbnQtZXdxZWkiLCJmbXNfdmNpZDJ0eXBlIjoidXNlcmlkIiwiZm1zX3JhbXBfaWQiOiIiLCJmbXNfaGhfcmFtcF9pZCI6IiIsImZtc19iaWRpZHR5cGUiOiIiLCJfZndfM1BfVUlEIjoiIiwiZm1zX3J1bGVpZCI6IjEwMDAwLDEwMDA5LDEwMDEzLDEwMDE0LDEwMDE2LDEwMDE1LDEwMDIxLDEwMDIzLDEwMDIwIn19LCJzZXNzaW9uU3RhcnRUaW1lIjoxNzgwNjc4MTEwNjk5LCJpc3MiOiJib290LnBsdXRvLnR2Iiwic3ViIjoicHJpOnYxOnBsdXRvOmRldmljZXM6VkU6ZG1semFXOXVMWEJzZFhNdGNHeDFkRzh0WTJ4cFpXNTBMV1YzY1dWcCIsImF1ZCI6IioucGx1dG8udHYiLCJleHAiOjE3ODA3NjQ1MTAsImlhdCI6MTc4MDY3ODExMCwianRpIjoiMzRmNjk4OGYtZmNmYy00YzY5LWExNDEtOGNhNmZmZmRmNjRlIn0.-KQiAJ5EJObsEoWuewkk1faSsclc7l1TooFgc6-Zx1M&masterJWTPassthrough=true
+[2026-06-05 10:48:43] [INFO] [33m[2026-06-05T10:48:43.937] [INFO] - [connection closed][0m
+[2026-06-05 10:48:43] [INFO] [35m[2026-06-05T10:48:43.938] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 10:48:43] [ERROR] {}
+[2026-06-05 10:48:44] [INFO] [33m[2026-06-05T10:48:44.952] [INFO] - [Started reconnecting][0m
+[2026-06-05 10:48:44] [INFO] [35m[2026-06-05T10:48:44.954] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 10:48:44] [INFO] [33m[2026-06-05T10:48:44.957] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 10:48:44] [INFO] [33m[2026-06-05T10:48:44.959] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 10:48:45] [INFO] [33m[2026-06-05T10:48:45.045] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 10:48:45] [INFO] [33m[2026-06-05T10:48:45.057] [INFO] - [Handling reconnect!][0m
+[2026-06-05 10:48:54] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-05 10:48:56] [INFO] [DB] SQLite inicializado.
+[2026-06-05 10:48:56] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-05 10:48:56] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-05 10:48:56] [INFO] [33m[2026-06-05T10:48:56.531] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-05 10:48:56] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-05 10:48:56] [INFO] [33m[2026-06-05T10:48:56.543] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 10:48:56] [INFO] [33m[2026-06-05T10:48:56.735] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 10:48:56] [INFO] [33m[2026-06-05T10:48:56.739] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-05 10:48:56] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
+[2026-06-05 10:48:56] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-05 10:48:56] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-05 10:48:56] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-05 10:48:58] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-05 10:49:00] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-05 10:49:00] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-05 10:49:00] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-05 10:49:00] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-05 10:49:00] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-05 10:49:00] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-05 10:49:00] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-05 10:49:00] [ERROR] (node:7932) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-06-05 10:49:01] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-05 10:49:01] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-05 10:49:01] [INFO] [GitHub Pages] Nuevo túnel detectado: https://begin-vegas-lime-sherman.trycloudflare.com. Actualizando redirect...
