@@ -1415,22 +1415,29 @@ async function scrapeMovieCatalog(maxPagesPerUrl = 5) {
     }
   };
 
+  // [antigravity] delay anti-bloqueo entre páginas para scraping masivo
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
   async function scrapePagesForUrl(page, url, type, siteName, pageFn) {
     let emptyPages = 0;
     for (let p = 1; p <= maxPagesPerUrl; p++) {
       const pageUrl = p === 1 ? url : pageFn(url, p);
+      console.log(`[CatalogScraper] 📄 ${siteName} ${type}: scrapeando pág ${p}/${maxPagesPerUrl} → ${pageUrl}`);
       const items = await scrapeItemsFromPage(page, pageUrl, type, siteName);
       addUnique(items);
       if (items.length === 0) {
         emptyPages++;
-        console.log(`[CatalogScraper] ⚠ ${siteName} ${type}: pagina ${p} vacia (${emptyPages} consecutivas)`);
+        console.log(`[CatalogScraper] ⚠ ${siteName} ${type}: pág ${p} vacía (${emptyPages} consecutivas)`);
         if (emptyPages >= 2) {
-          console.log(`[CatalogScraper] ⚠ ${siteName} ${type}: 2 paginas consecutivas vacias, cortando paginacion`);
+          console.log(`[CatalogScraper] ✂ ${siteName} ${type}: 2 págs vacías consecutivas → fin de paginación en pág ${p}`);
           break;
         }
       } else {
         emptyPages = 0;
+        console.log(`[CatalogScraper] ✅ ${siteName} ${type}: pág ${p} → ${items.length} items (total acumulado: ${allMovies.length} películas, ${allSeries.length} series)`);
       }
+      // Pausa anti-bloqueo entre páginas
+      if (p < maxPagesPerUrl) await sleep(800);
     }
   }
 
@@ -2017,7 +2024,7 @@ async function scrapeAnimeCatalog(maxPages = 3) {
     // 1. Scrape AnimeFLV.net
     for (let p = 1; p <= maxPages; p++) {
       const url = `https://www4.animeflv.net/browse?page=${p}`;
-      console.log(`[AnimeScraper] Visitando: ${url}`);
+      console.log(`[AnimeScraper] 📄 AnimeFLV.net pág ${p}/${maxPages} → ${url}`);
       try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
         const items = await page.evaluate(() => {
@@ -2048,7 +2055,13 @@ async function scrapeAnimeCatalog(maxPages = 3) {
           });
           return res;
         });
+        if (items.length === 0) {
+          console.log(`[AnimeScraper] ✂ AnimeFLV.net pág ${p} vacía → fin de paginación`);
+          break;
+        }
+        console.log(`[AnimeScraper] ✅ AnimeFLV.net pág ${p} → ${items.length} animes`);
         items.forEach(addOrMerge);
+        if (p < maxPages) await new Promise(r => setTimeout(r, 800));
       } catch (e) {
         console.warn(`[AnimeScraper] Error en AnimeFLV.net pag ${p}:`, e.message);
       }
@@ -2057,7 +2070,7 @@ async function scrapeAnimeCatalog(maxPages = 3) {
     // 2. Scrape AnimeFLV.one
     for (let p = 1; p <= maxPages; p++) {
       const url = `https://vww.animeflv.one/animes?page=${p}`;
-      console.log(`[AnimeScraper] Visitando: ${url}`);
+      console.log(`[AnimeScraper] 📄 AnimeFLV.one pág ${p}/${maxPages} → ${url}`);
       try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
         const items = await page.evaluate(() => {
@@ -2088,7 +2101,13 @@ async function scrapeAnimeCatalog(maxPages = 3) {
           });
           return res;
         });
+        if (items.length === 0) {
+          console.log(`[AnimeScraper] ✂ AnimeFLV.one pág ${p} vacía → fin de paginación`);
+          break;
+        }
+        console.log(`[AnimeScraper] ✅ AnimeFLV.one pág ${p} → ${items.length} animes`);
         items.forEach(addOrMerge);
+        if (p < maxPages) await new Promise(r => setTimeout(r, 800));
       } catch (e) {
         console.warn(`[AnimeScraper] Error en AnimeFLV.one pag ${p}:`, e.message);
       }

@@ -1512,7 +1512,8 @@ async function runCatalogSync() {
   catalogSyncInProgress = true;
   console.log('[CatalogWorker] Iniciando sincronización de catálogo...');
   try {
-    const result = await scrapeMovieCatalog(5);
+    // [antigravity] maxPages=500: indexado completo, se detiene solo con 2 págs vacías
+    const result = await scrapeMovieCatalog(500);
     const db = readDB();
     if (!db.movieCatalog) db.movieCatalog = [];
     if (!db.seriesCatalog) db.seriesCatalog = [];
@@ -1599,7 +1600,8 @@ async function runAnimeSync() {
   animeSyncInProgress = true;
   console.log('[AnimeWorker] Iniciando sincronización de catálogo de anime...');
   try {
-    const result = await scrapeAnimeCatalog(2);
+    // [antigravity] maxPages=150: indexado completo de anime
+    const result = await scrapeAnimeCatalog(150);
     const db = readDB();
     if (!db.animeMovieCatalog) db.animeMovieCatalog = [];
     if (!db.animeSeriesCatalog) db.animeSeriesCatalog = [];
