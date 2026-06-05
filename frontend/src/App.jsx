@@ -11,6 +11,7 @@ import Series from './pages/Series';
 import useSpatialNavigation from './hooks/useSpatialNavigation';
 import { useCatalog } from './context/CatalogContext.jsx';
 import logoImg from './assets/logo.png';
+import Bootloader from './components/Bootloader.jsx';
 
 function getNormalizedTVCategory(channel) {
   if (!channel) return 'Variedades / General';
@@ -236,6 +237,13 @@ export default function App() {
     }, 50);
   }, [animeSubmenuOpen]);
 
+  // Listen for sidebar-open event from useSpatialNavigation
+  useEffect(() => {
+    const handleSidebarOpen = () => setSidebarOpen(true);
+    window.addEventListener('sidebar-open', handleSidebarOpen);
+    return () => window.removeEventListener('sidebar-open', handleSidebarOpen);
+  }, []);
+
   const selectPage = (page) => {
     setCurrentPage(page);
     setSidebarOpen(false);
@@ -276,10 +284,20 @@ export default function App() {
   }, [sources]);
 
   return (
-    <div className="app-container">
+    <Bootloader>
+      <div className="app-container">
 
-      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-      <aside className={`sidebar`} tabIndex={-1}>
+        {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+      <aside 
+        className={`sidebar ${sidebarOpen ? 'open' : ''}`} 
+        tabIndex={-1}
+        onFocus={() => setSidebarOpen(true)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) {
+            setSidebarOpen(false);
+          }
+        }}
+      >
         {/* Logo */}
         <div className="logo">
           <img src={logoImg} alt="Vision+" />
@@ -465,5 +483,6 @@ export default function App() {
         {currentPage === 'anime' && <Movies contentType={animeTab === 'Películas' ? 'anime_movie' : 'anime_series'} />}
       </main>
     </div>
+    </Bootloader>
   );
 }

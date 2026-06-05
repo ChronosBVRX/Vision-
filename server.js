@@ -2556,17 +2556,48 @@ function publishTunnelUrl(tunnelUrl, callback) {
     trimLogFile(2500);
     fs.writeFileSync(indexPath, htmlContent, 'utf8');
     
+    // Copiar index.html a la carpeta de publicación (server.log ya no se sube a GitHub para evitar conflictos)
+    const publishDir = 'C:\\Users\\Chronos\\Desktop\\Vision+_publish';
+    try {
+      fs.writeFileSync(path.join(publishDir, 'index.html'), htmlContent, 'utf8');
+    } catch (copyErr) {
+      console.error('[GitHub Pages] Error al copiar index.html a carpeta de publicación:', copyErr.message);
+    }
+    
     const { exec } = require('child_process');
-    exec('git add index.html server.log', { cwd: __dirname }, (err) => {
+    exec('git add index.html', { cwd: publishDir }, (err) => {
       if (err) {
         if (callback) callback(err);
         return;
       }
       
-      exec(`git commit -m "update tunnel url redirect to ${tunnelUrl}"`, { cwd: __dirname }, (err) => {
-        exec('git push origin main', { cwd: __dirname }, (pushErr) => {
-          if (callback) callback(pushErr);
-        });
+      // Verificar si hay cambios reales en index.html antes de intentar el commit
+      exec('git diff --cached --quiet', { cwd: publishDir }, (diffErr) => {
+        // diffErr.code === 1 indica que hay cambios staged listos para confirmar
+        if (diffErr && diffErr.code === 1) {
+          exec(`git commit -m "update tunnel url redirect to ${tunnelUrl}"`, { cwd: publishDir }, (commitErr) => {
+            if (commitErr) {
+              if (callback) callback(commitErr);
+              return;
+            }
+            exec('git pull --rebase -X theirs origin main', { cwd: publishDir }, (pullErr) => {
+              if (pullErr) {
+                console.error('[GitHub Pages] Error en git pull --rebase:', pullErr.message);
+              }
+              exec('git push origin main', { cwd: publishDir }, (pushErr) => {
+                if (callback) callback(pushErr);
+              });
+            });
+          });
+        } else {
+          // No hay cambios locales. Solo hacemos un pull para estar al día por seguridad.
+          exec('git pull --rebase -X theirs origin main', { cwd: publishDir }, (pullErr) => {
+            if (pullErr) {
+              console.error('[GitHub Pages] Error en git pull --rebase (sin cambios locales):', pullErr.message);
+            }
+            if (callback) callback(null);
+          });
+        }
       });
     });
   } catch (e) {
@@ -2604,17 +2635,29 @@ function checkAndPublishTunnelRedirect() {
 function publishServerLogs() {
   try {
     trimLogFile(2500);
+    const publishDir = 'C:\\Users\\Chronos\\Desktop\\Vision+_publish';
+    try {
+      if (fs.existsSync(path.join(__dirname, 'server.log'))) {
+        fs.copyFileSync(path.join(__dirname, 'server.log'), path.join(publishDir, 'server.log'));
+      }
+    } catch (copyErr) {
+      return;
+    }
+    
     const { exec } = require('child_process');
-    exec('git add server.log', { cwd: __dirname }, (err) => {
+    exec('git add server.log', { cwd: publishDir }, (err) => {
       if (err) return;
       
       const timeStr = getFormattedTime();
-      exec(`git commit -m "chore: update server runtime logs [${timeStr}]"`, { cwd: __dirname }, (err) => {
-        if (err) return; // Si no hay cambios, git commit falla. Lo ignoramos.
+      exec(`git commit -m "chore: update server runtime logs [${timeStr}]"`, { cwd: publishDir }, (err) => {
+        if (err) return; // Si no hay cambios, lo ignoramos.
         
-        exec('git push origin main', { cwd: __dirname }, (err) => {
-          if (err) return;
-          originalLog(`[Git Logs] Logs de servidor subidos a GitHub con éxito.`);
+        // Ejecutar pull --rebase -X theirs para resolver automáticamente conflictos en favor del servidor
+        exec('git pull --rebase -X theirs origin main', { cwd: publishDir }, (pullErr) => {
+          exec('git push origin main', { cwd: publishDir }, (err) => {
+            if (err) return;
+            originalLog(`[Git Logs] Logs de servidor subidos a GitHub con éxito.`);
+          });
         });
       });
     });
@@ -2639,8 +2682,8 @@ initializeDB().then(async () => {
     setTimeout(checkAndPublishTunnelRedirect, 5000);
     setInterval(checkAndPublishTunnelRedirect, 20000);
     
-    // Publicar logs del servidor de forma periódica en segundo plano (cada 10 minutos)
-    setInterval(publishServerLogs, 10 * 60 * 1000);
+    // Publicar logs del servidor de forma periódica en segundo plano (desactivado para evitar conflictos de git ignore)
+    // setInterval(publishServerLogs, 10 * 60 * 1000);
 
     // Health check de enlaces cada 6 horas
     const { runHealthCheck } = require('./server/db/movieLinksStore');
