@@ -1,58 +1,3 @@
-[2026-06-04 20:04:39] [INFO] [35m[2026-06-04T20:04:39.426] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 20:04:39] [ERROR] {}
-[2026-06-04 20:04:40] [INFO] [33m[2026-06-04T20:04:40.442] [INFO] - [Started reconnecting][0m
-[2026-06-04 20:04:40] [INFO] [35m[2026-06-04T20:04:40.443] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 20:04:40] [INFO] [33m[2026-06-04T20:04:40.443] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:04:40] [INFO] [33m[2026-06-04T20:04:40.445] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:04:40] [INFO] [33m[2026-06-04T20:04:40.536] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 20:04:40] [INFO] [33m[2026-06-04T20:04:40.537] [INFO] - [Handling reconnect!][0m
-[2026-06-04 20:06:10] [INFO] [33m[2026-06-04T20:06:10.617] [INFO] - [connection closed][0m
-[2026-06-04 20:06:10] [INFO] [35m[2026-06-04T20:06:10.619] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 20:06:10] [ERROR] {}
-[2026-06-04 20:06:11] [INFO] [33m[2026-06-04T20:06:11.628] [INFO] - [Started reconnecting][0m
-[2026-06-04 20:06:11] [INFO] [35m[2026-06-04T20:06:11.628] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 20:06:11] [INFO] [33m[2026-06-04T20:06:11.629] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:06:11] [INFO] [33m[2026-06-04T20:06:11.629] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:06:11] [INFO] [33m[2026-06-04T20:06:11.751] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 20:06:11] [INFO] [33m[2026-06-04T20:06:11.752] [INFO] - [Handling reconnect!][0m
-[2026-06-04 20:06:18] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "telegram_415" (Idioma pref: auto, Servidores excluidos: [])
-[2026-06-04 20:06:18] [INFO] [Resolver] Película encontrada: "🔆 Sonido de libertad
-🍿 #Thriller #Drama
-🕔 2 h 11 min
-
-Sinopsis
-Narra la historia de Tim Ballard, un ex agente de Seguridad Nacional de Estados Unidos que dejó su trabajo para dedicar su vida (sumergiéndose en el submundo del tráfico sexual de menores a lo largo de Latinoamérica), a intentar salvar las vidas de cientos de niños."
-[2026-06-04 20:06:18] [INFO] [Resolver] Total de opciones filtradas a evaluar: 1
-[2026-06-04 20:06:18] [INFO] [Resolver] Lanzando 1 opciones en paralelo (max 3)...
-[2026-06-04 20:06:18] [INFO] [Resolver] ▶ Probando en paralelo: [Latino/Original] Telegram Stream
-[2026-06-04 20:06:18] [INFO] [Resolver] ✅ Primer éxito paralelo: Telegram Stream -> /api/stream/telegram/415
-[2026-06-04 20:07:10] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "telegram_414" (Idioma pref: auto, Servidores excluidos: [])
-[2026-06-04 20:07:10] [INFO] [Resolver] Película encontrada: "📽 Nowhere
-🔆 2023
-🍿 #Thriller #Drama
-🕔 1 h 49 min
-
-Sinopsis
-Mía es una mujer embarazada que, junto a su marido, huye de un país totalitario escondida en un contenedor marítimo. Tras ser forzosamente separados, deberá luchar por su supervivencia cuando una violenta tormenta la arroja al mar. Sola y a la deriva en mitad del océano, Mía se enfrentará a todo para salvar la vida de su hija y reencontrarse con su pareja."
-[2026-06-04 20:07:10] [INFO] [Resolver] Total de opciones filtradas a evaluar: 1
-[2026-06-04 20:07:10] [INFO] [Resolver] Lanzando 1 opciones en paralelo (max 3)...
-[2026-06-04 20:07:10] [INFO] [Resolver] ▶ Probando en paralelo: [Latino/Original] Telegram Stream
-[2026-06-04 20:07:10] [INFO] [Resolver] ✅ Primer éxito paralelo: Telegram Stream -> /api/stream/telegram/414
-[2026-06-04 20:07:41] [INFO] [33m[2026-06-04T20:07:41.824] [INFO] - [connection closed][0m
-[2026-06-04 20:07:41] [INFO] [35m[2026-06-04T20:07:41.825] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 20:07:41] [ERROR] {}
-[2026-06-04 20:07:42] [INFO] [33m[2026-06-04T20:07:42.835] [INFO] - [Started reconnecting][0m
-[2026-06-04 20:07:42] [INFO] [35m[2026-06-04T20:07:42.836] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 20:07:42] [INFO] [33m[2026-06-04T20:07:42.836] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:07:42] [INFO] [33m[2026-06-04T20:07:42.837] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 20:07:42] [INFO] [33m[2026-06-04T20:07:42.917] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 20:07:42] [INFO] [33m[2026-06-04T20:07:42.918] [INFO] - [Handling reconnect!][0m
-[2026-06-04 20:09:12] [INFO] [33m[2026-06-04T20:09:12.987] [INFO] - [connection closed][0m
-[2026-06-04 20:09:12] [INFO] [35m[2026-06-04T20:09:12.988] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 20:09:12] [ERROR] {}
-[2026-06-04 20:09:14] [INFO] [33m[2026-06-04T20:09:14.004] [INFO] - [Started reconnecting][0m
-[2026-06-04 20:09:14] [INFO] [35m[2026-06-04T20:09:14.005] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 20:09:14] [INFO] [33m[2026-06-04T20:09:14.005] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
 [2026-06-04 20:09:14] [INFO] [33m[2026-06-04T20:09:14.006] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-04 20:09:14] [INFO] [33m[2026-06-04T20:09:14.083] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-04 20:09:14] [INFO] [33m[2026-06-04T20:09:14.084] [INFO] - [Handling reconnect!][0m
@@ -2497,3 +2442,58 @@ Mía es una mujer embarazada que, junto a su marido, huye de un país totalitari
 [2026-06-05 01:52:43] [INFO] [33m[2026-06-05T01:52:43.299] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 01:52:43] [INFO] [33m[2026-06-05T01:52:43.392] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-05 01:52:43] [INFO] [33m[2026-06-05T01:52:43.393] [INFO] - [Handling reconnect!][0m
+[2026-06-05 01:54:13] [INFO] [33m[2026-06-05T01:54:13.485] [INFO] - [connection closed][0m
+[2026-06-05 01:54:13] [INFO] [35m[2026-06-05T01:54:13.486] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 01:54:13] [ERROR] {}
+[2026-06-05 01:54:14] [INFO] [33m[2026-06-05T01:54:14.495] [INFO] - [Started reconnecting][0m
+[2026-06-05 01:54:14] [INFO] [35m[2026-06-05T01:54:14.495] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 01:54:14] [INFO] [33m[2026-06-05T01:54:14.496] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:54:14] [INFO] [33m[2026-06-05T01:54:14.496] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:54:14] [INFO] [33m[2026-06-05T01:54:14.588] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 01:54:14] [INFO] [33m[2026-06-05T01:54:14.588] [INFO] - [Handling reconnect!][0m
+[2026-06-05 01:55:44] [INFO] [33m[2026-06-05T01:55:44.679] [INFO] - [connection closed][0m
+[2026-06-05 01:55:44] [INFO] [35m[2026-06-05T01:55:44.680] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 01:55:44] [ERROR] {}
+[2026-06-05 01:55:45] [INFO] [33m[2026-06-05T01:55:45.692] [INFO] - [Started reconnecting][0m
+[2026-06-05 01:55:45] [INFO] [35m[2026-06-05T01:55:45.693] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 01:55:45] [INFO] [33m[2026-06-05T01:55:45.693] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:55:45] [INFO] [33m[2026-06-05T01:55:45.694] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:55:45] [INFO] [33m[2026-06-05T01:55:45.768] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 01:55:45] [INFO] [33m[2026-06-05T01:55:45.769] [INFO] - [Handling reconnect!][0m
+[2026-06-05 01:57:15] [INFO] [33m[2026-06-05T01:57:15.841] [INFO] - [connection closed][0m
+[2026-06-05 01:57:15] [INFO] [35m[2026-06-05T01:57:15.841] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 01:57:15] [ERROR] {}
+[2026-06-05 01:57:16] [INFO] [33m[2026-06-05T01:57:16.843] [INFO] - [Started reconnecting][0m
+[2026-06-05 01:57:16] [INFO] [35m[2026-06-05T01:57:16.844] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 01:57:16] [INFO] [33m[2026-06-05T01:57:16.844] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:57:16] [INFO] [33m[2026-06-05T01:57:16.845] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:57:16] [INFO] [33m[2026-06-05T01:57:16.919] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 01:57:16] [INFO] [33m[2026-06-05T01:57:16.920] [INFO] - [Handling reconnect!][0m
+[2026-06-05 01:58:47] [INFO] [33m[2026-06-05T01:58:47.647] [INFO] - [connection closed][0m
+[2026-06-05 01:58:47] [INFO] [35m[2026-06-05T01:58:47.648] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 01:58:47] [ERROR] {}
+[2026-06-05 01:58:48] [INFO] [33m[2026-06-05T01:58:48.655] [INFO] - [Started reconnecting][0m
+[2026-06-05 01:58:48] [INFO] [35m[2026-06-05T01:58:48.656] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 01:58:48] [INFO] [33m[2026-06-05T01:58:48.656] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:58:48] [INFO] [33m[2026-06-05T01:58:48.657] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:58:48] [INFO] [33m[2026-06-05T01:58:48.730] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 01:58:48] [INFO] [33m[2026-06-05T01:58:48.731] [INFO] - [Handling reconnect!][0m
+[2026-06-05 02:00:18] [INFO] [33m[2026-06-05T02:00:18.803] [INFO] - [connection closed][0m
+[2026-06-05 02:00:18] [INFO] [35m[2026-06-05T02:00:18.803] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 02:00:18] [ERROR] {}
+[2026-06-05 02:00:19] [INFO] [33m[2026-06-05T02:00:19.809] [INFO] - [Started reconnecting][0m
+[2026-06-05 02:00:19] [INFO] [35m[2026-06-05T02:00:19.809] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 02:00:19] [INFO] [33m[2026-06-05T02:00:19.810] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:00:19] [INFO] [33m[2026-06-05T02:00:19.810] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:00:19] [INFO] [33m[2026-06-05T02:00:19.884] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 02:00:19] [INFO] [33m[2026-06-05T02:00:19.884] [INFO] - [Handling reconnect!][0m
+[2026-06-05 02:01:49] [INFO] [33m[2026-06-05T02:01:49.962] [INFO] - [connection closed][0m
+[2026-06-05 02:01:49] [INFO] [35m[2026-06-05T02:01:49.962] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 02:01:49] [ERROR] {}
+[2026-06-05 02:01:50] [INFO] [33m[2026-06-05T02:01:50.970] [INFO] - [Started reconnecting][0m
+[2026-06-05 02:01:50] [INFO] [35m[2026-06-05T02:01:50.970] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 02:01:50] [INFO] [33m[2026-06-05T02:01:50.971] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:01:50] [INFO] [33m[2026-06-05T02:01:50.971] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 02:01:51] [INFO] [33m[2026-06-05T02:01:51.044] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 02:01:51] [INFO] [33m[2026-06-05T02:01:51.044] [INFO] - [Handling reconnect!][0m
+[2026-06-05 02:03:06] [INFO] [HealthCheck] ✅ 30 enlaces verificados y puntuados.
