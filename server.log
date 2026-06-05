@@ -1,66 +1,3 @@
-[2026-06-04 19:55:39] [INFO] [33m[2026-06-04T19:55:39.824] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 19:55:39] [INFO] [33m[2026-06-04T19:55:39.826] [INFO] - [Handling reconnect!][0m
-[2026-06-04 19:57:09] [INFO] [33m[2026-06-04T19:57:09.911] [INFO] - [connection closed][0m
-[2026-06-04 19:57:09] [INFO] [35m[2026-06-04T19:57:09.912] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 19:57:09] [ERROR] {}
-[2026-06-04 19:57:10] [INFO] [33m[2026-06-04T19:57:10.922] [INFO] - [Started reconnecting][0m
-[2026-06-04 19:57:10] [INFO] [35m[2026-06-04T19:57:10.923] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 19:57:10] [INFO] [33m[2026-06-04T19:57:10.923] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 19:57:10] [INFO] [33m[2026-06-04T19:57:10.924] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 19:57:11] [INFO] [33m[2026-06-04T19:57:11.017] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 19:57:11] [INFO] [33m[2026-06-04T19:57:11.017] [INFO] - [Handling reconnect!][0m
-[2026-06-04 19:57:22] [INFO] [AnimeWorker] Iniciando sincronización de catálogo de anime...
-[2026-06-04 19:57:22] [INFO] [AnimeScraper] ▶ Iniciando scraping de Anime (animeflv.net y animeflv.one)...
-[2026-06-04 19:57:23] [INFO] [AnimeScraper] Visitando: https://www4.animeflv.net/browse?page=1
-[2026-06-04 19:57:30] [INFO] [AnimeScraper] Visitando: https://www4.animeflv.net/browse?page=2
-[2026-06-04 19:57:31] [INFO] [AnimeScraper] Visitando: https://vww.animeflv.one/animes?page=1
-[2026-06-04 19:57:32] [INFO] [AnimeScraper] Visitando: https://vww.animeflv.one/animes?page=2
-[2026-06-04 19:57:32] [INFO] [AnimeScraper] Visitando: https://ww3.animeonline.ninja/pelicula/
-[2026-06-04 19:57:33] [INFO] [AnimeScraper] Visitando películas en AnimeFLV.net: https://www4.animeflv.net/browse?type[]=movie&page=1
-[2026-06-04 19:57:34] [INFO] [AnimeScraper] Visitando películas en AnimeFLV.net: https://www4.animeflv.net/browse?type[]=movie&page=2
-[2026-06-04 19:57:35] [INFO] [AnimeScraper] Visitando: https://jkanime.net/directorio?tipo=peliculas&page=1
-[2026-06-04 19:57:39] [INFO] [CatalogWorker] Iniciando sincronización de catálogo...
-[2026-06-04 19:57:39] [INFO] [CatalogScraper] ▶ Iniciando scraping de catálogo de películas y series...
-[2026-06-04 19:57:40] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/peliculas/...
-[2026-06-04 19:57:45] [INFO] [AnimeScraper] Visitando: https://jkanime.net/directorio?tipo=peliculas&page=2
-[2026-06-04 19:57:45] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/peliculas/
-[2026-06-04 19:57:45] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/peliculas/?page/2...
-[2026-06-04 19:57:50] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/peliculas/?page/2
-[2026-06-04 19:57:50] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/peliculas/?page/3...
-[2026-06-04 19:57:54] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/peliculas/?page/3
-[2026-06-04 19:57:54] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/peliculas/?page/4...
-[2026-06-04 19:57:55] [INFO] [AnimeScraper] Completado. Encontradas 73 películas y 48 series de anime.
-[2026-06-04 19:57:55] [INFO] [AnimeWorker] ✅ Sync completado. Anime Películas: +1 (total 74), Anime Series: +0 (total 48)
-[2026-06-04 19:57:58] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/peliculas/?page/4
-[2026-06-04 19:57:58] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/peliculas/?page/5...
-[2026-06-04 19:58:03] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/peliculas/?page/5
-[2026-06-04 19:58:03] [INFO] [CatalogScraper] PelisPlus: 19 generos descubiertos
-[2026-06-04 19:58:03] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/estrenos/...
-[2026-06-04 19:58:07] [INFO] [CatalogScraper] PelisPlus movie: 96 items de https://www.pelisplushd.la/estrenos/
-[2026-06-04 19:58:07] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/estrenos/?page/2...
-[2026-06-04 19:58:12] [INFO] [CatalogScraper] PelisPlus movie: 96 items de https://www.pelisplushd.la/estrenos/?page/2
-[2026-06-04 19:58:12] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/estrenos/?page/3...
-[2026-06-04 19:58:17] [INFO] [CatalogScraper] PelisPlus movie: 96 items de https://www.pelisplushd.la/estrenos/?page/3
-[2026-06-04 19:58:17] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/estrenos/?page/4...
-[2026-06-04 19:58:21] [INFO] [CatalogScraper] PelisPlus movie: 96 items de https://www.pelisplushd.la/estrenos/?page/4
-[2026-06-04 19:58:21] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/estrenos/?page/5...
-[2026-06-04 19:58:26] [INFO] [CatalogScraper] PelisPlus movie: 96 items de https://www.pelisplushd.la/estrenos/?page/5
-[2026-06-04 19:58:26] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/series/...
-[2026-06-04 19:58:30] [INFO] [CatalogScraper] PelisPlus series: 24 items de https://www.pelisplushd.la/series/
-[2026-06-04 19:58:30] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/series/?page/2...
-[2026-06-04 19:58:34] [INFO] [CatalogScraper] PelisPlus series: 24 items de https://www.pelisplushd.la/series/?page/2
-[2026-06-04 19:58:34] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/series/?page/3...
-[2026-06-04 19:58:39] [INFO] [CatalogScraper] PelisPlus series: 24 items de https://www.pelisplushd.la/series/?page/3
-[2026-06-04 19:58:39] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/series/?page/4...
-[2026-06-04 19:58:41] [INFO] [33m[2026-06-04T19:58:41.100] [INFO] - [connection closed][0m
-[2026-06-04 19:58:41] [INFO] [35m[2026-06-04T19:58:41.101] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 19:58:41] [ERROR] {}
-[2026-06-04 19:58:42] [INFO] [33m[2026-06-04T19:58:42.110] [INFO] - [Started reconnecting][0m
-[2026-06-04 19:58:42] [INFO] [35m[2026-06-04T19:58:42.111] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 19:58:42] [INFO] [33m[2026-06-04T19:58:42.112] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 19:58:42] [INFO] [33m[2026-06-04T19:58:42.114] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 19:58:42] [INFO] [33m[2026-06-04T19:58:42.209] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 19:58:42] [INFO] [33m[2026-06-04T19:58:42.209] [INFO] - [Handling reconnect!][0m
 [2026-06-04 19:58:43] [INFO] [CatalogScraper] PelisPlus series: 24 items de https://www.pelisplushd.la/series/?page/4
 [2026-06-04 19:58:43] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/series/?page/5...
 [2026-06-04 19:58:47] [INFO] [CatalogScraper] PelisPlus series: 24 items de https://www.pelisplushd.la/series/?page/5
@@ -2497,3 +2434,66 @@ Mía es una mujer embarazada que, junto a su marido, huye de un país totalitari
 [2026-06-05 01:11:41] [INFO] [33m[2026-06-05T01:11:41.545] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 01:11:41] [INFO] [33m[2026-06-05T01:11:41.622] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-05 01:11:41] [INFO] [33m[2026-06-05T01:11:41.622] [INFO] - [Handling reconnect!][0m
+[2026-06-05 01:13:11] [INFO] [33m[2026-06-05T01:13:11.695] [INFO] - [connection closed][0m
+[2026-06-05 01:13:11] [INFO] [35m[2026-06-05T01:13:11.696] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 01:13:11] [ERROR] {}
+[2026-06-05 01:13:12] [INFO] [33m[2026-06-05T01:13:12.710] [INFO] - [Started reconnecting][0m
+[2026-06-05 01:13:12] [INFO] [35m[2026-06-05T01:13:12.710] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 01:13:12] [INFO] [33m[2026-06-05T01:13:12.711] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:13:12] [INFO] [33m[2026-06-05T01:13:12.711] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:13:12] [INFO] [33m[2026-06-05T01:13:12.804] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 01:13:12] [INFO] [33m[2026-06-05T01:13:12.805] [INFO] - [Handling reconnect!][0m
+[2026-06-05 01:14:42] [INFO] [33m[2026-06-05T01:14:42.899] [INFO] - [connection closed][0m
+[2026-06-05 01:14:42] [INFO] [35m[2026-06-05T01:14:42.900] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 01:14:42] [ERROR] {}
+[2026-06-05 01:14:43] [INFO] [33m[2026-06-05T01:14:43.908] [INFO] - [Started reconnecting][0m
+[2026-06-05 01:14:43] [INFO] [35m[2026-06-05T01:14:43.909] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 01:14:43] [INFO] [33m[2026-06-05T01:14:43.909] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:14:43] [INFO] [33m[2026-06-05T01:14:43.910] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:14:44] [INFO] [33m[2026-06-05T01:14:44.003] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 01:14:44] [INFO] [33m[2026-06-05T01:14:44.003] [INFO] - [Handling reconnect!][0m
+[2026-06-05 01:16:14] [INFO] [33m[2026-06-05T01:16:14.097] [INFO] - [connection closed][0m
+[2026-06-05 01:16:14] [INFO] [35m[2026-06-05T01:16:14.097] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 01:16:14] [ERROR] {}
+[2026-06-05 01:16:15] [INFO] [33m[2026-06-05T01:16:15.113] [INFO] - [Started reconnecting][0m
+[2026-06-05 01:16:15] [INFO] [35m[2026-06-05T01:16:15.113] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 01:16:15] [INFO] [33m[2026-06-05T01:16:15.114] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:16:15] [INFO] [33m[2026-06-05T01:16:15.114] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:16:15] [INFO] [33m[2026-06-05T01:16:15.186] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 01:16:15] [INFO] [33m[2026-06-05T01:16:15.187] [INFO] - [Handling reconnect!][0m
+[2026-06-05 01:17:45] [INFO] [33m[2026-06-05T01:17:45.265] [INFO] - [connection closed][0m
+[2026-06-05 01:17:45] [INFO] [35m[2026-06-05T01:17:45.266] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 01:17:45] [ERROR] {}
+[2026-06-05 01:17:46] [INFO] [33m[2026-06-05T01:17:46.270] [INFO] - [Started reconnecting][0m
+[2026-06-05 01:17:46] [INFO] [35m[2026-06-05T01:17:46.271] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 01:17:46] [INFO] [33m[2026-06-05T01:17:46.271] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:17:46] [INFO] [33m[2026-06-05T01:17:46.272] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:17:46] [INFO] [33m[2026-06-05T01:17:46.366] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 01:17:46] [INFO] [33m[2026-06-05T01:17:46.367] [INFO] - [Handling reconnect!][0m
+[2026-06-05 01:19:16] [INFO] [33m[2026-06-05T01:19:16.458] [INFO] - [connection closed][0m
+[2026-06-05 01:19:16] [INFO] [35m[2026-06-05T01:19:16.459] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 01:19:16] [ERROR] {}
+[2026-06-05 01:19:17] [INFO] [33m[2026-06-05T01:19:17.461] [INFO] - [Started reconnecting][0m
+[2026-06-05 01:19:17] [INFO] [35m[2026-06-05T01:19:17.462] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 01:19:17] [INFO] [33m[2026-06-05T01:19:17.462] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:19:17] [INFO] [33m[2026-06-05T01:19:17.463] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:19:17] [INFO] [33m[2026-06-05T01:19:17.537] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 01:19:17] [INFO] [33m[2026-06-05T01:19:17.537] [INFO] - [Handling reconnect!][0m
+[2026-06-05 01:20:47] [INFO] [33m[2026-06-05T01:20:47.610] [INFO] - [connection closed][0m
+[2026-06-05 01:20:47] [INFO] [35m[2026-06-05T01:20:47.611] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 01:20:47] [ERROR] {}
+[2026-06-05 01:20:48] [INFO] [33m[2026-06-05T01:20:48.620] [INFO] - [Started reconnecting][0m
+[2026-06-05 01:20:48] [INFO] [35m[2026-06-05T01:20:48.620] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 01:20:48] [INFO] [33m[2026-06-05T01:20:48.620] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:20:48] [INFO] [33m[2026-06-05T01:20:48.621] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:20:48] [INFO] [33m[2026-06-05T01:20:48.694] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 01:20:48] [INFO] [33m[2026-06-05T01:20:48.695] [INFO] - [Handling reconnect!][0m
+[2026-06-05 01:22:18] [INFO] [33m[2026-06-05T01:22:18.768] [INFO] - [connection closed][0m
+[2026-06-05 01:22:18] [INFO] [35m[2026-06-05T01:22:18.769] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 01:22:18] [ERROR] {}
+[2026-06-05 01:22:19] [INFO] [33m[2026-06-05T01:22:19.784] [INFO] - [Started reconnecting][0m
+[2026-06-05 01:22:19] [INFO] [35m[2026-06-05T01:22:19.784] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 01:22:19] [INFO] [33m[2026-06-05T01:22:19.785] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:22:19] [INFO] [33m[2026-06-05T01:22:19.786] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 01:22:19] [INFO] [33m[2026-06-05T01:22:19.866] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 01:22:19] [INFO] [33m[2026-06-05T01:22:19.867] [INFO] - [Handling reconnect!][0m
