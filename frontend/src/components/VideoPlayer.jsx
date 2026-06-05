@@ -1016,30 +1016,29 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       }
 
       // ── Escape / Backspace ─────────────────────────────────────
-      // UX: 1st press → show controls (if hidden). 2nd press within 2s → close player.
       if (e.key === 'Escape' || e.key === 'Backspace') {
         e.preventDefault();
         e.stopPropagation();
 
-        if (isSmartTV) {
+        const now = Date.now();
+
+        // Si se presiona dos veces en menos de 2 segundos, cerrar el reproductor
+        if (backPressRef.current > 0 && now - backPressRef.current < 2000) {
+          backPressRef.current = 0;
           onClose?.();
           return;
         }
 
-        const now = Date.now();
+        // Registrar el toque actual para la ventana de 2 segundos
+        backPressRef.current = now;
 
-        if (!showControlsRef.current) {
-          // Controls hidden → show them on first press
-          resetControlsTimer();
-          backPressRef.current = now;
-        } else if (backPressRef.current > 0 && now - backPressRef.current < 2000) {
-          // Controls visible + second press within 2s → close player
-          backPressRef.current = 0;
-          onClose?.();
-          return;
-        } else {
-          // Controls visible, timer expired or first time → restart timer
-          backPressRef.current = now;
+        // Si los controles están visibles, el primer toque los oculta
+        if (showControlsRef.current) {
+          setShowControls(false);
+          showControlsRef.current = false;
+          if (controlsTimeoutRef.current) {
+            clearTimeout(controlsTimeoutRef.current);
+          }
         }
         return;
       }
