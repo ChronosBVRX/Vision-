@@ -714,7 +714,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       // ── Brand Intro keys ────────────────────────────────────────
       // Use ref to avoid stale closure — handler is registered once but showBrandIntro changes
       if (showBrandIntroRef.current) {
-        if (e.key === 'Escape' || e.key === 'Backspace') {
+        if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') {
           e.preventDefault(); e.stopPropagation();
           onClose?.();
           return;
@@ -754,7 +754,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       // ── Loader keys ─────────────────────────────────────────────
       // Use ref to avoid stale closure — isLoading changes after streams resolve
       if (isLoadingRef.current) {
-        if (e.key === 'Escape' || e.key === 'Backspace') {
+        if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') {
           e.preventDefault(); e.stopPropagation();
           onClose?.();
           return;
@@ -770,7 +770,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       // ── Audio/Subtitle/Server popups navigation ─────────────────
       const isInPopup = activeEl?.closest('.player-popup-menu');
       if (isInPopup) {
-        if (e.key === 'Escape' || e.key === 'Backspace') {
+        if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') {
           e.preventDefault(); e.stopPropagation();
           setShowAudioPopup(false);
           setShowSubtitlePopup(false);
@@ -801,7 +801,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       // ── Series drawer navigation ────────────────────────────────
       const isInDrawer = activeEl?.closest('.player-series-drawer');
       if (localSource.isSeriesEpisode && isInDrawer) {
-        if (e.key === 'Escape' || e.key === 'Backspace') {
+        if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') {
           e.preventDefault(); e.stopPropagation();
           setShowSeriesDrawer(false);
           setTimeout(() => {
@@ -920,7 +920,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         const isInCategories = activeEl?.closest('.channel-category-tabs-container');
         const isInList = activeEl?.closest('.channel-guide-list');
 
-        if (e.key === 'Escape' || e.key === 'Backspace') {
+        if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') {
           e.preventDefault();
           e.stopPropagation();
           setShowChannelGuide(false);
@@ -1015,8 +1015,8 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         }
       }
 
-      // ── Escape / Backspace ─────────────────────────────────────
-      if (e.key === 'Escape' || e.key === 'Backspace') {
+      // ── Escape / Backspace / BrowserBack ─────────────────────────────────────
+      if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') {
         e.preventDefault();
         e.stopPropagation();
 
