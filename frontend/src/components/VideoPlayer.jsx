@@ -546,11 +546,11 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   // and for movies after brand intro it would incorrectly block key handling.
   const isLoadingRef = useRef(isLoading);
   useEffect(() => { isLoadingRef.current = isLoading; }, [isLoading]);
+  // Detect Smart TV environment — must be declared before KEY_THROTTLE_MS uses it
+  const isSmartTV = typeof window !== 'undefined' && window.isSmartTV === true;
   // Throttle ref for Smart TV — prevents rapid key repeat from queuing expensive ops
   const lastKeyTimeRef = useRef(0);
   const KEY_THROTTLE_MS = isSmartTV ? 120 : 0;
-  // Detect Smart TV environment
-  const isSmartTV = typeof window !== 'undefined' && window.isSmartTV === true;
   const CONTROLS_TIMEOUT = isSmartTV ? 15000 : 5000;
 
   const toggleFullscreen = useCallback(() => {
