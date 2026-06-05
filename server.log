@@ -1,66 +1,3 @@
-[2026-06-04 19:34:35] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 19:34:35] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 19:34:35] [INFO] [BrowserResolver] 🚫 Anuncio ignorado: https://amd-cdn-1.ffb7df5a878b59e42e257c042f54bed2.com/content/stream/agl/1xbet_mx_1920x1080_rituals.mp4
-[2026-06-04 19:34:35] [INFO] [BrowserResolver] 🚫 Anuncio ignorado: https://amd-cdn-1.ffb7df5a878b59e42e257c042f54bed2.com/content/stream/agl/pinup_preroll_kaiserscene_mx_dinero.mp4
-[2026-06-04 19:34:36] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 19:34:36] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 19:34:36] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 19:34:39] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/3HdyiVm6udCihAUkQ48AdQ/hjkrhuihghfvu/1780666476/39620871/master.m3u8
-[2026-06-04 19:34:39] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/3HdyiVm6udCihAUkQ48AdQ/hjkrhuihghfvu/1780666476/39620871/master.m3u8
-[2026-06-04 19:34:39] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://callistanise.com/stream/3HdyiVm6udCihAUkQ48AdQ/hjkrhuihghfvu/1780666476/39620871/master.m3u8
-[2026-06-04 19:34:39] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/3HdyiVm6udCihAUkQ48AdQ/hjkrhuihghfvu/1780666476/39620871/index-v1-a1.m3u8
-[2026-06-04 19:34:41] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://hgplaycdn.com/stream/KXRf9EqSMPJ7Lq2to94oXA/kjhhiuahiuhgihdf/1780666477/70429790/master.m3u8
-[2026-06-04 19:34:41] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://hgplaycdn.com/stream/KXRf9EqSMPJ7Lq2to94oXA/kjhhiuahiuhgihdf/1780666477/70429790/master.m3u8
-[2026-06-04 19:34:42] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://hgplaycdn.com/stream/KXRf9EqSMPJ7Lq2to94oXA/kjhhiuahiuhgihdf/1780666477/70429790/master.m3u8
-[2026-06-04 19:34:44] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://edge2-waw-sprintcdn.r66nv9ed.com/hls2/03/11107/zxm5taxsz7h8_x/master.m3u8?t=6EexhFQy1Fdwf9234sX1YBqcXcRncFLtkt_FpqlEvx4&s=1780623282&e=10800&f=55535615&srv=1065&asn=8151&sp=5500&p=0
-[2026-06-04 19:34:44] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://edge2-waw-sprintcdn.r66nv9ed.com/hls2/03/11107/zxm5taxsz7h8_x/master.m3u8?t=6EexhFQy1Fdwf9234sX1YBqcXcRncFLtkt_FpqlEvx4&s=1780623282&e=10800&f=55535615&srv=1065&asn=8151&sp=5500&p=0
-[2026-06-04 19:34:45] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://callistanise.com/stream/3HdyiVm6udCihAUkQ48AdQ/hjkrhuihghfvu/1780666476/39620871/master.m3u8. Validando conectividad...
-[2026-06-04 19:34:45] [INFO] [SourceValidator] Probando HEAD para: https://callistanise.com/stream/3HdyiVm6udCihAUkQ48AdQ/hjkrhuihghfvu/1780666476/39620871/master.m3u8
-[2026-06-04 19:34:45] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://hgplaycdn.com/stream/KXRf9EqSMPJ7Lq2to94oXA/kjhhiuahiuhgihdf/1780666477/70429790/master.m3u8. Validando conectividad...
-[2026-06-04 19:34:45] [INFO] [SourceValidator] Probando HEAD para: https://hgplaycdn.com/stream/KXRf9EqSMPJ7Lq2to94oXA/kjhhiuahiuhgihdf/1780666477/70429790/master.m3u8
-[2026-06-04 19:34:45] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://edge2-waw-sprintcdn.r66nv9ed.com/hls2/03/11107/zxm5taxsz7h8_x/master.m3u8?t=6EexhFQy1Fdwf9234sX1YBqcXcRncFLtkt_FpqlEvx4&s=1780623282&e=10800&f=55535615&srv=1065&asn=8151&sp=5500&p=0. Validando conectividad...
-[2026-06-04 19:34:45] [INFO] [SourceValidator] Probando HEAD para: https://edge2-waw-sprintcdn.r66nv9ed.com/hls2/03/11107/zxm5taxsz7h8_x/master.m3u8?t=6EexhFQy1Fdwf9234sX1YBqcXcRncFLtkt_FpqlEvx4&s=1780623282&e=10800&f=55535615&srv=1065&asn=8151&sp=5500&p=0
-[2026-06-04 19:34:45] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://callistanise.com/stream/3HdyiVm6udCihAUkQ48AdQ/hjkrhuihghfvu/1780666476/39620871/master.m3u8
-[2026-06-04 19:34:45] [INFO] [Resolver] ✅ Primer éxito paralelo: player -> https://callistanise.com/stream/3HdyiVm6udCihAUkQ48AdQ/hjkrhuihghfvu/1780666476/39620871/master.m3u8
-[2026-06-04 19:34:45] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://hgplaycdn.com/stream/KXRf9EqSMPJ7Lq2to94oXA/kjhhiuahiuhgihdf/1780666477/70429790/master.m3u8
-[2026-06-04 19:34:46] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://edge2-waw-sprintcdn.r66nv9ed.com/hls2/03/11107/zxm5taxsz7h8_x/master.m3u8?t=6EexhFQy1Fdwf9234sX1YBqcXcRncFLtkt_FpqlEvx4&s=1780623282&e=10800&f=55535615&srv=1065&asn=8151&sp=5500&p=0
-[2026-06-04 19:34:53] [INFO] [fallbackAdapter] ⚠️ Evaluando fuente restante: https://general-domainparking.com/lander?serveURL=https%3A%2F%2Fver-series.com&system=SN&domain=ver-series.com&feedid=2&type=17698CA83F07400EA43D0F83D7CDA055&qs=qsx-eae0464552a967b43fa3810d35fbca2650b2a3acef325fc0ffeaa7483804c0cb8ae3c383b72831ac65db0b77aba69a49e609bc619c372793c57767fd47c220246a37b3f334a5fd7ce33d29f5daa215f1e23f820cd98cdec75e081d3cc284174498a68ac172a6505c2d3467f0fa8a749bb7f16ce0b1878a9b2236ef8d4fb9696ccbe30c13c5a1d94214b9d86d1d9a5139ebb3fa13d27a9af3c35f6985f9a9730283292e9f78ea55ea022eaab809bad24bbdb618d3c4338ff38786e52b5e973677e7a6318d2959e07929b7e0a58275a676aff8f2d3fb51a43a2e71ad2dcc293c7159b3a6812cecb4bac82e455362c6c40cad1ba8e74395789627d5d87513b1773107120ad42fb3b9b6fad847c492296d3c8e7bcffb85367523fd5737b1938148a84621961f13725fc5a66a7bf97715e9fb830d2ecd78fc7f8e75db10dc6712fab13afbfec1462e3951af968e4580b2a693ed015ca569b4fcdafb2f490b7553ebaa43c468c4c52dccef4ae8234b4ed42f532bdd5518a8863f7560a958767d1a39c145c6a178d35a8bf47975f065b81db4f45fc60d052cd2ac2a0e92cf85a402e00ca65340b643e29f90055e3c3ecf2c0a8f2cee822913aebc2a519a931fafc04f4d259bc14dc4d8a8ac4d87eb5c97e39c99c41c86046b263d3ef28e93e32169b8c70d5422b1b67898afcbee06c3bcd989e8383197cae4febb20546b57da9de2965091d8661848edfd496c69e0aec586e5f370ca5f9df7cb327d627090985f6e29b9843e5bafefcf4a21044b97f724bdd5e8c53e1cfe2ff8afcd2bcdfb481a36cfde4347d53a43a7f8412053c7e5a7e71eb1dc1ef1b8e9df8301e12420d013ca63ea185714b5e5a55ab99f87c5ba3af58af573534a36f451b9bccfc920b5b03dffdee378c85d7aed0f7c1b11e4fdbc6ca5174e5def73805e4a.57de87ee90baedb0b527a61001f59ca0
-[2026-06-04 19:34:53] [INFO] [fallbackAdapter] 🌐 Intentando sniffing genérico con Playwright...
-[2026-06-04 19:34:53] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://general-domainparking.com/lander?serveURL=https%3A%2F%2Fver-series.com&system=SN&domain=ver-series.com&feedid=2&type=17698CA83F07400EA43D0F83D7CDA055&qs=qsx-eae0464552a967b43fa3810d35fbca2650b2a3acef325fc0ffeaa7483804c0cb8ae3c383b72831ac65db0b77aba69a49e609bc619c372793c57767fd47c220246a37b3f334a5fd7ce33d29f5daa215f1e23f820cd98cdec75e081d3cc284174498a68ac172a6505c2d3467f0fa8a749bb7f16ce0b1878a9b2236ef8d4fb9696ccbe30c13c5a1d94214b9d86d1d9a5139ebb3fa13d27a9af3c35f6985f9a9730283292e9f78ea55ea022eaab809bad24bbdb618d3c4338ff38786e52b5e973677e7a6318d2959e07929b7e0a58275a676aff8f2d3fb51a43a2e71ad2dcc293c7159b3a6812cecb4bac82e455362c6c40cad1ba8e74395789627d5d87513b1773107120ad42fb3b9b6fad847c492296d3c8e7bcffb85367523fd5737b1938148a84621961f13725fc5a66a7bf97715e9fb830d2ecd78fc7f8e75db10dc6712fab13afbfec1462e3951af968e4580b2a693ed015ca569b4fcdafb2f490b7553ebaa43c468c4c52dccef4ae8234b4ed42f532bdd5518a8863f7560a958767d1a39c145c6a178d35a8bf47975f065b81db4f45fc60d052cd2ac2a0e92cf85a402e00ca65340b643e29f90055e3c3ecf2c0a8f2cee822913aebc2a519a931fafc04f4d259bc14dc4d8a8ac4d87eb5c97e39c99c41c86046b263d3ef28e93e32169b8c70d5422b1b67898afcbee06c3bcd989e8383197cae4febb20546b57da9de2965091d8661848edfd496c69e0aec586e5f370ca5f9df7cb327d627090985f6e29b9843e5bafefcf4a21044b97f724bdd5e8c53e1cfe2ff8afcd2bcdfb481a36cfde4347d53a43a7f8412053c7e5a7e71eb1dc1ef1b8e9df8301e12420d013ca63ea185714b5e5a55ab99f87c5ba3af58af573534a36f451b9bccfc920b5b03dffdee378c85d7aed0f7c1b11e4fdbc6ca5174e5def73805e4a.57de87ee90baedb0b527a61001f59ca0
-[2026-06-04 19:34:56] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 19:34:57] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 19:34:58] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 19:35:24] [INFO] [fallbackAdapter] ⚠️ Evaluando fuente restante: https://general-domainparking.com/lander?serveURL=https%3A%2F%2Fver-series.com&system=SN&domain=ver-series.com&feedid=2&type=17698CA83F07400EA43D0F83D7CDA055&qs=qsx-6910aeb5f454a887a649d63f244a6059943d4db0f1f239b503929dc2cb0490fba4f0bec9834715f12092ae52221d592adcd200ad20aa8fd50e9a54ef73b37fc9f1c0185b8c7f53ac116f09b0fe5662ddc6c3c70c2a5f12a1e94d8f7944305228c8de653225c895f85b24ec8098bc4fedbfd716b819b839c1cb517274aeee071e24fbadf3b150d197301a8f8163624348fca8522f0934996b1d38c69000a6c548fe15e25701dda4467fed06d65c57794b920d67e821a87d7dbe34eb2650e6b7a5f1eb5221275a387d45ab0890f175592d09a3585ed62d6d85a03e8f6bd210f288ccc798fa2fbf6d56ec1b7a14ce510845d292705847553f5c09dbbba1b448d42b6fef7c7d81434f10f1bfd6222c546a1f50558b3213b3438e29a9fbb7b3e587bb18b06c82c81e4033c7bf2bd634563d5396c607c630c0e8ab99ad69058c936f94ab024a331b1c1c7b8fcbccea0ed35bf61cb0a36340e4f0343585467c6b034de816b2e95d047537f72fa6b68f33d37e4ba032fcc5a8cb33369900a8d1e429f588b949cddac3def4c5bc051194554a4fc8b7d59b7015f96d3f79fad9c0a3708bdabb6b3e54e44ed888b509129d0f00040b69881f13a093c808f164786f77a54427358de368602593a5abfc55b84d33c2e22a679227a02082320be05a0c7d80a97df2c5640ef97b158eb760033036da8c961938f881c7622707f598157b8abf615adaf8d62911bd14d0887c319abedc4ac8e5f6643aa199034e3e11422a5842504fd1d1196e4633afd2b5c226cb0388b5e11478d904d3cd1fa105d034dfbab1d467f89d49e9093e0ceb7244038e5cc5b2cafa1665a80a56cfc6328c4d392904f7bd834211d312f069abd64b9d1ea0411f9368fe29b3b57370368c04386e0c12d5427e8e44e0298417e2290f6093f281222ff93117c3a3d8b9.20f9026d7e725c5ca6dcb11f3336cc57
-[2026-06-04 19:35:24] [INFO] [fallbackAdapter] 🌐 Intentando sniffing genérico con Playwright...
-[2026-06-04 19:35:24] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://general-domainparking.com/lander?serveURL=https%3A%2F%2Fver-series.com&system=SN&domain=ver-series.com&feedid=2&type=17698CA83F07400EA43D0F83D7CDA055&qs=qsx-6910aeb5f454a887a649d63f244a6059943d4db0f1f239b503929dc2cb0490fba4f0bec9834715f12092ae52221d592adcd200ad20aa8fd50e9a54ef73b37fc9f1c0185b8c7f53ac116f09b0fe5662ddc6c3c70c2a5f12a1e94d8f7944305228c8de653225c895f85b24ec8098bc4fedbfd716b819b839c1cb517274aeee071e24fbadf3b150d197301a8f8163624348fca8522f0934996b1d38c69000a6c548fe15e25701dda4467fed06d65c57794b920d67e821a87d7dbe34eb2650e6b7a5f1eb5221275a387d45ab0890f175592d09a3585ed62d6d85a03e8f6bd210f288ccc798fa2fbf6d56ec1b7a14ce510845d292705847553f5c09dbbba1b448d42b6fef7c7d81434f10f1bfd6222c546a1f50558b3213b3438e29a9fbb7b3e587bb18b06c82c81e4033c7bf2bd634563d5396c607c630c0e8ab99ad69058c936f94ab024a331b1c1c7b8fcbccea0ed35bf61cb0a36340e4f0343585467c6b034de816b2e95d047537f72fa6b68f33d37e4ba032fcc5a8cb33369900a8d1e429f588b949cddac3def4c5bc051194554a4fc8b7d59b7015f96d3f79fad9c0a3708bdabb6b3e54e44ed888b509129d0f00040b69881f13a093c808f164786f77a54427358de368602593a5abfc55b84d33c2e22a679227a02082320be05a0c7d80a97df2c5640ef97b158eb760033036da8c961938f881c7622707f598157b8abf615adaf8d62911bd14d0887c319abedc4ac8e5f6643aa199034e3e11422a5842504fd1d1196e4633afd2b5c226cb0388b5e11478d904d3cd1fa105d034dfbab1d467f89d49e9093e0ceb7244038e5cc5b2cafa1665a80a56cfc6328c4d392904f7bd834211d312f069abd64b9d1ea0411f9368fe29b3b57370368c04386e0c12d5427e8e44e0298417e2290f6093f281222ff93117c3a3d8b9.20f9026d7e725c5ca6dcb11f3336cc57
-[2026-06-04 19:35:26] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 19:35:27] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 19:35:28] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 19:35:54] [INFO] [fallbackAdapter] ⚠️ Evaluando fuente restante: https://general-domainparking.com/lander?serveURL=https%3A%2F%2Fver-series.com&system=SN&domain=ver-series.com&feedid=2&type=17698CA83F07400EA43D0F83D7CDA055&qs=qsx-02bdc9abfcbfd1cb7e44ca85700c964875afbac458e793ea1492dc3080f9f7b1860cf060f9a2550aabd28a08bb07dcb75d1a3a1ea50c0748856d1c748ea879e051c5a058bd0c35cc62555ffc1ac70e52316c8f471a401a96bab9c2f999ce31dab1ba577c27b23e4d697dd2640efcf4fae9189826c1d2247580583590dbf580adcd58f1f7eb3554b2582f4b2bddd0938c311ad75584a89df7f39c306c9ff4f467d2bc7f5a3eb891be4439c0e81b1ae0f38af5e3c0257e3814fa5b47cd7137b74f7cef154e96ce71f4cb47047f04f5ecea504097ec8db4af5bb0a54472fa1a4371d9b79fc3d97f45fc0d832df30bb4f46c301da5689aa46362b098adf9b02c0598019e3625692d5c0ff41d8f5d0fb762d0636385d93ce89ec5a3cbf8a01637e1b53a8fc803e8258e68380464ef123b6434c5077f54971e0c11491615e77294311056579cc72f1a47ac606203584126943b46fcad1e8d40a335735e68dd3f14cfe5681129ff71581849b6405b653b31ecbed437aae01869edc03cd2a4189f5b53d9f1a2917d55594dafd373a298b41bc81d008df1f32dbf1728e5ee934348ba48dfe088db5e6a38f91d8a12a54e63c619395d4f1b45cafaafa9a7ae9bb8bbc263b9be59a22c9463ff2db0d0bbcb53bca5514dbff055bc466f6eb72542fe07c64eeb8dd30ef10d800a30806c1f8fe5d44ec8fd63ad6d5b07baec81e4495c428dff5611e81332211636fd2d3e35d2be8d71a629596bd8ec0e5d6762afeefb3a47bc062e987b39cfb429ede12f339dceaa7b8a46a4c5b6f3db314b9de0fabb74af6712031c9002cc868cc4f5e01b4890f68b91eb7d43c384caf1b5cd0f9d060709b3320e20c449324162ee05c010045a12654f810b8a207e0a3db36e02b63d254e7217e8438d1c1dc5bceac26e48e6340dd318810d5db2.679d6279beeedc397b77fd663620061f
-[2026-06-04 19:35:54] [INFO] [fallbackAdapter] 🌐 Intentando sniffing genérico con Playwright...
-[2026-06-04 19:35:54] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://general-domainparking.com/lander?serveURL=https%3A%2F%2Fver-series.com&system=SN&domain=ver-series.com&feedid=2&type=17698CA83F07400EA43D0F83D7CDA055&qs=qsx-02bdc9abfcbfd1cb7e44ca85700c964875afbac458e793ea1492dc3080f9f7b1860cf060f9a2550aabd28a08bb07dcb75d1a3a1ea50c0748856d1c748ea879e051c5a058bd0c35cc62555ffc1ac70e52316c8f471a401a96bab9c2f999ce31dab1ba577c27b23e4d697dd2640efcf4fae9189826c1d2247580583590dbf580adcd58f1f7eb3554b2582f4b2bddd0938c311ad75584a89df7f39c306c9ff4f467d2bc7f5a3eb891be4439c0e81b1ae0f38af5e3c0257e3814fa5b47cd7137b74f7cef154e96ce71f4cb47047f04f5ecea504097ec8db4af5bb0a54472fa1a4371d9b79fc3d97f45fc0d832df30bb4f46c301da5689aa46362b098adf9b02c0598019e3625692d5c0ff41d8f5d0fb762d0636385d93ce89ec5a3cbf8a01637e1b53a8fc803e8258e68380464ef123b6434c5077f54971e0c11491615e77294311056579cc72f1a47ac606203584126943b46fcad1e8d40a335735e68dd3f14cfe5681129ff71581849b6405b653b31ecbed437aae01869edc03cd2a4189f5b53d9f1a2917d55594dafd373a298b41bc81d008df1f32dbf1728e5ee934348ba48dfe088db5e6a38f91d8a12a54e63c619395d4f1b45cafaafa9a7ae9bb8bbc263b9be59a22c9463ff2db0d0bbcb53bca5514dbff055bc466f6eb72542fe07c64eeb8dd30ef10d800a30806c1f8fe5d44ec8fd63ad6d5b07baec81e4495c428dff5611e81332211636fd2d3e35d2be8d71a629596bd8ec0e5d6762afeefb3a47bc062e987b39cfb429ede12f339dceaa7b8a46a4c5b6f3db314b9de0fabb74af6712031c9002cc868cc4f5e01b4890f68b91eb7d43c384caf1b5cd0f9d060709b3320e20c449324162ee05c010045a12654f810b8a207e0a3db36e02b63d254e7217e8438d1c1dc5bceac26e48e6340dd318810d5db2.679d6279beeedc397b77fd663620061f
-[2026-06-04 19:35:57] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 19:35:58] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 19:35:58] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 19:36:02] [INFO] [Server] Iniciando live resolve para 1 opciones... (Excluyendo: [])
-[2026-06-04 19:36:02] [INFO] [Server] Probando servidor 1/1: ROJADIRECTAHD (https://www.rojadirectahd.dev/ver/canal-197.php)
-[2026-06-04 19:36:02] [INFO] [Sniffer] Iniciando analisis de trafico para: https://www.rojadirectahd.dev/ver/canal-197.php
-[2026-06-04 19:36:11] [INFO] [Sniffer] Realizando clics simulados para iniciar reproducción...
-[2026-06-04 19:36:23] [INFO] [Sniffer] Analisis finalizado para https://www.rojadirectahd.dev/ver/canal-197.php. Resultado: FALLIDO
-[2026-06-04 19:36:23] [INFO] [Server] Servidor ROJADIRECTAHD no retornó video válido.
-[2026-06-04 19:36:23] [INFO] [Server] Fallaron todos los servidores de Deportes en live resolve. Retornando error estricto sin iframe.
-[2026-06-04 19:36:36] [INFO] [Server] Iniciando live resolve para 4 opciones... (Excluyendo: [])
-[2026-06-04 19:36:36] [INFO] [Server] Probando servidor 1/4: ROJADIRECTAHD (https://www.rojadirectahd.dev/ver/univision-deportes.php)
-[2026-06-04 19:36:36] [INFO] [Sniffer] Iniciando analisis de trafico para: https://www.rojadirectahd.dev/ver/univision-deportes.php
-[2026-06-04 19:36:43] [INFO] [Sniffer] Realizando clics simulados para iniciar reproducción...
-[2026-06-04 19:36:44] [INFO] [Sniffer] ¡Video detectado en peticion de red! -> https://pecdl1.streameasthd.net/global/max1/index.m3u8?token=e56152481d01b17f12d5dd7d9321f6c1a46a4d59-93-1780668402-1780614402&ip=187.173.128.107
-[2026-06-04 19:36:44] [INFO] [Sniffer] Headers detectados: {"accept-language":"es-ES,es;q=0.9","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36","referer":"https://streamtp-x-y-z.ws/","accept":"*/*","origin":"https://streamtp-x-y-z.ws"}
-[2026-06-04 19:36:45] [INFO] [Sniffer] ¡Video detectado en peticion de red! -> https://98ca2.streameasthd.net/max1/index.m3u8?token=e56152481d01b17f12d5dd7d9321f6c1a46a4d59-93-1780668402-1780614402&ip=187.173.128.107
-[2026-06-04 19:36:45] [INFO] [Sniffer] Headers detectados: {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36","referer":"https://streamtp-x-y-z.ws/","accept":"*/*","accept-language":"es-ES,es;q=0.9","origin":"null"}
-[2026-06-04 19:36:45] [INFO] [Sniffer] ¡Video detectado en respuesta Content-Type! -> https://98ca2.streameasthd.net/max1/index.m3u8?token=e56152481d01b17f12d5dd7d9321f6c1a46a4d59-93-1780668402-1780614402&ip=187.173.128.107 (application/vnd.apple.mpegurl)
-[2026-06-04 19:36:45] [INFO] [Sniffer] ¡Video detectado en peticion de red! -> https://98ca2.streameasthd.net/max1/tracks-v1a1/mono.m3u8?ip=187.173.128.107&token=e56152481d01b17f12d5dd7d9321f6c1a46a4d59-93-1780668402-1780614402
-[2026-06-04 19:36:45] [INFO] [Sniffer] Headers detectados: {"accept-language":"es-ES,es;q=0.9","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36","referer":"https://streamtp-x-y-z.ws/","accept":"*/*","origin":"https://streamtp-x-y-z.ws"}
-[2026-06-04 19:36:45] [INFO] [Sniffer] ¡Video detectado en respuesta Content-Type! -> https://98ca2.streameasthd.net/max1/tracks-v1a1/mono.m3u8?ip=187.173.128.107&token=e56152481d01b17f12d5dd7d9321f6c1a46a4d59-93-1780668402-1780614402 (application/vnd.apple.mpegurl)
 [2026-06-04 19:36:47] [INFO] [Sniffer] Analisis finalizado para https://www.rojadirectahd.dev/ver/univision-deportes.php. Resultado: EXITO
 [2026-06-04 19:36:47] [INFO] [Server] Video detectado: https://98ca2.streameasthd.net/max1/tracks-v1a1/mono.m3u8?ip=187.173.128.107&token=e56152481d01b17f12d5dd7d9321f6c1a46a4d59-93-1780668402-1780614402. Referer: https://streamtp-x-y-z.ws/. Verificando conectividad...
 [2026-06-04 19:36:47] [INFO] [Server] ¡Validación HEAD exitosa! Status: 200
@@ -2497,3 +2434,66 @@ Mía es una mujer embarazada que, junto a su marido, huye de un país totalitari
 [2026-06-05 00:32:10] [INFO] [33m[2026-06-05T00:32:10.912] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 00:32:11] [INFO] [33m[2026-06-05T00:32:11.009] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-05 00:32:11] [INFO] [33m[2026-06-05T00:32:11.010] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:33:41] [INFO] [33m[2026-06-05T00:33:41.102] [INFO] - [connection closed][0m
+[2026-06-05 00:33:41] [INFO] [35m[2026-06-05T00:33:41.102] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:33:41] [ERROR] {}
+[2026-06-05 00:33:42] [INFO] [33m[2026-06-05T00:33:42.113] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:33:42] [INFO] [35m[2026-06-05T00:33:42.114] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:33:42] [INFO] [33m[2026-06-05T00:33:42.114] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:33:42] [INFO] [33m[2026-06-05T00:33:42.115] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:33:42] [INFO] [33m[2026-06-05T00:33:42.194] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:33:42] [INFO] [33m[2026-06-05T00:33:42.194] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:35:12] [INFO] [33m[2026-06-05T00:35:12.266] [INFO] - [connection closed][0m
+[2026-06-05 00:35:12] [INFO] [35m[2026-06-05T00:35:12.266] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:35:12] [ERROR] {}
+[2026-06-05 00:35:13] [INFO] [33m[2026-06-05T00:35:13.273] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:35:13] [INFO] [35m[2026-06-05T00:35:13.273] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:35:13] [INFO] [33m[2026-06-05T00:35:13.274] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:35:13] [INFO] [33m[2026-06-05T00:35:13.274] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:35:13] [INFO] [33m[2026-06-05T00:35:13.350] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:35:13] [INFO] [33m[2026-06-05T00:35:13.350] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:36:43] [INFO] [33m[2026-06-05T00:36:43.428] [INFO] - [connection closed][0m
+[2026-06-05 00:36:43] [INFO] [35m[2026-06-05T00:36:43.429] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:36:43] [ERROR] {}
+[2026-06-05 00:36:44] [INFO] [33m[2026-06-05T00:36:44.444] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:36:44] [INFO] [35m[2026-06-05T00:36:44.445] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:36:44] [INFO] [33m[2026-06-05T00:36:44.445] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:36:44] [INFO] [33m[2026-06-05T00:36:44.446] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:36:44] [INFO] [33m[2026-06-05T00:36:44.540] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:36:44] [INFO] [33m[2026-06-05T00:36:44.541] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:38:14] [INFO] [33m[2026-06-05T00:38:14.635] [INFO] - [connection closed][0m
+[2026-06-05 00:38:14] [INFO] [35m[2026-06-05T00:38:14.636] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:38:14] [ERROR] {}
+[2026-06-05 00:38:15] [INFO] [33m[2026-06-05T00:38:15.644] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:38:15] [INFO] [35m[2026-06-05T00:38:15.645] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:38:15] [INFO] [33m[2026-06-05T00:38:15.645] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:38:15] [INFO] [33m[2026-06-05T00:38:15.646] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:38:15] [INFO] [33m[2026-06-05T00:38:15.719] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:38:15] [INFO] [33m[2026-06-05T00:38:15.719] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:39:45] [INFO] [33m[2026-06-05T00:39:45.791] [INFO] - [connection closed][0m
+[2026-06-05 00:39:45] [INFO] [35m[2026-06-05T00:39:45.792] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:39:45] [ERROR] {}
+[2026-06-05 00:39:46] [INFO] [33m[2026-06-05T00:39:46.795] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:39:46] [INFO] [35m[2026-06-05T00:39:46.796] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:39:46] [INFO] [33m[2026-06-05T00:39:46.796] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:39:46] [INFO] [33m[2026-06-05T00:39:46.797] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:39:46] [INFO] [33m[2026-06-05T00:39:46.875] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:39:46] [INFO] [33m[2026-06-05T00:39:46.875] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:41:16] [INFO] [33m[2026-06-05T00:41:16.948] [INFO] - [connection closed][0m
+[2026-06-05 00:41:16] [INFO] [35m[2026-06-05T00:41:16.949] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:41:16] [ERROR] {}
+[2026-06-05 00:41:17] [INFO] [33m[2026-06-05T00:41:17.961] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:41:17] [INFO] [35m[2026-06-05T00:41:17.962] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:41:17] [INFO] [33m[2026-06-05T00:41:17.962] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:41:17] [INFO] [33m[2026-06-05T00:41:17.962] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:41:18] [INFO] [33m[2026-06-05T00:41:18.055] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:41:18] [INFO] [33m[2026-06-05T00:41:18.055] [INFO] - [Handling reconnect!][0m
+[2026-06-05 00:42:48] [INFO] [33m[2026-06-05T00:42:48.147] [INFO] - [connection closed][0m
+[2026-06-05 00:42:48] [INFO] [35m[2026-06-05T00:42:48.148] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 00:42:48] [ERROR] {}
+[2026-06-05 00:42:49] [INFO] [33m[2026-06-05T00:42:49.162] [INFO] - [Started reconnecting][0m
+[2026-06-05 00:42:49] [INFO] [35m[2026-06-05T00:42:49.162] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 00:42:49] [INFO] [33m[2026-06-05T00:42:49.163] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:42:49] [INFO] [33m[2026-06-05T00:42:49.163] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 00:42:49] [INFO] [33m[2026-06-05T00:42:49.255] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 00:42:49] [INFO] [33m[2026-06-05T00:42:49.256] [INFO] - [Handling reconnect!][0m
