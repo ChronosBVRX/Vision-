@@ -1,260 +1,3 @@
-[2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
-[2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
-[2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
-[2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
-[2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
-[2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
-[2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
-[2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
-[2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
-[2026-06-04 15:39:55] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
-[2026-06-04 15:39:56] [ERROR] [GitHub Pages] Error en git push: Command failed: git push origin main
-To https://github.com/ChronosBVRX/Vision-.git
- ! [rejected]        main -> main (fetch first)
-error: failed to push some refs to 'https://github.com/ChronosBVRX/Vision-.git'
-hint: Updates were rejected because the remote contains work that you do not
-hint: have locally. This is usually caused by another repository pushing to
-hint: the same ref. If you want to integrate the remote changes, use
-hint: 'git pull' before pushing again.
-hint: See the 'Note about fast-forwards' in 'git push --help' for details.
-
-[2026-06-04 15:39:57] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
-[2026-06-04 15:39:57] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
-[2026-06-04 15:39:57] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
-[2026-06-04 15:39:57] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 18
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Escaneando un total de 23 espejos en paralelo...
-[2026-06-04 15:39:58] [ERROR] (node:14540) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
-(Use `node --trace-warnings ...` to show where the warning was created)
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo ENOTFOUND pirlotv3.pl)
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: getaddrinfo ENOTFOUND www.pirlotv3.sale)
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 401)
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
-[2026-06-04 15:39:58] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
-[2026-06-04 15:39:59] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://www.rojadirectatvmas.com (23 partidos encontrados)
-[2026-06-04 15:39:59] [INFO] [SportsWorker] Buscando logotipos para 23 partidos...
-[2026-06-04 15:39:59] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
-[2026-06-04 15:39:59] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectahd.vip (Solo 24 partidos)
-[2026-06-04 15:39:59] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectahd.dev (Solo 24 partidos)
-[2026-06-04 15:39:59] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
-[2026-06-04 15:39:59] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
-[2026-06-04 15:39:59] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
-[2026-06-04 15:39:59] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 14 partidos)
-[2026-06-04 15:39:59] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://www.rojadirectatvmas.com
-[2026-06-04 15:40:00] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
-[2026-06-04 15:40:00] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
-[2026-06-04 15:40:00] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 14 partidos)
-[2026-06-04 15:40:02] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
-[2026-06-04 15:42:10] [INFO] [Env] Variables de entorno cargadas correctamente.
-[2026-06-04 15:42:12] [INFO] [DB] SQLite inicializado.
-[2026-06-04 15:42:12] [INFO] [DB] Memoria sincronizada: 474 sources, 382 pelis, 144 series.
-[2026-06-04 15:42:12] [INFO] Servidor corriendo en el puerto 5000
-[2026-06-04 15:42:12] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
-[2026-06-04 15:42:12] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
-[2026-06-04 15:42:13] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
-[2026-06-04 15:42:15] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
-[2026-06-04 15:42:15] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
-[2026-06-04 15:42:15] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
-[2026-06-04 15:42:15] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
-[2026-06-04 15:42:15] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
-[2026-06-04 15:42:15] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
-[2026-06-04 15:42:15] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
-[2026-06-04 15:42:17] [INFO] [CatalogWorker] Catálogo existente: 382 películas, 144 series.
-[2026-06-04 15:42:17] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
-[2026-06-04 15:42:17] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
-[2026-06-04 15:42:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
-[2026-06-04 15:42:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
-[2026-06-04 15:42:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
-[2026-06-04 15:42:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
-[2026-06-04 15:42:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
-[2026-06-04 15:42:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
-[2026-06-04 15:42:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
-[2026-06-04 15:42:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
-[2026-06-04 15:42:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
-[2026-06-04 15:42:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
-[2026-06-04 15:42:18] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
-[2026-06-04 15:42:20] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
-[2026-06-04 15:42:20] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
-[2026-06-04 15:42:20] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
-[2026-06-04 15:42:20] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
-[2026-06-04 15:42:20] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://beaches-july-general-certificates.trycloudflare.com
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 18
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Escaneando un total de 23 espejos en paralelo...
-[2026-06-04 15:42:21] [ERROR] (node:7704) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
-(Use `node --trace-warnings ...` to show where the warning was created)
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo ENOTFOUND pirlotv3.pl)
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: getaddrinfo ENOTFOUND www.pirlotv3.sale)
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 401)
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
-[2026-06-04 15:42:21] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
-[2026-06-04 15:42:22] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
-[2026-06-04 15:42:22] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
-[2026-06-04 15:42:22] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://rojadirectahd.vip (24 partidos encontrados)
-[2026-06-04 15:42:22] [INFO] [SportsWorker] Buscando logotipos para 24 partidos...
-[2026-06-04 15:42:22] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectahd.dev (Solo 24 partidos)
-[2026-06-04 15:42:22] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectatvmas.com (Solo 23 partidos)
-[2026-06-04 15:42:22] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
-[2026-06-04 15:42:22] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
-[2026-06-04 15:42:22] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 14 partidos)
-[2026-06-04 15:42:22] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 14 partidos)
-[2026-06-04 15:42:23] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://rojadirectahd.vip
-[2026-06-04 15:42:23] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
-[2026-06-04 15:42:25] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
-[2026-06-04 15:47:10] [INFO] [Env] Variables de entorno cargadas correctamente.
-[2026-06-04 15:47:12] [INFO] [DB] SQLite inicializado.
-[2026-06-04 15:47:12] [INFO] [DB] Memoria sincronizada: 474 sources, 382 pelis, 144 series.
-[2026-06-04 15:47:12] [INFO] Servidor corriendo en el puerto 5000
-[2026-06-04 15:47:12] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
-[2026-06-04 15:47:12] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
-[2026-06-04 15:47:13] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
-[2026-06-04 15:47:15] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
-[2026-06-04 15:47:15] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
-[2026-06-04 15:47:15] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
-[2026-06-04 15:47:15] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
-[2026-06-04 15:47:15] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
-[2026-06-04 15:47:15] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
-[2026-06-04 15:47:15] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
-[2026-06-04 15:47:17] [INFO] [CatalogWorker] Catálogo existente: 382 películas, 144 series.
-[2026-06-04 15:47:17] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
-[2026-06-04 15:47:17] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
-[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
-[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
-[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
-[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
-[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
-[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
-[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
-[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
-[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
-[2026-06-04 15:47:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
-[2026-06-04 15:47:18] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
-[2026-06-04 15:47:20] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://beaches-july-general-certificates.trycloudflare.com
-[2026-06-04 15:47:21] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
-[2026-06-04 15:47:21] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
-[2026-06-04 15:47:21] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
-[2026-06-04 15:47:21] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
-[2026-06-04 15:47:21] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 18
-[2026-06-04 15:47:21] [INFO] [SportsScraper] Escaneando un total de 23 espejos en paralelo...
-[2026-06-04 15:47:21] [ERROR] (node:8852) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
-(Use `node --trace-warnings ...` to show where the warning was created)
-[2026-06-04 15:47:21] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo ENOTFOUND pirlotv3.pl)
-[2026-06-04 15:47:21] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
-[2026-06-04 15:47:21] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: getaddrinfo ENOTFOUND www.pirlotv3.sale)
-[2026-06-04 15:47:21] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
-[2026-06-04 15:47:21] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
-[2026-06-04 15:47:21] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
-[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
-[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
-[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
-[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
-[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 401)
-[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
-[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
-[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
-[2026-06-04 15:47:22] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://rojadirectahd.vip (24 partidos encontrados)
-[2026-06-04 15:47:22] [INFO] [SportsWorker] Buscando logotipos para 24 partidos...
-[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectahd.dev (Solo 24 partidos)
-[2026-06-04 15:47:22] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectatvmas.com (Solo 23 partidos)
-[2026-06-04 15:47:23] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 14 partidos)
-[2026-06-04 15:47:23] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
-[2026-06-04 15:47:23] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
-[2026-06-04 15:47:23] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://rojadirectahd.vip
-[2026-06-04 15:47:24] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
-[2026-06-04 15:47:24] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 14 partidos)
-[2026-06-04 15:47:25] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
-[2026-06-04 15:47:43] [INFO] [Resolver] ▶ Iniciando resolución automática para movieId: "catalog_poseidonhd_movie_eldrama" (Idioma pref: auto, Servidores excluidos: [])
-[2026-06-04 15:47:43] [INFO] [Resolver] Película encontrada: "El Drama"
-[2026-06-04 15:47:43] [INFO] [MoviePageParser] 🔍 Analizando página externa de PoseidonHD: https://www.poseidonhd2.co/pelicula/1325734/el-drama
-[2026-06-04 15:47:43] [INFO] [BrowserFetcher] 🌐 Cargando página con Playwright para evadir antibot: https://www.poseidonhd2.co/pelicula/1325734/el-drama
-[2026-06-04 15:47:48] [INFO] [BrowserFetcher] ✅ HTML cargado exitosamente. Longitud: 109642 bytes.
-[2026-06-04 15:47:49] [INFO] [Resolver] Página de detalle scrapeada: 10 opciones extraídas de https://www.poseidonhd2.co/pelicula/1325734/el-drama
-[2026-06-04 15:47:49] [INFO] [Resolver] Total de opciones filtradas a evaluar: 10
-[2026-06-04 15:47:49] [INFO] [Resolver] Lanzando 3 opciones en paralelo (max 3)...
-[2026-06-04 15:47:49] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
-[2026-06-04 15:47:49] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j385eVxIrBa3fANhWCdQcTnvZCEA2K3x.x_9rgPQSsCR
-[2026-06-04 15:47:49] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j385eVxIrBa3fANhWCdQcTnvZCEA2K3x.x_9rgPQSsCR
-[2026-06-04 15:47:49] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
-[2026-06-04 15:47:49] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=nvSrqGY5gls.ZEL93nL9MBLchPU7N5gJsn6QCo0G58M-
-[2026-06-04 15:47:49] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=nvSrqGY5gls.ZEL93nL9MBLchPU7N5gJsn6QCo0G58M-
-[2026-06-04 15:47:49] [INFO] [Resolver] ▶ Probando en paralelo: [Español Latino] player
-[2026-06-04 15:47:49] [INFO] [authorizedEmbedAdapter] 🌐 Resolviendo iframe de dominio autorizado: https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0PLYGnJ6qldOkduhm4DVNxzjM_hcmFDJ96BhIUMmhSiW
-[2026-06-04 15:47:49] [INFO] [BrowserResolver] 🌐 Iniciando Playwright para: https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0PLYGnJ6qldOkduhm4DVNxzjM_hcmFDJ96BhIUMmhSiW
-[2026-06-04 15:47:52] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 15:47:52] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 15:47:52] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 1)
-[2026-06-04 15:47:53] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 15:47:53] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 15:47:53] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 2)
-[2026-06-04 15:47:53] [INFO] [BrowserResolver] 🚫 Anuncio ignorado: https://amd-cdn-1.ffb7df5a878b59e42e257c042f54bed2.com/content/stream/agl/pinup_MX_preroll_ZEVS_1920kh1080_DiNERO.mp4
-[2026-06-04 15:47:53] [INFO] [BrowserResolver] 🚫 Anuncio ignorado: https://amd-cdn-1.ffb7df5a878b59e42e257c042f54bed2.com/content/stream/agl/pinup_MX_preroll_ZEVS_1920kh1080_DiNERO.mp4
-[2026-06-04 15:47:54] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 15:47:54] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 15:47:54] [INFO] [BrowserResolver] 🖱️ Clic en el player (intento 3)
-[2026-06-04 15:47:57] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/VYizxAwVCLBcVR19cFEYKQ/hjkrhuihghfvu/1780652874/40568348/master.m3u8
-[2026-06-04 15:47:57] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://callistanise.com/stream/VYizxAwVCLBcVR19cFEYKQ/hjkrhuihghfvu/1780652874/40568348/master.m3u8
-[2026-06-04 15:47:57] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://callistanise.com/stream/VYizxAwVCLBcVR19cFEYKQ/hjkrhuihghfvu/1780652874/40568348/master.m3u8
-[2026-06-04 15:47:57] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8
-[2026-06-04 15:47:57] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8
-[2026-06-04 15:47:57] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8
-[2026-06-04 15:48:02] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8. Validando conectividad...
-[2026-06-04 15:48:02] [INFO] [SourceValidator] Probando HEAD para: https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8
-[2026-06-04 15:48:02] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://callistanise.com/stream/VYizxAwVCLBcVR19cFEYKQ/hjkrhuihghfvu/1780652874/40568348/master.m3u8. Validando conectividad...
-[2026-06-04 15:48:02] [INFO] [SourceValidator] Probando HEAD para: https://callistanise.com/stream/VYizxAwVCLBcVR19cFEYKQ/hjkrhuihghfvu/1780652874/40568348/master.m3u8
-[2026-06-04 15:48:03] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8
-[2026-06-04 15:48:03] [INFO] [Resolver] ✅ Primer éxito paralelo: player -> https://playnixes.com/stream/67mXfmdwxKyecSjdkXSDFg/kjhhiuahiuhgihdf/1780652875/71357588/master.m3u8
-[2026-06-04 15:48:03] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://callistanise.com/stream/VYizxAwVCLBcVR19cFEYKQ/hjkrhuihghfvu/1780652874/40568348/master.m3u8
-[2026-06-04 15:48:04] [INFO] [BrowserResolver] 🎥 Stream detectado en red: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0
-[2026-06-04 15:48:04] [INFO] [BrowserResolver] ✅ HLS seleccionado: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0
-[2026-06-04 15:48:05] [INFO] [authorizedEmbedAdapter] 🎥 Video sniffed: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0. Validando conectividad...
-[2026-06-04 15:48:05] [INFO] [SourceValidator] Probando HEAD para: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0
-[2026-06-04 15:48:05] [INFO] [SourceValidator] HEAD exitoso. Content-Type: application/vnd.apple.mpegurl, Final URL: https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/03/11390/230jl53zcp0b_x/master.m3u8?t=f9ESOHwjid2kYyP9Fb524X9tkoq6dgyZeHj0hqV2OKg&s=1780609682&e=10800&f=56951025&srv=1055&asn=8151&sp=5500&p=0
-[2026-06-04 16:12:10] [INFO] [Env] Variables de entorno cargadas correctamente.
-[2026-06-04 16:12:12] [INFO] [DB] SQLite inicializado.
-[2026-06-04 16:12:12] [INFO] [DB] Memoria sincronizada: 474 sources, 382 pelis, 144 series.
-[2026-06-04 16:12:12] [INFO] Servidor corriendo en el puerto 5000
-[2026-06-04 16:12:12] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
-[2026-06-04 16:12:12] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
-[2026-06-04 16:12:13] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
-[2026-06-04 16:12:16] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
-[2026-06-04 16:12:16] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
-[2026-06-04 16:12:16] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
-[2026-06-04 16:12:16] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
-[2026-06-04 16:12:16] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
-[2026-06-04 16:12:16] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
-[2026-06-04 16:12:16] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
-[2026-06-04 16:12:17] [INFO] [CatalogWorker] Catálogo existente: 382 películas, 144 series.
-[2026-06-04 16:12:17] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
-[2026-06-04 16:12:17] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
-[2026-06-04 16:12:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
-[2026-06-04 16:12:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
-[2026-06-04 16:12:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
-[2026-06-04 16:12:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
-[2026-06-04 16:12:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
-[2026-06-04 16:12:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
-[2026-06-04 16:12:18] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
-[2026-06-04 16:12:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
-[2026-06-04 16:12:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
-[2026-06-04 16:12:18] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
-[2026-06-04 16:12:18] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
-[2026-06-04 16:12:20] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://beaches-july-general-certificates.trycloudflare.com
-[2026-06-04 16:12:21] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
-[2026-06-04 16:12:21] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
-[2026-06-04 16:12:21] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
-[2026-06-04 16:12:21] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
-[2026-06-04 16:12:21] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 18
 [2026-06-04 16:12:21] [INFO] [SportsScraper] Escaneando un total de 23 espejos en paralelo...
 [2026-06-04 16:12:21] [ERROR] (node:17304) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -2497,3 +2240,260 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-04 19:52:40] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
 [2026-06-04 19:52:40] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
 [2026-06-04 19:52:40] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
+[2026-06-04 19:52:42] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-04 19:52:42] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-04 19:52:42] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-04 19:52:42] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
+[2026-06-04 19:52:42] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.com.co (query: "pirlo tv")
+[2026-06-04 19:52:42] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.click (query: "pirlo tv")
+[2026-06-04 19:52:42] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotvlibre.com (query: "pirlo tv")
+[2026-06-04 19:52:42] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvs.com (query: "pirlo tv")
+[2026-06-04 19:52:42] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv3.sale (query: "pirlo tv")
+[2026-06-04 19:52:42] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-04 19:52:42] [INFO] [SportsScraper] Consultando Brave Search para: "tarjeta roja"...
+[2026-06-04 19:52:44] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectamas.com (query: "tarjeta roja")
+[2026-06-04 19:52:44] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatvmas.com (query: "tarjeta roja")
+[2026-06-04 19:52:44] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojas.com (query: "tarjeta roja")
+[2026-06-04 19:52:44] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "tarjeta roja")
+[2026-06-04 19:52:44] [INFO] [GitHub Pages] Redirect actualizado e index.html subido a GitHub con éxito: https://attitudes-onto-certified-whole.trycloudflare.com
+[2026-06-04 19:52:45] [INFO] [SportsScraper] Búsqueda finalizada. Dominios potenciales encontrados: 18
+[2026-06-04 19:52:45] [INFO] [SportsScraper] Escaneando un total de 23 espejos en paralelo...
+[2026-06-04 19:52:45] [ERROR] (node:11828) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-06-04 19:52:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotvlibre.com (Failed to scrape matches from https://www.pirlotvlibre.com: getaddrinfo ENOTFOUND www.pirlotvlibre.com)
+[2026-06-04 19:52:45] [INFO] [SportsScraper] Candidato caido/invalido: https://tarjetarojatv.blog (Failed to scrape matches from https://tarjetarojatv.blog: getaddrinfo ENOTFOUND tarjetarojatv.blog)
+[2026-06-04 19:52:45] [INFO] [SportsScraper] Candidato caido/invalido: https://www.pirlotv3.sale (Failed to scrape matches from https://www.pirlotv3.sale: getaddrinfo ENOTFOUND www.pirlotv3.sale)
+[2026-06-04 19:52:45] [INFO] [SportsScraper] Candidato rechazado: https://www.tarjetarojatv.net (Solo 0 partidos)
+[2026-06-04 19:52:45] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.watch (Solo 0 partidos)
+[2026-06-04 19:52:46] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv.mx (Failed to scrape matches from https://pirlotv.mx: Request failed with status code 401)
+[2026-06-04 19:52:46] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojatvmas.com (Solo 0 partidos)
+[2026-06-04 19:52:46] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectamas.com (Solo 0 partidos)
+[2026-06-04 19:52:46] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectatv.net (Solo 0 partidos)
+[2026-06-04 19:52:46] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.com.co (Solo 0 partidos)
+[2026-06-04 19:52:46] [INFO] [SportsScraper] Candidato rechazado: https://tarjetarojas.com (Solo 0 partidos)
+[2026-06-04 19:52:46] [INFO] [SportsScraper] Candidato rechazado: https://rojadirectaplay.com (Solo 0 partidos)
+[2026-06-04 19:52:46] [INFO] [SportsScraper] ¡ESPEJO SELECCIONADO! -> https://rojadirectahd.vip (24 partidos encontrados)
+[2026-06-04 19:52:46] [INFO] [SportsWorker] Buscando logotipos para 24 partidos...
+[2026-06-04 19:52:46] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectahd.dev (Solo 24 partidos)
+[2026-06-04 19:52:46] [INFO] [SportsScraper] Candidato caido/invalido: https://pirlotv3.pl (Failed to scrape matches from https://pirlotv3.pl: getaddrinfo EAI_AGAIN pirlotv3.pl)
+[2026-06-04 19:52:46] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirectatvmas.com (Solo 23 partidos)
+[2026-06-04 19:52:47] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvs.com (Solo 0 partidos)
+[2026-06-04 19:52:47] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv3.click (Solo 0 partidos)
+[2026-06-04 19:52:47] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotvhd.re (Solo 14 partidos)
+[2026-06-04 19:52:47] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.us (Solo 1 partidos)
+[2026-06-04 19:52:47] [INFO] [SportsScraper] Candidato rechazado: https://www.rojadirecta.lt (Solo 14 partidos)
+[2026-06-04 19:52:47] [INFO] [SportsWorker] Cache de deportes actualizado con exito. Espejo activo: https://rojadirectahd.vip
+[2026-06-04 19:52:48] [INFO] [SportsScraper] Candidato rechazado: https://pirlotvhd.su (Solo 0 partidos)
+[2026-06-04 19:52:49] [INFO] [SportsScraper] Candidato rechazado: https://www.pirlotv.online (Solo 0 partidos)
+[2026-06-04 19:54:07] [INFO] [33m[2026-06-04T19:54:07.524] [INFO] - [connection closed][0m
+[2026-06-04 19:54:07] [INFO] [35m[2026-06-04T19:54:07.525] [WARN] - [Connection closed while receiving data][0m
+[2026-06-04 19:54:07] [ERROR] {}
+[2026-06-04 19:54:08] [INFO] [33m[2026-06-04T19:54:08.539] [INFO] - [Started reconnecting][0m
+[2026-06-04 19:54:08] [INFO] [35m[2026-06-04T19:54:08.539] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-04 19:54:08] [INFO] [33m[2026-06-04T19:54:08.540] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 19:54:08] [INFO] [33m[2026-06-04T19:54:08.541] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 19:54:08] [INFO] [33m[2026-06-04T19:54:08.635] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 19:54:08] [INFO] [33m[2026-06-04T19:54:08.639] [INFO] - [Handling reconnect!][0m
+[2026-06-04 19:55:38] [INFO] [33m[2026-06-04T19:55:38.710] [INFO] - [connection closed][0m
+[2026-06-04 19:55:38] [INFO] [35m[2026-06-04T19:55:38.710] [WARN] - [Connection closed while receiving data][0m
+[2026-06-04 19:55:38] [ERROR] {}
+[2026-06-04 19:55:39] [INFO] [33m[2026-06-04T19:55:39.725] [INFO] - [Started reconnecting][0m
+[2026-06-04 19:55:39] [INFO] [35m[2026-06-04T19:55:39.726] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-04 19:55:39] [INFO] [33m[2026-06-04T19:55:39.727] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 19:55:39] [INFO] [33m[2026-06-04T19:55:39.727] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 19:55:39] [INFO] [33m[2026-06-04T19:55:39.824] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 19:55:39] [INFO] [33m[2026-06-04T19:55:39.826] [INFO] - [Handling reconnect!][0m
+[2026-06-04 19:57:09] [INFO] [33m[2026-06-04T19:57:09.911] [INFO] - [connection closed][0m
+[2026-06-04 19:57:09] [INFO] [35m[2026-06-04T19:57:09.912] [WARN] - [Connection closed while receiving data][0m
+[2026-06-04 19:57:09] [ERROR] {}
+[2026-06-04 19:57:10] [INFO] [33m[2026-06-04T19:57:10.922] [INFO] - [Started reconnecting][0m
+[2026-06-04 19:57:10] [INFO] [35m[2026-06-04T19:57:10.923] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-04 19:57:10] [INFO] [33m[2026-06-04T19:57:10.923] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 19:57:10] [INFO] [33m[2026-06-04T19:57:10.924] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 19:57:11] [INFO] [33m[2026-06-04T19:57:11.017] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 19:57:11] [INFO] [33m[2026-06-04T19:57:11.017] [INFO] - [Handling reconnect!][0m
+[2026-06-04 19:57:22] [INFO] [AnimeWorker] Iniciando sincronización de catálogo de anime...
+[2026-06-04 19:57:22] [INFO] [AnimeScraper] ▶ Iniciando scraping de Anime (animeflv.net y animeflv.one)...
+[2026-06-04 19:57:23] [INFO] [AnimeScraper] Visitando: https://www4.animeflv.net/browse?page=1
+[2026-06-04 19:57:30] [INFO] [AnimeScraper] Visitando: https://www4.animeflv.net/browse?page=2
+[2026-06-04 19:57:31] [INFO] [AnimeScraper] Visitando: https://vww.animeflv.one/animes?page=1
+[2026-06-04 19:57:32] [INFO] [AnimeScraper] Visitando: https://vww.animeflv.one/animes?page=2
+[2026-06-04 19:57:32] [INFO] [AnimeScraper] Visitando: https://ww3.animeonline.ninja/pelicula/
+[2026-06-04 19:57:33] [INFO] [AnimeScraper] Visitando películas en AnimeFLV.net: https://www4.animeflv.net/browse?type[]=movie&page=1
+[2026-06-04 19:57:34] [INFO] [AnimeScraper] Visitando películas en AnimeFLV.net: https://www4.animeflv.net/browse?type[]=movie&page=2
+[2026-06-04 19:57:35] [INFO] [AnimeScraper] Visitando: https://jkanime.net/directorio?tipo=peliculas&page=1
+[2026-06-04 19:57:39] [INFO] [CatalogWorker] Iniciando sincronización de catálogo...
+[2026-06-04 19:57:39] [INFO] [CatalogScraper] ▶ Iniciando scraping de catálogo de películas y series...
+[2026-06-04 19:57:40] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/peliculas/...
+[2026-06-04 19:57:45] [INFO] [AnimeScraper] Visitando: https://jkanime.net/directorio?tipo=peliculas&page=2
+[2026-06-04 19:57:45] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/peliculas/
+[2026-06-04 19:57:45] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/peliculas/?page/2...
+[2026-06-04 19:57:50] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/peliculas/?page/2
+[2026-06-04 19:57:50] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/peliculas/?page/3...
+[2026-06-04 19:57:54] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/peliculas/?page/3
+[2026-06-04 19:57:54] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/peliculas/?page/4...
+[2026-06-04 19:57:55] [INFO] [AnimeScraper] Completado. Encontradas 73 películas y 48 series de anime.
+[2026-06-04 19:57:55] [INFO] [AnimeWorker] ✅ Sync completado. Anime Películas: +1 (total 74), Anime Series: +0 (total 48)
+[2026-06-04 19:57:58] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/peliculas/?page/4
+[2026-06-04 19:57:58] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/peliculas/?page/5...
+[2026-06-04 19:58:03] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/peliculas/?page/5
+[2026-06-04 19:58:03] [INFO] [CatalogScraper] PelisPlus: 19 generos descubiertos
+[2026-06-04 19:58:03] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/estrenos/...
+[2026-06-04 19:58:07] [INFO] [CatalogScraper] PelisPlus movie: 96 items de https://www.pelisplushd.la/estrenos/
+[2026-06-04 19:58:07] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/estrenos/?page/2...
+[2026-06-04 19:58:12] [INFO] [CatalogScraper] PelisPlus movie: 96 items de https://www.pelisplushd.la/estrenos/?page/2
+[2026-06-04 19:58:12] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/estrenos/?page/3...
+[2026-06-04 19:58:17] [INFO] [CatalogScraper] PelisPlus movie: 96 items de https://www.pelisplushd.la/estrenos/?page/3
+[2026-06-04 19:58:17] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/estrenos/?page/4...
+[2026-06-04 19:58:21] [INFO] [CatalogScraper] PelisPlus movie: 96 items de https://www.pelisplushd.la/estrenos/?page/4
+[2026-06-04 19:58:21] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/estrenos/?page/5...
+[2026-06-04 19:58:26] [INFO] [CatalogScraper] PelisPlus movie: 96 items de https://www.pelisplushd.la/estrenos/?page/5
+[2026-06-04 19:58:26] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/series/...
+[2026-06-04 19:58:30] [INFO] [CatalogScraper] PelisPlus series: 24 items de https://www.pelisplushd.la/series/
+[2026-06-04 19:58:30] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/series/?page/2...
+[2026-06-04 19:58:34] [INFO] [CatalogScraper] PelisPlus series: 24 items de https://www.pelisplushd.la/series/?page/2
+[2026-06-04 19:58:34] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/series/?page/3...
+[2026-06-04 19:58:39] [INFO] [CatalogScraper] PelisPlus series: 24 items de https://www.pelisplushd.la/series/?page/3
+[2026-06-04 19:58:39] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/series/?page/4...
+[2026-06-04 19:58:41] [INFO] [33m[2026-06-04T19:58:41.100] [INFO] - [connection closed][0m
+[2026-06-04 19:58:41] [INFO] [35m[2026-06-04T19:58:41.101] [WARN] - [Connection closed while receiving data][0m
+[2026-06-04 19:58:41] [ERROR] {}
+[2026-06-04 19:58:42] [INFO] [33m[2026-06-04T19:58:42.110] [INFO] - [Started reconnecting][0m
+[2026-06-04 19:58:42] [INFO] [35m[2026-06-04T19:58:42.111] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-04 19:58:42] [INFO] [33m[2026-06-04T19:58:42.112] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 19:58:42] [INFO] [33m[2026-06-04T19:58:42.114] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 19:58:42] [INFO] [33m[2026-06-04T19:58:42.209] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 19:58:42] [INFO] [33m[2026-06-04T19:58:42.209] [INFO] - [Handling reconnect!][0m
+[2026-06-04 19:58:43] [INFO] [CatalogScraper] PelisPlus series: 24 items de https://www.pelisplushd.la/series/?page/4
+[2026-06-04 19:58:43] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/series/?page/5...
+[2026-06-04 19:58:47] [INFO] [CatalogScraper] PelisPlus series: 24 items de https://www.pelisplushd.la/series/?page/5
+[2026-06-04 19:58:47] [INFO] [CatalogScraper] PelisPlus: Scrapeando 19 paginas de genero...
+[2026-06-04 19:58:47] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/dorama...
+[2026-06-04 19:58:51] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/dorama
+[2026-06-04 19:58:51] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/dorama?page/2...
+[2026-06-04 19:58:56] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/dorama?page/2
+[2026-06-04 19:58:56] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/dorama?page/3...
+[2026-06-04 19:59:00] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/dorama?page/3
+[2026-06-04 19:59:00] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/dorama?page/4...
+[2026-06-04 19:59:04] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/dorama?page/4
+[2026-06-04 19:59:04] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/dorama?page/5...
+[2026-06-04 19:59:08] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/dorama?page/5
+[2026-06-04 19:59:08] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/accion...
+[2026-06-04 19:59:13] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/accion
+[2026-06-04 19:59:13] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/accion?page/2...
+[2026-06-04 19:59:17] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/accion?page/2
+[2026-06-04 19:59:17] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/accion?page/3...
+[2026-06-04 19:59:21] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/accion?page/3
+[2026-06-04 19:59:21] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/accion?page/4...
+[2026-06-04 19:59:25] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/accion?page/4
+[2026-06-04 19:59:25] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/accion?page/5...
+[2026-06-04 19:59:30] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/accion?page/5
+[2026-06-04 19:59:30] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/animacion...
+[2026-06-04 19:59:34] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/animacion
+[2026-06-04 19:59:34] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/animacion?page/2...
+[2026-06-04 19:59:38] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/animacion?page/2
+[2026-06-04 19:59:38] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/animacion?page/3...
+[2026-06-04 19:59:43] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/animacion?page/3
+[2026-06-04 19:59:43] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/animacion?page/4...
+[2026-06-04 19:59:47] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/animacion?page/4
+[2026-06-04 19:59:47] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/animacion?page/5...
+[2026-06-04 19:59:51] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/animacion?page/5
+[2026-06-04 19:59:51] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/aventura...
+[2026-06-04 19:59:56] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/aventura
+[2026-06-04 19:59:56] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/aventura?page/2...
+[2026-06-04 20:00:00] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/aventura?page/2
+[2026-06-04 20:00:00] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/aventura?page/3...
+[2026-06-04 20:00:04] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/aventura?page/3
+[2026-06-04 20:00:04] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/aventura?page/4...
+[2026-06-04 20:00:08] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/aventura?page/4
+[2026-06-04 20:00:08] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/aventura?page/5...
+[2026-06-04 20:00:12] [INFO] [33m[2026-06-04T20:00:12.287] [INFO] - [connection closed][0m
+[2026-06-04 20:00:12] [INFO] [35m[2026-06-04T20:00:12.287] [WARN] - [Connection closed while receiving data][0m
+[2026-06-04 20:00:12] [ERROR] {}
+[2026-06-04 20:00:13] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/aventura?page/5
+[2026-06-04 20:00:13] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/ciencia-ficcion...
+[2026-06-04 20:00:13] [INFO] [33m[2026-06-04T20:00:13.298] [INFO] - [Started reconnecting][0m
+[2026-06-04 20:00:13] [INFO] [35m[2026-06-04T20:00:13.298] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-04 20:00:13] [INFO] [33m[2026-06-04T20:00:13.299] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 20:00:13] [INFO] [33m[2026-06-04T20:00:13.300] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 20:00:13] [INFO] [33m[2026-06-04T20:00:13.401] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 20:00:13] [INFO] [33m[2026-06-04T20:00:13.402] [INFO] - [Handling reconnect!][0m
+[2026-06-04 20:00:17] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/ciencia-ficcion
+[2026-06-04 20:00:17] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/ciencia-ficcion?page/2...
+[2026-06-04 20:00:21] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/ciencia-ficcion?page/2
+[2026-06-04 20:00:21] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/ciencia-ficcion?page/3...
+[2026-06-04 20:00:26] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/ciencia-ficcion?page/3
+[2026-06-04 20:00:26] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/ciencia-ficcion?page/4...
+[2026-06-04 20:00:30] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/ciencia-ficcion?page/4
+[2026-06-04 20:00:30] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/ciencia-ficcion?page/5...
+[2026-06-04 20:00:34] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/ciencia-ficcion?page/5
+[2026-06-04 20:00:34] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/comedia...
+[2026-06-04 20:00:39] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/comedia
+[2026-06-04 20:00:39] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/comedia?page/2...
+[2026-06-04 20:00:43] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/comedia?page/2
+[2026-06-04 20:00:43] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/comedia?page/3...
+[2026-06-04 20:00:47] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/comedia?page/3
+[2026-06-04 20:00:47] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/comedia?page/4...
+[2026-06-04 20:00:52] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/comedia?page/4
+[2026-06-04 20:00:52] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/comedia?page/5...
+[2026-06-04 20:00:56] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/comedia?page/5
+[2026-06-04 20:00:56] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/crimen...
+[2026-06-04 20:01:00] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/crimen
+[2026-06-04 20:01:00] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/crimen?page/2...
+[2026-06-04 20:01:58] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-04 20:02:00] [INFO] [DB] SQLite inicializado.
+[2026-06-04 20:02:00] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-04 20:02:00] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-04 20:02:00] [INFO] [33m[2026-06-04T20:02:00.832] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-04 20:02:00] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-04 20:02:00] [INFO] [33m[2026-06-04T20:02:00.839] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 20:02:00] [INFO] [33m[2026-06-04T20:02:00.948] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 20:02:00] [INFO] [33m[2026-06-04T20:02:00.950] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-04 20:02:01] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
+[2026-06-04 20:02:01] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-04 20:02:01] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-04 20:02:01] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-04 20:02:01] [INFO] [CatalogWorker] Iniciando sincronización de catálogo...
+[2026-06-04 20:02:01] [INFO] [CatalogScraper] ▶ Iniciando scraping de catálogo de películas y series...
+[2026-06-04 20:02:01] [INFO] [AnimeWorker] Iniciando sincronización de catálogo de anime...
+[2026-06-04 20:02:01] [INFO] [AnimeScraper] ▶ Iniciando scraping de Anime (animeflv.net y animeflv.one)...
+[2026-06-04 20:02:03] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-04 20:02:05] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-04 20:02:06] [INFO] [AnimeWorker] Catálogo anime existente: 74 películas, 48 series.
+[2026-06-04 20:02:06] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
+[2026-06-04 20:02:07] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-04 20:02:07] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-04 20:02:08] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-04 20:02:08] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-04 20:02:08] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-04 20:02:08] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-04 20:02:08] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-04 20:02:08] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/peliculas/...
+[2026-06-04 20:02:11] [INFO] [AnimeScraper] Visitando: https://www4.animeflv.net/browse?page=1
+[2026-06-04 20:02:13] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
+[2026-06-04 20:02:13] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
+[2026-06-04 20:02:13] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
+[2026-06-04 20:03:04] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-04 20:03:07] [INFO] [DB] SQLite inicializado.
+[2026-06-04 20:03:07] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-04 20:03:07] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-04 20:03:07] [INFO] [33m[2026-06-04T20:03:07.088] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-04 20:03:07] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-04 20:03:07] [INFO] [33m[2026-06-04T20:03:07.100] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 20:03:07] [INFO] [33m[2026-06-04T20:03:07.186] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 20:03:07] [INFO] [33m[2026-06-04T20:03:07.188] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-04 20:03:07] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
+[2026-06-04 20:03:07] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-04 20:03:07] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-04 20:03:07] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-04 20:03:08] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-04 20:03:11] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-04 20:03:11] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-04 20:03:11] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-04 20:03:11] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-04 20:03:11] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-04 20:03:11] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-04 20:03:11] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-04 20:03:12] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-04 20:03:12] [INFO] [AnimeWorker] Catálogo anime existente: 74 películas, 48 series.
+[2026-06-04 20:03:12] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
