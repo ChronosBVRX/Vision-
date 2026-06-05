@@ -2556,16 +2556,33 @@ function publishTunnelUrl(tunnelUrl, callback) {
     trimLogFile(2500);
     fs.writeFileSync(indexPath, htmlContent, 'utf8');
     
+    // Copiar index.html y server.log a la carpeta de publicación
+    const publishDir = 'C:\\Users\\Chronos\\Desktop\\Vision+_publish';
+    try {
+      fs.writeFileSync(path.join(publishDir, 'index.html'), htmlContent, 'utf8');
+      if (fs.existsSync(path.join(__dirname, 'server.log'))) {
+        fs.copyFileSync(path.join(__dirname, 'server.log'), path.join(publishDir, 'server.log'));
+      }
+    } catch (copyErr) {
+      console.error('[GitHub Pages] Error al copiar a carpeta de publicación:', copyErr.message);
+    }
+    
     const { exec } = require('child_process');
-    exec('git add index.html server.log', { cwd: __dirname }, (err) => {
+    exec('git add index.html server.log', { cwd: publishDir }, (err) => {
       if (err) {
         if (callback) callback(err);
         return;
       }
       
-      exec(`git commit -m "update tunnel url redirect to ${tunnelUrl}"`, { cwd: __dirname }, (err) => {
-        exec('git push origin main', { cwd: __dirname }, (pushErr) => {
-          if (callback) callback(pushErr);
+      exec(`git commit -m "update tunnel url redirect to ${tunnelUrl}"`, { cwd: publishDir }, (err) => {
+        // Ejecutar pull --rebase -X theirs para resolver automáticamente conflictos en favor del servidor
+        exec('git pull --rebase -X theirs origin main', { cwd: publishDir }, (pullErr) => {
+          if (pullErr) {
+            console.error('[GitHub Pages] Error en git pull --rebase:', pullErr.message);
+          }
+          exec('git push origin main', { cwd: publishDir }, (pushErr) => {
+            if (callback) callback(pushErr);
+          });
         });
       });
     });
@@ -2604,17 +2621,29 @@ function checkAndPublishTunnelRedirect() {
 function publishServerLogs() {
   try {
     trimLogFile(2500);
+    const publishDir = 'C:\\Users\\Chronos\\Desktop\\Vision+_publish';
+    try {
+      if (fs.existsSync(path.join(__dirname, 'server.log'))) {
+        fs.copyFileSync(path.join(__dirname, 'server.log'), path.join(publishDir, 'server.log'));
+      }
+    } catch (copyErr) {
+      return;
+    }
+    
     const { exec } = require('child_process');
-    exec('git add server.log', { cwd: __dirname }, (err) => {
+    exec('git add server.log', { cwd: publishDir }, (err) => {
       if (err) return;
       
       const timeStr = getFormattedTime();
-      exec(`git commit -m "chore: update server runtime logs [${timeStr}]"`, { cwd: __dirname }, (err) => {
-        if (err) return; // Si no hay cambios, git commit falla. Lo ignoramos.
+      exec(`git commit -m "chore: update server runtime logs [${timeStr}]"`, { cwd: publishDir }, (err) => {
+        if (err) return; // Si no hay cambios, lo ignoramos.
         
-        exec('git push origin main', { cwd: __dirname }, (err) => {
-          if (err) return;
-          originalLog(`[Git Logs] Logs de servidor subidos a GitHub con éxito.`);
+        // Ejecutar pull --rebase -X theirs para resolver automáticamente conflictos en favor del servidor
+        exec('git pull --rebase -X theirs origin main', { cwd: publishDir }, (pullErr) => {
+          exec('git push origin main', { cwd: publishDir }, (err) => {
+            if (err) return;
+            originalLog(`[Git Logs] Logs de servidor subidos a GitHub con éxito.`);
+          });
         });
       });
     });
