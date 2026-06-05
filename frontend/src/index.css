@@ -1314,6 +1314,20 @@ button, input, select, textarea {
 .catalog-row-title { font-size: 1.25rem; font-weight: 800; color: #e8e8ff; padding: 16px 52px 10px; margin: 0; transition: color 0.2s; }
 .catalog-row-wrapper { position: relative; }
 
+/* Row group with "Ver más" */
+.catalog-row-group { margin-bottom: 8px; }
+.catalog-row-showall {
+  display: block; width: fit-content; margin: -4px 52px 12px;
+  background: none; border: none; color: var(--primary-light);
+  font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  padding: 6px 14px; border-radius: 6px; transition: background 0.2s;
+}
+.catalog-row-showall:hover,
+.catalog-row-showall:focus-visible { background: rgba(229,9,20,0.12); outline: none; }
+.catalog-row-group .catalog-grid {
+  padding: 0 52px 20px; margin-top: -4px;
+}
+
 /* Row nav arrows */
 .catalog-row-nav {
   position: absolute; top: 0; bottom: 0; width: 56px;

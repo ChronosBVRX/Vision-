@@ -8,8 +8,8 @@ function fetchJson(url) {
 }
 
 export function CatalogProvider({ children }) {
-  const movies = useCache('catalog_movie', () => fetchJson('/api/catalog/movie'), 10 * 60 * 1000);
-  const series = useCache('catalog_series', () => fetchJson('/api/catalog/series'), 10 * 60 * 1000);
+  const movies = useCache('catalog_movie', () => fetchJson('/api/catalog/movie?limit=500'), 10 * 60 * 1000);
+  const series = useCache('catalog_series', () => fetchJson('/api/catalog/series?limit=500'), 10 * 60 * 1000);
   const sources = useCache('sources', () => fetchJson('/api/sources?includePlutoTV=true'), 5 * 60 * 1000);
 
   const value = useMemo(() => ({

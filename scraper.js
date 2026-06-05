@@ -1425,11 +1425,26 @@ async function scrapeMovieCatalog(maxPagesPerUrl = 5) {
       console.log(`[CatalogScraper] 📄 ${siteName} ${type}: scrapeando pág ${p}/${maxPagesPerUrl} → ${pageUrl}`);
       const items = await scrapeItemsFromPage(page, pageUrl, type, siteName);
       addUnique(items);
-      if (items.length === 0) {
+        if (items.length === 0) {
+          // [opencode] Reintentar 1 vez con timeout más largo antes de contar como vacía
+          try {
+            console.log(`[CatalogScraper] 🔄 ${siteName} ${type}: reintentando pág ${p} con timeout extendido...`);
+            await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await new Promise(r => setTimeout(r, 6000));
+            const retryItems = await scrapeItemsFromPage(page, pageUrl, type, siteName);
+            if (retryItems.length > 0) {
+              addUnique(retryItems);
+              emptyPages = 0;
+              console.log(`[CatalogScraper] ✅ ${siteName} ${type}: reintento pág ${p} → ${retryItems.length} items`);
+              continue;
+            }
+          } catch (retryErr) {
+            console.log(`[CatalogScraper] ⚠ ${siteName} ${type}: reintento también falló: ${retryErr.message.slice(0, 60)}`);
+          }
         emptyPages++;
         console.log(`[CatalogScraper] ⚠ ${siteName} ${type}: pág ${p} vacía (${emptyPages} consecutivas)`);
-        if (emptyPages >= 2) {
-          console.log(`[CatalogScraper] ✂ ${siteName} ${type}: 2 págs vacías consecutivas → fin de paginación en pág ${p}`);
+        if (emptyPages >= 5) {
+          console.log(`[CatalogScraper] ✂ ${siteName} ${type}: 5 págs vacías consecutivas → fin de paginación en pág ${p}`);
           break;
         }
       } else {

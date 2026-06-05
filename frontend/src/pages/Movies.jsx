@@ -20,7 +20,7 @@ const GENRE_ORDER = [
 // ─── Main Movies/Series Catalog Page ─────────────────────────────────────────
 export default function Movies({ contentType = 'movie' }) {
   const { data: catalogData, loading: cacheLoading, refresh: refreshCache } = useCache(`catalog_${contentType}`, () =>
-    fetch(`/api/catalog/${contentType}`).then(r => r.json()), 10 * 60 * 1000
+    fetch(`/api/catalog/${contentType}?limit=500`).then(r => r.json()), 10 * 60 * 1000
   );
   const [catalog, setCatalog]       = useState([]);
   const [isLoading, setIsLoading]   = useState(true);
@@ -312,21 +312,30 @@ export default function Movies({ contentType = 'movie' }) {
 
 
 
+  // ── Expanded genre grid state ──────────────────────────────────────────────
+  const [expandedGenre, setExpandedGenre] = useState(null);
+
   // ── Group catalog into genre rows ────────────────────────────────────────────
   const genreGroups = useMemo(() => {
     const g = {};
-    const topRated = catalog.filter(m => (m.rating && m.rating >= 7) || m.featured).slice(0, 24);
+    const topRated = catalog.filter(m => (m.rating && m.rating >= 7) || m.featured);
     if (topRated.length > 0) g['⭐ Destacadas'] = topRated;
-    if (catalog.length > 0)  g['🔥 Recientes']  = catalog.slice(0, 24);
+    if (catalog.length > 0)  g['🔥 Recientes']  = catalog.slice(0, 50);
     catalog.forEach(item => {
       const genres = item.genres?.length > 0 ? item.genres : ['General'];
       genres.forEach(genre => {
         if (!g[genre]) g[genre] = [];
-        if (g[genre].length < 24) g[genre].push(item);
+        g[genre].push(item);
       });
     });
     return g;
   }, [catalog]);
+
+  // All items for the expanded genre grid
+  const allExpandedItems = useMemo(() => {
+    if (!expandedGenre) return [];
+    return genreGroups[expandedGenre] || [];
+  }, [expandedGenre, genreGroups]);
 
   const rowKeys = useMemo(() => {
     const keys = Object.keys(genreGroups);
@@ -605,17 +614,42 @@ export default function Movies({ contentType = 'movie' }) {
         </>
       ) : (
         <div className="catalog-rows">
-          {rowKeys.map((genre, rowIdx) => (
-            <CatalogRow
-              key={genre}
-              id={`crow-${rowIdx}`}
-              title={genre}
-              items={genreGroups[genre] || []}
-              isActive={activeRow === rowIdx}
-              onPlay={handleDetails}
-              onFocus={() => setActiveRow(rowIdx)}
-            />
-          ))}
+          {rowKeys.map((genre, rowIdx) => {
+            const genreItems = genreGroups[genre] || [];
+            return (
+              <div key={genre} className="catalog-row-group">
+                <CatalogRow
+                  id={`crow-${rowIdx}`}
+                  title={genre}
+                  items={genreItems}
+                  isActive={activeRow === rowIdx}
+                  onPlay={handleDetails}
+                  onFocus={() => setActiveRow(rowIdx)}
+                />
+                {genreItems.length > 50 && (
+                  <button
+                    className="catalog-row-showall focusable"
+                    tabIndex={0}
+                    onClick={() => setExpandedGenre(expandedGenre === genre ? null : genre)}
+                  >
+                    {expandedGenre === genre ? '▲ Mostrar menos' : `Ver todas (${genreItems.length}) →`}
+                  </button>
+                )}
+                {expandedGenre === genre && (
+                  <div className="catalog-grid">
+                    {allExpandedItems.map((item, idx) => (
+                      <CatalogCard
+                        key={`${item.id}-full-${idx}`}
+                        item={item}
+                        onPlay={handleDetails}
+                        onFocus={() => {}}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

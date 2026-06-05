@@ -285,6 +285,9 @@ export default function Home({ selectedCategoryFilter }) {
 
 
 
+  // ── Expanded genre grid state ──────────────────────────────────────────────
+  const [expandedGenre, setExpandedGenre] = useState(null);
+
   // ── Group into rows ────────────────────────────────────────────────────────
   const genreGroups = useMemo(() => {
     const g = {};
@@ -293,34 +296,34 @@ export default function Home({ selectedCategoryFilter }) {
     const tvItems     = filteredContent.filter(s => s.type === 'tv');
 
     if (movieItems.length > 0) {
-      // Destacadas: top rated
+      // Destacadas: top rated (sin límite)
       const topRated = movieItems.filter(m => m.featured || (m.rating && m.rating >= 7));
       if (topRated.length >= 4) {
-        g['⭐ Películas Destacadas'] = [...topRated].sort(() => 0.5 - Math.random()).slice(0, 24);
+        g['⭐ Películas Destacadas'] = [...topRated].sort(() => 0.5 - Math.random());
       }
-      // Recientes: all shuffled
-      g['🎬 Películas para Ti'] = [...movieItems].sort(() => 0.5 - Math.random()).slice(0, 24);
+      // Recientes: shuffled (cap 50 items aleatorios)
+      g['🎬 Películas para Ti'] = [...movieItems].sort(() => 0.5 - Math.random()).slice(0, 50);
 
-      // Genre rows from movie genres
+      // Genre rows from movie genres (sin límite — scroll horizontal)
       movieItems.forEach(item => {
         const genres = item.genres?.length > 0 ? item.genres.filter(g2 => !/^[⭐🔥🎬]/.test(g2)) : [];
         genres.forEach(genre => {
           if (!g[genre]) g[genre] = [];
-          if (g[genre].length < 24) g[genre].push(item);
+          g[genre].push(item);
         });
       });
 
-      // Top rated separate row if many
+      // Top rated separate row (sin límite)
       const topR = movieItems.filter(m => m.rating && m.rating >= 8);
-      if (topR.length >= 4) g['🏆 Mejor Valoradas'] = topR.slice(0, 24);
+      if (topR.length >= 4) g['🏆 Mejor Valoradas'] = topR;
     }
 
     if (seriesItems.length > 0) {
-      g['📺 Series del Momento'] = [...seriesItems].sort(() => 0.5 - Math.random()).slice(0, 24);
+      g['📺 Series del Momento'] = [...seriesItems].sort(() => 0.5 - Math.random()).slice(0, 50);
     }
 
     if (tvItems.length > 0) {
-      g['📡 Canales en Vivo'] = tvItems.slice(0, 24);
+      g['📡 Canales en Vivo'] = tvItems;
     }
 
     return g;
@@ -352,6 +355,12 @@ export default function Home({ selectedCategoryFilter }) {
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [activeItem, rowKeys.length]);
+
+  // ── Expand full genre grid ─────────────────────────────────────────────────
+  const allGenreItems = useMemo(() => {
+    if (!expandedGenre) return [];
+    return genreGroups[expandedGenre] || [];
+  }, [expandedGenre, genreGroups]);
 
   // ── Series Episode Player Callback ─────────────────────────────────────────
   const playEpisode = useCallback((series, episode) => {
@@ -767,17 +776,42 @@ export default function Home({ selectedCategoryFilter }) {
 
       {/* ── GENRE ROWS ───────────────────────────────────────────────────── */}
       <div className="catalog-rows">
-        {rowKeys.map((genre, rowIdx) => (
-          <CatalogRow
-            key={genre}
-            id={`home-crow-${rowIdx}`}
-            title={genre}
-            items={genreGroups[genre] || []}
-            isActive={activeRow === rowIdx}
-            onPlay={handleDetails}
-            onFocus={() => setActiveRow(rowIdx)}
-          />
-        ))}
+        {rowKeys.map((genre, rowIdx) => {
+          const genreItems = genreGroups[genre] || [];
+          return (
+            <div key={genre} className="catalog-row-group">
+              <CatalogRow
+                id={`home-crow-${rowIdx}`}
+                title={genre}
+                items={genreItems}
+                isActive={activeRow === rowIdx}
+                onPlay={handleDetails}
+                onFocus={() => setActiveRow(rowIdx)}
+              />
+              {genreItems.length > 50 && (
+                <button
+                  className="catalog-row-showall focusable"
+                  tabIndex={0}
+                  onClick={() => setExpandedGenre(expandedGenre === genre ? null : genre)}
+                >
+                  {expandedGenre === genre ? '▲ Mostrar menos' : `Ver todas (${genreItems.length}) →`}
+                </button>
+              )}
+              {expandedGenre === genre && (
+                <div className="catalog-grid">
+                  {allGenreItems.map((item, idx) => (
+                    <CatalogCard
+                      key={`${item.id}-full-${idx}`}
+                      item={item}
+                      onPlay={handleDetails}
+                      onFocus={() => {}}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* ── DETAILS MODAL ────────────────────────────────────────────────── */}

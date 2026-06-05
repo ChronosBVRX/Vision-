@@ -1542,47 +1542,51 @@ async function runCatalogSync() {
     [...db.movieCatalog].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 20).forEach(m => { m.featured = true; });
     [...db.seriesCatalog].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 10).forEach(s => { s.featured = true; });
 
-    // Also populate normalized movie_links store
+    writeDB(db);
+    console.log(`[CatalogWorker] ✅ Sync base completado. Películas: +${addedMovies} (total ${db.movieCatalog.length}), Series: +${addedSeries} (total ${db.seriesCatalog.length})`);
+
+    // [opencode] TMDB enrichment en segundo plano — no bloquea el sync
     const allItems = [...result.movies.map(m => ({ ...m, type: 'movie' })), ...result.series.map(s => ({ ...s, type: 'series' }))];
-    for (const item of allItems) {
-      try {
-        const tmdbInfo = await searchTMDB(item.title, item.year, item.type);
-        const movie = await upsertMovie({
-          title: item.title,
-          year: item.year,
-          type: item.type,
-          tmdbId: tmdbInfo?.tmdb_id || null,
-          poster: tmdbInfo?.poster || item.poster,
-          backdrop: tmdbInfo?.backdrop || '',
-          description: tmdbInfo?.description || item.description || '',
-          rating: tmdbInfo?.rating || item.rating || null,
-          genres: item.genres || [],
-          duration: item.duration || null,
-          languages: item.languages || ['Español Latino'],
-          director: item.director || '',
-          youtubeId: item.youtubeId || ''
-        });
-        if (movie && item.streams) {
-          for (const stream of item.streams) {
-            if (stream.url) {
-              await upsertMovieLink(movie.id, {
-                sourceWebsite: item.siteName || 'Catalog',
-                serverName: stream.name || 'Servidor',
-                url: stream.url,
-                language: stream.language || 'Español Latino',
-                resolver: stream.resolver || 'iframe',
-                quality: stream.quality || 'HD'
-              });
+    setImmediate(async () => {
+      console.log(`[CatalogWorker] TMDB enrichment iniciado para ${allItems.length} items en background...`);
+      for (const item of allItems) {
+        try {
+          const tmdbInfo = await searchTMDB(item.title, item.year, item.type);
+          const movie = await upsertMovie({
+            title: item.title,
+            year: item.year,
+            type: item.type,
+            tmdbId: tmdbInfo?.tmdb_id || null,
+            poster: tmdbInfo?.poster || item.poster,
+            backdrop: tmdbInfo?.backdrop || '',
+            description: tmdbInfo?.description || item.description || '',
+            rating: tmdbInfo?.rating || item.rating || null,
+            genres: item.genres || [],
+            duration: item.duration || null,
+            languages: item.languages || ['Español Latino'],
+            director: item.director || '',
+            youtubeId: item.youtubeId || ''
+          });
+          if (movie && item.streams) {
+            for (const stream of item.streams) {
+              if (stream.url) {
+                await upsertMovieLink(movie.id, {
+                  sourceWebsite: item.siteName || 'Catalog',
+                  serverName: stream.name || 'Servidor',
+                  url: stream.url,
+                  language: stream.language || 'Español Latino',
+                  resolver: stream.resolver || 'iframe',
+                  quality: stream.quality || 'HD'
+                });
+              }
             }
           }
+        } catch (e) {
+          console.warn(`[CatalogWorker] Error normalizando "${item.title}": ${e.message}`);
         }
-      } catch (e) {
-        console.warn(`[CatalogWorker] Error normalizando "${item.title}": ${e.message}`);
       }
-    }
-
-    writeDB(db);
-    console.log(`[CatalogWorker] ✅ Sync completado. Películas: +${addedMovies} (total ${db.movieCatalog.length}), Series: +${addedSeries} (total ${db.seriesCatalog.length})`);
+      console.log(`[CatalogWorker] ✅ TMDB enrichment completado para ${allItems.length} items.`);
+    });
   } catch (e) {
     console.error('[CatalogWorker] Error:', e.message);
   } finally {
@@ -1635,23 +1639,31 @@ async function runAnimeSync() {
   }
 }
 
-// GET /api/catalog/:type — Returns movie or series catalog
+// GET /api/catalog/:type — Returns movie or series catalog with pagination
 app.get('/api/catalog/:type', (req, res) => {
-  const { type } = req.params; // 'movie', 'series', 'anime_movie', or 'anime_series'
+  const { type } = req.params;
   const allowedTypes = ['movie', 'series', 'anime_movie', 'anime_series'];
   if (!allowedTypes.includes(type)) {
     return res.status(400).json({ error: 'invalid type' });
   }
+
+  // Pagination params
+  let page = parseInt(req.query.page) || 1;
+  let limit = parseInt(req.query.limit) || 200;
+  const search = (req.query.search || '').trim().toLowerCase();
+  const genre = (req.query.genre || '').trim();
+  if (page < 1) page = 1;
+  if (limit < 1) limit = 200;
+  if (limit > 500) limit = 500;
+
   const db = readDB();
   
-  // Get catalog items
   let catalogItems = [];
   if (type === 'movie') catalogItems = db.movieCatalog || [];
   else if (type === 'series') catalogItems = db.seriesCatalog || [];
   else if (type === 'anime_movie') catalogItems = db.animeMovieCatalog || [];
   else if (type === 'anime_series') catalogItems = db.animeSeriesCatalog || [];
   
-  // Get custom sources of the same type and map them to catalog item shape
   const customItems = (db.sources || [])
     .filter(s => s.type === type)
     .map(s => ({
@@ -1659,15 +1671,38 @@ app.get('/api/catalog/:type', (req, res) => {
       genres: s.genres || (s.category ? [s.category] : ['General'])
     }));
 
-  // Combine them
-  const items = [...catalogItems, ...customItems];
-  
+  let items = [...catalogItems, ...customItems];
+
+  // Apply filters
+  if (search) {
+    items = items.filter(item =>
+      (item.title && item.title.toLowerCase().includes(search)) ||
+      (item.description && item.description.toLowerCase().includes(search)) ||
+      (item.genres && item.genres.some(g => g.toLowerCase().includes(search)))
+    );
+  }
+  if (genre) {
+    items = items.filter(item => item.genres && item.genres.includes(genre));
+  }
+
+  const total = items.length;
+  const totalPages = Math.ceil(total / limit);
+  const offset = (page - 1) * limit;
+  const paginatedItems = items.slice(offset, offset + limit);
+
   let syncing = false;
   if (type === 'movie' || type === 'series') syncing = catalogSyncInProgress;
   if (type === 'anime_movie' || type === 'anime_series') syncing = animeSyncInProgress;
 
   res.set('Cache-Control', 'public, max-age=300');
-  res.json({ items, total: items.length, syncing });
+  res.json({
+    items: paginatedItems,
+    total,
+    page,
+    limit,
+    totalPages,
+    syncing
+  });
 });
 
 // GET /api/plutotv - Returns only Pluto TV sources
