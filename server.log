@@ -1,207 +1,3 @@
-[2026-06-05 01:17:45] [INFO] [33m[2026-06-05T01:17:45.265] [INFO] - [connection closed][0m
-[2026-06-05 01:17:45] [INFO] [35m[2026-06-05T01:17:45.266] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:17:45] [ERROR] {}
-[2026-06-05 01:17:46] [INFO] [33m[2026-06-05T01:17:46.270] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:17:46] [INFO] [35m[2026-06-05T01:17:46.271] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:17:46] [INFO] [33m[2026-06-05T01:17:46.271] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:17:46] [INFO] [33m[2026-06-05T01:17:46.272] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:17:46] [INFO] [33m[2026-06-05T01:17:46.366] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:17:46] [INFO] [33m[2026-06-05T01:17:46.367] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:19:16] [INFO] [33m[2026-06-05T01:19:16.458] [INFO] - [connection closed][0m
-[2026-06-05 01:19:16] [INFO] [35m[2026-06-05T01:19:16.459] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:19:16] [ERROR] {}
-[2026-06-05 01:19:17] [INFO] [33m[2026-06-05T01:19:17.461] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:19:17] [INFO] [35m[2026-06-05T01:19:17.462] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:19:17] [INFO] [33m[2026-06-05T01:19:17.462] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:19:17] [INFO] [33m[2026-06-05T01:19:17.463] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:19:17] [INFO] [33m[2026-06-05T01:19:17.537] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:19:17] [INFO] [33m[2026-06-05T01:19:17.537] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:20:47] [INFO] [33m[2026-06-05T01:20:47.610] [INFO] - [connection closed][0m
-[2026-06-05 01:20:47] [INFO] [35m[2026-06-05T01:20:47.611] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:20:47] [ERROR] {}
-[2026-06-05 01:20:48] [INFO] [33m[2026-06-05T01:20:48.620] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:20:48] [INFO] [35m[2026-06-05T01:20:48.620] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:20:48] [INFO] [33m[2026-06-05T01:20:48.620] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:20:48] [INFO] [33m[2026-06-05T01:20:48.621] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:20:48] [INFO] [33m[2026-06-05T01:20:48.694] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:20:48] [INFO] [33m[2026-06-05T01:20:48.695] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:22:18] [INFO] [33m[2026-06-05T01:22:18.768] [INFO] - [connection closed][0m
-[2026-06-05 01:22:18] [INFO] [35m[2026-06-05T01:22:18.769] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:22:18] [ERROR] {}
-[2026-06-05 01:22:19] [INFO] [33m[2026-06-05T01:22:19.784] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:22:19] [INFO] [35m[2026-06-05T01:22:19.784] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:22:19] [INFO] [33m[2026-06-05T01:22:19.785] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:22:19] [INFO] [33m[2026-06-05T01:22:19.786] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:22:19] [INFO] [33m[2026-06-05T01:22:19.866] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:22:19] [INFO] [33m[2026-06-05T01:22:19.867] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:23:49] [INFO] [33m[2026-06-05T01:23:49.938] [INFO] - [connection closed][0m
-[2026-06-05 01:23:49] [INFO] [35m[2026-06-05T01:23:49.939] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:23:49] [ERROR] {}
-[2026-06-05 01:23:50] [INFO] [33m[2026-06-05T01:23:50.954] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:23:50] [INFO] [35m[2026-06-05T01:23:50.954] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:23:50] [INFO] [33m[2026-06-05T01:23:50.955] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:23:50] [INFO] [33m[2026-06-05T01:23:50.955] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:23:51] [INFO] [33m[2026-06-05T01:23:51.027] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:23:51] [INFO] [33m[2026-06-05T01:23:51.028] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:25:21] [INFO] [33m[2026-06-05T01:25:21.101] [INFO] - [connection closed][0m
-[2026-06-05 01:25:21] [INFO] [35m[2026-06-05T01:25:21.101] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:25:21] [ERROR] {}
-[2026-06-05 01:25:22] [INFO] [33m[2026-06-05T01:25:22.104] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:25:22] [INFO] [35m[2026-06-05T01:25:22.105] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:25:22] [INFO] [33m[2026-06-05T01:25:22.105] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:25:22] [INFO] [33m[2026-06-05T01:25:22.106] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:25:22] [INFO] [33m[2026-06-05T01:25:22.178] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:25:22] [INFO] [33m[2026-06-05T01:25:22.179] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:26:52] [INFO] [33m[2026-06-05T01:26:52.250] [INFO] - [connection closed][0m
-[2026-06-05 01:26:52] [INFO] [35m[2026-06-05T01:26:52.251] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:26:52] [ERROR] {}
-[2026-06-05 01:26:53] [INFO] [33m[2026-06-05T01:26:53.259] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:26:53] [INFO] [35m[2026-06-05T01:26:53.260] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:26:53] [INFO] [33m[2026-06-05T01:26:53.260] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:26:53] [INFO] [33m[2026-06-05T01:26:53.261] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:26:53] [INFO] [33m[2026-06-05T01:26:53.353] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:26:53] [INFO] [33m[2026-06-05T01:26:53.354] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:28:23] [INFO] [33m[2026-06-05T01:28:23.446] [INFO] - [connection closed][0m
-[2026-06-05 01:28:23] [INFO] [35m[2026-06-05T01:28:23.447] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:28:23] [ERROR] {}
-[2026-06-05 01:28:24] [INFO] [33m[2026-06-05T01:28:24.459] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:28:24] [INFO] [35m[2026-06-05T01:28:24.459] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:28:24] [INFO] [33m[2026-06-05T01:28:24.459] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:28:24] [INFO] [33m[2026-06-05T01:28:24.460] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:28:24] [INFO] [33m[2026-06-05T01:28:24.557] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:28:24] [INFO] [33m[2026-06-05T01:28:24.557] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:29:54] [INFO] [33m[2026-06-05T01:29:54.648] [INFO] - [connection closed][0m
-[2026-06-05 01:29:54] [INFO] [35m[2026-06-05T01:29:54.649] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:29:54] [ERROR] {}
-[2026-06-05 01:29:55] [INFO] [33m[2026-06-05T01:29:55.663] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:29:55] [INFO] [35m[2026-06-05T01:29:55.663] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:29:55] [INFO] [33m[2026-06-05T01:29:55.664] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:29:55] [INFO] [33m[2026-06-05T01:29:55.664] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:29:55] [INFO] [33m[2026-06-05T01:29:55.738] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:29:55] [INFO] [33m[2026-06-05T01:29:55.738] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:31:25] [INFO] [33m[2026-06-05T01:31:25.811] [INFO] - [connection closed][0m
-[2026-06-05 01:31:25] [INFO] [35m[2026-06-05T01:31:25.812] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:31:25] [ERROR] {}
-[2026-06-05 01:31:26] [INFO] [33m[2026-06-05T01:31:26.819] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:31:26] [INFO] [35m[2026-06-05T01:31:26.820] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:31:26] [INFO] [33m[2026-06-05T01:31:26.820] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:31:26] [INFO] [33m[2026-06-05T01:31:26.821] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:31:26] [INFO] [33m[2026-06-05T01:31:26.931] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:31:26] [INFO] [33m[2026-06-05T01:31:26.931] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:32:57] [INFO] [33m[2026-06-05T01:32:57.024] [INFO] - [connection closed][0m
-[2026-06-05 01:32:57] [INFO] [35m[2026-06-05T01:32:57.025] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:32:57] [ERROR] {}
-[2026-06-05 01:32:58] [INFO] [33m[2026-06-05T01:32:58.036] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:32:58] [INFO] [35m[2026-06-05T01:32:58.037] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:32:58] [INFO] [33m[2026-06-05T01:32:58.037] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:32:58] [INFO] [33m[2026-06-05T01:32:58.038] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:32:58] [INFO] [33m[2026-06-05T01:32:58.130] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:32:58] [INFO] [33m[2026-06-05T01:32:58.131] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:34:28] [INFO] [33m[2026-06-05T01:34:28.223] [INFO] - [connection closed][0m
-[2026-06-05 01:34:28] [INFO] [35m[2026-06-05T01:34:28.223] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:34:28] [ERROR] {}
-[2026-06-05 01:34:29] [INFO] [33m[2026-06-05T01:34:29.227] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:34:29] [INFO] [35m[2026-06-05T01:34:29.228] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:34:29] [INFO] [33m[2026-06-05T01:34:29.228] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:34:29] [INFO] [33m[2026-06-05T01:34:29.229] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:34:29] [INFO] [33m[2026-06-05T01:34:29.320] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:34:29] [INFO] [33m[2026-06-05T01:34:29.321] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:35:59] [INFO] [33m[2026-06-05T01:35:59.412] [INFO] - [connection closed][0m
-[2026-06-05 01:35:59] [INFO] [35m[2026-06-05T01:35:59.412] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:35:59] [ERROR] {}
-[2026-06-05 01:36:00] [INFO] [33m[2026-06-05T01:36:00.421] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:36:00] [INFO] [35m[2026-06-05T01:36:00.422] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:36:00] [INFO] [33m[2026-06-05T01:36:00.422] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:36:00] [INFO] [33m[2026-06-05T01:36:00.423] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:36:00] [INFO] [33m[2026-06-05T01:36:00.498] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:36:00] [INFO] [33m[2026-06-05T01:36:00.498] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:37:30] [INFO] [33m[2026-06-05T01:37:30.575] [INFO] - [connection closed][0m
-[2026-06-05 01:37:30] [INFO] [35m[2026-06-05T01:37:30.575] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:37:30] [ERROR] {}
-[2026-06-05 01:37:31] [INFO] [33m[2026-06-05T01:37:31.592] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:37:31] [INFO] [35m[2026-06-05T01:37:31.592] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:37:31] [INFO] [33m[2026-06-05T01:37:31.593] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:37:31] [INFO] [33m[2026-06-05T01:37:31.593] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:37:31] [INFO] [33m[2026-06-05T01:37:31.685] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:37:31] [INFO] [33m[2026-06-05T01:37:31.686] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:39:01] [INFO] [33m[2026-06-05T01:39:01.776] [INFO] - [connection closed][0m
-[2026-06-05 01:39:01] [INFO] [35m[2026-06-05T01:39:01.777] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:39:01] [ERROR] {}
-[2026-06-05 01:39:02] [INFO] [33m[2026-06-05T01:39:02.788] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:39:02] [INFO] [35m[2026-06-05T01:39:02.788] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:39:02] [INFO] [33m[2026-06-05T01:39:02.789] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:39:02] [INFO] [33m[2026-06-05T01:39:02.789] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:39:02] [INFO] [33m[2026-06-05T01:39:02.881] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:39:02] [INFO] [33m[2026-06-05T01:39:02.882] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:40:32] [INFO] [33m[2026-06-05T01:40:32.974] [INFO] - [connection closed][0m
-[2026-06-05 01:40:32] [INFO] [35m[2026-06-05T01:40:32.975] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:40:32] [ERROR] {}
-[2026-06-05 01:40:33] [INFO] [33m[2026-06-05T01:40:33.979] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:40:33] [INFO] [35m[2026-06-05T01:40:33.979] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:40:33] [INFO] [33m[2026-06-05T01:40:33.980] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:40:33] [INFO] [33m[2026-06-05T01:40:33.980] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:40:34] [INFO] [33m[2026-06-05T01:40:34.052] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:40:34] [INFO] [33m[2026-06-05T01:40:34.053] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:42:04] [INFO] [33m[2026-06-05T01:42:04.127] [INFO] - [connection closed][0m
-[2026-06-05 01:42:04] [INFO] [35m[2026-06-05T01:42:04.128] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:42:04] [ERROR] {}
-[2026-06-05 01:42:05] [INFO] [33m[2026-06-05T01:42:05.132] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:42:05] [INFO] [35m[2026-06-05T01:42:05.132] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:42:05] [INFO] [33m[2026-06-05T01:42:05.133] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:42:05] [INFO] [33m[2026-06-05T01:42:05.133] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:42:05] [INFO] [33m[2026-06-05T01:42:05.207] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:42:05] [INFO] [33m[2026-06-05T01:42:05.207] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:43:35] [INFO] [33m[2026-06-05T01:43:35.280] [INFO] - [connection closed][0m
-[2026-06-05 01:43:35] [INFO] [35m[2026-06-05T01:43:35.280] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:43:35] [ERROR] {}
-[2026-06-05 01:43:36] [INFO] [33m[2026-06-05T01:43:36.286] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:43:36] [INFO] [35m[2026-06-05T01:43:36.287] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:43:36] [INFO] [33m[2026-06-05T01:43:36.287] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:43:36] [INFO] [33m[2026-06-05T01:43:36.287] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:43:36] [INFO] [33m[2026-06-05T01:43:36.359] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:43:36] [INFO] [33m[2026-06-05T01:43:36.360] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:45:06] [INFO] [33m[2026-06-05T01:45:06.432] [INFO] - [connection closed][0m
-[2026-06-05 01:45:06] [INFO] [35m[2026-06-05T01:45:06.432] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:45:06] [ERROR] {}
-[2026-06-05 01:45:07] [INFO] [33m[2026-06-05T01:45:07.439] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:45:07] [INFO] [35m[2026-06-05T01:45:07.439] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:45:07] [INFO] [33m[2026-06-05T01:45:07.440] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:45:07] [INFO] [33m[2026-06-05T01:45:07.440] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:45:07] [INFO] [33m[2026-06-05T01:45:07.514] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:45:07] [INFO] [33m[2026-06-05T01:45:07.514] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:46:37] [INFO] [33m[2026-06-05T01:46:37.587] [INFO] - [connection closed][0m
-[2026-06-05 01:46:37] [INFO] [35m[2026-06-05T01:46:37.587] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:46:37] [ERROR] {}
-[2026-06-05 01:46:38] [INFO] [33m[2026-06-05T01:46:38.592] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:46:38] [INFO] [35m[2026-06-05T01:46:38.592] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:46:38] [INFO] [33m[2026-06-05T01:46:38.593] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:46:38] [INFO] [33m[2026-06-05T01:46:38.593] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:46:38] [INFO] [33m[2026-06-05T01:46:38.687] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:46:38] [INFO] [33m[2026-06-05T01:46:38.688] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:48:08] [INFO] [33m[2026-06-05T01:48:08.782] [INFO] - [connection closed][0m
-[2026-06-05 01:48:08] [INFO] [35m[2026-06-05T01:48:08.783] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:48:08] [ERROR] {}
-[2026-06-05 01:48:09] [INFO] [33m[2026-06-05T01:48:09.785] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:48:09] [INFO] [35m[2026-06-05T01:48:09.785] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:48:09] [INFO] [33m[2026-06-05T01:48:09.786] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:48:09] [INFO] [33m[2026-06-05T01:48:09.786] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:48:09] [INFO] [33m[2026-06-05T01:48:09.878] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:48:09] [INFO] [33m[2026-06-05T01:48:09.878] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:49:39] [INFO] [33m[2026-06-05T01:49:39.970] [INFO] - [connection closed][0m
-[2026-06-05 01:49:39] [INFO] [35m[2026-06-05T01:49:39.971] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:49:39] [ERROR] {}
-[2026-06-05 01:49:40] [INFO] [33m[2026-06-05T01:49:40.978] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:49:40] [INFO] [35m[2026-06-05T01:49:40.979] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:49:40] [INFO] [33m[2026-06-05T01:49:40.979] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:49:40] [INFO] [33m[2026-06-05T01:49:40.980] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-05 01:49:41] [INFO] [33m[2026-06-05T01:49:41.055] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 01:49:41] [INFO] [33m[2026-06-05T01:49:41.056] [INFO] - [Handling reconnect!][0m
-[2026-06-05 01:51:11] [INFO] [33m[2026-06-05T01:51:11.129] [INFO] - [connection closed][0m
-[2026-06-05 01:51:11] [INFO] [35m[2026-06-05T01:51:11.129] [WARN] - [Connection closed while receiving data][0m
-[2026-06-05 01:51:11] [ERROR] {}
-[2026-06-05 01:51:12] [INFO] [33m[2026-06-05T01:51:12.145] [INFO] - [Started reconnecting][0m
-[2026-06-05 01:51:12] [INFO] [35m[2026-06-05T01:51:12.146] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-05 01:51:12] [INFO] [33m[2026-06-05T01:51:12.146] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 01:51:12] [INFO] [33m[2026-06-05T01:51:12.147] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 01:51:12] [INFO] [33m[2026-06-05T01:51:12.219] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-05 01:51:12] [INFO] [33m[2026-06-05T01:51:12.219] [INFO] - [Handling reconnect!][0m
@@ -2497,3 +2293,214 @@
 [2026-06-05 08:03:05] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/accion?page/2
 [2026-06-05 08:03:05] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/accion?page/3...
 [2026-06-05 08:03:06] [INFO] [HealthCheck] ✅ 30 enlaces verificados y puntuados.
+[2026-06-05 08:03:09] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/accion?page/3
+[2026-06-05 08:03:09] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/accion?page/4...
+[2026-06-05 08:03:13] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/accion?page/4
+[2026-06-05 08:03:13] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/accion?page/5...
+[2026-06-05 08:03:18] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/accion?page/5
+[2026-06-05 08:03:18] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/animacion...
+[2026-06-05 08:03:22] [INFO] [Server] Iniciando live resolve para 1 opciones... (Excluyendo: [])
+[2026-06-05 08:03:22] [INFO] [Server] Probando servidor 1/1: Planeta Play Stream (https://la14hd.com/vivo/canales.php?stream=tudn)
+[2026-06-05 08:03:22] [INFO] [Sniffer] Iniciando analisis de trafico para: https://la14hd.com/vivo/canales.php?stream=tudn
+[2026-06-05 08:03:23] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/animacion
+[2026-06-05 08:03:23] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/animacion?page/2...
+[2026-06-05 08:03:24] [INFO] [Sniffer] ¡Video detectado en peticion de red! -> https://cgxheq.fubohd.com/tudn/mono.m3u8?token=5d64913811714a3df46b652168e1e2756e825128-89-1780685303-1780667303
+[2026-06-05 08:03:24] [INFO] [Sniffer] Headers detectados: {"accept-language":"es-ES,es;q=0.9","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36","referer":"https://la14hd.com/","accept":"*/*","origin":"https://la14hd.com"}
+[2026-06-05 08:03:24] [INFO] [Sniffer] ¡Video detectado en respuesta Content-Type! -> https://cgxheq.fubohd.com/tudn/mono.m3u8?token=5d64913811714a3df46b652168e1e2756e825128-89-1780685303-1780667303 (application/vnd.apple.mpegurl)
+[2026-06-05 08:03:24] [INFO] [Sniffer] ¡Video detectado en peticion de red! -> https://cgxheq.fubohd.com/tudn/mono.m3u8?token=5d64913811714a3df46b652168e1e2756e825128-89-1780685303-1780667303
+[2026-06-05 08:03:24] [INFO] [Sniffer] Headers detectados: {"accept-language":"es-ES,es;q=0.9","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36","referer":"https://la14hd.com/","accept":"*/*","origin":"https://la14hd.com"}
+[2026-06-05 08:03:25] [INFO] [Sniffer] ¡Video detectado en respuesta Content-Type! -> https://cgxheq.fubohd.com/tudn/mono.m3u8?token=5d64913811714a3df46b652168e1e2756e825128-89-1780685303-1780667303 (application/vnd.apple.mpegurl)
+[2026-06-05 08:03:26] [INFO] [Sniffer] Realizando clics simulados para iniciar reproducción...
+[2026-06-05 08:03:27] [INFO] [Sniffer] ¡Video detectado en peticion de red! -> https://cgxheq.fubohd.com/tudn/mono.m3u8?token=5d64913811714a3df46b652168e1e2756e825128-89-1780685303-1780667303
+[2026-06-05 08:03:27] [INFO] [Sniffer] Headers detectados: {"accept-language":"es-ES,es;q=0.9","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36","referer":"https://la14hd.com/","accept":"*/*","origin":"https://la14hd.com"}
+[2026-06-05 08:03:28] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/animacion?page/2
+[2026-06-05 08:03:28] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/animacion?page/3...
+[2026-06-05 08:03:28] [INFO] [Sniffer] ¡Video detectado en respuesta Content-Type! -> https://cgxheq.fubohd.com/tudn/mono.m3u8?token=5d64913811714a3df46b652168e1e2756e825128-89-1780685303-1780667303 (application/vnd.apple.mpegurl)
+[2026-06-05 08:03:29] [INFO] [Sniffer] Analisis finalizado para https://la14hd.com/vivo/canales.php?stream=tudn. Resultado: EXITO
+[2026-06-05 08:03:29] [INFO] [Server] Video detectado: https://cgxheq.fubohd.com/tudn/mono.m3u8?token=5d64913811714a3df46b652168e1e2756e825128-89-1780685303-1780667303. Referer: https://la14hd.com/. Verificando conectividad...
+[2026-06-05 08:03:30] [INFO] [Server] ¡Validación HEAD exitosa! Status: 200
+[2026-06-05 08:03:30] [INFO] [Server] ¡Éxito! Servidor Planeta Play Stream validado en: https://cgxheq.fubohd.com/tudn/mono.m3u8?token=5d64913811714a3df46b652168e1e2756e825128-89-1780685303-1780667303
+[2026-06-05 08:03:32] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/animacion?page/3
+[2026-06-05 08:03:32] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/animacion?page/4...
+[2026-06-05 08:03:33] [INFO] [33m[2026-06-05T08:03:33.655] [INFO] - [connection closed][0m
+[2026-06-05 08:03:33] [INFO] [35m[2026-06-05T08:03:33.655] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 08:03:33] [ERROR] {}
+[2026-06-05 08:03:34] [INFO] [33m[2026-06-05T08:03:34.660] [INFO] - [Started reconnecting][0m
+[2026-06-05 08:03:34] [INFO] [35m[2026-06-05T08:03:34.660] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 08:03:34] [INFO] [33m[2026-06-05T08:03:34.661] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:03:34] [INFO] [33m[2026-06-05T08:03:34.661] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:03:34] [INFO] [33m[2026-06-05T08:03:34.735] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:03:34] [INFO] [33m[2026-06-05T08:03:34.736] [INFO] - [Handling reconnect!][0m
+[2026-06-05 08:03:36] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/animacion?page/4
+[2026-06-05 08:03:36] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/animacion?page/5...
+[2026-06-05 08:03:40] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/animacion?page/5
+[2026-06-05 08:03:40] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/aventura...
+[2026-06-05 08:03:45] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/aventura
+[2026-06-05 08:03:45] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/aventura?page/2...
+[2026-06-05 08:03:49] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/aventura?page/2
+[2026-06-05 08:03:49] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/aventura?page/3...
+[2026-06-05 08:03:53] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/aventura?page/3
+[2026-06-05 08:03:53] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/aventura?page/4...
+[2026-06-05 08:03:57] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/aventura?page/4
+[2026-06-05 08:03:57] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/aventura?page/5...
+[2026-06-05 08:04:02] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/aventura?page/5
+[2026-06-05 08:04:02] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/ciencia-ficcion...
+[2026-06-05 08:04:06] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/ciencia-ficcion
+[2026-06-05 08:04:06] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/ciencia-ficcion?page/2...
+[2026-06-05 08:04:08] [INFO] [Server] Iniciando live resolve para 1 opciones... (Excluyendo: [])
+[2026-06-05 08:04:08] [INFO] [Server] Probando servidor 1/1: Planeta Play Stream (https://la14hd.com/vivo/canales.php?stream=foxsports)
+[2026-06-05 08:04:08] [INFO] [Sniffer] Iniciando analisis de trafico para: https://la14hd.com/vivo/canales.php?stream=foxsports
+[2026-06-05 08:04:10] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/ciencia-ficcion?page/2
+[2026-06-05 08:04:10] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/ciencia-ficcion?page/3...
+[2026-06-05 08:04:11] [INFO] [Sniffer] ¡Video detectado en peticion de red! -> https://yxdlc29tzq.fubohd.com/foxsports/mono.m3u8?token=f39507366454645208c941a04d63df424df47c22-55-1780685350-1780667350
+[2026-06-05 08:04:11] [INFO] [Sniffer] Headers detectados: {"accept-language":"es-ES,es;q=0.9","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36","referer":"https://la14hd.com/","accept":"*/*","origin":"https://la14hd.com"}
+[2026-06-05 08:04:11] [INFO] [Sniffer] ¡Video detectado en respuesta Content-Type! -> https://yxdlc29tzq.fubohd.com/foxsports/mono.m3u8?token=f39507366454645208c941a04d63df424df47c22-55-1780685350-1780667350 (application/vnd.apple.mpegurl)
+[2026-06-05 08:04:11] [INFO] [Sniffer] ¡Video detectado en peticion de red! -> https://yxdlc29tzq.fubohd.com/foxsports/mono.m3u8?token=f39507366454645208c941a04d63df424df47c22-55-1780685350-1780667350
+[2026-06-05 08:04:11] [INFO] [Sniffer] Headers detectados: {"accept-language":"es-ES,es;q=0.9","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36","referer":"https://la14hd.com/","accept":"*/*","origin":"https://la14hd.com"}
+[2026-06-05 08:04:11] [INFO] [Sniffer] ¡Video detectado en respuesta Content-Type! -> https://yxdlc29tzq.fubohd.com/foxsports/mono.m3u8?token=f39507366454645208c941a04d63df424df47c22-55-1780685350-1780667350 (application/vnd.apple.mpegurl)
+[2026-06-05 08:04:13] [INFO] [Sniffer] Realizando clics simulados para iniciar reproducción...
+[2026-06-05 08:04:14] [INFO] [Sniffer] ¡Video detectado en peticion de red! -> https://yxdlc29tzq.fubohd.com/foxsports/mono.m3u8?token=f39507366454645208c941a04d63df424df47c22-55-1780685350-1780667350
+[2026-06-05 08:04:14] [INFO] [Sniffer] Headers detectados: {"accept-language":"es-ES,es;q=0.9","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36","referer":"https://la14hd.com/","accept":"*/*","origin":"https://la14hd.com"}
+[2026-06-05 08:04:15] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/ciencia-ficcion?page/3
+[2026-06-05 08:04:15] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/ciencia-ficcion?page/4...
+[2026-06-05 08:04:18] [INFO] [Sniffer] Analisis finalizado para https://la14hd.com/vivo/canales.php?stream=foxsports. Resultado: EXITO
+[2026-06-05 08:04:18] [INFO] [Server] Video detectado: https://yxdlc29tzq.fubohd.com/foxsports/mono.m3u8?token=f39507366454645208c941a04d63df424df47c22-55-1780685350-1780667350. Referer: https://la14hd.com/. Verificando conectividad...
+[2026-06-05 08:04:19] [INFO] [Server] ¡Validación HEAD exitosa! Status: 200
+[2026-06-05 08:04:19] [INFO] [Server] ¡Éxito! Servidor Planeta Play Stream validado en: https://yxdlc29tzq.fubohd.com/foxsports/mono.m3u8?token=f39507366454645208c941a04d63df424df47c22-55-1780685350-1780667350
+[2026-06-05 08:04:19] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/ciencia-ficcion?page/4
+[2026-06-05 08:04:19] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/ciencia-ficcion?page/5...
+[2026-06-05 08:04:24] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/ciencia-ficcion?page/5
+[2026-06-05 08:04:24] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/comedia...
+[2026-06-05 08:04:28] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/comedia
+[2026-06-05 08:04:28] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/comedia?page/2...
+[2026-06-05 08:04:32] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/comedia?page/2
+[2026-06-05 08:04:32] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/comedia?page/3...
+[2026-06-05 08:04:36] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/comedia?page/3
+[2026-06-05 08:04:36] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/comedia?page/4...
+[2026-06-05 08:04:41] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/comedia?page/4
+[2026-06-05 08:04:41] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/comedia?page/5...
+[2026-06-05 08:04:45] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/comedia?page/5
+[2026-06-05 08:04:45] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/crimen...
+[2026-06-05 08:04:47] [INFO] [Server] Iniciando live resolve para 1 opciones... (Excluyendo: [])
+[2026-06-05 08:04:47] [INFO] [Server] Probando servidor 1/1: Planeta Play Stream (https://la14hd.com/vivo/canal.php?stream=foxsports2)
+[2026-06-05 08:04:47] [INFO] [Sniffer] Iniciando analisis de trafico para: https://la14hd.com/vivo/canal.php?stream=foxsports2
+[2026-06-05 08:04:49] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/crimen
+[2026-06-05 08:04:49] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/crimen?page/2...
+[2026-06-05 08:04:50] [INFO] [Sniffer] ¡Video detectado en peticion de red! -> https://a2vlca.fubohd.com/foxsports2/mono.m3u8?token=46c832413ffb3eb3b34b75eddbe7dfd38321d1bd-b4-1780685389-1780667389
+[2026-06-05 08:04:50] [INFO] [Sniffer] Headers detectados: {"accept-language":"es-ES,es;q=0.9","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36","referer":"https://la14hd.com/","accept":"*/*","origin":"https://la14hd.com"}
+[2026-06-05 08:04:50] [INFO] [Sniffer] ¡Video detectado en respuesta Content-Type! -> https://a2vlca.fubohd.com/foxsports2/mono.m3u8?token=46c832413ffb3eb3b34b75eddbe7dfd38321d1bd-b4-1780685389-1780667389 (application/vnd.apple.mpegurl)
+[2026-06-05 08:04:50] [INFO] [Sniffer] ¡Video detectado en peticion de red! -> https://a2vlca.fubohd.com/foxsports2/mono.m3u8?token=46c832413ffb3eb3b34b75eddbe7dfd38321d1bd-b4-1780685389-1780667389
+[2026-06-05 08:04:50] [INFO] [Sniffer] Headers detectados: {"accept-language":"es-ES,es;q=0.9","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36","referer":"https://la14hd.com/","accept":"*/*","origin":"https://la14hd.com"}
+[2026-06-05 08:04:51] [INFO] [Sniffer] ¡Video detectado en respuesta Content-Type! -> https://a2vlca.fubohd.com/foxsports2/mono.m3u8?token=46c832413ffb3eb3b34b75eddbe7dfd38321d1bd-b4-1780685389-1780667389 (application/vnd.apple.mpegurl)
+[2026-06-05 08:04:52] [INFO] [Sniffer] Realizando clics simulados para iniciar reproducción...
+[2026-06-05 08:04:53] [INFO] [Sniffer] ¡Video detectado en peticion de red! -> https://a2vlca.fubohd.com/foxsports2/mono.m3u8?token=46c832413ffb3eb3b34b75eddbe7dfd38321d1bd-b4-1780685389-1780667389
+[2026-06-05 08:04:53] [INFO] [Sniffer] Headers detectados: {"accept-language":"es-ES,es;q=0.9","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36","referer":"https://la14hd.com/","accept":"*/*","origin":"https://la14hd.com"}
+[2026-06-05 08:04:53] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/crimen?page/2
+[2026-06-05 08:04:53] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/crimen?page/3...
+[2026-06-05 08:04:54] [INFO] [Sniffer] ¡Video detectado en respuesta Content-Type! -> https://a2vlca.fubohd.com/foxsports2/mono.m3u8?token=46c832413ffb3eb3b34b75eddbe7dfd38321d1bd-b4-1780685389-1780667389 (application/vnd.apple.mpegurl)
+[2026-06-05 08:04:55] [INFO] [Sniffer] Analisis finalizado para https://la14hd.com/vivo/canal.php?stream=foxsports2. Resultado: EXITO
+[2026-06-05 08:04:55] [INFO] [Server] Video detectado: https://a2vlca.fubohd.com/foxsports2/mono.m3u8?token=46c832413ffb3eb3b34b75eddbe7dfd38321d1bd-b4-1780685389-1780667389. Referer: https://la14hd.com/. Verificando conectividad...
+[2026-06-05 08:04:56] [INFO] [Server] ¡Validación HEAD exitosa! Status: 200
+[2026-06-05 08:04:56] [INFO] [Server] ¡Éxito! Servidor Planeta Play Stream validado en: https://a2vlca.fubohd.com/foxsports2/mono.m3u8?token=46c832413ffb3eb3b34b75eddbe7dfd38321d1bd-b4-1780685389-1780667389
+[2026-06-05 08:04:58] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/crimen?page/3
+[2026-06-05 08:04:58] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/crimen?page/4...
+[2026-06-05 08:05:02] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/crimen?page/4
+[2026-06-05 08:05:02] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/crimen?page/5...
+[2026-06-05 08:05:04] [INFO] [33m[2026-06-05T08:05:04.814] [INFO] - [connection closed][0m
+[2026-06-05 08:05:04] [INFO] [35m[2026-06-05T08:05:04.815] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 08:05:04] [ERROR] {}
+[2026-06-05 08:05:05] [INFO] [33m[2026-06-05T08:05:05.822] [INFO] - [Started reconnecting][0m
+[2026-06-05 08:05:05] [INFO] [35m[2026-06-05T08:05:05.822] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 08:05:05] [INFO] [33m[2026-06-05T08:05:05.823] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:05:05] [INFO] [33m[2026-06-05T08:05:05.823] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:05:05] [INFO] [33m[2026-06-05T08:05:05.915] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:05:05] [INFO] [33m[2026-06-05T08:05:05.916] [INFO] - [Handling reconnect!][0m
+[2026-06-05 08:05:06] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/crimen?page/5
+[2026-06-05 08:05:06] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/documental...
+[2026-06-05 08:05:10] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/documental
+[2026-06-05 08:05:10] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/documental?page/2...
+[2026-06-05 08:05:15] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/documental?page/2
+[2026-06-05 08:05:15] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/documental?page/3...
+[2026-06-05 08:05:19] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/documental?page/3
+[2026-06-05 08:05:19] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/documental?page/4...
+[2026-06-05 08:05:23] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/documental?page/4
+[2026-06-05 08:05:23] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/documental?page/5...
+[2026-06-05 08:05:27] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/documental?page/5
+[2026-06-05 08:05:27] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/drama...
+[2026-06-05 08:05:32] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/drama
+[2026-06-05 08:05:32] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/drama?page/2...
+[2026-06-05 08:05:36] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/drama?page/2
+[2026-06-05 08:05:36] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/drama?page/3...
+[2026-06-05 08:05:40] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/drama?page/3
+[2026-06-05 08:05:40] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/drama?page/4...
+[2026-06-05 08:05:44] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/drama?page/4
+[2026-06-05 08:05:44] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/drama?page/5...
+[2026-06-05 08:05:49] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/drama?page/5
+[2026-06-05 08:05:49] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/fantasia...
+[2026-06-05 08:05:53] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/fantasia
+[2026-06-05 08:05:53] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/fantasia?page/2...
+[2026-06-05 08:05:57] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/fantasia?page/2
+[2026-06-05 08:05:57] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/fantasia?page/3...
+[2026-06-05 08:06:01] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/fantasia?page/3
+[2026-06-05 08:06:01] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/fantasia?page/4...
+[2026-06-05 08:06:05] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/fantasia?page/4
+[2026-06-05 08:06:05] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/fantasia?page/5...
+[2026-06-05 08:06:10] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/fantasia?page/5
+[2026-06-05 08:06:10] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/foreign...
+[2026-06-05 08:06:14] [INFO] [CatalogScraper] PelisPlus movie: 1 items de https://www.pelisplushd.la/generos/foreign
+[2026-06-05 08:06:14] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/foreign?page/2...
+[2026-06-05 08:06:18] [INFO] [CatalogScraper] PelisPlus movie: 1 items de https://www.pelisplushd.la/generos/foreign?page/2
+[2026-06-05 08:06:18] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/foreign?page/3...
+[2026-06-05 08:06:22] [INFO] [CatalogScraper] PelisPlus movie: 1 items de https://www.pelisplushd.la/generos/foreign?page/3
+[2026-06-05 08:06:22] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/foreign?page/4...
+[2026-06-05 08:06:27] [INFO] [CatalogScraper] PelisPlus movie: 1 items de https://www.pelisplushd.la/generos/foreign?page/4
+[2026-06-05 08:06:27] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/foreign?page/5...
+[2026-06-05 08:06:31] [INFO] [CatalogScraper] PelisPlus movie: 1 items de https://www.pelisplushd.la/generos/foreign?page/5
+[2026-06-05 08:06:31] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/guerra...
+[2026-06-05 08:06:35] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/guerra
+[2026-06-05 08:06:35] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/guerra?page/2...
+[2026-06-05 08:06:36] [INFO] [33m[2026-06-05T08:06:36.017] [INFO] - [connection closed][0m
+[2026-06-05 08:06:36] [INFO] [35m[2026-06-05T08:06:36.017] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 08:06:36] [ERROR] {}
+[2026-06-05 08:06:37] [INFO] [33m[2026-06-05T08:06:37.025] [INFO] - [Started reconnecting][0m
+[2026-06-05 08:06:37] [INFO] [35m[2026-06-05T08:06:37.026] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 08:06:37] [INFO] [33m[2026-06-05T08:06:37.026] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:06:37] [INFO] [33m[2026-06-05T08:06:37.027] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:06:37] [INFO] [33m[2026-06-05T08:06:37.120] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:06:37] [INFO] [33m[2026-06-05T08:06:37.121] [INFO] - [Handling reconnect!][0m
+[2026-06-05 08:06:39] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/guerra?page/2
+[2026-06-05 08:06:39] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/guerra?page/3...
+[2026-06-05 08:06:44] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/guerra?page/3
+[2026-06-05 08:06:44] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/guerra?page/4...
+[2026-06-05 08:06:48] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/guerra?page/4
+[2026-06-05 08:06:48] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/guerra?page/5...
+[2026-06-05 08:06:52] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/guerra?page/5
+[2026-06-05 08:06:52] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/historia...
+[2026-06-05 08:06:56] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/historia
+[2026-06-05 08:06:56] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/historia?page/2...
+[2026-06-05 08:07:01] [INFO] [CatalogScraper] PelisPlus movie: 24 items de https://www.pelisplushd.la/generos/historia?page/2
+[2026-06-05 08:07:01] [INFO] [CatalogScraper] Navegando a https://www.pelisplushd.la/generos/historia?page/3...
+[2026-06-05 08:07:43] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-05 08:07:46] [INFO] [DB] SQLite inicializado.
+[2026-06-05 08:07:46] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-05 08:07:46] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-05 08:07:46] [INFO] [33m[2026-06-05T08:07:46.728] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-05 08:07:46] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-05 08:07:46] [INFO] [33m[2026-06-05T08:07:46.742] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 08:07:46] [INFO] [33m[2026-06-05T08:07:46.820] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 08:07:46] [INFO] [33m[2026-06-05T08:07:46.822] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-05 08:07:46] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
+[2026-06-05 08:07:47] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-05 08:07:47] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-05 08:07:47] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-05 08:07:49] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-05 08:07:51] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-05 08:07:51] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-05 08:07:52] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
+[2026-06-05 08:07:52] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-05 08:07:52] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-05 08:07:52] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-05 08:07:52] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-05 08:07:52] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-05 08:07:52] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-05 08:07:52] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
