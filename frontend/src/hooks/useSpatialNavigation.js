@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-const NAV_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace']);
+const NAV_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace', 'BrowserBack', 'GoBack']);
 const FOCUSABLE_SEL = '.focusable';
 
 const isTV = typeof window !== 'undefined' && window.isSmartTV === true;
@@ -163,8 +163,8 @@ export default function useSpatialNavigation(isActive = true) {
         return;
       }
 
-      // ── Backspace / Escape ─────────────────────────────────────────
-      if (e.key === 'Backspace' || e.key === 'Escape') {
+      // ── Backspace / Escape / BrowserBack ─────────────────────────────────────────
+      if (e.key === 'Backspace' || e.key === 'Escape' || e.key === 'BrowserBack' || e.key === 'GoBack') {
         if (activeModal) {
           const closeBtn = activeModal.querySelector('.watch-close, .btn-secondary') || activeModal.querySelector('button');
           if (closeBtn) {
