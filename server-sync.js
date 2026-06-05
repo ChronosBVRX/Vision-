@@ -58,14 +58,45 @@ function doPull() {
     log('PULL', `✓ Pull exitoso — ${changedFiles.length} archivo(s) actualizado(s):`);
     changedFiles.forEach(f => log('INFO', `  → ${c.yellow}${f}${c.reset}`));
 
-    // Si el servidor (server.js) fue modificado, reiniciar con pm2 si está disponible
-    if (changedFiles.some(f => f === 'server.js' || f === 'scraper.js')) {
-      log('WARN', 'server.js/scraper.js modificado — considera reiniciar el servidor.');
+    // Si el servidor (server.js o subcarpetas de servidor) fue modificado, reiniciar el servidor
+    if (changedFiles.some(f => f === 'server.js' || f === 'scraper.js' || f.startsWith('server/') || f.startsWith('services/'))) {
+      log('WARN', 'Código del servidor modificado — reiniciando servidor...');
       try {
         execSync('pm2 restart vision-plus --silent', { stdio: 'pipe' });
         log('OK', '✓ Servidor reiniciado via pm2.');
       } catch {
-        log('WARN', 'pm2 no disponible — reinicia el servidor manualmente si es necesario.');
+        // Buscar proceso en puerto 5000 y finalizarlo para que run_server.bat lo levante
+        try {
+          const netstatOut = execSync('netstat -aon', { encoding: 'utf8' });
+          const lines = netstatOut.split('\n');
+          let pidToKill = null;
+          for (const line of lines) {
+            if (line.includes(':5000') && line.includes('LISTENING')) {
+              const parts = line.trim().split(/\s+/);
+              pidToKill = parts[parts.length - 1];
+              break;
+            }
+          }
+          if (pidToKill) {
+            execSync(`taskkill /f /pid ${pidToKill}`, { stdio: 'pipe' });
+            log('OK', `✓ Servidor en puerto 5000 (PID ${pidToKill}) finalizado para auto-reinicio.`);
+          } else {
+            log('WARN', 'No se encontró ningún proceso escuchando en el puerto 5000 para reiniciar.');
+          }
+        } catch (killErr) {
+          log('ERROR', `Error al intentar reiniciar el servidor en puerto 5000: ${killErr.message}`);
+        }
+      }
+    }
+
+    // Si el frontend fue modificado, recompilar
+    if (changedFiles.some(f => f.startsWith('frontend/') && !f.startsWith('frontend/dist/'))) {
+      log('WARN', 'Archivos de frontend modificados — iniciando recompilación...');
+      try {
+        execSync('npm run build --prefix frontend', { stdio: 'inherit' });
+        log('OK', '✓ Frontend recompilado con éxito.');
+      } catch (buildErr) {
+        log('ERROR', `Error al compilar el frontend: ${buildErr.message}`);
       }
     }
 
