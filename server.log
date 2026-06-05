@@ -1,27 +1,3 @@
-[2026-06-04 15:03:17] [INFO] [Sniffer] Realizando clics simulados para iniciar reproducción...
-[2026-06-04 15:03:30] [INFO] [Sniffer] Analisis finalizado para https://www.rojadirectahd.dev/verhttpswww.tarjetaroja.blog.php. Resultado: FALLIDO
-[2026-06-04 15:03:30] [INFO] [Server] Servidor ROJADIRECTAHD no retornó video válido.
-[2026-06-04 15:03:30] [INFO] [Server] Fallaron todos los servidores de Deportes en live resolve. Retornando error estricto sin iframe.
-[2026-06-04 15:39:36] [INFO] [API Sync] Iniciando actualización mediante la tarea programada VisionRepoAutoPull...
-[2026-06-04 15:39:36] [INFO] [API Sync] Tarea programada lanzada con éxito.
-[2026-06-04 15:39:46] [INFO] [Env] Variables de entorno cargadas correctamente.
-[2026-06-04 15:39:48] [INFO] [DB] SQLite inicializado.
-[2026-06-04 15:39:48] [INFO] [DB] Memoria sincronizada: 474 sources, 382 pelis, 144 series.
-[2026-06-04 15:39:48] [INFO] Servidor corriendo en el puerto 5000
-[2026-06-04 15:39:48] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
-[2026-06-04 15:39:48] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
-[2026-06-04 15:39:49] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
-[2026-06-04 15:39:52] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
-[2026-06-04 15:39:52] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
-[2026-06-04 15:39:52] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
-[2026-06-04 15:39:52] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
-[2026-06-04 15:39:52] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
-[2026-06-04 15:39:52] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
-[2026-06-04 15:39:52] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
-[2026-06-04 15:39:53] [INFO] [CatalogWorker] Catálogo existente: 382 películas, 144 series.
-[2026-06-04 15:39:53] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
-[2026-06-04 15:39:53] [INFO] [GitHub Pages] Nuevo túnel detectado: https://beaches-july-general-certificates.trycloudflare.com. Actualizando redirect...
-[2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotvhd.su (query: "pirlo tv")
 [2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv3.pl (query: "pirlo tv")
 [2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://www.pirlotv.online (query: "pirlo tv")
 [2026-06-04 15:39:55] [INFO] [SportsScraper] Dominio descubierto: https://pirlotv.mx (query: "pirlo tv")
@@ -2497,3 +2473,27 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-04 19:42:41] [INFO] [Server] Video detectado: https://amg01258-raycomsports-powernationspanish-canelatv-5h8dc.amagi.tv/playlist/amg01258-raycomsports-powernationspanish-canelatv/playlist.m3u8. Referer: . Verificando conectividad...
 [2026-06-04 19:42:41] [INFO] [Server] ¡Validación HEAD exitosa! Status: 200
 [2026-06-04 19:42:41] [INFO] [Server] ¡Éxito! Servidor Planeta Play Stream validado en: https://amg01258-raycomsports-powernationspanish-canelatv-5h8dc.amagi.tv/playlist/amg01258-raycomsports-powernationspanish-canelatv/playlist.m3u8
+[2026-06-04 19:52:32] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-04 19:52:35] [INFO] [DB] SQLite inicializado.
+[2026-06-04 19:52:35] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-04 19:52:35] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-04 19:52:35] [INFO] [33m[2026-06-04T19:52:35.426] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-04 19:52:35] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-04 19:52:35] [INFO] [33m[2026-06-04T19:52:35.435] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-04 19:52:35] [INFO] [33m[2026-06-04T19:52:35.546] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-04 19:52:35] [INFO] [33m[2026-06-04T19:52:35.548] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-04 19:52:35] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
+[2026-06-04 19:52:35] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-04 19:52:35] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-04 19:52:35] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-04 19:52:37] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
+[2026-06-04 19:52:39] [INFO] [SportsScraper] Dominio descubierto: https://tarjetarojatv.blog (query: "rojadirecta")
+[2026-06-04 19:52:39] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectaplay.com (query: "rojadirecta")
+[2026-06-04 19:52:39] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirecta.lt (query: "rojadirecta")
+[2026-06-04 19:52:39] [INFO] [SportsScraper] Dominio descubierto: https://www.rojadirectahd.dev (query: "rojadirecta")
+[2026-06-04 19:52:39] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectatv.net (query: "rojadirecta")
+[2026-06-04 19:52:39] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
+[2026-06-04 19:52:39] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
+[2026-06-04 19:52:40] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-04 19:52:40] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-04 19:52:40] [INFO] [GitHub Pages] Nuevo túnel detectado: https://attitudes-onto-certified-whole.trycloudflare.com. Actualizando redirect...
