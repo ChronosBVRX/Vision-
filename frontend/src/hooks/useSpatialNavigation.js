@@ -175,10 +175,11 @@ export default function useSpatialNavigation(isActive = true) {
         } else {
           e.preventDefault();
           e.stopPropagation();
-          const firstSidebarItem = document.querySelector('.sidebar .focusable');
-          if (firstSidebarItem) {
-            firstSidebarItem.focus();
-            firstSidebarItem.scrollIntoView({ behavior: isTV ? 'auto' : 'smooth', block: 'center' });
+          const activeSidebarItem = document.querySelector('.sidebar .active.focusable') || document.querySelector('.sidebar .focusable');
+          if (activeSidebarItem) {
+            activeSidebarItem.focus();
+            activeSidebarItem.scrollIntoView({ behavior: isTV ? 'auto' : 'smooth', block: 'center' });
+            window.dispatchEvent(new CustomEvent('sidebar-open'));
           }
         }
         return;
@@ -232,8 +233,12 @@ export default function useSpatialNavigation(isActive = true) {
           pool = getCachedSidebar();
         }
       } else {
-        const mainContent = document.querySelector('.main-content');
-        pool = mainContent ? getCachedFocusables(mainContent) : focusableCache.current;
+        if (e.key === 'ArrowLeft') {
+          pool = focusableCache.current; // allow jumping to sidebar
+        } else {
+          const mainContent = document.querySelector('.main-content');
+          pool = mainContent ? getCachedFocusables(mainContent) : focusableCache.current;
+        }
       }
 
       if (!activeEl || !pool.includes(activeEl)) {
