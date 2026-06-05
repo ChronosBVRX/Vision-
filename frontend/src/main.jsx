@@ -56,6 +56,16 @@
   }
 })();
 
+// Bridge: recibe eventos de teclado re-enviados desde index.html (APK Android TV via iframe)
+window.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'FORWARD_KEYDOWN') {
+    const d = event.data;
+    document.dispatchEvent(new KeyboardEvent('keydown', {
+      key: d.key, code: d.code, keyCode: d.keyCode, which: d.which, bubbles: true, cancelable: true
+    }));
+  }
+});
+
 // Interceptar peticiones fetch a /api para direccionarlas al backend en producción
 const originalFetch = window.fetch;
 window.fetch = (input, init) => {
