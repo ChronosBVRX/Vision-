@@ -123,6 +123,8 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 
 ### 📋 Workflow obligatorio para cada agente
 
+**Regla de Espejo en Vivo:** Todos los agentes (EXCEPTO el agente del servidor remoto) deben cerciorarse de lanzar y mantener corriendo en segundo plano el comando `npm run sync` al iniciar su sesión, para garantizar que todos los cambios se inyecten automáticamente al servidor remoto.
+
 **Antes de empezar cualquier tarea:**
 1. `git pull origin main` — asegurar código más reciente
 2. `node agent-lock.js status` — verificar que no haya locks activos
