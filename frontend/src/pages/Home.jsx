@@ -487,74 +487,33 @@ export default function Home({ selectedCategoryFilter }) {
     setResolveAttempts([]);
     setActiveItem({ ...item, isResolving: true });
 
-    const resolvePlay = (asLegacy = false) => {
-      const url = asLegacy
-        ? `/api/movies/${item.id}/resolve?lang=auto&debug=true`
-        : `/api/movies/${item.id}/play?lang=auto`;
-      return fetch(url).then(r => r.json());
-    };
-
-    resolvePlay(false)
+    // [antigravity] Usar directamente el endpoint /resolve (ya probado y funcional).
+    // El endpoint /play duplicaba las sesiones de Playwright y saturaba el servidor.
+    fetch(`/api/movies/${item.id}/resolve?lang=auto&debug=true`)
+      .then(r => r.json())
       .then(data => {
         if (data.success) {
-          const alt = data.alternatives || [];
           setActiveItem({
             id: item.id, title: item.title, type: item.type, poster: item.poster,
             provider: 'internal-resolver',
             selectedLanguage: data.selectedLanguage,
             selectedServer: data.selectedServer,
-            streams: [{ name: data.selectedServer, url: data.stream.url, type: data.stream.type || 'video/mp4', headers: data.stream.headers || {}, quality: data.stream.quality || 'auto', resolver: 'direct' },
-              ...alt.filter(a => a.url && a.server !== data.selectedServer).map(a => ({ name: `${a.server}`, url: a.url, type: 'video/mp4', headers: {}, quality: a.quality || 'HD', resolver: 'direct' }))],
-            alternatives: alt,
+            streams: [{ name: data.selectedServer, url: data.stream.url, type: data.stream.type, headers: data.stream.headers || {}, quality: data.stream.quality || 'auto', resolver: 'direct' }],
+            alternatives: [],
             attempts: data.attempts || []
           });
           setIsResolving(false);
         } else {
-          resolvePlay(true).then(legacy => {
-            if (legacy.success) {
-              setActiveItem({
-                id: item.id, title: item.title, type: item.type, poster: item.poster,
-                provider: 'internal-resolver',
-                selectedLanguage: legacy.selectedLanguage,
-                selectedServer: legacy.selectedServer,
-                streams: [{ name: legacy.selectedServer, url: legacy.stream.url, type: legacy.stream.type, headers: legacy.stream.headers || {}, quality: legacy.stream.quality || 'auto', resolver: 'direct' }],
-                alternatives: [],
-                attempts: legacy.attempts || []
-              });
-              setIsResolving(false);
-            } else {
-              setActiveItem(null);
-              setIsResolving(false);
-              setResolveError(legacy.error || data.error || 'No hay fuentes disponibles.');
-              setResolveAttempts(legacy.attempts || data.attempts || []);
-            }
-          });
+          setActiveItem(null);
+          setIsResolving(false);
+          setResolveError(data.error || 'No hay fuentes disponibles.');
+          setResolveAttempts(data.attempts || []);
         }
       })
       .catch(() => {
-        resolvePlay(true).then(legacy => {
-          if (legacy.success) {
-            setActiveItem({
-              id: item.id, title: item.title, type: item.type, poster: item.poster,
-              provider: 'internal-resolver',
-              selectedLanguage: legacy.selectedLanguage,
-              selectedServer: legacy.selectedServer,
-              streams: [{ name: legacy.selectedServer, url: legacy.stream.url, type: legacy.stream.type, headers: legacy.stream.headers || {}, quality: legacy.stream.quality || 'auto', resolver: 'direct' }],
-              alternatives: [],
-              attempts: legacy.attempts || []
-            });
-            setIsResolving(false);
-          } else {
-            setActiveItem(null);
-            setIsResolving(false);
-            setResolveError(legacy.error || 'No hay fuentes disponibles.');
-            setResolveAttempts(legacy.attempts || []);
-          }
-        }).catch(() => {
-          setActiveItem(null);
-          setIsResolving(false);
-          setResolveError('Error de conexión al resolver la fuente.');
-        });
+        setActiveItem(null);
+        setIsResolving(false);
+        setResolveError('Error de conexión al resolver la fuente.');
       })
       .finally(() => { resolvingRef.current = false; });
   }, []);
