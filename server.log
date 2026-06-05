@@ -1,57 +1,3 @@
-[2026-06-04 21:43:27] [INFO] [33m[2026-06-04T21:43:27.421] [INFO] - [connection closed][0m
-[2026-06-04 21:43:27] [INFO] [35m[2026-06-04T21:43:27.422] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 21:43:27] [ERROR] {}
-[2026-06-04 21:43:28] [INFO] [33m[2026-06-04T21:43:28.428] [INFO] - [Started reconnecting][0m
-[2026-06-04 21:43:28] [INFO] [35m[2026-06-04T21:43:28.429] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 21:43:28] [INFO] [33m[2026-06-04T21:43:28.429] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 21:43:28] [INFO] [33m[2026-06-04T21:43:28.430] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 21:43:28] [INFO] [33m[2026-06-04T21:43:28.523] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 21:43:28] [INFO] [33m[2026-06-04T21:43:28.523] [INFO] - [Handling reconnect!][0m
-[2026-06-04 21:44:58] [INFO] [33m[2026-06-04T21:44:58.611] [INFO] - [connection closed][0m
-[2026-06-04 21:44:58] [INFO] [35m[2026-06-04T21:44:58.611] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 21:44:58] [ERROR] {}
-[2026-06-04 21:44:59] [INFO] [33m[2026-06-04T21:44:59.627] [INFO] - [Started reconnecting][0m
-[2026-06-04 21:44:59] [INFO] [35m[2026-06-04T21:44:59.628] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 21:44:59] [INFO] [33m[2026-06-04T21:44:59.628] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 21:44:59] [INFO] [33m[2026-06-04T21:44:59.629] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 21:44:59] [INFO] [33m[2026-06-04T21:44:59.749] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 21:44:59] [INFO] [33m[2026-06-04T21:44:59.750] [INFO] - [Handling reconnect!][0m
-[2026-06-04 21:46:29] [INFO] [33m[2026-06-04T21:46:29.862] [INFO] - [connection closed][0m
-[2026-06-04 21:46:29] [INFO] [35m[2026-06-04T21:46:29.863] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 21:46:29] [ERROR] {}
-[2026-06-04 21:46:30] [INFO] [33m[2026-06-04T21:46:30.870] [INFO] - [Started reconnecting][0m
-[2026-06-04 21:46:30] [INFO] [35m[2026-06-04T21:46:30.870] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 21:46:30] [INFO] [33m[2026-06-04T21:46:30.870] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 21:46:30] [INFO] [33m[2026-06-04T21:46:30.871] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 21:46:30] [INFO] [33m[2026-06-04T21:46:30.993] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 21:46:30] [INFO] [33m[2026-06-04T21:46:30.994] [INFO] - [Handling reconnect!][0m
-[2026-06-04 21:48:01] [INFO] [33m[2026-06-04T21:48:01.116] [INFO] - [connection closed][0m
-[2026-06-04 21:48:01] [INFO] [35m[2026-06-04T21:48:01.117] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 21:48:01] [ERROR] {}
-[2026-06-04 21:48:02] [INFO] [33m[2026-06-04T21:48:02.126] [INFO] - [Started reconnecting][0m
-[2026-06-04 21:48:02] [INFO] [35m[2026-06-04T21:48:02.127] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 21:48:02] [INFO] [33m[2026-06-04T21:48:02.127] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 21:48:02] [INFO] [33m[2026-06-04T21:48:02.128] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 21:48:02] [INFO] [33m[2026-06-04T21:48:02.239] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 21:48:02] [INFO] [33m[2026-06-04T21:48:02.240] [INFO] - [Handling reconnect!][0m
-[2026-06-04 21:49:32] [INFO] [33m[2026-06-04T21:49:32.358] [INFO] - [connection closed][0m
-[2026-06-04 21:49:32] [INFO] [35m[2026-06-04T21:49:32.359] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 21:49:32] [ERROR] {}
-[2026-06-04 21:49:33] [INFO] [33m[2026-06-04T21:49:33.370] [INFO] - [Started reconnecting][0m
-[2026-06-04 21:49:33] [INFO] [35m[2026-06-04T21:49:33.370] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 21:49:33] [INFO] [33m[2026-06-04T21:49:33.371] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 21:49:33] [INFO] [33m[2026-06-04T21:49:33.371] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 21:49:33] [INFO] [33m[2026-06-04T21:49:33.501] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 21:49:33] [INFO] [33m[2026-06-04T21:49:33.502] [INFO] - [Handling reconnect!][0m
-[2026-06-04 21:51:03] [INFO] [33m[2026-06-04T21:51:03.607] [INFO] - [connection closed][0m
-[2026-06-04 21:51:03] [INFO] [35m[2026-06-04T21:51:03.607] [WARN] - [Connection closed while receiving data][0m
-[2026-06-04 21:51:03] [ERROR] {}
-[2026-06-04 21:51:04] [INFO] [33m[2026-06-04T21:51:04.619] [INFO] - [Started reconnecting][0m
-[2026-06-04 21:51:04] [INFO] [35m[2026-06-04T21:51:04.620] [WARN] - [[Reconnect] Closing current connection...][0m
-[2026-06-04 21:51:04] [INFO] [33m[2026-06-04T21:51:04.620] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 21:51:04] [INFO] [33m[2026-06-04T21:51:04.621] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
-[2026-06-04 21:51:04] [INFO] [33m[2026-06-04T21:51:04.695] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-04 21:51:04] [INFO] [33m[2026-06-04T21:51:04.696] [INFO] - [Handling reconnect!][0m
 [2026-06-04 21:52:34] [INFO] [33m[2026-06-04T21:52:34.775] [INFO] - [connection closed][0m
 [2026-06-04 21:52:34] [INFO] [35m[2026-06-04T21:52:34.775] [WARN] - [Connection closed while receiving data][0m
 [2026-06-04 21:52:34] [ERROR] {}
@@ -2497,3 +2443,57 @@
 [2026-06-05 04:42:58] [INFO] [33m[2026-06-05T04:42:58.133] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 04:42:58] [INFO] [33m[2026-06-05T04:42:58.244] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-05 04:42:58] [INFO] [33m[2026-06-05T04:42:58.245] [INFO] - [Handling reconnect!][0m
+[2026-06-05 04:44:28] [INFO] [33m[2026-06-05T04:44:28.338] [INFO] - [connection closed][0m
+[2026-06-05 04:44:28] [INFO] [35m[2026-06-05T04:44:28.339] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 04:44:28] [ERROR] {}
+[2026-06-05 04:44:29] [INFO] [33m[2026-06-05T04:44:29.340] [INFO] - [Started reconnecting][0m
+[2026-06-05 04:44:29] [INFO] [35m[2026-06-05T04:44:29.341] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 04:44:29] [INFO] [33m[2026-06-05T04:44:29.341] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 04:44:29] [INFO] [33m[2026-06-05T04:44:29.342] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 04:44:29] [INFO] [33m[2026-06-05T04:44:29.414] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 04:44:29] [INFO] [33m[2026-06-05T04:44:29.415] [INFO] - [Handling reconnect!][0m
+[2026-06-05 04:45:59] [INFO] [33m[2026-06-05T04:45:59.484] [INFO] - [connection closed][0m
+[2026-06-05 04:45:59] [INFO] [35m[2026-06-05T04:45:59.485] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 04:45:59] [ERROR] {}
+[2026-06-05 04:46:00] [INFO] [33m[2026-06-05T04:46:00.495] [INFO] - [Started reconnecting][0m
+[2026-06-05 04:46:00] [INFO] [35m[2026-06-05T04:46:00.496] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 04:46:00] [INFO] [33m[2026-06-05T04:46:00.496] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 04:46:00] [INFO] [33m[2026-06-05T04:46:00.497] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 04:46:00] [INFO] [33m[2026-06-05T04:46:00.592] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 04:46:00] [INFO] [33m[2026-06-05T04:46:00.592] [INFO] - [Handling reconnect!][0m
+[2026-06-05 04:47:30] [INFO] [33m[2026-06-05T04:47:30.687] [INFO] - [connection closed][0m
+[2026-06-05 04:47:30] [INFO] [35m[2026-06-05T04:47:30.688] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 04:47:30] [ERROR] {}
+[2026-06-05 04:47:31] [INFO] [33m[2026-06-05T04:47:31.691] [INFO] - [Started reconnecting][0m
+[2026-06-05 04:47:31] [INFO] [35m[2026-06-05T04:47:31.692] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 04:47:31] [INFO] [33m[2026-06-05T04:47:31.692] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 04:47:31] [INFO] [33m[2026-06-05T04:47:31.693] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 04:47:31] [INFO] [33m[2026-06-05T04:47:31.768] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 04:47:31] [INFO] [33m[2026-06-05T04:47:31.769] [INFO] - [Handling reconnect!][0m
+[2026-06-05 04:49:01] [INFO] [33m[2026-06-05T04:49:01.841] [INFO] - [connection closed][0m
+[2026-06-05 04:49:01] [INFO] [35m[2026-06-05T04:49:01.842] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 04:49:01] [ERROR] {}
+[2026-06-05 04:49:02] [INFO] [33m[2026-06-05T04:49:02.845] [INFO] - [Started reconnecting][0m
+[2026-06-05 04:49:02] [INFO] [35m[2026-06-05T04:49:02.846] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 04:49:02] [INFO] [33m[2026-06-05T04:49:02.846] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 04:49:02] [INFO] [33m[2026-06-05T04:49:02.847] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 04:49:02] [INFO] [33m[2026-06-05T04:49:02.939] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 04:49:02] [INFO] [33m[2026-06-05T04:49:02.939] [INFO] - [Handling reconnect!][0m
+[2026-06-05 04:50:33] [INFO] [33m[2026-06-05T04:50:33.034] [INFO] - [connection closed][0m
+[2026-06-05 04:50:33] [INFO] [35m[2026-06-05T04:50:33.035] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 04:50:33] [ERROR] {}
+[2026-06-05 04:50:34] [INFO] [33m[2026-06-05T04:50:34.044] [INFO] - [Started reconnecting][0m
+[2026-06-05 04:50:34] [INFO] [35m[2026-06-05T04:50:34.044] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 04:50:34] [INFO] [33m[2026-06-05T04:50:34.045] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 04:50:34] [INFO] [33m[2026-06-05T04:50:34.045] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 04:50:34] [INFO] [33m[2026-06-05T04:50:34.140] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 04:50:34] [INFO] [33m[2026-06-05T04:50:34.141] [INFO] - [Handling reconnect!][0m
+[2026-06-05 04:52:04] [INFO] [33m[2026-06-05T04:52:04.231] [INFO] - [connection closed][0m
+[2026-06-05 04:52:04] [INFO] [35m[2026-06-05T04:52:04.232] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 04:52:04] [ERROR] {}
+[2026-06-05 04:52:05] [INFO] [33m[2026-06-05T04:52:05.234] [INFO] - [Started reconnecting][0m
+[2026-06-05 04:52:05] [INFO] [35m[2026-06-05T04:52:05.234] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 04:52:05] [INFO] [33m[2026-06-05T04:52:05.235] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 04:52:05] [INFO] [33m[2026-06-05T04:52:05.235] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 04:52:05] [INFO] [33m[2026-06-05T04:52:05.307] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 04:52:05] [INFO] [33m[2026-06-05T04:52:05.308] [INFO] - [Handling reconnect!][0m
