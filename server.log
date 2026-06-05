@@ -1,6 +1,3 @@
-[2026-06-05 05:51:21] [INFO] [33m[2026-06-05T05:51:21.491] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
-[2026-06-05 05:51:21] [INFO] [33m[2026-06-05T05:51:21.492] [INFO] - [Handling reconnect!][0m
-[2026-06-05 05:52:51] [INFO] [33m[2026-06-05T05:52:51.562] [INFO] - [connection closed][0m
 [2026-06-05 05:52:51] [INFO] [35m[2026-06-05T05:52:51.563] [WARN] - [Connection closed while receiving data][0m
 [2026-06-05 05:52:51] [ERROR] {}
 [2026-06-05 05:52:52] [INFO] [33m[2026-06-05T05:52:52.568] [INFO] - [Started reconnecting][0m
@@ -2497,3 +2494,6 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 [2026-06-05 09:59:32] [INFO] [SportsScraper] Dominio descubierto: https://rojadirectahd.vip (query: "rojadirecta")
 [2026-06-05 09:59:32] [INFO] [SportsScraper] Consultando Brave Search para: "pirlo tv"...
 [2026-06-05 09:59:32] [INFO] [API Publish Tunnel] Publicando enlace manualmente: https://constitutional-wed-desperate-valentine.trycloudflare.com
+[2026-06-05 09:59:32] [INFO] [CatalogWorker] Catálogo existente: 428 películas, 144 series.
+[2026-06-05 09:59:32] [INFO] [AnimeWorker] Catálogo anime existente: 73 películas, 48 series.
+[2026-06-05 09:59:33] [INFO] [GitHub Pages] Nuevo túnel detectado: https://constitutional-wed-desperate-valentine.trycloudflare.com. Actualizando redirect...
