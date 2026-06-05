@@ -348,3 +348,4 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 - [ ] ~~Sistema de locks entre agents~~ ✅ `agent-lock.js` implementado
 - [ ] ~~Utilidad: read-logs.js con filtros~~ ✅ Creado + npm scripts
 - [ ] ~~Workflow multi-agente documentado~~ ✅ Reglas completas en AGENTS.md
+- [ ] **Configurar Enlace en Vivo (direct-sync)**: (Para opencode) El usuario ha solicitado un espejo EN VIVO para no depender de GitHub como intermediario en tiempo real. He creado `direct-sync.js`. Debes configurar la ruta de red del servidor remoto en el archivo `.env` (`REMOTE_SERVER_PATH=\\ruta\del\servidor`) y ejecutar `npm run sync`. Este script hará copia instantánea (fs.copyFile) al servidor remoto y continuará subiendo a GitHub en segundo plano.

@@ -2497,3 +2497,39 @@ fatal: unable to access 'https://github.com/ChronosBVRX/Vision-.git/': Could not
 [2026-06-05 08:58:46] [INFO] [33m[2026-06-05T08:58:46.584] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 08:58:46] [INFO] [33m[2026-06-05T08:58:46.671] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-05 08:58:46] [INFO] [33m[2026-06-05T08:58:46.671] [INFO] - [Handling reconnect!][0m
+[2026-06-05 09:00:16] [INFO] [33m[2026-06-05T09:00:16.754] [INFO] - [connection closed][0m
+[2026-06-05 09:00:16] [INFO] [35m[2026-06-05T09:00:16.755] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 09:00:16] [ERROR] {}
+[2026-06-05 09:00:17] [INFO] [33m[2026-06-05T09:00:17.763] [INFO] - [Started reconnecting][0m
+[2026-06-05 09:00:17] [INFO] [35m[2026-06-05T09:00:17.765] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 09:00:17] [INFO] [33m[2026-06-05T09:00:17.766] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 09:00:17] [INFO] [33m[2026-06-05T09:00:17.767] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 09:00:17] [INFO] [33m[2026-06-05T09:00:17.857] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 09:00:17] [INFO] [33m[2026-06-05T09:00:17.859] [INFO] - [Handling reconnect!][0m
+[2026-06-05 09:01:47] [INFO] [33m[2026-06-05T09:01:47.941] [INFO] - [connection closed][0m
+[2026-06-05 09:01:47] [INFO] [35m[2026-06-05T09:01:47.941] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 09:01:47] [ERROR] {}
+[2026-06-05 09:01:48] [INFO] [33m[2026-06-05T09:01:48.953] [INFO] - [Started reconnecting][0m
+[2026-06-05 09:01:48] [INFO] [35m[2026-06-05T09:01:48.954] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 09:01:48] [INFO] [33m[2026-06-05T09:01:48.956] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 09:01:48] [INFO] [33m[2026-06-05T09:01:48.958] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 09:01:49] [INFO] [33m[2026-06-05T09:01:49.043] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 09:01:49] [INFO] [33m[2026-06-05T09:01:49.045] [INFO] - [Handling reconnect!][0m
+[2026-06-05 09:03:19] [INFO] [33m[2026-06-05T09:03:19.128] [INFO] - [connection closed][0m
+[2026-06-05 09:03:19] [INFO] [35m[2026-06-05T09:03:19.131] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 09:03:19] [ERROR] {}
+[2026-06-05 09:03:20] [INFO] [33m[2026-06-05T09:03:20.151] [INFO] - [Started reconnecting][0m
+[2026-06-05 09:03:20] [INFO] [35m[2026-06-05T09:03:20.153] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 09:03:20] [INFO] [33m[2026-06-05T09:03:20.155] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 09:03:20] [INFO] [33m[2026-06-05T09:03:20.158] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 09:03:20] [INFO] [33m[2026-06-05T09:03:20.249] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 09:03:20] [INFO] [33m[2026-06-05T09:03:20.251] [INFO] - [Handling reconnect!][0m
+[2026-06-05 09:04:50] [INFO] [33m[2026-06-05T09:04:50.369] [INFO] - [connection closed][0m
+[2026-06-05 09:04:50] [INFO] [35m[2026-06-05T09:04:50.370] [WARN] - [Connection closed while receiving data][0m
+[2026-06-05 09:04:50] [ERROR] {}
+[2026-06-05 09:04:51] [INFO] [33m[2026-06-05T09:04:51.374] [INFO] - [Started reconnecting][0m
+[2026-06-05 09:04:51] [INFO] [35m[2026-06-05T09:04:51.377] [WARN] - [[Reconnect] Closing current connection...][0m
+[2026-06-05 09:04:51] [INFO] [33m[2026-06-05T09:04:51.379] [INFO] - [Disconnecting from 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 09:04:51] [INFO] [33m[2026-06-05T09:04:51.381] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 09:04:51] [INFO] [33m[2026-06-05T09:04:51.689] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 09:04:51] [INFO] [33m[2026-06-05T09:04:51.690] [INFO] - [Handling reconnect!][0m
