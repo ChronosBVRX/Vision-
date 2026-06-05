@@ -2497,3 +2497,17 @@ error: failed to push some refs to 'https://github.com/ChronosBVRX/Vision-.git'
 [2026-06-05 10:19:14] [INFO] [33m[2026-06-05T10:19:14.871] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
 [2026-06-05 10:19:14] [INFO] [33m[2026-06-05T10:19:14.944] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
 [2026-06-05 10:19:14] [INFO] [33m[2026-06-05T10:19:14.945] [INFO] - [Handling reconnect!][0m
+[2026-06-05 10:21:26] [INFO] [Env] Variables de entorno cargadas correctamente.
+[2026-06-05 10:21:28] [INFO] [DB] SQLite inicializado.
+[2026-06-05 10:21:28] [INFO] [DB] Memoria sincronizada: 474 sources, 428 pelis, 144 series.
+[2026-06-05 10:21:28] [INFO] [TelegramClient] Iniciando con API_ID: 2040, HASH: SET
+[2026-06-05 10:21:28] [INFO] [33m[2026-06-05T10:21:28.556] [INFO] - [Running gramJS version 2.26.21][0m
+[2026-06-05 10:21:28] [INFO] [TelegramClient] Conectando a Telegram...
+[2026-06-05 10:21:28] [INFO] [33m[2026-06-05T10:21:28.562] [INFO] - [Connecting to 149.154.175.52:80/TCPFull...][0m
+[2026-06-05 10:21:28] [INFO] [33m[2026-06-05T10:21:28.650] [INFO] - [Connection to 149.154.175.52:80/TCPFull complete!][0m
+[2026-06-05 10:21:28] [INFO] [33m[2026-06-05T10:21:28.652] [INFO] - [Using LAYER 198 for initial connect][0m
+[2026-06-05 10:21:28] [ERROR] [TelegramClient] Error al conectar: {"code":406,"errorMessage":"AUTH_KEY_DUPLICATED"}
+[2026-06-05 10:21:28] [INFO] Servidor corriendo en el puerto 5000
+[2026-06-05 10:21:28] [INFO] [SportsWorker] Iniciando refresco de cache de deportes...
+[2026-06-05 10:21:28] [INFO] [SportsScraper] Buscando espejos activos con búsqueda web dinámica mediante Puppeteer...
+[2026-06-05 10:21:29] [INFO] [SportsScraper] Consultando Brave Search para: "rojadirecta"...
