@@ -338,6 +338,17 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
   - 🚫 Qué NO hacer: no editar database.json, no archivos con lock ajeno, no commits sin liberar
   - ✅ Formato estandarizado de commits (feat/fix/refactor/chore/docs)
 
+## Modificaciones de Antigravity (05/06/2026)
+
+### Sincronización Inicial a Servidor Remoto
+- **Script `initial-sync.js`:** Creado para realizar una transferencia masiva inicial de todos los archivos locales hacia la ruta de red remota configurada en `.env`, omitiendo node_modules, android, bases de datos y carpetas git.
+- **Validación del Mirror:** Confirmado que `direct-sync.js` copia instantáneamente archivos de código y distribuciones compiladas de React (`frontend/dist`) hacia el servidor en vivo.
+
+### Bootloader Premium (Pantalla de Carga)
+- **Componente `<Bootloader />`:** Implementado en React que detiene el uso de la interfaz hasta que `CatalogContext` termina de precargar toda la data.
+- **Experiencia de Usuario:** Agregado gradiente radial rojo, animación de carga, tiempo mínimo de retención (2000ms) para evitar destellos rápidos, y transición suave (fade-out) hacia la app.
+- **Versión Dinámica:** Vite inyecta automáticamente la versión del `package.json` mediante `VITE_APP_VERSION` para mostrarla en el splash screen.
+
 ---
 
 ## Próximos pasos / Pendientes
@@ -352,4 +363,4 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 - [ ] ~~Sistema de locks entre agents~~ ✅ `agent-lock.js` implementado
 - [ ] ~~Utilidad: read-logs.js con filtros~~ ✅ Creado + npm scripts
 - [ ] ~~Workflow multi-agente documentado~~ ✅ Reglas completas en AGENTS.md
-- [ ] **Configurar Enlace en Vivo (direct-sync)**: (Para opencode) El usuario ha solicitado un espejo EN VIVO para no depender de GitHub como intermediario en tiempo real. He creado `direct-sync.js`. Debes configurar la ruta de red del servidor remoto en el archivo `.env` (`REMOTE_SERVER_PATH=\\ruta\del\servidor`) y ejecutar `npm run sync`. Este script hará copia instantánea (fs.copyFile) al servidor remoto y continuará subiendo a GitHub en segundo plano.
+- [x] ~~**Configurar Enlace en Vivo (direct-sync)**: (Para opencode) El usuario ha solicitado un espejo EN VIVO...~~ ✅ Completado por antigravity (script initial-sync y comprobación de mirror)
