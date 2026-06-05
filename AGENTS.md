@@ -126,6 +126,7 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 **Regla de Espejo en Vivo:** Todos los agentes (EXCEPTO el agente del servidor remoto) deben cerciorarse de lanzar y mantener corriendo en segundo plano el comando `npm run sync` al iniciar su sesión, para garantizar que todos los cambios se inyecten automáticamente al servidor remoto.
 
 **Antes de empezar cualquier tarea:**
+0. **CORRER EL SERVIDOR SIEMPRE:** Debes ejecutar `npm run dev` (o `npm run sync` en su defecto) en segundo plano **antes de hacer cualquier otra cosa**. Es una regla estricta ordenada por el usuario.
 1. `git pull origin main` — asegurar código más reciente
 2. `node agent-lock.js status` — verificar que no haya locks activos
 3. Si el archivo a editar tiene lock de otro agente → **detenerse y avisar al usuario**
