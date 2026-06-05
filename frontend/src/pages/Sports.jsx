@@ -106,6 +106,10 @@ export default function Sports() {
   const [resolveError, setResolveError] = useState(null);
   const resolvingRef = useRef(false);
   const resolveErrorBtnRef = useRef(null);
+  
+  // Track last match for retry with different servers
+  const [lastFailedMatch, setLastFailedMatch] = useState(null);
+  const [excludedServers, setExcludedServers] = useState([]);
 
   // Auto-focus close button when error overlay appears
   useEffect(() => {
@@ -229,20 +233,22 @@ export default function Sports() {
       });
   };
 
-  // Open the video player and let the player auto-resolve the stream list
-  const handleSelectMatch = (match) => {
+  // Open the video player and resolve the best stream for a match
+  const handleSelectMatch = (match, excludeList = []) => {
     if (resolvingRef.current) return;
     resolvingRef.current = true;
     setIsResolving(true);
     setResolveError(null);
     setResolveAttempts([]);
+    setLastFailedMatch(match);
+    setExcludedServers(excludeList);
 
     setActiveWatchSource({ title: match.title, isResolving: true });
 
     fetch(`/api/live/resolve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ streams: match.streams, type: 'sports' })
+      body: JSON.stringify({ streams: match.streams, type: 'sports', excludeServer: excludeList.length > 0 ? excludeList : undefined })
     })
       .then(r => r.json())
       .then(data => {
@@ -270,6 +276,7 @@ export default function Sports() {
             attempts: data.attempts || []
           };
           setActiveWatchSource(playableSource);
+          setLastFailedMatch(null);
         } else {
           setActiveWatchSource(null);
           setResolveError(data.error || "No hay fuentes disponibles en este momento.");
@@ -285,6 +292,18 @@ export default function Sports() {
         setIsResolving(false);
         resolvingRef.current = false;
       });
+  };
+
+  // Retry with the next available server excluded
+  const handleRetryWithNextServer = () => {
+    if (!lastFailedMatch) return;
+    // Find which server failed from the attempts
+    const failedNames = resolveAttempts
+      .filter(a => a.status === 'FAILED')
+      .map(a => a.server)
+      .filter(Boolean);
+    const newExcludeList = [...new Set([...excludedServers, ...failedNames])];
+    handleSelectMatch(lastFailedMatch, newExcludeList);
   };
 
   const filteredMatches = matches.filter(match => 
@@ -551,20 +570,28 @@ export default function Sports() {
               {resolveError}
             </p>
             
-            {import.meta.env.VITE_DEBUG_SOURCES === 'true' && resolveAttempts.length > 0 && (
-              <div style={{ textAlign: 'left', maxHeight: '200px', overflowY: 'auto', marginBottom: '20px', background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '6px' }}>
-                <h4 style={{ fontSize: '0.9rem', color: '#fff', marginBottom: '8px' }}>Intentos de resolución:</h4>
+            {/* Show tried servers */}
+            {resolveAttempts.length > 0 && (
+              <div style={{ textAlign: 'left', maxHeight: '160px', overflowY: 'auto', marginBottom: '16px', background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '6px' }}>
+                <h4 style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: '6px' }}>Servidores probados:</h4>
                 {resolveAttempts.map((att, i) => (
-                  <div key={i} style={{ fontSize: '0.8rem', color: att.status === 'SUCCESS' ? '#4caf50' : '#f44336', marginBottom: '4px' }}>
-                    • [{att.language}] {att.sourceName}: {att.status} ({att.reason})
+                  <div key={i} style={{ fontSize: '0.78rem', color: att.status === 'SUCCESS' ? 'var(--primary)' : '#f44336', marginBottom: '3px' }}>
+                    • {att.sourceName}: {att.status === 'SUCCESS' ? '✅' : '❌'} {att.reason}
                   </div>
                 ))}
               </div>
             )}
             
-            <button ref={resolveErrorBtnRef} className="btn btn-secondary focusable" tabIndex={0} onClick={() => setResolveError(null)}>
-              <X size={18} /> Cerrar
-            </button>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              {lastFailedMatch && (
+                <button className="btn btn-primary focusable" tabIndex={0} onClick={handleRetryWithNextServer}>
+                  <RefreshCw size={16} /> Reintentar con otro servidor
+                </button>
+              )}
+              <button ref={resolveErrorBtnRef} className="btn btn-secondary focusable" tabIndex={0} onClick={() => { setResolveError(null); setLastFailedMatch(null); }}>
+                <X size={18} /> Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

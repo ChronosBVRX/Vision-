@@ -488,13 +488,24 @@ async function sniffVideoUrl(targetUrl) {
         '--disable-gpu',
         '--mute-audio',
         '--ignore-certificate-errors',
-        '--ignore-certificate-errors-spki-list'
+        '--ignore-certificate-errors-spki-list',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process'
       ]
     });
 
     const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
     await page.setViewport({ width: 1280, height: 720 });
+    
+    // Stealth: hide webdriver and add chrome runtime
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['es-MX', 'es', 'en'] });
+      window.chrome = { runtime: {} };
+    });
     
     // Enable request interception for Ad-blocking and media sniffing
     await page.setRequestInterception(true);
@@ -517,7 +528,24 @@ async function sniffVideoUrl(targetUrl) {
         lowerUrl.includes('whos.amung.us') || 
         lowerUrl.includes('pagead') || 
         lowerUrl.includes('adsense') || 
-        resourceType === 'image' && !lowerUrl.includes('logo') || // Block ads loading images
+        lowerUrl.includes('cpmstar') ||
+        lowerUrl.includes('exoclick') ||
+        lowerUrl.includes('trafficjunky') ||
+        lowerUrl.includes('outbrain') ||
+        lowerUrl.includes('taboola') ||
+        lowerUrl.includes('adserver') ||
+        lowerUrl.includes('adnxs') ||
+        lowerUrl.includes('rubicon') ||
+        lowerUrl.includes('criteo') ||
+        lowerUrl.includes('amazon-adsystem') ||
+        lowerUrl.includes('casalemedia') ||
+        lowerUrl.includes('adsafeprotected') ||
+        lowerUrl.includes('moatads') ||
+        lowerUrl.includes('servedby') ||
+        lowerUrl.includes('adscale') ||
+        lowerUrl.includes('adition') ||
+        lowerUrl.includes('advertising') ||
+        resourceType === 'image' && !lowerUrl.includes('logo') && !lowerUrl.includes('banner') ||
         resourceType === 'font';
 
       if (isAd) {
@@ -530,10 +558,12 @@ async function sniffVideoUrl(targetUrl) {
         lowerUrl.includes('.m3u8') || 
         lowerUrl.includes('.mpd') ||
         lowerUrl.includes('/manifest') ||
-        (lowerUrl.includes('.mp4') && !lowerUrl.includes('ads') && !lowerUrl.includes('loader')) ||
+        (lowerUrl.includes('.mp4') && !lowerUrl.includes('ads') && !lowerUrl.includes('loader') && !lowerUrl.includes('preload')) ||
         lowerUrl.includes('/playlist.m3u8') ||
         lowerUrl.includes('.m3u8?') ||
-        lowerUrl.includes('.mpd?');
+        lowerUrl.includes('.mpd?') ||
+        lowerUrl.includes('/live') && lowerUrl.includes('.ts') ||
+        lowerUrl.includes('segment') && lowerUrl.includes('.ts');
 
       if (isStream) {
         console.log(`[Sniffer] ¡Video detectado en peticion de red! -> ${url}`);
@@ -557,7 +587,9 @@ async function sniffVideoUrl(targetUrl) {
         contentType.includes('application/vnd.apple.mpegurl') || 
         contentType.includes('application/dash+xml') ||
         contentType.includes('video/mpd') ||
-        (contentType.includes('video/mp4') && !url.includes('ads'))
+        (contentType.includes('video/mp4') && !url.includes('ads')) ||
+        contentType.includes('video/mp2t') ||
+        contentType.includes('video/quicktime')
       ) {
         console.log(`[Sniffer] ¡Video detectado en respuesta Content-Type! -> ${url} (${contentType})`);
         detectedVideoUrl = url;
@@ -572,30 +604,58 @@ async function sniffVideoUrl(targetUrl) {
     try {
       await page.goto(targetUrl, { 
         waitUntil: 'domcontentloaded', 
-        timeout: 10000 
+        timeout: 15000 
       });
     } catch (e) {
-      // Continue even if page timeout was hit, scripts might have already loaded
       console.log(`[Sniffer] Nota: Goto completo o excedio tiempo en ${targetUrl}`);
     }
 
-    // Esperar a que se carguen los scripts e intentar clics automáticos en el centro de la pantalla
-    await new Promise(resolve => setTimeout(resolve, 2500));
+    // Wait for initial scripts and try multiple click strategies
+    await new Promise(resolve => setTimeout(resolve, 3000));
     try {
       console.log(`[Sniffer] Realizando clics simulados para iniciar reproducción...`);
-      await page.mouse.click(640, 360);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      await page.mouse.click(640, 360);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      await page.mouse.click(640, 360);
+      // Strategy 1: Click center of page
+      const viewport = page.viewportSize() || { width: 1280, height: 720 };
+      await page.mouse.click(viewport.width / 2, viewport.height / 2);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Strategy 2: Click slightly above center (where video players usually are)
+      await page.mouse.click(viewport.width / 2, viewport.height * 0.4);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Strategy 3: Click lower third
+      await page.mouse.click(viewport.width / 2, viewport.height * 0.6);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Strategy 4: Click on known video containers if they exist
+      try {
+        await page.click('video, iframe, .video-js, .player, .plyr, [class*="player"], [id*="player"], [id*="video"]', { timeout: 500 });
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (e) {}
+      
+      // Strategy 5: Try clicking play buttons
+      try {
+        await page.click('[class*="play"], [id*="play"], button, [class*="btn-play"], [class*="start"]', { timeout: 500 });
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (e) {}
+      
+      // Strategy 6: Final center click
+      await page.mouse.click(viewport.width / 2, viewport.height * 0.45);
+      await new Promise(resolve => setTimeout(resolve, 500));
     } catch (clickErr) {
       console.warn(`[Sniffer] Advertencia al cliquear:`, clickErr.message);
     }
 
-    // Wait and poll for up to 10 seconds for the scripts to decode window._econfig and fetch stream
+    // Wait and poll for up to 20 seconds for stream detection
     const startTime = Date.now();
-    while (Date.now() - startTime < 10000) {
+    while (Date.now() - startTime < 20000) {
       if (detectedVideoUrl) break;
+      // Every 3 seconds, try another click to trigger lazy-loaded players
+      if ((Date.now() - startTime) % 3000 < 500) {
+        try {
+          await page.mouse.click(640, 380);
+        } catch (e) {}
+      }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
@@ -603,7 +663,7 @@ async function sniffVideoUrl(targetUrl) {
     console.error(`[Sniffer] Error durante sniffing de ${targetUrl}:`, error.message);
   } finally {
     if (browser) {
-      await browser.close();
+      try { await browser.close(); } catch (e) {}
     }
   }
 

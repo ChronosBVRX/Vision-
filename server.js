@@ -1163,7 +1163,24 @@ app.post('/api/live/resolve', async (req, res) => {
                              videoUrl.toLowerCase().includes('.avi');
                              
       if (!isDirectStream) {
-        const sniffResult = await sniffVideoUrl(stream.url);
+        // Try Puppeteer sniffer first
+        let sniffResult = await sniffVideoUrl(stream.url);
+        
+        // If Puppeteer fails, try Playwright browserResolver as fallback
+        if (!sniffResult || !sniffResult.url) {
+          console.log(`[Server] Puppeteer sniffer falló para ${serverName}. Intentando con Playwright browserResolver...`);
+          try {
+            const { sniffAuthorizedEmbed } = require('./server/resolvers/browserResolver');
+            const pwResult = await sniffAuthorizedEmbed(stream.url, { bypassAuth: true });
+            if (pwResult && pwResult.success) {
+              sniffResult = { url: pwResult.url, referer: '' };
+              console.log(`[Server] Playwright browserResolver tuvo éxito: ${pwResult.url}`);
+            }
+          } catch (pwErr) {
+            console.warn(`[Server] Playwright fallback también falló: ${pwErr.message}`);
+          }
+        }
+        
         if (sniffResult && sniffResult.url) {
           videoUrl = sniffResult.url;
           referer = sniffResult.referer;
@@ -1190,44 +1207,62 @@ app.post('/api/live/resolve', async (req, res) => {
             const originUrl = new URL(stream.url).origin;
             if (videoUrl.includes('54434687.net') || videoUrl.includes('verfutbol')) {
               checkReferer = 'https://verfutbol.at/';
+            } else if (videoUrl.includes('pirlotv')) {
+              checkReferer = 'https://pirlotv.dev/';
             } else {
               checkReferer = originUrl;
             }
           } catch (e) {}
         }
 
+        // Use validatePlayableUrl from sourceValidator for robust validation
         try {
-          const checkRes = await axios({
-            method: 'head',
-            url: videoUrl,
-            timeout: 4000,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Referer': checkReferer
-            },
-            validateStatus: (status) => status >= 200 && status < 400
-          });
-          console.log(`[Server] ¡Validación HEAD exitosa! Status: ${checkRes.status}`);
-          isValidStream = true;
-        } catch (headErr) {
-          console.log(`[Server] HEAD falló (${headErr.message}), intentando GET parcial de respaldo...`);
-          try {
-            const checkResGet = await axios({
-              method: 'get',
-              url: videoUrl,
-              timeout: 4000,
-              headers: { 
-                Range: 'bytes=0-100',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': checkReferer
-              },
-              validateStatus: (status) => status >= 200 && status < 400
-            });
-            console.log(`[Server] ¡Validación GET exitosa! Status: ${checkResGet.status}`);
+          const { validatePlayableUrl } = require('./server/resolvers/sourceValidator');
+          const validationResult = await validatePlayableUrl(videoUrl, { Referer: checkReferer });
+          
+          if (validationResult.success) {
+            console.log(`[Server] ¡Validación exitosa via sourceValidator! Status: ${validationResult.type}`);
             isValidStream = true;
-          } catch (getErr) {
-            console.warn(`[Server] Validación de conectividad fallida para: ${videoUrl}. Error: ${getErr.message}`);
+            videoUrl = validationResult.url; // Use final URL after redirects
+          } else {
+            console.warn(`[Server] Validación sourceValidator falló: ${validationResult.reason}`);
+            // Fallback to legacy inline validation
+            try {
+              const checkRes = await axios({
+                method: 'head',
+                url: videoUrl,
+                timeout: 4000,
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  'Referer': checkReferer
+                },
+                validateStatus: (status) => status >= 200 && status < 400
+              });
+              console.log(`[Server] ¡Validación HEAD exitosa! Status: ${checkRes.status}`);
+              isValidStream = true;
+            } catch (headErr) {
+              console.log(`[Server] HEAD falló (${headErr.message}), intentando GET parcial...`);
+              try {
+                const checkResGet = await axios({
+                  method: 'get',
+                  url: videoUrl,
+                  timeout: 4000,
+                  headers: { 
+                    Range: 'bytes=0-100',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': checkReferer
+                  },
+                  validateStatus: (status) => status >= 200 && status < 400
+                });
+                console.log(`[Server] ¡Validación GET exitosa! Status: ${checkResGet.status}`);
+                isValidStream = true;
+              } catch (getErr) {
+                console.warn(`[Server] Validación de conectividad fallida para: ${videoUrl}. Error: ${getErr.message}`);
+              }
+            }
           }
+        } catch (valErr) {
+          console.warn(`[Server] Error en validación: ${valErr.message}`);
         }
 
         if (isValidStream) {
@@ -1257,7 +1292,6 @@ app.post('/api/live/resolve', async (req, res) => {
         }
 
         if (!isValidStream) {
-          // Fallback if isValidStream fails
           console.log(`[Server] Servidor ${serverName} falló validación de conectividad.`);
           attempts.push({
             sourceName: serverName,
@@ -1752,6 +1786,110 @@ app.post('/api/catalog/clear', (req, res) => {
   if (!type || type === 'anime_series') db.animeSeriesCatalog = [];
   writeDB(db);
   res.json({ success: true, message: 'Catálogo limpiado.' });
+});
+
+// POST /api/catalog/refresh-all — Refresh ALL catalogs sequentially (movies, series, anime, TV live, sports)
+app.post('/api/catalog/refresh-all', async (req, res) => {
+  res.json({ success: true, message: 'Refrescando todos los catálogos en segundo plano...' });
+  
+  console.log('[RefreshAll] ===== INICIANDO ACTUALIZACIÓN COMPLETA DE CATÁLOGOS =====');
+  
+  // 1. Movies & Series
+  console.log('[RefreshAll] ▶ Catálogo de películas y series...');
+  try {
+    if (!catalogSyncInProgress) {
+      await runCatalogSync();
+      console.log('[RefreshAll] ✅ Catálogo de películas/series completado.');
+    } else {
+      console.log('[RefreshAll] ⏭ Catálogo ya en progreso, saltando.');
+    }
+  } catch (e) {
+    console.error('[RefreshAll] ❌ Error en catálogo películas/series:', e.message);
+  }
+
+  // 2. Anime
+  console.log('[RefreshAll] ▶ Catálogo de anime...');
+  try {
+    if (!animeSyncInProgress) {
+      await runAnimeSync();
+      console.log('[RefreshAll] ✅ Catálogo de anime completado.');
+    } else {
+      console.log('[RefreshAll] ⏭ Anime ya en progreso, saltando.');
+    }
+  } catch (e) {
+    console.error('[RefreshAll] ❌ Error en catálogo anime:', e.message);
+  }
+
+  // 3. Pluto TV Live
+  console.log('[RefreshAll] ▶ Pluto TV en vivo...');
+  try {
+    const plutoLive = await scrapePlutoTVLive();
+    if (plutoLive && plutoLive.length > 0) {
+      const db = readDB();
+      let added = 0;
+      for (const source of plutoLive) {
+        if (!db.sources.some(s => s.id === source.id)) {
+          db.sources.push(source);
+          added++;
+        }
+      }
+      writeDB(db);
+      console.log(`[RefreshAll] ✅ Pluto TV Live: +${added} canales.`);
+    }
+  } catch (e) {
+    console.error('[RefreshAll] ❌ Error Pluto TV Live:', e.message);
+  }
+
+  // 4. Pluto TV VOD
+  console.log('[RefreshAll] ▶ Pluto TV bajo demanda...');
+  try {
+    const plutoVod = await scrapePlutoTVOnDemand();
+    if (plutoVod && plutoVod.length > 0) {
+      const db = readDB();
+      let added = 0;
+      for (const source of plutoVod) {
+        if (!db.sources.some(s => s.id === source.id)) {
+          db.sources.push(source);
+          added++;
+        }
+      }
+      writeDB(db);
+      console.log(`[RefreshAll] ✅ Pluto TV VOD: +${added} películas.`);
+    }
+  } catch (e) {
+    console.error('[RefreshAll] ❌ Error Pluto TV VOD:', e.message);
+  }
+
+  // 5. Planeta Play Live
+  console.log('[RefreshAll] ▶ Planeta Play en vivo...');
+  try {
+    const planeta = await scrapePlanetaPlayLive();
+    if (planeta && planeta.length > 0) {
+      const db = readDB();
+      let added = 0;
+      for (const source of planeta) {
+        if (!db.sources.some(s => s.id === source.id)) {
+          db.sources.push(source);
+          added++;
+        }
+      }
+      writeDB(db);
+      console.log(`[RefreshAll] ✅ Planeta Play: +${added} canales.`);
+    }
+  } catch (e) {
+    console.error('[RefreshAll] ❌ Error Planeta Play:', e.message);
+  }
+
+  // 6. Sports cache
+  console.log('[RefreshAll] ▶ Deportes en vivo...');
+  try {
+    await refreshSportsCache();
+    console.log('[RefreshAll] ✅ Deportes actualizado.');
+  } catch (e) {
+    console.error('[RefreshAll] ❌ Error deportes:', e.message);
+  }
+
+  console.log('[RefreshAll] ===== ACTUALIZACIÓN COMPLETA FINALIZADA =====');
 });
 
 // Helper to clean search titles for TMDB API search
