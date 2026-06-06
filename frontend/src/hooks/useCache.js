@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 const DEFAULT_TTL = 5 * 60 * 1000;
-const CACHE_PREFIX = 'vp_cache_';
+const APP_VERSION = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_APP_VERSION : '1.0.0';
+const CACHE_PREFIX = 'vp_cache_' + APP_VERSION + '_';
 
 function getCacheItem(key) {
   try {
