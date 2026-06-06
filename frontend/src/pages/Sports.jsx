@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PlayCircle, Search, RefreshCw, AlertCircle, Play, Globe, Settings, Clock, Activity, Loader, X, Trophy } from 'lucide-react';
+import { PlayCircle, Search, RefreshCw, AlertCircle, Play, Globe, Settings, Clock, Activity, Loader, X, Trophy, SkipForward } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
 import LoadingScreen from '../components/LoadingScreen';
 
@@ -107,14 +107,30 @@ export default function Sports() {
   const resolvingRef = useRef(false);
   const resolveErrorBtnRef = useRef(null);
   
+  // Live client clock
+  const [clientTime, setClientTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setClientTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Track last match for retry with different servers
   const [lastFailedMatch, setLastFailedMatch] = useState(null);
   const [excludedServers, setExcludedServers] = useState([]);
+  const [currentMatchStreams, setCurrentMatchStreams] = useState([]);
+  const [remainingSources, setRemainingSources] = useState(0);
+  const [currentSourceIndex, setCurrentSourceIndex] = useState(0);
+  const autoRetryTimerRef = useRef(null);
 
   // Auto-focus close button when error overlay appears
   useEffect(() => {
     if (resolveError) setTimeout(() => resolveErrorBtnRef.current?.focus(), 100);
   }, [resolveError]);
+
+  // Cleanup auto-retry timer on unmount
+  useEffect(() => {
+    return () => { if (autoRetryTimerRef.current) clearTimeout(autoRetryTimerRef.current); };
+  }, []);
 
   // Polling reference for background updates
   const pollingIntervalRef = useRef(null);
@@ -236,16 +252,42 @@ export default function Sports() {
   // Open the video player and resolve the best stream for a match
   const handleSelectMatch = (match, excludeList = []) => {
     if (resolvingRef.current) return;
+    if (autoRetryTimerRef.current) clearTimeout(autoRetryTimerRef.current);
     resolvingRef.current = true;
     setIsResolving(true);
     setResolveError(null);
     setResolveAttempts([]);
     setLastFailedMatch(match);
     setExcludedServers(excludeList);
+    setCurrentMatchStreams(match.streams || []);
+
+    // Calculate remaining sources not yet excluded
+    const availableStreams = (match.streams || []).filter(s => {
+      const name = s.name || '';
+      return !excludeList.some(exc => name.toLowerCase().includes(exc.toLowerCase()));
+    });
+    setRemainingSources(availableStreams.length);
+    setCurrentSourceIndex((match.streams || []).length - availableStreams.length + 1);
 
     setActiveWatchSource({ title: match.title, isResolving: true });
 
-    fetch(`/api/live/resolve`, {
+    // Also search for additional mirrors in parallel
+    const mirrorPromise = fetch(`/api/sports/search-mirrors`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: match.title, sport: match.sport, existingUrls: (match.streams || []).map(s => s.url) })
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.mirrors && data.mirrors.length > 0) {
+          console.log(`[Sports] ${data.mirrors.length} espejos adicionales encontrados para "${match.title}"`);
+          return data.mirrors;
+        }
+        return [];
+      })
+      .catch(() => []);
+
+    const resolvePromise = fetch(`/api/live/resolve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ streams: match.streams, type: 'sports', excludeServer: excludeList.length > 0 ? excludeList : undefined })
@@ -277,11 +319,62 @@ export default function Sports() {
           };
           setActiveWatchSource(playableSource);
           setLastFailedMatch(null);
-        } else {
-          setActiveWatchSource(null);
-          setResolveError(data.error || "No hay fuentes disponibles en este momento.");
-          setResolveAttempts(data.attempts || []);
+          return { resolved: true };
         }
+        return { resolved: false, error: data.error, attempts: data.attempts || [] };
+      });
+
+    Promise.all([resolvePromise, mirrorPromise])
+      .then(([resolveResult, mirrors]) => {
+        if (resolveResult.resolved) return; // Already playing
+
+        // If primary resolve failed but we have mirrors, try them
+        if (mirrors.length > 0 && lastFailedMatch) {
+          const newStreams = [...(match.streams || [])];
+          let added = 0;
+          mirrors.forEach(m => {
+            if (!newStreams.some(s => s.url === m.url)) {
+              newStreams.push({ name: `Espejo ${newStreams.length + 1}`, url: m.url, resolver: 'direct' });
+              added++;
+            }
+          });
+          if (added > 0) {
+            console.log(`[Sports] Reintentando con ${added} espejos adicionales...`);
+            match.streams = newStreams;
+            // Try again with the new streams
+            fetch(`/api/live/resolve`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ streams: newStreams, type: 'sports', excludeServer: excludeList.length > 0 ? excludeList : undefined })
+            })
+              .then(r => r.json())
+              .then(data2 => {
+                if (data2.success) {
+                  const playableSource = {
+                    id: match.id || Date.now().toString(),
+                    title: match.title,
+                    type: 'sports',
+                    isSports: true,
+                    provider: "live-resolver",
+                    selectedLanguage: data2.selectedLanguage,
+                    selectedServer: data2.selectedServer,
+                    selectedStreamIndex: 0,
+                    originalStreams: newStreams,
+                    streams: [{ name: data2.selectedServer, url: data2.stream.url, type: data2.stream.type, headers: data2.stream.headers || {}, quality: data2.stream.quality || "auto", resolver: data2.stream.resolver || "direct" }],
+                    attempts: data2.attempts || []
+                  };
+                  setActiveWatchSource(playableSource);
+                  setLastFailedMatch(null);
+                  return;
+                }
+                showResolveError(data2.error || "No hay fuentes disponibles.", data2.attempts || []);
+              });
+            return;
+          }
+        }
+
+        // Still failed - show error
+        showResolveError(resolveResult.error || "No hay fuentes disponibles en este momento.", resolveResult.attempts || []);
       })
       .catch(err => {
         console.error("Resolution error:", err);
@@ -294,16 +387,39 @@ export default function Sports() {
       });
   };
 
-  // Retry with the next available server excluded
-  const handleRetryWithNextServer = () => {
+  const showResolveError = (errorMsg, attempts) => {
+    setActiveWatchSource(null);
+    setResolveError(errorMsg);
+    setResolveAttempts(attempts);
+  };
+
+  // Skip to next source (exclude current failed one and retry)
+  const handleSkipToNextSource = () => {
     if (!lastFailedMatch) return;
-    // Find which server failed from the attempts
+    if (autoRetryTimerRef.current) clearTimeout(autoRetryTimerRef.current);
     const failedNames = resolveAttempts
       .filter(a => a.status === 'FAILED')
       .map(a => a.server)
       .filter(Boolean);
     const newExcludeList = [...new Set([...excludedServers, ...failedNames])];
     handleSelectMatch(lastFailedMatch, newExcludeList);
+  };
+
+  // Auto-try next source after failure (2s delay with cancel option)
+  const handleAutoRetryNext = () => {
+    if (!lastFailedMatch) return;
+    if (autoRetryTimerRef.current) clearTimeout(autoRetryTimerRef.current);
+    const availableStreams = currentMatchStreams.filter(s => {
+      const name = s.name || '';
+      return !excludedServers.some(exc => name.toLowerCase().includes(exc.toLowerCase()));
+    });
+    const failedInThisBatch = resolveAttempts.filter(a => a.status === 'FAILED').length;
+    const remainingCount = availableStreams.length - failedInThisBatch;
+    if (remainingCount <= 0) return; // No more sources to try
+
+    autoRetryTimerRef.current = setTimeout(() => {
+      handleSkipToNextSource();
+    }, 2500);
   };
 
   const filteredMatches = matches.filter(match => 
@@ -336,8 +452,8 @@ export default function Sports() {
         </div>
         <div className="sports-header-right">
           {lastUpdated && (
-            <span className="sports-update-time">
-              <Clock size={14} /> Act. {getFormattedTime(lastUpdated)}
+            <span className="sports-update-time" style={{ opacity: 0.7 }}>
+              <RefreshCw size={12} />{getFormattedTime(lastUpdated)}
             </span>
           )}
           <button 
@@ -551,47 +667,89 @@ export default function Sports() {
 
       {/* RESOLVER LOADING OVERLAY */}
       {(isResolving || (activeWatchSource && activeWatchSource.isResolving)) && (
-        <LoadingScreen 
-          type="resolver" 
-          theme="sports"
-          title={activeWatchSource?.title || 'Sintonizando transmisión...'} 
-          onCancel={() => { setActiveWatchSource(null); setIsResolving(false); }} 
-        />
+        <div className="watch-overlay" style={{ zIndex: 9999 }}>
+          <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 10000 }}>
+            <button className="btn btn-secondary focusable" tabIndex={0} onClick={() => { setActiveWatchSource(null); setIsResolving(false); if (autoRetryTimerRef.current) clearTimeout(autoRetryTimerRef.current); }}
+              style={{ padding: '8px 16px', fontSize: '0.82rem', opacity: 0.8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <X size={16} /> Cancelar
+            </button>
+          </div>
+          <LoadingScreen 
+            type="resolver" 
+            theme="sports"
+            title={activeWatchSource?.title || 'Sintonizando transmisión...'} 
+            onCancel={() => { setActiveWatchSource(null); setIsResolving(false); }} 
+          />
+          {remainingSources > 1 && (
+            <div style={{ position: 'absolute', bottom: '80px', left: '50%', transform: 'translateX(-50%)', textAlign: 'center', zIndex: 10000 }}>
+              <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '8px' }}>
+                Fuente {currentSourceIndex} de {currentSourceIndex + remainingSources - 1}
+              </p>
+              <button className="focusable" tabIndex={0} onClick={handleSkipToNextSource}
+                style={{ padding: '8px 20px', fontSize: '0.85rem', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '20px', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s' }}>
+                <SkipForward size={14} /> Saltar a siguiente fuente
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* RESOLVER ERROR / DEBUG OVERLAY */}
       {resolveError && (
         <div className="watch-overlay" style={{ justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
-          <div style={{ textAlign: 'center', maxWidth: '550px', padding: '24px' }} className="glass-panel form-card">
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent)', marginBottom: '12px' }}>
-              Error de Conexión
+          <div style={{ textAlign: 'center', maxWidth: '520px', padding: '28px' }} className="glass-panel form-card">
+            <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(239,68,68,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <AlertCircle size={28} style={{ color: '#ef4444' }} />
+            </div>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>
+              Sin conexión
             </h3>
-            <p className="text-secondary" style={{ marginBottom: '20px', fontSize: '0.95rem' }}>
+            <p className="text-secondary" style={{ marginBottom: '18px', fontSize: '0.88rem', lineHeight: 1.5 }}>
               {resolveError}
             </p>
             
             {/* Show tried servers */}
             {resolveAttempts.length > 0 && (
-              <div style={{ textAlign: 'left', maxHeight: '160px', overflowY: 'auto', marginBottom: '16px', background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '6px' }}>
-                <h4 style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: '6px' }}>Servidores probados:</h4>
+              <div style={{ textAlign: 'left', maxHeight: '140px', overflowY: 'auto', marginBottom: '18px', background: 'rgba(0,0,0,0.3)', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                <h4 style={{ fontSize: '0.78rem', color: '#888', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Servidores probados:</h4>
                 {resolveAttempts.map((att, i) => (
-                  <div key={i} style={{ fontSize: '0.78rem', color: att.status === 'SUCCESS' ? 'var(--primary)' : '#f44336', marginBottom: '3px' }}>
-                    • {att.sourceName}: {att.status === 'SUCCESS' ? '✅' : '❌'} {att.reason}
+                  <div key={i} style={{ fontSize: '0.78rem', color: att.status === 'SUCCESS' ? 'var(--primary)' : '#f87171', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: att.status === 'SUCCESS' ? '#22c55e' : '#ef4444', display: 'inline-block', flexShrink: 0 }}></span>
+                    {att.sourceName}
+                    <span style={{ color: '#666', fontSize: '0.7rem', marginLeft: 'auto' }}>{att.reason}</span>
                   </div>
                 ))}
               </div>
             )}
             
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              {lastFailedMatch && (
-                <button className="btn btn-primary focusable" tabIndex={0} onClick={handleRetryWithNextServer}>
-                  <RefreshCw size={16} /> Reintentar con otro servidor
-                </button>
-              )}
-              <button ref={resolveErrorBtnRef} className="btn btn-secondary focusable" tabIndex={0} onClick={() => { setResolveError(null); setLastFailedMatch(null); }}>
-                <X size={18} /> Cerrar
-              </button>
-            </div>
+            {/* Calculate remaining sources */}
+            {(() => {
+              const failedInThisBatch = resolveAttempts.filter(a => a.status === 'FAILED').length;
+              const remainingCount = currentMatchStreams.length - excludedServers.length - failedInThisBatch;
+              const hasMoreSources = remainingCount > 0 && lastFailedMatch;
+              return hasMoreSources ? (
+                <div>
+                  <p style={{ fontSize: '0.78rem', color: '#999', marginBottom: '14px' }}>
+                    {remainingCount} fuente{remainingCount !== 1 ? 's' : ''} restante{remainingCount !== 1 ? 's' : ''} por probar
+                  </p>
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <button className="btn btn-primary focusable" tabIndex={0} onClick={() => { handleSkipToNextSource(); if (autoRetryTimerRef.current) clearTimeout(autoRetryTimerRef.current); }}
+                      style={{ background: 'linear-gradient(135deg, var(--primary) 0%, #6d28d9 100%)', border: 'none', padding: '10px 22px', borderRadius: '10px', fontWeight: 700, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 16px rgba(124,58,237,0.3)' }}>
+                      <SkipForward size={16} /> Probar siguiente fuente
+                    </button>
+                    <button ref={resolveErrorBtnRef} className="btn btn-secondary focusable" tabIndex={0} onClick={() => { setResolveError(null); setLastFailedMatch(null); if (autoRetryTimerRef.current) clearTimeout(autoRetryTimerRef.current); }}>
+                      <X size={16} /> Cerrar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <button ref={resolveErrorBtnRef} className="btn btn-secondary focusable" tabIndex={0} onClick={() => { setResolveError(null); setLastFailedMatch(null); }}>
+                    <X size={16} /> Cerrar
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -618,6 +776,36 @@ export default function Sports() {
           }}
         />
       )}
+
+      {/* Persistent Fixed Clock */}
+      <div style={{
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
+        zIndex: 99999,
+        background: 'rgba(0,0,0,0.6)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: '12px',
+        padding: '10px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontVariantNumeric: 'tabular-nums',
+        fontFamily: 'var(--font-alt)',
+        fontSize: '0.85rem',
+        fontWeight: 600,
+        color: '#fff',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+        letterSpacing: '0.5px',
+        pointerEvents: 'none',
+        userSelect: 'none'
+      }}>
+        <Clock size={16} style={{ color: 'var(--primary-light)', filter: 'drop-shadow(0 0 6px var(--primary-glow))' }} />
+        {clientTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+        <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.35)', marginLeft: '2px' }}>CL</span>
+      </div>
     </div>
   );
 }

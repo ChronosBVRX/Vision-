@@ -847,74 +847,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         }
       }
 
-      // ── Arrow keys: navigate controls or show them ──────────────
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        const isInGuide = activeEl?.closest('.channel-guide-panel');
-        // Use ref to avoid stale closure — showControlsRef always has fresh value
-        const controlsCurrentlyVisible = showControlsRef.current;
-        
-        if (!controlsCurrentlyVisible) {
-          if (isTV) {
-            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-              e.preventDefault();
-              e.stopPropagation();
-              if (e.key === 'ArrowUp') {
-                switchToPrevChannel();
-              } else {
-                switchToNextChannel();
-              }
-              return;
-            }
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-              e.preventDefault();
-              e.stopPropagation();
-              setShowChannelGuide(true);
-              return;
-            }
-          }
-
-          // Controls hidden VOD → show them and focus first button
-          e.preventDefault();
-          e.stopPropagation();
-          resetControlsTimer(); // This sets showControls(true) + updates ref
-          setTimeout(() => {
-            const firstBtn = document.querySelector('.custom-player-buttons-row .control-btn');
-            if (firstBtn) firstBtn.focus();
-          }, 50); // Small delay to let React re-render the visible overlay first
-          return;
-        }
-
-        // Controls visible → let special elements handle left/right natively
-        const isSpecial = activeEl?.classList?.contains?.('custom-player-progress-bar-wrapper')
-                       || activeEl?.classList?.contains?.('volume-slider')
-                       || activeEl?.closest?.('.channel-category-tabs-container');
-        if (isSpecial && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-          resetControlsTimer();
-          return; // Let the element's own handler process it
-        }
-
-        // Navigate between focusable elements
-        e.preventDefault();
-        e.stopPropagation();
-        const player = document.querySelector('.watch-overlay');
-        if (!player) return;
-        const focusables = Array.from(player.querySelectorAll('.focusable')).filter(el => {
-          return el.offsetParent !== null && !el.disabled;
-        });
-        if (focusables.length === 0) return;
-        const curIdx = focusables.indexOf(activeEl);
-        let nextIdx;
-        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-          nextIdx = curIdx < focusables.length - 1 ? curIdx + 1 : 0;
-        } else {
-          nextIdx = curIdx > 0 ? curIdx - 1 : focusables.length - 1;
-        }
-        focusables[nextIdx]?.focus();
-        resetControlsTimer();
-        return;
-      }
-
-      // ── Channel guide mode ──────────────────────────────────────
+      // ── Channel guide mode FIRST (before general arrow keys) ────
       if (isTV && showChannelGuide) {
         const isInSearch = activeEl?.classList.contains('channel-guide-search-input');
         const isInCategories = activeEl?.closest('.channel-category-tabs-container');
@@ -924,7 +857,6 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
           e.preventDefault();
           e.stopPropagation();
           setShowChannelGuide(false);
-          // Focus the guide list button
           setTimeout(() => {
             const btn = document.querySelector('.custom-player-buttons-row .control-btn');
             if (btn) btn.focus();
@@ -940,7 +872,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             return;
           }
           if (e.key === 'Enter') {
-            return; // Let the input behave normally (accept enter/typing)
+            return;
           }
         }
 
@@ -980,7 +912,6 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             const items = Array.from(document.querySelectorAll('.channel-guide-item'));
             const cur = items.indexOf(activeEl);
             if (cur === 0 && e.key === 'ArrowUp') {
-              // Move focus to category tabs
               const activeTab = document.querySelector('.channel-category-tab.active') || document.querySelector('.channel-category-tab');
               if (activeTab) activeTab.focus();
               return;
@@ -993,7 +924,6 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
           }
           if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
             e.preventDefault(); e.stopPropagation();
-            // Switch categories via arrow keys inside list
             const tabs = Array.from(document.querySelectorAll('.channel-category-tab'));
             const activeTab = document.querySelector('.channel-category-tab.active');
             const curIdx = tabs.indexOf(activeTab);
@@ -1009,10 +939,77 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
           }
         }
 
-        // Fallback to avoid double bubble
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' '].includes(e.key)) {
+        // Guide open but focus outside guide elements → block arrow keys
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          e.preventDefault(); e.stopPropagation();
           return;
         }
+      }
+
+      // ── Arrow keys: navigate controls or show them ──────────────
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        // Use ref to avoid stale closure — showControlsRef always has fresh value
+        const controlsCurrentlyVisible = showControlsRef.current;
+        
+        if (!controlsCurrentlyVisible) {
+          if (isTV) {
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              e.preventDefault();
+              e.stopPropagation();
+              if (e.key === 'ArrowUp') {
+                switchToPrevChannel();
+              } else {
+                switchToNextChannel();
+              }
+              return;
+            }
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowChannelGuide(true);
+              return;
+            }
+          }
+
+          // Controls hidden VOD → show them and focus first button
+          e.preventDefault();
+          e.stopPropagation();
+          resetControlsTimer();
+          setTimeout(() => {
+            const firstBtn = document.querySelector('.custom-player-buttons-row .control-btn');
+            if (firstBtn) firstBtn.focus();
+          }, 50);
+          return;
+        }
+
+        // Controls visible → let special elements handle left/right natively
+        const isSpecial = activeEl?.classList?.contains?.('custom-player-progress-bar-wrapper')
+                       || activeEl?.classList?.contains?.('volume-slider')
+                       || activeEl?.closest?.('.channel-category-tabs-container');
+        if (isSpecial && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+          resetControlsTimer();
+          return;
+        }
+
+        // Navigate between focusable elements
+        e.preventDefault();
+        e.stopPropagation();
+        const player = document.querySelector('.watch-overlay');
+        if (!player) return;
+        const focusables = Array.from(player.querySelectorAll('.focusable')).filter(el => {
+          return el.offsetParent !== null && !el.disabled;
+        });
+        if (focusables.length === 0) return;
+        const curIdx = focusables.indexOf(activeEl);
+        let nextIdx;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          nextIdx = curIdx < focusables.length - 1 ? curIdx + 1 : 0;
+        } else {
+          nextIdx = curIdx > 0 ? curIdx - 1 : focusables.length - 1;
+        }
+        focusables[nextIdx]?.focus();
+        resetControlsTimer();
+        return;
       }
 
       // ── Escape / Backspace / BrowserBack ─────────────────────────────────────
@@ -1233,6 +1230,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
 
     if (isHls) {
       if (Hls.isSupported()) {
+        setIsLoading(true);
         const hls = new Hls({
           maxMaxBufferLength: 30,
           enableWorker: true,
@@ -1242,7 +1240,21 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         hls.loadSource(streamUrl);
         hls.attachMedia(video);
         
+        let hlsRetryCount = 0;
+        const MAX_HLS_RETRIES = 2;
+        let hlsTimeout = setTimeout(() => {
+          console.warn("[VideoPlayer] HLS timeout — no se recibió MANIFEST_PARSED en 25s");
+          if (hlsRef.current) {
+            hlsRef.current.destroy();
+            hlsRef.current = null;
+          }
+          destroyPlayer();
+          handleStreamError("El servidor de video no responde (timeout).");
+        }, 25000);
+
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          clearTimeout(hlsTimeout);
+          setIsLoading(false);
           playerRef.current = new Plyr(video, {
             controls: [], // Hide native controls
             autoplay: !showBrandIntroRef.current
@@ -1274,16 +1286,31 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
 
         hls.on(Hls.Events.ERROR, function (event, data) {
           if (data.fatal) {
+            hlsRetryCount++;
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
-                console.log("fatal network error, try to recover");
-                hls.startLoad();
+                if (hlsRetryCount <= MAX_HLS_RETRIES) {
+                  console.log(`fatal network error, retry ${hlsRetryCount}/${MAX_HLS_RETRIES}`);
+                  hls.startLoad();
+                } else {
+                  clearTimeout(hlsTimeout);
+                  console.error(`[VideoPlayer] HLS NETWORK_ERROR agotó reintentos (${hlsRetryCount})`);
+                  destroyPlayer();
+                  handleStreamError("El servidor de video no responde.");
+                }
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
-                console.log("fatal media error, try to recover");
-                hls.recoverMediaError();
+                if (hlsRetryCount <= MAX_HLS_RETRIES) {
+                  console.log(`fatal media error, retry ${hlsRetryCount}/${MAX_HLS_RETRIES}`);
+                  hls.recoverMediaError();
+                } else {
+                  clearTimeout(hlsTimeout);
+                  destroyPlayer();
+                  handleStreamError("Error al reproducir el video.");
+                }
                 break;
               default:
+                clearTimeout(hlsTimeout);
                 destroyPlayer();
                 handleStreamError("Error de red fatal.");
                 break;
@@ -1639,6 +1666,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             preload="none"
             poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
             style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+            onError={onVideoError}
           />
         )}
       </div>

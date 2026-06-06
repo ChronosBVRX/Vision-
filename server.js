@@ -4,6 +4,7 @@ const compression = require('compression');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const cheerio = require('cheerio');
 
 // Wrapper de logs con hora local y guardado en archivo server.log
 const logPath = path.join(__dirname, 'server.log');
@@ -464,36 +465,110 @@ async function refreshMoviesAndSeries() {
 }
 
 // Helper functions for team logo enrichment
+const teamLogoCache = new Map();
+
 async function getTeamLogo(teamName) {
   if (!teamName || teamName.length < 2) return null;
+  const cacheKey = teamName.toLowerCase().trim();
+  if (teamLogoCache.has(cacheKey)) return teamLogoCache.get(cacheKey);
+
+  // Try TheSportsDB first
   try {
     const cleanName = encodeURIComponent(teamName.trim());
-    const res = await axios.get(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${cleanName}`, { timeout: 2000 });
+    const res = await axios.get(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${cleanName}`, { timeout: 3000 });
     if (res.data && res.data.teams && res.data.teams.length > 0) {
-      return res.data.teams[0].strBadge || null;
+      const badge = res.data.teams[0].strBadge || null;
+      if (badge) {
+        teamLogoCache.set(cacheKey, badge);
+        return badge;
+      }
     }
-  } catch (err) {
-    // Fail silently
-  }
+  } catch (err) {}
+
+  // Fallback: search DuckDuckGo Images for the logo
+  try {
+    const ddgUrl = `https://duckduckgo.com/i.js?q=${encodeURIComponent(teamName + ' logo escudo')}&iax=images`;
+    const ddgRes = await axios.get(ddgUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' },
+      timeout: 3000
+    });
+    if (ddgRes.data && ddgRes.data.results && ddgRes.data.results.length > 0) {
+      const imgUrl = ddgRes.data.results[0].image || null;
+      if (imgUrl) {
+        teamLogoCache.set(cacheKey, imgUrl);
+        return imgUrl;
+      }
+    }
+  } catch (err) {}
+
+  teamLogoCache.set(cacheKey, null);
   return null;
 }
 
 function getTeamsFromTitle(title) {
-  let parts = [];
-  if (title.toLowerCase().includes(' vs ')) {
-    parts = title.split(/ vs /i);
-  } else if (title.toLowerCase().includes(' v ')) {
-    parts = title.split(/ v /i);
-  } else if (title.includes(' - ')) {
-    parts = title.split(' - ');
+  // Strip the event/sport suffix first (e.g. " - La Liga", " - NBA")
+  const cleanTitle = title.replace(/[–—-]\s*.+$/, '').trim();
+  const lower = cleanTitle.toLowerCase();
+
+  // Pattern 1: "Team1 vs Team2" (most common)
+  const vsMatch = cleanTitle.match(/^(.+?)\s+(?:vs\.?|v\.?|VS\.?|v\/s)\s+(.+)$/i);
+  if (vsMatch) {
+    return [vsMatch[1].trim(), vsMatch[2].trim()].map(t => t.replace(/en vivo/i, '').replace(/live/i, '').trim()).filter(t => t.length > 2);
   }
-  return parts.map(p => p.replace(/en vivo/i, '').replace(/live/i, '').trim()).filter(p => p.length > 0);
+
+  // Pattern 2: "Team1 - Team2" (some sites use dash)
+  const dashMatch = cleanTitle.match(/^(.+?)\s*[–—-]\s*(.+?)$/);
+  if (dashMatch) {
+    const t1 = dashMatch[1].trim();
+    const t2 = dashMatch[2].trim();
+    // Only treat as two teams if both are short enough (not a full sentence)
+    if (t1.length < 40 && t2.length < 40 && !t1.toLowerCase().includes('canal') && !t2.toLowerCase().includes('canal')) {
+      return [t1.replace(/en vivo/i, '').replace(/live/i, '').trim(), t2.replace(/en vivo/i, '').replace(/live/i, '').trim()].filter(t => t.length > 2);
+    }
+  }
+
+  // Pattern 3: Single-event titles like "F1 GP Monaco" — no teams
+  return [];
+}
+
+// Enrich matches with improved sport detection via page context search
+async function detectSportForMatch(match) {
+  const sport = match.sport || '';
+  // If already detected as something other than the default 'Fútbol', keep it
+  if (sport && sport !== 'Fútbol') return sport;
+  
+  // Try to extract sport from the stream URL page
+  for (const stream of (match.streams || [])) {
+    if (!stream.url) continue;
+    try {
+      const resp = await axios.get(stream.url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        timeout: 3000,
+        maxRedirects: 2
+      });
+      const $ = cheerio.load(resp.data);
+      const pageText = $('title').text() + ' ' + $('body').text();
+      const lowerText = pageText.toLowerCase().substring(0, 5000);
+      
+      if (/baloncesto|basketball|nba|euroliga|acb/i.test(lowerText)) return 'Baloncesto';
+      if (/béisbol|baseball|mlb/i.test(lowerText)) return 'Béisbol';
+      if (/tenis|tennis|atp|wta/i.test(lowerText)) return 'Tenis';
+      if (/ufc|boxeo|boxing|mma|lucha libre|wwe/i.test(lowerText)) return 'Combate';
+      if (/fórmula 1|formula 1|f1|motogp|nascar|automovilismo/i.test(lowerText)) return 'Automovilismo';
+      if (/fútbol americano|nfl|american football/i.test(lowerText)) return 'Fútbol Americano';
+    } catch (e) {}
+  }
+  return sport || 'Fútbol';
 }
 
 async function enrichMatchesWithLogos(matches) {
-  console.log(`[SportsWorker] Buscando logotipos para ${matches.length} partidos...`);
+  console.log(`[SportsWorker] Enriqueciendo ${matches.length} partidos con logos y detección de deporte...`);
   try {
     const enriched = await Promise.all(matches.map(async (match) => {
+      // Detect/improve sport
+      const detectedSport = await detectSportForMatch(match);
+      
+      // Extract teams
       const teams = getTeamsFromTitle(match.title);
       if (teams.length >= 2) {
         const [logo1, logo2] = await Promise.all([
@@ -502,17 +577,21 @@ async function enrichMatchesWithLogos(matches) {
         ]);
         return {
           ...match,
+          sport: detectedSport,
           team1: teams[0],
           team2: teams[1],
           logo1,
           logo2
         };
       }
-      return match;
+      return {
+        ...match,
+        sport: detectedSport
+      };
     }));
     return enriched;
   } catch (e) {
-    console.error("[SportsWorker] Fallo al enriquecer logotipos:", e.message);
+    console.error("[SportsWorker] Fallo al enriquecer:", e.message);
     return matches;
   }
 }
@@ -1097,7 +1176,105 @@ app.post('/api/sports/resolve-and-play', async (req, res) => {
 // Import plutoAdapter for direct live resolution
 const plutoAdapter = require('./server/resolvers/adapters/plutoAdapter');
 
-// Endpoint to resolve Live TV and Sports mimicking the movie resolver behavior
+// Helper: resolve a single stream (used in parallel below)
+async function resolveSingleStream(stream, serverName, type) {
+  const result = { serverName, success: false, stream: null, error: null };
+
+  try {
+    // Check plutoAdapter first
+    if (plutoAdapter.canHandle({ url: stream.url })) {
+      const plutoResult = await plutoAdapter.resolve({ url: stream.url });
+      if (plutoResult.success) {
+        return { ...result, success: true, stream: plutoResult.stream };
+      }
+      return { ...result, error: plutoResult.reason || 'PLUTO_ERROR' };
+    }
+
+    let videoUrl = stream.url;
+    let referer = '';
+
+    const isDirectStream = videoUrl.toLowerCase().includes('.m3u8') ||
+                           videoUrl.toLowerCase().includes('.mp4') ||
+                           videoUrl.toLowerCase().includes('.mkv') ||
+                           videoUrl.toLowerCase().includes('.avi');
+
+    if (!isDirectStream) {
+      // Fast HTTP sniff first (no browser)
+      let sniffResult = await sniffVideoUrl(stream.url);
+      
+      // Fallback: Playwright browserResolver
+      if (!sniffResult || !sniffResult.url) {
+        try {
+          const { sniffAuthorizedEmbed } = require('./server/resolvers/browserResolver');
+          const pwResult = await sniffAuthorizedEmbed(stream.url, { bypassAuth: true });
+          if (pwResult && pwResult.success) {
+            sniffResult = { url: pwResult.url, referer: '' };
+          }
+        } catch (e) {}
+      }
+
+      if (!sniffResult || !sniffResult.url) {
+        return { ...result, error: 'SERVER_DOWN' };
+      }
+      videoUrl = sniffResult.url;
+      referer = sniffResult.referer || '';
+    }
+
+    // Resolve referer
+    let checkReferer = referer;
+    if (!checkReferer) {
+      try {
+        const originUrl = new URL(stream.url).origin;
+        if (videoUrl.includes('54434687.net') || videoUrl.includes('verfutbol')) checkReferer = 'https://verfutbol.at/';
+        else if (videoUrl.includes('pirlotv')) checkReferer = 'https://pirlotv.dev/';
+        else checkReferer = originUrl;
+      } catch (e) {}
+    }
+
+    // Validate stream
+    try {
+      const { validatePlayableUrl } = require('./server/resolvers/sourceValidator');
+      const validationResult = await validatePlayableUrl(videoUrl, { Referer: checkReferer });
+      if (validationResult.success) {
+        return {
+          ...result,
+          success: true,
+          stream: {
+            url: validationResult.url,
+            type: validationResult.type,
+            headers: { referer: checkReferer },
+            resolver: 'direct',
+            quality: 'auto'
+          }
+        };
+      }
+    } catch (e) {}
+
+    // Fallback validation
+    try {
+      const checkRes = await axios({
+        method: 'head',
+        url: videoUrl,
+        timeout: 3000,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', 'Referer': checkReferer },
+        validateStatus: (status) => status >= 200 && status < 400
+      });
+      if (checkRes.status >= 200 && checkRes.status < 400) {
+        return {
+          ...result,
+          success: true,
+          stream: { url: videoUrl, type: 'hls', headers: { referer: checkReferer }, resolver: 'direct', quality: 'auto' }
+        };
+      }
+    } catch (e) {}
+
+    return { ...result, error: 'SERVER_DOWN' };
+  } catch (err) {
+    return { ...result, error: err.message || 'ERROR' };
+  }
+}
+
+// Endpoint to resolve Live TV and Sports (parallel processing)
 app.post('/api/live/resolve', async (req, res) => {
   const { streams, type, excludeServer } = req.body;
   if (!streams || !Array.isArray(streams) || streams.length === 0) {
@@ -1106,237 +1283,135 @@ app.post('/api/live/resolve', async (req, res) => {
 
   let excludeServers = [];
   if (excludeServer) {
-    if (Array.isArray(excludeServer)) {
-      excludeServers = excludeServer;
-    } else {
-      excludeServers = [excludeServer];
-    }
+    if (Array.isArray(excludeServer)) excludeServers = excludeServer;
+    else excludeServers = [excludeServer];
   }
 
-  console.log(`[Server] Iniciando live resolve para ${streams.length} opciones... (Excluyendo: [${excludeServers.join(', ')}])`);
+  console.log(`[Server] Iniciando live resolve PARALELO para ${streams.length} opciones... (Excluyendo: [${excludeServers.join(', ')}])`);
+
+  // Filter excluded servers
+  const activeStreams = streams.filter((s, i) => {
+    const name = s.name || `Servidor ${i + 1}`;
+    const excluded = excludeServers.some(exc => name.toLowerCase().includes(exc.toLowerCase()));
+    if (excluded) console.log(`[Server] Excluyendo servidor: ${name}`);
+    return !excluded;
+  });
+
+  if (activeStreams.length === 0) {
+    return res.json({ success: false, error: "No hay servidores disponibles.", attempts: [] });
+  }
 
   const attempts = [];
-  
-  for (let i = 0; i < streams.length; i++) {
-    const stream = streams[i];
-    const serverName = stream.name || `Servidor ${i + 1}`;
-    
-    // Filter excluded servers
-    const isExcluded = excludeServers.some(exc => (serverName).toLowerCase().includes(exc.toLowerCase()));
-    if (isExcluded) {
-      console.log(`[Server] Excluyendo servidor: ${serverName}`);
-      continue;
-    }
 
-    console.log(`[Server] Probando servidor ${i + 1}/${streams.length}: ${serverName} (${stream.url})`);
-    
-    try {
-      if (plutoAdapter.canHandle({ url: stream.url })) {
-        console.log(`[Server] Redirigiendo a plutoAdapter...`);
-        const result = await plutoAdapter.resolve({ url: stream.url });
-        if (result.success) {
-          return res.json({
-            success: true,
-            selectedServer: serverName,
-            stream: result.stream,
-            attempts
-          });
-        } else {
-          attempts.push({
-            sourceName: serverName,
-            language: type === 'tv' ? 'En Vivo' : 'Deportes',
-            server: serverName,
-            status: 'FAILED',
-            reason: result.reason || 'PLUTO_ERROR',
-            timestamp: new Date()
-          });
-          continue;
-        }
-      }
+  // Process all streams IN PARALLEL, resolve with first success
+  try {
+    const result = await Promise.any(
+      activeStreams.map(async (stream, i) => {
+        const serverName = stream.name || `Servidor ${i + 1}`;
+        console.log(`[Server] ▶ Probando paralelo: ${serverName} (${stream.url})`);
+        const r = await resolveSingleStream(stream, serverName, type);
+        attempts.push({
+          sourceName: serverName,
+          language: type === 'tv' ? 'En Vivo' : 'Deportes',
+          server: serverName,
+          status: r.success ? 'SUCCESS' : 'FAILED',
+          reason: r.success ? 'SUCCESS' : (r.error || 'SERVER_DOWN'),
+          timestamp: new Date()
+        });
+        if (r.success) return r;
+        throw new Error(r.error || 'SERVER_DOWN');
+      })
+    );
 
-      let videoUrl = stream.url;
-      let referer = '';
-      
-      const isDirectStream = videoUrl.toLowerCase().includes('.m3u8') || 
-                             videoUrl.toLowerCase().includes('.mp4') ||
-                             videoUrl.toLowerCase().includes('.mkv') ||
-                             videoUrl.toLowerCase().includes('.avi');
-                             
-      if (!isDirectStream) {
-        // Try Puppeteer sniffer first
-        let sniffResult = await sniffVideoUrl(stream.url);
-        
-        // If Puppeteer fails, try Playwright browserResolver as fallback
-        if (!sniffResult || !sniffResult.url) {
-          console.log(`[Server] Puppeteer sniffer falló para ${serverName}. Intentando con Playwright browserResolver...`);
-          try {
-            const { sniffAuthorizedEmbed } = require('./server/resolvers/browserResolver');
-            const pwResult = await sniffAuthorizedEmbed(stream.url, { bypassAuth: true });
-            if (pwResult && pwResult.success) {
-              sniffResult = { url: pwResult.url, referer: '' };
-              console.log(`[Server] Playwright browserResolver tuvo éxito: ${pwResult.url}`);
-            }
-          } catch (pwErr) {
-            console.warn(`[Server] Playwright fallback también falló: ${pwErr.message}`);
-          }
-        }
-        
-        if (sniffResult && sniffResult.url) {
-          videoUrl = sniffResult.url;
-          referer = sniffResult.referer;
-        } else {
-          console.log(`[Server] Servidor ${serverName} no retornó video válido.`);
-          attempts.push({
-            sourceName: serverName,
-            language: type === 'tv' ? 'En Vivo' : 'Deportes',
-            server: serverName,
-            status: 'FAILED',
-            reason: 'SERVER_DOWN',
-            timestamp: new Date()
-          });
-          continue;
-        }
-      }
-
-      console.log(`[Server] Video detectado: ${videoUrl}. Referer: ${referer}. Verificando conectividad...`);
-      let isValidStream = false;
-
-        let checkReferer = referer || '';
-        if (!checkReferer) {
-          try {
-            const originUrl = new URL(stream.url).origin;
-            if (videoUrl.includes('54434687.net') || videoUrl.includes('verfutbol')) {
-              checkReferer = 'https://verfutbol.at/';
-            } else if (videoUrl.includes('pirlotv')) {
-              checkReferer = 'https://pirlotv.dev/';
-            } else {
-              checkReferer = originUrl;
-            }
-          } catch (e) {}
-        }
-
-        // Use validatePlayableUrl from sourceValidator for robust validation
-        try {
-          const { validatePlayableUrl } = require('./server/resolvers/sourceValidator');
-          const validationResult = await validatePlayableUrl(videoUrl, { Referer: checkReferer });
-          
-          if (validationResult.success) {
-            console.log(`[Server] ¡Validación exitosa via sourceValidator! Status: ${validationResult.type}`);
-            isValidStream = true;
-            videoUrl = validationResult.url; // Use final URL after redirects
-          } else {
-            console.warn(`[Server] Validación sourceValidator falló: ${validationResult.reason}`);
-            // Fallback to legacy inline validation
-            try {
-              const checkRes = await axios({
-                method: 'head',
-                url: videoUrl,
-                timeout: 4000,
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                  'Referer': checkReferer
-                },
-                validateStatus: (status) => status >= 200 && status < 400
-              });
-              console.log(`[Server] ¡Validación HEAD exitosa! Status: ${checkRes.status}`);
-              isValidStream = true;
-            } catch (headErr) {
-              console.log(`[Server] HEAD falló (${headErr.message}), intentando GET parcial...`);
-              try {
-                const checkResGet = await axios({
-                  method: 'get',
-                  url: videoUrl,
-                  timeout: 4000,
-                  headers: { 
-                    Range: 'bytes=0-100',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Referer': checkReferer
-                  },
-                  validateStatus: (status) => status >= 200 && status < 400
-                });
-                console.log(`[Server] ¡Validación GET exitosa! Status: ${checkResGet.status}`);
-                isValidStream = true;
-              } catch (getErr) {
-                console.warn(`[Server] Validación de conectividad fallida para: ${videoUrl}. Error: ${getErr.message}`);
-              }
-            }
-          }
-        } catch (valErr) {
-          console.warn(`[Server] Error en validación: ${valErr.message}`);
-        }
-
-        if (isValidStream) {
-          console.log(`[Server] ¡Éxito! Servidor ${serverName} validado en: ${videoUrl}`);
-          const attempt = {
-            sourceName: serverName,
-            language: type === 'tv' ? 'En Vivo' : 'Deportes',
-            server: serverName,
-            status: 'SUCCESS',
-            reason: 'SUCCESS',
-            timestamp: new Date()
-          };
-          attempts.push(attempt);
-          return res.json({
-            success: true,
-            selectedLanguage: type === 'tv' ? 'En Vivo' : 'Deportes',
-            selectedServer: serverName,
-            stream: {
-              name: serverName,
-              url: videoUrl,
-              headers: { referer: checkReferer },
-              resolver: 'direct',
-              type: 'direct'
-            },
-            attempts
-          });
-        }
-
-        if (!isValidStream) {
-          console.log(`[Server] Servidor ${serverName} falló validación de conectividad.`);
-          attempts.push({
-            sourceName: serverName,
-            language: type === 'tv' ? 'En Vivo' : 'Deportes',
-            server: serverName,
-            status: 'FAILED',
-            reason: 'SERVER_DOWN',
-            timestamp: new Date()
-          });
-        }
-    } catch (err) {
-      console.error(`[Server] Error probando servidor ${serverName}:`, err.message);
-      attempts.push({
-        sourceName: serverName,
-        language: type === 'tv' ? 'En Vivo' : 'Deportes',
-        server: serverName,
-        status: 'FAILED',
-        reason: 'ERROR',
-        timestamp: new Date()
-      });
-    }
+    console.log(`[Server] ✅ Primer éxito paralelo: ${result.serverName}`);
+    return res.json({
+      success: true,
+      selectedLanguage: type === 'tv' ? 'En Vivo' : 'Deportes',
+      selectedServer: result.serverName,
+      stream: result.stream,
+      attempts
+    });
+  } catch (err) {
+    console.log(`[Server] ❌ Todos los servidores fallaron en paralelo.`);
   }
 
   if (type === 'sports' || type === 'sport') {
-    console.log(`[Server] Fallaron todos los servidores de Deportes en live resolve. Retornando error estricto sin iframe.`);
+    console.log(`[Server] Fallaron todos los servidores de Deportes. Retornando error sin iframe.`);
     return res.json({
       success: false,
-      error: "No se pudo sintonizar un flujo de video directo para este evento. Intente con otra opción o servidor.",
+      error: "No se pudo sintonizar un flujo de video directo para este evento.",
       attempts
     });
   }
 
-  console.log(`[Server] Fallaron todos los servidores en live resolve. Retornando fallback iframe.`);
   return res.json({
-    success: true, // We return success: true so VideoPlayer can mount the iframe!
+    success: true,
     selectedLanguage: type === 'tv' ? 'En Vivo' : 'Deportes',
     selectedServer: streams[0].name || 'Servidor Original',
-    stream: {
-      name: streams[0].name || 'Servidor Original',
-      url: streams[0].url,
-      resolver: 'iframe',
-      type: 'iframe'
-    },
+    stream: { name: streams[0].name || 'Servidor Original', url: streams[0].url, resolver: 'iframe', type: 'iframe' },
     attempts
   });
+});
+
+// Endpoint to search for additional match mirrors from other sources
+const CANDIDATE_DOMAINS = [
+  'https://www.rojadirectatvmas.com',
+  'https://www.rojadirecta.lt',
+  'https://www.rojadirecta.watch'
+];
+
+async function searchMirrorsForMatch(title, sport, existingUrls) {
+  const mirrors = [];
+  const keywords = title.toLowerCase().split(/[:\-–—vs]+/).map(k => k.trim()).filter(k => k.length > 3);
+  if (keywords.length < 2) return mirrors;
+
+  for (const domain of CANDIDATE_DOMAINS) {
+    try {
+      const resp = await axios.get(domain, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept-Language': 'es-ES,es;q=0.9'
+        },
+        timeout: 4000
+      });
+      const $ = cheerio.load(resp.data);
+      $('a').each((i, el) => {
+        const link = $(el);
+        const href = link.attr('href');
+        if (!href) return;
+        let url = href;
+        if (url.startsWith('/')) url = new URL(url, domain).toString();
+        else if (!url.startsWith('http')) return;
+
+        if (existingUrls.includes(url)) return;
+        const text = link.text().replace(/\s+/g, ' ').trim().toLowerCase();
+        const allMatch = keywords.every(k => text.includes(k));
+        if (allMatch && (text.includes(' vs ') || text.includes(' - ')) && text.length > 8) {
+          if (!mirrors.some(m => m.url === url)) {
+            mirrors.push({ name: `Mirror ${mirrors.length + 1}`, url, resolver: 'direct' });
+          }
+        }
+      });
+    } catch (e) {
+      console.log(`[MirrorSearch] Fallo en ${domain}: ${e.message}`);
+    }
+  }
+  return mirrors;
+}
+
+app.post('/api/sports/search-mirrors', async (req, res) => {
+  const { title, sport, existingUrls } = req.body;
+  if (!title) return res.json({ success: false, mirrors: [] });
+
+  console.log(`[MirrorSearch] Buscando espejos para "${title}"...`);
+  try {
+    const mirrors = await searchMirrorsForMatch(title, sport, existingUrls || []);
+    console.log(`[MirrorSearch] ${mirrors.length} espejos encontrados para "${title}"`);
+    return res.json({ success: true, mirrors });
+  } catch (err) {
+    console.error(`[MirrorSearch] Error: ${err.message}`);
+    return res.json({ success: false, mirrors: [] });
+  }
 });
 
 // In-memory image proxy cache (key: url, value: { data, contentType, timestamp })

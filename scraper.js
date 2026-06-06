@@ -470,205 +470,144 @@ async function discoverActiveMirror() {
  * @param {string} targetUrl The stream page URL (e.g. pirlotv / verfutbol)
  * @returns {Promise<string|null>} Direct video URL or null if not found
  */
+// Fast HTTP pre-check: look for .m3u8 URLs in page HTML without a browser
+async function fastHttpSniff(targetUrl) {
+  try {
+    const resp = await axios.get(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
+      },
+      timeout: 5000,
+      maxRedirects: 3
+    });
+    const html = resp.data;
+    // Search for .m3u8 URLs in the HTML
+    const m3u8Matches = html.match(/https?:\/\/[^"'\s<>]+\.m3u8[^"'\s<>]*/gi);
+    if (m3u8Matches && m3u8Matches.length > 0) {
+      const url = m3u8Matches[0];
+      console.log(`[Sniffer] ⚡ Fast HTTP: .m3u8 encontrado en HTML: ${url}`);
+      // Try to find a referer from the page
+      const baseUrl = new URL(targetUrl).origin;
+      return { url, referer: baseUrl };
+    }
+    // Also check for mp4
+    const mp4Matches = html.match(/https?:\/\/[^"'\s<>]+\.mp4[^"'\s<>]*/gi);
+    if (mp4Matches && mp4Matches.length > 0) {
+      const url = mp4Matches.filter(u => !u.includes('ads') && !u.includes('preload'))[0];
+      if (url) {
+        console.log(`[Sniffer] ⚡ Fast HTTP: .mp4 encontrado en HTML: ${url}`);
+        return { url, referer: new URL(targetUrl).origin };
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 async function sniffVideoUrl(targetUrl) {
-  console.log(`[Sniffer] Iniciando analisis de trafico para: ${targetUrl}`);
-  let browser = null;
-  let detectedVideoUrl = null;
+  console.log(`[Sniffer] Iniciando analisis para: ${targetUrl}`);
+
+  // Phase 1: Fast HTTP check (no browser needed)
+  const fastResult = await fastHttpSniff(targetUrl);
+  if (fastResult) {
+    console.log(`[Sniffer] ✅ Éxito via fast HTTP: ${fastResult.url}`);
+    return fastResult;
+  }
+
+  // Phase 2: Playwright browser sniffing (replaces Puppeteer)
+  console.log(`[Sniffer] Fast HTTP falló. Iniciando Playwright para: ${targetUrl}`);
+  let detectedUrl = null;
   let detectedReferer = null;
 
   try {
-    browser = await puppeteer.launch({
+    const { chromium } = require('playwright');
+    const browser = await chromium.launch({
       headless: true,
-      ignoreHTTPSErrors: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--mute-audio',
-        '--ignore-certificate-errors',
-        '--ignore-certificate-errors-spki-list',
         '--disable-blink-features=AutomationControlled',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process'
+        '--disable-web-security'
       ]
     });
 
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-    await page.setViewport({ width: 1280, height: 720 });
-    
-    // Stealth: hide webdriver and add chrome runtime
-    await page.evaluateOnNewDocument(() => {
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 720 }
+    });
+
+    await context.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-      Object.defineProperty(navigator, 'languages', { get: () => ['es-MX', 'es', 'en'] });
       window.chrome = { runtime: {} };
     });
-    
-    // Enable request interception for Ad-blocking and media sniffing
-    await page.setRequestInterception(true);
 
-    page.on('request', (req) => {
-      const url = req.url();
-      const lowerUrl = url.toLowerCase();
-      const resourceType = req.resourceType();
+    const page = await context.newPage();
 
-      // Ad-blocker: Abort tracker, popup scripts, and generic ad domains
-      const isAd = 
-        lowerUrl.includes('popads') || 
-        lowerUrl.includes('onclick') || 
-        lowerUrl.includes('adsterra') || 
-        lowerUrl.includes('acscdn') || 
-        lowerUrl.includes('propeller') || 
-        lowerUrl.includes('doubleclick') || 
-        lowerUrl.includes('google-analytics') || 
-        lowerUrl.includes('histats') || 
-        lowerUrl.includes('whos.amung.us') || 
-        lowerUrl.includes('pagead') || 
-        lowerUrl.includes('adsense') || 
-        lowerUrl.includes('cpmstar') ||
-        lowerUrl.includes('exoclick') ||
-        lowerUrl.includes('trafficjunky') ||
-        lowerUrl.includes('outbrain') ||
-        lowerUrl.includes('taboola') ||
-        lowerUrl.includes('adserver') ||
-        lowerUrl.includes('adnxs') ||
-        lowerUrl.includes('rubicon') ||
-        lowerUrl.includes('criteo') ||
-        lowerUrl.includes('amazon-adsystem') ||
-        lowerUrl.includes('casalemedia') ||
-        lowerUrl.includes('adsafeprotected') ||
-        lowerUrl.includes('moatads') ||
-        lowerUrl.includes('servedby') ||
-        lowerUrl.includes('adscale') ||
-        lowerUrl.includes('adition') ||
-        lowerUrl.includes('advertising') ||
-        resourceType === 'image' && !lowerUrl.includes('logo') && !lowerUrl.includes('banner') ||
-        resourceType === 'font';
-
-      if (isAd) {
-        req.abort();
+    // Intercept requests for ad blocking + stream sniffing
+    await page.route('**/*', async (route) => {
+      const url = route.request().url().toLowerCase();
+      const type = route.request().resourceType();
+      
+      // Aggressive ad block
+      if (url.includes('popads') || url.includes('onclick') || url.includes('adsterra') ||
+          url.includes('propeller') || url.includes('doubleclick') || url.includes('google-analytics') ||
+          url.includes('histats') || url.includes('pagead') || url.includes('adsense') ||
+          url.includes('cpmstar') || url.includes('exoclick') || url.includes('adserver') ||
+          url.includes('adscale') || url.includes('advertising') || url.includes('taboola') ||
+          url.includes('outbrain') || url.includes('moatads') || url.includes('casalemedia') ||
+          url.includes('rubicon') || url.includes('criteo') || url.includes('amazon-adsystem') ||
+          type === 'image' || type === 'font' || type === 'stylesheet' || type === 'media') {
+        try { await route.abort(); } catch (e) {}
         return;
       }
 
-      // Sniff outgoing media request URLs (.m3u8, .mp4, .mpd)
-      const isStream = 
-        lowerUrl.includes('.m3u8') || 
-        lowerUrl.includes('.mpd') ||
-        lowerUrl.includes('/manifest') ||
-        (lowerUrl.includes('.mp4') && !lowerUrl.includes('ads') && !lowerUrl.includes('loader') && !lowerUrl.includes('preload')) ||
-        lowerUrl.includes('/playlist.m3u8') ||
-        lowerUrl.includes('.m3u8?') ||
-        lowerUrl.includes('.mpd?') ||
-        lowerUrl.includes('/live') && lowerUrl.includes('.ts') ||
-        lowerUrl.includes('segment') && lowerUrl.includes('.ts');
-
-      if (isStream) {
-        console.log(`[Sniffer] ¡Video detectado en peticion de red! -> ${url}`);
-        const headers = req.headers();
-        console.log(`[Sniffer] Headers detectados:`, headers);
-        detectedVideoUrl = url;
-        detectedReferer = headers['referer'] || headers['Referer'] || '';
+      // Sniff .m3u8 and .mp4
+      if (url.includes('.m3u8') || url.includes('.mpd') || (url.includes('.mp4') && !url.includes('ads') && !url.includes('preload'))) {
+        console.log(`[Sniffer] 🎥 Stream detectado: ${url}`);
+        detectedUrl = route.request().url();
+        detectedReferer = route.request().headers()['referer'] || '';
       }
 
-      req.continue();
+      try { await route.continue(); } catch (e) {}
     });
 
-    // Sniff response headers for video content-types
-    page.on('response', (res) => {
-      const url = res.url();
-      const headers = res.headers();
-      const contentType = (headers['content-type'] || '').toLowerCase();
-      
-      if (
-        contentType.includes('application/x-mpegurl') || 
-        contentType.includes('application/vnd.apple.mpegurl') || 
-        contentType.includes('application/dash+xml') ||
-        contentType.includes('video/mpd') ||
-        (contentType.includes('video/mp4') && !url.includes('ads')) ||
-        contentType.includes('video/mp2t') ||
-        contentType.includes('video/quicktime')
-      ) {
-        console.log(`[Sniffer] ¡Video detectado en respuesta Content-Type! -> ${url} (${contentType})`);
-        detectedVideoUrl = url;
-        try {
-          const reqHeaders = res.request().headers();
-          detectedReferer = reqHeaders['referer'] || reqHeaders['Referer'] || '';
-        } catch (e) {}
-      }
-    });
-
-    // Navigate and wait for media scripts to trigger
+    // Navigate fast
     try {
-      await page.goto(targetUrl, { 
-        waitUntil: 'domcontentloaded', 
-        timeout: 15000 
-      });
-    } catch (e) {
-      console.log(`[Sniffer] Nota: Goto completo o excedio tiempo en ${targetUrl}`);
-    }
+      await page.goto(targetUrl, { waitUntil: 'commit', timeout: 8000 });
+    } catch (e) {}
 
-    // Wait for initial scripts and try multiple click strategies
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Quick wait + clicks (4s total)
+    await new Promise(r => setTimeout(r, 1500));
     try {
-      console.log(`[Sniffer] Realizando clics simulados para iniciar reproducción...`);
-      // Strategy 1: Click center of page
-      const viewport = page.viewportSize() || { width: 1280, height: 720 };
-      await page.mouse.click(viewport.width / 2, viewport.height / 2);
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Strategy 2: Click slightly above center (where video players usually are)
-      await page.mouse.click(viewport.width / 2, viewport.height * 0.4);
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Strategy 3: Click lower third
-      await page.mouse.click(viewport.width / 2, viewport.height * 0.6);
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Strategy 4: Click on known video containers if they exist
-      try {
-        await page.click('video, iframe, .video-js, .player, .plyr, [class*="player"], [id*="player"], [id*="video"]', { timeout: 500 });
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (e) {}
-      
-      // Strategy 5: Try clicking play buttons
-      try {
-        await page.click('[class*="play"], [id*="play"], button, [class*="btn-play"], [class*="start"]', { timeout: 500 });
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (e) {}
-      
-      // Strategy 6: Final center click
-      await page.mouse.click(viewport.width / 2, viewport.height * 0.45);
-      await new Promise(resolve => setTimeout(resolve, 500));
-    } catch (clickErr) {
-      console.warn(`[Sniffer] Advertencia al cliquear:`, clickErr.message);
+      const vp = page.viewportSize() || { width: 1280, height: 720 };
+      await page.mouse.click(vp.width / 2, vp.height / 2);
+      await new Promise(r => setTimeout(r, 600));
+      await page.mouse.click(vp.width / 2, vp.height * 0.4);
+      await new Promise(r => setTimeout(r, 600));
+      await page.mouse.click(vp.width / 2, vp.height * 0.6);
+      await new Promise(r => setTimeout(r, 600));
+    } catch (e) {}
+
+    // Short poll (6s)
+    const start = Date.now();
+    while (Date.now() - start < 6000) {
+      if (detectedUrl) break;
+      await new Promise(r => setTimeout(r, 300));
     }
 
-    // Wait and poll for up to 20 seconds for stream detection
-    const startTime = Date.now();
-    while (Date.now() - startTime < 20000) {
-      if (detectedVideoUrl) break;
-      // Every 3 seconds, try another click to trigger lazy-loaded players
-      if ((Date.now() - startTime) % 3000 < 500) {
-        try {
-          await page.mouse.click(640, 380);
-        } catch (e) {}
-      }
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-  } catch (error) {
-    console.error(`[Sniffer] Error durante sniffing de ${targetUrl}:`, error.message);
-  } finally {
-    if (browser) {
-      try { await browser.close(); } catch (e) {}
-    }
+    await browser.close();
+  } catch (err) {
+    console.error(`[Sniffer] Error Playwright: ${err.message}`);
   }
 
-  console.log(`[Sniffer] Analisis finalizado para ${targetUrl}. Resultado: ${detectedVideoUrl ? 'EXITO' : 'FALLIDO'}`);
-  return detectedVideoUrl ? { url: detectedVideoUrl, referer: detectedReferer } : null;
+  if (detectedUrl) {
+    console.log(`[Sniffer] ✅ Éxito via Playwright: ${detectedUrl}`);
+    return { url: detectedUrl, referer: detectedReferer };
+  }
+
+  console.log(`[Sniffer] ❌ Falló para ${targetUrl}`);
+  return null;
 }
 
 const OFFICIAL_IPTV_FALLBACKS = [
@@ -1159,14 +1098,6 @@ const CATALOG_SITES = [
     genreSelector: 'a[href*="/genero/"]',
     genreBase: 'https://www.poseidonhd2.co'
   },
-  {
-    name: 'Cuevana',
-    movieUrls: ['https://cuevana3x.xyz/peliculas/'],
-    seriesUrls: ['https://cuevana3x.xyz/series/'],
-    pageFn: (base, p) => `${base}page/${p}/`,
-    genreSelector: 'nav a[href*="/genero/"], a[href*="/genero/"]',
-    genreBase: 'https://cuevana3x.xyz'
-  }
 ];
 
 const GENRE_MAP = {
