@@ -1081,14 +1081,6 @@ const CATALOG_SITES = [
     genreSelector: 'a[href*="/genero/"]',
     genreBase: 'https://www.poseidonhd2.co'
   },
-  {
-    name: 'SomosMovies',
-    movieUrls: ['https://somosmovies.org/peliculas/'],
-    seriesUrls: ['https://somosmovies.org/series/'],
-    pageFn: (base, p) => `${base}?page=${p}`,
-    genreSelector: '.search-options .dropdown:first-child .dropdown-item[href*="?genre="]',
-    genreBase: 'https://somosmovies.org'
-  },
 ];
 
 const GENRE_MAP = {
@@ -1299,42 +1291,6 @@ async function scrapeItemsFromPage(page, url, type, siteName) {
               poster,
               sourceUrl: linkEl.href,
               rating: null,
-              year,
-              genres: ['General'],
-              siteName: sName,
-              type: itemType
-            });
-          }
-        });
-      } else if (sName === 'SomosMovies') {
-        const cards = document.querySelectorAll('article.movie.grid-view');
-        cards.forEach(card => {
-          const linkEl = card.querySelector('.movie-footer h3 a');
-          const img = card.querySelector('.movie-body a img');
-          const ratingEl = card.querySelector('.badge-light');
-          const epBadge = card.querySelector('.movie-header .badge-dark');
-
-          let title = linkEl ? linkEl.textContent.trim() : '';
-          let poster = img ? (img.getAttribute('src') || img.src) : null;
-          let rating = ratingEl ? parseFloat(ratingEl.textContent) : null;
-
-          let year = null;
-          const yearMatch = title.match(/\((\d{4})\)$/);
-          if (yearMatch) year = parseInt(yearMatch[1]);
-          if (year) title = title.replace(/\s*\(\d{4}\)$/, '');
-
-          let itemType = sType;
-          if (epBadge) {
-            const epText = epBadge.textContent.trim();
-            if (epText.match(/T\d+E\d+/i)) itemType = 'series';
-          }
-
-          if (title && linkEl && linkEl.href) {
-            res.push({
-              title,
-              poster,
-              sourceUrl: linkEl.href,
-              rating,
               year,
               genres: ['General'],
               siteName: sName,
@@ -1988,25 +1944,6 @@ async function scrapeEpisodesFromSeriesPage(seriesUrl, siteName) {
         } catch (e) {
           console.error("PoseidonHD next data parse error:", e.message);
         }
-      }
-    } else if (siteName === 'SomosMovies') {
-      const { extractStreamsWithBrowser } = require('./server/resolvers/somosSolver');
-      console.log(`[CatalogScraper] Intentando extraer episodios de SomosMovies via browser: ${seriesUrl}`);
-      const streamUrls = await extractStreamsWithBrowser(seriesUrl);
-      if (streamUrls.length > 0) {
-        const episodes = streamUrls.map((url, idx) => ({
-          id: `sm_ep_${idx + 1}`,
-          title: `Enlace ${idx + 1}`,
-          episodeNum: idx + 1,
-          url
-        }));
-        seasons.push({ seasonNum: 1, title: 'Temporada 1', episodes });
-      } else {
-        console.log('[CatalogScraper] No se pudieron extraer episodios de SomosMovies. Los enlaces requieren Turnstile.');
-        const fallbackEpisodes = [
-          { id: 'sm_ep_1', title: 'Episodio 1', episodeNum: 1, url: seriesUrl }
-        ];
-        seasons.push({ seasonNum: 1, title: 'Temporada 1', episodes: fallbackEpisodes });
       }
     } else if (siteName === 'UltraPelisHD') {
       // Dooplay standard structure (same as PelisPlus)

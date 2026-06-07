@@ -1,30 +1,21 @@
 # Vision+ — AGENTS.md
 
 > Archivo de contexto compartido entre opencode y Antigravity 2.0.
-> **Actualizado por última vez:** 06/06/2026 por opencode (sesión noche)
+> **Actualizado por última vez:** 05/06/2026 por antigravity (sesión tarde)
 
 ---
 
 ## Estado del proyecto
 
-Aplicación web de streaming (películas, series, TV en vivo, deportes). Stack: Node/Express + React/Vite. Persistencia en SQLite (`data/database.sqlite`).
+Aplicación web de streaming (películas, series, TV en vivo, deportes). Stack: Node/Express + React/Vite. Persistencia en `database.json` (JSON plano).
 
 ## Estructura de archivos clave
 
 ```
 Vision+/
 ├── server.js              ← API Express (~1620 líneas, monolithic)
-├── scraper.js             ← Scrapers (~1500 líneas): Rojadirecta, IPTV, películas
-├── data/database.sqlite          ← BD local SQLite
-├── frontend/
-│   ├── capacitor.config.json  ← Config Capacitor (APK Android)
-│   └── node_modules/
-│       └── @capacitor/        ← Capacitor 8.4.0 (core, cli, android)
-├── android/               ← Proyecto Android generado por Capacitor
-│   ├── app/src/main/java/.../MainActivity.java  ← CapacitorBridge + TV support
-│   ├── gradlew            ← Gradle Wrapper para compilar APK
-│   └── local.properties   ← SDK path
-├── VisionPlus-Capacitor.apk  ← APK compilado (~8 MB)
+├── scraper.js             ← Scrapers (~1430 líneas): Rojadirecta, IPTV, películas
+├── database.json          ← BD local (~8425 líneas)
 ├── server/resolvers/
 │   ├── videoSourceResolver.js
 │   ├── browserResolver.js
@@ -386,116 +377,7 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 - **Eliminación del flujo Sync:** Se eliminó la regla de sincronización a otra PC (espejo en vivo) debido a que el entorno de desarrollo ahora reside directamente en el servidor.
 - **Simplificación del Workflow:** Se adaptaron las reglas del workflow para evitar el uso del comando `npm run sync` y de los scripts de sincronización (`direct-sync.js`, `watch-sync.js`), manteniendo la compilación del frontend y el ciclo de desarrollo directo en el servidor.
 
-## Modificaciones de opencode (06/06/2026) — Migración a Capacitor 8.4.0
-
-### Resumen
-Se migró el proyecto Android de un WebView nativo a Capacitor 8.4.0 para mejor rendimiento, acceso a APIs nativas y soporte de plugins.
-
-### Cambios realizados
-
-1. **Instalación de Capacitor:**
-   - `@capacitor/core`, `@capacitor/cli`, `@capacitor/android` 8.4.0 en `frontend/package.json`
-   - `frontend/capacitor.config.json` — Config: appId `com.chronosbvrx.vision`, webDir `dist`, Android path `../android`
-
-2. **Proyecto Android regenerado:**
-   - Eliminado el antiguo `android/` (WebView raw)
-   - `npx cap add android` generó la estructura Capacitor desde `frontend/`
-   - Movido a raíz del proyecto `Vision+/android/`
-   - `capacitor.settings.gradle` apunta a `frontend/node_modules/@capacitor/android/capacitor`
-
-3. **Personalizaciones para Android TV:**
-   - `AndroidManifest.xml`: Añadido `leanback` no requerido, `usesCleartextTraffic=true`, `hardwareAccelerated=true`, `LEANBACK_LAUNCHER`, landscape
-   - `MainActivity.java`: Extiende `BridgeActivity` (Capacitor), fullscreen, `FLAG_KEEP_SCREEN_ON`, back button → dispatch GoBack al webapp + doble-back para salir con Toast
-   - `styles.xml`: Tema oscuro fullscreen, colorPrimary `#000`, accent `#E50914`
-
-4. **Ajustes de build:**
-   - `local.properties` → SDK en `C:\Users\Chronos\AppData\Local\Android\Sdk`
-   - Java 17 instalado (Temurin 17.0.12) para compatibilidad con Gradle 8.13
-   - Android SDK platform 34 + 36, build-tools 34.0.0, platform-tools instalados
-   - Parche temporal: `capacitor-android/build.gradle` y `cordova-plugins/build.gradle` cambiados de Java 21 → 17 para compatibilidad
-
-5. **APK generado:**
-   - `VisionPlus-Capacitor.apk` (~8.5 MB, debug)
-   - Frontend embebido localmente (carga instantánea, no depende de red para UI)
-   - **Auto-detección de túnel:** Al iniciar, consulta `https://chronosbvrx.github.io/Vision-/`, extrae la URL del túnel desde el HTML (`window.location.href = "..."`), y la usa como base para `/api/*`
-   - Caché en localStorage de la URL del túnel (inicio rápido, funciona offline si la URL no cambió)
-   - No requiere recompilar cuando el túnel cambia
-
-### Para compilar nuevamente:
-```bash
-cd frontend
-npx vite build
-npx cap copy android
-cd ../android
-set JAVA_HOME=%LOCALAPPDATA%\Java\jdk-17.0.12+7
-gradlew.bat assembleDebug
-```
-
 ---
-
-## Modificaciones de opencode (06/06/2026, sesión tarde) — UltraPelisHD + VerPelisTV removal
-
-### Resumen
-Se eliminó VerPelisTV (sitio requiere registro) y se agregó UltraPelisHD (WordPress + Dooplay) como fuente de catálogo y resolución de streams.
-
-### Cambios realizados
-
-1. **VerPelisTV eliminado completamente:**
-   - `videoSourceResolver.js`: Eliminado el bloque `else if (lowerHref.includes('verpelistv'))` del mapeo de nombres de sitio.
-   - `scraper.js`: Eliminado el scraper de catálogo VerPelisTV en `scrapeItemsFromPage` y el scraper de episodios.
-   - Base de datos: 1082 sources y 1166 movie_links eliminados vía API.
-
-2. **PoseidonHD fast-fix:**
-   - `videoSourceResolver.js:deadDomains`: Eliminado `poseidonhd2.co` de la lista de dominios muertos.
-   - Confirmado que ~75 movies + 75 series de PoseidonHD resuelven correctamente a HLS.
-
-3. **UltraPelisHD (nuevo scraper + resolver):**
-   - **Sitio:** WordPress + Dooplay theme (v2.5.5, child theme "ultrapelis")
-   - **Catálogo:** `/pelis/` (movies), `/tvshows/` (series), paginación `/page/{n}/`
-   - **DOM catálogo:** `#archive-content article.item.movies` → `.poster img` (poster), `.data h3 a` (title + link)
-   - **Resolución:** Extrae `#bar-video .play-btn-cont[data-src]` → embed HTML → JS arrays `videosOriginal`/`videosSubtitulado` → base64 decode `player.php?id=...` → `resolver: 'iframe'` → adapter pipeline
-   - `scraper.js`: Reemplazó VerPelisTV en CATALOG_SITES, añadido a `scrapeItemsFromPage`, link discovery, episode scraper (Dooplay standard).
-   - `videoSourceResolver.js`: Añadido `ultrapelishd` a `isDetailPage`, bloque de extracción en `extractStreamsFromMoviePage`.
-
-4. **BrowserFetcher mejorado:**
-   - `browserFetcher.js`: Añadido `clickPlayButton()` y mejoras de stealth (User-Agent rotado, viewport aleatorio).
-
-5. **Limpieza:**
-   - Eliminado código muerto de VerPelisTV en scraper.js (catálogo y episodios).
-   - Versión bump: `1.0.27` → `1.0.29`.
-   - Frontend rebuild con versión inyectada correctamente.
-
-## Modificaciones de opencode (06/06/2026, sesión tarde 2) — SomosMovies
-
-### Resumen
-Se agregó SomosMovies (`somosmovies.org`) como nueva fuente de catálogo y resolución de streams. El sitio usa AngularJS + Cloudflare Turnstile para proteger los enlaces de video.
-
-### Cambios realizados
-
-1. **Nuevo módulo `server/resolvers/somosSolver.js`:**
-   - Función `solveTurnstileToken()`: Resuelve Turnstile via CapSolver API (necesita `CAPSOLVER_API_KEY` en `.env`)
-   - Función `getVideoLinksFromApi()`: Envía el token Turnstile a la API de SomosMovies para obtener enlaces
-   - Función `extractStreamsWithBrowser()`: Usa Playwright para navegar la página, hacer clic en "Ver enlaces", detectar Turnstile y extraer URLs de video (fallback)
-   - Integración con `browserPool.js` para manejo de páginas del navegador
-
-2. **Catálogo (`scraper.js`):**
-   - `CATALOG_SITES`: Agregada entrada `SomosMovies` con URLs `/peliculas/` y `/series/`, paginación `?page=N`
-   - `scrapeItemsFromPage`: Nueva sección `SomosMovies` que parsea `article.movie.grid-view` → poster, título (extrae año de paréntesis), rating IMDb, detección serie vs película via badge `T##E##`
-   - `scrapeEpisodesFromSeriesPage`: Nueva sección `SomosMovies` que usa `extractStreamsWithBrowser()` para resolver episodios (con fallback a enlace directo si no hay CapSolver)
-
-3. **Resolución de video (`videoSourceResolver.js`):**
-   - `isDetailPage` (line 690): Agregado `stream.url.includes('somosmovies')`
-   - `extractStreamsFromMoviePage`: Nuevo bloque `SomosMovies` que llama a `extractStreamsWithBrowser()` y marca los resultados como `direct` o `iframe` según extensión
-
-4. **Configuración:**
-   - `.env`: Añadido placeholder `CAPSOLVER_API_KEY` comentado
-   - Versión bump: `1.0.27` → `1.0.28`
-   - Frontend rebuild con versión inyectada
-
-### Notas sobre Turnstile
-- **Sin CapSolver:** El scraper de catálogo funciona (HTML server-rendered), pero el resolver de video NO puede extraer enlaces (devuelve la URL de la página como fallback `iframe` → el adapter pipeline intentará sniffear la página)
-- **Con CapSolver:** Configurar `CAPSOLVER_API_KEY=CAP-xxxx` en `.env`. El resolver usará CapSolver para resolver Turnstile, obtener el token, llamar a la API de SomosMovies y extraer los iframes de video
-- **Caché de enlaces:** Los enlaces resueltos se cachean vía el sistema existente (`useCache` en frontend con TTL configurable)
 
 ## Próximos pasos / Pendientes
 
