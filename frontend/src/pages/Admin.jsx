@@ -43,12 +43,24 @@ export default function Admin() {
   // Basic Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authInput, setAuthInput] = useState('');
+  const [adminPassword, setAdminPassword] = useState(() => localStorage.getItem('admin_password') || '');
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('admin_token');
-    if (savedToken === 'visionplus2026') {
-      setIsAuthenticated(true);
-      fetchSources();
+    const savedPassword = localStorage.getItem('admin_password');
+    if (savedPassword) {
+      fetch('/api/admin/check', { headers: { 'x-admin-password': savedPassword } })
+        .then(res => {
+          if (!res.ok) throw new Error('Sesión expirada');
+          setAdminPassword(savedPassword);
+          setIsAuthenticated(true);
+          fetchSources();
+        })
+        .catch(() => {
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('admin_password');
+          setAdminPassword('');
+          setIsAuthenticated(false);
+        });
     }
   }, []);
 
@@ -65,8 +77,8 @@ export default function Admin() {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (authInput === 'admin123' || authInput === 'visionplus2026') { // Hardcoded for simplicity as requested by basic auth
-      localStorage.setItem('admin_token', 'visionplus2026');
+    if (false) {
+      localStorage.setItem('admin_token', 'authenticated');
       setIsAuthenticated(true);
       fetchSources();
     } else {
@@ -82,6 +94,42 @@ export default function Admin() {
   const showAlert = (type, message) => {
     setAlert({ type, message });
     setTimeout(() => setAlert(null), 5000);
+  };
+
+  const handleSecureLogin = async (e) => {
+    e.preventDefault();
+    const password = authInput.trim();
+    if (!password) {
+      showAlert('error', 'Ingresa la contraseña de administrador');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/check', { headers: { 'x-admin-password': password } });
+      if (!res.ok) throw new Error('Contraseña incorrecta');
+      localStorage.setItem('admin_token', 'authenticated');
+      localStorage.setItem('admin_password', password);
+      setAdminPassword(password);
+      setIsAuthenticated(true);
+      fetchSources();
+    } catch (err) {
+      showAlert('error', err.message);
+    }
+  };
+
+  const handleSecureLogout = () => {
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_password');
+    setAdminPassword('');
+    setIsAuthenticated(false);
+  };
+
+  const adminFetch = (url, options = {}) => {
+    const headers = {
+      ...(options.headers || {}),
+      'x-admin-password': adminPassword || localStorage.getItem('admin_password') || ''
+    };
+    return fetch(url, { ...options, headers });
   };
 
   const fetchSources = () => {
@@ -147,7 +195,7 @@ export default function Admin() {
     const method = editingId ? 'PUT' : 'POST';
     const endpoint = editingId ? `/api/sources/${editingId}` : '/api/sources';
 
-    fetch(endpoint, {
+    adminFetch(endpoint, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(sourceData)
@@ -184,7 +232,7 @@ export default function Admin() {
   const handleDeleteSource = (id) => {
     if (!window.confirm('¿Estás seguro de que deseas eliminar esta fuente?')) return;
 
-    fetch(`/api/sources/${id}`, { method: 'DELETE' })
+    adminFetch(`/api/sources/${id}`, { method: 'DELETE' })
       .then(res => {
         if (!res.ok) throw new Error('Error al eliminar la fuente.');
         return res.json();
@@ -215,7 +263,7 @@ export default function Admin() {
     e.preventDefault();
     if (!newCategoryName.trim()) return;
 
-    fetch('/api/categories', {
+    adminFetch('/api/categories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newCategoryName.trim(), type: newCategoryType })
@@ -236,7 +284,7 @@ export default function Admin() {
   const handleDeleteCategory = (name) => {
     if (!window.confirm(`¿Estás seguro de que deseas eliminar la categoría "${name}"?`)) return;
 
-    fetch('/api/categories', {
+    adminFetch('/api/categories', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })
@@ -263,7 +311,7 @@ export default function Admin() {
 
     showAlert('info', 'Importando lista, por favor espera...');
 
-    fetch('/api/import-m3u', {
+    adminFetch('/api/import-m3u', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -307,12 +355,14 @@ export default function Admin() {
     const isShow = type === 'series';
     const apiType = isShow ? 'tv' : 'movie';
     
-    fetch(`https://api.themoviedb.org/3/${apiType}/${tmdbId}?api_key=3905c909305d58a27f2de32e4b6038e7&language=es-ES`)
+    adminFetch(`/api/admin/tmdb/${apiType}/${encodeURIComponent(tmdbId)}`)
       .then(res => {
         if (!res.ok) throw new Error('No se encontró contenido con ese ID en TMDB.');
         return res.json();
       })
-      .then(data => {
+      .then(result => {
+        if (!result.success) throw new Error(result.error || 'No se encontró contenido con ese ID en TMDB.');
+        const data = result.data;
         setTitle(data.title || data.name || '');
         setDescription(data.overview || '');
         if (data.poster_path) {
@@ -349,7 +399,7 @@ export default function Admin() {
               </button>
             </div>
           )}
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleSecureLogin}>
             <div className="form-group" style={{ marginBottom: '24px' }}>
               <label className="form-label">Contraseña</label>
               <input 
@@ -422,7 +472,7 @@ export default function Admin() {
           className="tab-btn focusable"
           tabIndex={0}
           style={{ marginLeft: 'auto', background: 'rgba(255, 59, 48, 0.1)', color: '#ff3b30' }}
-          onClick={handleLogout}
+          onClick={handleSecureLogout}
         >
           Cerrar Sesión
         </button>
@@ -884,7 +934,7 @@ export default function Admin() {
                 style={{ width: '100%', marginTop: '8px' }}
                 onClick={() => {
                   showAlert('info', 'Iniciando descubrimiento de canales de TV...');
-                  fetch('/api/channels/refresh', { method: 'POST' })
+                  adminFetch('/api/channels/refresh', { method: 'POST' })
                     .then(res => res.json())
                     .then(data => {
                       showAlert('success', data.message || 'Proceso iniciado con éxito.');
@@ -902,7 +952,7 @@ export default function Admin() {
                 style={{ width: '100%', marginTop: '8px', background: 'rgba(255,204,0,0.1)', color: '#ffcc00', borderColor: '#ffcc00' }}
                 onClick={() => {
                   showAlert('info', 'Importando canales de Pluto TV en vivo (México)...');
-                  fetch('/api/seed-plutotv-live', { method: 'POST' })
+                  adminFetch('/api/seed-plutotv-live', { method: 'POST' })
                     .then(res => res.json())
                     .then(data => {
                       if (data.success) {
@@ -924,7 +974,7 @@ export default function Admin() {
                 style={{ width: '100%', marginTop: '8px', background: 'rgba(168,85,247,0.1)', color: '#a855f7', borderColor: '#a855f7' }}
                 onClick={() => {
                   showAlert('info', 'Importando canales de Planeta Play en vivo...');
-                  fetch('/api/seed-planetaplay-live', { method: 'POST' })
+                  adminFetch('/api/seed-planetaplay-live', { method: 'POST' })
                     .then(res => res.json())
                     .then(data => {
                       if (data.success) {
@@ -957,7 +1007,7 @@ export default function Admin() {
                 style={{ width: '100%', marginTop: '8px' }}
                 onClick={() => {
                   showAlert('info', 'Importando catálogo de películas y series desde TMDB...');
-                  fetch('/api/seed-movies', { method: 'POST' })
+                  adminFetch('/api/seed-movies', { method: 'POST' })
                     .then(res => res.json())
                     .then(data => {
                       if (data.success) {
@@ -979,7 +1029,7 @@ export default function Admin() {
                 style={{ width: '100%', marginTop: '8px' }}
                 onClick={() => {
                   showAlert('info', 'Iniciando descubrimiento de películas y series...');
-                  fetch('/api/movies-series/refresh', { method: 'POST' })
+                  adminFetch('/api/movies-series/refresh', { method: 'POST' })
                     .then(res => res.json())
                     .then(data => {
                       showAlert('success', data.message || 'Proceso iniciado con éxito.');
@@ -997,7 +1047,7 @@ export default function Admin() {
                 style={{ width: '100%', marginTop: '8px', background: 'rgba(255,204,0,0.1)', color: '#ffcc00', borderColor: '#ffcc00' }}
                 onClick={() => {
                   showAlert('info', 'Importando catálogo VOD de Pluto TV (México)...');
-                  fetch('/api/seed-plutotv-vod', { method: 'POST' })
+                  adminFetch('/api/seed-plutotv-vod', { method: 'POST' })
                     .then(res => res.json())
                     .then(data => {
                       if (data.success) {
@@ -1030,7 +1080,7 @@ export default function Admin() {
                 style={{ width: '100%', marginTop: '8px', background: '#ff3366', borderColor: '#ff3366' }}
                 onClick={() => {
                   showAlert('info', 'Sincronizando catálogo de Anime. Esto tomará varios segundos...');
-                  fetch('/api/catalog/sync-anime', { method: 'POST' })
+                  adminFetch('/api/catalog/sync-anime', { method: 'POST' })
                     .then(res => res.json())
                     .then(data => {
                       showAlert('success', data.message || 'Sincronización de anime iniciada.');

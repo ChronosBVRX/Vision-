@@ -7,7 +7,7 @@
 
 ## Estado del proyecto
 
-Aplicación web de streaming (películas, series, TV en vivo). Stack: Node/Express + React/Vite. Persistencia en `database.json` (JSON plano).
+Aplicación web de streaming (películas, series, TV en vivo). Stack: Node/Express + React/Vite. Persistencia principal en SQLite (`data/database.sqlite`). El antiguo `database.json` quedó solo como respaldo/migración legacy.
 
 ## Estructura de archivos clave
 
@@ -15,7 +15,8 @@ Aplicación web de streaming (películas, series, TV en vivo). Stack: Node/Expre
 Vision+/
 ├── server.js              ← API Express (~1620 líneas, monolithic)
 ├── scraper.js             ← Scrapers: IPTV, películas, catálogo
-├── database.json          ← BD local (~8425 líneas)
+├── data/database.sqlite   ← BD local principal (SQLite)
+├── database.json.backup   ← Respaldo legacy de la antigua BD JSON
 ├── server/sports/
 │   ├── sportsApiClient.js    ← TheSportsDB API client
 │   ├── sportsRanker.js       ← Interest scoring LATAM/Global
@@ -73,7 +74,7 @@ Vision+/
 
 ## Estado actual para el siguiente agente
 
-- Versión actual visible en Bootloader: `1.0.37`
+- Versión actual visible en Bootloader: `1.0.39`
 - Smart TV: `useSpatialNavigation.js` ya lee `window.isSmartTV` en runtime, no en scope de módulo.
 - Smart TV: `Home.jsx` y `Movies.jsx` ya calculan columnas reales del selector de episodios; no usan `4` fijo.
 - Smart TV: `VideoPlayer.jsx` ya depende de `selectedSeasonIndex` en el handler de teclas para evitar closures viejas al cambiar de temporada.
@@ -111,7 +112,7 @@ npm run errors   # node read-logs.js --errors
 
 **Backend:** express, axios, cheerio, puppeteer, playwright, cors, youtube-dl-exec
 **Frontend:** react 19, vite 8, hls.js, plyr, lucide-react
-**Sin BD:** usa JSON plano (`database.json`) — ~8425 líneas actualmente
+**Persistencia:** SQLite (`data/database.sqlite`) con tablas legacy (`sources`, `categories`, `settings`) y tablas normalizadas (`movies`, `movie_links`, `sports_events`, etc.). `server.js` todavía mantiene una capa `memDB` en memoria para compatibilidad con endpoints legacy.
 
 ## Convenciones / Reglas
 
@@ -171,7 +172,7 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 
 **Mientras se trabaja:**
 - No modificar archivos fuera del alcance de la tarea
-- `database.json` NUNCA se edita manualmente, solo via API
+- `data/database.sqlite` NUNCA se edita manualmente, solo vía API/módulos DB. `database.json.backup` no se toca salvo restauración explícita.
 - Usar `console.log("[Modulo] mensaje")` en server.js para que quede en server.log
 - **Rebuild el frontend** después de cualquier cambio en código o versión: `npm run build --prefix frontend` (en Windows: `cmd.exe /c "npm run build --prefix frontend"` si es necesario).
 - Si `watch-sync.js` no está corriendo, hacer commit + push manual tras cada cambio significativo
@@ -181,7 +182,7 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 2. **AVANZAR VERSIÓN:** Incrementar `package.json` → `version` sumando 1 al último dígito (ej. 1.0.02 → 1.0.03). Verificar con `grep '"version"' package.json`
 3. `git status` — verificar que solo están los archivos intencionados
 4. `git diff --stat` — revisar que no hay cambios accidentales
-5. Verificar que NO se incluye `database.json` ni `agent.lock` en el commit
+5. Verificar que NO se incluye `data/database.sqlite`, `database.json.backup` ni `agent.lock` en el commit
 6. Verificar que no se incluyen secretos/API keys
 7. Hacer commit descriptivo incluyendo la versión y push
 
@@ -194,7 +195,7 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 - Ejemplo: `fix: PoseidonHD no cargaba episodios — cambiar thisSeries por thisSerie (v1.0.01)`
 
 ### 🚫 Qué NO hacer
-- No editar `database.json` manualmente (siempre via API)
+- No editar `data/database.sqlite` ni `database.json.backup` manualmente (siempre vía API/módulos DB)
 - No editar archivos con lock activo de otro agente
 - No hacer commits sin liberar el lock primero
 - No incluir secretos, API keys, .env en commits
@@ -381,7 +382,7 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
   - 🆔 Identidad de cada agente (opencode / antigravity)
   - 📋 Checklist pre-tarea: git pull → check locks → leer errores → acquire lock
   - 📋 Checklist pre-commit: release lock → git status → diff → sin secrets → push
-  - 🚫 Qué NO hacer: no editar database.json, no archivos con lock ajeno, no commits sin liberar
+  - 🚫 Qué NO hacer: no editar `data/database.sqlite`/`database.json.backup`, no archivos con lock ajeno, no commits sin liberar
   - ✅ Formato estandarizado de commits (feat/fix/refactor/chore/docs)
 
 ## Modificaciones de Antigravity (05/06/2026)
@@ -404,7 +405,7 @@ Marca bloques de código delicados con `// [opencode]` o `// [antigravity]`.
 ## Próximos pasos / Pendientes
 
 - [ ] Agregar autenticación básica al panel admin
-- [ ] Migrar database.json a SQLite
+- [x] ~~Migrar database.json a SQLite~~ ✅ Hecho (`data/database.sqlite`)
 - [ ] Refactorizar server.js en rutas modulares (separar concerns)
 - [ ] ~~Cache de catálogo con TTL configurable~~ ✅ Hecho
 - [ ] ~~Modo offline / service worker~~ ✅ Cache-First implementado en SW

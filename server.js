@@ -143,6 +143,16 @@ const { router: sportsRouter, initSportsRoutes } = require('./server/sports/spor
 const app = express();
 const PORT = process.env.PORT || 5000;
 const DB_FILE = path.join(__dirname, 'database.json');
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+
+function requireAdmin(req, res, next) {
+  const token = req.headers['x-admin-password'] || req.query.admin_pass;
+  if (token === ADMIN_PASSWORD) return next();
+  return res.status(401).json({
+    success: false,
+    error: 'No autorizado. Se requiere contraseña de administrador.'
+  });
+}
 
 let memDB = { categories: [], sources: [], movieCatalog: [], seriesCatalog: [], animeMovieCatalog: [], animeSeriesCatalog: [], settings: {} };
 
@@ -188,6 +198,34 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Serve frontend static files in production
 app.use(express.static(path.join(__dirname, 'frontend/dist')));
 app.use(express.static(path.join(__dirname, 'frontend/public')));
+
+app.get('/api/admin/check', requireAdmin, (req, res) => {
+  res.json({ success: true });
+});
+
+app.get('/api/admin/tmdb/:type/:id', requireAdmin, async (req, res) => {
+  const tmdbType = req.params.type === 'tv' ? 'tv' : 'movie';
+  const tmdbId = String(req.params.id || '').trim();
+  const tmdbKey = process.env.TMDB_API_KEY || '3905c909305d58a27f2de32e4b6038e7';
+
+  if (!tmdbId) {
+    return res.status(400).json({ success: false, error: 'Falta el ID de TMDB.' });
+  }
+
+  try {
+    const response = await axios.get(
+      `https://api.themoviedb.org/3/${tmdbType}/${encodeURIComponent(tmdbId)}?api_key=${tmdbKey}&language=es-ES`,
+      { timeout: 10000 }
+    );
+    res.json({ success: true, data: response.data });
+  } catch (err) {
+    const status = err.response?.status || 500;
+    res.status(status).json({
+      success: false,
+      error: status === 404 ? 'No se encontró contenido con ese ID en TMDB.' : err.message
+    });
+  }
+});
 
 // Mount normalized movie store routes
 const playRoutes = require('./server/routes/play');
@@ -655,7 +693,7 @@ app.get('/api/sources', (req, res) => {
   });
 });
 
-app.post('/api/sources', (req, res) => {
+app.post('/api/sources', requireAdmin, (req, res) => {
   const db = readDB();
   const newSource = req.body;
   
@@ -669,7 +707,7 @@ app.post('/api/sources', (req, res) => {
   res.status(201).json(newSource);
 });
 
-app.put('/api/sources/:id', (req, res) => {
+app.put('/api/sources/:id', requireAdmin, (req, res) => {
   const db = readDB();
   const id = req.params.id;
   const updatedSource = req.body;
@@ -722,7 +760,7 @@ app.put('/api/sources/:id', (req, res) => {
   return res.status(404).json({ error: 'Source not found' });
 });
 
-app.delete('/api/sources/:id', (req, res) => {
+app.delete('/api/sources/:id', requireAdmin, (req, res) => {
   const db = readDB();
   const id = req.params.id;
   let deleted = false;
@@ -774,7 +812,7 @@ app.delete('/api/sources/:id', (req, res) => {
 });
 
 // Categories
-app.post('/api/categories', (req, res) => {
+app.post('/api/categories', requireAdmin, (req, res) => {
   const db = readDB();
   const { name, type } = req.body;
 
@@ -793,7 +831,7 @@ app.post('/api/categories', (req, res) => {
   res.status(201).json(flatCats);
 });
 
-app.delete('/api/categories', (req, res) => {
+app.delete('/api/categories', requireAdmin, (req, res) => {
   const db = readDB();
   const { name } = req.body;
 
@@ -835,7 +873,7 @@ app.delete('/api/categories', (req, res) => {
 });
 
 // Endpoint to manually refresh Live TV Channels in background
-app.post('/api/channels/refresh', (req, res) => {
+app.post('/api/channels/refresh', requireAdmin, (req, res) => {
   if (tvRefreshInProgress) {
     return res.json({ success: true, message: "El refresco de canales ya está en progreso." });
   }
@@ -844,7 +882,7 @@ app.post('/api/channels/refresh', (req, res) => {
 });
 
 // Endpoint to manually refresh Movies & Series in background
-app.post('/api/movies-series/refresh', (req, res) => {
+app.post('/api/movies-series/refresh', requireAdmin, (req, res) => {
   if (movieRefreshInProgress) {
     return res.json({ success: true, message: "El refresco de películas y series ya está en progreso." });
   }
@@ -1076,7 +1114,7 @@ app.get('/api/img-proxy', async (req, res) => {
 });
 
 // Movie seeder: populates DB with real movies from jsonfakery.com (uses TMDB data + vidsrc.to streaming)
-app.post('/api/seed-movies', async (req, res) => {
+app.post('/api/seed-movies', requireAdmin, async (req, res) => {
   const db = readDB();
   const existingIds = new Set(db.sources.map(s => s.id));
   let added = 0;
@@ -1130,7 +1168,7 @@ app.post('/api/seed-movies', async (req, res) => {
   res.json({ success: true, added, total: db.sources.length });
 });
 
-app.post('/api/seed-plutotv-live', async (req, res) => {
+app.post('/api/seed-plutotv-live', requireAdmin, async (req, res) => {
   try {
     const newSources = await scrapePlutoTVLive();
     if (!newSources || newSources.length === 0) {
@@ -1160,7 +1198,7 @@ app.post('/api/seed-plutotv-live', async (req, res) => {
   }
 });
 
-app.post('/api/seed-planetaplay-live', async (req, res) => {
+app.post('/api/seed-planetaplay-live', requireAdmin, async (req, res) => {
   try {
     const newSources = await scrapePlanetaPlayLive();
     if (!newSources || newSources.length === 0) {
@@ -1190,7 +1228,7 @@ app.post('/api/seed-planetaplay-live', async (req, res) => {
   }
 });
 
-app.post('/api/seed-plutotv-vod', async (req, res) => {
+app.post('/api/seed-plutotv-vod', requireAdmin, async (req, res) => {
   try {
     const newSources = await scrapePlutoTVOnDemand();
     if (!newSources || newSources.length === 0) {
@@ -1446,7 +1484,7 @@ app.get('/api/plutotv', (req, res) => {
 });
 
 // POST /api/catalog/sync — Trigger background catalog sync
-app.post('/api/catalog/sync', (req, res) => {
+app.post('/api/catalog/sync', requireAdmin, (req, res) => {
   if (catalogSyncInProgress) {
     return res.json({ success: true, message: 'Sincronización ya en progreso.', syncing: true });
   }
@@ -1454,7 +1492,7 @@ app.post('/api/catalog/sync', (req, res) => {
   res.json({ success: true, message: 'Sincronización iniciada en segundo plano.' });
 });
 
-app.post('/api/catalog/sync-anime', (req, res) => {
+app.post('/api/catalog/sync-anime', requireAdmin, (req, res) => {
   if (animeSyncInProgress) {
     return res.json({ success: true, message: 'Sincronización de anime ya en progreso.', syncing: true });
   }
@@ -1463,7 +1501,7 @@ app.post('/api/catalog/sync-anime', (req, res) => {
 });
 
 // POST /api/catalog/clear — Clear catalog (for reset)
-app.post('/api/catalog/clear', (req, res) => {
+app.post('/api/catalog/clear', requireAdmin, (req, res) => {
   const db = readDB();
   const { type } = req.body;
   if (!type || type === 'movie') db.movieCatalog = [];
@@ -1475,7 +1513,7 @@ app.post('/api/catalog/clear', (req, res) => {
 });
 
 // POST /api/catalog/refresh-all — Refresh ALL catalogs sequentially (movies, series, anime, TV live, sports)
-app.post('/api/catalog/refresh-all', async (req, res) => {
+app.post('/api/catalog/refresh-all', requireAdmin, async (req, res) => {
   res.json({ success: true, message: 'Refrescando todos los catálogos en segundo plano...' });
   
   console.log('[RefreshAll] ===== INICIANDO ACTUALIZACIÓN COMPLETA DE CATÁLOGOS =====');
@@ -1984,7 +2022,7 @@ app.get('/api/proxy', async (req, res) => {
 });
 
 // Import M3U playlists
-app.post('/api/import-m3u', async (req, res) => {
+app.post('/api/import-m3u', requireAdmin, async (req, res) => {
   const { url, rawText, category, type } = req.body;
   let m3uContent = '';
   const itemType = type || 'tv';
@@ -2334,9 +2372,15 @@ const TUNNEL_HTML_TEMPLATE = (url) => `<!DOCTYPE html>
     <div class="card">
         <div class="spinner"></div>
         <h1>Redirigiendo a Vision+</h1>
-        <p>Si no eres redirigido automáticamente, <a href="${url}">haz clic aqu\u00ED</a>.</p>
+        <p>Si no eres redirigido automáticamente, <a id="liveLink" href="${url}">haz clic aqu\u00ED</a>.</p>
     </div>
-    <script>window.location.href = "${url}";</script>
+    <script>
+        const target = new URL("${url}");
+        target.search = window.location.search;
+        target.hash = window.location.hash;
+        document.getElementById('liveLink').href = target.toString();
+        window.location.replace(target.toString());
+    </script>
 </body>
 </html>`;
 
