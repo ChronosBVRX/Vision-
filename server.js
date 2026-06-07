@@ -118,8 +118,6 @@ axios.defaults.httpsAgent = customHttpsAgent;
 axios.defaults.httpAgent = customHttpAgent;
 
 const { 
-  scrapeRojadirectaMatches, 
-  discoverActiveMirror, 
   sniffVideoUrl, 
   searchBraveForIPTVPlaylists, 
   fetchAndParseIPTVPlaylists, 
@@ -239,15 +237,6 @@ function writeDB(data) {
   })();
   return true;
 }
-
-// In-Memory Cache for Sports Matches
-let sportsCache = {
-  matches: [],
-  activeUrl: '',
-  lastUpdated: null,
-  loading: false,
-  error: null
-};
 
 // Worker function to automatically search and refresh Live TV IPTV channels
 let tvRefreshInProgress = false;
@@ -461,169 +450,6 @@ async function refreshMoviesAndSeries() {
     console.error("[VODWorker] Error en el worker de películas y series:", error.message);
   } finally {
     movieRefreshInProgress = false;
-  }
-}
-
-// Helper functions for team logo enrichment
-const teamLogoCache = new Map();
-
-async function getTeamLogo(teamName) {
-  if (!teamName || teamName.length < 2) return null;
-  const cacheKey = teamName.toLowerCase().trim();
-  if (teamLogoCache.has(cacheKey)) return teamLogoCache.get(cacheKey);
-
-  // Try TheSportsDB first
-  try {
-    const cleanName = encodeURIComponent(teamName.trim());
-    const res = await axios.get(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${cleanName}`, { timeout: 3000 });
-    if (res.data && res.data.teams && res.data.teams.length > 0) {
-      const badge = res.data.teams[0].strBadge || null;
-      if (badge) {
-        teamLogoCache.set(cacheKey, badge);
-        return badge;
-      }
-    }
-  } catch (err) {}
-
-  // Fallback: search DuckDuckGo Images for the logo
-  try {
-    const ddgUrl = `https://duckduckgo.com/i.js?q=${encodeURIComponent(teamName + ' logo escudo')}&iax=images`;
-    const ddgRes = await axios.get(ddgUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' },
-      timeout: 3000
-    });
-    if (ddgRes.data && ddgRes.data.results && ddgRes.data.results.length > 0) {
-      const imgUrl = ddgRes.data.results[0].image || null;
-      if (imgUrl) {
-        teamLogoCache.set(cacheKey, imgUrl);
-        return imgUrl;
-      }
-    }
-  } catch (err) {}
-
-  teamLogoCache.set(cacheKey, null);
-  return null;
-}
-
-function getTeamsFromTitle(title) {
-  // Strip the event/sport suffix first (e.g. " - La Liga", " - NBA")
-  const cleanTitle = title.replace(/[–—-]\s*.+$/, '').trim();
-  const lower = cleanTitle.toLowerCase();
-
-  // Pattern 1: "Team1 vs Team2" (most common)
-  const vsMatch = cleanTitle.match(/^(.+?)\s+(?:vs\.?|v\.?|VS\.?|v\/s)\s+(.+)$/i);
-  if (vsMatch) {
-    return [vsMatch[1].trim(), vsMatch[2].trim()].map(t => t.replace(/en vivo/i, '').replace(/live/i, '').trim()).filter(t => t.length > 2);
-  }
-
-  // Pattern 2: "Team1 - Team2" (some sites use dash)
-  const dashMatch = cleanTitle.match(/^(.+?)\s*[–—-]\s*(.+?)$/);
-  if (dashMatch) {
-    const t1 = dashMatch[1].trim();
-    const t2 = dashMatch[2].trim();
-    // Only treat as two teams if both are short enough (not a full sentence)
-    if (t1.length < 40 && t2.length < 40 && !t1.toLowerCase().includes('canal') && !t2.toLowerCase().includes('canal')) {
-      return [t1.replace(/en vivo/i, '').replace(/live/i, '').trim(), t2.replace(/en vivo/i, '').replace(/live/i, '').trim()].filter(t => t.length > 2);
-    }
-  }
-
-  // Pattern 3: Single-event titles like "F1 GP Monaco" — no teams
-  return [];
-}
-
-// Enrich matches with improved sport detection via page context search
-async function detectSportForMatch(match) {
-  const sport = match.sport || '';
-  // If already detected as something other than the default 'Fútbol', keep it
-  if (sport && sport !== 'Fútbol') return sport;
-  
-  // Try to extract sport from the stream URL page
-  for (const stream of (match.streams || [])) {
-    if (!stream.url) continue;
-    try {
-      const resp = await axios.get(stream.url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-        timeout: 3000,
-        maxRedirects: 2
-      });
-      const $ = cheerio.load(resp.data);
-      const pageText = $('title').text() + ' ' + $('body').text();
-      const lowerText = pageText.toLowerCase().substring(0, 5000);
-      
-      if (/baloncesto|basketball|nba|euroliga|acb/i.test(lowerText)) return 'Baloncesto';
-      if (/béisbol|baseball|mlb/i.test(lowerText)) return 'Béisbol';
-      if (/tenis|tennis|atp|wta/i.test(lowerText)) return 'Tenis';
-      if (/ufc|boxeo|boxing|mma|lucha libre|wwe/i.test(lowerText)) return 'Combate';
-      if (/fórmula 1|formula 1|f1|motogp|nascar|automovilismo/i.test(lowerText)) return 'Automovilismo';
-      if (/fútbol americano|nfl|american football/i.test(lowerText)) return 'Fútbol Americano';
-    } catch (e) {}
-  }
-  return sport || 'Fútbol';
-}
-
-async function enrichMatchesWithLogos(matches) {
-  console.log(`[SportsWorker] Enriqueciendo ${matches.length} partidos con logos y detección de deporte...`);
-  try {
-    const enriched = await Promise.all(matches.map(async (match) => {
-      // Detect/improve sport
-      const detectedSport = await detectSportForMatch(match);
-      
-      // Extract teams
-      const teams = getTeamsFromTitle(match.title);
-      if (teams.length >= 2) {
-        const [logo1, logo2] = await Promise.all([
-          getTeamLogo(teams[0]),
-          getTeamLogo(teams[1])
-        ]);
-        return {
-          ...match,
-          sport: detectedSport,
-          team1: teams[0],
-          team2: teams[1],
-          logo1,
-          logo2
-        };
-      }
-      return {
-        ...match,
-        sport: detectedSport
-      };
-    }));
-    return enriched;
-  } catch (e) {
-    console.error("[SportsWorker] Fallo al enriquecer:", e.message);
-    return matches;
-  }
-}
-
-// Function to refresh sports cache
-async function refreshSportsCache() {
-  if (sportsCache.loading) return;
-  sportsCache.loading = true;
-  sportsCache.error = null;
-  console.log(`[SportsWorker] Iniciando refresco de cache de deportes...`);
-
-  try {
-    const result = await discoverActiveMirror();
-    
-    // Enrich matches with official team logos from TheSportsDB
-    const enrichedMatches = await enrichMatchesWithLogos(result.matches);
-    
-    sportsCache.matches = enrichedMatches;
-    sportsCache.activeUrl = result.activeUrl;
-    sportsCache.lastUpdated = new Date();
-    sportsCache.loading = false;
-    sportsCache.error = null;
-    console.log(`[SportsWorker] Cache de deportes actualizado con exito. Espejo activo: ${result.activeUrl}`);
-
-    // Update settings in database.json to persist the latest working mirror
-    const db = readDB();
-    db.settings.rojadirectaUrl = result.activeUrl;
-    writeDB(db);
-  } catch (error) {
-    sportsCache.loading = false;
-    sportsCache.error = error.message;
-    console.error(`[SportsWorker] Error al actualizar cache de deportes: ${error.message}`);
   }
 }
 
@@ -1004,19 +830,6 @@ app.delete('/api/categories', (req, res) => {
   res.json(flatCats);
 });
 
-// Settings Endpoints
-app.get('/api/settings', (req, res) => {
-  const db = readDB();
-  res.json(db.settings || { rojadirectaUrl: "https://www.rojadirectatvmas.com" });
-});
-
-app.post('/api/settings', (req, res) => {
-  const db = readDB();
-  db.settings = { ...db.settings, ...req.body };
-  writeDB(db);
-  res.json(db.settings);
-});
-
 // Endpoint to manually refresh Live TV Channels in background
 app.post('/api/channels/refresh', (req, res) => {
   if (tvRefreshInProgress) {
@@ -1033,144 +846,6 @@ app.post('/api/movies-series/refresh', (req, res) => {
   }
   refreshMoviesAndSeries();
   res.json({ success: true, message: "Refresco de películas y series iniciado en segundo plano." });
-});
-
-// Sports Scraping Endpoints (Instantly returns cached data)
-app.get('/api/sports/matches', (req, res) => {
-  res.json({
-    success: sportsCache.error ? false : true,
-    matches: sportsCache.matches,
-    activeUrl: sportsCache.activeUrl,
-    lastUpdated: sportsCache.lastUpdated,
-    loading: sportsCache.loading,
-    error: sportsCache.error
-  });
-});
-
-// Manually trigger a refresh in background
-app.post('/api/sports/refresh', async (req, res) => {
-  if (sportsCache.loading) {
-    return res.json({ success: true, message: "El refresco ya esta en progreso.", status: sportsCache });
-  }
-  refreshSportsCache();
-  res.json({ success: true, message: "Refresco iniciado en segundo plano." });
-});
-
-// Endpoint to recursively resolve iframe links to direct stream URLs
-app.get('/api/sports/resolve-stream', async (req, res) => {
-  const streamUrl = req.query.url;
-  if (!streamUrl) {
-    return res.status(400).json({ error: "Missing url parameter" });
-  }
-
-  try {
-    const sniffResult = await sniffVideoUrl(streamUrl);
-    if (sniffResult && sniffResult.url) {
-      res.json({ success: true, result: { type: 'direct', url: sniffResult.url, referer: sniffResult.referer } });
-    } else {
-      res.json({ success: true, result: { type: 'iframe', url: streamUrl } });
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Endpoint to resolve and play using sequential auto-hop sniffing
-app.post('/api/sports/resolve-and-play', async (req, res) => {
-  const { streams } = req.body;
-  if (!streams || !Array.isArray(streams) || streams.length === 0) {
-    return res.status(400).json({ error: "Missing or invalid streams parameter" });
-  }
-
-  console.log(`[Server] Iniciando resolve-and-play para ${streams.length} opciones...`);
-
-  for (let i = 0; i < streams.length; i++) {
-    const stream = streams[i];
-    console.log(`[Server] Probando servidor ${i + 1}/${streams.length}: ${stream.name} (${stream.url})`);
-    
-    try {
-      const sniffResult = await sniffVideoUrl(stream.url);
-      if (sniffResult && sniffResult.url) {
-        const videoUrl = sniffResult.url;
-        const referer = sniffResult.referer;
-        console.log(`[Server] Video detectado: ${videoUrl}. Referer: ${referer}. Verificando conectividad...`);
-        let isValidStream = false;
-
-        let checkReferer = referer || '';
-        if (!checkReferer) {
-          try {
-            const originUrl = new URL(stream.url).origin;
-            if (videoUrl.includes('54434687.net') || videoUrl.includes('verfutbol')) {
-              checkReferer = 'https://verfutbol.at/';
-            } else {
-              checkReferer = originUrl;
-            }
-          } catch (e) {}
-        }
-
-        // Step 1: Try a quick HEAD request
-        try {
-          const checkRes = await axios({
-            method: 'head',
-            url: videoUrl,
-            timeout: 4000,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Referer': checkReferer
-            },
-            validateStatus: (status) => status >= 200 && status < 400
-          });
-          console.log(`[Server] ¡Validación HEAD exitosa! Status: ${checkRes.status}`);
-          isValidStream = true;
-        } catch (headErr) {
-          console.log(`[Server] HEAD falló (${headErr.message}), intentando GET parcial de respaldo...`);
-          // Step 2: Try a quick GET range request as fallback (some HLS servers block HEAD)
-          try {
-            const checkResGet = await axios({
-              method: 'get',
-              url: videoUrl,
-              timeout: 4000,
-              headers: { 
-                Range: 'bytes=0-100',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': checkReferer
-              },
-              validateStatus: (status) => status >= 200 && status < 400
-            });
-            console.log(`[Server] ¡Validación GET exitosa! Status: ${checkResGet.status}`);
-            isValidStream = true;
-          } catch (getErr) {
-            console.warn(`[Server] Validación de conectividad fallida para: ${videoUrl}. Error: ${getErr.message}`);
-          }
-        }
-
-        if (isValidStream) {
-          console.log(`[Server] ¡Éxito! Servidor ${stream.name} validado en: ${videoUrl}`);
-          return res.json({
-            success: true,
-            url: videoUrl,
-            referer: checkReferer,
-            name: stream.name,
-            resolver: 'direct'
-          });
-        }
-      }
-      console.log(`[Server] Servidor ${stream.name} no retornó video válido.`);
-    } catch (err) {
-      console.error(`[Server] Error probando servidor ${stream.name}:`, err.message);
-    }
-  }
-
-  console.log(`[Server] Fallaron todos los servidores. Retornando primer servidor como iframe fallback.`);
-  return res.json({
-    success: false,
-    error: "No se pudo extraer video directo de ningún servidor activo.",
-    fallback: {
-      url: streams[0].url,
-      name: streams[0].name,
-      resolver: 'iframe'
-    }
-  });
 });
 
 // Import plutoAdapter for direct live resolution
@@ -1274,7 +949,7 @@ async function resolveSingleStream(stream, serverName, type) {
   }
 }
 
-// Endpoint to resolve Live TV and Sports (parallel processing)
+// Endpoint to resolve Live TV (parallel processing)
 app.post('/api/live/resolve', async (req, res) => {
   const { streams, type, excludeServer } = req.body;
   if (!streams || !Array.isArray(streams) || streams.length === 0) {
@@ -1312,7 +987,7 @@ app.post('/api/live/resolve', async (req, res) => {
         const r = await resolveSingleStream(stream, serverName, type);
         attempts.push({
           sourceName: serverName,
-          language: type === 'tv' ? 'En Vivo' : 'Deportes',
+          language: 'En Vivo',
           server: serverName,
           status: r.success ? 'SUCCESS' : 'FAILED',
           reason: r.success ? 'SUCCESS' : (r.error || 'SERVER_DOWN'),
@@ -1326,7 +1001,7 @@ app.post('/api/live/resolve', async (req, res) => {
     console.log(`[Server] ✅ Primer éxito paralelo: ${result.serverName}`);
     return res.json({
       success: true,
-      selectedLanguage: type === 'tv' ? 'En Vivo' : 'Deportes',
+      selectedLanguage: 'En Vivo',
       selectedServer: result.serverName,
       stream: result.stream,
       attempts
@@ -1335,84 +1010,16 @@ app.post('/api/live/resolve', async (req, res) => {
     console.log(`[Server] ❌ Todos los servidores fallaron en paralelo.`);
   }
 
-  if (type === 'sports' || type === 'sport') {
-    console.log(`[Server] Fallaron todos los servidores de Deportes. Retornando error sin iframe.`);
-    return res.json({
-      success: false,
-      error: "No se pudo sintonizar un flujo de video directo para este evento.",
-      attempts
-    });
-  }
-
   return res.json({
     success: true,
-    selectedLanguage: type === 'tv' ? 'En Vivo' : 'Deportes',
+    selectedLanguage: 'En Vivo',
     selectedServer: streams[0].name || 'Servidor Original',
     stream: { name: streams[0].name || 'Servidor Original', url: streams[0].url, resolver: 'iframe', type: 'iframe' },
     attempts
   });
 });
 
-// Endpoint to search for additional match mirrors from other sources
-const CANDIDATE_DOMAINS = [
-  'https://www.rojadirectatvmas.com',
-  'https://www.rojadirecta.lt',
-  'https://www.rojadirecta.watch'
-];
 
-async function searchMirrorsForMatch(title, sport, existingUrls) {
-  const mirrors = [];
-  const keywords = title.toLowerCase().split(/[:\-–—vs]+/).map(k => k.trim()).filter(k => k.length > 3);
-  if (keywords.length < 2) return mirrors;
-
-  for (const domain of CANDIDATE_DOMAINS) {
-    try {
-      const resp = await axios.get(domain, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept-Language': 'es-ES,es;q=0.9'
-        },
-        timeout: 4000
-      });
-      const $ = cheerio.load(resp.data);
-      $('a').each((i, el) => {
-        const link = $(el);
-        const href = link.attr('href');
-        if (!href) return;
-        let url = href;
-        if (url.startsWith('/')) url = new URL(url, domain).toString();
-        else if (!url.startsWith('http')) return;
-
-        if (existingUrls.includes(url)) return;
-        const text = link.text().replace(/\s+/g, ' ').trim().toLowerCase();
-        const allMatch = keywords.every(k => text.includes(k));
-        if (allMatch && (text.includes(' vs ') || text.includes(' - ')) && text.length > 8) {
-          if (!mirrors.some(m => m.url === url)) {
-            mirrors.push({ name: `Mirror ${mirrors.length + 1}`, url, resolver: 'direct' });
-          }
-        }
-      });
-    } catch (e) {
-      console.log(`[MirrorSearch] Fallo en ${domain}: ${e.message}`);
-    }
-  }
-  return mirrors;
-}
-
-app.post('/api/sports/search-mirrors', async (req, res) => {
-  const { title, sport, existingUrls } = req.body;
-  if (!title) return res.json({ success: false, mirrors: [] });
-
-  console.log(`[MirrorSearch] Buscando espejos para "${title}"...`);
-  try {
-    const mirrors = await searchMirrorsForMatch(title, sport, existingUrls || []);
-    console.log(`[MirrorSearch] ${mirrors.length} espejos encontrados para "${title}"`);
-    return res.json({ success: true, mirrors });
-  } catch (err) {
-    console.error(`[MirrorSearch] Error: ${err.message}`);
-    return res.json({ success: false, mirrors: [] });
-  }
-});
 
 // In-memory image proxy cache (key: url, value: { data, contentType, timestamp })
 const imgCache = new Map();
@@ -1953,15 +1560,6 @@ app.post('/api/catalog/refresh-all', async (req, res) => {
     }
   } catch (e) {
     console.error('[RefreshAll] ❌ Error Planeta Play:', e.message);
-  }
-
-  // 6. Sports cache
-  console.log('[RefreshAll] ▶ Deportes en vivo...');
-  try {
-    await refreshSportsCache();
-    console.log('[RefreshAll] ✅ Deportes actualizado.');
-  } catch (e) {
-    console.error('[RefreshAll] ❌ Error deportes:', e.message);
   }
 
   console.log('[RefreshAll] ===== ACTUALIZACIÓN COMPLETA FINALIZADA =====');
@@ -2863,11 +2461,6 @@ initializeDB().then(async () => {
   app.listen(PORT, () => {
     console.log(`Servidor corriendo en el puerto ${PORT}`);
     
-    // Inicializar cache de deportes en segundo plano
-    refreshSportsCache().catch(err => {
-      console.error("[Startup] Error al inicializar cache de deportes:", err.message);
-    });
-
     // Publicar enlace de túnel actual en GitHub Pages e iniciar intervalo de chequeo
     setTimeout(checkAndPublishTunnelRedirect, 5000);
     setInterval(checkAndPublishTunnelRedirect, 20000);

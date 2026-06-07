@@ -242,7 +242,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
 
   // Live TV custom states
   const isLive = useMemo(() => {
-    return localSource?.type === 'tv' || localSource?.type === 'sports' || localSource?.isSports;
+    return localSource?.type === 'tv';
   }, [localSource]);
 
   const [showZappingBanner, setShowZappingBanner] = useState(false);
@@ -1639,7 +1639,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
                 )}
               </>
             ) : (
-              isLive ? (localSource.isSports ? 'Deportes en Vivo' : 'Canal en Vivo') : 'Película'
+              isLive ? 'Canal en Vivo' : 'Película'
             )}
             {streams.length > 1 && ` • Servidor ${activeStreamIndex + 1} de ${streams.length}`}
           </div>

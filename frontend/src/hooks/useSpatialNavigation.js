@@ -205,11 +205,11 @@ export default function useSpatialNavigation(isActive = true) {
           } else {
             navigateSpatially(e.key, activeEl, sidebarItems);
           }
-        } else if (document.querySelector('.catalog-grid, .sports-grid')) {
+        } else if (document.querySelector('.catalog-grid')) {
           e.preventDefault();
           e.stopPropagation();
           // Inline lightweight spatial for grid rows — skip full DOM scan
-          const grid = document.querySelector('.catalog-grid, .sports-grid');
+          const grid = document.querySelector('.catalog-grid');
           if (grid) {
             const items = getCachedFocusables(grid);
             navigateSpatially(e.key, activeEl, items);

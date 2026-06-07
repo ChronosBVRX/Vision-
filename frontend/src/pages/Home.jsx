@@ -224,7 +224,7 @@ export default function Home({ selectedCategoryFilter }) {
   const handlePlay = useCallback((item) => {
     setDetailsItem(null);
     if (!item || resolvingRef.current) return;
-    if (item.provider === 'internal-resolver' || item.isSports) { setActiveItem(item); return; }
+    if (item.provider === 'internal-resolver') { setActiveItem(item); return; }
     if (item.type === 'tv') {
       if (item.streams && item.streams.length > 0) {
         resolvingRef.current = true; setIsResolving(true); setResolveError(null); setResolveAttempts([]);

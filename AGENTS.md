@@ -1,20 +1,20 @@
 # Vision+ — AGENTS.md
 
 > Archivo de contexto compartido entre opencode y Antigravity 2.0.
-> **Actualizado por última vez:** 05/06/2026 por antigravity (sesión tarde)
+> **Actualizado por última vez:** 07/06/2026 por opencode
 
 ---
 
 ## Estado del proyecto
 
-Aplicación web de streaming (películas, series, TV en vivo, deportes). Stack: Node/Express + React/Vite. Persistencia en `database.json` (JSON plano).
+Aplicación web de streaming (películas, series, TV en vivo). Stack: Node/Express + React/Vite. Persistencia en `database.json` (JSON plano).
 
 ## Estructura de archivos clave
 
 ```
 Vision+/
 ├── server.js              ← API Express (~1620 líneas, monolithic)
-├── scraper.js             ← Scrapers (~1430 líneas): Rojadirecta, IPTV, películas
+├── scraper.js             ← Scrapers: IPTV, películas, catálogo
 ├── database.json          ← BD local (~8425 líneas)
 ├── server/resolvers/
 │   ├── videoSourceResolver.js
@@ -32,7 +32,6 @@ Vision+/
 │   │   ├── Home.jsx       ← Catálogo + TV en vivo (~366 líneas)
 │   │   ├── Movies.jsx     ← Películas/series con catálogo, selector episodios TV (~710 líneas)
 │   │   ├── Series.jsx     ← Wrapper de Movies.jsx con contentType='series' (7 líneas)
-│   │   ├── Sports.jsx     ← Deportes en vivo (~438 líneas)
 │   │   └── Admin.jsx      ← CRUD fuentes + import M3U + seed (~780 líneas)
 │   └── components/
 │       ├── VideoPlayer.jsx     ← Reproductor HLS/MP4/iframe (~1215 líneas)
@@ -50,7 +49,6 @@ Vision+/
 | Series con episodios | ✅ | Scrapea temporadas, resuelve episodios individuales |
 | TV en vivo (IPTV) | ✅ | Brave Search + M3U fallbacks, parseo automático |
 | Pluto TV (Live & VOD) | ✅ | Scraper integrado con boot dinámico para México |
-| Deportes en vivo | ✅ | Scrapea Rojadirecta + mirrors |
 | Resolución de video | ✅ | iframe → sniff → directo (.m3u8/.mp4), con proxy HLS |
 | Proxy HLS | ✅ | `/api/proxy` reescribe playlists y sirve segmentos |
 | Panel Admin | ✅ | CRUD, import M3U, seed TMDB, scraper URL |
@@ -61,6 +59,7 @@ Vision+/
 | Submenú Pluto TV (sidebar) | ✅ | Expandible con "TV en Vivo" y "Películas Bajo Demanda" |
 | Selector episodios TV (Movies.jsx) | ✅ | Pestañas temporada + grilla episodios, navegable con mando |
 | Navegación episodios en reproductor | ✅ | Botones Anterior/Siguiente + drawer lateral con lista completa |
+| ~~Deportes en vivo~~ | ❌ Eliminado | Sección de deportes en vivo removida (07/06/2026) |
 
 ## Sistema de Logs
 

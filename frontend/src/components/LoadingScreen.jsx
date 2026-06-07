@@ -74,7 +74,7 @@ export default function LoadingScreen({
         {type === 'resolver' && (
           <>
             <div className="vision-loading-subtitle">
-              {theme === 'sports' ? ' Sintonizando Deportes' : ' Sintonizando Señal'}
+              {' Sintonizando Señal'}
             </div>
             <div className="vision-loading-trust-box">
               <span className="vision-loading-trust-text">

@@ -105,8 +105,8 @@ export default function Movies({ contentType = 'movie' }) {
       return;
     }
 
-    // Sports and already-resolved items go directly to player
-    if (item.provider === 'internal-resolver' || item.isSports || item.type === 'tv') {
+    // Already-resolved items go directly to player
+    if (item.provider === 'internal-resolver' || item.type === 'tv') {
       setActiveItem(item);
       return;
     }

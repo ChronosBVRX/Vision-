@@ -7,7 +7,6 @@ import Home from './pages/Home';
 import Movies from './pages/Movies';
 import Series from './pages/Series';
 const Admin = lazy(() => import('./pages/Admin'));
-const Sports = lazy(() => import('./pages/Sports'));
 import useSpatialNavigation from './hooks/useSpatialNavigation';
 import { useCatalog } from './context/CatalogContext.jsx';
 import logoImg from './assets/logo.png';
@@ -326,18 +325,6 @@ export default function App() {
             <span>Inicio</span>
           </li>
 
-          {/* Deportes */}
-          <li
-            className={`nav-item focusable ${currentPage === 'sports' ? 'active' : ''}`}
-            tabIndex={0}
-            onClick={() => selectPage('sports')}
-            onKeyDown={e => { if (e.key === 'Enter') selectPage('sports'); }}
-          >
-            <PlayCircle size={24} />
-            <span>Deportes en Vivo</span>
-          </li>
-
-
           {/* ── Section divider ──────────────────────────────────────────── */}
           <li className="nav-divider" />
           <li className="nav-section-label">Contenido</li>
@@ -488,7 +475,6 @@ export default function App() {
             />
           )}
           {currentPage === 'admin' && <Admin />}
-          {currentPage === 'sports' && <Sports />}
           {currentPage === 'movies' && <Movies contentType="movie" />}
           {currentPage === 'series' && <Series />}
           {currentPage === 'anime' && <Movies contentType={animeTab === 'Películas' ? 'anime_movie' : 'anime_series'} />}
