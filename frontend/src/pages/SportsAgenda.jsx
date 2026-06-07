@@ -6,6 +6,7 @@ import SportsEventCard from '../components/SportsEventCard';
 import WatchOptionsModal from '../components/WatchOptionsModal';
 import VideoPlayer from '../components/VideoPlayer';
 import { getSportsEvents, refreshSportsEvents } from '../services/sportsApi';
+import { useCatalog } from '../context/CatalogContext';
 
 const SPORTS = ['Todos', 'Soccer', 'Basketball', 'Baseball', 'Motorsport', 'Tennis', 'Boxing', 'MMA', 'American_Football'];
 const SORT_OPTIONS = [
@@ -50,6 +51,8 @@ export default function SportsAgenda() {
   const [activePlayerEvent, setActivePlayerEvent] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const debouncedSearch = useDebounce(searchQuery, 300);
+
+  const { sources } = useCatalog();
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -126,14 +129,14 @@ export default function SportsAgenda() {
 
   const handlePlayChannel = (option) => {
     if (option.channelId && option.type === 'internal_channel') {
-      const channel = {
-        id: option.channelId,
-        title: option.channelName || option.label,
-        type: 'tv',
-        streams: [{ name: 'Stream Directo', url: '', resolver: 'direct' }]
-      };
-      setActivePlayerEvent(channel);
-      setShowWatchModal(false);
+      let channel = sources.find(s => s.id === option.channelId);
+      if (!channel) {
+        channel = sources.find(s => s.title && s.title.toLowerCase() === (option.channelName || '').toLowerCase());
+      }
+      if (channel) {
+        setActivePlayerEvent(channel);
+        setShowWatchModal(false);
+      }
     }
   };
 
@@ -274,9 +277,7 @@ export default function SportsAgenda() {
             ✕ Cerrar reproductor
           </button>
           <VideoPlayer
-            stream={activePlayerEvent.streams?.[0] || {}}
-            title={activePlayerEvent.title}
-            type="tv"
+            source={activePlayerEvent}
             onClose={() => setActivePlayerEvent(null)}
           />
         </div>
