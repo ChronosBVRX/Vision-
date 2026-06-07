@@ -62,7 +62,9 @@ try {
         if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
           val = val.slice(1, -1);
         }
-        process.env[key] = val;
+        if (process.env[key] === undefined) {
+          process.env[key] = val;
+        }
       }
     });
     console.log("[Env] Variables de entorno cargadas correctamente.");
@@ -146,7 +148,7 @@ const DB_FILE = path.join(__dirname, 'database.json');
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 function requireAdmin(req, res, next) {
-  const token = req.headers['x-admin-password'] || req.query.admin_pass;
+  const token = req.headers['x-admin-password'] || req.query.admin_pass || req.body?.admin_pass;
   if (token === ADMIN_PASSWORD) return next();
   return res.status(401).json({
     success: false,
@@ -2110,7 +2112,7 @@ app.post('/api/import-m3u', requireAdmin, async (req, res) => {
 });
 
 // Scrape helper for extracting video source URLs from common media hosting pages
-app.post('/api/scrape', async (req, res) => {
+app.post('/api/scrape', requireAdmin, async (req, res) => {
   const { url } = req.body;
   if (!url) {
     return res.status(400).json({ error: 'URL is required' });
@@ -2227,7 +2229,7 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-app.post('/api/sync', (req, res) => {
+app.post('/api/sync', requireAdmin, (req, res) => {
   const { exec } = require('child_process');
   
   // Escribir archivo flag para forzar la actualización en update_repo.bat
@@ -2257,7 +2259,7 @@ app.post('/api/sync', (req, res) => {
   });
 });
 
-app.post('/api/restart', (req, res) => {
+app.post('/api/restart', requireAdmin, (req, res) => {
   console.log('[API Restart] Petición de reinicio recibida. Deteniendo proceso en 1 segundo...');
   res.json({ success: true, message: "Reiniciando el servidor..." });
   setTimeout(() => {
@@ -2265,7 +2267,7 @@ app.post('/api/restart', (req, res) => {
   }, 1000);
 });
 
-app.post('/api/restart-tunnel', (req, res) => {
+app.post('/api/restart-tunnel', requireAdmin, (req, res) => {
   const { exec } = require('child_process');
   console.log('[API Tunnel] Reiniciando túnel de Cloudflare...');
   
@@ -2291,7 +2293,7 @@ app.post('/api/restart-tunnel', (req, res) => {
   });
 });
 
-app.post('/api/publish-tunnel', (req, res) => {
+app.post('/api/publish-tunnel', requireAdmin, (req, res) => {
   const { customUrl } = req.body;
   let urlToPublish = customUrl;
 

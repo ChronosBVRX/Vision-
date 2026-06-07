@@ -75,22 +75,6 @@ export default function Admin() {
     }
   }, [type, categoriesDetailed]);
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (false) {
-      localStorage.setItem('admin_token', 'authenticated');
-      setIsAuthenticated(true);
-      fetchSources();
-    } else {
-      showAlert('error', 'Contraseña incorrecta');
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('admin_token');
-    setIsAuthenticated(false);
-  };
-
   const showAlert = (type, message) => {
     setAlert({ type, message });
     setTimeout(() => setAlert(null), 5000);

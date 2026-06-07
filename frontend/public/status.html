@@ -832,6 +832,35 @@
       }, 2500);
     }
 
+    function getAdminPassword() {
+      const saved = localStorage.getItem('admin_password') || '';
+      if (saved) return saved;
+
+      const input = prompt('Ingresa la contraseÃ±a de administrador para esta acciÃ³n:');
+      if (!input) return '';
+
+      localStorage.setItem('admin_password', input);
+      return input;
+    }
+
+    async function adminPost(url, options = {}) {
+      const password = getAdminPassword();
+      if (!password) throw new Error('NO_ADMIN_PASSWORD');
+
+      const headers = {
+        ...(options.headers || {}),
+        'x-admin-password': password
+      };
+
+      const res = await fetch(url, { ...options, method: 'POST', headers });
+      if (res.status === 401) {
+        localStorage.removeItem('admin_password');
+        throw new Error('UNAUTHORIZED');
+      }
+
+      return res;
+    }
+
     // Sincronizar Repositorio
     syncBtn.addEventListener('click', async () => {
       syncBtn.disabled = true;
@@ -839,7 +868,7 @@
       showToast('Iniciando sincronización de repositorio...');
       
       try {
-        const res = await fetch('/api/sync', { method: 'POST' });
+        const res = await adminPost('/api/sync');
         if (!res.ok) throw new Error('Error en sincronización');
         
         const data = await res.json();
@@ -866,8 +895,7 @@
       showToast('Publicando túnel en GitHub Pages...');
       
       try {
-        const res = await fetch('/api/publish-tunnel', {
-          method: 'POST',
+        const res = await adminPost('/api/publish-tunnel', {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ customUrl })
         });
@@ -900,9 +928,15 @@
       offlineOverlay.classList.add('show');
 
       try {
-        await fetch('/api/restart', { method: 'POST' });
+        await adminPost('/api/restart');
       } catch (e) {
-        // Ignoramos el error porque el fetch puede fallar al apagarse el servidor
+        if (e.message === 'NO_ADMIN_PASSWORD' || e.message === 'UNAUTHORIZED') {
+          isRebooting = false;
+          offlineOverlay.classList.remove('show');
+          showToast('ContraseÃ±a de administrador requerida o invÃ¡lida');
+          return;
+        }
+        // Ignoramos otros errores porque el fetch puede fallar al apagarse el servidor
       }
 
       // Iniciar el pool intensivo de reconexión cada 1.5s
@@ -930,7 +964,7 @@
       tunnelUrlLink.textContent = 'Generando nuevo túnel público...';
       
       try {
-        const res = await fetch('/api/restart-tunnel', { method: 'POST' });
+        const res = await adminPost('/api/restart-tunnel');
         if (!res.ok) throw new Error('Error al reiniciar el túnel');
         
         const data = await res.json();

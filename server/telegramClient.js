@@ -11,9 +11,15 @@ const stringSession = new StringSession(process.env.TELEGRAM_STRING_SESSION || "
 let client = null;
 let isConnected = false;
 let initPromise = null;
+let disabledReason = null;
 
 // Conecta el cliente
 async function initTelegramClient() {
+  if (disabledReason) {
+    console.warn(`[TelegramClient] Desactivado: ${disabledReason}`);
+    return false;
+  }
+
   if (client && isConnected) {
     return true;
   }
@@ -31,7 +37,7 @@ async function initTelegramClient() {
   initPromise = (async () => {
     try {
       client = new TelegramClient(stringSession, apiId, apiHash, {
-        connectionRetries: 5,
+        connectionRetries: 1,
       });
 
       console.log("[TelegramClient] Conectando a Telegram...");
@@ -44,7 +50,14 @@ async function initTelegramClient() {
       client = null;
 
       if (error?.errorMessage === 'AUTH_KEY_DUPLICATED' || error?.code === 406) {
+        disabledReason = 'sesion duplicada o invalida';
         console.warn("[TelegramClient] Sesión duplicada o inválida. Se desactiva Telegram hasta reiniciar con una sesión limpia.");
+        return false;
+      }
+
+      if (error?.code === 'ENETUNREACH' || error?.errno === -4062) {
+        disabledReason = 'red de Telegram inalcanzable';
+        console.warn("[TelegramClient] Red de Telegram inalcanzable. Se desactiva Telegram hasta el siguiente reinicio.");
         return false;
       }
 
