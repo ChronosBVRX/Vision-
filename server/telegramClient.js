@@ -10,34 +10,52 @@ const stringSession = new StringSession(process.env.TELEGRAM_STRING_SESSION || "
 
 let client = null;
 let isConnected = false;
+let initPromise = null;
 
 // Conecta el cliente
 async function initTelegramClient() {
+  if (client && isConnected) {
+    return true;
+  }
+
+  if (initPromise) {
+    return initPromise;
+  }
+
   console.log(`[TelegramClient] Iniciando con API_ID: ${apiId}, HASH: ${apiHash ? "SET" : "NOT SET"}`);
   if (!apiId || !apiHash) {
     console.warn("[TelegramClient] API_ID y API_HASH no configurados. Saltando inicio.");
     return false;
   }
-  
-  try {
-    client = new TelegramClient(stringSession, apiId, apiHash, {
-      connectionRetries: 5,
-    });
 
-    console.log("[TelegramClient] Conectando a Telegram...");
-    await client.connect();
-    isConnected = true;
-    console.log("[TelegramClient] ¡Conectado exitosamente!");
-    
-    // Si queremos obtener un nuevo string session:
-    // console.log(client.session.save());
+  initPromise = (async () => {
+    try {
+      client = new TelegramClient(stringSession, apiId, apiHash, {
+        connectionRetries: 5,
+      });
 
-    return true;
-  } catch (error) {
-    console.error("[TelegramClient] Error al conectar:", error);
-    isConnected = false;
-    return false;
-  }
+      console.log("[TelegramClient] Conectando a Telegram...");
+      await client.connect();
+      isConnected = true;
+      console.log("[TelegramClient] ¡Conectado exitosamente!");
+      return true;
+    } catch (error) {
+      isConnected = false;
+      client = null;
+
+      if (error?.errorMessage === 'AUTH_KEY_DUPLICATED' || error?.code === 406) {
+        console.warn("[TelegramClient] Sesión duplicada o inválida. Se desactiva Telegram hasta reiniciar con una sesión limpia.");
+        return false;
+      }
+
+      console.error("[TelegramClient] Error al conectar:", error);
+      return false;
+    } finally {
+      initPromise = null;
+    }
+  })();
+
+  return initPromise;
 }
 
 // Retorna el cliente conectado

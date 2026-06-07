@@ -71,6 +71,19 @@ Vision+/
 | **Sports Hub (Agenda Deportiva)** | ✅ | Módulo nuevo con agenda inteligente LATAM/Global + matching IPTV (07/06/2026) |
 | ~~Deportes en vivo~~ | ❌ Eliminado | Sección de deportes en vivo removida (07/06/2026) |
 
+## Estado actual para el siguiente agente
+
+- Versión actual visible en Bootloader: `1.0.37`
+- Smart TV: `useSpatialNavigation.js` ya lee `window.isSmartTV` en runtime, no en scope de módulo.
+- Smart TV: `Home.jsx` y `Movies.jsx` ya calculan columnas reales del selector de episodios; no usan `4` fijo.
+- Smart TV: `VideoPlayer.jsx` ya depende de `selectedSeasonIndex` en el handler de teclas para evitar closures viejas al cambiar de temporada.
+- Smart TV: `index.css` ya anula `transform`/`box-shadow` de `season-tab` y `episode-card` en modo TV para evitar layout shift.
+- Backend: `server/telegramClient.js` ya es idempotente con `initPromise` y tolera `AUTH_KEY_DUPLICATED` sin reintentos infinitos.
+- Build: el frontend recompiló con éxito con `cmd.exe /c "npm run build --prefix frontend"`.
+- Worktree: hay cambios ajenos/no relacionados en `frontend/src/components/SportsEventCard.jsx`, `frontend/src/pages/SportsAgenda.jsx`, `server/sports/*` y `server/resolvers/adapters/planetaplayAdapter.js`; no revertirlos.
+- Locks: al cierre de esta sesión el lock estaba libre.
+- Riesgo pendiente: si reaparecen errores de `BrowserResolver`/`browserPool`, reprobar con el runtime activo antes de tocar el resolver.
+
 ## Sistema de Logs
 
 El servidor escribe todos los logs en `server.log` con formato `[fecha] [LEVEL] [Modulo] mensaje`.

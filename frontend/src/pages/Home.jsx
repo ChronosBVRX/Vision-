@@ -7,6 +7,17 @@ import LoadingScreen from '../components/LoadingScreen';
 import { useCatalog } from '../context/CatalogContext.jsx';
 import useDebounce from '../hooks/useDebounce';
 
+function getEpisodeGridColumns(cards) {
+  if (!cards.length) return 1;
+  const firstTop = cards[0].offsetTop;
+  let cols = 0;
+  for (const card of cards) {
+    if (card.offsetTop !== firstTop) break;
+    cols += 1;
+  }
+  return Math.max(1, cols);
+}
+
 function getNormalizedTVCategory(channel) {
   if (!channel) return 'Variedades / General';
   
@@ -169,7 +180,7 @@ export default function Home({ selectedCategoryFilter }) {
 
   // ── TV keyboard nav between rows ───────────────────────────────────────────
   useEffect(() => {
-    if (activeItem) return;
+    if (activeItem || isTVMode) return;
     const handleKey = (e) => {
       const activeEl = document.activeElement;
       const inSidebar = activeEl && !!activeEl.closest('.sidebar');
@@ -187,7 +198,7 @@ export default function Home({ selectedCategoryFilter }) {
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [activeItem, rowKeys.length, rowKeys]);
+  }, [activeItem, rowKeys.length, rowKeys, isTVMode]);
 
   // ── Episode Player ───────────────────────────────────────────────────────
   const playEpisode = useCallback((series, episode) => {
@@ -306,7 +317,8 @@ export default function Home({ selectedCategoryFilter }) {
         const cards = Array.from(document.querySelectorAll('.episode-card'));
         const cur = cards.indexOf(el);
         if (cur === -1) return;
-        const cols = 4; let target = -1;
+        const cols = getEpisodeGridColumns(cards);
+        let target = -1;
         if (e.key === 'ArrowRight') target = cur + 1;
         else if (e.key === 'ArrowLeft') target = cur - 1;
         else if (e.key === 'ArrowDown') target = cur + cols;
@@ -316,7 +328,7 @@ export default function Home({ selectedCategoryFilter }) {
     };
     window.addEventListener('keydown', handleKey, true);
     return () => window.removeEventListener('keydown', handleKey, true);
-  }, [activeSeries]);
+  }, [activeSeries, selectedSeasonIdx]);
 
   // ── PREMIUM HERO RENDER ──────────────────────────────────────────────────
   const renderHero = () => {

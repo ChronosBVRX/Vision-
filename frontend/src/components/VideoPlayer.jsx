@@ -1085,7 +1085,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       window.removeEventListener('keydown', handleKeyDown, true);
     };
   // showControls removed from deps — we use showControlsRef to avoid stale closures
-  }, [localSource.type, channelList, showChannelGuide, currentChannelIndex, switchToPrevChannel, switchToNextChannel, jumpToChannel]);
+  }, [localSource.type, channelList, showChannelGuide, currentChannelIndex, selectedSeasonIndex, switchToPrevChannel, switchToNextChannel, jumpToChannel]);
 
   const handleStreamError = async (errorMsg) => {
     console.error("[VideoPlayer] Stream error:", errorMsg);

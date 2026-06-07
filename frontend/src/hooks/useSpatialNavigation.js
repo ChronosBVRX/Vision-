@@ -3,7 +3,9 @@ import { useEffect, useRef } from 'react';
 const NAV_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace', 'BrowserBack', 'GoBack']);
 const FOCUSABLE_SEL = '.focusable';
 
-const isTV = typeof window !== 'undefined' && window.isSmartTV === true;
+function isSmartTV() {
+  return typeof window !== 'undefined' && window.isSmartTV === true;
+}
 
 /**
  * Spatial navigation hook for Smart TV remote controls.
@@ -21,7 +23,7 @@ export default function useSpatialNavigation(isActive = true) {
   const sidebarCache   = useRef([]);
   const cacheValid     = useRef(false);
   const lastNavTime    = useRef(0);
-  const throttleMs     = isTV ? 100 : 40;
+  const throttleMs     = isSmartTV() ? 100 : 40;
   const mutationObserver = useRef(null);
 
   // ── Keyboard / Mouse mode detection ───────────────────────────────
@@ -178,7 +180,7 @@ export default function useSpatialNavigation(isActive = true) {
           const activeSidebarItem = document.querySelector('.sidebar .active.focusable') || document.querySelector('.sidebar .focusable');
           if (activeSidebarItem) {
             activeSidebarItem.focus();
-            activeSidebarItem.scrollIntoView({ behavior: isTV ? 'auto' : 'smooth', block: 'center' });
+            activeSidebarItem.scrollIntoView({ behavior: isSmartTV() ? 'auto' : 'smooth', block: 'center' });
             window.dispatchEvent(new CustomEvent('sidebar-open'));
           }
         }
@@ -201,18 +203,22 @@ export default function useSpatialNavigation(isActive = true) {
               ? Math.max(0, idx - 1)
               : Math.min(sidebarItems.length - 1, idx + 1);
             sidebarItems[nextIdx].focus();
-            sidebarItems[nextIdx].scrollIntoView({ behavior: isTV ? 'auto' : 'smooth', block: 'center' });
+            sidebarItems[nextIdx].scrollIntoView({ behavior: isSmartTV() ? 'auto' : 'smooth', block: 'center' });
           } else {
             navigateSpatially(e.key, activeEl, sidebarItems);
           }
-        } else if (document.querySelector('.catalog-grid')) {
+        } else {
           e.preventDefault();
           e.stopPropagation();
-          // Inline lightweight spatial for grid rows — skip full DOM scan
-          const grid = document.querySelector('.catalog-grid');
-          if (grid) {
-            const items = getCachedFocusables(grid);
-            navigateSpatially(e.key, activeEl, items);
+          const mainContent = document.querySelector('.main-content');
+          const pool = mainContent ? getCachedFocusables(mainContent) : focusableCache.current;
+          if (pool && pool.length > 0) {
+            if (!activeEl || !pool.includes(activeEl)) {
+              pool[0].focus();
+              pool[0].scrollIntoView({ behavior: 'auto', block: 'nearest' });
+            } else {
+              navigateSpatially(e.key, activeEl, pool);
+            }
           }
         }
         return;
@@ -245,7 +251,7 @@ export default function useSpatialNavigation(isActive = true) {
         if (pool.length > 0) {
           const target = pool[0];
           target.focus();
-          if (isTV) {
+          if (isSmartTV()) {
             target.scrollIntoView({ behavior: 'auto', block: 'nearest' });
           }
         }
@@ -263,7 +269,7 @@ export default function useSpatialNavigation(isActive = true) {
         const first = document.querySelector('.sidebar .focusable');
         if (first) first.focus();
       }
-    }, isTV ? 800 : 500);
+    }, isSmartTV() ? 800 : 500);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
@@ -360,6 +366,6 @@ function navigateSpatially(key, activeEl, focusables) {
 
   if (best) {
     best.focus();
-    best.scrollIntoView({ behavior: isTV ? 'auto' : 'smooth', block: 'nearest', inline: 'nearest' });
+    best.scrollIntoView({ behavior: isSmartTV() ? 'auto' : 'smooth', block: 'nearest', inline: 'nearest' });
   }
 }

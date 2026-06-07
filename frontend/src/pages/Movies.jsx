@@ -8,6 +8,18 @@ import useCache from '../hooks/useCache';
 import useDebounce from '../hooks/useDebounce';
 
 
+function getEpisodeGridColumns(cards) {
+  if (!cards.length) return 1;
+  const firstTop = cards[0].offsetTop;
+  let cols = 0;
+  for (const card of cards) {
+    if (card.offsetTop !== firstTop) break;
+    cols += 1;
+  }
+  return Math.max(1, cols);
+}
+
+
 
 // ─── Genre priority order ─────────────────────────────────────────────────────
 const GENRE_ORDER = [
@@ -471,7 +483,7 @@ export default function Movies({ contentType = 'movie' }) {
         const cards = Array.from(document.querySelectorAll('.episode-card'));
         const cur = cards.indexOf(el);
         if (cur === -1) return;
-        const cols = 4;
+        const cols = getEpisodeGridColumns(cards);
         let target = -1;
         if (e.key === 'ArrowRight') target = cur + 1;
         else if (e.key === 'ArrowLeft') target = cur - 1;
@@ -484,7 +496,7 @@ export default function Movies({ contentType = 'movie' }) {
     };
     window.addEventListener('keydown', handleKey, true);
     return () => window.removeEventListener('keydown', handleKey, true);
-  }, [activeSeries]);
+  }, [activeSeries, selectedSeasonIdx]);
 
   // ── Handle source change (server switch) ───────────────────────────────────
   const handleSourceChange = useCallback((updatedSource) => {
