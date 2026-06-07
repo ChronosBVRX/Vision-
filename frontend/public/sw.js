@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vision-plus-v3';
+const CACHE_NAME = 'vision-plus-v4';
 const STATIC_ASSETS = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {

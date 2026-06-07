@@ -11,14 +11,18 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
+import android.webkit.ServiceWorkerController;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
+import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
+
+    private static final String LIVE_ENTRY_URL = "https://chronosbvrx.github.io/Vision-/";
 
     private WebView mWebView;
     private FrameLayout mCustomViewContainer;
@@ -58,9 +62,16 @@ public class MainActivity extends Activity {
         settings.setLoadsImagesAutomatically(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         
-        // Cache settings
+        // [opencode] Always resolve the current live redirect instead of reusing an old packaged/cached build.
         mWebView.clearCache(true);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        mWebView.clearHistory();
+        WebStorage.getInstance().deleteAllData();
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            ServiceWorkerController.getInstance()
+                    .getServiceWorkerWebSettings()
+                    .setCacheMode(WebSettings.LOAD_NO_CACHE);
+        }
         
         // Viewport scale optimizations
         settings.setUseWideViewPort(true);
@@ -74,9 +85,12 @@ public class MainActivity extends Activity {
         mWebView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
         
         // Enable cookies
-        CookieManager.getInstance().setAcceptCookie(true);
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.removeAllCookies(null);
+        cookieManager.flush();
+        cookieManager.setAcceptCookie(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            CookieManager.getInstance().setAcceptThirdPartyCookies(mWebView, true);
+            cookieManager.setAcceptThirdPartyCookies(mWebView, true);
         }
 
         mWebView.setWebViewClient(new WebViewClient() {
@@ -110,7 +124,11 @@ public class MainActivity extends Activity {
         mWebView.setFocusableInTouchMode(true);
         mWebView.requestFocus();
 
-        mWebView.loadUrl("https://chronosbvrx.github.io/Vision-/");
+        mWebView.loadUrl(buildLiveEntryUrl());
+    }
+
+    private String buildLiveEntryUrl() {
+        return LIVE_ENTRY_URL + "?apk=true&tv=true&_live=" + System.currentTimeMillis();
     }
 
     // Inner class to handle HTML5 Video Fullscreen
