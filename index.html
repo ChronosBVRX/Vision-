@@ -42,8 +42,14 @@
     <div class="card">
         <div class="spinner"></div>
         <h1>Redirigiendo a Vision+</h1>
-        <p>Si no eres redirigido automáticamente, <a href="https://component-contributing-mainland-student.trycloudflare.com">haz clic aquí</a>.</p>
+        <p>Si no eres redirigido automáticamente, <a id="liveLink" href="https://component-contributing-mainland-student.trycloudflare.com">haz clic aquí</a>.</p>
     </div>
-    <script>window.location.href = "https://component-contributing-mainland-student.trycloudflare.com";</script>
+    <script>
+        const target = new URL("https://component-contributing-mainland-student.trycloudflare.com");
+        target.search = window.location.search;
+        target.hash = window.location.hash;
+        document.getElementById('liveLink').href = target.toString();
+        window.location.replace(target.toString());
+    </script>
 </body>
 </html>
