@@ -54,3 +54,6 @@ android/build/
 !VisionPlus-TV.apk
 
 server.log
+tunnel.log
+server*.log
+srv*.log

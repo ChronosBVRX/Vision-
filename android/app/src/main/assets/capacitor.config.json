@@ -1,0 +1,16 @@
+{
+	"appId": "com.chronosbvrx.vision",
+	"appName": "Vision+",
+	"webDir": "dist",
+	"android": {
+		"path": "../android"
+	},
+	"server": {
+		"androidScheme": "https",
+		"cleartext": true,
+		"allowNavigation": [
+			"*.trycloudflare.com",
+			"chronosbvrx.github.io"
+		]
+	}
+}
