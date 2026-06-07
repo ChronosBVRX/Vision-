@@ -521,28 +521,8 @@ async function sniffVideoUrl(targetUrl) {
   let detectedReferer = null;
 
   try {
-    const { chromium } = require('playwright');
-    const browser = await chromium.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-web-security'
-      ]
-    });
-
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      viewport: { width: 1280, height: 720 }
-    });
-
-    await context.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-      window.chrome = { runtime: {} };
-    });
-
-    const page = await context.newPage();
+    const { acquirePage } = require('./server/resolvers/browserPool');
+    const { page, context, release } = await acquirePage();
 
     // Intercept requests for ad blocking + stream sniffing
     await page.route('**/*', async (route) => {
@@ -596,9 +576,10 @@ async function sniffVideoUrl(targetUrl) {
       await new Promise(r => setTimeout(r, 300));
     }
 
-    await browser.close();
+    release();
   } catch (err) {
     console.error(`[Sniffer] Error Playwright: ${err.message}`);
+    try { release(); } catch (e) {}
   }
 
   if (detectedUrl) {
@@ -888,16 +869,18 @@ async function searchBraveForMovieContent() {
           // 2. Check if it's a movie page on one of the target streaming sites
           else if (
             lowerHref.includes('pelisplushd.mx') ||
-            lowerHref.includes('verpelistv.com') ||
             lowerHref.includes('pelisyaske.com') ||
             lowerHref.includes('pelisonline.ws') ||
+            lowerHref.includes('ultrapelishd.com') ||
             lowerHref.includes('cuevana')
           ) {
             const isMovieOrSeriesPage = 
               lowerHref.includes('/pelicula/') || 
               lowerHref.includes('/movie/') || 
               lowerHref.includes('/serie/') || 
-              lowerHref.includes('/tv/');
+              lowerHref.includes('/tv/') ||
+              lowerHref.includes('/pelis/') ||
+              lowerHref.includes('/tvshows/');
               
             if (isMovieOrSeriesPage) {
               const parts = cleanHref.split('/');
@@ -908,12 +891,12 @@ async function searchBraveForMovieContent() {
                   .map(word => word.charAt(0).toUpperCase() + word.slice(1))
                   .join(' ');
                   
-                const isSeries = lowerHref.includes('/serie/') || lowerHref.includes('/tv/');
+                const isSeries = lowerHref.includes('/serie/') || lowerHref.includes('/tv/') || lowerHref.includes('/tvshows/');
                 
                 let siteName = 'PelisPlus';
                 if (lowerHref.includes('cuevana')) siteName = 'Cuevana';
                 else if (lowerHref.includes('pelisonline')) siteName = 'PelisOnline';
-                else if (lowerHref.includes('verpelistv')) siteName = 'VerPelisTV';
+                else if (lowerHref.includes('ultrapelishd')) siteName = 'UltraPelisHD';
                 else if (lowerHref.includes('pelisyaske')) siteName = 'PelisYaske';
 
                 pages.push({
@@ -1076,12 +1059,12 @@ const CATALOG_SITES = [
     genreBase: 'https://www.pelisplushd.la'
   },
   {
-    name: 'VerPelisTV',
-    movieUrls: ['https://verpelistv.com/peliculas/', 'https://verpelistv.com/inicio/'],
-    seriesUrls: ['https://verpelistv.com/series/'],
+    name: 'UltraPelisHD',
+    movieUrls: ['https://ultrapelishd.com/pelis/'],
+    seriesUrls: ['https://ultrapelishd.com/tvshows/'],
     pageFn: (base, p) => `${base}page/${p}/`,
-    genreSelector: 'a[href*="/genero/"], a[href*="/genre/"]',
-    genreBase: 'https://verpelistv.com'
+    genreSelector: 'nav.genres ul li.cat-item a[href*="/genre/"]',
+    genreBase: 'https://ultrapelishd.com'
   },
   {
     name: 'PelisOnline',
@@ -1196,33 +1179,6 @@ async function scrapeItemsFromPage(page, url, type, siteName) {
             });
           }
         });
-      } else if (sName === 'VerPelisTV') {
-        const cards = document.querySelectorAll('.card');
-        cards.forEach(card => {
-          const linkEl = card.querySelector('a.poster') || card.querySelector('a');
-          if (!linkEl) return;
-          
-          const titleEl = card.querySelector('.item-title') || card.querySelector('.card-body p') || linkEl;
-          const img = card.querySelector('img');
-          
-          let title = titleEl ? titleEl.textContent.trim() : '';
-          title = title.replace(/HD$/i, '').trim();
-          
-          let poster = img ? (img.getAttribute('data-src') || img.src) : null;
-          
-          if (title && linkEl.href) {
-            res.push({
-              title,
-              poster,
-              sourceUrl: linkEl.href,
-              rating: null,
-              year: null,
-              genres: ['General'],
-              siteName: sName,
-              type: sType
-            });
-          }
-        });
       } else if (sName === 'PelisOnline') {
         const cards = document.querySelectorAll('.item');
         cards.forEach(item => {
@@ -1298,6 +1254,47 @@ async function scrapeItemsFromPage(page, url, type, siteName) {
               description: desc,
               siteName: sName,
               type: sType
+            });
+          }
+        });
+      } else if (sName === 'UltraPelisHD') {
+        const cards = document.querySelectorAll('#archive-content article.item.movies');
+        cards.forEach(card => {
+          const linkEl = card.querySelector('.data h3 a');
+          const img = card.querySelector('.poster img');
+          const yearEl = card.querySelector('.mepo.vertical.right .quality');
+          const qualityEl = card.querySelector('.mepo.vertical .quality');
+          const mtdtaInfo = card.querySelector('.mtdta-info');
+          
+          const title = linkEl ? linkEl.textContent.trim() : '';
+          let poster = img ? img.src : null;
+          
+          const yearText = yearEl ? yearEl.textContent.trim() : '';
+          const year = yearText ? parseInt(yearText) : null;
+          
+          // Serie detection: .mtdta-info has content for series
+          const hasSeasonInfo = mtdtaInfo && mtdtaInfo.textContent.trim().length > 0;
+          
+          if (title && linkEl && linkEl.href) {
+            let itemType = sType;
+            const lowerUrl = linkEl.href.toLowerCase();
+            if (lowerUrl.includes('/pelis/') || lowerUrl.includes('/movie/')) {
+              itemType = 'movie';
+            } else if (lowerUrl.includes('/tvshows/') || lowerUrl.includes('/serie/')) {
+              itemType = 'series';
+            }
+            // Also use mtdta-info heuristic
+            if (itemType === 'movie' && hasSeasonInfo) itemType = 'series';
+            
+            res.push({
+              title,
+              poster,
+              sourceUrl: linkEl.href,
+              rating: null,
+              year,
+              genres: ['General'],
+              siteName: sName,
+              type: itemType
             });
           }
         });
@@ -1948,34 +1945,58 @@ async function scrapeEpisodesFromSeriesPage(seriesUrl, siteName) {
           console.error("PoseidonHD next data parse error:", e.message);
         }
       }
-    } else if (siteName === 'VerPelisTV') {
-      $('.episodios li').each((i, epEl) => {
-        const epUrl = $(epEl).find('a').attr('href');
-        const numText = $(epEl).find('.numerando').text().trim(); // format "1 - 1"
-        const titleText = $(epEl).find('.episodiotitle a').text().trim() || `Episodio ${i+1}`;
-        
-        if (epUrl) {
-          let seasonNum = 1, epNum = i + 1;
-          const match = numText.match(/(\d+)\s*-\s*(\d+)/);
-          if (match) {
-            seasonNum = parseInt(match[1]);
-            epNum = parseInt(match[2]);
+    } else if (siteName === 'UltraPelisHD') {
+      // Dooplay standard structure (same as PelisPlus)
+      $('.tab-content .tab-pane').each((i, seasonEl) => {
+        const seasonId = $(seasonEl).attr('id');
+        let seasonNum = i + 1;
+        if (seasonId) {
+          const match = seasonId.match(/(\d+)/);
+          if (match) seasonNum = parseInt(match[1]);
+        }
+        const episodes = [];
+        $(seasonEl).find('.btn-container a, a').each((j, epEl) => {
+          const epUrl = $(epEl).attr('href');
+          let epTitle = $(epEl).find('.title').text().trim() || $(epEl).text().trim() || `Episodio ${j + 1}`;
+          if (epUrl && (epUrl.includes('/episodio/') || epUrl.includes('/capitulo/') || epUrl.includes('/tvshows/'))) {
+            episodes.push({
+              id: `s${seasonNum}e${j + 1}`,
+              title: epTitle,
+              episodeNum: j + 1,
+              url: epUrl.startsWith('http') ? epUrl : 'https://ultrapelishd.com' + epUrl
+            });
           }
-          
-          let season = seasons.find(s => s.seasonNum === seasonNum);
-          if (!season) {
-            season = { seasonNum, title: `Temporada ${seasonNum}`, episodes: [] };
-            seasons.push(season);
-          }
-          
-          season.episodes.push({
-            id: `s${seasonNum}e${epNum}`,
-            title: titleText,
-            episodeNum: epNum,
-            url: epUrl
+        });
+        if (episodes.length > 0) {
+          seasons.push({
+            seasonNum,
+            title: `Temporada ${seasonNum}`,
+            episodes
           });
         }
       });
+      // Fallback: Dooplay standard #seasons structure
+      if (seasons.length === 0) {
+        $('.se-c').each((i, seasonEl) => {
+          const seasonNum = i + 1;
+          const episodes = [];
+          $(seasonEl).find('ul.episodios li').each((j, epEl) => {
+            const epUrl = $(epEl).find('.episodiotitle a').attr('href');
+            const titleText = $(epEl).find('.episodiotitle a').text().trim() || `Episodio ${j + 1}`;
+            if (epUrl) {
+              episodes.push({
+                id: `s${seasonNum}e${j + 1}`,
+                title: titleText,
+                episodeNum: j + 1,
+                url: epUrl.startsWith('http') ? epUrl : 'https://ultrapelishd.com' + epUrl
+              });
+            }
+          });
+          if (episodes.length > 0) {
+            seasons.push({ seasonNum, title: `Temporada ${seasonNum}`, episodes });
+          }
+        });
+      }
     }
 
     // Sort seasons and episodes

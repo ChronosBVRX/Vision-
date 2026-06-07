@@ -76,6 +76,17 @@ async function extractStreamsFromMoviePage(pageUrl, siteName) {
   const options = [];
   if (!pageUrl || !pageUrl.startsWith('http')) return options;
 
+  // Known dead domains — skip immediately to avoid wasting time
+  // Only mark domains that are CONFIRMED dead (returning 404/connection refused)
+  const deadDomains = ['poseidonhd.to', 'poseidonhd.at', 'poseidonhd.site'];
+  try {
+    const pageHostname = new URL(pageUrl).hostname.replace('www.', '');
+    if (deadDomains.some(d => pageHostname.includes(d.replace('www.', '')))) {
+      console.log(`[MoviePageParser] ⏭️ Dominio caído conocido: ${pageHostname}. Saltando...`);
+      return options;
+    }
+  } catch (e) {}
+
   try {
     console.log(`[MoviePageParser] 🔍 Analizando página externa de ${siteName || 'Proveedor'}: ${pageUrl}`);
     
@@ -95,6 +106,12 @@ async function extractStreamsFromMoviePage(pageUrl, siteName) {
           timeout: 12000
         });
         html = response.data;
+        // Detect captcha/block pages that return small HTML with redirects
+        if (html.length < 2000 && (html.includes('redirect') || html.includes('fingerprint') || html.includes('challenge') || html.includes('Just a moment'))) {
+          console.warn(`[MoviePageParser] ⚠️ Página bloqueada/captcha detectada (${html.length} bytes). Reintentando con Playwright...`);
+          const { fetchHtmlWithBrowser } = require('./browserFetcher');
+          html = await fetchHtmlWithBrowser(pageUrl);
+        }
       } catch (axiosErr) {
         const status = axiosErr.response?.status;
         const shouldFallback = status === 403 || status === 429 || status === 503 || axiosErr.code === 'ECONNABORTED' || !axiosErr.response;
@@ -147,7 +164,66 @@ async function extractStreamsFromMoviePage(pageUrl, siteName) {
         });
       }
     }
-    // -- B) PELISONLINE STRUCTURE --
+    // -- B) ULTRAPELISHD STRUCTURE --
+    else if (siteName === 'UltraPelisHD' || pageUrl.includes('ultrapelishd')) {
+      // Extract embed page URL from the play button container
+      const embedSrc = $('#bar-video .play-btn-cont').attr('data-src');
+      if (embedSrc) {
+        try {
+          const embedAxios = require('axios');
+          const embedResp = await embedAxios.get(embedSrc, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept-Language': 'es-MX,es;q=0.9,en;q=0.5'
+            },
+            timeout: 15000
+          });
+          const embedHtml = embedResp.data;
+          // Extract video arrays: videosOriginal, videosSubtitulado, videosLatino, videosCastellano
+          const videoArrays = embedHtml.match(/var\s+(videos\w*)\s*=\s*(\[[\s\S]*?\]);/g) || [];
+          const seenUrls = new Set();
+          for (const arrayMatch of videoArrays) {
+            const langMatch = arrayMatch.match(/videos(\w*)/);
+            const langName = langMatch ? langMatch[1].toLowerCase() : 'original';
+            const langLabel = langName === 'original' ? 'Español Latino' : 
+                              langName === 'subtitulado' ? 'Subtitulado' : 
+                              langName === 'latino' ? 'Latino' : 
+                              langName === 'castellano' ? 'Castellano' : 'Español Latino';
+            // Extract URL pairs from the array
+            const urlPairs = arrayMatch.match(/\["([^"]+)",\s*"([^"]+)"\]/g) || [];
+            for (const pair of urlPairs) {
+              const pairMatch = pair.match(/\["([^"]+)",\s*"([^"]+)"\]/);
+              if (pairMatch) {
+                const serverName = pairMatch[1];
+                let videoUrl = pairMatch[2];
+                // Decode base64 player.php?id=BASE64
+                if (videoUrl.includes('player.php?id=')) {
+                  const b64Match = videoUrl.match(/id=([^&]+)/);
+                  if (b64Match) {
+                    try {
+                      const decoded = Buffer.from(b64Match[1], 'base64').toString('utf-8');
+                      if (decoded.startsWith('http')) videoUrl = decoded;
+                    } catch (e) {}
+                  }
+                }
+                if (videoUrl && videoUrl.startsWith('http') && !seenUrls.has(videoUrl)) {
+                  seenUrls.add(videoUrl);
+                  options.push({
+                    url: videoUrl,
+                    name: serverName,
+                    language: langLabel,
+                    resolver: 'iframe'
+                  });
+                }
+              }
+            }
+          }
+        } catch (embedErr) {
+          console.log(`[Resolver] Error fetching UltraPelisHD embed page: ${embedErr.message.slice(0, 80)}`);
+        }
+      }
+    }
+    // -- C) PELISONLINE STRUCTURE --
     else if (siteName === 'PelisOnline' || pageUrl.includes('pelisonline')) {
       // 1. Map tabs to option languages (#option1 -> Latino, #option2 -> Sub, etc.)
       const optLangs = {};
@@ -484,6 +560,35 @@ async function extractStreamsFromMoviePage(pageUrl, siteName) {
           });
         }
       });
+
+      // 3. If no options found statically, try Playwright for JS-loaded content (e.g. VerPelisTV)
+      if (options.length === 0) {
+        console.log(`[MoviePageParser] ⚠️ No se encontraron opciones estáticas. Reintentando con Playwright para: ${pageUrl}`);
+        try {
+          const { fetchHtmlWithBrowser } = require('./browserFetcher');
+          const browserHtml = await fetchHtmlWithBrowser(pageUrl, { timeout: 25000 });
+          const $b = cheerio.load(browserHtml);
+          $b('iframe').each((i, el) => {
+            const src = $b(el).attr('src') || $b(el).attr('data-src');
+            if (src && src.startsWith('http') && !src.includes('google') && !src.includes('facebook') && !src.includes('ads')) {
+              let serverName = 'Iframe';
+              try { serverName = new URL(src).hostname.replace('www.', '').split('.')[0]; } catch (e) {}
+              options.push({ url: src, name: serverName, language: 'Cualquier fuente disponible', resolver: 'iframe' });
+            }
+          });
+          $b('[data-url], [data-video], [data-embed]').each((i, el) => {
+            const url = $b(el).attr('data-url') || $b(el).attr('data-video') || $b(el).attr('data-embed');
+            if (url && url.startsWith('http')) {
+              let serverName = 'Embed';
+              try { serverName = new URL(url).hostname.replace('www.', '').split('.')[0]; } catch (e) {}
+              options.push({ url, name: serverName, language: 'Cualquier fuente disponible', resolver: 'iframe' });
+            }
+          });
+          console.log(`[MoviePageParser] ✅ Playwright devolvió ${options.length} opciones para: ${pageUrl}`);
+        } catch (browserErr) {
+          console.warn(`[MoviePageParser] ❌ Playwright falló para ${pageUrl}: ${browserErr.message}`);
+        }
+      }
     }
 
   } catch (err) {
@@ -554,6 +659,7 @@ async function resolveBestVideoSource({
       stream.url.includes('animeflv') ||
       stream.url.includes('animeonline') ||
       stream.url.includes('jkanime') ||
+      stream.url.includes('ultrapelis') ||
       stream.url.includes('/ver/');
 
     if (isDetailPage) {
