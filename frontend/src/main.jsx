@@ -75,12 +75,65 @@ window.addEventListener('message', (event) => {
   }
 });
 
-// Interceptar peticiones fetch a /api para direccionarlas al backend en producción
+// --- Auto-detección de túnel ---
+// Solo aplica para Capacitor APK (Android TV). En navegador local se usa Express directo.
+const GITHUB_PAGES_URL = 'https://chronosbvrx.github.io/Vision-/';
+const CACHE_KEY = 'vp_tunnel_url';
+
+async function detectTunnelUrl() {
+  const hostname = window.location.hostname;
+  const isOnTunnel = hostname.includes('trycloudflare.com');
+  const isSmartTV = window.isSmartTV === true;
+  const isDirectLocal = (hostname === 'localhost' || hostname === '127.0.0.1') && !isSmartTV;
+
+  // Si ya estamos en un túnel, usamos URLs relativas (mismo origen) — no necesitamos CORS
+  if (isOnTunnel) {
+    console.log('[Tunnel] Modo túnel directo, usando URLs relativas');
+    window.__API_BASE = '';
+    localStorage.removeItem(CACHE_KEY);
+    return;
+  }
+
+  // Capacitor APK se ejecuta en localhost pero necesita túnel
+  if (isDirectLocal) {
+    console.log('[Tunnel] Modo localhost directo, Express sin túnel');
+    return;
+  }
+
+  const cached = localStorage.getItem(CACHE_KEY);
+  if (cached) {
+    window.__API_BASE = cached;
+  }
+
+  try {
+    const res = await window.fetch(GITHUB_PAGES_URL);
+    const html = await res.text();
+    const match = html.match(/window\.location\.href\s*=\s*"([^"]+)"/) || html.match(/href="(https:\/\/[^"]+\.trycloudflare\.com[^"]*)"/);
+    if (match) {
+      const tunnelUrl = match[1].replace(/\/+$/, '');
+      window.__API_BASE = tunnelUrl;
+      localStorage.setItem(CACHE_KEY, tunnelUrl);
+      console.log('[Tunnel] Detectado:', tunnelUrl);
+    }
+  } catch (err) {
+    console.warn('[Tunnel] Error detectando URL, usando cache:', err.message);
+  }
+
+  if (!window.__API_BASE) {
+    console.warn('[Tunnel] No hay URL de túnel disponible');
+  }
+}
+
+// Interceptar peticiones fetch a /api para direccionarlas al backend
 const originalFetch = window.fetch;
 window.fetch = (input, init) => {
   if (typeof input === 'string' && input.startsWith('/api')) {
-    const apiBase = import.meta.env.VITE_API_URL || '';
-    input = apiBase + input;
+    const hostname = window.location.hostname;
+    const isSmartTV = window.isSmartTV === true;
+    const isDirectLocal = (hostname === 'localhost' || hostname === '127.0.0.1') && !isSmartTV;
+    if (!isDirectLocal) {
+      input = (window.__API_BASE || '') + input;
+    }
   }
   return originalFetch(input, init);
 };
@@ -91,13 +144,16 @@ import './index.css'
 import App from './App.jsx'
 import { CatalogProvider } from './context/CatalogContext.jsx'
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <CatalogProvider>
-      <App />
-    </CatalogProvider>
-  </StrictMode>,
-)
+// Detectar túnel antes de montar React para que CatalogProvider tenga la URL lista
+detectTunnelUrl().then(() => {
+  createRoot(document.getElementById('root')).render(
+    <StrictMode>
+      <CatalogProvider>
+        <App />
+      </CatalogProvider>
+    </StrictMode>,
+  );
+});
 
 // Register Service Worker for offline capabilities with auto-refresh on update
 if ('serviceWorker' in navigator) {
