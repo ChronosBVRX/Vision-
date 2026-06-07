@@ -138,6 +138,7 @@ const {
 const { db, initDB, allQuery, getQuery, runQuery } = require('./server/db/database');
 const { initTelegramClient, streamTelegramFile, syncTelegramChannel } = require('./server/telegramClient');
 const { upsertMovie, upsertMovieLink, searchTMDB, reportFailedLink } = require('./server/db/movieLinksStore');
+const { router: sportsRouter, initSportsRoutes } = require('./server/sports/sportsRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -191,6 +192,9 @@ app.use(express.static(path.join(__dirname, 'frontend/public')));
 // Mount normalized movie store routes
 const playRoutes = require('./server/routes/play');
 app.use('/api', playRoutes);
+
+// Mount sports routes
+app.use('/api', sportsRouter);
 
 // Helper to read database
 function readDB() {
@@ -2458,6 +2462,9 @@ initializeDB().then(async () => {
   syncTelegramChannel();
   setInterval(syncTelegramChannel, 60 * 60 * 1000);
 
+  // Inicializar rutas de deportes con referencias a DB y memDB
+  initSportsRoutes(memDB, allQuery, getQuery, runQuery);
+
   app.listen(PORT, () => {
     console.log(`Servidor corriendo en el puerto ${PORT}`);
     
@@ -2478,6 +2485,24 @@ initializeDB().then(async () => {
         console.warn(`[HealthCheck] Error: ${e.message}`);
       }
     }, 6 * 60 * 60 * 1000);
+
+    // Sports refresh al inicio y cada 4 horas
+    const { refreshSportsEvents } = require('./server/sports/sportsWorker');
+    setTimeout(async () => {
+      try {
+        console.log('[Sports] Actualizando agenda deportiva al arranque...');
+        await refreshSportsEvents(memDB, allQuery, runQuery);
+      } catch (e) {
+        console.warn(`[Sports] Error en refresco inicial: ${e.message}`);
+      }
+    }, 10000);
+    setInterval(async () => {
+      try {
+        await refreshSportsEvents(memDB, allQuery, runQuery);
+      } catch (e) {
+        console.warn(`[Sports] Error en refresco periódico: ${e.message}`);
+      }
+    }, 4 * 60 * 60 * 1000);
   });
 }).catch(err => {
   console.error("[DB] Error fatal al inicializar la base de datos:", err);

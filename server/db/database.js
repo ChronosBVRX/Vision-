@@ -118,6 +118,59 @@ const initDB = async () => {
   await runQuery(`CREATE INDEX IF NOT EXISTS idx_movie_links_score ON movie_links(score DESC)`);
   await runQuery(`CREATE INDEX IF NOT EXISTS idx_movie_links_active ON movie_links(is_active)`);
 
+  // ── Sports schema: events, channel matches, watch options ──
+  await runQuery(`
+    CREATE TABLE IF NOT EXISTS sports_events (
+      id TEXT PRIMARY KEY,
+      sport TEXT,
+      league TEXT,
+      season TEXT,
+      home_team TEXT,
+      away_team TEXT,
+      title TEXT,
+      start_time_utc TEXT,
+      status TEXT,
+      country TEXT,
+      poster TEXT,
+      interest_score INTEGER DEFAULT 0,
+      source_api TEXT,
+      raw_json TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await runQuery(`
+    CREATE TABLE IF NOT EXISTS sports_event_channels (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL,
+      channel_id TEXT,
+      channel_name TEXT,
+      confidence INTEGER DEFAULT 0,
+      match_reason TEXT,
+      FOREIGN KEY(event_id) REFERENCES sports_events(id)
+    )
+  `);
+
+  await runQuery(`
+    CREATE TABLE IF NOT EXISTS sports_watch_options (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL,
+      type TEXT,
+      label TEXT,
+      url TEXT,
+      channel_id TEXT,
+      legal_status TEXT DEFAULT 'unknown',
+      priority INTEGER DEFAULT 0,
+      FOREIGN KEY(event_id) REFERENCES sports_events(id)
+    )
+  `);
+
+  await runQuery(`CREATE INDEX IF NOT EXISTS idx_sports_events_start ON sports_events(start_time_utc)`);
+  await runQuery(`CREATE INDEX IF NOT EXISTS idx_sports_events_score ON sports_events(interest_score DESC)`);
+  await runQuery(`CREATE INDEX IF NOT EXISTS idx_sec_event_id ON sports_event_channels(event_id)`);
+  await runQuery(`CREATE INDEX IF NOT EXISTS idx_swo_event_id ON sports_watch_options(event_id)`);
+
   // ── Migrate existing sources into new schema ──
   try {
     const moviesCount = await getQuery(`SELECT COUNT(*) as count FROM movies`);

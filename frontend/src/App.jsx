@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect, Suspense, lazy } from 'react';
 import {
   Home as HomeIcon, Settings, Film, Tv, Play, Menu, X,
-  Globe, PlayCircle, ChevronDown, ChevronRight, Star, Layers
+  Globe, PlayCircle, ChevronDown, ChevronRight, Star, Layers, Trophy
 } from 'lucide-react';
 import Home from './pages/Home';
 import Movies from './pages/Movies';
 import Series from './pages/Series';
+import SportsAgenda from './pages/SportsAgenda';
 const Admin = lazy(() => import('./pages/Admin'));
 import useSpatialNavigation from './hooks/useSpatialNavigation';
 import { useCatalog } from './context/CatalogContext.jsx';
@@ -406,7 +407,16 @@ export default function App() {
             <span>Series</span>
           </li>
 
-
+          {/* Deportes → SportsAgenda */}
+          <li
+            className={`nav-item focusable ${currentPage === 'sports' ? 'active' : ''}`}
+            tabIndex={0}
+            onClick={() => selectPage('sports')}
+            onKeyDown={e => { if (e.key === 'Enter') selectPage('sports'); }}
+          >
+            <Trophy size={24} />
+            <span>Deportes</span>
+          </li>
 
           {/* Anime → expandable submenu */}
           <li
@@ -477,6 +487,7 @@ export default function App() {
           {currentPage === 'admin' && <Admin />}
           {currentPage === 'movies' && <Movies contentType="movie" />}
           {currentPage === 'series' && <Series />}
+          {currentPage === 'sports' && <SportsAgenda />}
           {currentPage === 'anime' && <Movies contentType={animeTab === 'Películas' ? 'anime_movie' : 'anime_series'} />}
         </Suspense>
       </main>
