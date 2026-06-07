@@ -367,7 +367,34 @@ async function extractStreamsFromMoviePage(pageUrl, siteName) {
         }
       }
     }
-    // -- E) ANIMEFLV STRUCTURE --
+    // -- E) SOMOSMOVIES STRUCTURE (Turnstile-protected) --
+    else if (siteName === 'SomosMovies' || pageUrl.includes('somosmovies')) {
+      console.log(`[MoviePageParser] 🔍 Extrayendo streams de SomosMovies: ${pageUrl}`);
+      const { extractStreamsWithBrowser } = require('./somosSolver');
+      const streamUrls = await extractStreamsWithBrowser(pageUrl);
+      for (const url of streamUrls) {
+        if (url.startsWith('http')) {
+          let serverName = 'SomosMovies';
+          try { serverName = new URL(url).hostname.replace('www.', '').split('.')[0]; } catch (e) {}
+          options.push({
+            url,
+            name: serverName,
+            language: 'Español Latino',
+            resolver: url.includes('.m3u8') || url.includes('.mp4') ? 'direct' : 'iframe'
+          });
+        }
+      }
+      if (options.length === 0) {
+        console.log(`[MoviePageParser] ⚠️ No se encontraron streams via browser para SomosMovies. Usando página como iframe.`);
+        options.push({
+          url: pageUrl,
+          name: 'SomosMovies',
+          language: 'Español Latino',
+          resolver: 'iframe'
+        });
+      }
+    }
+    // -- G) ANIMEFLV STRUCTURE --
     else if ((siteName === 'AnimeFLV.net' || siteName === 'AnimeFLV.one' || pageUrl.includes('animeflv')) && !pageUrl.includes('jkanime')) {
       let finalData = html;
       if (pageUrl.includes('/anime/')) {
@@ -660,6 +687,7 @@ async function resolveBestVideoSource({
       stream.url.includes('animeonline') ||
       stream.url.includes('jkanime') ||
       stream.url.includes('ultrapelis') ||
+      stream.url.includes('somosmovies') ||
       stream.url.includes('/ver/');
 
     if (isDetailPage) {
