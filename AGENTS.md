@@ -16,6 +16,12 @@ Vision+/
 ├── server.js              ← API Express (~1620 líneas, monolithic)
 ├── scraper.js             ← Scrapers: IPTV, películas, catálogo
 ├── database.json          ← BD local (~8425 líneas)
+├── server/sports/
+│   ├── sportsApiClient.js    ← TheSportsDB API client
+│   ├── sportsRanker.js       ← Interest scoring LATAM/Global
+│   ├── sportsMatcher.js      ← Matching eventos ↔ canales IPTV
+│   ├── sportsRoutes.js       ← 6 endpoints REST
+│   └── sportsWorker.js       ← Refresco automático
 ├── server/resolvers/
 │   ├── videoSourceResolver.js
 │   ├── browserResolver.js
@@ -32,10 +38,13 @@ Vision+/
 │   │   ├── Home.jsx       ← Catálogo + TV en vivo (~366 líneas)
 │   │   ├── Movies.jsx     ← Películas/series con catálogo, selector episodios TV (~710 líneas)
 │   │   ├── Series.jsx     ← Wrapper de Movies.jsx con contentType='series' (7 líneas)
+│   │   ├── SportsAgenda.jsx ← Agenda deportiva inteligente
 │   │   └── Admin.jsx      ← CRUD fuentes + import M3U + seed (~780 líneas)
 │   └── components/
 │       ├── VideoPlayer.jsx     ← Reproductor HLS/MP4/iframe (~1215 líneas)
 │       ├── DetailsModal.jsx    ← Modal de detalles
+│       ├── SportsEventCard.jsx ← Tarjeta de evento deportivo
+│       ├── WatchOptionsModal.jsx ← Modal "Dónde verlo"
 │       ├── CatalogComponents.jsx ← HeroBanner + CatalogRow (~231 líneas)
 │       └── TrailerPlayer.jsx
 └── Dockerfile             ← Chromium incluido para Puppeteer
@@ -59,6 +68,7 @@ Vision+/
 | Submenú Pluto TV (sidebar) | ✅ | Expandible con "TV en Vivo" y "Películas Bajo Demanda" |
 | Selector episodios TV (Movies.jsx) | ✅ | Pestañas temporada + grilla episodios, navegable con mando |
 | Navegación episodios en reproductor | ✅ | Botones Anterior/Siguiente + drawer lateral con lista completa |
+| **Sports Hub (Agenda Deportiva)** | ✅ | Módulo nuevo con agenda inteligente LATAM/Global + matching IPTV (07/06/2026) |
 | ~~Deportes en vivo~~ | ❌ Eliminado | Sección de deportes en vivo removida (07/06/2026) |
 
 ## Sistema de Logs
