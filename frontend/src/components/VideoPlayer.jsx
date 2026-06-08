@@ -14,6 +14,10 @@ const BRAND_INTRO_CONFIG = {
   playOnEpisodeChange: false      // Show on every episode change?
 };
 
+const CAST_PLAYBACK_CONFIG = {
+  requireCastForDirectStreams: true
+};
+
 function getNormalizedTVCategory(channel) {
   if (!channel) return 'Variedades / General';
   
@@ -224,6 +228,70 @@ function detectMobileDevice() {
 
 function isNativeVideoElement(el) {
   return typeof HTMLVideoElement !== 'undefined' && el instanceof HTMLVideoElement;
+}
+
+function loadGoogleCastSdk() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return Promise.resolve(false);
+  }
+
+  if (window.cast?.framework && window.chrome?.cast) {
+    return Promise.resolve(true);
+  }
+
+  if (window.__visionGoogleCastPromise) {
+    return window.__visionGoogleCastPromise;
+  }
+
+  window.__visionGoogleCastPromise = new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const previousCallback = window.__onGCastApiAvailable;
+    window.__onGCastApiAvailable = (isAvailable) => {
+      if (typeof previousCallback === 'function') {
+        try { previousCallback(isAvailable); } catch (err) { console.log('[Cast] Callback previo fallo:', err); }
+      }
+      finish(Boolean(isAvailable && window.cast?.framework && window.chrome?.cast));
+    };
+
+    const existing = document.querySelector('script[data-vision-cast-sdk="true"]');
+    window.setTimeout(() => finish(Boolean(window.cast?.framework && window.chrome?.cast)), 5000);
+    if (existing) return;
+
+    const script = document.createElement('script');
+    script.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+    script.async = true;
+    script.dataset.visionCastSdk = 'true';
+    script.onerror = () => finish(false);
+    document.head.appendChild(script);
+  });
+
+  return window.__visionGoogleCastPromise;
+}
+
+function getGoogleCastContext() {
+  if (!window.cast?.framework || !window.chrome?.cast) return null;
+
+  const context = window.cast.framework.CastContext.getInstance();
+  const receiverId = window.__VISION_CAST_RECEIVER_ID || window.chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID;
+  context.setOptions({
+    receiverApplicationId: receiverId,
+    autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+  });
+  return context;
+}
+
+function getCastMetadata(source, stream) {
+  return {
+    title: source?.isSeriesEpisode
+      ? `${source?.seriesInfo?.title || source?.title || 'Vision+'}${source?.episodeInfo ? ` - T${source.episodeInfo.season}:E${source.episodeInfo.episode}` : ''}`
+      : source?.title || stream?.name || 'Vision+',
+    poster: source?.poster || source?.thumbnail || source?.logo || source?.image || ''
+  };
 }
 
 export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, onPrevEpisode, channelList, onChannelChange, onSourceChange }) {
@@ -605,8 +673,10 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   const streams = localSource.streams || [];
   const activeRawStream = streams[activeStreamIndex] || null;
   const currentStream = activeRawStream;
-  const showCastButton = isMobileDevice;
+  const showCastButton = true;
   const isIframeStream = Boolean(currentStream && currentStream.resolver !== 'direct');
+  const isCastingConnected = castState === 'connected';
+  const castRequired = Boolean(CAST_PLAYBACK_CONFIG.requireCastForDirectStreams && currentStream?.resolver === 'direct');
   const castButtonStyle = castState === 'connected'
     ? { background: 'rgba(229, 9, 20, 0.24)', borderColor: 'var(--primary-light)' }
     : undefined;
@@ -694,6 +764,53 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   };
 
   useEffect(() => {
+    let cancelled = false;
+    let castContext = null;
+    let updateGoogleCastAvailability = null;
+
+    loadGoogleCastSdk().then((ready) => {
+      if (cancelled || !ready) return;
+
+      castContext = getGoogleCastContext();
+      if (!castContext) return;
+
+      updateGoogleCastAvailability = () => {
+        const castState = castContext.getCastState?.();
+        const session = castContext.getCurrentSession?.();
+        setCastAvailable(Boolean(castState && castState !== window.cast.framework.CastState.NO_DEVICES_AVAILABLE));
+        if (session) {
+          setCastState('connected');
+          setCastStatusText('Chromecast conectado');
+        }
+      };
+
+      updateGoogleCastAvailability();
+      castContext.addEventListener(
+        window.cast.framework.CastContextEventType.CAST_STATE_CHANGED,
+        updateGoogleCastAvailability
+      );
+      castContext.addEventListener(
+        window.cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+        updateGoogleCastAvailability
+      );
+    });
+
+    return () => {
+      cancelled = true;
+      if (castContext && updateGoogleCastAvailability && window.cast?.framework) {
+        castContext.removeEventListener(
+          window.cast.framework.CastContextEventType.CAST_STATE_CHANGED,
+          updateGoogleCastAvailability
+        );
+        castContext.removeEventListener(
+          window.cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+          updateGoogleCastAvailability
+        );
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isMobileDevice) return;
 
     const video = videoRef.current;
@@ -778,6 +895,77 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     }, 4200);
   }, []);
 
+  const startGoogleCast = useCallback(async (forceTranscode = false) => {
+    if (!currentStream || currentStream.resolver !== 'direct') {
+      showCastStatus('Esta fuente aun no tiene video directo para Cast.');
+      return false;
+    }
+
+    const sdkReady = await loadGoogleCastSdk();
+    if (!sdkReady) return false;
+
+    const castContext = getGoogleCastContext();
+    if (!castContext || !window.chrome?.cast?.media) return false;
+
+    const metadata = getCastMetadata(localSource, currentStream);
+    setCastState('connecting');
+    setCastStatusText(forceTranscode ? 'Preparando transcodificacion para Chromecast...' : 'Preparando Cast...');
+
+    const prepareResponse = await fetch('/api/cast/prepare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stream: currentStream,
+        source: {
+          title: metadata.title,
+          poster: metadata.poster,
+          type: localSource?.type
+        },
+        forceTranscode
+      })
+    });
+
+    const prepared = await prepareResponse.json().catch(() => null);
+    if (!prepareResponse.ok || !prepared?.success) {
+      showCastStatus(prepared?.error || 'No se pudo preparar esta fuente para Cast.');
+      return true;
+    }
+
+    let castSession = castContext.getCurrentSession?.();
+    if (!castSession) {
+      setCastStatusText('Elige tu Chromecast...');
+      castSession = await castContext.requestSession();
+    }
+
+    const mediaInfo = new window.chrome.cast.media.MediaInfo(prepared.mediaUrl, prepared.contentType);
+    const castMetadata = new window.chrome.cast.media.GenericMediaMetadata();
+    castMetadata.title = prepared.title || metadata.title;
+    castMetadata.subtitle = prepared.mode === 'transcode' ? 'Vision+ Cast Gateway (transcodificado)' : 'Vision+ Cast Gateway';
+    if (prepared.poster || metadata.poster) {
+      castMetadata.images = [{ url: prepared.poster || metadata.poster }];
+    }
+    mediaInfo.metadata = castMetadata;
+    mediaInfo.streamType = localSource?.type === 'tv'
+      ? window.chrome.cast.media.StreamType.LIVE
+      : window.chrome.cast.media.StreamType.BUFFERED;
+
+    if (prepared.contentType?.toLowerCase().includes('mpegurl')) {
+      mediaInfo.hlsSegmentFormat = window.chrome.cast.media.HlsSegmentFormat?.TS;
+    }
+
+    const request = new window.chrome.cast.media.LoadRequest(mediaInfo);
+    request.autoplay = true;
+    request.currentTime = localSource?.type === 'tv' ? 0 : Math.max(0, Math.floor(videoRef.current?.currentTime || 0));
+    request.customData = { visionCastToken: prepared.token, mode: prepared.mode };
+
+    await castSession.loadMedia(request);
+    videoRef.current?.pause();
+    setCastAvailable(true);
+    setCastState('connected');
+    setCastStatusText('Transmitiendo por Chromecast');
+    return true;
+  }, [currentStream, localSource, showCastStatus]);
+
   const handleCastClick = useCallback(async () => {
     resetControlsTimer();
 
@@ -785,6 +973,23 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     if (!isNativeVideoElement(video)) {
       showCastStatus('Este servidor usa reproductor externo y no permite casteo nativo.');
       return;
+    }
+
+    try {
+      const handledByGoogleCast = await startGoogleCast(false);
+      if (handledByGoogleCast) return;
+    } catch (err) {
+      const userCancelled = err?.code === 'cancel' || err?.description === 'cancel' || err?.message?.toLowerCase?.().includes('cancel');
+      console.log('[VideoPlayer] Google Cast error:', err);
+      if (!userCancelled) {
+        try {
+          const handledByTranscode = await startGoogleCast(true);
+          if (handledByTranscode) return;
+        } catch (transcodeErr) {
+          console.log('[VideoPlayer] Google Cast transcode error:', transcodeErr);
+        }
+        showCastStatus('Chromecast no pudo iniciar. Probando casteo nativo...');
+      }
     }
 
     if (typeof video.webkitShowPlaybackTargetPicker === 'function') {
@@ -813,8 +1018,8 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       return;
     }
 
-    showCastStatus('Tu navegador movil no expone una opcion nativa de casteo.');
-  }, [isMobileDevice, showCastStatus]);
+    showCastStatus('Tu navegador no expone una opcion nativa de casteo.');
+  }, [startGoogleCast, showCastStatus]);
 
   const togglePlayPause = useCallback(() => {
     resetControlsTimer();
@@ -1458,6 +1663,12 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       return;
     }
 
+    if (castRequired && !isCastingConnected) {
+      destroyPlayer();
+      setIsLoading(false);
+      return;
+    }
+
     const video = videoRef.current;
     if (!video) return;
 
@@ -1646,7 +1857,7 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     return () => {
       destroyPlayer();
     };
-  }, [activeStreamIndex, currentStream, playerKey]);
+  }, [activeStreamIndex, currentStream, playerKey, castRequired, isCastingConnected]);
 
   // Video event listeners (timeupdate, play, pause, etc.)
   useEffect(() => {
@@ -1913,6 +2124,43 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
             style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
             onError={onVideoError}
           />
+        )}
+        {castRequired && !isCastingConnected && (
+          <div
+            className="cast-required-overlay"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 30,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 16,
+              padding: 24,
+              textAlign: 'center',
+              background: 'radial-gradient(circle at center, rgba(229,9,20,0.18), rgba(0,0,0,0.94) 62%)',
+              color: '#fff'
+            }}
+          >
+            <Cast size={48} />
+            <div style={{ fontSize: '1.35rem', fontWeight: 800 }}>Transmitir a pantalla</div>
+            <div style={{ maxWidth: 520, color: 'rgba(255,255,255,0.72)', lineHeight: 1.45 }}>
+              Vision+ preparo esta fuente para Chromecast. El video se reproducira en la pantalla elegida.
+            </div>
+            <button
+              className="control-btn cast-control-btn focusable"
+              tabIndex={0}
+              onClick={handleCastClick}
+              style={{ ...castButtonStyle, minWidth: 180, justifyContent: 'center' }}
+            >
+              <Cast size={20} />
+              <span>Enviar a Cast</span>
+            </button>
+            {castStatusText && (
+              <div style={{ color: 'rgba(255,255,255,0.78)', fontSize: '0.9rem' }}>{castStatusText}</div>
+            )}
+          </div>
         )}
       </div>
 

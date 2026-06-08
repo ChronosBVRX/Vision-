@@ -77,6 +77,14 @@ const axios = require('axios');
 const https = require('https');
 const http = require('http');
 const dns = require('dns');
+const crypto = require('crypto');
+const { spawn } = require('child_process');
+let bundledFfmpegPath = null;
+try {
+  bundledFfmpegPath = require('ffmpeg-static');
+} catch (e) {
+  bundledFfmpegPath = null;
+}
 
 // Configure global Node DNS servers for Google DNS and Cloudflare DNS
 try {
@@ -146,6 +154,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const DB_FILE = path.join(__dirname, 'database.json');
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const CAST_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
+const castSessions = new Map();
 
 function requireAdmin(req, res, next) {
   const token = req.headers['x-admin-password'] || req.query.admin_pass || req.body?.admin_pass;
@@ -2021,6 +2031,341 @@ app.get('/api/proxy', async (req, res) => {
     console.error('Proxy error for url:', targetUrl, error.message);
     res.status(500).send(error.message);
   }
+});
+
+function getLatestTunnelUrl() {
+  try {
+    const tunnelLogPath = path.join(__dirname, 'tunnel.log');
+    if (!fs.existsSync(tunnelLogPath)) return null;
+    const logs = fs.readFileSync(tunnelLogPath, 'utf8');
+    const matches = logs.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/ig);
+    return matches && matches.length ? matches[matches.length - 1].replace(/\/+$/, '') : null;
+  } catch (e) {
+    console.error('[CastGateway] Error leyendo tunnel.log:', e.message);
+    return null;
+  }
+}
+
+function getPublicBaseUrl(req) {
+  const configured = process.env.CAST_PUBLIC_URL || process.env.PUBLIC_BASE_URL || process.env.VISION_PUBLIC_URL;
+  if (configured) return configured.replace(/\/+$/, '');
+
+  const tunnelUrl = getLatestTunnelUrl();
+  if (tunnelUrl) return tunnelUrl;
+
+  const host = req.get('host');
+  const forwardedProto = req.get('x-forwarded-proto');
+  const proto = forwardedProto || req.protocol || 'http';
+  if (host && !/^localhost(:|$)|^127\.0\.0\.1(:|$)/i.test(host)) {
+    return `${proto}://${host}`;
+  }
+
+  return null;
+}
+
+function inferContentType(url, type) {
+  const value = `${type || ''} ${url || ''}`.toLowerCase();
+  if (value.includes('.m3u8') || value.includes('hls')) return 'application/x-mpegURL';
+  if (value.includes('.mpd') || value.includes('dash')) return 'application/dash+xml';
+  if (value.includes('.mp4')) return 'video/mp4';
+  if (value.includes('.webm')) return 'video/webm';
+  if (value.includes('.mkv')) return 'video/x-matroska';
+  return 'application/octet-stream';
+}
+
+function isCastDirectStream(stream) {
+  return stream && stream.url && /^https?:\/\//i.test(stream.url) && (!stream.resolver || stream.resolver === 'direct');
+}
+
+function cleanupCastSessions() {
+  const now = Date.now();
+  for (const [token, session] of castSessions.entries()) {
+    if (session.expiresAt > now) continue;
+    if (session.ffmpegProcess) {
+      try { session.ffmpegProcess.kill('SIGTERM'); } catch (e) {}
+    }
+    if (session.workDir && session.workDir.startsWith(path.join(__dirname, 'scratch'))) {
+      fs.rm(session.workDir, { recursive: true, force: true }, () => {});
+    }
+    castSessions.delete(token);
+  }
+}
+
+function resolveUrlSafely(relative, base) {
+  try {
+    return new URL(relative, base).toString();
+  } catch (e) {
+    return relative;
+  }
+}
+
+function castAssetUrl(session, token, targetUrl) {
+  return `${session.publicBaseUrl}/api/cast/session/${token}/asset?u=${encodeURIComponent(targetUrl)}`;
+}
+
+function rewriteHlsForCast(playlistText, baseUrl, token, session) {
+  const targetQuery = (() => {
+    try { return new URL(baseUrl).search; } catch (e) { return ''; }
+  })();
+
+  return playlistText.split('\n').map(line => {
+    let trimmed = line.trim();
+    if (!trimmed) return line;
+
+    if (trimmed.startsWith('#')) {
+      if (trimmed.includes('URI=')) {
+        const match = trimmed.match(/URI="([^"]+)"/);
+        if (match && match[1]) {
+          const originalUri = match[1];
+          let resolvedUri = /^https?:\/\//i.test(originalUri) ? originalUri : resolveUrlSafely(originalUri, baseUrl);
+          if (targetQuery && !resolvedUri.includes('?')) resolvedUri += targetQuery;
+          trimmed = trimmed.replace(`URI="${originalUri}"`, `URI="${castAssetUrl(session, token, resolvedUri)}"`);
+        }
+      }
+      return trimmed;
+    }
+
+    let resolvedUrl = /^https?:\/\//i.test(trimmed) ? trimmed : resolveUrlSafely(trimmed, baseUrl);
+    if (targetQuery && !resolvedUrl.includes('?')) resolvedUrl += targetQuery;
+    return castAssetUrl(session, token, resolvedUrl);
+  }).join('\n');
+}
+
+async function proxyCastUrl(targetUrl, req, res, options = {}) {
+  const referer = options.referer || '';
+  const isPlaylist = options.forcePlaylist || targetUrl.toLowerCase().includes('.m3u8');
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': '*/*'
+  };
+
+  if (referer) headers.Referer = referer;
+  if (req.headers.range) headers.Range = req.headers.range;
+
+  const response = await axios({
+    method: 'get',
+    url: targetUrl,
+    responseType: isPlaylist ? 'text' : 'stream',
+    headers,
+    validateStatus: () => true
+  });
+
+  res.status(response.status);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+  res.setHeader('Timing-Allow-Origin', '*');
+  res.setHeader('Cache-Control', isPlaylist ? 'no-store' : 'public, max-age=30');
+
+  if (isPlaylist) {
+    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+    const text = typeof response.data === 'string' ? response.data : String(response.data || '');
+    return res.send(options.rewritePlaylist ? options.rewritePlaylist(text, targetUrl) : text);
+  }
+
+  ['content-type', 'content-length', 'content-range', 'accept-ranges'].forEach(header => {
+    if (response.headers[header]) res.setHeader(header.replace(/\b\w/g, c => c.toUpperCase()), response.headers[header]);
+  });
+
+  response.data.pipe(res);
+}
+
+function startCastTranscoder(token, session) {
+  if (session.ffmpegStarted) return;
+  session.ffmpegStarted = true;
+
+  const workDir = path.join(__dirname, 'scratch', 'cast', token);
+  fs.mkdirSync(workDir, { recursive: true });
+  session.workDir = workDir;
+
+  const headerLines = [];
+  if (session.referer) headerLines.push(`Referer: ${session.referer}`);
+  headerLines.push('User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+  const args = [
+    '-hide_banner',
+    '-loglevel', 'warning',
+    '-headers', `${headerLines.join('\r\n')}\r\n`,
+    '-i', session.sourceUrl,
+    '-c:v', 'libx264',
+    '-preset', 'veryfast',
+    '-profile:v', 'main',
+    '-level', '4.0',
+    '-c:a', 'aac',
+    '-b:a', '128k',
+    '-f', 'hls',
+    '-hls_time', '4',
+    '-hls_list_size', '8',
+    '-hls_flags', 'delete_segments+append_list+omit_endlist',
+    '-hls_segment_filename', path.join(workDir, 'seg_%05d.ts'),
+    path.join(workDir, 'index.m3u8')
+  ];
+
+  const ffmpegBin = process.env.FFMPEG_PATH || bundledFfmpegPath || 'ffmpeg';
+  const child = spawn(ffmpegBin, args, { windowsHide: true });
+  session.ffmpegProcess = child;
+
+  child.stderr.on('data', chunk => {
+    const msg = String(chunk).trim();
+    if (msg) console.log(`[CastGateway] ffmpeg ${token}: ${msg}`);
+  });
+
+  child.on('error', err => {
+    session.ffmpegError = err.message;
+    console.error(`[CastGateway] FFmpeg no pudo iniciar (${token}):`, err.message);
+  });
+
+  child.on('exit', code => {
+    session.ffmpegExitCode = code;
+    console.log(`[CastGateway] FFmpeg termino (${token}) con codigo ${code}`);
+  });
+}
+
+async function waitForFile(filePath, timeoutMs = 15000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (fs.existsSync(filePath)) return true;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  return false;
+}
+
+setInterval(cleanupCastSessions, 10 * 60 * 1000);
+
+app.post('/api/cast/prepare', (req, res) => {
+  cleanupCastSessions();
+
+  const { stream = {}, source = {}, forceTranscode = false } = req.body || {};
+  if (!isCastDirectStream(stream)) {
+    return res.status(422).json({
+      success: false,
+      error: 'La fuente actual todavia es iframe/reproductor externo. Primero debe resolverse a HLS, MP4 o DASH directo.'
+    });
+  }
+
+  const publicBaseUrl = getPublicBaseUrl(req);
+  if (!publicBaseUrl) {
+    return res.status(503).json({
+      success: false,
+      error: 'No hay URL publica para Cast. Inicia/publica el tunel o configura CAST_PUBLIC_URL.'
+    });
+  }
+
+  const sourceUrl = stream.url;
+  const contentType = inferContentType(sourceUrl, stream.type);
+  const referer = stream.referer || stream.headers?.referer || stream.headers?.Referer || '';
+  const shouldTranscode = Boolean(forceTranscode) || !/mpegurl|video\/mp4/i.test(contentType);
+  const token = crypto.randomBytes(18).toString('base64url');
+  const title = source.title || stream.name || 'Vision+';
+  const poster = source.poster || source.logo || source.image || '';
+  const session = {
+    token,
+    title,
+    poster,
+    sourceUrl,
+    referer,
+    contentType,
+    mode: shouldTranscode ? 'transcode' : 'proxy',
+    publicBaseUrl,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + CAST_SESSION_TTL_MS
+  };
+
+  castSessions.set(token, session);
+
+  const isHls = contentType.includes('mpegURL');
+  const mediaUrl = shouldTranscode || isHls
+    ? `${publicBaseUrl}/api/cast/session/${token}/master.m3u8`
+    : `${publicBaseUrl}/api/cast/session/${token}/media`;
+
+  console.log(`[CastGateway] Sesion lista ${token} (${session.mode}) para ${title}: ${sourceUrl}`);
+
+  res.json({
+    success: true,
+    token,
+    mediaUrl,
+    contentType: shouldTranscode || isHls ? 'application/x-mpegURL' : contentType,
+    title,
+    poster,
+    expiresAt: session.expiresAt,
+    mode: session.mode
+  });
+});
+
+app.get('/api/cast/session/:token/master.m3u8', async (req, res) => {
+  const session = castSessions.get(req.params.token);
+  if (!session) return res.status(404).send('Cast session expired');
+
+  try {
+    if (session.mode === 'transcode') {
+      startCastTranscoder(req.params.token, session);
+      const indexPath = path.join(session.workDir, 'index.m3u8');
+      const ready = await waitForFile(indexPath);
+      if (!ready) {
+        return res.status(503).send(session.ffmpegError || 'FFmpeg aun no genero playlist');
+      }
+      res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-store');
+      const text = fs.readFileSync(indexPath, 'utf8').replace(/^(seg_\d+\.ts)$/gm, `${session.publicBaseUrl}/api/cast/session/${req.params.token}/transcoded/$1`);
+      return res.send(text);
+    }
+
+    return proxyCastUrl(session.sourceUrl, req, res, {
+      referer: session.referer,
+      forcePlaylist: true,
+      rewritePlaylist: (text, baseUrl) => rewriteHlsForCast(text, baseUrl, req.params.token, session)
+    });
+  } catch (error) {
+    console.error('[CastGateway] Error sirviendo master:', error.message);
+    res.status(500).send(error.message);
+  }
+});
+
+app.get('/api/cast/session/:token/media', async (req, res) => {
+  const session = castSessions.get(req.params.token);
+  if (!session) return res.status(404).send('Cast session expired');
+
+  try {
+    return proxyCastUrl(session.sourceUrl, req, res, { referer: session.referer });
+  } catch (error) {
+    console.error('[CastGateway] Error sirviendo media:', error.message);
+    res.status(500).send(error.message);
+  }
+});
+
+app.get('/api/cast/session/:token/asset', async (req, res) => {
+  const session = castSessions.get(req.params.token);
+  const targetUrl = req.query.u;
+  if (!session) return res.status(404).send('Cast session expired');
+  if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) return res.status(400).send('Invalid asset url');
+
+  try {
+    const isPlaylist = String(targetUrl).toLowerCase().includes('.m3u8');
+    return proxyCastUrl(targetUrl, req, res, {
+      referer: session.referer,
+      forcePlaylist: isPlaylist,
+      rewritePlaylist: isPlaylist
+        ? (text, baseUrl) => rewriteHlsForCast(text, baseUrl, req.params.token, session)
+        : null
+    });
+  } catch (error) {
+    console.error('[CastGateway] Error sirviendo asset:', error.message);
+    res.status(500).send(error.message);
+  }
+});
+
+app.get('/api/cast/session/:token/transcoded/:file', (req, res) => {
+  const session = castSessions.get(req.params.token);
+  if (!session || !session.workDir) return res.status(404).send('Cast session expired');
+
+  const file = path.basename(req.params.file);
+  const filePath = path.join(session.workDir, file);
+  if (!fs.existsSync(filePath)) return res.status(404).send('Segment not ready');
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'public, max-age=20');
+  if (file.endsWith('.ts')) res.setHeader('Content-Type', 'video/mp2t');
+  return res.sendFile(filePath);
 });
 
 // Import M3U playlists

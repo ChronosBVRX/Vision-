@@ -1,6 +1,6 @@
 {
   "name": "vision-plus",
-  "version": "1.0.46",
+  "version": "1.0.47",
   "description": "Aplicación para ver películas y canales de TV en vivo con panel de administración y reproductor interno libre de anuncios.",
   "main": "server.js",
   "scripts": {
@@ -21,6 +21,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
+    "ffmpeg-static": "^5.3.0",
     "input": "^1.0.1",
     "playwright": "^1.60.0",
     "puppeteer": "^25.1.0",
