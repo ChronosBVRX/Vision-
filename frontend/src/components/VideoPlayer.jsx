@@ -606,13 +606,14 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   const activeRawStream = streams[activeStreamIndex] || null;
   const currentStream = activeRawStream;
   const showCastButton = isMobileDevice;
+  const isIframeStream = Boolean(currentStream && currentStream.resolver !== 'direct');
   const castButtonStyle = castState === 'connected'
     ? { background: 'rgba(229, 9, 20, 0.24)', borderColor: 'var(--primary-light)' }
     : undefined;
   const castToastStyle = {
     position: 'absolute',
     right: 16,
-    bottom: 104,
+    bottom: isMobileDevice ? 300 : 104,
     maxWidth: 'min(360px, calc(100vw - 32px))',
     padding: '12px 16px',
     border: `1px solid ${castState === 'connected' ? 'var(--primary-light)' : 'rgba(255, 255, 255, 0.14)'}`,
@@ -622,7 +623,74 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
     fontSize: '0.86rem',
     fontWeight: 600,
     boxShadow: 'var(--shadow-lg)',
-    zIndex: 1002
+    zIndex: 1004
+  };
+  const mobileRemoteStyle = {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 18,
+    display: isMobileDevice ? 'flex' : 'none',
+    flexDirection: 'column',
+    gap: 12,
+    padding: '14px',
+    border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: 18,
+    background: 'linear-gradient(180deg, rgba(10,12,20,0.92), rgba(0,0,0,0.96))',
+    boxShadow: '0 18px 48px rgba(0,0,0,0.55)',
+    zIndex: 1003,
+    touchAction: 'manipulation'
+  };
+  const mobileRemoteHeaderStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    color: '#fff'
+  };
+  const mobileRemoteTitleStyle = {
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    fontSize: '0.92rem',
+    fontWeight: 700
+  };
+  const mobileRemoteGridStyle = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+    gap: 10
+  };
+  const mobileRemoteButtonStyle = {
+    minHeight: 54,
+    border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: 14,
+    background: 'rgba(255,255,255,0.08)',
+    color: '#fff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    fontWeight: 700,
+    fontSize: '0.82rem'
+  };
+  const mobileRemotePrimaryButtonStyle = {
+    ...mobileRemoteButtonStyle,
+    minHeight: 64,
+    background: 'var(--primary)',
+    borderColor: 'var(--primary-light)',
+    boxShadow: '0 0 18px rgba(229, 9, 20, 0.22)'
+  };
+  const mobileRemoteWideButtonStyle = {
+    ...mobileRemoteButtonStyle,
+    gridColumn: 'span 2'
+  };
+  const mobileRemoteLabelStyle = {
+    display: 'block',
+    fontSize: '0.72rem',
+    color: 'rgba(255,255,255,0.66)',
+    fontWeight: 600,
+    marginBottom: 2
   };
 
   useEffect(() => {
@@ -747,6 +815,35 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
 
     showCastStatus('Tu navegador movil no expone una opcion nativa de casteo.');
   }, [isMobileDevice, showCastStatus]);
+
+  const togglePlayPause = useCallback(() => {
+    resetControlsTimer();
+    if (!videoRef.current || isIframeStream) return;
+    if (isPlaying) videoRef.current.pause();
+    else videoRef.current.play().catch(() => {});
+  }, [isPlaying, isIframeStream]);
+
+  const seekBySeconds = useCallback((seconds) => {
+    resetControlsTimer();
+    if (!videoRef.current || isLive || isIframeStream) return;
+    const nextTime = Math.max(0, Math.min(duration || 0, (videoRef.current.currentTime || 0) + seconds));
+    videoRef.current.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  }, [duration, isLive, isIframeStream]);
+
+  const changeVolumeBy = useCallback((delta) => {
+    resetControlsTimer();
+    changeVolume((isMuted ? 0 : volume) + delta);
+  }, [changeVolume, isMuted, volume]);
+
+  const openMobileList = useCallback(() => {
+    resetControlsTimer();
+    if (localSource.isSeriesEpisode) {
+      setShowSeriesDrawer(true);
+    } else if (isLive) {
+      setShowChannelGuide(true);
+    }
+  }, [isLive, localSource.isSeriesEpisode]);
 
   useEffect(() => {
     resetControlsTimer();
@@ -1821,7 +1918,191 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
 
       {/* ── Bottom controls overlay ──────────────────────────────────── */}
       <div className={`custom-player-overlay ${showControls ? 'visible' : 'hidden'}`}>
-        <div className="custom-player-bottom-bar">
+        {isMobileDevice && (
+          <div style={mobileRemoteStyle}>
+            <div style={mobileRemoteHeaderStyle}>
+              <div style={{ minWidth: 0 }}>
+                <span style={mobileRemoteLabelStyle}>Control movil</span>
+                <div style={mobileRemoteTitleStyle}>
+                  {localSource.isSeriesEpisode ? localSource.seriesInfo?.title : localSource.title}
+                </div>
+              </div>
+              <button
+                type="button"
+                style={{ ...mobileRemoteButtonStyle, minHeight: 42, width: 48, padding: 0, flexShrink: 0 }}
+                onClick={onClose}
+                aria-label="Cerrar reproductor"
+              >
+                <X size={19} />
+              </button>
+            </div>
+
+            {!isLive && !isIframeStream && (
+              <div style={{ display: 'grid', gridTemplateColumns: '48px 1fr 48px', alignItems: 'center', gap: 10 }}>
+                <span style={{ color: 'rgba(255,255,255,0.72)', fontSize: '0.76rem', fontWeight: 700 }}>
+                  {formatTime(currentTime)}
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={duration || 0}
+                  step={1}
+                  value={Math.min(currentTime, duration || 0)}
+                  onChange={(e) => {
+                    const t = Number(e.target.value);
+                    if (videoRef.current) videoRef.current.currentTime = t;
+                    setCurrentTime(t);
+                    resetControlsTimer();
+                  }}
+                  style={{ width: '100%', accentColor: 'var(--primary-light)' }}
+                  aria-label="Progreso"
+                />
+                <span style={{ color: 'rgba(255,255,255,0.72)', fontSize: '0.76rem', fontWeight: 700, textAlign: 'right' }}>
+                  {formatTime(duration)}
+                </span>
+              </div>
+            )}
+
+            {isIframeStream && (
+              <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: '0.82rem', lineHeight: 1.35 }}>
+                Este servidor externo no expone controles nativos. Puedes cerrar, abrir fullscreen o cambiar de episodio/canal si aplica.
+              </div>
+            )}
+
+            <div style={mobileRemoteGridStyle}>
+              <button
+                type="button"
+                style={mobileRemoteButtonStyle}
+                onClick={() => changeVolumeBy(-0.1)}
+                aria-label="Bajar volumen"
+                disabled={isIframeStream}
+              >
+                Vol -
+              </button>
+
+              <button
+                type="button"
+                style={mobileRemoteButtonStyle}
+                onClick={() => {
+                  if (isLive) switchToPrevChannel();
+                  else if (localSource.isSeriesEpisode) {
+                    const prev = getPrevEpisode();
+                    if (prev) playEpisode(prev);
+                  } else seekBySeconds(-10);
+                  resetControlsTimer();
+                }}
+                aria-label={isLive ? 'Canal anterior' : localSource.isSeriesEpisode ? 'Episodio anterior' : 'Retroceder 10 segundos'}
+              >
+                {isLive || localSource.isSeriesEpisode ? <SkipBack size={20} /> : <RotateCcw size={20} />}
+              </button>
+
+              <button
+                type="button"
+                style={mobileRemotePrimaryButtonStyle}
+                onClick={togglePlayPause}
+                aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
+                disabled={isIframeStream}
+              >
+                {isPlaying ? <Pause size={28} /> : <Play size={28} />}
+              </button>
+
+              <button
+                type="button"
+                style={mobileRemoteButtonStyle}
+                onClick={() => {
+                  if (isLive) switchToNextChannel();
+                  else if (localSource.isSeriesEpisode) {
+                    const next = getNextEpisode();
+                    if (next) playEpisode(next);
+                  } else seekBySeconds(10);
+                  resetControlsTimer();
+                }}
+                aria-label={isLive ? 'Canal siguiente' : localSource.isSeriesEpisode ? 'Episodio siguiente' : 'Avanzar 10 segundos'}
+              >
+                {isLive || localSource.isSeriesEpisode ? <SkipForward size={20} /> : <RotateCw size={20} />}
+              </button>
+
+              <button
+                type="button"
+                style={mobileRemoteButtonStyle}
+                onClick={() => changeVolumeBy(0.1)}
+                aria-label="Subir volumen"
+                disabled={isIframeStream}
+              >
+                Vol +
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+              <button
+                type="button"
+                style={mobileRemoteButtonStyle}
+                onClick={toggleMute}
+                aria-label={isMuted ? 'Activar sonido' : 'Silenciar'}
+                disabled={isIframeStream}
+              >
+                {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+              </button>
+
+              <button
+                type="button"
+                style={mobileRemoteButtonStyle}
+                onClick={handleCastClick}
+                aria-label="Transmitir a pantalla"
+              >
+                <Cast size={20} />
+              </button>
+
+              {(isLive || localSource.isSeriesEpisode) ? (
+                <button
+                  type="button"
+                  style={mobileRemoteButtonStyle}
+                  onClick={openMobileList}
+                  aria-label={isLive ? 'Abrir guia de canales' : 'Abrir lista de episodios'}
+                >
+                  <List size={20} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  style={mobileRemoteButtonStyle}
+                  onClick={() => changePlaybackRate(playbackRate >= 2 ? 1 : playbackRate + 0.25)}
+                  aria-label="Cambiar velocidad"
+                  disabled={isIframeStream}
+                >
+                  {playbackRate}x
+                </button>
+              )}
+
+              <button
+                type="button"
+                style={mobileRemoteButtonStyle}
+                onClick={toggleFullscreen}
+                aria-label="Pantalla completa"
+              >
+                {document.fullscreenElement ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+              </button>
+            </div>
+
+            {streams.length > 1 && (
+              <button
+                type="button"
+                style={mobileRemoteWideButtonStyle}
+                onClick={() => {
+                  if (isLive) setShowServerPopup(!showServerPopup);
+                  else setShowVODServerPopup(!showVODServerPopup);
+                  resetControlsTimer();
+                }}
+                aria-label="Cambiar servidor"
+              >
+                <Layers size={18} />
+                Servidores
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="custom-player-bottom-bar" style={isMobileDevice ? { display: 'none' } : undefined}>
 
           {/* Progress bar (solo películas/series) */}
           {/* Progress bar (solo películas/series) */}
