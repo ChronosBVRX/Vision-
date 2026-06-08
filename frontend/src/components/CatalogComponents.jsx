@@ -237,7 +237,7 @@ export const CatalogRow = memo(function CatalogRow({ id, title, items, isActive,
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerEnd}
           onPointerCancel={handlePointerEnd}
-          style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain' }}
+          style={{ touchAction: 'pan-x pan-y', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain' }}
         >
           {items.map((item, idx) => (
             <CatalogCard
