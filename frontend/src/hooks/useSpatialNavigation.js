@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 
 const NAV_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace', 'BrowserBack', 'GoBack']);
 const FOCUSABLE_SEL = '.focusable';
+const LOCAL_NAV_OVERLAY_SEL = '.ep-selector-overlay';
+const MODAL_NAV_SEL = '.details-modal-overlay, .video-overlay, .wo-modal-overlay';
 
 function isSmartTV() {
   return typeof window !== 'undefined' && window.isSmartTV === true;
@@ -135,8 +137,15 @@ export default function useSpatialNavigation(isActive = true) {
       // We must bail out immediately, BEFORE applying our throttle,
       // so both systems don't compete and the throttle doesn't eat the event.
       const wOverlay = document.querySelector('.watch-overlay');
-      if (wOverlay && (wOverlay.querySelector('video') || wOverlay.querySelector('.watch-header-overlay'))) {
+      if (wOverlay) {
         return; // VideoPlayer takes full control
+      }
+
+      // Episode selector owns its grid math locally (season tabs + real columns).
+      // The global navigator must stay out so a single D-pad press never moves
+      // both the overlay and the catalog behind it.
+      if (document.querySelector(LOCAL_NAV_OVERLAY_SEL)) {
+        return;
       }
 
       // ── Throttle: skip if too soon since last navigation ──────────
@@ -150,8 +159,7 @@ export default function useSpatialNavigation(isActive = true) {
 
       const activeEl = document.activeElement;
 
-      const overlayContainer = wOverlay || null;
-      const activeModal = overlayContainer || document.querySelector('.details-modal-overlay, .video-overlay');
+      const activeModal = document.querySelector(MODAL_NAV_SEL);
       const activeInSidebar = activeEl ? activeEl.closest('.sidebar') : false;
 
       // ── Enter: click focused element ───────────────────────────────
@@ -168,7 +176,7 @@ export default function useSpatialNavigation(isActive = true) {
       // ── Backspace / Escape / BrowserBack ─────────────────────────────────────────
       if (e.key === 'Backspace' || e.key === 'Escape' || e.key === 'BrowserBack' || e.key === 'GoBack') {
         if (activeModal) {
-          const closeBtn = activeModal.querySelector('.watch-close, .btn-secondary') || activeModal.querySelector('button');
+          const closeBtn = activeModal.querySelector('.watch-close, .wo-close, .btn-secondary') || activeModal.querySelector('button');
           if (closeBtn) {
             e.preventDefault();
             e.stopPropagation();
@@ -240,10 +248,10 @@ export default function useSpatialNavigation(isActive = true) {
         }
       } else {
         if (e.key === 'ArrowLeft') {
-          pool = focusableCache.current; // allow jumping to sidebar
+          pool = getCachedFocusables(null); // allow jumping to sidebar
         } else {
           const mainContent = document.querySelector('.main-content');
-          pool = mainContent ? getCachedFocusables(mainContent) : focusableCache.current;
+          pool = mainContent ? getCachedFocusables(mainContent) : getCachedFocusables(null);
         }
       }
 
@@ -285,7 +293,13 @@ export default function useSpatialNavigation(isActive = true) {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function isVisible(el) {
-  return el.offsetWidth > 0 && el.offsetHeight > 0 && !el.disabled;
+  const style = window.getComputedStyle(el);
+  return el.offsetWidth > 0
+    && el.offsetHeight > 0
+    && !el.disabled
+    && style.display !== 'none'
+    && style.visibility !== 'hidden'
+    && !el.closest('[hidden], [inert], [aria-hidden="true"]');
 }
 
 function queryFocusables(restrictTo) {

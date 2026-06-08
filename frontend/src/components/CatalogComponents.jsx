@@ -165,6 +165,12 @@ export const CatalogRow = memo(function CatalogRow({ id, title, items, isActive,
     if (isTouchDevice && !isTV) return;
 
     const cards = Array.from(trackRef.current?.querySelectorAll('.catalog-card') || []);
+    const currentIdx = cards.indexOf(document.activeElement);
+    if (currentIdx >= 0) {
+      setFocusIdx(currentIdx);
+      return;
+    }
+
     if (cards.length > 0) {
       cards[0].focus();
       cards[0].scrollIntoView({ behavior: isTV ? 'auto' : 'smooth', block: 'nearest', inline: 'start' });

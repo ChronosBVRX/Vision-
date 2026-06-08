@@ -359,60 +359,6 @@ export default function Movies({ contentType = 'movie' }) {
     ];
   }, [genreGroups]);
 
-  // ── TV keyboard navigation ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (activeItem || activeSeries) return;
-    const isTV = typeof window !== 'undefined' && window.isSmartTV;
-    const scrollOpt = { behavior: isTV ? 'auto' : 'smooth', block: 'nearest' };
-    const handleKey = (e) => {
-      const activeEl = document.activeElement;
-      const inSidebar = activeEl && !!activeEl.closest('.sidebar');
-      if (inSidebar) return; // Let the sidebar handle its own Up/Down navigation
-
-      // If in grid view, let useSpatialNavigation handle ArrowUp/Down
-      if (isFilteringOrSearching) return;
-
-      const inTopBar = activeEl && !!activeEl.closest('.catalog-filter-bar');
-
-      if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
-        if (inTopBar) {
-          if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setActiveRow(0);
-            const firstCard = document.querySelector('#crow-0 .catalog-card');
-            firstCard?.focus();
-          }
-          return;
-        }
-
-        e.preventDefault();
-        setActiveRow(prev => {
-          if (e.key === 'ArrowUp') {
-            if (prev === 0) {
-              const topBarItems = Array.from(document.querySelectorAll('.catalog-filter-bar .focusable'));
-              if (topBarItems.length > 0) {
-                topBarItems[0].focus();
-                window.scrollTo({ top: 0, behavior: isTV ? 'auto' : 'smooth' });
-              }
-              return 0;
-            }
-            const next = prev - 1;
-            const el = document.getElementById(`crow-${next}`);
-            el?.scrollIntoView(scrollOpt);
-            return next;
-          } else {
-            const next = Math.min(rowKeys.length - 1, prev + 1);
-            const el = document.getElementById(`crow-${next}`);
-            el?.scrollIntoView(scrollOpt);
-            return next;
-          }
-        });
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [activeItem, rowKeys.length, isFilteringOrSearching]);
-
   // When user clicks a card, show details first
   const handleDetails = useCallback((item) => {
     setDetailsItem(item);
@@ -435,18 +381,17 @@ export default function Movies({ contentType = 'movie' }) {
     if (!activeSeries) return;
     const handleKey = (e) => {
       const el = document.activeElement;
+      const selectorKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' ', 'Escape', 'Backspace', 'BrowserBack', 'GoBack'];
+      if (!selectorKeys.includes(e.key)) return;
 
-      // Stop ALL arrow keys from reaching the catalog handler behind
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+      e.preventDefault();
+      e.stopPropagation();
 
       if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') {
         setActiveSeries(null);
         return;
       }
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' || e.key === ' ') {
         const insideOverlay = el && el.closest('.ep-selector-overlay');
         if (insideOverlay && (el?.tagName === 'BUTTON' || el?.tagName === 'A')) {
           el.click();

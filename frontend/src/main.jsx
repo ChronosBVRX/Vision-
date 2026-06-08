@@ -52,13 +52,8 @@
         const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
         if (activeTag !== 'input' && activeTag !== 'textarea') {
           // Si no es un campo de texto, detenemos el Backspace para evitar salida del navegador
-          // (React aún procesará el evento porque React maneja sus propios listeners globales,
-          // pero el preventDefault detiene la navegación del motor del navegador).
+          // y dejamos que Vision+ procese el evento original una sola vez.
           e.preventDefault();
-          
-          if (e.key === 'GoBack' || e.keyCode === 461) {
-             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true, cancelable: true }));
-          }
         }
       }
     }, { capture: true });

@@ -272,6 +272,51 @@ export default function App() {
     }, 100);
   };
 
+  const focusSidebarItem = (selector) => {
+    window.setTimeout(() => {
+      const target = document.querySelector(selector);
+      if (target) target.focus();
+    }, 50);
+  };
+
+  const closeTvSubmenuToRoot = () => {
+    setTvSubmenuOpen(false);
+    focusSidebarItem('[data-nav-id="tv-root"]');
+  };
+
+  const closeAnimeSubmenuToRoot = () => {
+    setAnimeSubmenuOpen(false);
+    focusSidebarItem('[data-nav-id="anime-root"]');
+  };
+
+  const handleTvSubitemKeyDown = (e, action) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      action();
+      return;
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeTvSubmenuToRoot();
+    }
+  };
+
+  const handleAnimeSubitemKeyDown = (e, action) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      action();
+      return;
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeAnimeSubmenuToRoot();
+    }
+  };
+
   // TV channel subcategories (unified and cleaned up)
   const tvCategories = useMemo(() => {
     const set = new Set();
@@ -333,6 +378,7 @@ export default function App() {
           {/* Canales en Vivo (with subcategories) */}
           <li
             className={`nav-item focusable ${currentPage === 'home' && (selectedCategoryFilter === 'Canales en Vivo' || tvCategories.includes(selectedCategoryFilter)) ? 'active' : ''}`}
+            data-nav-id="tv-root"
             tabIndex={0}
             style={{ display: 'flex', alignItems: 'center' }}
             onClick={() => {
@@ -342,8 +388,24 @@ export default function App() {
               }
             }}
             onKeyDown={e => {
-              if (e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); setTvSubmenuOpen(true); selectCategory('Canales en Vivo'); }
-              if (e.key === 'ArrowLeft' && tvSubmenuOpen) { e.preventDefault(); e.stopPropagation(); setTvSubmenuOpen(false); }
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                selectCategory('Canales en Vivo');
+                return;
+              }
+              if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                e.stopPropagation();
+                setTvSubmenuOpen(true);
+                focusSidebarItem('[data-nav-id="tv-all"]');
+                return;
+              }
+              if (e.key === 'ArrowLeft' && tvSubmenuOpen) {
+                e.preventDefault();
+                e.stopPropagation();
+                setTvSubmenuOpen(false);
+              }
             }}
           >
             <Tv size={24} />
@@ -355,9 +417,10 @@ export default function App() {
             <>
               <li
                 className={`nav-subitem focusable ${currentPage === 'home' && selectedCategoryFilter === 'Canales en Vivo' ? 'active' : ''}`}
+                data-nav-id="tv-all"
                 tabIndex={0}
                 onClick={() => selectCategory('Canales en Vivo')}
-                onKeyDown={e => { if (e.key === 'Enter') selectCategory('Canales en Vivo'); }}
+                onKeyDown={e => handleTvSubitemKeyDown(e, () => selectCategory('Canales en Vivo'))}
               >
                 🌐 Todos
               </li>
@@ -367,7 +430,7 @@ export default function App() {
                   className={`nav-subitem focusable ${currentPage === 'home' && selectedCategoryFilter === cat ? 'active' : ''}`}
                   tabIndex={0}
                   onClick={() => selectCategory(cat)}
-                  onKeyDown={e => { if (e.key === 'Enter') selectCategory(cat); }}
+                  onKeyDown={e => handleTvSubitemKeyDown(e, () => selectCategory(cat))}
                 >
                   {cat}
                 </li>
@@ -377,7 +440,7 @@ export default function App() {
                   className={`nav-subitem focusable ${currentPage === 'home' && selectedCategoryFilter === 'Variedades / General' ? 'active' : ''}`}
                   tabIndex={0}
                   onClick={() => selectCategory('Variedades / General')}
-                  onKeyDown={e => { if (e.key === 'Enter') selectCategory('Variedades / General'); }}
+                  onKeyDown={e => handleTvSubitemKeyDown(e, () => selectCategory('Variedades / General'))}
                 >
                   Variedades / General
                 </li>
@@ -421,12 +484,33 @@ export default function App() {
           {/* Anime → expandable submenu */}
           <li
             className={`nav-item focusable ${currentPage === 'anime' ? 'active' : ''}`}
+            data-nav-id="anime-root"
             tabIndex={0}
             style={{ display: 'flex', alignItems: 'center' }}
             onClick={() => setAnimeSubmenuOpen(o => !o)}
             onKeyDown={e => {
-              if (e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); setAnimeSubmenuOpen(true); }
-              if (e.key === 'ArrowLeft' && animeSubmenuOpen) { e.preventDefault(); e.stopPropagation(); setAnimeSubmenuOpen(false); }
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                setAnimeSubmenuOpen(open => {
+                  const next = !open;
+                  if (next) focusSidebarItem('[data-nav-id="anime-movies"]');
+                  return next;
+                });
+                return;
+              }
+              if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                e.stopPropagation();
+                setAnimeSubmenuOpen(true);
+                focusSidebarItem('[data-nav-id="anime-movies"]');
+                return;
+              }
+              if (e.key === 'ArrowLeft' && animeSubmenuOpen) {
+                e.preventDefault();
+                e.stopPropagation();
+                setAnimeSubmenuOpen(false);
+              }
             }}
           >
             <div style={{
@@ -442,8 +526,10 @@ export default function App() {
             <>
               <li
                 className={`nav-subitem focusable ${currentPage === 'anime' && animeTab === 'Películas' ? 'active' : ''}`}
+                data-nav-id="anime-movies"
                 tabIndex={0}
                 onClick={() => { setAnimeTab('Películas'); selectPage('anime'); }}
+                onKeyDown={e => handleAnimeSubitemKeyDown(e, () => { setAnimeTab('Películas'); selectPage('anime'); })}
               >
                 <Film size={16} />
                 Películas
@@ -452,6 +538,7 @@ export default function App() {
                 className={`nav-subitem focusable ${currentPage === 'anime' && animeTab === 'Series' ? 'active' : ''}`}
                 tabIndex={0}
                 onClick={() => { setAnimeTab('Series'); selectPage('anime'); }}
+                onKeyDown={e => handleAnimeSubitemKeyDown(e, () => { setAnimeTab('Series'); selectPage('anime'); })}
               >
                 <Tv size={16} />
                 Series

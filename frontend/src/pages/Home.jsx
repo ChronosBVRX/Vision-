@@ -167,39 +167,6 @@ export default function Home({ selectedCategoryFilter }) {
     return () => clearInterval(heroTimerRef.current);
   }, [heroItems.length]);
 
-  const rowKeys = useMemo(() => {
-    const keys = [];
-    if (trendingItems.length > 0) keys.push('trending');
-    if (topRatedItems.length > 0) keys.push('topRated');
-    if (criticsPick.length > 0) keys.push('critics');
-    genreSections.forEach(gs => keys.push(`genre_${gs.genre}`));
-    if (seriesRow.length > 0) keys.push('series');
-    if (tvItems.length > 0) keys.push('tv');
-    return keys;
-  }, [trendingItems, topRatedItems, criticsPick, genreSections, seriesRow, tvItems]);
-
-  // ── TV keyboard nav between rows ───────────────────────────────────────────
-  useEffect(() => {
-    if (activeItem || isTVMode) return;
-    const handleKey = (e) => {
-      const activeEl = document.activeElement;
-      const inSidebar = activeEl && !!activeEl.closest('.sidebar');
-      if (inSidebar) return;
-      if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
-        e.preventDefault();
-        const isTV = typeof window !== 'undefined' && window.isSmartTV;
-        setActiveRow(prev => {
-          const next = e.key === 'ArrowUp' ? Math.max(0, prev - 1) : Math.min(rowKeys.length - 1, prev + 1);
-          const sectionEl = document.getElementById(`home-section-${rowKeys[next]}`);
-          if (sectionEl) sectionEl.scrollIntoView({ behavior: isTV ? 'auto' : 'smooth', block: 'nearest' });
-          return next;
-        });
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [activeItem, rowKeys.length, rowKeys, isTVMode]);
-
   // ── Episode Player ───────────────────────────────────────────────────────
   const playEpisode = useCallback((series, episode) => {
     setActiveSeries(null);
@@ -293,9 +260,14 @@ export default function Home({ selectedCategoryFilter }) {
     if (!activeSeries) return;
     const handleKey = (e) => {
       const el = document.activeElement;
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); }
+      const selectorKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' ', 'Escape', 'Backspace', 'BrowserBack', 'GoBack'];
+      if (!selectorKeys.includes(e.key)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
       if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') { setActiveSeries(null); return; }
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' || e.key === ' ') {
         const insideOverlay = el && el.closest('.ep-selector-overlay');
         if (insideOverlay && (el?.tagName === 'BUTTON' || el?.tagName === 'A')) el.click();
         else if (!insideOverlay || el === document.body) { (document.querySelector('.episode-card') || document.querySelector('.season-tab'))?.focus(); }

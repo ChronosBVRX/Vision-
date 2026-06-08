@@ -92,6 +92,8 @@ export default function DetailsModal({ item, onClose, onPlay }) {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') {
+        e.preventDefault();
+        e.stopPropagation();
         if (showTrailer) {
           setShowTrailer(false);
         } else {
@@ -99,8 +101,8 @@ export default function DetailsModal({ item, onClose, onPlay }) {
         }
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [onClose, showTrailer]);
 
   const handleClosePress = useCallback((e) => {
