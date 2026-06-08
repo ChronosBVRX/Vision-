@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import Plyr from 'plyr';
 import Hls from 'hls.js';
-import { X, Play, Pause, RefreshCw, Layers, RotateCcw, RotateCw, SkipForward, SkipBack, List, Globe as Globe2, Subtitles, Volume2, VolumeX, Maximize2, Minimize2, FastForward, Search, Tv } from 'lucide-react';
+import { X, Play, Pause, RefreshCw, Layers, RotateCcw, RotateCw, SkipForward, SkipBack, List, Globe as Globe2, Subtitles, Volume2, VolumeX, Maximize2, Minimize2, FastForward, Search, Tv, Cast } from 'lucide-react';
 import 'plyr/dist/plyr.css';
 import LoadingScreen from './LoadingScreen';
 
@@ -212,6 +212,20 @@ function getNormalizedTVCategory(channel) {
   return cat;
 }
 
+function detectMobileDevice() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+
+  const ua = navigator.userAgent || navigator.vendor || '';
+  const isTouchMac = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  const isSmallTouchScreen = navigator.maxTouchPoints > 1 && window.innerWidth <= 900;
+
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) || isTouchMac || isSmallTouchScreen;
+}
+
+function isNativeVideoElement(el) {
+  return typeof HTMLVideoElement !== 'undefined' && el instanceof HTMLVideoElement;
+}
+
 export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, onPrevEpisode, channelList, onChannelChange, onSourceChange }) {
   const [activeStreamIndex, setActiveStreamIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -237,8 +251,12 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showEndScreen, setShowEndScreen] = useState(false);
+  const [castStatusText, setCastStatusText] = useState('');
+  const [castState, setCastState] = useState('idle');
+  const [castAvailable, setCastAvailable] = useState(false);
   const channelInfoTimer = useRef(null);
   const guideRef = useRef(null);
+  const isMobileDevice = useMemo(() => detectMobileDevice(), []);
 
   // Live TV custom states
   const isLive = useMemo(() => {
@@ -587,6 +605,89 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
   const streams = localSource.streams || [];
   const activeRawStream = streams[activeStreamIndex] || null;
   const currentStream = activeRawStream;
+  const showCastButton = isMobileDevice;
+  const castButtonStyle = castState === 'connected'
+    ? { background: 'rgba(229, 9, 20, 0.24)', borderColor: 'var(--primary-light)' }
+    : undefined;
+  const castToastStyle = {
+    position: 'absolute',
+    right: 16,
+    bottom: 104,
+    maxWidth: 'min(360px, calc(100vw - 32px))',
+    padding: '12px 16px',
+    border: `1px solid ${castState === 'connected' ? 'var(--primary-light)' : 'rgba(255, 255, 255, 0.14)'}`,
+    borderRadius: 'var(--radius-md)',
+    background: 'rgba(8, 10, 18, 0.92)',
+    color: '#fff',
+    fontSize: '0.86rem',
+    fontWeight: 600,
+    boxShadow: 'var(--shadow-lg)',
+    zIndex: 1002
+  };
+
+  useEffect(() => {
+    if (!isMobileDevice) return;
+
+    const video = videoRef.current;
+    let watchId = null;
+    let cancelled = false;
+
+    if (!isNativeVideoElement(video)) {
+      setCastAvailable(false);
+      setCastState('idle');
+      return;
+    }
+
+    const hasAirPlay = typeof video.webkitShowPlaybackTargetPicker === 'function';
+    const hasRemotePlayback = !!video.remote && typeof video.remote.prompt === 'function';
+    setCastAvailable(hasAirPlay || hasRemotePlayback);
+
+    const handleRemoteConnect = () => {
+      setCastState('connected');
+      setCastStatusText('Transmitiendo a pantalla');
+    };
+    const handleRemoteDisconnect = () => {
+      setCastState('idle');
+      setCastStatusText('Transmision finalizada');
+    };
+    const handleAirPlayAvailability = (event) => {
+      setCastAvailable(hasRemotePlayback || event.availability === 'available');
+    };
+    const handleAirPlayTargetChange = () => {
+      if (video.webkitCurrentPlaybackTargetIsWireless) {
+        setCastState('connected');
+        setCastStatusText('Transmitiendo por AirPlay');
+      } else {
+        setCastState('idle');
+      }
+    };
+
+    video.remote?.addEventListener?.('connect', handleRemoteConnect);
+    video.remote?.addEventListener?.('disconnect', handleRemoteDisconnect);
+    video.addEventListener?.('webkitplaybacktargetavailabilitychanged', handleAirPlayAvailability);
+    video.addEventListener?.('webkitcurrentplaybacktargetiswirelesschanged', handleAirPlayTargetChange);
+
+    if (video.remote?.watchAvailability) {
+      video.remote.watchAvailability((available) => {
+        if (!cancelled) setCastAvailable(Boolean(available) || hasAirPlay);
+      }).then((id) => {
+        watchId = id;
+      }).catch(() => {
+        if (!cancelled) setCastAvailable(hasAirPlay || hasRemotePlayback);
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      if (watchId !== null) {
+        video.remote?.cancelWatchAvailability?.(watchId);
+      }
+      video.remote?.removeEventListener?.('connect', handleRemoteConnect);
+      video.remote?.removeEventListener?.('disconnect', handleRemoteDisconnect);
+      video.removeEventListener?.('webkitplaybacktargetavailabilitychanged', handleAirPlayAvailability);
+      video.removeEventListener?.('webkitcurrentplaybacktargetiswirelesschanged', handleAirPlayTargetChange);
+    };
+  }, [isMobileDevice, playerKey, currentStream?.url, showBrandIntro]);
 
   const resetControlsTimer = () => {
     setShowControls(true);
@@ -599,6 +700,53 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
       showControlsRef.current = false;
     }, CONTROLS_TIMEOUT);
   };
+
+  const showCastStatus = useCallback((message, state = 'idle') => {
+    setCastStatusText(message);
+    setCastState(state);
+    window.setTimeout(() => {
+      setCastStatusText('');
+      setCastState((current) => (current === 'connecting' ? 'idle' : current));
+    }, 4200);
+  }, []);
+
+  const handleCastClick = useCallback(async () => {
+    resetControlsTimer();
+
+    const video = videoRef.current;
+    if (!isNativeVideoElement(video)) {
+      showCastStatus('Este servidor usa reproductor externo y no permite casteo nativo.');
+      return;
+    }
+
+    if (typeof video.webkitShowPlaybackTargetPicker === 'function') {
+      try {
+        video.webkitShowPlaybackTargetPicker();
+        showCastStatus('Selecciona tu pantalla AirPlay.', 'connecting');
+      } catch (err) {
+        console.log('[VideoPlayer] AirPlay picker error:', err);
+        showCastStatus('No se pudo abrir AirPlay en este navegador.');
+      }
+      return;
+    }
+
+    if (video.remote && typeof video.remote.prompt === 'function') {
+      try {
+        setCastState('connecting');
+        setCastStatusText('Buscando pantallas disponibles...');
+        await video.remote.prompt();
+      } catch (err) {
+        const reason = err?.name === 'NotFoundError'
+          ? 'No se encontraron pantallas disponibles.'
+          : 'No se pudo iniciar el casteo en este navegador.';
+        console.log('[VideoPlayer] Cast prompt error:', err);
+        showCastStatus(reason);
+      }
+      return;
+    }
+
+    showCastStatus('Tu navegador movil no expone una opcion nativa de casteo.');
+  }, [isMobileDevice, showCastStatus]);
 
   useEffect(() => {
     resetControlsTimer();
@@ -1831,6 +1979,20 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
               </button>
             )}
 
+            {/* Mobile cast */}
+            {showCastButton && (
+              <button
+                className={`control-btn cast-control-btn focusable ${castState === 'connected' ? 'active' : ''}`}
+                tabIndex={0}
+                onClick={handleCastClick}
+                title={castAvailable ? 'Transmitir a pantalla' : 'Casteo no disponible en este navegador'}
+                style={castButtonStyle}
+              >
+                <Cast size={20} />
+                <span className="cast-btn-label">Cast</span>
+              </button>
+            )}
+
             {/* Fullscreen */}
             <button className="control-btn focusable" tabIndex={0} onClick={toggleFullscreen}>
               {document.fullscreenElement ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
@@ -1839,6 +2001,12 @@ export default function VideoPlayer({ source, onClose, onNext, onNextEpisode, on
         </div>
 
         {/* ── Popups for Server, Audio, Subtitles ────────────────────── */}
+        {showCastButton && castStatusText && (
+          <div className={`cast-status-toast ${castState}`} style={castToastStyle}>
+            {castStatusText}
+          </div>
+        )}
+
         {showServerPopup && (streams.length > 1 || (localSource.originalStreams && localSource.originalStreams.length > 1)) && (
           <div className="player-popup-menu focusable-container">
             <div className="player-popup-header">Servidores</div>
