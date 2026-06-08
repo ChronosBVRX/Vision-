@@ -108,6 +108,8 @@ export function HeroBanner({ item, totalItems, currentIndex, onIndexChange, onPl
 // ─── Horizontal Genre Row ─────────────────────────────────────────────────────
 export const CatalogRow = memo(function CatalogRow({ id, title, items, isActive, onPlay, onFocus, onItemFocus }) {
   const trackRef   = useRef(null);
+  const touchDragRef = useRef({ active: false, moved: false, startX: 0, scrollLeft: 0 });
+  const suppressClickRef = useRef(false);
   const [focusIdx, setFocusIdx] = useState(0);
   const [canLeft, setCanLeft]   = useState(false);
   const [canRight, setCanRight] = useState(true);
@@ -155,13 +157,63 @@ export const CatalogRow = memo(function CatalogRow({ id, title, items, isActive,
   useEffect(() => {
     if (!isActive) return;
     const isTV = typeof window !== 'undefined' && window.isSmartTV;
+    const isTouchDevice = typeof window !== 'undefined' && (
+      window.matchMedia?.('(pointer: coarse)')?.matches ||
+      navigator.maxTouchPoints > 0
+    );
     setFocusIdx(0);
+    if (isTouchDevice && !isTV) return;
+
     const cards = Array.from(trackRef.current?.querySelectorAll('.catalog-card') || []);
     if (cards.length > 0) {
       cards[0].focus();
       cards[0].scrollIntoView({ behavior: isTV ? 'auto' : 'smooth', block: 'nearest', inline: 'start' });
     }
   }, [isActive]);
+
+  const clearSuppressedClick = useCallback(() => {
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 80);
+  }, []);
+
+  const handlePointerDown = useCallback((e) => {
+    if (e.pointerType && e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+    const el = trackRef.current;
+    if (!el) return;
+
+    touchDragRef.current = {
+      active: true,
+      moved: false,
+      startX: e.clientX,
+      scrollLeft: el.scrollLeft
+    };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }, []);
+
+  const handlePointerMove = useCallback((e) => {
+    const drag = touchDragRef.current;
+    const el = trackRef.current;
+    if (!drag.active || !el) return;
+
+    const dx = e.clientX - drag.startX;
+    if (Math.abs(dx) > 6) {
+      drag.moved = true;
+      suppressClickRef.current = true;
+      el.scrollLeft = drag.scrollLeft - dx;
+      updateArrows();
+      e.preventDefault();
+    }
+  }, [updateArrows]);
+
+  const handlePointerEnd = useCallback(() => {
+    const drag = touchDragRef.current;
+    touchDragRef.current = { active: false, moved: false, startX: 0, scrollLeft: 0 };
+    if (drag.moved) {
+      suppressClickRef.current = true;
+      clearSuppressedClick();
+    }
+  }, [clearSuppressedClick]);
 
   if (!items || items.length === 0) return null;
 
@@ -181,9 +233,20 @@ export const CatalogRow = memo(function CatalogRow({ id, title, items, isActive,
           ref={trackRef}
           className="catalog-row-track"
           onScroll={updateArrows}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
+          style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain' }}
         >
           {items.map((item, idx) => (
-            <CatalogCard key={`${item.id}-${idx}`} item={item} onPlay={onPlay} onFocus={() => onItemFocus?.(item)} />
+            <CatalogCard
+              key={`${item.id}-${idx}`}
+              item={item}
+              onPlay={onPlay}
+              onFocus={() => onItemFocus?.(item)}
+              shouldSuppressClick={() => suppressClickRef.current}
+            />
           ))}
         </div>
       </div>
@@ -192,7 +255,7 @@ export const CatalogRow = memo(function CatalogRow({ id, title, items, isActive,
 });
 
 // ─── Individual Movie / Series Card ──────────────────────────────────────────
-export const CatalogCard = memo(function CatalogCard({ item, onPlay, onFocus }) {
+export const CatalogCard = memo(function CatalogCard({ item, onPlay, onFocus, shouldSuppressClick }) {
   const [imgErr, setImgErr] = useState(false);
 
   return (
@@ -201,7 +264,14 @@ export const CatalogCard = memo(function CatalogCard({ item, onPlay, onFocus }) 
       tabIndex={0}
       role="button"
       aria-label={`Reproducir ${item.title}`}
-      onClick={() => onPlay(item)}
+      onClick={(e) => {
+        if (shouldSuppressClick?.()) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        onPlay(item);
+      }}
       onFocus={onFocus}
       onMouseEnter={() => {
         if (document.body.classList.contains('keyboard-mode')) return;

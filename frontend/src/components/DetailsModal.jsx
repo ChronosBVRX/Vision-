@@ -103,6 +103,12 @@ export default function DetailsModal({ item, onClose, onPlay }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, showTrailer]);
 
+  const handleClosePress = useCallback((e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    onClose();
+  }, [onClose]);
+
   if (!item) return null;
 
   const typeLabel = item.type === 'tv' ? 'TV en Vivo' : item.type === 'series' ? 'Serie' : 'Película';
@@ -137,7 +143,18 @@ export default function DetailsModal({ item, onClose, onPlay }) {
         </div>
 
         {/* ── Close button ───────────────────────────────────────────────── */}
-        <button className="details-close-btn focusable" onClick={onClose} aria-label="Cerrar">
+        <button
+          type="button"
+          className="details-close-btn focusable"
+          onClick={handleClosePress}
+          onPointerUp={(e) => {
+            if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+              handleClosePress(e);
+            }
+          }}
+          aria-label="Cerrar"
+          style={{ zIndex: 30, pointerEvents: 'auto', touchAction: 'manipulation' }}
+        >
           <X size={24} />
         </button>
 
