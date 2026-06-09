@@ -11,10 +11,8 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
-import android.webkit.ServiceWorkerController;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
-import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -58,15 +56,12 @@ public class MainActivity extends Activity {
         settings.setLoadsImagesAutomatically(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         
-        // [opencode] Always resolve the current live redirect instead of reusing an old packaged/cached build.
-        mWebView.clearCache(true);
+        // [opencode] Keep the live entry fresh via _live=..., but let WebView cache heavy assets.
         mWebView.clearHistory();
-        WebStorage.getInstance().deleteAllData();
-        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            ServiceWorkerController.getInstance()
-                    .getServiceWorkerWebSettings()
-                    .setCacheMode(WebSettings.LOAD_NO_CACHE);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            settings.setOffscreenPreRaster(true);
         }
         
         // Viewport scale optimizations
@@ -77,13 +72,16 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         
         // Better rendering
+        mWebView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        mWebView.setKeepScreenOn(true);
         mWebView.setScrollbarFadingEnabled(true);
         mWebView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            mWebView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND, true);
+        }
         
         // Enable cookies
         CookieManager cookieManager = CookieManager.getInstance();
-        cookieManager.removeAllCookies(null);
-        cookieManager.flush();
         cookieManager.setAcceptCookie(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             cookieManager.setAcceptThirdPartyCookies(mWebView, true);
