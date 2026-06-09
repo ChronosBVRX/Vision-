@@ -10,8 +10,8 @@ android {
         applicationId "com.chronosbvrx.vision"
         minSdk 21
         targetSdk 34
-        versionCode 41
-        versionName "1.0.41"
+        versionCode 63
+        versionName "1.0.63"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -18,7 +18,6 @@ import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
@@ -29,9 +28,6 @@ public class MainActivity extends Activity {
     private WebChromeClient.CustomViewCallback mCustomViewCallback;
     private View mCustomView;
     private MyWebChromeClient mWebChromeClient;
-    
-    private long lastBackPressTime = 0;
-    private Toast backToast;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -211,18 +207,8 @@ public class MainActivity extends Activity {
                 null
             );
 
-            // Double-back-exit: 2 presses within 3 seconds
-            long currentTime = System.currentTimeMillis();
-            if (currentTime - lastBackPressTime < 3000 && lastBackPressTime > 0) {
-                if (backToast != null) {
-                    backToast.cancel();
-                }
-                finish();
-            } else {
-                lastBackPressTime = currentTime;
-                backToast = Toast.makeText(MainActivity.this, "Presiona ATRÁS nuevamente para salir", Toast.LENGTH_SHORT);
-                backToast.show();
-            }
+            // [opencode] Keep the remote Back button inside the web app.
+            // Vision+ handles overlays, player close, drawers and focus recovery in JS.
             return true;
         }
 
