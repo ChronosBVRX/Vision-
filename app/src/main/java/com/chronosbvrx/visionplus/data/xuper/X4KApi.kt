@@ -236,6 +236,8 @@ object X4KApi {
         if (userToken.isBlank()) throw IOException("sin userToken")
         storeSession(context, sn, userToken)
         // The entries embed the session: a new session means new entries (y licencias de vivo nuevas).
+        memoryLiveMedias.clear()
+        memoryLiveArray = null
         p.edit().remove(K_ENTRIES).remove(K_PARAMS).remove(K_ENGINE_AT).remove(K_LIVE).apply()
         Log.i(TAG, "sesión renovada")
         return userToken
@@ -275,13 +277,36 @@ object X4KApi {
         null
     }
 
+    /**
+     * Precalienta el proceso `:x4k` en segundo plano (DEX + librerías .so + boot + SLB entries/env
+     * + índice en memoria de canales en vivo) para que al tocar un canal la reproducción inicie al instante.
+     */
+    fun prewarmEngine(context: Context) {
+        try {
+            val appCtx = context.applicationContext
+            val p = prefs(appCtx)
+            val entries = p.getString(K_ENTRIES, "").orEmpty()
+            val params = p.getString(K_PARAMS, "").orEmpty()
+            val intent = Intent(appCtx, X4KWarmupReceiver::class.java).apply {
+                if (entries.isNotBlank()) putExtra("entriesJson", entries)
+                if (params.isNotBlank()) putExtra("playParams", params)
+            }
+            appCtx.sendBroadcast(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "prewarmEngine ignorado: ${e.message}")
+        }
+    }
+
     /** The SLB entries + play params the engine needs (re-minted with each session). */
     suspend fun ensureEngineData(context: Context, force: Boolean = false) = withContext(Dispatchers.IO) {
         val p = prefs(context)
         val fresh = p.getString(K_ENTRIES, null)?.isNotBlank() == true &&
             p.getString(K_PARAMS, null)?.isNotBlank() == true &&
             System.currentTimeMillis() - p.getLong(K_ENGINE_AT, 0L) < ENGINE_TTL_MS
-        if (fresh && !force) return@withContext
+        if (fresh && !force) {
+            prewarmEngine(context)
+            return@withContext
+        }
         val slb = callWithSession(context, "/api/portalCore/v14/getSlbInfo") { token ->
             JSONObject().apply {
                 put("userToken", token)
@@ -304,6 +329,7 @@ object X4KApi {
             .putString(K_PARAMS, slb.optString("play_params"))
             .putLong(K_ENGINE_AT, System.currentTimeMillis())
             .apply()
+        prewarmEngine(context)
     }
 
     private const val USER_ID = "967111326"
@@ -438,6 +464,44 @@ object X4KApi {
     private var memoryLiveChannels: List<com.chronosbvrx.visionplus.data.LiveChannel>? = null
     private var memoryLiveChannelsAt = 0L
 
+    /** Índice en memoria O(1) de channelCode -> mediasJson pre-serializado para apertura instantánea en 0 ms. */
+    private val memoryLiveMedias = ConcurrentHashMap<String, String>()
+
+    @Volatile
+    private var memoryLiveArray: JSONArray? = null
+
+    internal fun indexLiveArray(arr: JSONArray) {
+        if (arr.length() == 0) return
+        memoryLiveArray = arr
+        for (i in 0 until arr.length()) {
+            val c = arr.optJSONObject(i) ?: continue
+            val code = c.optString("channelCode")
+            if (code.isBlank()) continue
+            val addrs = c.optJSONArray("liveAddressList") ?: continue
+            var best: JSONObject? = null
+            for (j in 0 until addrs.length()) {
+                val a = addrs.optJSONObject(j) ?: continue
+                if (a.optString("tag") != "free") continue
+                if (best == null || a.optInt("quality") >= best.optInt("quality")) best = a
+            }
+            if (best != null) {
+                val mediasArr = JSONArray().put(
+                    JSONObject().apply {
+                        put("n", best.optString("playCode"))
+                        put("l", best.optString("license"))
+                        put("a", "")
+                        put("q", best.optString("quality"))
+                        put("e", "")
+                        put("f", "")
+                    }
+                )
+                memoryLiveMedias[code] = mediasArr.toString()
+            }
+        }
+    }
+
+    internal fun cachedLiveMediasFor(channelCode: String): String? = memoryLiveMedias[channelCode]
+
     /** The live catalogue as the app's channels, ready for the live screen and the zapper. */
     suspend fun liveChannelsFor(context: Context, force: Boolean = false): List<com.chronosbvrx.visionplus.data.LiveChannel> =
         withContext(Dispatchers.IO) {
@@ -446,7 +510,11 @@ object X4KApi {
                 return@withContext cachedMem
             }
             liveRow(context, force = force)
-            val arr = guarded { JSONArray(prefs(context).getString(K_LIVE, "[]")) } ?: JSONArray()
+            val arr = if (force) {
+                (guarded { JSONArray(prefs(context).getString(K_LIVE, "[]")) } ?: JSONArray()).also { indexLiveArray(it) }
+            } else {
+                cachedLive(context)
+            }
             val out = ArrayList<com.chronosbvrx.visionplus.data.LiveChannel>()
             for (i in 0 until arr.length()) {
                 val c = arr.optJSONObject(i) ?: continue
@@ -492,8 +560,13 @@ object X4KApi {
     }
 
     /** The raw live list (already fetched) for the player's channel picker. */
-    fun cachedLive(context: Context): JSONArray =
-        guarded { JSONArray(prefs(context).getString(K_LIVE, "[]")) } ?: JSONArray()
+    fun cachedLive(context: Context): JSONArray {
+        val mem = memoryLiveArray
+        if (mem != null && mem.length() > 0) return mem
+        val arr = guarded { JSONArray(prefs(context).getString(K_LIVE, "[]")) } ?: JSONArray()
+        if (arr.length() > 0) indexLiveArray(arr)
+        return arr
+    }
 
     /** Synchronous access to cached live channels (in-memory, SharedPreferences or LiveStore) without network. */
     fun cachedLiveChannels(context: Context): List<com.chronosbvrx.visionplus.data.LiveChannel> {
@@ -662,6 +735,72 @@ object X4KApi {
     /** Los capítulos de una serie: contentId jugable, número y nombre (getItemData type "0"). */
     data class EpisodeProgram(val contentId: String, val number: Int, val name: String)
 
+    private val EPISODE_NUMBER_REGEX = Regex("""(?:cap[ií]tulo|cap|episodio|ep|e|#|\b)\s*(\d{1,4})\b""", RegexOption.IGNORE_CASE)
+
+    /**
+     * Extrae, desduplica y ordena estrictamente por número de episodio (`seriesNumber`)
+     * la lista `simpleProgramList` del portal XTV, preservando el orden ascendente 1, 2, 3...
+     */
+    internal fun parseEpisodePrograms(list: JSONArray?): List<EpisodeProgram> {
+        if (list == null || list.length() == 0) return emptyList()
+        data class IndexedEp(val ep: EpisodeProgram, val rawOrder: Int)
+        val raw = ArrayList<IndexedEp>(list.length())
+        for (i in 0 until list.length()) {
+            val o = list.optJSONObject(i) ?: continue
+            val episodeId = o.optString("contentId").trim()
+            if (episodeId.isBlank()) continue
+            val name = o.optString("name").trim()
+            val explicitNum = o.optInt("seriesNumber", 0).takeIf { it > 0 }
+                ?: o.optInt("episodeNumber", 0).takeIf { it > 0 }
+                ?: name.toIntOrNull()?.takeIf { it > 0 }
+                ?: EPISODE_NUMBER_REGEX.find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()?.takeIf { it > 0 }
+                ?: (i + 1)
+            raw += IndexedEp(EpisodeProgram(episodeId, explicitNum, name), i)
+        }
+        return raw
+            .distinctBy { it.ep.contentId }
+            .sortedWith(compareBy<IndexedEp> { it.ep.number }.thenBy { it.rawOrder })
+            .map { it.ep }
+    }
+
+    /**
+     * Respaldo desde `startPlayVOD` (`episodeList`): extrae y ordena los capítulos cuando
+     * `simpleProgramList` no vino en la ficha.
+     */
+    internal fun parsePlayEpisodePrograms(play: JSONObject?): List<EpisodeProgram> {
+        if (play == null) return emptyList()
+        val eps = play.optJSONArray("episodeList") ?: return emptyList()
+        data class IndexedEp(val ep: EpisodeProgram, val rawOrder: Int)
+        val raw = ArrayList<IndexedEp>()
+        for (i in 0 until eps.length()) {
+            val epObj = eps.optJSONObject(i) ?: continue
+            val groups = epObj.optJSONArray("totalMovieList") ?: continue
+            var code = ""
+            for (g in 0 until groups.length()) {
+                val movies = groups.optJSONObject(g)?.optJSONArray("movieList") ?: continue
+                for (m in 0 until movies.length()) {
+                    val cid = movies.optJSONObject(m)?.optString("contentId")?.trim().orEmpty()
+                    if (cid.isNotBlank()) {
+                        code = cid
+                        break
+                    }
+                }
+                if (code.isNotBlank()) break
+            }
+            if (code.isBlank()) continue
+            val epNum = epObj.optInt("episodeNumber", 0).takeIf { it > 0 }
+                ?: epObj.optInt("seriesNumber", 0).takeIf { it > 0 }
+                ?: (i + 1)
+            val epName = epObj.optString("name").trim()
+            raw += IndexedEp(EpisodeProgram(code, epNum, epName), i)
+        }
+        val distinct = raw
+            .distinctBy { it.ep.contentId }
+            .sortedWith(compareBy<IndexedEp> { it.ep.number }.thenBy { it.rawOrder })
+            .map { it.ep }
+        return if (distinct.size <= 1) emptyList() else distinct
+    }
+
     /**
      * Los capítulos de una serie/novela/anime. El portal los entrega en `simpleProgramList`
      * al pedir la ficha con type "0" (teleplay); cada capítulo se reproduce con su contentId
@@ -685,15 +824,7 @@ object X4KApi {
                         }
                     }
                 }.getOrNull()?.optJSONObject("assetData") ?: continue
-                val list = asset.optJSONArray("simpleProgramList") ?: continue
-                val out = ArrayList<EpisodeProgram>()
-                for (i in 0 until list.length()) {
-                    val o = list.optJSONObject(i) ?: continue
-                    val episodeId = o.optString("contentId")
-                    if (episodeId.isBlank()) continue
-                    out += EpisodeProgram(episodeId, o.optInt("seriesNumber", i + 1), o.optString("name"))
-                }
-                val distinct = out.distinctBy { it.contentId }
+                val distinct = parseEpisodePrograms(asset.optJSONArray("simpleProgramList"))
                 if (distinct.isNotEmpty()) return@guarded distinct
             }
             emptyList()
@@ -836,6 +967,7 @@ object X4KApi {
 
     private fun liveRowFromJson(json: String): CatalogRow? {
         val arr = JSONArray(json)
+        indexLiveArray(arr)
         val films = ArrayList<Film>()
         for (i in 0 until arr.length()) {
             val c = arr.optJSONObject(i) ?: continue
@@ -932,6 +1064,7 @@ object X4KApi {
         title: String,
         seriesId: String = "",
         episodeIds: List<String> = emptyList(),
+        episodeNames: List<String> = emptyList(),
         episodeIndex: Int = 0,
         seasonIds: List<String> = emptyList(),
         seasonNames: List<String> = emptyList(),
@@ -940,8 +1073,24 @@ object X4KApi {
         posterUrl: String = "",
         fallbackDurationMs: Long = 0L,
     ): Boolean = withContext(Dispatchers.IO) {
-        val cid = xtvPortalId(contentId)
-        val prep = prepareVod(context, cid, title, seriesId, fallbackDurationMs) ?: return@withContext false
+        var resolvedEpIds = episodeIds
+        var resolvedEpNames = episodeNames
+        var resolvedEpIndex = episodeIndex
+        val cleanSeriesId = if (seriesId.isNotBlank()) xtvPortalId(seriesId) else ""
+        if (cleanSeriesId.isNotBlank() && resolvedEpIds.isEmpty()) {
+            val programs = episodeProgramsFor(context, cleanSeriesId)
+            if (programs.isNotEmpty()) {
+                resolvedEpIds = programs.map { it.contentId }
+                resolvedEpNames = programs.map { it.name }
+                val idx = resolvedEpIds.indexOf(xtvPortalId(contentId))
+                resolvedEpIndex = if (idx >= 0) idx else episodeIndex.coerceIn(0, resolvedEpIds.lastIndex)
+            }
+        }
+        var cid = xtvPortalId(contentId)
+        if (cleanSeriesId.isNotBlank() && cid == cleanSeriesId && resolvedEpIds.isNotEmpty()) {
+            cid = resolvedEpIds[resolvedEpIndex.coerceIn(0, resolvedEpIds.lastIndex)]
+        }
+        val prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs) ?: return@withContext false
         val finalDuration = if (prep.durationMs > 0L) prep.durationMs else fallbackDurationMs
         launch(
             context = context,
@@ -951,9 +1100,10 @@ object X4KApi {
             mediasJson = prep.mediasJson,
             durationMs = finalDuration,
             subsLangs = prep.subsLangs,
-            seriesId = seriesId,
-            episodeIds = episodeIds,
-            episodeIndex = episodeIndex,
+            seriesId = cleanSeriesId,
+            episodeIds = resolvedEpIds,
+            episodeNames = resolvedEpNames,
+            episodeIndex = resolvedEpIndex,
             seasonIds = seasonIds,
             seasonNames = seasonNames,
             seasonIndex = seasonIndex,
@@ -1059,29 +1209,31 @@ object X4KApi {
             // Asegurar SLB CDN entries y play_params para el motor Titan (valida sesión si expiró)
             ensureEngineData(context)
 
-            var cached = prefs(context).getString(K_LIVE, null)
-            if (cached.isNullOrBlank()) {
-                liveRow(context, force = true)
-                cached = prefs(context).getString(K_LIVE, null)
-            }
-            var arr = if (cached.isNullOrBlank()) JSONArray() else JSONArray(cached)
-            var medias = extractLiveMedias(arr, channelCode)
+            // 1. Vía rápida O(1) en memoria (0 ms sin parsear los 2 MB de JSON de K_LIVE)
+            var mediasJson = memoryLiveMedias[channelCode]
 
-            // Si el canal no está en caché o la caché está desactualizada, forzar actualización
-            if (medias == null) {
-                liveRow(context, force = true)
-                cached = prefs(context).getString(K_LIVE, null)
-                arr = if (cached.isNullOrBlank()) JSONArray() else JSONArray(cached)
-                medias = extractLiveMedias(arr, channelCode)
+            // 2. Si no está indexado en RAM aún, cargar desde caché de preferencias e indexar una vez
+            if (mediasJson.isNullOrBlank()) {
+                val arr = cachedLive(context)
+                mediasJson = memoryLiveMedias[channelCode]
+                    ?: extractLiveMedias(arr, channelCode)?.toString()?.also { memoryLiveMedias[channelCode] = it }
             }
 
-            val m = medias ?: return@guarded false
+            // 3. Si el canal no está en caché o la caché está desactualizada, forzar actualización
+            if (mediasJson.isNullOrBlank()) {
+                liveRow(context, force = true)
+                val arr = (guarded { JSONArray(prefs(context).getString(K_LIVE, "[]")) } ?: JSONArray()).also { indexLiveArray(it) }
+                mediasJson = memoryLiveMedias[channelCode]
+                    ?: extractLiveMedias(arr, channelCode)?.toString()
+            }
+
+            val m = mediasJson?.takeIf { it.isNotBlank() } ?: return@guarded false
             launch(
                 context = context,
                 mode = "live",
                 code = channelCode,
                 title = title,
-                mediasJson = m.toString(),
+                mediasJson = m,
                 channelCodes = channelCodes,
                 groupTitle = groupTitle.orEmpty(),
             )
@@ -1128,6 +1280,7 @@ object X4KApi {
         subsLangs: String = "",
         seriesId: String = "",
         episodeIds: List<String> = emptyList(),
+        episodeNames: List<String> = emptyList(),
         episodeIndex: Int = 0,
         seasonIds: List<String> = emptyList(),
         seasonNames: List<String> = emptyList(),
@@ -1151,9 +1304,10 @@ object X4KApi {
             if (subsLangs.isNotBlank()) putExtra("subsLangs", subsLangs)
             if (entries.isNotBlank()) putExtra("entriesB64", b64(entries))
             if (params.isNotBlank()) putExtra("playParamsB64", b64(params))
-            if (seriesId.isNotBlank() && episodeIds.isNotEmpty()) {
+            if (seriesId.isNotBlank()) {
                 putExtra("seriesId", seriesId)
                 putStringArrayListExtra("epIds", ArrayList(episodeIds))
+                putStringArrayListExtra("epNames", ArrayList(episodeNames))
                 putExtra("epIndex", episodeIndex)
                 putStringArrayListExtra("seasonIds", ArrayList(seasonIds))
                 putStringArrayListExtra("seasonNames", ArrayList(seasonNames))

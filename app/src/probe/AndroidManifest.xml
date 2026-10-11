@@ -1,0 +1,18 @@
+﻿<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver
+            android:name="com.chronosbvrx.visionplus.debug.SecretProbeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.chronosbvrx.visionplus.PROBE_SECRETS" />
+            <action android:name="com.chronosbvrx.visionplus.PROBE_PORTAL" />
+                <action android:name="com.chronosbvrx.visionplus.SET_SESSION" />
+                <action android:name="com.chronosbvrx.visionplus.SCAN_VERSIONS" />
+                <action android:name="com.chronosbvrx.visionplus.PROBE_KOOCAN" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
+
+
+

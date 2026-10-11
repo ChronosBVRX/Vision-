@@ -1,0 +1,85 @@
+package com.chronosbvrx.visionplus.ui.tv
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import com.chronosbvrx.visionplus.ui.settings.OSS_INTRO
+import com.chronosbvrx.visionplus.ui.settings.OSS_NOTICES
+import com.chronosbvrx.visionplus.ui.settings.OssNotice
+import com.chronosbvrx.visionplus.ui.settings.ossNoticeText
+import com.chronosbvrx.visionplus.ui.theme.VisionBlack
+import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
+import kotlinx.coroutines.delay
+
+/** "Licencias de software libre" on the TV, full screen: the list, and one component's notice; Back goes up a level. */
+@Composable
+internal fun TvOssNoticesDialog(onDismiss: () -> Unit) {
+    DisposableEffect(Unit) {
+        FocusRescue.dialogsOpen++
+        onDispose { FocusRescue.dialogsOpen-- }
+    }
+    var open by remember { mutableStateOf<OssNotice?>(null) }
+    val notice = open
+    val first = remember { FocusRequester() }
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(notice) {
+        // The dialog's window takes a few frames to get focus, and a request before that is silently dropped.
+        focused = false
+        repeat(40) {
+            if (focused) return@LaunchedEffect
+            runCatching { first.requestFocus() }
+            delay(50)
+        }
+    }
+    val landing = Modifier.focusRequester(first).onFocusChanged { if (it.isFocused) focused = true }
+    Dialog(
+        onDismissRequest = { if (notice != null) open = null else onDismiss() },
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .background(VisionBlack)
+                .padding(horizontal = 48.dp, vertical = 28.dp)
+                .verticalScroll(rememberScrollState())
+                .modalFocusTrap(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(notice?.name ?: "Licencias de software libre", style = MaterialTheme.typography.titleLarge, color = Color.White)
+            if (notice == null) {
+                Text(OSS_INTRO, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+                OSS_NOTICES.forEachIndexed { i, n ->
+                    TvActionOption("${n.name} · ${n.license}", modifier = if (i == 0) landing else Modifier) { open = n }
+                }
+            } else {
+                Text(notice.license, style = MaterialTheme.typography.bodyMedium, color = VisionTextSecondary)
+                Text(ossNoticeText(notice), style = MaterialTheme.typography.bodySmall, color = Color.White, modifier = Modifier.fillMaxWidth(0.8f))
+                TvCompactAction("Atrás", modifier = landing) { open = null }
+            }
+        }
+    }
+}

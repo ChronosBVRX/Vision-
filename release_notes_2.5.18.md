@@ -1,0 +1,7 @@
+Mejoras en Canales de Fútbol en Vivo, Selector Interactivo y Zapping TV de Dos Pasos:
+
+- Selector Interactivo de Canales por Partido: Al presionar OK con el control remoto o tocar la tarjeta de cualquier partido en la sección Fútbol, se despliega una ventana modal interactiva con las opciones de canales disponibles en la app (con escudos/logos de canal, nombre y estado) para sintonizar directamente la señal deseada.
+- Integración de Transmisiones de Fútbol con LiveSoccerTV: El servidor VPS enriquece la agenda deportiva cruzando en tiempo real las guías oficiales para México de LiveSoccerTV (Canal 5 Televisa, Azteca 7, FOX, TUDN, ViX, Sky Sports, Claro Sports, ESPN). La app empareja automáticamente las cadenas candidatas con los 1000+ canales del catálogo en vivo de Vision+.
+- Zapping TV de Dos Pasos con D-pad (Arriba / Abajo): En el reproductor de TV en vivo para Smart TV, presionar Arriba o Abajo ya no interrumpe la transmisión cambiando de canal a ciegas. El primer toque abre la barra de navegación y el banner EPG («Ahora / Después»); un segundo toque consecutivo mientras la barra está visible ejecuta el cambio de canal.
+- Modal Adaptativo para Smart TV y Móvil: En TV se presenta un modal Leanback con navegación D-pad, anillo de foco azul `#2D7DF6` y salida con tecla Atrás. En móviles se despliega un diálogo estilizado con esquinas redondeadas y selección táctil directa.
+- Blindaje Anti-Regresiones: 100% de cobertura en pruebas unitarias de backend en Python y cliente Android sin advertencias ni regresiones de foco.

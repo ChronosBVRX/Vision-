@@ -1,0 +1,349 @@
+package com.chronosbvrx.visionplus.data.sources
+
+import android.content.Context
+import android.util.Log
+import com.chronosbvrx.visionplus.data.CatalogRow
+import com.chronosbvrx.visionplus.data.Film
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+
+/**
+ * The remote index (the person's own server): the categories calculated there
+ * (Estrenos, Recomendados, genres, the portals' own shelves) already joined with
+ * their titles. It feeds the Categorías screen and the search; playback keeps
+ * resolving on the device (`xtv:`/`magisvod:`/`ia:`/`xtvlive:` refs), so this
+ * source never claims a ref. When the server cannot be reached the last cached
+ * copy is served, and when there is none the local sources stay in charge.
+ */
+object RemoteIndexSource {
+
+    private const val TAG = "RemoteIndex"
+
+    /** Public route of the index (independent Vision+ domain via DuckDNS). */
+    internal const val BASE_URL = "https://visionplusv2.duckdns.org"
+
+    /** Read-only key of the index API. */
+    internal const val API_KEY = "fb2244441f690185f861470423afb43278c3b19d31b14115"
+
+    /** Titles per category fetched for browsing/searching on the device. */
+    private const val FILMS_PER_CATEGORY = 100
+
+    private const val PREFS = "catalog_remote"
+    private const val K_PAYLOAD = "payload_json"
+    private const val K_VERSION = "version"
+    private const val K_AT = "rows_at"
+
+    /** How long a fetched copy is trusted before asking the server again. */
+    private const val TTL_MS = 10L * 60 * 1000
+    private const val SECTION_TTL_MS = 15L * 60 * 1000
+
+    private val memorySections = java.util.concurrent.ConcurrentHashMap<String, List<CatalogRow>>()
+    private val memorySectionsAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val memorySearchCache = java.util.concurrent.ConcurrentHashMap<String, List<Film>>()
+    private val memorySearchCacheAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private const val SEARCH_CACHE_TTL_MS = 5L * 60 * 1000
+    private var memoryIndexRows: List<CatalogRow>? = null
+    private var memoryIndexRowsAt = 0L
+
+    internal data class IndexPayload(val version: Int, val upToDate: Boolean, val rows: List<CatalogRow>)
+
+    /** The index rows: the fresh cached copy when there is one, otherwise the server's answer. */
+    suspend fun rows(context: Context): List<CatalogRow> = withContext(Dispatchers.IO) {
+        val cached = cached(context)
+        val at = if (memoryIndexRowsAt > 0L) memoryIndexRowsAt else {
+            val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            prefs.getLong(K_AT, 0L)
+        }
+        if (cached.isNotEmpty() && System.currentTimeMillis() - at < TTL_MS) {
+            Log.i(TAG, "índice remoto desde caché: ${cached.size} categorías")
+            return@withContext cached
+        }
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val fetched = runCatching { download(prefs.getInt(K_VERSION, 0), cached) }.getOrNull()
+            ?: run {
+                Log.w(TAG, "índice remoto inalcanzable; se usa la copia local (${cached.size} categorías)")
+                return@withContext cached
+            }
+        if (fetched.second.isNotEmpty()) {
+            memoryIndexRows = fetched.second
+            memoryIndexRowsAt = System.currentTimeMillis()
+            prefs.edit()
+                .putString(K_PAYLOAD, payloadToJson(fetched.first, fetched.second))
+                .putInt(K_VERSION, fetched.first)
+                .putLong(K_AT, System.currentTimeMillis())
+                .apply()
+        }
+        Log.i(TAG, "índice remoto v${fetched.first}: ${fetched.second.size} categorías")
+        fetched.second
+    }
+
+    /** La última copia guardada, sin red: para pintar contenido al instante mientras llega lo fresco. */
+    fun cached(context: Context): List<CatalogRow> {
+        memoryIndexRows?.takeIf { it.isNotEmpty() }?.let { return it }
+        val rows = runCatching {
+            val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            parseIndex(prefs.getString(K_PAYLOAD, null).orEmpty()).rows
+        }.getOrDefault(emptyList())
+        if (rows.isNotEmpty()) {
+            memoryIndexRows = rows
+        }
+        return rows
+    }
+
+    private fun download(since: Int, cached: List<CatalogRow>): Pair<Int, List<CatalogRow>> {
+        val connection = (URL("$BASE_URL/v1/index?limitFilms=$FILMS_PER_CATEGORY&since=$since")
+            .openConnection() as HttpURLConnection).apply {
+            connectTimeout = 12_000
+            readTimeout = 30_000
+            setRequestProperty("X-Api-Key", API_KEY)
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            if (connection.responseCode !in 200..299) {
+                error("el índice respondió HTTP ${connection.responseCode}")
+            }
+            val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val payload = parseIndex(text)
+            return payload.version to if (payload.upToDate) cached else payload.rows
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /** The server's JSON as rows; pure, so the tests can exercise it. */
+    internal fun parseIndex(text: String): IndexPayload {
+        if (text.isBlank()) return IndexPayload(0, false, emptyList())
+        val root = JSONObject(text)
+        val version = root.optInt("version", 0)
+        if (root.optBoolean("upToDate")) return IndexPayload(version, true, emptyList())
+        return IndexPayload(version, false, parseRows(root.optJSONArray("categories") ?: JSONArray()))
+    }
+
+    /** Un arreglo de categorías/hileras como filas; puro, para tests y secciones. */
+    internal fun parseRows(categories: JSONArray): List<CatalogRow> {
+        val rows = ArrayList<CatalogRow>(categories.length())
+        for (i in 0 until categories.length()) {
+            val category = categories.optJSONObject(i) ?: continue
+            val id = category.optString("id")
+            if (id.isBlank()) continue
+            val filmsJson = category.optJSONArray("films") ?: JSONArray()
+            val films = ArrayList<Film>(filmsJson.length())
+            for (j in 0 until filmsJson.length()) {
+                val f = filmsJson.optJSONObject(j) ?: continue
+                val filmId = f.optString("id")
+                if (filmId.isBlank()) continue
+                films += Film(
+                    id = filmId,
+                    title = f.optString("title"),
+                    year = f.optInt("year"),
+                    durationMin = f.optInt("durationMin"),
+                    synopsis = f.optString("synopsis"),
+                    posterUrl = f.optString("posterUrl"),
+                    videoUrl = f.optString("videoUrl"),
+                    sourceUrl = f.optString("sourceUrl"),
+                    score = f.optDouble("score", 0.0),
+                    groupId = f.optString("groupId"),
+                    seasons = parseSeasons(f.optJSONArray("seasons")),
+                )
+            }
+            rows += CatalogRow(id, category.optString("title"), films)
+        }
+        return rows
+    }
+
+    /** Obtiene la sección desde memoria RAM al instante (0 ms) o desde disco si existe. */
+    fun cachedSection(context: Context, name: String): List<CatalogRow>? {
+        memorySections[name]?.takeIf { it.isNotEmpty() }?.let { return it }
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val raw = prefs.getString("section_$name", null) ?: return null
+        return runCatching {
+            val rows = parseRows(JSONArray(raw))
+            if (rows.isNotEmpty()) {
+                memorySections[name] = rows
+            }
+            rows
+        }.getOrNull()?.takeIf { it.isNotEmpty() }
+    }
+
+    /** Precarga en memoria RAM las 4 secciones principales durante el arranque. */
+    suspend fun prewarm(context: Context) = withContext(Dispatchers.IO) {
+        val sections = listOf("movies", "series", "novelas", "anime")
+        // Paso 1: calentar RAM desde disco inmediatamente (< 10 ms)
+        for (sec in sections) {
+            cachedSection(context, sec)
+        }
+        // Paso 2: si alguna no está en RAM o está vencida, refrescar en segundo plano
+        for (sec in sections) {
+            val at = memorySectionsAt[sec] ?: 0L
+            val needRefresh = memorySections[sec].isNullOrEmpty() || (System.currentTimeMillis() - at > SECTION_TTL_MS)
+            if (needRefresh) {
+                runCatching { fetchSectionNetwork(context, sec) }
+            }
+        }
+    }
+
+    private fun fetchSectionNetwork(context: Context, name: String, limit: Int = 40): List<CatalogRow>? {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val cacheKey = "section_$name"
+        val connection = (URL("$BASE_URL/v1/section/$name?limit=$limit")
+            .openConnection() as HttpURLConnection).apply {
+            connectTimeout = 8_000
+            readTimeout = 15_000
+            setRequestProperty("X-Api-Key", API_KEY)
+            setRequestProperty("Accept", "application/json")
+        }
+        return try {
+            if (connection.responseCode !in 200..299) {
+                error("la sección respondió HTTP ${connection.responseCode}")
+            }
+            val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val rows = parseRows(JSONObject(text).optJSONArray("rows") ?: JSONArray())
+            if (rows.isNotEmpty()) {
+                memorySections[name] = rows
+                memorySectionsAt[name] = System.currentTimeMillis()
+                prefs.edit().putString(cacheKey, rowsToJson(rows).toString()).apply()
+                Log.i(TAG, "sección $name actualizada: ${rows.size} hileras")
+            }
+            rows
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /** Hileras de género de una sección (`movies`/`series`/`novelas`/`anime`), con caché propia y Stale-While-Revalidate. */
+    suspend fun section(context: Context, name: String, limit: Int = 40): List<CatalogRow> = withContext(Dispatchers.IO) {
+        val cached = cachedSection(context, name)
+        val at = memorySectionsAt[name] ?: 0L
+        val isFresh = cached != null && cached.isNotEmpty() && (System.currentTimeMillis() - at < SECTION_TTL_MS)
+        if (isFresh) {
+            return@withContext cached!!
+        }
+
+        val networkRows = runCatching { fetchSectionNetwork(context, name, limit) }.getOrNull()
+        if (!networkRows.isNullOrEmpty()) {
+            return@withContext networkRows
+        }
+        cached ?: emptyList()
+    }
+
+    /** Búsqueda en el servidor VPS (rápida, indexada en Postgres): busca en segundos 80,000+ títulos sin saturar la CPU de la TV. */
+    suspend fun search(query: String, limit: Int = 60): List<Film> = withContext(Dispatchers.IO) {
+        val q = query.trim()
+        if (q.isBlank()) return@withContext emptyList()
+        val cacheKey = "${q.lowercase()}:$limit"
+        val cachedAt = memorySearchCacheAt[cacheKey] ?: 0L
+        val cachedList = memorySearchCache[cacheKey]
+        if (cachedList != null && (System.currentTimeMillis() - cachedAt < SEARCH_CACHE_TTL_MS)) {
+            return@withContext cachedList
+        }
+
+        val encoded = java.net.URLEncoder.encode(q, "UTF-8")
+        val connection = (URL("$BASE_URL/v1/search?q=$encoded&limit=$limit")
+            .openConnection() as HttpURLConnection).apply {
+            connectTimeout = 5_000
+            readTimeout = 8_000
+            setRequestProperty("X-Api-Key", API_KEY)
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            if (connection.responseCode !in 200..299) return@withContext cachedList ?: emptyList()
+            val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val root = JSONObject(text)
+            val filmsJson = root.optJSONArray("films") ?: JSONArray()
+            val films = ArrayList<Film>(filmsJson.length())
+            for (i in 0 until filmsJson.length()) {
+                val f = filmsJson.optJSONObject(i) ?: continue
+                val filmId = f.optString("id")
+                if (filmId.isBlank()) continue
+                films += Film(
+                    id = filmId,
+                    title = f.optString("title"),
+                    year = f.optInt("year"),
+                    durationMin = f.optInt("durationMin"),
+                    synopsis = f.optString("synopsis"),
+                    posterUrl = f.optString("posterUrl"),
+                    videoUrl = f.optString("videoUrl"),
+                    sourceUrl = f.optString("sourceUrl"),
+                    score = f.optDouble("score", 0.0),
+                    groupId = f.optString("groupId"),
+                    seasons = parseSeasons(f.optJSONArray("seasons")),
+                )
+            }
+            if (memorySearchCache.size > 100) {
+                memorySearchCache.clear()
+                memorySearchCacheAt.clear()
+            }
+            memorySearchCache[cacheKey] = films
+            memorySearchCacheAt[cacheKey] = System.currentTimeMillis()
+            films
+        } catch (_: Exception) {
+            cachedList ?: emptyList()
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    internal fun parseSeasons(arr: JSONArray?): List<com.chronosbvrx.visionplus.data.SeasonRef> {
+        if (arr == null) return emptyList()
+        val byNumber = LinkedHashMap<Int, com.chronosbvrx.visionplus.data.SeasonRef>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val n = o.optInt("n", 0)
+            val candidate = com.chronosbvrx.visionplus.data.SeasonRef(
+                n = n,
+                titleId = o.optString("titleId"),
+                videoUrl = o.optString("videoUrl"),
+            )
+            val current = byNumber[n]
+            // Ante duplicados (T1 + Temporada 1, XTV + Magis), manda el miembro XTV:
+            // es el único que la ficha puede resolver por el portal.
+            if (current == null || (!isXtvRef(current.titleId) && isXtvRef(candidate.titleId))) {
+                byNumber[n] = candidate
+            }
+        }
+        return byNumber.values.sortedBy { it.n }
+    }
+
+    internal fun isXtvRef(id: String): Boolean = id.startsWith("xtv:")
+
+    private fun rowToJson(row: CatalogRow): JSONObject {
+        val films = JSONArray()
+        row.films.forEach { f ->
+            films.put(JSONObject().apply {
+                put("id", f.id)
+                put("title", f.title)
+                put("year", f.year)
+                put("durationMin", f.durationMin)
+                put("synopsis", f.synopsis)
+                put("posterUrl", f.posterUrl)
+                put("videoUrl", f.videoUrl)
+                put("sourceUrl", f.sourceUrl)
+                put("score", f.score)
+                if (f.groupId.isNotBlank()) put("groupId", f.groupId)
+                if (f.seasons.isNotEmpty()) {
+                    val seasons = JSONArray()
+                    f.seasons.forEach { season ->
+                        seasons.put(
+                            JSONObject()
+                                .put("n", season.n)
+                                .put("titleId", season.titleId)
+                                .put("videoUrl", season.videoUrl),
+                        )
+                    }
+                    put("seasons", seasons)
+                }
+            })
+        }
+        return JSONObject().put("id", row.id).put("title", row.title).put("films", films)
+    }
+
+    private fun rowsToJson(rows: List<CatalogRow>): JSONArray =
+        JSONArray().apply { rows.forEach { put(rowToJson(it)) } }
+
+    private fun payloadToJson(version: Int, rows: List<CatalogRow>): String =
+        JSONObject().put("version", version).put("categories", rowsToJson(rows)).toString()
+}

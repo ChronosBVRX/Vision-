@@ -1,0 +1,112 @@
+name: streaming-backend
+
+# Compose del índice Vision+ (fase 1) para el VPS OCI compartido con La Veinte:
+#   - NO incluye Caddy: el Caddy nativo del host (80/443) hace el reverse proxy.
+#   - Postgres NO publica 5432/6543: vive solo en la red interna.
+#   - Solo la API se expone, y únicamente en 127.0.0.1:8100 (el host no abre nada nuevo).
+# Secretos: copiar .env.example a .env y completar (ver README).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: streaming-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-catalog_db}"
+      POSTGRES_USER: "${POSTGRES_USER:-catalog_user}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD en server/.env}"
+      TZ: "${TZ:-America/Mexico_City}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - streaming-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-catalog_user} -d ${POSTGRES_DB:-catalog_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 2g
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: streaming-api:local
+    container_name: streaming-api
+    restart: unless-stopped
+    init: true
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-catalog_user}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-catalog_db}"
+      API_KEY: "${API_KEY:?define API_KEY en server/.env}"
+      TZ: "${TZ:-America/Mexico_City}"
+    ports:
+      - "127.0.0.1:8100:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - streaming-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  sync:
+    build:
+      context: ./sync
+      dockerfile: Dockerfile
+    image: streaming-sync:local
+    container_name: streaming-sync
+    restart: unless-stopped
+    init: true
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-catalog_user}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-catalog_db}"
+      SYNC_INTERVAL_SECONDS: "${SYNC_INTERVAL_SECONDS:-21600}"
+      SEED_DEMO: "${SEED_DEMO:-0}"
+      XTV_SYNC: "${XTV_SYNC:-1}"
+      MAGIS_SYNC: "${MAGIS_SYNC:-1}"
+      IA_SYNC: "${IA_SYNC:-1}"
+      XTV_MAX_PAGES: "${XTV_MAX_PAGES:-0}"
+      XTV_COLLECTION_PAGES: "${XTV_COLLECTION_PAGES:-3}"
+      XTV_SERIES_COLLECTION_PAGES: "${XTV_SERIES_COLLECTION_PAGES:-0}"
+      XTV_PAGE_DELAY_SECONDS: "${XTV_PAGE_DELAY_SECONDS:-0.15}"
+      XTV_SERVER_SN: "${XTV_SERVER_SN:-}"
+      SPORTS_SYNC: "${SPORTS_SYNC:-1}"
+      SPORTS_INTERVAL_SECONDS: "${SPORTS_INTERVAL_SECONDS:-600}"
+      TMDB_API_KEY: "${TMDB_API_KEY:-}"
+      ENRICH_BATCH: "${ENRICH_BATCH:-300}"
+      ENRICH_DELAY_SECONDS: "${ENRICH_DELAY_SECONDS:-0.25}"
+      TZ: "${TZ:-America/Mexico_City}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - streaming-net
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  streaming-net:
+    driver: bridge
+
+volumes:
+  pgdata:

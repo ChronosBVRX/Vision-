@@ -1,0 +1,62 @@
+package com.chronosbvrx.visionplus.ui.tv
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import com.chronosbvrx.visionplus.data.CatalogRow
+import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.ui.theme.VisionBlack
+
+/** "Categorías" on the TV: one titled row of cards per category. */
+@Composable
+fun TvCategoriesScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit) {
+    val landing = rememberLandingFocus()
+    val safeRows = remember(rows) { rows.distinctBy { it.id } }
+    val firstRowId = safeRows.firstOrNull()?.id
+    // Las filas del índice pueden llegar después de abrir la pantalla: si el foco quedó huérfano, vuelve.
+    LaunchedEffect(rows) {
+        delay(150)
+        if (!FocusRescue.screenHasFocus && safeRows.isNotEmpty()) landing.request()
+    }
+    Column(Modifier.fillMaxSize().background(VisionBlack).padding(vertical = 28.dp)) {
+        Text("Categorías", style = MaterialTheme.typography.headlineSmall, color = Color.White, modifier = Modifier.padding(start = 48.dp, bottom = 12.dp))
+        LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), contentPadding = PaddingValues(bottom = 32.dp)) {
+            items(safeRows, key = { it.id }) { row ->
+                val safeFilms = remember(row.films) { row.films.distinctBy { it.id } }
+                val firstFilmId = safeFilms.firstOrNull()?.id
+                TvRowLabel(row.title, 26.dp)
+                LazyRow(contentPadding = PaddingValues(horizontal = 48.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(safeFilms, key = { "${row.id}-${it.id}" }) { film ->
+                        val isLanding = row.id == firstRowId && film.id == firstFilmId
+                        TvLandscapeCard(
+                            title = film.title,
+                            imageUrl = film.posterUrl,
+                            cardHeight = 110.dp,
+                            modifier = if (isLanding) Modifier.landingFocus(landing) else Modifier,
+                            onClick = { onOpenFilm(film) },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+            }
+        }
+    }
+}

@@ -1,0 +1,10 @@
+## Vision+ v2.5.36 — Apertura Instantánea de TV en Vivo y Despertar Limpio de Controles con D-Pad
+
+### ⚡ Apertura Instantánea de Canales en Vivo (`:x4k` Pre-Warming + Índice O(1))
+- **Precalentamiento del motor nativo (`X4KWarmupReceiver.kt` & `X4KTitan.kt`)**: El proceso `:x4k` (3 archivos DEX + 6 librerías nativas `.so` + arranque de `yc.h` + configuración de SLB CDN `entries` y `Env`) ahora se precalienta automáticamente en segundo plano al abrir la app y al volver del reproductor. Al tocar un canal, `X4KPlayerAty` detecta el motor ya precalentado y monta la superficie de video inmediatamente en `0 ms` sin esperas de arranque en frío.
+- **Índice en Memoria O(1) de Direcciones en Vivo (`X4KApi.kt`)**: Eliminado el reprocesamiento repetido del JSON de 2 MB (`1,035+` canales) en cada clic. `X4KApi.indexLiveArray` indexa `memoryLiveMedias` en `O(1)` (`0 ms`) y `X4KPlayerAty` resuelve la lista completa de zapping en segundo plano sin bloquear el hilo principal de UI.
+- **Sondeo Rápido del Primer Cuadro (`X4KPlayerAty.kt`)**: Reducido el intervalo de detección de primer frame de `500 ms` a `80 ms` (con disparo inmediato en `onPosition`) y el fundido de la cortina de carga en vivo de `400 ms` a `120 ms`.
+
+### 🎮 Despertar Limpio del Menú de Reproducción con D-Pad en Smart TV
+- **Apertura sin Acción Accidental (`ControlsState.kt`, `X4KPlayerAty.kt`, `PlayerScreen.kt`)**: En Smart TV, cuando los controles están ocultos, presionar cualquier botón del D-pad (OK/Centro, Izquierda, Derecha, Arriba o Abajo) **únicamente abre el menú de reproducción y posiciona el foco** sobre el botón principal (`Reproducir/Pausar` en películas/series o `Canales` en TV en vivo), sin ejecutar ninguna acción por sí solo (no pausa, no adelanta/atrasa ±10s, ni cambia de canal).
+- **Absorción de Repetición y `ACTION_UP` (`swallowWakeupKeyCode`)**: Se absorben las repeticiones y el evento `ACTION_UP` de la pulsación que despierta el menú para evitar que el botón recién enfocado se dispare accidentalmente al soltar la tecla del control remoto.

@@ -13,8 +13,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = 270
-        versionName = "2.5.34"
+        versionCode = 272
+        versionName = "2.5.36"
     }
 
     flavorDimensions += "laboratorio"

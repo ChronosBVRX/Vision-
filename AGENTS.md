@@ -5,14 +5,34 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.34**
-  (versionCode **270**, release OTA v2.5.34). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.36**
+  (versionCode **272**, release OTA v2.5.36). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Apertura Instantánea de Canales en Vivo y Despertar Limpio de Controles con D-Pad** (v2.5.36):
+  - **Precalentamiento del Proceso `:x4k` e Índice O(1) en Memoria (`X4KWarmupReceiver.kt`, `X4KTitan.kt`, `X4KApi.kt`, `X4KPlayerAty.kt`)**:
+    - Creado `X4KWarmupReceiver` en `android:process=":x4k"` que precalienta en segundo plano los 3 DEX, las 6 librerías `.so` nativas, el boot de `yc.h`, las entradas SLB CDN (`sendEntriesCdnList` + `sendEnv`) y el arreglo de canales en vivo antes de que el usuario toque un canal, y se recalienta automáticamente al cerrar el reproductor (`XtvHandoff`).
+    - Implementado índice `O(1)` en memoria (`memoryLiveMedias` y `memoryLiveArray`) en `X4KApi.kt` para evitar volver a parsear los ~2 MB de JSON (`K_LIVE`, 1,035+ canales) en cada clic.
+    - En `X4KPlayerAty.onCreate`, si `X4KTitan.isConfigured(...)` ya está listo, `mountUi` se ejecuta de inmediato en el hilo principal en `0 ms`, mientras que el filtrado de la lista de canales corre en segundo plano sin bloquear el arranque.
+    - Reducido el intervalo de sondeo del primer cuadro (`poller`) de `500 ms` a `80 ms` (con disparo inmediato desde `onPosition`), y el fundido de `loadingOverlay` en vivo de `400 ms` a `120 ms`.
+  - **Despertar Limpio del Menú de Reproducción con D-Pad sin Acción Accidental (`ControlsState.kt`, `X4KPlayerAty.kt`, `PlayerScreen.kt`)**:
+    - Los controles inician ocultos (`controlsVisible = false`, `View.GONE`) para que el video arranque limpio.
+    - Implementado `shouldWakeControlsWithoutAction` y `swallowWakeupKeyCode` en `dispatchKeyEvent` / `onPreviewKeyEvent`: en Smart TV, cuando el menú está oculto (o sin foco activo), pulsar cualquier tecla del D-pad (`OK/Centro`, `Izquierda`, `Derecha`, `Arriba`, `Abajo`) **solo muestra el menú y posiciona el foco** en el botón principal (`channelsBtn` en vivo, `playPauseBtn` en VOD), absorbiendo repeticiones y el `ACTION_UP` para que jamás pause, adelante/atrase ni cambie de canal por sí solo.
+  - **Validación**: 133 pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) pasando al 100%. Release OTA v2.5.36 publicada en GitHub.
+
+- **Continuidad Secuencial de Series y Selector Pro de Temporadas y Capítulos** (v2.5.35):
+  - **Ordenamiento Estricto y Reproducción Continua de Series (`X4KApi.kt`, `X4KTitan.kt`, `X4KPlayerAty.kt`, `PlayerScreen.kt`)**:
+    - `X4KApi.parseEpisodePrograms` y `parsePlayEpisodePrograms` desduplican por `contentId` y ordenan ascendentemente (`1, 2, 3...`) según `seriesNumber` / `episodeNumber` (con fallback por regex en el nombre).
+    - Conectado el callback nativo de fin de reproducción (`bd.a.z2` → `onCompletion`) en `X4KTitan.makePlayerListener` hacia `onEpisodeEnded()`, y eliminada la duración fallback ficticia de 45m en series para que cada capítulo fije su duración real de archivo (20–58m) y dispare el paso al siguiente episodio sin fallos.
+    - Al cambiar automáticamente a la siguiente temporada, se actualizan `epIds` y `epNames` con todos los capítulos de la nueva temporada, preservando `curBaseTitle` e iniciando desde `00:00`.
+  - **Selector Pro de Temporadas y Capítulos (`X4KPlayerAty.kt`, `TvTitleScreen.kt`, `TitleScreen.kt`)**:
+    - Modal en reproductor y paneles en fichas de Smart TV y móvil rediseñados con la paleta Vision+ (`VisionBlue` `#2D7DF6`, `VisionBlueBright` `#6BA6FF`, `VisionSurface` `#0F1626`, `VisionSurfaceHigh` `#1B2538`), insignias `C#`, títulos limpios de episodios, estado (`● Reproduciendo ahora`, `✓ Visto`, `▶ Siguiente`) y botón principal inteligente (`▶ Continuar · T# · C#`).
+  - **Validación**: 131 pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) pasando al 100%. Release OTA v2.5.35 publicada en GitHub.
 
 - **Canales Internacionales de Fútbol, Descubrimiento de ESPN / Star+ y Opciones Adicionales con DRM ClearKey** (v2.5.34):
   - **Identidad Real de ESPN / Star+ en XTV (`X4KApi.kt` & `SportsLinker.kt`)**:

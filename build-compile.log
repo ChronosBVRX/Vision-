@@ -1,0 +1,36 @@
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preNormalDebugBuild UP-TO-DATE
+> Task :app:generateNormalDebugBuildConfig UP-TO-DATE
+> Task :app:checkNormalDebugAarMetadata UP-TO-DATE
+> Task :app:generateNormalDebugResValues UP-TO-DATE
+> Task :app:mapNormalDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateNormalDebugResources UP-TO-DATE
+> Task :app:mergeNormalDebugResources UP-TO-DATE
+> Task :app:packageNormalDebugResources UP-TO-DATE
+> Task :app:parseNormalDebugLocalResources UP-TO-DATE
+> Task :app:createNormalDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksNormalDebug UP-TO-DATE
+> Task :app:processNormalDebugMainManifest UP-TO-DATE
+> Task :app:processNormalDebugManifest UP-TO-DATE
+> Task :app:processNormalDebugManifestForPackage UP-TO-DATE
+> Task :app:processNormalDebugResources UP-TO-DATE
+
+> Task :app:compileNormalDebugKotlin FAILED
+e: file:///C:/Users/Axel%20Rosete/Desktop/Proyectos/Vision+/app/src/main/java/com/chronosbvrx/visionplus/data/xuper/MagisClient.kt:251:17 Unresolved reference 'body'.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileNormalDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 8s
+15 actionable tasks: 1 executed, 14 up-to-date

@@ -120,6 +120,7 @@ import com.chronosbvrx.visionplus.ui.tv.modalFocusTrap
 import com.chronosbvrx.visionplus.ui.tv.rememberLandingFocus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** How far the arrows and the ±10 buttons jump. */
@@ -164,21 +165,21 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
         // El capítulo llega con su contexto: el handoff ("Abriendo…") sale al instante y el
         // portal resuelve detrás, en vez del click muerto de lanzar el play en segundo plano.
         val ep = episode
-        val fallbackDuration = (if (film.durationMin > 0) film.durationMin else 45) * 60_000L
+        val fallbackDuration = if (film.durationMin > 0) film.durationMin * 60_000L else 0L
         XtvHandoff(
             title = film.title + (ep?.titleSuffix.orEmpty()),
             prepare = {
                 if (live) com.chronosbvrx.visionplus.data.xuper.X4KApi.playLive(context, code, film.title)
                 else if (ep != null) com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(
                     context, ep.code, film.title + ep.titleSuffix, seriesId = ep.seriesId,
-                    episodeIds = ep.episodeIds, episodeIndex = ep.episodeIndex,
+                    episodeIds = ep.episodeIds, episodeNames = ep.episodeNames, episodeIndex = ep.episodeIndex,
                     seasonIds = ep.seasonIds, seasonNames = ep.seasonNames, seasonIndex = ep.seasonIndex,
                     resumeMs = ep.resumeMs, posterUrl = film.posterUrl,
                     fallbackDurationMs = fallbackDuration,
                 )
                 else com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(
                     context, code, film.title, resumeMs = resumeMs, posterUrl = film.posterUrl,
-                    fallbackDurationMs = if (film.durationMin > 0) film.durationMin * 60_000L else 0L,
+                    fallbackDurationMs = fallbackDuration,
                 )
             },
             onDone = onBack,
@@ -833,16 +834,41 @@ private fun PlayerCore(
     }
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    var swallowWakeupKey by remember { mutableStateOf<Key?>(null) }
 
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
             .landingFocus(surface)
+            .onPreviewKeyEvent { e ->
+                if (swallowWakeupKey != null && e.key == swallowWakeupKey) {
+                    if (e.type == KeyEventType.KeyUp) {
+                        swallowWakeupKey = null
+                    }
+                    return@onPreviewKeyEvent true
+                }
+                if (e.type == KeyEventType.KeyDown) {
+                    swallowWakeupKey = null
+                    val modalOpen = showTracks || showMarkers || (!resumeConsumed && resumeEntry != null)
+                    val skipTakesOk = (showSkip && skipFocused || brandSkipVisible && brandSkipFocused) &&
+                        (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter)
+                    val isWakeupKey = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter ||
+                        e.key == Key.DirectionLeft || e.key == Key.DirectionRight ||
+                        e.key == Key.DirectionUp || e.key == Key.DirectionDown || e.key == Key.Menu
+                    if (isTv && !controls.visible && !introPlaying && !modalOpen && error == null && isWakeupKey && !skipTakesOk) {
+                        swallowWakeupKey = e.key
+                        controls.bump()
+                        return@onPreviewKeyEvent true
+                    }
+                }
+                false
+            }
             .onKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown || controls.visible) return@onKeyEvent false
                 // Mando en TV: el primer toque muestra los controles, no actúa.
-                if (isTv && (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.DirectionLeft || e.key == Key.DirectionRight)) {
+                if (isTv && (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter || e.key == Key.DirectionLeft || e.key == Key.DirectionRight || e.key == Key.DirectionUp || e.key == Key.DirectionDown)) {
+                    swallowWakeupKey = e.key
                     controls.bump()
                     return@onKeyEvent true
                 }
@@ -1379,6 +1405,7 @@ private fun XtvHandoff(
     prepare: suspend () -> Boolean,
     onDone: () -> Unit,
 ) {
+    val appContext = LocalContext.current.applicationContext
     var attempt by remember { mutableStateOf(0) }
     var prepared by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
@@ -1398,7 +1425,7 @@ private fun XtvHandoff(
         } else {
             // Cold-starting the player's own process can bounce a spurious resume on some ROMs
             // (HyperOS); the grace window keeps that from counting as "the person came back".
-            delay(1200)
+            delay(500)
             prepared = true
         }
     }
@@ -1410,8 +1437,12 @@ private fun XtvHandoff(
             val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                 // Only a resume well after the launch counts as the player having closed.
                 if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME &&
-                    System.currentTimeMillis() - armedAt > 2500
+                    System.currentTimeMillis() - armedAt > 900
                 ) {
+                    kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                        delay(600)
+                        com.chronosbvrx.visionplus.data.xuper.X4KApi.prewarmEngine(appContext)
+                    }
                     onDone()
                 }
             }

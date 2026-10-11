@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="vision_background">#070B13</color>
+    <color name="vision_blue">#2D7DF6</color>
+    <!-- The blue of the logo's dot: the logo has its own blue, not the UI's. -->
+    <color name="vision_logo_blue">#2D7DF6</color>
+    <color name="ic_launcher_background">#070B13</color>
+</resources>

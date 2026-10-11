@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Vision" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/vision_background</item>
+        <item name="android:statusBarColor">@color/vision_background</item>
+        <item name="android:navigationBarColor">@color/vision_background</item>
+        <item name="android:colorPrimary">@color/vision_blue</item>
+        <item name="android:colorAccent">@color/vision_blue</item>
+    </style>
+
+    <!--
+      Startup theme: the system paints the logo's ring over the brand background from the very
+      first frame, then hands over to Theme.Vision, where the Compose intro continues the sequence.
+    -->
+    <style name="Theme.Vision.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/vision_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_vision_mark</item>
+        <item name="postSplashScreenTheme">@style/Theme.Vision</item>
+    </style>
+</resources>

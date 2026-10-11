@@ -1,0 +1,17 @@
+Vision+
+Copyright 2026 ChronosBVRX
+
+The source code in this repository is licensed under the Apache License, Version 2.0.
+See the LICENSE file.
+
+TRADEMARK & BRANDING
+The "Vision+" name, the Vision+ logo (the wordmark, the "V" badge and the mark) and the launcher
+and banner artwork are NOT licensed under the Apache License or any other license. All rights
+reserved. You may not use them to identify your own app, fork or service without permission.
+
+ATTRIBUTION & THIRD-PARTY NOTICES
+This project originally evolved from an open-source player template (Copyright 2026 kinotvapp,
+Apache-2.0), substantially rewritten, extended with dedicated backend microservices, native
+streaming engines and full Smart TV D-pad integration by ChronosBVRX.
+
+See THIRD_PARTY_NOTICES.md for third-party libraries and licenses included in binary builds.

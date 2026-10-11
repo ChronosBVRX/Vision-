@@ -1,0 +1,58 @@
+name: Android CI
+
+# Sistema anti-regresiones: cada push/PR corre los unit tests (JVM + Robolectric).
+# Con branch protection en main, un test rojo bloquea el merge.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run unit tests (flavor normal, build debug)
+        run: ./gradlew :app:testNormalDebugUnitTest --stacktrace
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+
+  server-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install server test deps
+        run: pip install pytest pycryptodome asyncpg fastapi
+
+      - name: Run server tests (sync + api, sin red ni DB)
+        run: python -m pytest server/tests -q
