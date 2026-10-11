@@ -5,14 +5,40 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.36**
-  (versionCode **272**, release OTA v2.5.36). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.37**
+  (versionCode **273**, release OTA v2.5.37). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Política Universal Anti-Regresiones de Controles D-Pad en Todos los Reproductores** (v2.5.37):
+  - **Diagnóstico y Análisis Forense Integral de los 6 Reproductores de la App**:
+    - Se identificaron y auditaron exhaustivamente las 6 variantes de reproductor:
+      1. `X4KPlayerAty` Live (`xtvlive:<code>`) — Nativo Titan en proceso aislado `:x4k`.
+      2. `X4KPlayerAty` VOD (`xtv:<id>`) — Nativo Titan en proceso aislado `:x4k`.
+      3. `PlayerCore` Live (M3U, `xuperch:`, live sports GeeSportsFallback con ClearKey DRM) — ExoPlayer en Compose.
+      4. `PlayerCore` VOD (HTTP/IA films) — ExoPlayer en Compose.
+      5. `TitanLivePlayer` (`magis:<code>`) — TitanSdk en Compose.
+      6. `TitanVodPlayerScreen` (`magisvod:<id>`) — TitanSdk en Compose.
+    - **Causa Raíz de la Regresión**:
+      - En v2.5.33, al habilitar la barra de progreso (scrubber) con D-pad en `X4KPlayerAty`, se añadieron atajos de seek directo `performSeekBy(±10s)` en `onKeyDown` sin verificar si los controles estaban visibles (`!controlsVisible`).
+      - En `PlayerCore`, entre el segundo 0:03 y 2:00 de cualquier película VOD > 10m, `SkipPill` («Saltar intro») se mostraba incondicionalmente fuera del bloque `controls.visible` y tomaba el foco D-pad sobre el video en negro. Al pulsar OK por primera vez, `skipTakesOk` disparaba el salto de +85s en lugar de abrir el menú de controles, y las flechas izquierda/derecha ejecutaban `seekBy(±10s)`.
+      - En `TitanLivePlayer` y `TitanVodPlayerScreen`, los controles iniciaban visibles (`controlsVisible = true`) y el único elemento interactivo era el botón Atrás (`IconButton(onClick = onBack)`), por lo que presionar OK con el menú cerrado cerraba el reproductor inmediatamente en el primer clic.
+      - Las pruebas anti-regresión anteriores sólo evaluaban la función booleana `resolveLiveDpadAction` para flechas Arriba/Abajo, sin probar OK/Centro, Enter, Izquierda, Derecha ni los dispatchers reales de eventos de los reproductores.
+  - **Motor Universal de Decisión Anti-Regresiones (`ControlsState.kt`)**:
+    - Implementado `PlayerKeyDownAction` y `resolvePlayerKeyDownAction`:
+      - Regla inmutable: Si el menú está oculto (`!isControlsVisible`) o sin foco activo (`!hasControlFocus`), el PRIMER clic en cualquier tecla de navegación D-pad (`OK/Center`, `Enter`, `Izquierda`, `Derecha`, `Arriba`, `Abajo`, `Menu`, `CH+`, `CH-`, `Info`, `Guide`) **ÚNICAMENTE** hace visible el menú y posiciona el foco (`WAKE_CONTROLS_ONLY`), con **cero** acciones ejecutadas (cero seek, cero togglePlay, cero zapping, cero saltar intro).
+      - Las acciones reales (seek, pausar, cambiar canal) solo se autorizan cuando el menú ya está visible y enfocado.
+    - Implementado guardián de debounce centralizado `canExecuteControlAction(nowMs, lastWakeupMs, cooldownMs = 220L)` para absorber rebotes de hardware, teclas repetidas y eventos `ACTION_UP` inmediatos tras la apertura de controles o el descarte de modales.
+  - **Corrección en Todos los Reproductores**:
+    - `X4KPlayerAty.kt`: Se reemplazó la lógica manual en `dispatchKeyEvent` y `onKeyDown` por `resolvePlayerKeyDownAction`. Se blindaron todos los botones y el `SeekBar` con `canExecuteControlAction()`.
+    - `PlayerScreen.kt` (`PlayerCore`): Se unificó `onPreviewKeyEvent` y `onKeyEvent` con `resolvePlayerKeyDownAction`. Se movió `SkipPill` dentro de `controls.visible`, eliminando el robo de foco durante la reproducción limpia. Se aplicó `canExecuteControlAction()` a todos los botones de transporte y atajos.
+    - `TitanLivePlayer` y `TitanVodPlayerScreen`: Migrados a `rememberControlsState()` iniciando ocultos, con `AutoHideEffect`, `landingFocus(surface)` y `resolvePlayerKeyDownAction`.
+  - **Blindaje de la Suite Anti-Regresiones (`PlayerNavigationTest.kt`)**:
+    - Añadidas 5 pruebas unitarias exhaustivas cubriendo todos los modos (VOD y Vivo), todas las teclas D-pad, teclas multimedia dedicadas, bypass de modales y el cooldown de 220ms. Total de pruebas pasando: 138 de Android (100%) y 33 de backend (100%).
 
 - **Apertura Instantánea de Canales en Vivo y Despertar Limpio de Controles con D-Pad** (v2.5.36):
   - **Precalentamiento del Proceso `:x4k` e Índice O(1) en Memoria (`X4KWarmupReceiver.kt`, `X4KTitan.kt`, `X4KApi.kt`, `X4KPlayerAty.kt`)**:

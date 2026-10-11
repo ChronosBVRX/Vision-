@@ -252,4 +252,212 @@ class PlayerNavigationTest {
         assertEquals("play_1080", parsed.getJSONObject(0).getString("n"))
         assertEquals("lic_1080", parsed.getJSONObject(0).getString("l"))
     }
+
+    @Test
+    fun universalPlayerFirstClickNeverActsAcrossAllModes() {
+        val dpadNavigationKeys = listOf(
+            android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+            android.view.KeyEvent.KEYCODE_ENTER,
+            android.view.KeyEvent.KEYCODE_NUMPAD_ENTER,
+            android.view.KeyEvent.KEYCODE_DPAD_LEFT,
+            android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+            android.view.KeyEvent.KEYCODE_DPAD_UP,
+            android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+            android.view.KeyEvent.KEYCODE_MENU,
+            android.view.KeyEvent.KEYCODE_CHANNEL_UP,
+            android.view.KeyEvent.KEYCODE_CHANNEL_DOWN,
+            android.view.KeyEvent.KEYCODE_INFO,
+            android.view.KeyEvent.KEYCODE_GUIDE,
+        )
+
+        // Verificamos tanto en modo VOD (Películas/Series) como en Vivo (Canales/Deportes)
+        for (isLive in listOf(false, true)) {
+            val modeName = if (isLive) "En Vivo" else "VOD"
+
+            // 1. Con controles ocultos: NINGUNA tecla debe realizar acción, SOLO despertar controles
+            for (key in dpadNavigationKeys) {
+                val action = resolvePlayerKeyDownAction(
+                    keyCode = key,
+                    isLive = isLive,
+                    isControlsVisible = false,
+                    hasControlFocus = false,
+                )
+                assertEquals(
+                    "[$modeName] Tecla $key con controles ocultos DEBE retornar WAKE_CONTROLS_ONLY y jamás actuar",
+                    PlayerKeyDownAction.WAKE_CONTROLS_ONLY,
+                    action,
+                )
+            }
+
+            // 2. Con controles visibles pero sin foco activo en controles: despertar/enfocar controles sin actuar
+            for (key in dpadNavigationKeys) {
+                val action = resolvePlayerKeyDownAction(
+                    keyCode = key,
+                    isLive = isLive,
+                    isControlsVisible = true,
+                    hasControlFocus = false,
+                )
+                assertEquals(
+                    "[$modeName] Tecla $key sin foco activo en controles DEBE retornar WAKE_CONTROLS_ONLY",
+                    PlayerKeyDownAction.WAKE_CONTROLS_ONLY,
+                    action,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun universalPlayerActionsOnlyWhenControlsVisibleAndFocused() {
+        // En VOD con controles visibles y enfocados: todas las teclas de navegación van al control enfocado
+        val vodKeys = listOf(
+            android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+            android.view.KeyEvent.KEYCODE_ENTER,
+            android.view.KeyEvent.KEYCODE_NUMPAD_ENTER,
+            android.view.KeyEvent.KEYCODE_DPAD_LEFT,
+            android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+            android.view.KeyEvent.KEYCODE_DPAD_UP,
+            android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+        )
+        for (key in vodKeys) {
+            val action = resolvePlayerKeyDownAction(
+                keyCode = key,
+                isLive = false,
+                isControlsVisible = true,
+                hasControlFocus = true,
+            )
+            assertEquals(
+                "[VOD] Con controles visibles y enfocados, tecla $key debe pasar al control enfocado",
+                PlayerKeyDownAction.PASS_TO_FOCUSED_CONTROL,
+                action,
+            )
+        }
+
+        // En Vivo con controles visibles y enfocados:
+        // Arriba / Channel Up cambia al canal siguiente
+        assertEquals(
+            PlayerKeyDownAction.LIVE_SWITCH_NEXT_CHANNEL,
+            resolvePlayerKeyDownAction(
+                keyCode = android.view.KeyEvent.KEYCODE_DPAD_UP,
+                isLive = true,
+                isControlsVisible = true,
+                hasControlFocus = true,
+            ),
+        )
+        assertEquals(
+            PlayerKeyDownAction.LIVE_SWITCH_NEXT_CHANNEL,
+            resolvePlayerKeyDownAction(
+                keyCode = android.view.KeyEvent.KEYCODE_CHANNEL_UP,
+                isLive = true,
+                isControlsVisible = true,
+                hasControlFocus = true,
+            ),
+        )
+
+        // Abajo / Channel Down cambia al canal anterior
+        assertEquals(
+            PlayerKeyDownAction.LIVE_SWITCH_PREV_CHANNEL,
+            resolvePlayerKeyDownAction(
+                keyCode = android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+                isLive = true,
+                isControlsVisible = true,
+                hasControlFocus = true,
+            ),
+        )
+        assertEquals(
+            PlayerKeyDownAction.LIVE_SWITCH_PREV_CHANNEL,
+            resolvePlayerKeyDownAction(
+                keyCode = android.view.KeyEvent.KEYCODE_CHANNEL_DOWN,
+                isLive = true,
+                isControlsVisible = true,
+                hasControlFocus = true,
+            ),
+        )
+
+        // Izquierda, Derecha, Centro en Vivo pasan al control enfocado (ej. botón Canales o Cerrar)
+        val livePassKeys = listOf(
+            android.view.KeyEvent.KEYCODE_DPAD_LEFT,
+            android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+            android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+            android.view.KeyEvent.KEYCODE_ENTER,
+        )
+        for (key in livePassKeys) {
+            assertEquals(
+                PlayerKeyDownAction.PASS_TO_FOCUSED_CONTROL,
+                resolvePlayerKeyDownAction(
+                    keyCode = key,
+                    isLive = true,
+                    isControlsVisible = true,
+                    hasControlFocus = true,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun dedicatedMediaKeysBypassWakeup() {
+        val mediaKeys = listOf(
+            android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+            android.view.KeyEvent.KEYCODE_MEDIA_PLAY,
+            android.view.KeyEvent.KEYCODE_MEDIA_PAUSE,
+            android.view.KeyEvent.KEYCODE_MEDIA_REWIND,
+            android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+            android.view.KeyEvent.KEYCODE_HEADSETHOOK,
+            android.view.KeyEvent.KEYCODE_SPACE,
+        )
+
+        for (key in mediaKeys) {
+            // Con controles ocultos
+            assertEquals(
+                PlayerKeyDownAction.DEDICATED_MEDIA_KEY,
+                resolvePlayerKeyDownAction(keyCode = key, isLive = false, isControlsVisible = false),
+            )
+            // Con controles visibles
+            assertEquals(
+                PlayerKeyDownAction.DEDICATED_MEDIA_KEY,
+                resolvePlayerKeyDownAction(keyCode = key, isLive = false, isControlsVisible = true),
+            )
+        }
+    }
+
+    @Test
+    fun modalsAndIntroBypassWakeup() {
+        val key = android.view.KeyEvent.KEYCODE_DPAD_CENTER
+
+        // Con modal activo: debe pasar al modal
+        assertEquals(
+            PlayerKeyDownAction.PASS_TO_MODAL_OR_SYSTEM,
+            resolvePlayerKeyDownAction(keyCode = key, isLive = false, isControlsVisible = false, isModalActive = true),
+        )
+
+        // Con intro activa: debe pasar a la intro
+        assertEquals(
+            PlayerKeyDownAction.PASS_TO_MODAL_OR_SYSTEM,
+            resolvePlayerKeyDownAction(keyCode = key, isLive = false, isControlsVisible = false, isIntroActive = true),
+        )
+
+        // Con error en pantalla: debe pasar al botón de error
+        assertEquals(
+            PlayerKeyDownAction.PASS_TO_MODAL_OR_SYSTEM,
+            resolvePlayerKeyDownAction(keyCode = key, isLive = false, isControlsVisible = false, isErrorShown = true),
+        )
+    }
+
+    @Test
+    fun canExecuteControlActionDebounceCooldown() {
+        val wakeupTime = 1000L
+
+        // Inmediatamente después del despertar (0 ms transcurridos): BLOQUEADO
+        assertFalse(canExecuteControlAction(nowMs = 1000L, lastWakeupMs = wakeupTime))
+
+        // A los 100 ms (típico rebote o repetición rápida de control remoto): BLOQUEADO
+        assertFalse(canExecuteControlAction(nowMs = 1100L, lastWakeupMs = wakeupTime))
+
+        // A los 219 ms: BLOQUEADO
+        assertFalse(canExecuteControlAction(nowMs = 1219L, lastWakeupMs = wakeupTime))
+
+        // A partir de los 220 ms: PERMITIDO
+        assertTrue(canExecuteControlAction(nowMs = 1220L, lastWakeupMs = wakeupTime))
+        assertTrue(canExecuteControlAction(nowMs = 1500L, lastWakeupMs = wakeupTime))
+    }
 }
+

@@ -75,6 +75,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -324,20 +325,18 @@ private fun TitanLivePlayer(channel: LiveChannel, onBack: () -> Unit) {
         if (!played) error = "No se pudo iniciar la reproducción."
     }
 
-    var controlsVisible by remember { mutableStateOf(true) }
-    LaunchedEffect(controlsVisible) {
-        if (controlsVisible) {
-            delay(4500)
-            controlsVisible = false
-        }
-    }
+    val controls = rememberControlsState()
+    AutoHideEffect(controls, playing = true)
+    val surface = rememberLandingFocus()
+    var swallowWakeupKey by remember { mutableStateOf<Key?>(null) }
+    var lastWakeupAtMs by remember { mutableLongStateOf(0L) }
 
     BackHandler {
-        if (controlsVisible && error == null) {
-            controlsVisible = false
+        if (error != null) {
+            onBack()
             return@BackHandler
         }
-        onBack()
+        controls.handleBack(onExit = onBack)
     }
 
     // The player follows the phone's orientation; the app's setting returns on leaving.
@@ -355,10 +354,35 @@ private fun TitanLivePlayer(channel: LiveChannel, onBack: () -> Unit) {
         Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .clickable(
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                indication = null,
-            ) { controlsVisible = !controlsVisible },
+            .landingFocus(surface)
+            .onPreviewKeyEvent { e ->
+                if (swallowWakeupKey != null) {
+                    if (e.type == KeyEventType.KeyUp) {
+                        swallowWakeupKey = null
+                        return@onPreviewKeyEvent true
+                    }
+                    if (e.key == swallowWakeupKey) return@onPreviewKeyEvent true
+                }
+                if (e.type == KeyEventType.KeyDown) {
+                    swallowWakeupKey = null
+                    val action = resolvePlayerKeyDownAction(
+                        keyCode = e.key.nativeKeyCode,
+                        isLive = true,
+                        isControlsVisible = controls.visible,
+                        hasControlFocus = controls.visible,
+                        isErrorShown = error != null,
+                    )
+                    if (action == PlayerKeyDownAction.WAKE_CONTROLS_ONLY) {
+                        swallowWakeupKey = e.key
+                        lastWakeupAtMs = android.os.SystemClock.uptimeMillis()
+                        controls.bump()
+                        return@onPreviewKeyEvent true
+                    }
+                }
+                false
+            }
+            .focusable()
+            .pointerInput(Unit) { detectTapGestures { controls.toggle() } },
         contentAlignment = Alignment.Center,
     ) {
         titanView?.let { view ->
@@ -369,7 +393,7 @@ private fun TitanLivePlayer(channel: LiveChannel, onBack: () -> Unit) {
         }
 
         AnimatedVisibility(
-            visible = controlsVisible && error == null,
+            visible = controls.visible && error == null,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopStart),
@@ -381,7 +405,13 @@ private fun TitanLivePlayer(channel: LiveChannel, onBack: () -> Unit) {
                     .padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onBack) {
+                IconButton(
+                    onClick = {
+                        if (android.os.SystemClock.uptimeMillis() - lastWakeupAtMs >= 220L && swallowWakeupKey == null) {
+                            onBack()
+                        }
+                    },
+                ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White)
                 }
                 Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
@@ -448,20 +478,18 @@ fun TitanVodPlayerScreen(film: Film, onBack: () -> Unit) {
         if (!played) error = "No se pudo iniciar la reproducción."
     }
 
-    var controlsVisible by remember { mutableStateOf(true) }
-    LaunchedEffect(controlsVisible) {
-        if (controlsVisible) {
-            delay(4500)
-            controlsVisible = false
-        }
-    }
+    val controls = rememberControlsState()
+    AutoHideEffect(controls, playing = true)
+    val surface = rememberLandingFocus()
+    var swallowWakeupKey by remember { mutableStateOf<Key?>(null) }
+    var lastWakeupAtMs by remember { mutableLongStateOf(0L) }
 
     BackHandler {
-        if (controlsVisible && error == null) {
-            controlsVisible = false
+        if (error != null) {
+            onBack()
             return@BackHandler
         }
-        onBack()
+        controls.handleBack(onExit = onBack)
     }
 
     // The player follows the phone's orientation; the app's setting returns on leaving.
@@ -479,10 +507,35 @@ fun TitanVodPlayerScreen(film: Film, onBack: () -> Unit) {
         Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .clickable(
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                indication = null,
-            ) { controlsVisible = !controlsVisible },
+            .landingFocus(surface)
+            .onPreviewKeyEvent { e ->
+                if (swallowWakeupKey != null) {
+                    if (e.type == KeyEventType.KeyUp) {
+                        swallowWakeupKey = null
+                        return@onPreviewKeyEvent true
+                    }
+                    if (e.key == swallowWakeupKey) return@onPreviewKeyEvent true
+                }
+                if (e.type == KeyEventType.KeyDown) {
+                    swallowWakeupKey = null
+                    val action = resolvePlayerKeyDownAction(
+                        keyCode = e.key.nativeKeyCode,
+                        isLive = false,
+                        isControlsVisible = controls.visible,
+                        hasControlFocus = controls.visible,
+                        isErrorShown = error != null,
+                    )
+                    if (action == PlayerKeyDownAction.WAKE_CONTROLS_ONLY) {
+                        swallowWakeupKey = e.key
+                        lastWakeupAtMs = android.os.SystemClock.uptimeMillis()
+                        controls.bump()
+                        return@onPreviewKeyEvent true
+                    }
+                }
+                false
+            }
+            .focusable()
+            .pointerInput(Unit) { detectTapGestures { controls.toggle() } },
         contentAlignment = Alignment.Center,
     ) {
         titanView?.let { view ->
@@ -493,7 +546,7 @@ fun TitanVodPlayerScreen(film: Film, onBack: () -> Unit) {
         }
 
         AnimatedVisibility(
-            visible = controlsVisible && error == null,
+            visible = controls.visible && error == null,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopStart),
@@ -505,7 +558,13 @@ fun TitanVodPlayerScreen(film: Film, onBack: () -> Unit) {
                     .padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onBack) {
+                IconButton(
+                    onClick = {
+                        if (android.os.SystemClock.uptimeMillis() - lastWakeupAtMs >= 220L && swallowWakeupKey == null) {
+                            onBack()
+                        }
+                    },
+                ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White)
                 }
                 Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
@@ -750,6 +809,14 @@ private fun PlayerCore(
         }
     }
 
+    var swallowWakeupKey by remember { mutableStateOf<Key?>(null) }
+    var lastWakeupAtMs by remember { mutableLongStateOf(0L) }
+
+    fun canExecuteControlAction(): Boolean {
+        if (!controls.visible || swallowWakeupKey != null) return false
+        return canExecuteControlAction(android.os.SystemClock.uptimeMillis(), lastWakeupAtMs)
+    }
+
     fun togglePlayPause() {
         if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
         player.playWhenReady = !player.playWhenReady
@@ -766,7 +833,11 @@ private fun PlayerCore(
 
     // The video surface takes the D-pad while the controls are hidden (and is the screen's landing).
     val surface = rememberLandingFocus()
+    var rewindFocused by remember { mutableStateOf(false) }
     var playPauseFocused by remember { mutableStateOf(false) }
+    var forwardFocused by remember { mutableStateOf(false) }
+    var tracksFocused by remember { mutableStateOf(false) }
+    var markersFocused by remember { mutableStateOf(false) }
     val barFocus = remember { FocusRequester() }
     val resumeFocus = remember { FocusRequester() }
     val rewindFocus = remember { FocusRequester() }
@@ -778,11 +849,13 @@ private fun PlayerCore(
     val brandSkipFocus = remember { FocusRequester() }
     var skipFocused by remember { mutableStateOf(false) }
     var brandSkipFocused by remember { mutableStateOf(false) }
+    val hasControlFocus = barFocused || rewindFocused || playPauseFocused || forwardFocused || tracksFocused || markersFocused || skipFocused
 
-    // "Saltar intro" during the opening minutes; one press and it is gone for this film.
+    // "Saltar intro" during the opening minutes; only interactive when navigation menu is visible.
     val showSkip = !isLive && !introPlaying && !skipUsed && error == null &&
         durationMs > SKIP_MIN_DURATION_MS && positionMs in SKIP_FROM_MS..SKIP_UNTIL_MS
     fun skipIntro() {
+        if (!canExecuteControlAction()) return
         skipUsed = true
         seekBy(SKIP_INTRO_MS)
         if (isTv) controls.hide()
@@ -793,14 +866,13 @@ private fun PlayerCore(
 
     // TV: the overlay's play/pause takes focus as it opens; the video takes it back as it closes.
     // Repeated until it holds, since a request made while the overlay is still appearing can be dropped.
-    // With the controls hidden, "Saltar intro" (or the pre-roll's "Omitir") holds the focus while it shows.
-    LaunchedEffect(controls.visible, isTv, showSkip, brandSkipVisible, introPlaying) {
+    // With the controls hidden, the surface ALWAYS holds focus so the first D-pad click only wakes the menu.
+    LaunchedEffect(controls.visible, isTv, brandSkipVisible, introPlaying) {
         if (!isTv) return@LaunchedEffect
         repeat(40) {
             val held = when {
                 brandSkipVisible && brandSkipFocused -> true
-                controls.visible && !introPlaying && playPauseFocused -> true
-                showSkip && skipFocused -> true
+                controls.visible && !introPlaying && hasControlFocus -> true
                 !controls.visible && surface.focused -> true
                 else -> false
             }
@@ -809,7 +881,6 @@ private fun PlayerCore(
                 when {
                     brandSkipVisible -> brandSkipFocus.requestFocus()
                     controls.visible && !introPlaying -> playPauseFocus.requestFocus()
-                    showSkip -> skipFocus.requestFocus()
                     else -> surface.request()
                 }
             }
@@ -834,7 +905,6 @@ private fun PlayerCore(
     }
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    var swallowWakeupKey by remember { mutableStateOf<Key?>(null) }
 
     Box(
         Modifier
@@ -842,23 +912,34 @@ private fun PlayerCore(
             .background(Color.Black)
             .landingFocus(surface)
             .onPreviewKeyEvent { e ->
-                if (swallowWakeupKey != null && e.key == swallowWakeupKey) {
+                if (swallowWakeupKey != null) {
                     if (e.type == KeyEventType.KeyUp) {
                         swallowWakeupKey = null
+                        return@onPreviewKeyEvent true
                     }
-                    return@onPreviewKeyEvent true
+                    if (e.key == swallowWakeupKey) {
+                        return@onPreviewKeyEvent true
+                    }
                 }
                 if (e.type == KeyEventType.KeyDown) {
                     swallowWakeupKey = null
                     val modalOpen = showTracks || showMarkers || (!resumeConsumed && resumeEntry != null)
-                    val skipTakesOk = (showSkip && skipFocused || brandSkipVisible && brandSkipFocused) &&
-                        (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter)
-                    val isWakeupKey = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter ||
-                        e.key == Key.DirectionLeft || e.key == Key.DirectionRight ||
-                        e.key == Key.DirectionUp || e.key == Key.DirectionDown || e.key == Key.Menu
-                    if (isTv && !controls.visible && !introPlaying && !modalOpen && error == null && isWakeupKey && !skipTakesOk) {
+                    val action = resolvePlayerKeyDownAction(
+                        keyCode = e.key.nativeKeyCode,
+                        isLive = isLive,
+                        isControlsVisible = controls.visible,
+                        hasControlFocus = if (isTv) hasControlFocus else controls.visible,
+                        isModalActive = modalOpen,
+                        isIntroActive = introPlaying,
+                        isErrorShown = error != null,
+                    )
+                    if (action == PlayerKeyDownAction.WAKE_CONTROLS_ONLY) {
                         swallowWakeupKey = e.key
+                        lastWakeupAtMs = android.os.SystemClock.uptimeMillis()
                         controls.bump()
+                        if (isTv && !introPlaying) {
+                            runCatching { playPauseFocus.requestFocus() }
+                        }
                         return@onPreviewKeyEvent true
                     }
                 }
@@ -866,24 +947,31 @@ private fun PlayerCore(
             }
             .onKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown || controls.visible) return@onKeyEvent false
-                // Mando en TV: el primer toque muestra los controles, no actúa.
-                if (isTv && (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter || e.key == Key.DirectionLeft || e.key == Key.DirectionRight || e.key == Key.DirectionUp || e.key == Key.DirectionDown)) {
-                    swallowWakeupKey = e.key
-                    controls.bump()
-                    return@onKeyEvent true
-                }
                 when (e.key) {
-                    Key.DirectionCenter, Key.Enter, Key.MediaPlayPause, Key.Spacebar -> {
+                    Key.DirectionCenter,
+                    Key.Enter,
+                    Key.NumPadEnter,
+                    Key.DirectionLeft,
+                    Key.DirectionRight,
+                    Key.DirectionUp,
+                    Key.DirectionDown,
+                    Key.Menu -> {
+                        // Regla inmutable: con el menú oculto, el primer clic SOLO hace visible el menú.
+                        swallowWakeupKey = e.key
+                        lastWakeupAtMs = android.os.SystemClock.uptimeMillis()
+                        controls.bump()
+                        true
+                    }
+                    Key.MediaPlayPause, Key.Spacebar -> {
                         if (introPlaying && brandSkipVisible) startMainItem() else togglePlayPause()
                         true
                     }
-                    Key.DirectionLeft, Key.MediaRewind -> {
+                    Key.MediaRewind -> {
                         if (isLive) false else { seekBy(-SEEK_STEP_MS); true }
                     }
-                    Key.DirectionRight, Key.MediaFastForward -> {
+                    Key.MediaFastForward -> {
                         if (isLive) false else { seekBy(SEEK_STEP_MS); true }
                     }
-                    Key.DirectionUp, Key.DirectionDown, Key.Menu -> { controls.bump(); true }
                     else -> false
                 }
             }
@@ -1033,7 +1121,7 @@ private fun PlayerCore(
                             .padding(horizontal = 6.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = { if (canExecuteControlAction()) onBack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White)
                         }
                         Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
@@ -1085,11 +1173,12 @@ private fun PlayerCore(
                                                 down = playPauseFocus
                                                 left = barFocus
                                                 right = barFocus
-                                                up = barFocus
+                                                up = if (showSkip) skipFocus else barFocus
                                             }
                                             // The bar's D-pad is handled here, before the Slider's own key handler:
                                             // left/right jump 10 s, down goes to the buttons, OK toggles play/pause.
                                             .onPreviewKeyEvent { e ->
+                                                if (!canExecuteControlAction()) return@onPreviewKeyEvent true
                                                 val arrow = e.key == Key.DirectionUp || e.key == Key.DirectionDown ||
                                                     e.key == Key.DirectionLeft || e.key == Key.DirectionRight
                                                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent arrow
@@ -1097,7 +1186,10 @@ private fun PlayerCore(
                                                     Key.DirectionRight -> { seekBy(SEEK_STEP_MS); true }
                                                     Key.DirectionLeft -> { seekBy(-SEEK_STEP_MS); true }
                                                     Key.DirectionDown -> { runCatching { playPauseFocus.requestFocus() }; true }
-                                                    Key.DirectionUp -> true
+                                                    Key.DirectionUp -> {
+                                                        if (showSkip) runCatching { skipFocus.requestFocus() }
+                                                        true
+                                                    }
                                                     Key.DirectionCenter, Key.Enter -> { togglePlayPause(); true }
                                                     else -> false
                                                 }
@@ -1128,9 +1220,10 @@ private fun PlayerCore(
                             TransportButton(
                                 icon = Icons.Default.Replay10,
                                 contentDescription = "Atrasar 10s",
-                                onClick = { seekBy(-SEEK_STEP_MS) },
+                                onClick = { if (canExecuteControlAction()) seekBy(-SEEK_STEP_MS) },
                                 modifier = if (!isTv) Modifier else Modifier
                                     .focusRequester(rewindFocus)
+                                    .onFocusChanged { rewindFocused = it.isFocused }
                                     .focusProperties { left = rewindFocus; right = playPauseFocus; up = barFocus; down = rewindFocus },
                             )
                         }
@@ -1138,7 +1231,7 @@ private fun PlayerCore(
                             TransportButton(
                                 icon = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = if (playing) "Pausar" else "Reproducir",
-                                onClick = { togglePlayPause() },
+                                onClick = { if (canExecuteControlAction()) togglePlayPause() },
                                 iconSize = 34.dp,
                                 modifier = if (!isTv) Modifier else Modifier
                                     .focusRequester(playPauseFocus)
@@ -1155,9 +1248,10 @@ private fun PlayerCore(
                             TransportButton(
                                 icon = Icons.Default.Forward10,
                                 contentDescription = "Adelantar 10s",
-                                onClick = { seekBy(SEEK_STEP_MS) },
+                                onClick = { if (canExecuteControlAction()) seekBy(SEEK_STEP_MS) },
                                 modifier = if (!isTv) Modifier else Modifier
                                     .focusRequester(forwardFocus)
+                                    .onFocusChanged { forwardFocused = it.isFocused }
                                     .focusProperties { left = playPauseFocus; right = tracksFocus; up = barFocus; down = forwardFocus },
                             )
                         }
@@ -1165,10 +1259,11 @@ private fun PlayerCore(
                             TransportButton(
                                 icon = Icons.Default.Subtitles,
                                 contentDescription = "Audio y subtítulos",
-                                onClick = { showTracks = true; controls.bump() },
+                                onClick = { if (canExecuteControlAction()) { showTracks = true; controls.bump() } },
                                 iconSize = 26.dp,
                                 modifier = if (!isTv) Modifier else Modifier
                                     .focusRequester(tracksFocus)
+                                    .onFocusChanged { tracksFocused = it.isFocused }
                                     .focusProperties {
                                         left = if (isLive) playPauseFocus else forwardFocus
                                         right = if (isLive) tracksFocus else markersFocus
@@ -1181,10 +1276,11 @@ private fun PlayerCore(
                             TransportButton(
                                 icon = Icons.Default.Tune,
                                 contentDescription = "Corregir intro y outro",
-                                onClick = { showMarkers = true; controls.bump() },
+                                onClick = { if (canExecuteControlAction()) { showMarkers = true; controls.bump() } },
                                 iconSize = 26.dp,
                                 modifier = if (!isTv) Modifier else Modifier
                                     .focusRequester(markersFocus)
+                                    .onFocusChanged { markersFocused = it.isFocused }
                                     .focusProperties { left = tracksFocus; right = markersFocus; up = barFocus; down = markersFocus },
                             )
                         }
@@ -1210,27 +1306,23 @@ private fun PlayerCore(
             }
         }
 
-        if (showSkip) {
+        if (showSkip && controls.visible) {
             SkipPill(
                 label = "Saltar intro",
                 onClick = { skipIntro() },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .systemBarsPadding()
-                    .padding(end = if (isTv) SAFE_H + 16.dp else 20.dp, bottom = if (controls.visible) 130.dp else 40.dp)
+                    .padding(end = if (isTv) SAFE_H + 16.dp else 20.dp, bottom = 130.dp)
                     .then(
                         if (!isTv) Modifier else Modifier
                             .focusRequester(skipFocus)
                             .onFocusChanged { skipFocused = it.isFocused }
-                            // Up brings the controls; left/right keep seeking as on the bare video.
-                            .onPreviewKeyEvent { e ->
-                                if (e.type != KeyEventType.KeyDown || controls.visible) return@onPreviewKeyEvent false
-                                when (e.key) {
-                                    Key.DirectionUp, Key.DirectionDown, Key.Menu -> { controls.bump(); true }
-                                    Key.DirectionLeft -> { seekBy(-SEEK_STEP_MS); true }
-                                    Key.DirectionRight -> { seekBy(SEEK_STEP_MS); true }
-                                    else -> false
-                                }
+                            .focusProperties {
+                                down = barFocus
+                                up = skipFocus
+                                left = skipFocus
+                                right = skipFocus
                             },
                     ),
             )

@@ -198,6 +198,7 @@ class X4KPlayerAty : ComponentActivity() {
     private var controlsVisible = false
     private var scrubbing = false
     private var swallowWakeupKeyCode: Int = KeyEvent.KEYCODE_UNKNOWN
+    private var lastControlsWakeupMs: Long = 0L
 
     /** La espera de marca se está desvaneciendo (evita relanzar el fundido en cada sondeo). */
     private var loadingFading = false
@@ -1042,7 +1043,7 @@ class X4KPlayerAty : ComponentActivity() {
             }
             val playPause = FrameLayout(this).apply {
                 background = roundBackground(blue, 28)
-                setOnClickListener { togglePlay() }
+                setOnClickListener { if (canExecuteControlAction()) togglePlay() }
             }
             playPause.addView(icon(MODE_PAUSE), FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER))
             playPause.tvControl(blue, 28)
@@ -1156,6 +1157,7 @@ class X4KPlayerAty : ComponentActivity() {
                         if (focused && controlsVisible && !picking && !nextVisible && introView == null && !errorShown) scheduleHide()
                     }
                     seek.setOnKeyListener { _, keyCode, event ->
+                        if (!canExecuteControlAction()) return@setOnKeyListener true
                         if (event.action == KeyEvent.ACTION_DOWN) {
                             when (keyCode) {
                                 KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -1250,14 +1252,18 @@ class X4KPlayerAty : ComponentActivity() {
         setTextColor(Color.WHITE)
         setPadding(dp(12), dp(8), dp(12), dp(8))
         background = roundBackground(surface)
-        setOnClickListener { onClick() }
+        setOnClickListener {
+            if (isModalActive || canExecuteControlAction()) onClick()
+        }
     }
 
     private fun skipButton(mode: Int, label: String, onClick: () -> Unit): View {
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setOnClickListener { onClick() }
+            setOnClickListener {
+                if (canExecuteControlAction()) onClick()
+            }
         }
         col.addView(icon(mode), LinearLayout.LayoutParams(dp(30), dp(30)))
         col.addView(TextView(this).apply {
@@ -1408,6 +1414,7 @@ class X4KPlayerAty : ComponentActivity() {
         root().removeView(d)
         picker = null
         picking = false
+        lastControlsWakeupMs = android.os.SystemClock.uptimeMillis()
         setBackgroundFocusBlocked(false)
         if (isTv && introView == null && !errorShown) {
             val target = lastPickerSourceBtn ?: (if (liveMode) channelsBtn else playPauseBtn)
@@ -2919,62 +2926,55 @@ class X4KPlayerAty : ComponentActivity() {
         return focused != null && playerControls.contains(focused)
     }
 
+    private fun canExecuteControlAction(): Boolean {
+        if (!controlsVisible) return false
+        return com.chronosbvrx.visionplus.ui.player.canExecuteControlAction(
+            android.os.SystemClock.uptimeMillis(),
+            lastControlsWakeupMs,
+        )
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (swallowWakeupKeyCode != KeyEvent.KEYCODE_UNKNOWN && event.keyCode == swallowWakeupKeyCode) {
+        if (swallowWakeupKeyCode != KeyEvent.KEYCODE_UNKNOWN) {
             if (event.action == KeyEvent.ACTION_UP || event.isCanceled) {
                 swallowWakeupKeyCode = KeyEvent.KEYCODE_UNKNOWN
+                return true
             }
-            return true
-        }
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            swallowWakeupKeyCode = KeyEvent.KEYCODE_UNKNOWN
-            if (shouldWakeControlsWithoutAction(
-                    keyCode = event.keyCode,
-                    isTv = isTv,
-                    isControlsVisible = controlsVisible,
-                    hasControlFocus = hasFocusedControl(),
-                    isModalActive = isModalActive,
-                    isIntroActive = introView != null,
-                    isErrorShown = errorShown,
-                )
-            ) {
-                swallowWakeupKeyCode = event.keyCode
-                showControlsBriefly()
+            if (event.keyCode == swallowWakeupKeyCode) {
                 return true
             }
         }
-        if (event.action == KeyEvent.ACTION_DOWN && liveMode && !isModalActive && introView == null) {
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
-                    when (resolveLiveDpadAction(isPicking = isModalActive, isNavigationVisible = controlsVisible)) {
-                        LiveDpadAction.SHOW_NAVIGATION -> {
-                            swallowWakeupKeyCode = event.keyCode
-                            showControlsBriefly()
-                            return true
-                        }
-                        LiveDpadAction.SWITCH_CHANNEL -> {
-                            switchChannel(liveIndex + 1)
-                            showControlsBriefly()
-                            return true
-                        }
-                        LiveDpadAction.LIST_NAVIGATION -> Unit
-                    }
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            swallowWakeupKeyCode = KeyEvent.KEYCODE_UNKNOWN
+            val action = resolvePlayerKeyDownAction(
+                keyCode = event.keyCode,
+                isLive = liveMode,
+                isControlsVisible = controlsVisible,
+                hasControlFocus = if (isTv) hasFocusedControl() else controlsVisible,
+                isModalActive = isModalActive,
+                isIntroActive = introView != null,
+                isErrorShown = errorShown,
+            )
+            when (action) {
+                PlayerKeyDownAction.WAKE_CONTROLS_ONLY -> {
+                    swallowWakeupKeyCode = event.keyCode
+                    lastControlsWakeupMs = android.os.SystemClock.uptimeMillis()
+                    showControlsBriefly()
+                    return true
                 }
-                KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                    when (resolveLiveDpadAction(isPicking = isModalActive, isNavigationVisible = controlsVisible)) {
-                        LiveDpadAction.SHOW_NAVIGATION -> {
-                            swallowWakeupKeyCode = event.keyCode
-                            showControlsBriefly()
-                            return true
-                        }
-                        LiveDpadAction.SWITCH_CHANNEL -> {
-                            switchChannel(liveIndex - 1)
-                            showControlsBriefly()
-                            return true
-                        }
-                        LiveDpadAction.LIST_NAVIGATION -> Unit
-                    }
+                PlayerKeyDownAction.LIVE_SWITCH_NEXT_CHANNEL -> {
+                    switchChannel(liveIndex + 1)
+                    showControlsBriefly()
+                    return true
                 }
+                PlayerKeyDownAction.LIVE_SWITCH_PREV_CHANNEL -> {
+                    switchChannel(liveIndex - 1)
+                    showControlsBriefly()
+                    return true
+                }
+                PlayerKeyDownAction.PASS_TO_FOCUSED_CONTROL,
+                PlayerKeyDownAction.PASS_TO_MODAL_OR_SYSTEM,
+                PlayerKeyDownAction.DEDICATED_MEDIA_KEY -> Unit
             }
         }
         return super.dispatchKeyEvent(event)
@@ -2983,52 +2983,33 @@ class X4KPlayerAty : ComponentActivity() {
     /**
      * The remote, two lives:
      *  - a control holds the focus → the keys go to the focus system (navigate + activate);
-     *  - no control focused (controls hidden) → on TV, first D-pad press brings the controls
+     *  - no control focused (controls hidden) → first D-pad press ONLY brings the controls
      *    and lands focus without executing any action by itself.
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        val onControl = isTv && hasFocusedControl()
+        val onControl = if (isTv) hasFocusedControl() else controlsVisible
         val inModal = isModalActive
         if (nextVisible && !picking && introView == null && keyCode != KeyEvent.KEYCODE_MEDIA_PLAY && keyCode != KeyEvent.KEYCODE_MEDIA_PAUSE) {
             // La tarjeta de "siguiente" está al mando: el D-pad la navega y OK la confirma.
             return super.onKeyDown(keyCode, event)
         }
         when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_NUMPAD_ENTER,
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_MENU,
+            KeyEvent.KEYCODE_INFO,
+            KeyEvent.KEYCODE_GUIDE -> {
                 if (inModal || introView != null || onControl) return super.onKeyDown(keyCode, event)
-                // Mando: el primer toque muestra los controles, no actúa (ver sin pausar).
-                if (isTv && (!controlsVisible || !onControl)) {
-                    showControlsBriefly()
-                    return true
-                }
-                if (!liveMode) togglePlay() else showControlsBriefly()
+                // Regla inmutable: con controles ocultos o sin foco, el primer toque SOLO abre el menú.
+                showControlsBriefly()
                 return true
             }
             KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> {
                 if (inModal || introView != null || onControl) return super.onKeyDown(keyCode, event)
                 togglePlay()
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_LEFT -> {
-                if (inModal || introView != null || onControl) return super.onKeyDown(keyCode, event)
-                if (isTv && (!controlsVisible || !onControl)) {
-                    showControlsBriefly()
-                    return true
-                }
-                if (liveMode) switchChannel(liveIndex - 1)
-                else performSeekBy(-10_000L)
-                showControlsBriefly()
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (inModal || introView != null || onControl) return super.onKeyDown(keyCode, event)
-                if (isTv && (!controlsVisible || !onControl)) {
-                    showControlsBriefly()
-                    return true
-                }
-                if (liveMode) switchChannel(liveIndex + 1)
-                else performSeekBy(10_000L)
-                showControlsBriefly()
                 return true
             }
             KeyEvent.KEYCODE_MEDIA_REWIND -> {
@@ -3052,21 +3033,12 @@ class X4KPlayerAty : ComponentActivity() {
                     introSkip?.post { introSkip?.requestFocus() }
                     return true
                 }
-                if (liveMode) {
-                    when (resolveLiveDpadAction(isPicking = isModalActive, isNavigationVisible = controlsVisible)) {
-                        LiveDpadAction.SHOW_NAVIGATION -> {
-                            showControlsBriefly()
-                            return true
-                        }
-                        LiveDpadAction.SWITCH_CHANNEL -> {
-                            switchChannel(liveIndex + 1)
-                            showControlsBriefly()
-                            return true
-                        }
-                        LiveDpadAction.LIST_NAVIGATION -> return super.onKeyDown(keyCode, event)
-                    }
+                if (!controlsVisible || !onControl) {
+                    showControlsBriefly()
+                    return true
                 }
-                if (!onControl) {
+                if (liveMode) {
+                    switchChannel(liveIndex + 1)
                     showControlsBriefly()
                     return true
                 }
@@ -3078,21 +3050,12 @@ class X4KPlayerAty : ComponentActivity() {
                     introSkip?.post { introSkip?.requestFocus() }
                     return true
                 }
-                if (liveMode) {
-                    when (resolveLiveDpadAction(isPicking = isModalActive, isNavigationVisible = controlsVisible)) {
-                        LiveDpadAction.SHOW_NAVIGATION -> {
-                            showControlsBriefly()
-                            return true
-                        }
-                        LiveDpadAction.SWITCH_CHANNEL -> {
-                            switchChannel(liveIndex - 1)
-                            showControlsBriefly()
-                            return true
-                        }
-                        LiveDpadAction.LIST_NAVIGATION -> return super.onKeyDown(keyCode, event)
-                    }
+                if (!controlsVisible || !onControl) {
+                    showControlsBriefly()
+                    return true
                 }
-                if (!onControl) {
+                if (liveMode) {
+                    switchChannel(liveIndex - 1)
                     showControlsBriefly()
                     return true
                 }
@@ -3115,6 +3078,10 @@ class X4KPlayerAty : ComponentActivity() {
     /** Controls on screen for a moment, whatever hid them before. */
     private fun showControlsBriefly() {
         if (errorShown || picking || nextVisible) return
+        val wasHiddenOrUnfocused = !controlsVisible || (isTv && !hasFocusedControl())
+        if (wasHiddenOrUnfocused) {
+            lastControlsWakeupMs = android.os.SystemClock.uptimeMillis()
+        }
         controlsVisible = true
         controls?.visibility = View.VISIBLE
         refreshPlayIcon()

@@ -98,24 +98,95 @@ internal fun resolveDismissFocusTarget(lastPickerSource: String?, isLive: Boolea
     return lastPickerSource ?: if (isLive) "channels" else "playPause"
 }
 
+internal enum class PlayerKeyDownAction {
+    /** El primer clic con menú oculto (o sin foco en controles) SOLO abre el menú y enfoca sin ejecutar acción. */
+    WAKE_CONTROLS_ONLY,
+    /** El menú ya está visible y enfocado: en TV en vivo Arriba/Abajo cambia al canal siguiente. */
+    LIVE_SWITCH_NEXT_CHANNEL,
+    /** El menú ya está visible y enfocado: en TV en vivo Abajo/CH- cambia al canal anterior. */
+    LIVE_SWITCH_PREV_CHANNEL,
+    /** El menú ya está visible y un control tiene el foco: el sistema de foco mueve el cursor o activa el botón enfocado. */
+    PASS_TO_FOCUSED_CONTROL,
+    /** Hay un modal, pre-roll de intro o pantalla de error activa: el evento pasa al modal/intro/error. */
+    PASS_TO_MODAL_OR_SYSTEM,
+    /** Tecla multimedia física dedicada (Play/Pause/Rewind/FastForward de control remoto multimedia). */
+    DEDICATED_MEDIA_KEY,
+}
+
 /**
- * En Smart TV, cuando el menú de reproducción está oculto (o visible pero sin ningún botón enfocado)
- * y no hay modales ni intro activos, cualquier pulsación del D-pad (OK/Centro, Izquierda, Derecha,
- * Arriba, Abajo) debe únicamente abrir el menú de reproducción y posicionar el foco sin ejecutar
- * ninguna acción por sí sola (ni pausar, ni adelantar/atrasar, ni cambiar de canal).
+ * Política universal anti-regresión para TODOS los reproductores de Vision+
+ * (`X4KPlayerAty` Live/VOD, `PlayerCore` Live/VOD, `TitanLivePlayer`, `TitanVodPlayerScreen`):
+ *
+ * Regla inmutable:
+ * Cuando el menú de navegación está oculto (`!isControlsVisible`) o ningún control del menú tiene
+ * el foco (`!hasControlFocus`), el PRIMER clic en cualquier tecla de navegación del D-pad
+ * (`OK/Center`, `Enter`, `Izquierda`, `Derecha`, `Arriba`, `Abajo`, `Menu`, `CH+`, `CH-`)
+ * DEBE ÚNICAMENTE hacer visible el menú de navegación y posicionar el foco (`WAKE_CONTROLS_ONLY`).
+ * JAMÁS debe pausar, hacer seek ±10s, saltar intro, cambiar de canal ni salir del reproductor en el primer clic.
  */
+internal fun resolvePlayerKeyDownAction(
+    keyCode: Int,
+    isLive: Boolean,
+    isControlsVisible: Boolean,
+    hasControlFocus: Boolean = isControlsVisible,
+    isModalActive: Boolean = false,
+    isIntroActive: Boolean = false,
+    isErrorShown: Boolean = false,
+): PlayerKeyDownAction {
+    if (isModalActive || isIntroActive || isErrorShown) {
+        return PlayerKeyDownAction.PASS_TO_MODAL_OR_SYSTEM
+    }
+    if (isDedicatedMediaKeyCode(keyCode)) {
+        return PlayerKeyDownAction.DEDICATED_MEDIA_KEY
+    }
+    if (isDpadWakeupKeyCode(keyCode)) {
+        if (!isControlsVisible || !hasControlFocus) {
+            return PlayerKeyDownAction.WAKE_CONTROLS_ONLY
+        }
+        if (isLive) {
+            if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP || keyCode == android.view.KeyEvent.KEYCODE_CHANNEL_UP) {
+                return PlayerKeyDownAction.LIVE_SWITCH_NEXT_CHANNEL
+            }
+            if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN || keyCode == android.view.KeyEvent.KEYCODE_CHANNEL_DOWN) {
+                return PlayerKeyDownAction.LIVE_SWITCH_PREV_CHANNEL
+            }
+        }
+        return PlayerKeyDownAction.PASS_TO_FOCUSED_CONTROL
+    }
+    return PlayerKeyDownAction.PASS_TO_MODAL_OR_SYSTEM
+}
+
+internal const val CONTROL_ACTION_COOLDOWN_MS = 220L
+
+/**
+ * Evita que un mismo evento de tecla (por rebote o repetición rápida de hardware)
+ * ejecute inmediatamente una acción en el control recién enfocado tras abrir el menú.
+ */
+internal fun canExecuteControlAction(
+    nowMs: Long,
+    lastWakeupMs: Long,
+    cooldownMs: Long = CONTROL_ACTION_COOLDOWN_MS,
+): Boolean = (nowMs - lastWakeupMs) >= cooldownMs
+
 internal fun shouldWakeControlsWithoutAction(
     keyCode: Int,
-    isTv: Boolean,
+    isTv: Boolean = true,
     isControlsVisible: Boolean,
     hasControlFocus: Boolean = isControlsVisible,
     isModalActive: Boolean = false,
     isIntroActive: Boolean = false,
     isErrorShown: Boolean = false,
 ): Boolean {
-    if (!isTv || isModalActive || isIntroActive || isErrorShown) return false
-    if (isControlsVisible && hasControlFocus) return false
-    return isDpadWakeupKeyCode(keyCode)
+    if (!isTv) return false
+    return resolvePlayerKeyDownAction(
+        keyCode = keyCode,
+        isLive = false,
+        isControlsVisible = isControlsVisible,
+        hasControlFocus = hasControlFocus,
+        isModalActive = isModalActive,
+        isIntroActive = isIntroActive,
+        isErrorShown = isErrorShown,
+    ) == PlayerKeyDownAction.WAKE_CONTROLS_ONLY
 }
 
 internal fun isDpadWakeupKeyCode(keyCode: Int): Boolean = when (keyCode) {
@@ -127,6 +198,22 @@ internal fun isDpadWakeupKeyCode(keyCode: Int): Boolean = when (keyCode) {
     android.view.KeyEvent.KEYCODE_DPAD_UP,
     android.view.KeyEvent.KEYCODE_DPAD_DOWN,
     android.view.KeyEvent.KEYCODE_MENU,
+    android.view.KeyEvent.KEYCODE_CHANNEL_UP,
+    android.view.KeyEvent.KEYCODE_CHANNEL_DOWN,
+    android.view.KeyEvent.KEYCODE_INFO,
+    android.view.KeyEvent.KEYCODE_GUIDE,
+    -> true
+    else -> false
+}
+
+internal fun isDedicatedMediaKeyCode(keyCode: Int): Boolean = when (keyCode) {
+    android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+    android.view.KeyEvent.KEYCODE_MEDIA_PLAY,
+    android.view.KeyEvent.KEYCODE_MEDIA_PAUSE,
+    android.view.KeyEvent.KEYCODE_MEDIA_REWIND,
+    android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+    android.view.KeyEvent.KEYCODE_HEADSETHOOK,
+    android.view.KeyEvent.KEYCODE_SPACE,
     -> true
     else -> false
 }
