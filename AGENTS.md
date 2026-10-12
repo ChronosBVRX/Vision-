@@ -5,14 +5,34 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.44**
-  (versionCode **280**, release OTA v2.5.44). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.45**
+  (versionCode **281**, release OTA v2.5.45). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Rediseño Integral de la Pantalla Principal (Home Screen) — Estilo Cinematic Billboard** (v2.5.45):
+  - **Billboard Hero Dinámico e Interactivo en Smart TV (`TvHomeScreen.kt`)**:
+    - Encabezado con badge distintivo `🔥 TENDENCIA DE HOY` en gradiente `VisionBlue`.
+    - Título en tipografía grande blanca bold, metadatos en una línea (`Año · ★ Rating · Duración`) y sinopsis limpia.
+    - **Botones de acción directa con foco de mando**: `[ ▶ Reproducir ]` (aterrizaje inicial de foco en D-pad), `[ ℹ Detalles ]` y `[ ★ Favorito ]`.
+    - Fondo cinemático inmersivo con drift y degradado horizontal/vertical suave hacia el fondo oscuro.
+  - **Fila 1: "🔥 Top 10 en Vision+ Hoy" (Tendencias)**:
+    - Títulos de mayor impacto con números de posición gigantes estilizados en degradado neón (`1..10`).
+    - Badges de rating (`★ 10`, `★ 9.8`, etc.) y estado `TOP 10`.
+    - Tarjetas verticales estilo póster 2:3 (`TvPosterCard`, 140.dp).
+  - **Fila 2: "✨ Novedades y Estrenos"**:
+    - Catálogo reciente 2024–2026 con badge neón `NUEVO` y calificaciones.
+  - **Fila 3: "⏱️ Seguir viendo"**:
+    - Rediseñada con barra de avance en azul neón brillante `VisionBlue`, duración restante formateada, auto-ocultable si no hay contenido en progreso.
+  - **Experiencia Homologada en Teléfonos y Tablets (`home/HomeScreen.kt`)**:
+    - Incorporadas las filas prioritarias de Top 10 Tendencias con números gigantes y Novedades y Estrenos antes del resto de categorías.
+  - **Desplazamiento Fluido en TV**:
+    - `LazyColumn` a pantalla completa sin restricciones rígidas de altura, navegación D-pad con `MinimalScrollBringIntoView`.
+  - **Validación**: 161 pruebas unitarias pasando al 100%, compilación limpia y verificación directa vía ADB en Smart TV Box ZTE B866F.
 
 - **Reingeniería Integral del Menú de Opciones y Erradicación de Placebos del Sistema** (v2.5.44):
   - **Eliminación Total de Código Placebo y Obsoleto**:

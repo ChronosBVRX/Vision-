@@ -130,6 +130,29 @@ fun HomeScreen(
         homeLifecycle.lifecycle.addObserver(observer)
         onDispose { homeLifecycle.lifecycle.removeObserver(observer) }
     }
+    val allAvailableFilms = remember(rows, catalog.indexRows) {
+        (rows + catalog.indexRows).flatMap { it.films }.distinctBy { it.id }
+    }
+    val top10Films = remember(allAvailableFilms) {
+        allAvailableFilms
+            .filter { it.score > 0 }
+            .sortedByDescending { it.score * 10 + (if (it.year >= 2024) 8 else 0) }
+            .take(10)
+    }
+    val estrenosFilms = remember(allAvailableFilms, catalog.rows) {
+        val shelf = catalog.rows.firstOrNull { it.id.contains("estrenos", ignoreCase = true) }?.films.orEmpty()
+        (shelf + allAvailableFilms.filter { it.year >= 2024 }.sortedByDescending { it.year * 100 + it.score })
+            .distinctBy { it.id }
+            .take(15)
+    }
+    val otherRows = remember(rows) {
+        rows.filterNot { row ->
+            row.id.contains("estrenos", ignoreCase = true) ||
+                row.id == "favorites" ||
+                row.id == "watch-later"
+        }
+    }
+
     LazyColumn(
         contentPadding = PaddingValues(
             top = contentPadding.calculateTopPadding(),
@@ -152,6 +175,26 @@ fun HomeScreen(
             }
         }
         item(key = "selection") { Selections(onGoSection) }
+        if (top10Films.isNotEmpty()) {
+            item(key = "home_top10") {
+                FilmRow(
+                    row = CatalogRow("home-top10", "🔥 Top 10 en Vision+ Hoy", top10Films),
+                    posterWidth = sizes.posterWidth,
+                    onOpen = onOpenFilm,
+                    onSeeAll = { onGoSection(Route.Section("movies", "Películas")) },
+                )
+            }
+        }
+        if (estrenosFilms.isNotEmpty()) {
+            item(key = "home_estrenos") {
+                FilmRow(
+                    row = CatalogRow("home-estrenos", "✨ Novedades y Estrenos", estrenosFilms),
+                    posterWidth = sizes.posterWidth,
+                    onOpen = onOpenFilm,
+                    onSeeAll = { onGoSection(Route.Section("movies", "Películas")) },
+                )
+            }
+        }
         if (continueCards.isNotEmpty()) {
             item(key = "continue") { ContinueRow(cards = continueCards, onResume = onResume) }
         }
@@ -168,7 +211,7 @@ fun HomeScreen(
                 }
             }
         }
-        items(rows, key = { it.id }) { row ->
+        items(otherRows, key = { it.id }) { row ->
             val seeAllAction: (() -> Unit)? = remember(row) {
                 val t = row.title.lowercase()
                 when {

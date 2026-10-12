@@ -23,22 +23,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Animation
-import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Theaters
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,57 +47,58 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
-import com.chronosbvrx.visionplus.data.AppUpdate
+import coil.compose.AsyncImage
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.ResumeCard
+import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.XuperCatalog
-import com.chronosbvrx.visionplus.data.allFilms
-import com.chronosbvrx.visionplus.data.formatResume
-import com.chronosbvrx.visionplus.ui.components.GhostRow
 import com.chronosbvrx.visionplus.data.XuperStatus
+import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.ui.LocalReducedEffects
 import com.chronosbvrx.visionplus.ui.backdropFadeSpec
-import com.chronosbvrx.visionplus.ui.comingSoon
+import com.chronosbvrx.visionplus.ui.components.GhostRow
 import com.chronosbvrx.visionplus.ui.plugins.PluginUpdatesBellIcon
 import com.chronosbvrx.visionplus.ui.plugins.appUpdateBadgeCount
 import com.chronosbvrx.visionplus.ui.rememberHeroDrift
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
+import com.chronosbvrx.visionplus.ui.theme.VisionBlueDark
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
-import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-/** What the hero shows: the focused card's film. */
-private data class Featured(val title: String, val subtitle: String, val imageUrl: String?, val meta: String)
+/** Datos para el Billboard/Hero inmersivo del inicio. */
+private data class Featured(
+    val title: String,
+    val subtitle: String,
+    val imageUrl: String?,
+    val meta: String,
+    val film: Film? = null,
+)
 
-private fun Film.featured() = Featured(title, synopsis, posterUrl, metaLine())
+private fun Film.featured() = Featured(title, synopsis, posterUrl, metaLine(), this)
 
-/** How much the hero's background is enlarged so it can drift without a border showing. */
 private const val HERO_SCALE = 1.12f
-
-/** How long the drift takes to cross from one end to the other: slow, it should feel like breathing. */
 private const val HERO_DRIFT_MS = 14_000
 
-/** The selections row's height: its pills plus the gap between them and the first catalog row. */
-internal val SELECTIONS_HEIGHT = TAB_HEIGHT + 14.dp
-
-/**
- * Horizontal scroll that keeps the focused card at 30% of the row, so the row runs under a card that
- * stays still instead of dragging it against the edge.
- */
 @OptIn(ExperimentalFoundationApi::class)
 private val TvPivot = object : BringIntoViewSpec {
     @Suppress("OVERRIDE_DEPRECATION")
@@ -117,7 +112,6 @@ private val TvPivot = object : BringIntoViewSpec {
     }
 }
 
-/** Vertical scroll that only moves when the focused row is not fully visible already. */
 @OptIn(ExperimentalFoundationApi::class)
 private val MinimalScrollBringIntoView = object : BringIntoViewSpec {
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
@@ -132,10 +126,14 @@ private val MinimalScrollBringIntoView = object : BringIntoViewSpec {
 }
 
 /**
- * The TV Home: a fixed immersive hero (the focused film's backdrop, title and synopsis) over a zone
- * that scrolls exactly two rows of landscape cards, with the navigation rail on the left and, top
- * right, the plugin-updates bell and reload. The zone opens with the four sections of the person's
- * single source (TV en vivo, Películas, Series, Anime).
+ * Pantalla principal de Smart TV (Estilo Netflix / Max):
+ * 1. Billboard inmersivo en la parte superior con botones interactivos de mando:
+ *    [ ▶ Reproducir ], [ ℹ Detalles ], [ ★ Favorito ].
+ * 2. Fila 1: "🔥 Top 10 en Vision+ Hoy" (Tendencias) con pósteres 2:3 y números gigantes estilizados 1..10.
+ * 3. Fila 2: "✨ Novedades y Estrenos" con badges de estado NUEVO y calificación.
+ * 4. Fila 3: "⏱️ Seguir viendo" con avance real y captura.
+ * 5. Filas de catálogo y recomendaciones posteriores.
+ * 6. Optimizada para dispositivos limitados (take 15 por carrusel, Coil 320x480).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -151,56 +149,76 @@ fun TvHomeScreen(
 ) {
     val context = LocalContext.current
     val reduced = LocalReducedEffects.current
-    // Solo las filas curadas: el índice primero pintaba sus categorías y al llegar el portal
-    // todo cambiaba a sus repisas nativas a mitad de sesión (el "cambio de clasificación").
+
     val rows = catalog.personalRows + catalog.rows
-    androidx.compose.runtime.LaunchedEffect(Unit) { catalog.refreshPersonal() }
-    // El índice cacheado pinta al instante; lo fresco lo reemplaza en cuanto llega.
+    LaunchedEffect(Unit) { catalog.refreshPersonal() }
+
     val noCatalogMessage = when {
         rows.isNotEmpty() -> null
         catalog.loading || catalog.status == XuperStatus.LOADING -> "Cargando tu contenido…"
         else -> "Tu contenido no está disponible ahora mismo. Revisa tu conexión e intenta de nuevo."
     }
-    var featured by remember { mutableStateOf(rows.firstOrNull()?.films?.firstOrNull()?.featured()) }
-    // El héroe sigue al foco asentado, no a cada tarjeta que el mando roza: sin esta pausa
-    // cada movimiento recargaba la imagen y el desplazamiento iba a tirones.
+
+    // Colección unificada de títulos disponibles para curar Tendencias y Estrenos
+    val allAvailableFilms = remember(rows, catalog.indexRows) {
+        (rows + catalog.indexRows).flatMap { it.films }.distinctBy { it.id }
+    }
+
+    // 1. Top 10 Tendencias: películas/series con mejor calificación e impacto
+    val top10Films = remember(allAvailableFilms) {
+        allAvailableFilms
+            .filter { it.score > 0 }
+            .sortedByDescending { it.score * 10 + (if (it.year >= 2024) 8 else 0) }
+            .take(10)
+    }
+
+    // 2. Novedades y Estrenos: catálogo 2024-2026 y repisa de estrenos
+    val estrenosFilms = remember(allAvailableFilms, catalog.rows) {
+        val shelf = catalog.rows.firstOrNull { it.id.contains("estrenos", ignoreCase = true) }?.films.orEmpty()
+        (shelf + allAvailableFilms.filter { it.year >= 2024 }.sortedByDescending { it.year * 100 + it.score })
+            .distinctBy { it.id }
+            .take(15)
+    }
+
+    // 3. Filas restantes del catálogo (evitando duplicar estrenos y listas personales en la cabecera)
+    val otherRows = remember(rows) {
+        rows.filterNot { row ->
+            row.id.contains("estrenos", ignoreCase = true) ||
+                row.id == "favorites" ||
+                row.id == "watch-later"
+        }
+    }
+
     var focusFilm by remember { mutableStateOf<Film?>(null) }
+    var featured by remember {
+        mutableStateOf(
+            top10Films.firstOrNull()?.featured()
+                ?: rows.firstOrNull()?.films?.firstOrNull()?.featured(),
+        )
+    }
+
     LaunchedEffect(focusFilm) {
         val settled = focusFilm ?: return@LaunchedEffect
         delay(if (reduced) 320L else 180L)
         if (focusFilm == settled) featured = settled.featured()
     }
-    // The card a film page was opened from, so Back lands on it again.
-    var returnKey by rememberSaveable { mutableStateOf<String?>(null) }
-    // Lands on the card a film page was opened from, else on the first card.
-    // Con memoria de riel, el foco de Inicio queda de respaldo (el riel lo pide): un solo dueño.
+
     val landing = rememberLandingFocus(if (railReturn.isEmpty()) Unit else null)
     val rowsListState = rememberLazyListState()
 
-    // Snap the rows zone to a row boundary when it stops, so two whole rows show, never three halves.
-    LaunchedEffect(rowsListState) {
-        snapshotFlow { rowsListState.isScrollInProgress }.collect { inMotion ->
-            if (inMotion) return@collect
-            val offset = rowsListState.firstVisibleItemScrollOffset
-            if (offset == 0) return@collect
-            val height = rowsListState.layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: return@collect
-            val target = rowsListState.firstVisibleItemIndex + if (offset > height / 2) 1 else 0
-            runCatching { rowsListState.animateScrollToItem(target) }
+    // El primer elemento al cargar obtiene el protagonismo en el billboard
+    LaunchedEffect(top10Films, rows) {
+        if (featured == null) {
+            featured = top10Films.firstOrNull()?.featured()
+                ?: rows.firstOrNull()?.films?.firstOrNull()?.featured()
         }
-    }
-
-    // The catalog arrives from the source after the first frame: give the hero its first film.
-    LaunchedEffect(rows) {
-        if (featured == null && rows.isNotEmpty()) {
-            featured = rows.first().films.firstOrNull()?.featured()
-        }
-        // Si la recarga reconstruyó las filas bajo el foco, el mando vuelve solo a la primera tarjeta.
         delay(150)
-        if (!FocusRescue.screenHasFocus && rows.isNotEmpty()) landing.request()
+        if (!FocusRescue.screenHasFocus && (top10Films.isNotEmpty() || rows.isNotEmpty())) {
+            landing.request()
+        }
     }
 
-    // «Seguir viendo»: se recarga al volver del reproductor (otra actividad: al regresar
-    // hay ON_RESUME aunque la ruta sea la misma y nada se recomponga solo).
+    // «Seguir viendo»: se recarga al volver del reproductor
     var continueCards by remember { mutableStateOf<List<ResumeCard>>(emptyList()) }
     val homeScope = rememberCoroutineScope()
     fun reloadContinue() {
@@ -231,16 +249,15 @@ fun TvHomeScreen(
         onDispose { homeLifecycle.lifecycle.removeObserver(observer) }
     }
 
-    // Fixed-size cards and rows: the rows zone measures exactly the selections row plus two rows (label + card).
-    val cardHeight = 92.dp
-    val labelHeight = 26.dp
-    val rowGap = 14.dp
-    val rowsTopPad = 6.dp
-    val rowUnit = labelHeight + cardHeight + rowGap
-    val rowsRegionHeight = rowUnit * 2 + rowsTopPad + SELECTIONS_HEIGHT
+    val currentFilm = focusFilm ?: featured?.film ?: top10Films.firstOrNull() ?: allAvailableFilms.firstOrNull()
+    var inFavorites by remember(currentFilm?.id) {
+        mutableStateOf(currentFilm?.let { UserLibrary.isFavorite(context, it.id) } ?: false)
+    }
+
     val heroDrift by rememberHeroDrift(reduced, HERO_DRIFT_MS)
 
     Box(Modifier.fillMaxSize().background(VisionBlack)) {
+        // Fondo cinemático inmersivo con drift y degradado suave
         Crossfade(targetState = featured?.imageUrl, animationSpec = backdropFadeSpec(reduced), label = "bg") { url ->
             Box(Modifier.fillMaxSize()) {
                 AsyncImage(
@@ -248,10 +265,9 @@ fun TvHomeScreen(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .fillMaxWidth(0.62f)
-                        .fillMaxHeight()
+                        .fillMaxWidth(0.68f)
+                        .fillMaxHeight(0.75f)
                         .align(Alignment.TopEnd)
-                        // Enlarged a bit and wandering within that slack, so a border never shows.
                         .graphicsLayer {
                             if (!reduced) {
                                 val margin = size.width * (HERO_SCALE - 1f) / 2f
@@ -265,71 +281,52 @@ fun TvHomeScreen(
         }
         Box(
             Modifier.fillMaxSize().background(
-                Brush.horizontalGradient(listOf(VisionBlack, VisionBlack, VisionBlack.copy(alpha = 0.15f), Color.Transparent)),
+                Brush.horizontalGradient(listOf(VisionBlack, VisionBlack, VisionBlack.copy(alpha = 0.45f), Color.Transparent)),
             ),
         )
         Box(
             Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color.Transparent, VisionBlack.copy(alpha = 0.4f), VisionBlack)),
+                Brush.verticalGradient(listOf(Color.Transparent, VisionBlack.copy(alpha = 0.6f), VisionBlack)),
             ),
         )
 
+        // Contenido con riel a la izquierda y desplazamiento vertical fluido
         Column(Modifier.fillMaxSize().padding(start = TV_RAIL_CONTENT_START)) {
-            Column(
-                Modifier.fillMaxWidth().weight(1f).padding(horizontal = 48.dp, vertical = 28.dp),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                featured?.let { f ->
-                    Text(
-                        f.title,
-                        style = MaterialTheme.typography.displaySmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth(0.55f),
-                    )
-                    if (f.meta.isNotBlank()) {
-                        Text(
-                            f.meta,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 8.dp).fillMaxWidth(0.55f),
-                        )
-                    }
-                    if (f.subtitle.isNotBlank()) {
-                        Text(
-                            f.subtitle,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = VisionTextSecondary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 8.dp).fillMaxWidth(0.55f),
-                        )
-                    }
-                }
-            }
-
             CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollBringIntoView) {
                 LazyColumn(
                     state = rowsListState,
-                    modifier = Modifier.fillMaxWidth().height(rowsRegionHeight).padding(top = rowsTopPad),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp),
                 ) {
-                    // Sin botones de acción: el inicio es solo contenido, estilo Netflix (los accesos viven en el riel).
+                    // 1. BILLBOARD HERO INTERACTIVO CON ACCIONES DIRECTAS
+                    item(key = "billboard") {
+                        HeroBillboard(
+                            featured = featured,
+                            currentFilm = currentFilm,
+                            inFavorites = inFavorites,
+                            landing = landing,
+                            onOpenFilm = onOpenFilm,
+                            onToggleFavorite = {
+                                currentFilm?.let { f ->
+                                    UserLibrary.toggleFavorite(context, f)
+                                    inFavorites = !inFavorites
+                                }
+                            },
+                        )
+                    }
+
+                    // Estados de carga o reintento si el catálogo aún no responde
                     if (rows.isEmpty() && catalog.loading) {
                         item(key = "ghosts") {
-                            Column(Modifier.padding(horizontal = 48.dp)) {
-                                GhostRow(count = 5, cardWidth = 190.dp, cardHeight = 108.dp, horizontalPadding = 0.dp)
-                                GhostRow(count = 5, cardWidth = 190.dp, cardHeight = 108.dp, horizontalPadding = 0.dp)
-                                GhostRow(count = 5, cardWidth = 190.dp, cardHeight = 108.dp, horizontalPadding = 0.dp)
+                            Column(Modifier.padding(horizontal = 48.dp, vertical = 12.dp)) {
+                                GhostRow(count = 5, cardWidth = 140.dp, cardHeight = 210.dp, horizontalPadding = 0.dp)
+                                GhostRow(count = 5, cardWidth = 140.dp, cardHeight = 210.dp, horizontalPadding = 0.dp)
                             }
                         }
                     } else if (noCatalogMessage != null) {
                         item(key = "norows") {
                             val scope = rememberCoroutineScope()
-                            Column(Modifier.padding(horizontal = 48.dp)) {
+                            Column(Modifier.padding(horizontal = 48.dp, vertical = 16.dp)) {
                                 Text(
                                     noCatalogMessage,
                                     style = MaterialTheme.typography.titleMedium,
@@ -342,53 +339,66 @@ fun TvHomeScreen(
                             }
                         }
                     }
+
+                    // 2. FILA 1: 🔥 TOP 10 EN VISION+ HOY (TENDENCIAS CON NÚMEROS GIGANTES)
+                    if (top10Films.isNotEmpty()) {
+                        item(key = "home_top10") {
+                            HomePosterRow(
+                                title = "🔥 Top 10 en Vision+ Hoy",
+                                films = top10Films,
+                                isTop10 = true,
+                                onFocusFilm = { focusFilm = it },
+                                onOpenFilm = onOpenFilm,
+                            )
+                        }
+                    }
+
+                    // 3. FILA 2: ✨ NOVEDADES Y ESTRENOS
+                    if (estrenosFilms.isNotEmpty()) {
+                        item(key = "home_estrenos") {
+                            HomePosterRow(
+                                title = "✨ Novedades y Estrenos",
+                                films = estrenosFilms,
+                                isNew = true,
+                                onFocusFilm = { focusFilm = it },
+                                onOpenFilm = onOpenFilm,
+                            )
+                        }
+                    }
+
+                    // 4. FILA 3: ⏱️ SEGUIR VIENDO (REDiseñado con barra de avance neón)
                     if (continueCards.isNotEmpty()) {
                         item(key = "continue") {
                             ContinueRow(
                                 cards = continueCards,
-                                cardHeight = cardHeight,
                                 onFocusFilm = { focusFilm = it },
                                 onResume = onResume,
                             )
                         }
                     }
-                    items(rows, key = { it.id }) { row ->
+
+                    // 5. RESTO DE FILAS CURADAS POR GÉNEROS Y SECCIONES DEL PORTAL
+                    items(otherRows, key = { it.id }) { row ->
                         val limitedFilms = remember(row.films) { row.films.take(15) }
-                        Column {
-                            TvRowLabel(row.title, labelHeight)
-                            CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
-                                LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 48.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                ) {
-                                    items(limitedFilms, key = { "${row.id}-${it.id}" }) { film ->
-                                        val cardKey = "${row.id}-${film.id}"
-                                        val isLanding = if (returnKey != null) cardKey == returnKey else row == rows.first() && film == row.films.first()
-                                        val modifier = if (isLanding) Modifier.landingFocus(landing) else Modifier
-                                        TvLandscapeCard(
-                                            title = film.title,
-                                            imageUrl = film.posterUrl,
-                                            cardHeight = cardHeight,
-                                            modifier = modifier,
-                                            onFocus = { focusFilm = film },
-                                            onClick = {
-                                                returnKey = cardKey
-                                                onOpenFilm(film)
-                                            },
-                                        )
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.height(rowGap))
-                        }
+                        HomePosterRow(
+                            title = row.title,
+                            films = limitedFilms,
+                            onFocusFilm = { focusFilm = it },
+                            onOpenFilm = onOpenFilm,
+                        )
                     }
-                    item(key = "rows_bottom_pad") { Spacer(Modifier.height(rowGap)) }
+
+                    item(key = "end_spacer") {
+                        Spacer(Modifier.height(32.dp))
+                    }
                 }
             }
         }
 
+        // Riel de navegación lateral con D-pad
         TvSideRail(railItems, Modifier.align(Alignment.CenterStart), bottomItems)
-        // The app's releases bell sits beside reload, as on the phone's Home; it checks once here.
+
+        // Campana de actualizaciones del sistema
         var showPluginUpdates by rememberSaveable { mutableStateOf(false) }
         val updatesBadge = appUpdateBadgeCount()
         if (showPluginUpdates) {
@@ -409,7 +419,8 @@ fun TvHomeScreen(
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { PluginUpdatesBellIcon(updatesBadge) }
         }
-        // Reload sits in the top right corner: an action on the screen, not a place to go.
+
+        // Botón de recarga de catálogo
         val reloadScope = rememberCoroutineScope()
         Surface(
             onClick = { reloadScope.launch { catalog.load() } },
@@ -432,43 +443,206 @@ fun TvHomeScreen(
 }
 
 /**
- * «Seguir viendo»: lo quedado a medias, con su avance y el minuto, para reanudar con OK.
+ * Billboard Cinemático del Hero con badge, metadatos y botones directos interactivos.
+ */
+@Composable
+private fun HeroBillboard(
+    featured: Featured?,
+    currentFilm: Film?,
+    inFavorites: Boolean,
+    landing: LandingFocus?,
+    onOpenFilm: (Film) -> Unit,
+    onToggleFavorite: () -> Unit,
+) {
+    if (featured == null) return
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 48.dp, vertical = 20.dp),
+    ) {
+        // Badge superior distintivo
+        Box(
+            modifier = Modifier
+                .background(
+                    Brush.horizontalGradient(listOf(VisionBlue, VisionBlueDark)),
+                    shape = RoundedCornerShape(4.dp),
+                )
+                .padding(horizontal = 9.dp, vertical = 4.dp),
+        ) {
+            Text(
+                text = "🔥 TENDENCIA DE HOY",
+                style = TextStyle(
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.6.sp,
+                ),
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // Título estilizado en blanco limpio
+        Text(
+            text = featured.title,
+            style = MaterialTheme.typography.displaySmall,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(0.58f),
+        )
+
+        // Metadatos (Año, Calificación, Género / Temporadas)
+        if (featured.meta.isNotBlank()) {
+            Text(
+                text = featured.meta,
+                style = MaterialTheme.typography.titleSmall,
+                color = Color.White.copy(alpha = 0.85f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 6.dp).fillMaxWidth(0.58f),
+            )
+        }
+
+        // Sinopsis
+        if (featured.subtitle.isNotBlank()) {
+            Text(
+                text = featured.subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = VisionTextSecondary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 6.dp).fillMaxWidth(0.55f),
+            )
+        }
+
+        // Botones de acción directa con foco de control remoto
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.padding(top = 16.dp),
+        ) {
+            TvCompactAction(
+                label = "▶  Reproducir",
+                modifier = if (landing != null) Modifier.landingFocus(landing) else Modifier,
+                onClick = { currentFilm?.let(onOpenFilm) },
+            )
+            TvCompactAction(
+                label = "ℹ  Detalles",
+                onClick = { currentFilm?.let(onOpenFilm) },
+            )
+            TvCompactAction(
+                label = if (inFavorites) "★ En Favoritos" else "☆ Favorito",
+                onClick = onToggleFavorite,
+            )
+        }
+    }
+}
+
+/**
+ * Fila moderna con pósteres verticales 2:3, números Top 10 y badges.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HomePosterRow(
+    title: String,
+    films: List<Film>,
+    isTop10: Boolean = false,
+    isNew: Boolean = false,
+    onFocusFilm: (Film) -> Unit,
+    onOpenFilm: (Film) -> Unit,
+) {
+    val safeFilms = remember(films) { films.distinctBy { it.id }.take(15) }
+    if (safeFilms.isEmpty()) return
+
+    Column(modifier = Modifier.padding(top = 18.dp)) {
+        TvRowLabel(title, 26.dp)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 48.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                itemsIndexed(safeFilms, key = { idx, film -> "${title}-${film.id}-${idx}" }) { idx, film ->
+                    val rank = if (isTop10 && idx in 0..9) idx + 1 else null
+                    val badge = when {
+                        isTop10 -> "TOP 10"
+                        isNew || film.year >= 2025 -> "NUEVO"
+                        else -> null
+                    }
+                    Column(Modifier.width(140.dp)) {
+                        TvPosterCard(
+                            title = film.title,
+                            imageUrl = film.posterUrl,
+                            score = film.score,
+                            badge = badge,
+                            rank = rank,
+                            onFocus = { onFocusFilm(film) },
+                            onClick = { onOpenFilm(film) },
+                        )
+                        Text(
+                            text = film.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+    }
+}
+
+/**
+ * Fila moderna de «Seguir viendo» con barra de avance en azul neón brillante.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ContinueRow(
     cards: List<ResumeCard>,
-    cardHeight: Dp,
     onFocusFilm: (Film) -> Unit,
     onResume: (ResumeCard) -> Unit,
 ) {
-    Column {
-        TvRowLabel("Seguir viendo", 26.dp)
+    if (cards.isEmpty()) return
+    Column(modifier = Modifier.padding(top = 18.dp)) {
+        TvRowLabel("⏱️ Seguir viendo", 26.dp)
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 items(cards, key = { it.entry.key }) { card ->
-                    Column(Modifier.width(178.dp)) {
+                    val film = card.film
+                    val title = film?.title ?: card.entry.title
+                    Column(Modifier.width(196.dp)) {
                         TvLandscapeCard(
-                            title = card.film?.title ?: card.entry.title,
-                            imageUrl = card.film?.posterUrl ?: card.entry.posterUrl.takeIf { it.isNotBlank() },
-                            cardHeight = cardHeight,
-                            onFocus = { card.film?.let(onFocusFilm) },
+                            title = title,
+                            imageUrl = film?.posterUrl ?: card.entry.posterUrl.takeIf { it.isNotBlank() },
+                            cardHeight = 110.dp,
+                            onFocus = { film?.let(onFocusFilm) },
                             onClick = { onResume(card) },
                         )
                         Box(
-                            Modifier.padding(top = 6.dp).fillMaxWidth().height(3.dp)
+                            Modifier
+                                .padding(top = 6.dp)
+                                .fillMaxWidth()
+                                .height(4.dp)
                                 .background(Color.White.copy(alpha = 0.25f), CircleShape),
                         ) {
                             Box(
-                                Modifier.fillMaxHeight().fillMaxWidth(card.progress)
-                                    .background(VisionBlue, CircleShape),
+                                Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(card.progress.coerceIn(0.04f, 1f))
+                                    .background(
+                                        Brush.horizontalGradient(listOf(VisionBlue, VisionBlueBright)),
+                                        CircleShape,
+                                    ),
                             )
                         }
                         Text(
-                            "Continuar en " + formatResume(card.entry.positionMs),
+                            text = "Continuar en " + formatResume(card.entry.positionMs),
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.85f),
                             maxLines = 1,
@@ -479,6 +653,6 @@ private fun ContinueRow(
                 }
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
     }
 }
