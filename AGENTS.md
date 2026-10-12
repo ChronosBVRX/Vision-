@@ -28,6 +28,10 @@
       1. *Auto-Retry Transparente en `XtvHandoff`*: Implementado bucle de reintento automático de hasta 3 intentos totales (intento inicial + 2 reintentos transparentes) con retardos progresivos (400 ms, 800 ms). Si ocurre un fallo transitorio en el primer intento, se auto-recupera en milisegundos de forma transparente, abriendo el video directo sin interrumpir al usuario ni exigir pulsar "Reintentar".
       2. *Auto-Recuperación de Sesión en `X4KApi.kt`*: En `prepareVod`, si la consulta a `/v10/startPlayVOD` no obtiene medios en la primera pasada, invoca de inmediato `renewSession(context)` y reintenta la llamada. En `isSessionFailure`, incorporada detección exhaustiva de códigos del portal (`portal 100001..100008`, `200000..200002`, `300001`, `HTTP 401..403`).
       3. *Resiliencia en `playVod` y `X4KPlayerAty.kt`*: Reintento automático interno en `playVod` y en el cambio de capítulo de series (`playEpisode`).
+  - **Entorno de Emulación Frameless (Móvil y Smart TV Low-End)**:
+    - `Vision_Chromecast_TV`: Perfil Smart TV 1080p (1920x1080, 320 dpi), memoria limitada a 1.5 GB RAM (`hw.ramSize = 1536`) y heap de 256 MB para emular exactamente un Chromecast with Google TV. Activa `DeviceKind.isTelevision()` y `DevicePerformance.isLowEndDevice()`. Controlable con teclado de PC vía D-Pad (Flechas, Enter, Esc). Ventana limpia sin marco (`-no-skin`).
+    - `Vision_Phone`: Perfil móvil vertical limpio (1080x2400) sin carcasa de plástico.
+    - Scripts de un solo clic: `run_emulator_tv.bat` (TV), `run_emulator.bat` (Móvil) e `iniciar_emulador.bat` (Selector interactivo).
   - **Validación**: 165+ pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) y 34 pruebas de backend (`pytest server/tests/`) pasando al 100%. Release OTA v2.5.47.
 
 - **Simplificación Integral del Menú Lateral (6 Pilares Globales), Colecciones Rápidas y Corrección Definitiva de Pérdida de Foco D-Pad al Regresar** (v2.5.46):
