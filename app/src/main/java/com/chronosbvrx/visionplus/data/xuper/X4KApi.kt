@@ -6,6 +6,7 @@ import android.util.Base64
 import android.util.Log
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -1011,11 +1012,17 @@ object X4KApi {
                 kotlinx.coroutines.delay(800)
                 item = itemInfo(context, cid)
             }
-            var durMs = parseDurationMs(item?.optString("duration").orEmpty())
+            var durMs = extractDurationMs(item)
             // Los capítulos de serie no suelen traer duración propia: heredar de la ficha de la serie.
             if (durMs <= 0L && sid.isNotBlank()) {
                 val seriesItem = itemInfo(context, sid)
-                durMs = parseDurationMs(seriesItem?.optString("duration").orEmpty())
+                durMs = extractDurationMs(seriesItem)
+            }
+            if (durMs <= 0L) {
+                val hist = PlaybackHistory.get(context, cid)
+                if (hist != null && hist.durationMs > 60_000L) {
+                    durMs = hist.durationMs
+                }
             }
             // Si el portal no la reporta, aplicar la duración declarada en catálogo (Film.durationMin).
             if (durMs <= 0L && fallbackDurationMs > 0L) {
@@ -1038,6 +1045,12 @@ object X4KApi {
                         }
                     }
                 }.getOrNull() ?: continue
+                if (durMs <= 0L) {
+                    durMs = extractDurationMs(d)
+                    if (durMs <= 0L) {
+                        durMs = extractDurationMs(d.optJSONArray("episodeList")?.optJSONObject(0))
+                    }
+                }
                 val list = collectMedias(d)
                 if (list.length() > 0) {
                     medias = list
@@ -1051,6 +1064,30 @@ object X4KApi {
                 subsLangs = item?.optString("subsInfo").orEmpty(),
             )
         }
+    }
+
+    /**
+     * Extrae de forma robusta la duración en ms desde cualquier objeto JSON del portal
+     * (assetData, startPlayVOD, episodeList, etc.).
+     */
+    internal fun extractDurationMs(obj: JSONObject?): Long {
+        if (obj == null) return 0L
+        val stringFields = listOf("duration", "playLength", "totalTime", "runtime", "len", "length", "videoTime")
+        for (f in stringFields) {
+            val v = obj.optString(f, "").trim()
+            if (v.isNotBlank()) {
+                val parsed = parseDurationMs(v)
+                if (parsed > 0L) return parsed
+            }
+        }
+        val longFields = listOf("duration", "playLength", "totalTime", "runtime")
+        for (f in longFields) {
+            val v = obj.optLong(f, 0L)
+            if (v > 0L) {
+                return parseDurationMs(v.toString())
+            }
+        }
+        return 0L
     }
 
     /**

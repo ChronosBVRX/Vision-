@@ -5,14 +5,39 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.37**
-  (versionCode **273**, release OTA v2.5.37). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.38**
+  (versionCode **274**, release OTA v2.5.38). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Restauración de Duración Total Inmutable y Scrubber Interactivo de Búsqueda Fina** (v2.5.38):
+  - **Diagnóstico Forense de la Regresión de Duración Total (`--:--` o `00:00`)**:
+    - En `X4KTitan.kt`, el listener por reflexión `bd.a` hacía cast de `args?.firstOrNull() as? Long`. Cuando el motor nativo Titan devolvía `Integer` (`java.lang.Integer`) para `V0(duration)` o `P3(position)`, el casteo fallaba silenciosamente a `null`, impidiendo que `onDuration` se ejecutara.
+    - En `X4KApi.kt`, `prepareVod` sólo leía `item?.optString("duration")`, ignorando variantes del JSON del portal como `playLength`, `totalTime`, `runtime`, `length`, `videoTime` o datos retornados en `startPlayVOD` (`d` / `episodeList`).
+    - En `X4KPlayerAty.kt`, la consulta en segundo plano de `itemInfo` en `onCreate` estaba condicionada a `if (curSeries.isNotBlank())`, dejando películas sueltas sin duración conocida sin consultar la API.
+    - En `TvTitleScreen.kt` y `TitleScreen.kt`, la duración recuperada del portal se mostraba sólo en la etiqueta visual pero no se inyectaba en `EpisodePlay.durationMs`.
+    - En `PlayerScreen.kt` (`PlayerCore`), la barra `SeekBar` tenía `enabled = durationMs > 0`, bloqueando el desplazamiento si no se cargaba inmediatamente la duración.
+  - **Diagnóstico Forense del Desplazamiento por la Barra (Scrubber Navigation)**:
+    - Cuando `total <= 0`, tocar o arrastrar la barra en pantalla o mando evaluaba `progressMs()` en `0L`, provocando que al soltar hiciera seek al segundo 0 (reinicio de la película).
+    - Al mantener presionado el D-pad izquierdo o derecho sobre la barra de progreso, se ejecutaba `X4KTitan.seekTo` de forma síncrona en cada repetición de tecla (`repeatCount`), saturando los decodificadores nativos de hardware con congelamientos y tartamudeos severos. Navegar 45 minutos requería cientos de pulsaciones lentas.
+  - **Soluciones Implementadas**:
+    - **`X4KTitan.kt`**: Casteo universal numérico `(args?.firstOrNull() as? Number)?.toLong()` en `V0` y `P3`. Método `durationMs(view)` con consulta directa a la vista nativa y al estado del facade `yc.h.p(0)`.
+    - **`X4KApi.kt`**: Función universal `extractDurationMs(json)` soportando campos en texto y numéricos (`duration`, `playLength`, `totalTime`, `runtime`, `len`, `length`, `videoTime`). `prepareVod` enriquecido inspeccionando `item`, `sid`, `PlaybackHistory` y respuestas de `startPlayVOD`.
+    - **`X4KPlayerAty.kt`**:
+      - Consulta asíncrona de `itemInfo` en `onCreate` tanto para películas como para series.
+      - Desplazamiento interactivo fluido a 60 FPS con `previewSeekMs` y paso dinámico progresivo `calculateScrubStepMs(total, event.repeatCount)` (10s–30s base -> 60s tras 1s -> 120s tras 2s -> 300s tras 5s).
+      - Commit desacoplado con debounce de 350 ms (`commitSeekRunnable`) o al presionar Enter / cambiar de botón / soltar, evitando saturar el decodificador nativo mientras se visualiza el minuto deseado en pantalla en tiempo real.
+      - Arrastre táctil en móvil calculando el tiempo objetivo directamente de `progress * total / 1000L`.
+    - **`PlayerScreen.kt`**: `fallbackDuration` y `declaredDurationMs` leen `episode.durationMs`, habilitando la barra de inmediato y aplicando paso dinámico progresivo.
+    - **`ControlsState.kt`**: Incorporada la función `calculateScrubStepMs(totalMs, repeatCount)`.
+    - **`TvTitleScreen.kt` / `TitleScreen.kt` / `Navigation.kt`**: Propagación íntegra de `durationMs` en `EpisodePlay`.
+  - **Blindaje de la Suite Anti-Regresiones (`PlayerNavigationTest.kt`)**:
+    - Agregadas pruebas para `calculateScrubStepMsProgressiveAcceleration` y `extractDurationMsFromPortalJson`. Total de pruebas pasando: 140 de Android (100%) y 33 de backend (100%).
+
 
 - **Política Universal Anti-Regresiones de Controles D-Pad en Todos los Reproductores** (v2.5.37):
   - **Diagnóstico y Análisis Forense Integral de los 6 Reproductores de la App**:

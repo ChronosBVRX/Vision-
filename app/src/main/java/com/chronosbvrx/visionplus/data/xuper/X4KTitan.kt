@@ -610,11 +610,42 @@ object X4KTitan {
     /** Current position (ms), straight from the engine (-1 when unknown). */
     fun positionMs(): Long = try {
         val f = facade ?: return -1L
-        f.javaClass.methods.first {
+        val m = f.javaClass.methods.firstOrNull {
             it.name == "o" && it.parameterCount == 1 && it.parameterTypes[0] == java.lang.Integer.TYPE
-        }.invoke(f, 0) as? Long ?: -1L
+        }
+        (m?.invoke(f, 0) as? Number)?.toLong() ?: -1L
     } catch (e: Exception) {
         -1L
+    }
+
+    /** Engine duration (ms), queried from view or facade status (-1 when unknown). */
+    fun durationMs(view: View? = null): Long {
+        return try {
+            if (view != null) {
+                val m = view.javaClass.methods.firstOrNull {
+                    (it.name == "getDuration" || it.name == "duration") && it.parameterCount == 0
+                }
+                val d = (m?.invoke(view) as? Number)?.toLong()
+                if (d != null && d > 0L) return d
+            }
+            val f = facade
+            if (f != null) {
+                val status = f.javaClass.methods.firstOrNull {
+                    it.name == "p" && it.parameterCount == 1 && it.parameterTypes[0] == java.lang.Integer.TYPE
+                }?.invoke(f, 0)
+                if (status != null) {
+                    val durMethod = status.javaClass.methods.firstOrNull {
+                        (it.name == "getDuration" || it.name == "duration" || it.name == "e" || it.name == "d") &&
+                            it.parameterCount == 0 && (it.returnType == java.lang.Long.TYPE || it.returnType == java.lang.Integer.TYPE)
+                    }
+                    val d = (durMethod?.invoke(status) as? Number)?.toLong()
+                    if (d != null && d > 0L) return d
+                }
+            }
+            -1L
+        } catch (e: Exception) {
+            -1L
+        }
     }
 
     /**
@@ -631,8 +662,8 @@ object X4KTitan {
             val iface = cl.loadClass("bd.a")
             Proxy.newProxyInstance(cl, arrayOf(iface), InvocationHandler { _, method, args ->
                 when (method.name) {
-                    "P3" -> (args?.firstOrNull() as? Long)?.let(onPosition)
-                    "V0" -> (args?.firstOrNull() as? Long)?.let(onDuration)
+                    "P3" -> (args?.firstOrNull() as? Number)?.toLong()?.let(onPosition)
+                    "V0" -> (args?.firstOrNull() as? Number)?.toLong()?.let(onDuration)
                     "z2" -> onCompletion()
                 }
                 when (method.returnType) {

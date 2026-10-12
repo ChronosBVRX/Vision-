@@ -48,6 +48,8 @@ data class EpisodePlay(
     val seasonIndex: Int = 0,
     /** Al reanudar desde «Seguir viendo»: el minuto donde quedó. */
     val resumeMs: Long = 0,
+    /** Duración exacta en ms si la ficha del portal la declaró. */
+    val durationMs: Long = 0L,
 )
 
 /** A tiny back stack: the app has no deep links or process restore to care about. */

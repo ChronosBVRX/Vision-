@@ -94,6 +94,24 @@ internal fun calculateSeekTarget(currentPosMs: Long, deltaMs: Long, durationMs: 
     return (currentPosMs + deltaMs).coerceIn(0L, total)
 }
 
+/**
+ * Calcula el salto en milisegundos para el scrubber según la duración total
+ * y acelera exponencialmente cuando la tecla se mantiene presionada en el mando.
+ */
+internal fun calculateScrubStepMs(totalMs: Long, repeatCount: Int = 0): Long {
+    val baseStep = when {
+        totalMs > 90 * 60_000L -> 30_000L
+        totalMs > 30 * 60_000L -> 20_000L
+        else -> 10_000L
+    }
+    return when {
+        repeatCount >= 30 -> 300_000L
+        repeatCount >= 15 -> 120_000L
+        repeatCount >= 5  -> 60_000L
+        else -> baseStep
+    }
+}
+
 internal fun resolveDismissFocusTarget(lastPickerSource: String?, isLive: Boolean): String {
     return lastPickerSource ?: if (isLive) "channels" else "playPause"
 }

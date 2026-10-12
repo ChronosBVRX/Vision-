@@ -459,5 +459,52 @@ class PlayerNavigationTest {
         assertTrue(canExecuteControlAction(nowMs = 1220L, lastWakeupMs = wakeupTime))
         assertTrue(canExecuteControlAction(nowMs = 1500L, lastWakeupMs = wakeupTime))
     }
+
+    @Test
+    fun calculateScrubStepMsProgressiveAcceleration() {
+        val twoHourMovie = 120 * 60_000L
+        val episode45m = 45 * 60_000L
+        val shortEp = 20 * 60_000L
+
+        // Pulsación simple (repeatCount = 0): paso base según duración
+        assertEquals(30_000L, calculateScrubStepMs(twoHourMovie, repeatCount = 0))
+        assertEquals(20_000L, calculateScrubStepMs(episode45m, repeatCount = 0))
+        assertEquals(10_000L, calculateScrubStepMs(shortEp, repeatCount = 0))
+
+        // Mantener presionado (repeatCount >= 5): acelera a 1 minuto por tick
+        assertEquals(60_000L, calculateScrubStepMs(twoHourMovie, repeatCount = 5))
+        assertEquals(60_000L, calculateScrubStepMs(twoHourMovie, repeatCount = 10))
+
+        // Mantener presionado prolongado (repeatCount >= 15): acelera a 2 minutos por tick
+        assertEquals(120_000L, calculateScrubStepMs(twoHourMovie, repeatCount = 15))
+        assertEquals(120_000L, calculateScrubStepMs(twoHourMovie, repeatCount = 25))
+
+        // Mantener presionado continuo (repeatCount >= 30): acelera a 5 minutos por tick para cruzar la película en segundos
+        assertEquals(300_000L, calculateScrubStepMs(twoHourMovie, repeatCount = 30))
+        assertEquals(300_000L, calculateScrubStepMs(twoHourMovie, repeatCount = 50))
+    }
+
+    @Test
+    fun extractDurationMsFromPortalJson() {
+        // Objeto con string "duration"
+        val obj1 = org.json.JSONObject().put("duration", "01:45:00")
+        assertEquals(105 * 60_000L, com.chronosbvrx.visionplus.data.xuper.X4KApi.extractDurationMs(obj1))
+
+        // Objeto con string "playLength"
+        val obj2 = org.json.JSONObject().put("playLength", "90 min")
+        assertEquals(90 * 60_000L, com.chronosbvrx.visionplus.data.xuper.X4KApi.extractDurationMs(obj2))
+
+        // Objeto con long numérico en segundos
+        val obj3 = org.json.JSONObject().put("totalTime", 5400L)
+        assertEquals(90 * 60_000L, com.chronosbvrx.visionplus.data.xuper.X4KApi.extractDurationMs(obj3))
+
+        // Objeto con string numérico en minutos
+        val obj4 = org.json.JSONObject().put("runtime", "120")
+        assertEquals(120 * 60_000L, com.chronosbvrx.visionplus.data.xuper.X4KApi.extractDurationMs(obj4))
+
+        // Objeto nulo o vacío
+        assertEquals(0L, com.chronosbvrx.visionplus.data.xuper.X4KApi.extractDurationMs(null))
+        assertEquals(0L, com.chronosbvrx.visionplus.data.xuper.X4KApi.extractDurationMs(org.json.JSONObject()))
+    }
 }
 

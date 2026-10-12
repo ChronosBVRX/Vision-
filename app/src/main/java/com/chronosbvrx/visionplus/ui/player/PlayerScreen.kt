@@ -166,7 +166,7 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
         // El capítulo llega con su contexto: el handoff ("Abriendo…") sale al instante y el
         // portal resuelve detrás, en vez del click muerto de lanzar el play en segundo plano.
         val ep = episode
-        val fallbackDuration = if (film.durationMin > 0) film.durationMin * 60_000L else 0L
+        val fallbackDuration = if (ep != null && ep.durationMs > 0) ep.durationMs else if (film.durationMin > 0) film.durationMin * 60_000L else 0L
         XtvHandoff(
             title = film.title + (ep?.titleSuffix.orEmpty()),
             prepare = {
@@ -212,7 +212,7 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
         showIntro = true,
         resumeInfo = ResumeInfo(film.videoUrl, film.title, film.posterUrl, streamUrl),
         resumeMs = resumeMs,
-        declaredDurationMs = if (film.durationMin > 0) film.durationMin * 60_000L else 0L,
+        declaredDurationMs = if (episode != null && episode.durationMs > 0) episode.durationMs else if (film.durationMin > 0) film.durationMin * 60_000L else 0L,
     )
 }
 
@@ -1150,12 +1150,18 @@ private fun PlayerCore(
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                 ) {
                     if (!introPlaying && !isLive) {
+                        val totalDur = if (durationMs > 0) durationMs else declaredDurationMs
                         val shownPosition = dragValue?.toLong() ?: positionMs
+                        val seekStepMs = when {
+                            totalDur > 90 * 60_000L -> 30_000L
+                            totalDur > 30 * 60_000L -> 20_000L
+                            else -> 10_000L
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(formatDuration(shownPosition), color = Color.White, style = MaterialTheme.typography.labelMedium)
                             SeekBar(
                                 positionMs = shownPosition,
-                                durationMs = durationMs,
+                                durationMs = totalDur,
                                 bufferedFraction = bufferedFraction,
                                 focused = barFocused,
                                 onDrag = { dragValue = it; controls.bump() },
@@ -1176,15 +1182,15 @@ private fun PlayerCore(
                                                 up = if (showSkip) skipFocus else barFocus
                                             }
                                             // The bar's D-pad is handled here, before the Slider's own key handler:
-                                            // left/right jump 10 s, down goes to the buttons, OK toggles play/pause.
+                                            // left/right jump smoothly with dynamic step, down goes to the buttons, OK toggles play/pause.
                                             .onPreviewKeyEvent { e ->
                                                 if (!canExecuteControlAction()) return@onPreviewKeyEvent true
                                                 val arrow = e.key == Key.DirectionUp || e.key == Key.DirectionDown ||
                                                     e.key == Key.DirectionLeft || e.key == Key.DirectionRight
                                                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent arrow
                                                 when (e.key) {
-                                                    Key.DirectionRight -> { seekBy(SEEK_STEP_MS); true }
-                                                    Key.DirectionLeft -> { seekBy(-SEEK_STEP_MS); true }
+                                                    Key.DirectionRight -> { seekBy(seekStepMs); true }
+                                                    Key.DirectionLeft -> { seekBy(-seekStepMs); true }
                                                     Key.DirectionDown -> { runCatching { playPauseFocus.requestFocus() }; true }
                                                     Key.DirectionUp -> {
                                                         if (showSkip) runCatching { skipFocus.requestFocus() }
@@ -1198,7 +1204,7 @@ private fun PlayerCore(
                                             .focusable(),
                                     ),
                             )
-                            Text(formatDuration(durationMs), color = Color.White, style = MaterialTheme.typography.labelMedium)
+                            Text(formatDuration(totalDur), color = Color.White, style = MaterialTheme.typography.labelMedium)
                         }
                         Spacer(Modifier.height(8.dp))
                     }

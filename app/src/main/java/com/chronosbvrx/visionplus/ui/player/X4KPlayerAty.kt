@@ -65,6 +65,15 @@ class X4KPlayerAty : ComponentActivity() {
     private var seekBar: SeekBar? = null
     private var timeNow: TextView? = null
     private var timeTotal: TextView? = null
+    private var previewSeekMs: Long = -1L
+    private val commitSeekRunnable = Runnable {
+        if (previewSeekMs >= 0L) {
+            val target = previewSeekMs
+            previewSeekMs = -1L
+            scrubbing = false
+            playerView?.let { com.chronosbvrx.visionplus.data.xuper.X4KTitan.seekTo(it, target) }
+        }
+    }
     private var controls: View? = null
     private var loadingOverlay: View? = null
     private var errorOverlay: View? = null
@@ -277,15 +286,22 @@ class X4KPlayerAty : ComponentActivity() {
             runCatching { String(android.util.Base64.decode(it, android.util.Base64.DEFAULT)) }.getOrNull()
         }.orEmpty()
         curSeries = intent.getStringExtra("seriesId").orEmpty()
-        if (declaredDurationMs <= 0L && !liveMode && curSeries.isNotBlank()) {
+        if (declaredDurationMs <= 0L && !liveMode) {
             Thread {
-                val sItem = kotlinx.coroutines.runBlocking { X4KApi.itemInfo(this@X4KPlayerAty, curSeries) }
-                val d = X4KApi.parseDurationMs(sItem?.optString("duration").orEmpty())
-                if (d > 0L) {
-                    runOnUiThread {
-                        if (declaredDurationMs <= 0L) {
-                            declaredDurationMs = d
-                            timeTotal?.text = fmt(d)
+                val targetId = if (curSeries.isNotBlank()) curSeries else code
+                if (targetId.isNotBlank()) {
+                    val sItem = kotlinx.coroutines.runBlocking { X4KApi.itemInfo(this@X4KPlayerAty, targetId) }
+                    val d = X4KApi.extractDurationMs(sItem)
+                    if (d > 0L) {
+                        runOnUiThread {
+                            if (declaredDurationMs <= 0L) {
+                                declaredDurationMs = d
+                                timeTotal?.text = fmt(d)
+                                val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
+                                if (!scrubbing && d > 0) {
+                                    seekBar?.progress = ((pos * 1000) / d).toInt().coerceIn(0, 1000)
+                                }
+                            }
                         }
                     }
                 }
@@ -523,19 +539,26 @@ class X4KPlayerAty : ComponentActivity() {
                     }
                 },
                 onDuration = { dur ->
-                    val isSeries = curSeries.isNotBlank() || epIds.isNotEmpty()
-                    if (isSeries && dur >= 5 * 60_000L) {
-                        // En series cada episodio tiene su propia duración real del archivo (p. ej. 22–58 min).
-                        declaredDurationMs = dur
+                    if (dur > 0L) {
                         durationMs = dur
-                    } else if (declaredDurationMs > 0L) {
-                        // Si el motor reporta una duración válida cercana al archivo completo (>= 80%),
-                        // refinamos con precisión milimétrica. Descartamos fragmentos parciales HLS (< 80%).
-                        if (dur > 0L && dur >= declaredDurationMs * 0.8) {
+                        val isSeries = curSeries.isNotBlank() || epIds.isNotEmpty()
+                        if (isSeries && dur >= 5 * 60_000L) {
+                            declaredDurationMs = dur
+                        } else if (declaredDurationMs <= 0L) {
+                            declaredDurationMs = dur
+                        } else if (dur >= declaredDurationMs * 0.8) {
                             declaredDurationMs = dur
                         }
-                    } else if (dur > 0L) {
-                        durationMs = dur
+                        runOnUiThread {
+                            val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
+                            if (total > 0) {
+                                timeTotal?.text = fmt(total)
+                                val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
+                                if (!scrubbing) {
+                                    seekBar?.progress = ((pos * 1000) / total).toInt().coerceIn(0, 1000)
+                                }
+                            }
+                        }
                     }
                 },
                 onCompletion = {
@@ -853,12 +876,22 @@ class X4KPlayerAty : ComponentActivity() {
             thumbTintList = android.content.res.ColorStateList.valueOf(blueBright)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                    if (fromUser) timeNow?.text = fmt(progressMs())
+                    if (fromUser) {
+                        val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
+                        val targetMs = if (total > 0) (progress.toLong() * total) / 1000L else 0L
+                        timeNow?.text = fmt(targetMs)
+                    }
                 }
-                override fun onStartTrackingTouch(sb: SeekBar?) { scrubbing = true }
+                override fun onStartTrackingTouch(sb: SeekBar?) {
+                    scrubbing = true
+                    scheduleHide()
+                }
                 override fun onStopTrackingTouch(sb: SeekBar?) {
+                    val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
+                    val targetMs = if (total > 0 && sb != null) (sb.progress.toLong() * total) / 1000L else 0L
+                    playerView?.let { com.chronosbvrx.visionplus.data.xuper.X4KTitan.seekTo(it, targetMs) }
                     scrubbing = false
-                    playerView?.let { X4KTitan.seekTo(it, progressMs()) }
+                    scheduleHide()
                 }
             })
         }
@@ -1154,34 +1187,63 @@ class X4KPlayerAty : ComponentActivity() {
                     playerControls.add(seek)
                     seek.onFocusChangeListener = View.OnFocusChangeListener { _, focused ->
                         seek.thumbTintList = android.content.res.ColorStateList.valueOf(if (focused) Color.WHITE else blueBright)
+                        if (!focused && previewSeekMs >= 0L) {
+                            handler.removeCallbacks(commitSeekRunnable)
+                            commitSeekRunnable.run()
+                        }
                         if (focused && controlsVisible && !picking && !nextVisible && introView == null && !errorShown) scheduleHide()
                     }
                     seek.setOnKeyListener { _, keyCode, event ->
                         if (!canExecuteControlAction()) return@setOnKeyListener true
                         if (event.action == KeyEvent.ACTION_DOWN) {
                             when (keyCode) {
-                                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                    performSeekBy(-10_000L)
-                                    true
-                                }
-                                KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                    performSeekBy(10_000L)
+                                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                    val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
+                                    val current = if (previewSeekMs >= 0L) previewSeekMs else com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
+                                    val step = com.chronosbvrx.visionplus.ui.player.calculateScrubStepMs(total, event.repeatCount)
+                                    val delta = if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -step else step
+                                    val newPos = if (total > 0) (current + delta).coerceIn(0L, total) else (current + delta).coerceAtLeast(0L)
+                                    scrubbing = true
+                                    previewSeekMs = newPos
+                                    if (total > 0) {
+                                        seek.progress = ((newPos * 1000) / total).toInt().coerceIn(0, 1000)
+                                    }
+                                    timeNow?.text = fmt(newPos)
+                                    handler.removeCallbacks(commitSeekRunnable)
+                                    handler.postDelayed(commitSeekRunnable, 350L)
+                                    scheduleHide()
                                     true
                                 }
                                 KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                    if (previewSeekMs >= 0L) {
+                                        handler.removeCallbacks(commitSeekRunnable)
+                                        commitSeekRunnable.run()
+                                    }
                                     playPauseBtn?.requestFocus()
                                     true
                                 }
                                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                                    togglePlay()
+                                    if (previewSeekMs >= 0L) {
+                                        handler.removeCallbacks(commitSeekRunnable)
+                                        commitSeekRunnable.run()
+                                    } else {
+                                        togglePlay()
+                                    }
                                     true
                                 }
                                 else -> false
                             }
                         } else if (event.action == KeyEvent.ACTION_UP) {
-                            keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                                if (previewSeekMs >= 0L) {
+                                    handler.removeCallbacks(commitSeekRunnable)
+                                    handler.postDelayed(commitSeekRunnable, 150L)
+                                }
+                                true
+                            } else {
                                 keyCode == KeyEvent.KEYCODE_DPAD_DOWN || keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-                                keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+                                    keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+                            }
                         } else {
                             false
                         }
@@ -2808,7 +2870,13 @@ class X4KPlayerAty : ComponentActivity() {
         override fun run() {
             val v = playerView
             if (v != null) {
-                val pos = X4KTitan.positionMs().coerceAtLeast(0L)
+                val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
+                if (!liveMode && declaredDurationMs <= 0L && durationMs <= 0L) {
+                    val engineDur = com.chronosbvrx.visionplus.data.xuper.X4KTitan.durationMs(v)
+                    if (engineDur > 0L) {
+                        durationMs = engineDur
+                    }
+                }
                 val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
                 val hasLivePlayback = liveMode && (pos > 0 || X4KTitan.isPlaying(v) || (System.currentTimeMillis() - startedAtMs > 1200))
                 if (pos > 0 || hasLivePlayback) {

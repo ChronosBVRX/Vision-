@@ -72,14 +72,15 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
     var qualities by remember(film.id) { mutableStateOf<List<String>>(emptyList()) }
     var itemLine by remember(film.id) { mutableStateOf("") }
     var durationLabel by remember(film.id) { mutableStateOf("") }
-    var description by remember(film.id) { mutableStateOf(film.synopsis) }
-    var episodePrograms by remember(film.id) { mutableStateOf<List<X4KApi.EpisodeProgram>>(emptyList()) }
-    var watchedTick by remember(film.id) { mutableStateOf(0) }
     var selectedSeason by remember(film.id) { mutableStateOf(film.seasons.firstOrNull()) }
     val activeId = selectedSeason?.titleId ?: film.id
     val seasonIdx = film.seasons.indexOfFirst { it.titleId == activeId }.coerceAtLeast(0)
     val seasonIdList = remember(film.id) { film.seasons.map { it.titleId } }
     val seasonNameList = remember(film.id) { film.seasons.map { if (it.n <= 0) "Completa" else "T${it.n}" } }
+    var itemDurationMs by remember(film.id, activeId) { mutableStateOf(0L) }
+    var description by remember(film.id) { mutableStateOf(film.synopsis) }
+    var episodePrograms by remember(film.id) { mutableStateOf<List<X4KApi.EpisodeProgram>>(emptyList()) }
+    var watchedTick by remember(film.id) { mutableStateOf(0) }
     val episodes = remember(episodePrograms) { episodePrograms.map { it.contentId } }
     val episodeNames = remember(episodePrograms) { episodePrograms.map { it.name } }
 
@@ -111,7 +112,9 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                     }
                 }
             }
-            val duration = prettyDuration(item.optString("duration"))
+            val durMs = X4KApi.extractDurationMs(item)
+            if (durMs > 0L) itemDurationMs = durMs
+            val duration = prettyDuration(item.optString("duration").ifBlank { if (durMs > 0) "${durMs / 60_000} min" else "" })
             durationLabel = duration
             val year = item.optString("releaseTime").take(4).takeIf { it.length == 4 } ?: ""
             val subs = item.optString("subsInfo").split(',').map { it.trim() }.filter { it.isNotBlank() }
@@ -278,6 +281,7 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                                         seasonIds = seasonIdList,
                                         seasonNames = seasonNameList,
                                         seasonIndex = seasonIdx,
+                                        durationMs = itemDurationMs,
                                     ),
                                 )
                             }
@@ -289,9 +293,17 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                                     seasonIds = seasonIdList,
                                     seasonNames = seasonNameList,
                                     seasonIndex = seasonIdx,
+                                    durationMs = itemDurationMs,
                                 ),
                             )
-                            else -> onPlay(null)
+                            else -> onPlay(
+                                if (itemDurationMs > 0L) {
+                                    EpisodePlay(
+                                        code = film.videoUrl.substringAfter(':'),
+                                        durationMs = itemDurationMs,
+                                    )
+                                } else null
+                            )
                         }
                     },
                     colors = visionTvButtonColors(),
@@ -335,6 +347,7 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                                 seasonIds = seasonIdList,
                                 seasonNames = seasonNameList,
                                 seasonIndex = seasonIdx,
+                                durationMs = itemDurationMs,
                             ),
                         )
                     },
