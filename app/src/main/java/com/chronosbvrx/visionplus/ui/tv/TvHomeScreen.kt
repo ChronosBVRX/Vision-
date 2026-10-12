@@ -3,6 +3,7 @@ package com.chronosbvrx.visionplus.ui.tv
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.BringIntoViewSpec
@@ -28,7 +29,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Animation
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -42,7 +47,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.tv.material3.Border
+import com.chronosbvrx.visionplus.ui.Route
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -142,10 +152,12 @@ fun TvHomeScreen(
     railItems: List<TvRailItem>,
     bottomItems: List<TvRailItem> = emptyList(),
     railReturn: String = "",
+    returnFilmId: String? = null,
     onOpenFilm: (Film) -> Unit,
     onOpenLive: () -> Unit,
     onOpenCategories: () -> Unit,
     onResume: (ResumeCard) -> Unit,
+    onGoRoute: (Route) -> Unit = {},
 ) {
     val context = LocalContext.current
     val reduced = LocalReducedEffects.current
@@ -204,7 +216,22 @@ fun TvHomeScreen(
     }
 
     val landing = rememberLandingFocus(if (railReturn.isEmpty()) Unit else null)
+    val returnRequester = remember { FocusRequester() }
     val rowsListState = rememberLazyListState()
+
+    // Al regresar de la ficha de una película, restaurar foco en la tarjeta exacta
+    LaunchedEffect(returnFilmId) {
+        if (returnFilmId == null) return@LaunchedEffect
+        repeat(12) {
+            if (FocusRescue.screenHasFocus) return@LaunchedEffect
+            val ok = runCatching { returnRequester.requestFocus() }.isSuccess
+            if (ok) return@LaunchedEffect
+            delay(60)
+        }
+        if (!FocusRescue.screenHasFocus) {
+            landing.request()
+        }
+    }
 
     // El primer elemento al cargar obtiene el protagonismo en el billboard
     LaunchedEffect(top10Films, rows) {
@@ -213,7 +240,7 @@ fun TvHomeScreen(
                 ?: rows.firstOrNull()?.films?.firstOrNull()?.featured()
         }
         delay(150)
-        if (!FocusRescue.screenHasFocus && (top10Films.isNotEmpty() || rows.isNotEmpty())) {
+        if (!FocusRescue.screenHasFocus && returnFilmId == null && (top10Films.isNotEmpty() || rows.isNotEmpty())) {
             landing.request()
         }
     }
@@ -305,6 +332,8 @@ fun TvHomeScreen(
                             currentFilm = currentFilm,
                             inFavorites = inFavorites,
                             landing = landing,
+                            returnRequester = returnRequester,
+                            returnFilmId = returnFilmId,
                             onOpenFilm = onOpenFilm,
                             onToggleFavorite = {
                                 currentFilm?.let { f ->
@@ -313,6 +342,11 @@ fun TvHomeScreen(
                                 }
                             },
                         )
+                    }
+
+                    // 2. ACCESOS RÁPIDOS A COLECCIONES Y ESPECIALES (Brand Hubs: Fútbol, Anime, Novelas, Categorías)
+                    item(key = "home_quick_hubs") {
+                        TvQuickHubsRow(onGoRoute = onGoRoute)
                     }
 
                     // Estados de carga o reintento si el catálogo aún no responde
@@ -340,49 +374,57 @@ fun TvHomeScreen(
                         }
                     }
 
-                    // 2. FILA 1: 🔥 TOP 10 EN VISION+ HOY (TENDENCIAS CON NÚMEROS GIGANTES)
+                    // 3. FILA 1: 🔥 TOP 10 EN VISION+ HOY (TENDENCIAS CON NÚMEROS GIGANTES)
                     if (top10Films.isNotEmpty()) {
                         item(key = "home_top10") {
                             HomePosterRow(
                                 title = "🔥 Top 10 en Vision+ Hoy",
                                 films = top10Films,
                                 isTop10 = true,
+                                returnRequester = returnRequester,
+                                returnFilmId = returnFilmId,
                                 onFocusFilm = { focusFilm = it },
                                 onOpenFilm = onOpenFilm,
                             )
                         }
                     }
 
-                    // 3. FILA 2: ✨ NOVEDADES Y ESTRENOS
+                    // 4. FILA 2: ✨ NOVEDADES Y ESTRENOS
                     if (estrenosFilms.isNotEmpty()) {
                         item(key = "home_estrenos") {
                             HomePosterRow(
                                 title = "✨ Novedades y Estrenos",
                                 films = estrenosFilms,
                                 isNew = true,
+                                returnRequester = returnRequester,
+                                returnFilmId = returnFilmId,
                                 onFocusFilm = { focusFilm = it },
                                 onOpenFilm = onOpenFilm,
                             )
                         }
                     }
 
-                    // 4. FILA 3: ⏱️ SEGUIR VIENDO (REDiseñado con barra de avance neón)
+                    // 5. FILA 3: ⏱️ SEGUIR VIENDO (REDiseñado con barra de avance neón)
                     if (continueCards.isNotEmpty()) {
                         item(key = "continue") {
                             ContinueRow(
                                 cards = continueCards,
+                                returnRequester = returnRequester,
+                                returnFilmId = returnFilmId,
                                 onFocusFilm = { focusFilm = it },
                                 onResume = onResume,
                             )
                         }
                     }
 
-                    // 5. RESTO DE FILAS CURADAS POR GÉNEROS Y SECCIONES DEL PORTAL
+                    // 6. RESTO DE FILAS CURADAS POR GÉNEROS Y SECCIONES DEL PORTAL
                     items(otherRows, key = { it.id }) { row ->
                         val limitedFilms = remember(row.films) { row.films.take(15) }
                         HomePosterRow(
                             title = row.title,
                             films = limitedFilms,
+                            returnRequester = returnRequester,
+                            returnFilmId = returnFilmId,
                             onFocusFilm = { focusFilm = it },
                             onOpenFilm = onOpenFilm,
                         )
@@ -443,6 +485,120 @@ fun TvHomeScreen(
 }
 
 /**
+ * Accesos rápidos a Colecciones y Especiales (Brand Hubs: Fútbol, Anime, Novelas, Categorías).
+ */
+private data class TvQuickHub(
+    val title: String,
+    val badge: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val route: Route,
+)
+
+private val TV_QUICK_HUBS = listOf(
+    TvQuickHub("Fútbol en Vivo", "EN DIRECTO", Icons.Default.SportsSoccer, Route.Sports),
+    TvQuickHub("Anime", "COLECCIÓN", Icons.Default.Animation, Route.Section("anime", "Anime")),
+    TvQuickHub("Novelas", "POPULAR", Icons.Default.AutoStories, Route.Section("novelas", "Novelas")),
+    TvQuickHub("Categorías", "EXPLORAR", Icons.Default.GridView, Route.Categories),
+)
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TvQuickHubsRow(
+    onGoRoute: (Route) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.padding(top = 10.dp, bottom = 4.dp)) {
+        TvRowLabel("✨ Colecciones y Especiales", 22.dp)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 48.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                items(TV_QUICK_HUBS, key = { it.title }) { hub ->
+                    TvQuickHubCard(hub = hub, onClick = { onGoRoute(hub.route) })
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun TvQuickHubCard(
+    hub: TvQuickHub,
+    onClick: () -> Unit,
+) {
+    var hasFocus by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .width(184.dp)
+            .height(68.dp)
+            .onFocusChanged { hasFocus = it.hasFocus },
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = VisionBlack.copy(alpha = 0.65f),
+            focusedContainerColor = VisionBlue,
+            pressedContainerColor = VisionBlueDark,
+        ),
+        border = ClickableSurfaceDefaults.border(
+            border = Border(
+                BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                shape = RoundedCornerShape(12.dp),
+            ),
+            focusedBorder = Border(
+                BorderStroke(2.dp, VisionBlueBright),
+                shape = RoundedCornerShape(12.dp),
+            ),
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(
+                        if (hasFocus) Color.White.copy(alpha = 0.22f) else VisionBlue.copy(alpha = 0.18f),
+                        CircleShape,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = hub.icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = if (hasFocus) Color.White else VisionBlueBright,
+                )
+            }
+            Column(verticalArrangement = Arrangement.Center) {
+                Text(
+                    text = hub.badge,
+                    style = TextStyle(
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.6.sp,
+                        color = if (hasFocus) Color.White.copy(alpha = 0.9f) else VisionBlueBright,
+                    ),
+                )
+                Text(
+                    text = hub.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/**
  * Billboard Cinemático del Hero con badge, metadatos y botones directos interactivos.
  */
 @Composable
@@ -451,6 +607,8 @@ private fun HeroBillboard(
     currentFilm: Film?,
     inFavorites: Boolean,
     landing: LandingFocus?,
+    returnRequester: FocusRequester? = null,
+    returnFilmId: String? = null,
     onOpenFilm: (Film) -> Unit,
     onToggleFavorite: () -> Unit,
 ) {
@@ -518,13 +676,18 @@ private fun HeroBillboard(
         }
 
         // Botones de acción directa con foco de control remoto
+        val isHeroTarget = returnFilmId != null && currentFilm?.id == returnFilmId
         Row(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.padding(top = 16.dp),
         ) {
             TvCompactAction(
                 label = "▶  Reproducir",
-                modifier = if (landing != null) Modifier.landingFocus(landing) else Modifier,
+                modifier = when {
+                    isHeroTarget && returnRequester != null -> Modifier.focusRequester(returnRequester)
+                    landing != null -> Modifier.landingFocus(landing)
+                    else -> Modifier
+                },
                 onClick = { currentFilm?.let(onOpenFilm) },
             )
             TvCompactAction(
@@ -549,6 +712,8 @@ private fun HomePosterRow(
     films: List<Film>,
     isTop10: Boolean = false,
     isNew: Boolean = false,
+    returnRequester: FocusRequester? = null,
+    returnFilmId: String? = null,
     onFocusFilm: (Film) -> Unit,
     onOpenFilm: (Film) -> Unit,
 ) {
@@ -569,6 +734,7 @@ private fun HomePosterRow(
                         isNew || film.year >= 2025 -> "NUEVO"
                         else -> null
                     }
+                    val isReturn = returnRequester != null && film.id == returnFilmId
                     Column(Modifier.width(140.dp)) {
                         TvPosterCard(
                             title = film.title,
@@ -576,6 +742,7 @@ private fun HomePosterRow(
                             score = film.score,
                             badge = badge,
                             rank = rank,
+                            modifier = if (isReturn) Modifier.focusRequester(returnRequester) else Modifier,
                             onFocus = { onFocusFilm(film) },
                             onClick = { onOpenFilm(film) },
                         )
@@ -602,6 +769,8 @@ private fun HomePosterRow(
 @Composable
 private fun ContinueRow(
     cards: List<ResumeCard>,
+    returnRequester: FocusRequester? = null,
+    returnFilmId: String? = null,
     onFocusFilm: (Film) -> Unit,
     onResume: (ResumeCard) -> Unit,
 ) {
@@ -616,11 +785,13 @@ private fun ContinueRow(
                 items(cards, key = { it.entry.key }) { card ->
                     val film = card.film
                     val title = film?.title ?: card.entry.title
+                    val isReturn = returnRequester != null && (film?.id == returnFilmId || card.entry.key == returnFilmId || card.entry.xtvCode == returnFilmId)
                     Column(Modifier.width(196.dp)) {
                         TvLandscapeCard(
                             title = title,
                             imageUrl = film?.posterUrl ?: card.entry.posterUrl.takeIf { it.isNotBlank() },
                             cardHeight = 110.dp,
+                            modifier = if (isReturn) Modifier.focusRequester(returnRequester) else Modifier,
                             onFocus = { film?.let(onFocusFilm) },
                             onClick = { onResume(card) },
                         )

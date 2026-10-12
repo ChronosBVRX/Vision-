@@ -25,16 +25,39 @@ import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+
 /** "Categorías" on the TV: one titled row of cards per category. */
 @Composable
-fun TvCategoriesScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit) {
+fun TvCategoriesScreen(
+    rows: List<CatalogRow>,
+    returnFilmId: String? = null,
+    onOpenFilm: (Film) -> Unit,
+) {
     val landing = rememberLandingFocus()
+    val returnRequester = remember { FocusRequester() }
     val safeRows = remember(rows) { rows.distinctBy { it.id } }
     val firstRowId = safeRows.firstOrNull()?.id
+
+    // Al regresar de la ficha de una película, restaurar foco en la tarjeta exacta
+    LaunchedEffect(returnFilmId) {
+        if (returnFilmId == null) return@LaunchedEffect
+        repeat(12) {
+            if (FocusRescue.screenHasFocus) return@LaunchedEffect
+            val ok = runCatching { returnRequester.requestFocus() }.isSuccess
+            if (ok) return@LaunchedEffect
+            delay(60)
+        }
+        if (!FocusRescue.screenHasFocus) {
+            landing.request()
+        }
+    }
+
     // Las filas del índice pueden llegar después de abrir la pantalla: si el foco quedó huérfano, vuelve.
     LaunchedEffect(rows) {
         delay(150)
-        if (!FocusRescue.screenHasFocus && safeRows.isNotEmpty()) landing.request()
+        if (!FocusRescue.screenHasFocus && safeRows.isNotEmpty() && returnFilmId == null) landing.request()
     }
     Column(Modifier.fillMaxSize().background(VisionBlack).padding(vertical = 28.dp)) {
         Text("Categorías", style = MaterialTheme.typography.headlineSmall, color = Color.White, modifier = Modifier.padding(start = 48.dp, bottom = 12.dp))
@@ -46,11 +69,16 @@ fun TvCategoriesScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit) {
                 LazyRow(contentPadding = PaddingValues(horizontal = 48.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     items(safeFilms, key = { "${row.id}-${it.id}" }) { film ->
                         val isLanding = row.id == firstRowId && film.id == firstFilmId
+                        val isReturn = film.id == returnFilmId
                         TvLandscapeCard(
                             title = film.title,
                             imageUrl = film.posterUrl,
                             cardHeight = 110.dp,
-                            modifier = if (isLanding) Modifier.landingFocus(landing) else Modifier,
+                            modifier = when {
+                                isReturn -> Modifier.focusRequester(returnRequester)
+                                isLanding -> Modifier.landingFocus(landing)
+                                else -> Modifier
+                            },
                             onClick = { onOpenFilm(film) },
                         )
                     }

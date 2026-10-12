@@ -5,14 +5,37 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.45**
-  (versionCode **281**, release OTA v2.5.45). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.46**
+  (versionCode **282**, release OTA v2.5.46). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Simplificación Integral del Menú Lateral (6 Pilares Globales), Colecciones Rápidas y Corrección Definitiva de Pérdida de Foco D-Pad al Regresar** (v2.5.46):
+  - **Diagnóstico y Corrección de Pérdida de Foco D-Pad al Regresar de Ficha ("Back Focus Orphan")**:
+    - *Causa Raíz*: Al abrir una película desde `TvHomeScreen` y `TvCategoriesScreen`, el callback `onOpenFilm` no notificaba el ID seleccionado (`onFilmPick(it.id)` no se invocaba) y ambas pantallas carecían del parámetro `returnFilmId`. Al presionar el botón "Atrás", `SaveableStateProvider` restauraba la pantalla en la posición de scroll donde el usuario había hecho clic, dejando el billboard fuera de la pantalla (`offscreen`). Al estar fuera del árbol de composición activo, `landing.request()` en el botón del Hero fallaba silenciosamente, y las tarjetas de la lista no tenían ningún `FocusRequester` registrado para retorno. Esto provocaba que ningún elemento tuviese el foco y la navegación con las flechas del control quedara completamente bloqueada.
+    - *Solución*: Implementado `returnFilmId` y `returnRequester: FocusRequester` con efecto reintento de 12 ciclos (`repeat(12)`) y fallback a `landing.request()` tanto en `TvHomeScreen` como en `TvCategoriesScreen`. Propagado a `HeroBillboard`, `HomePosterRow` (Top 10, Estrenos y filas curadas) y `ContinueRow`. Actualizado `onOpenFilm` en `TvApp.kt` para registrar `onFilmPick(it.id)`.
+  - **Arquitectura de Navegación Simplificada de Clase Mundial (Menú Lateral de 6 Pilares)**:
+    - Riel de Smart TV reducido de 9 ítems saturados a 6 pilares estratégicos:
+      1. `🔍 Buscar` (`Route.Search`)
+      2. `🏠 Inicio` (`Route.Home` con retorno de pila `goTab`)
+      3. `🎬 Películas` (`Route.Section("movies", "Películas")`)
+      4. `📺 Series` (`Route.Section("series", "Series")`)
+      5. `📡 En vivo` (`Route.Live`)
+      6. `🔖 Mi lista` (`Route.Library`)
+      Y anclado al fondo: `⚙️ Opciones` (`Route.Settings`).
+    - Homologado el menú lateral de Teléfonos y Tablets (`PhoneApp.kt`) bajo los mismos 6 pilares universales.
+  - **Fila de Accesos Rápidos a Colecciones y Especiales ("Brand Hubs" estilo Disney+/Max)**:
+    - En `TvHomeScreen`, agregada fila horizontal `TvQuickHubsRow` inmediatamente después del Hero Billboard:
+      - `[ ⚽ Fútbol en Vivo ]` (Acceso directo con foco D-pad a `Route.Sports`)
+      - `[ 🌸 Anime ]` (Acceso directo a `Route.Section("anime", "Anime")`)
+      - `[ 🎭 Novelas ]` (Acceso directo a `Route.Section("novelas", "Novelas")`)
+      - `[ 📂 Categorías ]` (Acceso directo a `Route.Categories`)
+    - En Móvil (`HomeScreen.kt`), expandida la fila `SELECTIONS` para incluir accesos directos a Películas, Series, Fútbol, TV en Vivo, Anime, Novelas y Categorías.
+  - **Validación**: 163 pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) pasando al 100%, incluyendo nuevas pruebas `homeDownToFilmAndBackKeepsFocus` y `categoriesBackKeepsFocus`. Release OTA v2.5.46.
 
 - **Rediseño Integral de la Pantalla Principal (Home Screen) — Estilo Cinematic Billboard** (v2.5.45):
   - **Billboard Hero Dinámico e Interactivo en Smart TV (`TvHomeScreen.kt`)**:

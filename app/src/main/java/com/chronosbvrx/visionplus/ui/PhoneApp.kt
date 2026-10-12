@@ -21,10 +21,12 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsSoccer
+import androidx.compose.material.icons.filled.Theaters
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Badge
 import androidx.compose.material3.DrawerValue
@@ -84,10 +86,10 @@ private data class Tab(val route: Route, val label: String, val icon: ImageVecto
 
 private val TABS = listOf(
     Tab(Route.Home, "Inicio", Icons.Default.Home),
-    Tab(Route.Categories, "Categorías", Icons.Default.GridView),
-    Tab(Route.Sports, "Fútbol", Icons.Default.SportsSoccer),
-    Tab(Route.Library, "Mi lista", Icons.Default.Bookmark),
+    Tab(Route.Section("movies", "Películas"), "Películas", Icons.Default.Movie),
+    Tab(Route.Section("series", "Series"), "Series", Icons.Default.Theaters),
     Tab(Route.Live, "En vivo", Icons.Default.LiveTv),
+    Tab(Route.Library, "Mi lista", Icons.Default.Bookmark),
     Tab(Route.Settings, "Ajustes", Icons.Default.Settings),
     Tab(Route.About, "Acerca de", Icons.Default.Info),
 )

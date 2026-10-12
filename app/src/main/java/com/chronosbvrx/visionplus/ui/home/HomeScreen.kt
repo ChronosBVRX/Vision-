@@ -22,10 +22,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Theaters
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -90,10 +93,13 @@ private fun homeSizes(): HomeSizes =
 private data class HomeSelection(val label: String, val icon: ImageVector, val route: Route)
 
 private val SELECTIONS = listOf(
-    HomeSelection("TV en Vivo", Icons.Default.LiveTv, Route.Live),
     HomeSelection("Películas", Icons.Default.Movie, Route.Section("movies", "Películas")),
     HomeSelection("Series", Icons.Default.Theaters, Route.Section("series", "Series")),
+    HomeSelection("Fútbol", Icons.Default.SportsSoccer, Route.Sports),
+    HomeSelection("TV en Vivo", Icons.Default.LiveTv, Route.Live),
     HomeSelection("Anime", Icons.Default.Animation, Route.Section("anime", "Anime")),
+    HomeSelection("Novelas", Icons.Default.AutoStories, Route.Section("novelas", "Novelas")),
+    HomeSelection("Categorías", Icons.Default.GridView, Route.Categories),
 )
 
 /**

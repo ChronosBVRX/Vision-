@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Theaters
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Search
@@ -104,7 +105,11 @@ private fun TvRoute(
         label,
         onClick = {
             onRailPick(label)
-            nav.push(target)
+            if (target == Route.Home) {
+                nav.goTab(Route.Home)
+            } else {
+                nav.push(target)
+            }
         },
         modifier = if (label == railReturn) Modifier.landingFocus(railLanding) else Modifier,
     )
@@ -113,24 +118,24 @@ private fun TvRoute(
             catalog = catalog,
             railItems = listOf(
                 rail(Icons.Default.Search, "Buscar", Route.Search),
+                rail(Icons.Default.Home, "Inicio", Route.Home),
                 rail(Icons.Default.Movie, "Películas", Route.Section("movies", "Películas")),
                 rail(Icons.Default.Theaters, "Series", Route.Section("series", "Series")),
-                rail(Icons.Default.AutoStories, "Novelas", Route.Section("novelas", "Novelas")),
-                rail(Icons.Default.Animation, "Anime", Route.Section("anime", "Anime")),
+                rail(Icons.Default.LiveTv, "En vivo", Route.Live),
                 rail(Icons.Default.Bookmark, "Mi lista", Route.Library),
-                rail(Icons.Default.LiveTv, "TV en vivo", Route.Live),
-                rail(Icons.Default.SportsSoccer, "Fútbol", Route.Sports),
             ),
             bottomItems = listOf(rail(Icons.Default.Settings, "Opciones", Route.Settings)),
             railReturn = railReturn,
+            returnFilmId = filmReturn,
             onOpenFilm = {
-                // Abrir una ficha desde Inicio borra la memoria del riel: al volver manda la tarjeta.
+                onFilmPick(it.id)
                 onRailPick("")
                 nav.push(Route.Title(it))
             },
             onOpenLive = { nav.push(Route.Live) },
             onOpenCategories = { nav.push(Route.Categories) },
             onResume = { nav.push(resumeRoute(it)) },
+            onGoRoute = { nav.push(it) },
         )
         is Route.Title -> TvTitleScreen(route.film, onPlay = { ep -> nav.push(Route.Player(route.film, ep)) })
         is Route.Player -> PlayerScreen(route.film, isTv = true, onBack = { nav.pop() }, episode = route.episode, resumeMs = route.resumeMs)
@@ -149,7 +154,14 @@ private fun TvRoute(
             },
             returnFilmId = filmReturn,
         )
-        Route.Categories -> TvCategoriesScreen(indexRows, onOpenFilm = { nav.push(Route.Title(it)) })
+        Route.Categories -> TvCategoriesScreen(
+            indexRows,
+            returnFilmId = filmReturn,
+            onOpenFilm = {
+                onFilmPick(it.id)
+                nav.push(Route.Title(it))
+            },
+        )
         is Route.Category -> TvCategoryScreen(
             indexRows,
             route.key,

@@ -139,6 +139,35 @@ class TvFocusTest {
     }
 
     @Test
+    fun homeDownToFilmAndBackKeepsFocus() {
+        val nav = start(Route.Home)
+        assertLanded("Inicio")
+        // Bajamos del Billboard Hero hacia las filas de contenido y abrimos
+        press(Key.DirectionDown)
+        press(Key.DirectionDown)
+        press(Key.DirectionCenter)
+        assertTrue("Debe abrir ficha o ruta seleccionada", nav.current != Route.Home)
+        back()
+        assertEquals("Al volver debe regresar a Home", Route.Home, nav.current)
+        assertLanded("Inicio tras volver de contenido")
+        press(Key.DirectionRight)
+        assertTrue("Inicio: debe mantener foco interactivo al navegar tras volver", focusedCount() >= 1)
+    }
+
+    @Test
+    fun categoriesBackKeepsFocus() {
+        val nav = start(Route.Home, Route.Categories)
+        assertLanded("Categorías")
+        press(Key.DirectionCenter)
+        assertTrue("Debe abrir ficha de película", nav.current is Route.Title)
+        back()
+        assertEquals("Al volver debe regresar a Categorías", Route.Categories, nav.current)
+        assertLanded("Categorías tras volver de ficha")
+        press(Key.DirectionRight)
+        assertTrue("Categorías: foco no debe perderse", focusedCount() >= 1)
+    }
+
+    @Test
     fun seriesBackKeepsFocus() {
         // Ficha de serie con temporadas (no-XTV para no tocar red): al salir con
         // Atrás el mando sigue en algo, aunque la tarjeta exacta no componga.
