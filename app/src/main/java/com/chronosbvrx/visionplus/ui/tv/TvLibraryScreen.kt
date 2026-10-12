@@ -32,6 +32,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.XuperCatalog
+import androidx.compose.ui.text.style.TextOverflow
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 
@@ -95,17 +96,32 @@ fun TvLibraryScreen(catalog: XuperCatalog, returnFilmId: String? = null, onOpenF
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) { }
             itemsIndexed(films, key = { _, film -> film.id }) { index, film ->
-                TvLandscapeCard(
-                    title = film.title,
-                    imageUrl = film.posterUrl,
-                    cardHeight = 116.dp,
-                    modifier = when {
-                        film.id == returnFilmId -> Modifier.focusRequester(returnRequester)
-                        index == 0 -> Modifier.landingFocus(landing)
-                        else -> Modifier
-                    },
-                    onClick = { onOpenFilm(film) },
-                )
+                Column(Modifier.fillMaxWidth()) {
+                    TvPosterCard(
+                        title = film.title,
+                        imageUrl = film.posterUrl,
+                        score = film.score,
+                        badge = if (film.year >= 2025) "NUEVO" else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                when {
+                                    film.id == returnFilmId -> Modifier.focusRequester(returnRequester)
+                                    index == 0 -> Modifier.landingFocus(landing)
+                                    else -> Modifier
+                                },
+                            ),
+                        onClick = { onOpenFilm(film) },
+                    )
+                    Text(
+                        film.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
             }
         }
     }

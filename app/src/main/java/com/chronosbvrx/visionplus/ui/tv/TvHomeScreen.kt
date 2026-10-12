@@ -353,6 +353,7 @@ fun TvHomeScreen(
                         }
                     }
                     items(rows, key = { it.id }) { row ->
+                        val limitedFilms = remember(row.films) { row.films.take(15) }
                         Column {
                             TvRowLabel(row.title, labelHeight)
                             CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
@@ -360,7 +361,7 @@ fun TvHomeScreen(
                                     contentPadding = PaddingValues(horizontal = 48.dp),
                                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                                 ) {
-                                    items(row.films, key = { "${row.id}-${it.id}" }) { film ->
+                                    items(limitedFilms, key = { "${row.id}-${it.id}" }) { film ->
                                         val cardKey = "${row.id}-${film.id}"
                                         val isLanding = if (returnKey != null) cardKey == returnKey else row == rows.first() && film == row.films.first()
                                         val modifier = if (isLanding) Modifier.landingFocus(landing) else Modifier

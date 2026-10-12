@@ -5,8 +5,8 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.42**
-  (versionCode **278**, release OTA v2.5.42). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.43**
+  (versionCode **279**, release OTA v2.5.43). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
@@ -14,23 +14,17 @@
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
 
-- **Rediseño UI/UX de Vistas Principales y Catálogo Optimizado para Dispositivos Limitados** (v2.5.42):
-  - **Cabecera Fija y Selector de Categorías (Chips / Pills)**:
-    - En `SectionScreen.kt` (Películas, Series, Novelas, Anime), incorporado selector deslizable horizontal de categorías/géneros mediante `CategoryPill` (`Todo / Destacados` inicial canónico + géneros desduplicados).
-    - Conmutación reactiva fluida: modo `"Todo / Destacados"` activa el feed curado por módulos; seleccionar un género oculta los carruseles y activa la vista en cuadrícula (Grid) paginada.
-    - Soporte integrado de navegación: `BackHandler` regresa al modo "Todo / Destacados" antes de abandonar la sección.
-  - **Estructura del Feed Curado y Cards de Streaming Prémium**:
-    - Carruseles horizontales limitados estrictamente a **máximo 15 elementos** (`LIMIT 15` / `take(15)`) para salvaguardar la memoria RAM en Chromecast y dispositivos de 1.5 GB - 2 GB.
-    - Encabezados de módulo con enlace interactivo `"Ver todo →"`, conmutando directamente a la cuadrícula de esa categoría.
-    - Componente `PosterCard` (proporción 2:3) rediseñado:
-      - Esquinas redondeadas (`RoundedCornerShape(12.dp)`), placeholder y protección de decodificación Coil acotada a `size(320, 480)` con `crossfade(150)`.
-      - **Badge de Calificación**: Contenedor translúcido (`#0B1220`) con borde neón/azul brillante (`VisionBlue`) en la esquina superior izquierda con rating numérico (`★ 8.2`).
-      - **Badge de Estado**: Cápsula de gradiente neón en la esquina superior derecha (`NUEVO`, `TOP 10`, `4K`).
-      - **Variante Top 10 con Número (Rank)**: Tipografía estilizada de gran tamaño (stroke outline en `VisionBlueBright` con degradado plateado/azul) superpuesta en la esquina inferior izquierda (`1..10`).
-  - **Vista de Catálogo en Cuadrícula con Paginación Infinita Optimizada**:
-    - Cuadrícula adaptativa de 3 columnas (móvil) y 5 columnas (tablets).
-    - Paginación infinita basada en `derivedStateOf` en lotes de 24 elementos (`batchSize = 24`), evitando instanciación masiva de nodos en Compose y manteniendo 60 FPS estables.
-  - **Validación**: 153 pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) pasando al 100%.
+- **Rediseño Integral UI/UX en Smart TV y Móvil / Catálogo Optimizado para Dispositivos Limitados** (v2.5.43):
+  - **Smart TV (Android TV Leanback D-pad Experience)**:
+    - En `TvCategoryScreen.kt` (Películas, Series, Novelas, Anime, Fútbol), incorporado selector deslizable horizontal de categorías (`TvCategoryPill`) con foco de D-pad, cápsula `"Todo / Destacados"` por defecto y géneros dinámicos.
+    - **Modo Feed Curado por Módulos**: Hero superior inmersivo + carruseles horizontales con `TvPosterCard` (proporción 2:3, ancho 140.dp) con badge de rating numérico (`★ 8.2`), badge de estado (`NUEVO`, `TOP 10`), y variante Top 10 con número de posición gigante estilizado en degradado azul plateado (`1..10`).
+    - **Encabezados con Acción Interactiva `"Ver todo →"` (`TvSeeAllButton`)**: botón de foco D-pad para conmutar directamente a la cuadrícula de cualquier categoría.
+    - **Modo Cuadrícula de Categoría (5 Columnas en Smart TV)**: Cuadrícula adaptativa `LazyVerticalGrid(columns = GridCells.Fixed(5))` con paginación infinita en lotes de 24 (`GRID_BATCH_SIZE = 24`), encabezado con botón `"← Volver a Todo"`, y soporte estricto de `BackHandler` para regresar al feed antes de salir de la sección.
+    - **Optimización de Memoria en Dispositivos Limitados (TV Box ZTE B866F, Chromecast)**: Carruseles horizontales limitados a `take(15)` (`CAROUSEL_LIMIT = 15`) en `TvCategoryScreen.kt`, `TvHomeScreen.kt` y `TvCategoriesScreen.kt`, junto con decodificación Coil acotada a `size(320, 480)`.
+    - **Biblioteca en TV (`TvLibraryScreen.kt`)**: Migrado a cuadrícula de 5 columnas con `TvPosterCard` y badges de calificación.
+  - **Móvil y Tablets (`phone/SectionScreen.kt` & `Components.kt`)**:
+    - Cabecera fija con selector `CategoryPill`, cuadrícula de 3 columnas (móvil) / 5 columnas (tablet), cards 2:3 con badges, Top 10 y límite de 15 items por carrusel.
+  - **Validación**: 153 pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) pasando al 100%, compilación limpia y verificación visual directa vía ADB en dispositivo real Smart TV Box B866F.
 
 - **Estabilización Total de la Duración ("Anti-Buffer Shadowing") y Selector Dinámico de Resolución en Series y Películas** (v2.5.42):
   - **Diagnóstico y Solución de la Duración Alternante ("Dos Minutos Más del Minuto Actual")**:

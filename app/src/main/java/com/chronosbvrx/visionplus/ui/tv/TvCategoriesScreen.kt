@@ -40,7 +40,7 @@ fun TvCategoriesScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit) {
         Text("Categorías", style = MaterialTheme.typography.headlineSmall, color = Color.White, modifier = Modifier.padding(start = 48.dp, bottom = 12.dp))
         LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), contentPadding = PaddingValues(bottom = 32.dp)) {
             items(safeRows, key = { it.id }) { row ->
-                val safeFilms = remember(row.films) { row.films.distinctBy { it.id } }
+                val safeFilms = remember(row.films) { row.films.distinctBy { it.id }.take(15) }
                 val firstFilmId = safeFilms.firstOrNull()?.id
                 TvRowLabel(row.title, 26.dp)
                 LazyRow(contentPadding = PaddingValues(horizontal = 48.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
