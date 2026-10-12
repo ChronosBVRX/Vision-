@@ -90,6 +90,7 @@ class X4KPlayerAty : ComponentActivity() {
     private var errorRetry: View? = null
     private var channelsBtn: View? = null
     private var episodesBtn: View? = null
+    private var nextEpBtn: TextView? = null
     private var epNames = ArrayList<String>()
     private var curBaseTitle = ""
 
@@ -347,6 +348,7 @@ class X4KPlayerAty : ComponentActivity() {
                         if (epNames.isEmpty()) {
                             epNames = ArrayList(programs.map { it.name })
                         }
+                        updateNextButtonState()
                     }
                 }
             }.start()
@@ -1127,11 +1129,20 @@ class X4KPlayerAty : ComponentActivity() {
             buttons.addView(forward)
             buttons.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
             if (curSeries.isNotBlank() || epIds.size > 1 || seasonIds.size > 1) {
+                val nextEp = pill("⏭ Sig. episodio") {
+                    if (canExecuteControlAction()) playNextEpisodeFromControls()
+                }
+                nextEp.tvControl()
+                nextEpBtn = nextEp
+                buttons.addView(nextEp)
+                buttons.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
+
                 val episodes = pill("☰ Capítulos") { showEpisodePicker() }
                 episodes.tvControl()
                 episodesBtn = episodes
                 buttons.addView(episodes)
                 buttons.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
+                updateNextButtonState()
             }
             val firstAudio = declaredLanguages.firstOrNull().orEmpty()
             val audioName = trackDisplayLang(firstAudio, null).takeIf { it.isNotBlank() }
@@ -1278,10 +1289,15 @@ class X4KPlayerAty : ComponentActivity() {
                         }
                     }
                     val seekId = View.generateViewId().also { seek.id = it }
+                    val nextView = nextEpBtn
+                    val nextId = if (nextView != null) View.generateViewId().also { nextView.id = it } else -1
                     val epsView = episodesBtn
                     val epsId = if (epsView != null) View.generateViewId().also { epsView.id = it } else -1
-                    val firstPillId = if (epsId != -1) epsId else audioId
-                    val pillLeftId = if (epsId != -1) epsId else forwardId
+                    val firstPillId = when {
+                        nextId != -1 -> nextId
+                        epsId != -1 -> epsId
+                        else -> audioId
+                    }
                     val upId = seekId
 
                     rewind.nextFocusUpId = upId
@@ -1298,11 +1314,23 @@ class X4KPlayerAty : ComponentActivity() {
                     forward.nextFocusUpId = upId
                     forward.nextFocusDownId = forwardId
 
+                    if (nextId != -1) {
+                        nextView?.nextFocusLeftId = forwardId
+                        nextView?.nextFocusRightId = if (epsId != -1) epsId else audioId
+                        nextView?.nextFocusUpId = upId
+                        nextView?.nextFocusDownId = nextId
+                    }
+
                     if (epsId != -1) {
-                        epsView?.nextFocusLeftId = forwardId
+                        epsView?.nextFocusLeftId = if (nextId != -1) nextId else forwardId
                         epsView?.nextFocusRightId = audioId
                         epsView?.nextFocusUpId = upId
                         epsView?.nextFocusDownId = epsId
+                    }
+                    val pillLeftId = when {
+                        epsId != -1 -> epsId
+                        nextId != -1 -> nextId
+                        else -> forwardId
                     }
                     audio.nextFocusLeftId = pillLeftId
                     audio.nextFocusRightId = subsId
@@ -1762,26 +1790,123 @@ class X4KPlayerAty : ComponentActivity() {
         }
     }
 
+    private fun hasNextEpisode(): Boolean {
+        return hasNextEpisodeAvailable(
+            isLive = liveMode,
+            curEpIndex = curEpIndex,
+            epCount = epIds.size,
+            curSeries = curSeries,
+            curSeasonIndex = curSeasonIndex,
+            seasonCount = seasonIds.size,
+        )
+    }
+
+    private fun updateNextButtonState() {
+        val btn = nextEpBtn ?: return
+        val hasNext = hasNextEpisode()
+        btn.alpha = if (hasNext) 1f else 0.45f
+        btn.text = if (hasNext && curEpIndex + 1 < epIds.size) {
+            "⏭ Sig. C${curEpIndex + 2}"
+        } else if (hasNext && curSeasonIndex + 1 < seasonIds.size) {
+            "⏭ Sig. ${seasonLabel(curSeasonIndex + 1)}"
+        } else {
+            "⏭ Sig. episodio"
+        }
+    }
+
+    private fun playNextEpisodeFromControls() {
+        if (!hasNextEpisode()) {
+            Toast.makeText(this, "Este es el último capítulo disponible", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val hasEp = curEpIndex + 1 < epIds.size
+        if (hasEp) {
+            val nextIdx = curEpIndex + 1
+            val seasonPrefix = if (seasonIds.size > 1) " · ${seasonLabel(curSeasonIndex)}" else ""
+            val playerTitle = "${curBaseTitle.ifBlank { curTitle }}$seasonPrefix · C${nextIdx + 1}"
+            playEpisode(
+                code = epIds[nextIdx],
+                series = curSeries,
+                title = playerTitle,
+                epIdx = nextIdx,
+                seasonIdx = curSeasonIndex,
+                auto = false,
+            )
+        } else {
+            val nextSeasonIdx = curSeasonIndex + 1
+            if (nextSeasonIdx < seasonIds.size) {
+                val seasonId = seasonIds[nextSeasonIdx]
+                val sLabel = seasonLabel(nextSeasonIdx)
+                Toast.makeText(this, "Cargando $sLabel…", Toast.LENGTH_SHORT).show()
+                Thread {
+                    val programs = kotlinx.coroutines.runBlocking {
+                        X4KApi.episodeProgramsFor(this@X4KPlayerAty, seasonId)
+                    }
+                    val first = programs.firstOrNull()
+                    runOnUiThread {
+                        if (first == null) {
+                            Toast.makeText(this@X4KPlayerAty, "Fin de la serie", Toast.LENGTH_SHORT).show()
+                            return@runOnUiThread
+                        }
+                        epIds = ArrayList(programs.map { it.contentId })
+                        epNames = ArrayList(programs.map { it.name })
+                        val playerTitle = "${curBaseTitle.ifBlank { curTitle }} · $sLabel · C1"
+                        playEpisode(
+                            code = first.contentId,
+                            series = seasonId,
+                            title = playerTitle,
+                            epIdx = 0,
+                            seasonIdx = nextSeasonIdx,
+                            auto = false,
+                        )
+                    }
+                }.start()
+            }
+        }
+    }
+
     /** Reproduce otro capítulo en el mismo motor/vista: la serie nunca sale del reproductor. */
     private fun playEpisode(code: String, series: String, title: String, epIdx: Int, seasonIdx: Int, auto: Boolean = false) {
         val v = playerView ?: return
         hideNext()
+        hideResumeDialog()
         nextDismissed = false
         endedShown = false
+
+        // Detener inmediatamente la reproducción previa para que positionMs()
+        // no retorne la posición del capítulo anterior mientras carga el nuevo.
+        X4KTitan.stop(v)
+
+        // Asignar de inmediato la nueva identidad del episodio antes del hilo de red
+        curCode = code
+        curTitle = title
+        curSeries = series
+        curEpIndex = epIdx
+        curSeasonIndex = seasonIdx
+        topTitle?.text = title
+
         // Reiniciar duración del capítulo previo para que el nuevo episodio tome su duración exacta.
         durationMs = -1L
         declaredDurationMs = 0L
-        // En transición automática al siguiente capítulo comenzamos siempre desde 00:00.
-        resumeMs = 0
-        resumeApplied = auto
-        resumeAsked = auto
+
+        // Al seleccionar o pasar al siguiente capítulo, NUNCA preguntar "¿Reanudar o desde el principio?".
+        // Comenzamos SIEMPRE desde el principio (00:00).
+        resumeMs = 0L
+        resumeApplied = true
+        resumeAsked = true
         pendingAutoResume = false
+        pendingResumeEntry = null
+
+        // Limpiar cualquier registro histórico previo para arrancar limpio en 00:00
+        PlaybackHistory.delete(this, code)
+
         loadingFading = false
         loadingOverlay?.alpha = 1f
         loadingOverlay?.visibility = View.VISIBLE
         firstFrame = false
         startedAtMs = System.currentTimeMillis()
         hideControls()
+
         Thread {
             val prep = kotlinx.coroutines.runBlocking {
                 X4KApi.prepareVod(this@X4KPlayerAty, code, title, series, 0L)
@@ -1800,11 +1925,6 @@ class X4KPlayerAty : ComponentActivity() {
                     .split(',').map { it.trim() }.filter { it.isNotBlank() }
                 subtitleLanguages = prep.subsLangs
                     .split(',').map { it.trim() }.filter { it.isNotBlank() }
-                curCode = code
-                curTitle = title
-                curSeries = series
-                curEpIndex = epIdx
-                curSeasonIndex = seasonIdx
                 if (prep.durationMs > 0 && declaredDurationMs <= 0L) {
                     declaredDurationMs = prep.durationMs
                 }
@@ -1813,6 +1933,8 @@ class X4KPlayerAty : ComponentActivity() {
                 seekBar?.progress = 0
                 timeNow?.text = "00:00"
                 UserLibrary.markEpisodeWatched(this@X4KPlayerAty, series, epIdx + 1)
+                updateNextButtonState()
+
                 v.alpha = 0f
                 v.animate().alpha(1f).setStartDelay(250).setDuration(650).start()
                 listOf(200L, 700L, 1500L, 3000L, 5000L).forEach { delay ->
@@ -1904,7 +2026,15 @@ class X4KPlayerAty : ComponentActivity() {
         if (!resumeAsked) {
             resumeAsked = true
             val entry = PlaybackHistory.get(this, curCode)
-            if (entry != null && shouldKeep(entry.positionMs, entry.durationMs)) {
+            val isSeries = curSeries.isNotBlank() || epIds.isNotEmpty()
+            if (entry != null && shouldPromptResume(
+                    isLive = liveMode,
+                    isSeries = isSeries,
+                    hasEntry = true,
+                    shouldKeepEntry = shouldKeep(entry.positionMs, entry.durationMs),
+                    resumeExplicitlyRequested = false,
+                )
+            ) {
                 pendingResumeEntry = entry
                 playerView?.let { X4KTitan.pause(it) }
                 showResumeDialog(entry)
@@ -3159,6 +3289,13 @@ class X4KPlayerAty : ComponentActivity() {
                 else performSeekBy(10_000L)
                 showControlsBriefly()
                 return true
+            }
+            KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                if (inModal || introView != null) return super.onKeyDown(keyCode, event)
+                if (hasNextEpisode()) {
+                    playNextEpisodeFromControls()
+                    return true
+                }
             }
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
                 if (inModal) return super.onKeyDown(keyCode, event)

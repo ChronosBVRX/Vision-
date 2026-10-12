@@ -236,6 +236,37 @@ internal fun isDedicatedMediaKeyCode(keyCode: Int): Boolean = when (keyCode) {
     else -> false
 }
 
+internal fun hasNextEpisodeAvailable(
+    isLive: Boolean,
+    curEpIndex: Int,
+    epCount: Int,
+    curSeries: String,
+    curSeasonIndex: Int,
+    seasonCount: Int,
+): Boolean {
+    if (isLive) return false
+    val hasEp = curEpIndex + 1 < epCount
+    val hasSeason = curSeries.isNotBlank() && curSeasonIndex + 1 < seasonCount
+    return hasEp || hasSeason
+}
+
+internal fun shouldPromptResume(
+    isLive: Boolean,
+    isSeries: Boolean,
+    hasEntry: Boolean,
+    shouldKeepEntry: Boolean,
+    resumeExplicitlyRequested: Boolean,
+): Boolean {
+    if (isLive) return false
+    if (!hasEntry || !shouldKeepEntry) return false
+    // Si el usuario pidió explícitamente reanudar (ej. clic en «Seguir viendo»), se aplica directo sin preguntar
+    if (resumeExplicitlyRequested) return false
+    // En series, novelas y anime (al dar play a un episodio o pasar al siguiente), nunca interrumpe con el diálogo
+    if (isSeries) return false
+    // En películas sueltas iniciadas por primera vez sin resume previo explícito, muestra la opción si hay historial previo
+    return true
+}
+
 @Composable
 internal fun rememberControlsState(): ControlsState = remember { ControlsState() }
 

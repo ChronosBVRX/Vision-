@@ -5,14 +5,29 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.39**
-  (versionCode **275**, release OTA v2.5.39). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.40**
+  (versionCode **276**, release OTA v2.5.40). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Botón "Siguiente Episodio" en Reproductor y Reproducción Limpia en Series, Novelas y Anime** (v2.5.40):
+  - **Botón Rápido de Siguiente Episodio en Controles**:
+    - Se incorporó la píldora interactiva `nextEpBtn` (`"⏭ Sig. C#"` / `"⏭ Sig. T#"`) en la barra inferior de controles de `X4KPlayerAty`, colocada ergonómicamente entre adelantar y capítulos.
+    - Soporta tanto avance de capítulo dentro de la misma temporada como transición fluida a la siguiente temporada cargando automáticamente su lista de episodios vía `X4KApi.episodeProgramsFor`.
+    - Conectado a la tecla multimedia física `KEYCODE_MEDIA_NEXT` para mandos de TV y controles remotos.
+    - Estado adaptativo: se desactiva con atenuación visual (`alpha = 0.45f`) al alcanzar el último capítulo de la última temporada disponible.
+  - **Erradicación del Diálogo "¿Reanudar o desde el principio?" al Seleccionar Episodios**:
+    - *Causa Raíz*: Al invocar `playEpisode()`, `curCode` sólo se actualizaba tras la respuesta del hilo de red (`prepareVod`), mientras que `playerView` no se detenía inmediatamente. El sondeo `poller` (`firstFrame = false`) disparaba `onFirstFrame()` mientras `curCode` aún correspondía al episodio previo, recuperando su posición histórica (> 15s) y desplegando el diálogo de reanudación sobre el nuevo capítulo.
+    - *Solución Definitiva*:
+      1. `X4KTitan.stop(v)` detiene inmediatamente el motor previo al solicitar un nuevo episodio.
+      2. Asignación inmediata de `curCode = code`, `curTitle = title`, `curSeries = series`, `curEpIndex = epIdx`, `curSeasonIndex = seasonIdx`.
+      3. Forzado de `resumeMs = 0L`, `resumeApplied = true`, `resumeAsked = true`, `pendingAutoResume = false` y `pendingResumeEntry = null`, eliminando además el historial previo con `PlaybackHistory.delete(this, code)`.
+      4. Regla universal en `onFirstFrame()`: si es contenido seriado (`curSeries.isNotBlank() || epIds.isNotEmpty()`), nunca interrumpe con el diálogo de reanudación y arranca limpio en `00:00` a menos que se haya abierto explícitamente desde la fila de «Seguir viendo».
+  - **Validación**: 142 tests unitarios de Android (`:app:testNormalDebugUnitTest`) y 33 de backend pasando al 100%. Release OTA v2.5.40.
 
 - **Corrección Definitiva de Barra de Avance Completa, Duración y Safe Area en Smart TV** (v2.5.39):
   - **Diagnóstico Integral de "Barra de Avance Incompleta"**:

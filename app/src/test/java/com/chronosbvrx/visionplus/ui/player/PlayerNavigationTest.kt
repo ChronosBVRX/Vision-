@@ -506,5 +506,133 @@ class PlayerNavigationTest {
         assertEquals(0L, com.chronosbvrx.visionplus.data.xuper.X4KApi.extractDurationMs(null))
         assertEquals(0L, com.chronosbvrx.visionplus.data.xuper.X4KApi.extractDurationMs(org.json.JSONObject()))
     }
+
+    @Test
+    fun seriesNextEpisodeAvailabilityLogic() {
+        // En vivo: nunca hay siguiente episodio
+        assertFalse(
+            hasNextEpisodeAvailable(
+                isLive = true,
+                curEpIndex = 0,
+                epCount = 10,
+                curSeries = "sid_123",
+                curSeasonIndex = 0,
+                seasonCount = 2,
+            ),
+        )
+
+        // En serie dentro de la misma temporada: capítulo 1 de 10 -> hay siguiente
+        assertTrue(
+            hasNextEpisodeAvailable(
+                isLive = false,
+                curEpIndex = 0,
+                epCount = 10,
+                curSeries = "sid_123",
+                curSeasonIndex = 0,
+                seasonCount = 2,
+            ),
+        )
+
+        // En serie en el último capítulo de la temporada 1 (índice 9 de 10) pero existe temporada 2:
+        // -> hay siguiente (siguiente temporada)
+        assertTrue(
+            hasNextEpisodeAvailable(
+                isLive = false,
+                curEpIndex = 9,
+                epCount = 10,
+                curSeries = "sid_123",
+                curSeasonIndex = 0,
+                seasonCount = 2,
+            ),
+        )
+
+        // En serie en el último capítulo de la última temporada:
+        // -> ya no hay siguiente
+        assertFalse(
+            hasNextEpisodeAvailable(
+                isLive = false,
+                curEpIndex = 9,
+                epCount = 10,
+                curSeries = "sid_123",
+                curSeasonIndex = 1,
+                seasonCount = 2,
+            ),
+        )
+
+        // En película suelta (sin serie y con 0 o 1 episodio):
+        // -> no hay siguiente episodio
+        assertFalse(
+            hasNextEpisodeAvailable(
+                isLive = false,
+                curEpIndex = 0,
+                epCount = 0,
+                curSeries = "",
+                curSeasonIndex = 0,
+                seasonCount = 0,
+            ),
+        )
+    }
+
+    @Test
+    fun cleanSeriesResumeStartsAtBeginningWithoutPrompt() {
+        // 1. En series, novelas y anime: NUNCA preguntar "¿Reanudar o desde el principio?"
+        // Siempre debe iniciar limpio desde 00:00 sin interrumpir.
+        assertFalse(
+            "En series con entrada histórica no debe mostrar diálogo de reanudar",
+            shouldPromptResume(
+                isLive = false,
+                isSeries = true,
+                hasEntry = true,
+                shouldKeepEntry = true,
+                resumeExplicitlyRequested = false,
+            ),
+        )
+
+        // 2. Si se solicitó reanudar explícitamente desde «Seguir viendo»:
+        // Tampoco debe mostrar diálogo porque ya se solicitó continuar directamente.
+        assertFalse(
+            "Cuando se pide resume explícito no debe mostrar diálogo",
+            shouldPromptResume(
+                isLive = false,
+                isSeries = false,
+                hasEntry = true,
+                shouldKeepEntry = true,
+                resumeExplicitlyRequested = true,
+            ),
+        )
+
+        // 3. En películas sueltas con progreso guardado y sin resume previo explícito:
+        // SÍ debe mostrar el diálogo de reanudar.
+        assertTrue(
+            "En película con progreso previo debe ofrecer reanudar",
+            shouldPromptResume(
+                isLive = false,
+                isSeries = false,
+                hasEntry = true,
+                shouldKeepEntry = true,
+                resumeExplicitlyRequested = false,
+            ),
+        )
+
+        // 4. En canales en vivo o cuando no hay entrada válida: NUNCA mostrar diálogo.
+        assertFalse(
+            shouldPromptResume(
+                isLive = true,
+                isSeries = false,
+                hasEntry = true,
+                shouldKeepEntry = true,
+                resumeExplicitlyRequested = false,
+            ),
+        )
+        assertFalse(
+            shouldPromptResume(
+                isLive = false,
+                isSeries = false,
+                hasEntry = false,
+                shouldKeepEntry = false,
+                resumeExplicitlyRequested = false,
+            ),
+        )
+    }
 }
 
