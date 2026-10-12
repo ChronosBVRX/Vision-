@@ -618,9 +618,10 @@ object X4KTitan {
         -1L
     }
 
-    /** Engine duration (ms), queried from view or facade status (-1 when unknown). */
+    /** Engine duration (ms), queried from view, facade status bean, or active engine (-1 when unknown). */
     fun durationMs(view: View? = null): Long {
         return try {
+            // 1. Consulta directa a la vista del reproductor (ed.e.getDuration -> p.c())
             if (view != null) {
                 val m = view.javaClass.methods.firstOrNull {
                     (it.name == "getDuration" || it.name == "duration") && it.parameterCount == 0
@@ -630,16 +631,43 @@ object X4KTitan {
             }
             val f = facade
             if (f != null) {
+                // 2. Consulta al bean uc.c vía yc.h.p(0).c()
                 val status = f.javaClass.methods.firstOrNull {
                     it.name == "p" && it.parameterCount == 1 && it.parameterTypes[0] == java.lang.Integer.TYPE
                 }?.invoke(f, 0)
                 if (status != null) {
                     val durMethod = status.javaClass.methods.firstOrNull {
-                        (it.name == "getDuration" || it.name == "duration" || it.name == "e" || it.name == "d") &&
+                        (it.name == "c" || it.name == "getDuration" || it.name == "duration" || it.name == "e" || it.name == "d") &&
                             it.parameterCount == 0 && (it.returnType == java.lang.Long.TYPE || it.returnType == java.lang.Integer.TYPE)
                     }
                     val d = (durMethod?.invoke(status) as? Number)?.toLong()
                     if (d != null && d > 0L) return d
+                }
+                // 3. Consulta al arreglo de motores yc.e (campo 'b' en yc.h) -> W() (IMediaPlayer.getDuration)
+                val bField = runCatching {
+                    f.javaClass.declaredFields.firstOrNull { it.name == "b" }?.apply { isAccessible = true }
+                }.getOrNull()
+                val playerArr = (bField?.get(f) as? Array<*>)
+                val activeEngine = playerArr?.getOrNull(0)
+                if (activeEngine != null) {
+                    val wMethod = activeEngine.javaClass.methods.firstOrNull {
+                        (it.name == "W" || it.name == "getDuration" || it.name == "duration") && it.parameterCount == 0
+                    }
+                    val wDur = (wMethod?.invoke(activeEngine) as? Number)?.toLong()
+                    if (wDur != null && wDur > 0L) return wDur
+
+                    // 4. Consulta directa a IMediaPlayer (campo 'n' en yc.e)
+                    val nField = runCatching {
+                        activeEngine.javaClass.declaredFields.firstOrNull { it.name == "n" }?.apply { isAccessible = true }
+                    }.getOrNull()
+                    val ijk = nField?.get(activeEngine)
+                    if (ijk != null) {
+                        val ijkDur = ijk.javaClass.methods.firstOrNull {
+                            it.name == "getDuration" && it.parameterCount == 0
+                        }?.invoke(ijk) as? Number
+                        val d = ijkDur?.toLong()
+                        if (d != null && d > 0L) return d
+                    }
                 }
             }
             -1L

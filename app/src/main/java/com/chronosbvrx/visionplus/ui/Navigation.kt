@@ -99,6 +99,7 @@ fun resumeRoute(card: ResumeCard): Route.Player {
                 code = e.xtvCode, seriesId = e.seriesId, episodeIds = e.episodeIds,
                 episodeIndex = e.episodeIndex, seasonIds = e.seasonIds,
                 seasonNames = e.seasonNames, seasonIndex = e.seasonIndex, resumeMs = e.positionMs,
+                durationMs = e.durationMs,
             ),
         )
     } else {

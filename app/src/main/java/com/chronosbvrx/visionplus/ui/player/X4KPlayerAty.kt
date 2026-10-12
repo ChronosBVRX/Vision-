@@ -11,6 +11,7 @@ import android.graphics.Path
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -22,6 +23,8 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewParent
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -219,6 +222,7 @@ class X4KPlayerAty : ComponentActivity() {
         startedAtMs = System.currentTimeMillis()
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        applyImmersiveMode()
 
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         contentRoot = root
@@ -288,19 +292,31 @@ class X4KPlayerAty : ComponentActivity() {
         curSeries = intent.getStringExtra("seriesId").orEmpty()
         if (declaredDurationMs <= 0L && !liveMode) {
             Thread {
-                val targetId = if (curSeries.isNotBlank()) curSeries else code
-                if (targetId.isNotBlank()) {
-                    val sItem = kotlinx.coroutines.runBlocking { X4KApi.itemInfo(this@X4KPlayerAty, targetId) }
-                    val d = X4KApi.extractDurationMs(sItem)
-                    if (d > 0L) {
-                        runOnUiThread {
-                            if (declaredDurationMs <= 0L) {
-                                declaredDurationMs = d
-                                timeTotal?.text = fmt(d)
-                                val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
-                                if (!scrubbing && d > 0) {
-                                    seekBar?.progress = ((pos * 1000) / d).toInt().coerceIn(0, 1000)
-                                }
+                var d = 0L
+                if (code.isNotBlank()) {
+                    val detail = kotlinx.coroutines.runBlocking { X4KApi.detailFor(this@X4KPlayerAty, code) }
+                    d = X4KApi.extractDurationMs(detail)
+                    if (d <= 0L) {
+                        val sItem = kotlinx.coroutines.runBlocking { X4KApi.itemInfo(this@X4KPlayerAty, code) }
+                        d = X4KApi.extractDurationMs(sItem)
+                    }
+                }
+                if (d <= 0L && curSeries.isNotBlank()) {
+                    val detailSeries = kotlinx.coroutines.runBlocking { X4KApi.detailFor(this@X4KPlayerAty, curSeries) }
+                    d = X4KApi.extractDurationMs(detailSeries)
+                    if (d <= 0L) {
+                        val sSeries = kotlinx.coroutines.runBlocking { X4KApi.itemInfo(this@X4KPlayerAty, curSeries) }
+                        d = X4KApi.extractDurationMs(sSeries)
+                    }
+                }
+                if (d > 0L) {
+                    runOnUiThread {
+                        if (declaredDurationMs <= 0L || Math.abs(declaredDurationMs - d) > 120_000L) {
+                            declaredDurationMs = d
+                            timeTotal?.text = fmt(d)
+                            val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
+                            if (!scrubbing && d > 0) {
+                                seekBar?.progress = ((pos * 1000) / d).toInt().coerceIn(0, 1000)
                             }
                         }
                     }
@@ -541,22 +557,12 @@ class X4KPlayerAty : ComponentActivity() {
                 onDuration = { dur ->
                     if (dur > 0L) {
                         durationMs = dur
-                        val isSeries = curSeries.isNotBlank() || epIds.isNotEmpty()
-                        if (isSeries && dur >= 5 * 60_000L) {
-                            declaredDurationMs = dur
-                        } else if (declaredDurationMs <= 0L) {
-                            declaredDurationMs = dur
-                        } else if (dur >= declaredDurationMs * 0.8) {
-                            declaredDurationMs = dur
-                        }
+                        declaredDurationMs = dur
                         runOnUiThread {
-                            val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
-                            if (total > 0) {
-                                timeTotal?.text = fmt(total)
-                                val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
-                                if (!scrubbing) {
-                                    seekBar?.progress = ((pos * 1000) / total).toInt().coerceIn(0, 1000)
-                                }
+                            timeTotal?.text = fmt(dur)
+                            val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
+                            if (!scrubbing && dur > 0) {
+                                seekBar?.progress = ((pos * 1000) / dur).toInt().coerceIn(0, 1000)
                             }
                         }
                     }
@@ -854,26 +860,37 @@ class X4KPlayerAty : ComponentActivity() {
         )
 
         // Bottom panel: seek arriba y una sola fila de transporte + pills (ancha, compacta).
+        val hPad = if (isTv) dp(48) else dp(16)
+        val bPad = if (isTv) dp(28) else dp(10)
         val bottom = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(0xD9070B13.toInt())
-            setPadding(dp(14), dp(6), dp(14), dp(8))
+            setPadding(hPad, dp(8), hPad, bPad)
+            clipChildren = false
+            clipToPadding = false
         }
 
         val seekRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            clipChildren = false
+            clipToPadding = false
         }
         val now = TextView(this).apply {
             text = "00:00"
-            textSize = 12f
+            textSize = 13f
             setTextColor(Color.WHITE)
+            isSingleLine = true
+            includeFontPadding = false
+            minWidth = dp(44)
         }
         val seek = SeekBar(this).apply {
             max = 1000
+            splitTrack = false
             progressTintList = android.content.res.ColorStateList.valueOf(blue)
             progressBackgroundTintList = android.content.res.ColorStateList.valueOf(0x3DFFFFFF)
             thumbTintList = android.content.res.ColorStateList.valueOf(blueBright)
+            minimumHeight = dp(24)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (fromUser) {
@@ -897,23 +914,35 @@ class X4KPlayerAty : ComponentActivity() {
         }
         val total = TextView(this).apply {
             text = if (declaredDurationMs > 0) fmt(declaredDurationMs) else "--:--"
-            textSize = 12f
+            textSize = 13f
             setTextColor(Color.WHITE)
+            isSingleLine = true
+            includeFontPadding = false
+            minWidth = dp(44)
+            gravity = Gravity.END
         }
-        seekRow.addView(now)
+        seekRow.addView(now, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         seekRow.addView(
             seek,
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = dp(10)
-                marginEnd = dp(10)
+                marginStart = dp(12)
+                marginEnd = dp(12)
             },
         )
-        seekRow.addView(total)
+        seekRow.addView(total, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         if (liveMode) {
             // Live has no timeline: a red badge instead of a growing fake duration.
             seekRow.visibility = View.GONE
         }
-        bottom.addView(seekRow)
+        bottom.addView(
+            seekRow,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                bottomMargin = dp(6)
+            },
+        )
         if (liveMode) {
             val liveBanner = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -2871,10 +2900,15 @@ class X4KPlayerAty : ComponentActivity() {
             val v = playerView
             if (v != null) {
                 val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
-                if (!liveMode && declaredDurationMs <= 0L && durationMs <= 0L) {
+                if (!liveMode) {
                     val engineDur = com.chronosbvrx.visionplus.data.xuper.X4KTitan.durationMs(v)
                     if (engineDur > 0L) {
-                        durationMs = engineDur
+                        if (engineDur != durationMs) {
+                            durationMs = engineDur
+                        }
+                        if (declaredDurationMs <= 0L || Math.abs(declaredDurationMs - engineDur) > 120_000L) {
+                            declaredDurationMs = engineDur
+                        }
                     }
                 }
                 val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
@@ -2985,8 +3019,40 @@ class X4KPlayerAty : ComponentActivity() {
         return this
     }
 
+    private fun applyImmersiveMode() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                window.insetsController?.let { controller ->
+                    controller.hide(WindowInsets.Type.systemBars())
+                    controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                )
+            }
+        } catch (_: Exception) {}
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyImmersiveMode()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applyImmersiveMode()
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        applyImmersiveMode()
     }
 
     private fun hasFocusedControl(): Boolean {

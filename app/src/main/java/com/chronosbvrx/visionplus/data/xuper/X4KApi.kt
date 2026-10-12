@@ -1068,23 +1068,35 @@ object X4KApi {
 
     /**
      * Extrae de forma robusta la duración en ms desde cualquier objeto JSON del portal
-     * (assetData, startPlayVOD, episodeList, etc.).
+     * (assetData, startPlayVOD, detail, item, episodeList, etc.).
      */
     internal fun extractDurationMs(obj: JSONObject?): Long {
         if (obj == null) return 0L
-        val stringFields = listOf("duration", "playLength", "totalTime", "runtime", "len", "length", "videoTime")
-        for (f in stringFields) {
-            val v = obj.optString(f, "").trim()
-            if (v.isNotBlank()) {
-                val parsed = parseDurationMs(v)
-                if (parsed > 0L) return parsed
+        val subObjs = mutableListOf<JSONObject>()
+        subObjs.add(obj)
+        obj.optJSONObject("item")?.let { subObjs.add(it) }
+        obj.optJSONObject("play")?.let { subObjs.add(it) }
+        obj.optJSONObject("assetData")?.let { subObjs.add(it) }
+        obj.optJSONObject("detail")?.let { subObjs.add(it) }
+        obj.optJSONArray("episodeList")?.optJSONObject(0)?.let { subObjs.add(it) }
+        obj.optJSONArray("simpleProgramList")?.optJSONObject(0)?.let { subObjs.add(it) }
+
+        val stringFields = listOf("duration", "playLength", "totalTime", "runtime", "len", "length", "videoTime", "time")
+        for (target in subObjs) {
+            for (f in stringFields) {
+                val v = target.optString(f, "").trim()
+                if (v.isNotBlank()) {
+                    val parsed = parseDurationMs(v)
+                    if (parsed > 0L) return parsed
+                }
             }
-        }
-        val longFields = listOf("duration", "playLength", "totalTime", "runtime")
-        for (f in longFields) {
-            val v = obj.optLong(f, 0L)
-            if (v > 0L) {
-                return parseDurationMs(v.toString())
+            val longFields = listOf("duration", "playLength", "totalTime", "runtime", "len", "length", "videoTime")
+            for (f in longFields) {
+                val v = target.optLong(f, 0L)
+                if (v > 0L) {
+                    val parsed = parseDurationMs(v.toString())
+                    if (parsed > 0L) return parsed
+                }
             }
         }
         return 0L

@@ -5,14 +5,23 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.38**
-  (versionCode **274**, release OTA v2.5.38). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.39**
+  (versionCode **275**, release OTA v2.5.39). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Corrección Definitiva de Barra de Avance Completa, Duración y Safe Area en Smart TV** (v2.5.39):
+  - **Diagnóstico Integral de "Barra de Avance Incompleta"**:
+    1. *Corte Físico por Overscan en Pantallas Smart TV*: `X4KPlayerAty` tenía un padding horizontal de sólo `14dp` y vertical de `10dp`. En televisores con sobreexploración (overscan del 3-5%), el extremo derecho de la barra de avance (`timeTotal`, p. ej. `1:45:20`) y el thumb final quedaban físicamente cortados fuera del marco de la pantalla.
+    2. *Márgenes de Seguridad y No Recorte*: Se incrementó el padding seguro en Smart TV a `48dp` horizontal y `28dp` vertical (alineado con los márgenes seguros de TV), con `clipChildren = false` y `clipToPadding = false` en `bottom` y `seekRow`, ancho mínimo garantizado (`minWidth = 44dp`), alineación derecha en `total`, y altura mínima de pista `minimumHeight = 28dp`.
+    3. *Desconexión de `splitTrack`*: Android por defecto recorta el riel con un espacio transparente alrededor del thumb (`splitTrack = true`), dando la ilusión visual de que la barra de avance está rota o incompleta. Se fijó `splitTrack = false` en `SeekBar`.
+    4. *Inspección Forense de Duración en Motor Nativo Titan*: Se descubrió por descompilación de bytecode que en el bean de estado `uc.c` (`yc.h.p(0)`) el método que devuelve la duración es `c()`, y en el facade `yc.e` es `W()`. Se expandió `X4KTitan.durationMs(view)` para consultar estos métodos directamente.
+    5. *Propagación Total de Duración Fallback*: Si el portal aún no responde o la consulta de red tarda, `TitleScreen.kt` y `TvTitleScreen.kt` inicializan `itemDurationMs` con `film.durationMin * 60_000L` y pasan `EpisodePlay` con duración no nula a `onPlay`. Se actualizó la consulta en segundo plano de `X4KPlayerAty` para inspeccionar tanto `code` como `curSeries` con `X4KApi.detailFor` y `itemInfo`.
+  - **Validación**: 140 tests unitarios de Android (`:app:testNormalDebugUnitTest`) y 33 de backend pasando al 100%. Release OTA v2.5.39.
 
 - **Restauración de Duración Total Inmutable y Scrubber Interactivo de Búsqueda Fina** (v2.5.38):
   - **Diagnóstico Forense de la Regresión de Duración Total (`--:--` o `00:00`)**:

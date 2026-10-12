@@ -77,7 +77,9 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
     val seasonIdx = film.seasons.indexOfFirst { it.titleId == activeId }.coerceAtLeast(0)
     val seasonIdList = remember(film.id) { film.seasons.map { it.titleId } }
     val seasonNameList = remember(film.id) { film.seasons.map { if (it.n <= 0) "Completa" else "T${it.n}" } }
-    var itemDurationMs by remember(film.id, activeId) { mutableStateOf(0L) }
+    var itemDurationMs by remember(film.id, activeId) {
+        mutableStateOf(if (film.durationMin > 0) film.durationMin * 60_000L else 0L)
+    }
     var description by remember(film.id) { mutableStateOf(film.synopsis) }
     var episodePrograms by remember(film.id) { mutableStateOf<List<X4KApi.EpisodeProgram>>(emptyList()) }
     var watchedTick by remember(film.id) { mutableStateOf(0) }
@@ -112,7 +114,7 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                     }
                 }
             }
-            val durMs = X4KApi.extractDurationMs(item)
+            val durMs = X4KApi.extractDurationMs(item).takeIf { it > 0L } ?: X4KApi.extractDurationMs(detail)
             if (durMs > 0L) itemDurationMs = durMs
             val duration = prettyDuration(item.optString("duration").ifBlank { if (durMs > 0) "${durMs / 60_000} min" else "" })
             durationLabel = duration
@@ -297,12 +299,10 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                                 ),
                             )
                             else -> onPlay(
-                                if (itemDurationMs > 0L) {
-                                    EpisodePlay(
-                                        code = film.videoUrl.substringAfter(':'),
-                                        durationMs = itemDurationMs,
-                                    )
-                                } else null
+                                EpisodePlay(
+                                    code = film.videoUrl.substringAfter(':'),
+                                    durationMs = if (itemDurationMs > 0L) itemDurationMs else if (film.durationMin > 0) film.durationMin * 60_000L else 0L,
+                                )
                             )
                         }
                     },
