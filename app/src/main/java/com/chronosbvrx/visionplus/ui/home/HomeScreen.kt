@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LiveTv
@@ -95,6 +96,7 @@ private data class HomeSelection(val label: String, val icon: ImageVector, val r
 private val SELECTIONS = listOf(
     HomeSelection("Películas", Icons.Default.Movie, Route.Section("movies", "Películas")),
     HomeSelection("Series", Icons.Default.Theaters, Route.Section("series", "Series")),
+    HomeSelection("Descargas", Icons.Default.Download, Route.Downloads),
     HomeSelection("Fútbol", Icons.Default.SportsSoccer, Route.Sports),
     HomeSelection("TV en Vivo", Icons.Default.LiveTv, Route.Live),
     HomeSelection("Anime", Icons.Default.Animation, Route.Section("anime", "Anime")),

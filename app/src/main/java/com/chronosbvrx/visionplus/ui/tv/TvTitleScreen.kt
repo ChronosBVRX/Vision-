@@ -39,6 +39,11 @@ import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import coil.compose.AsyncImage
 import org.json.JSONObject
+import androidx.compose.runtime.collectAsState
+import com.chronosbvrx.visionplus.data.offline.DownloadState
+import com.chronosbvrx.visionplus.data.offline.OfflineDownloadManager
+import com.chronosbvrx.visionplus.data.offline.OfflineRegistry
+import com.chronosbvrx.visionplus.data.offline.TvStorageRequiredException
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -314,6 +319,16 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                 }
                 val inLater = remember(film.id) { mutableStateOf(UserLibrary.isWatchLater(context, film.id)) }
                 val inFavorites = remember(film.id) { mutableStateOf(UserLibrary.isFavorite(context, film.id)) }
+                val downloads by OfflineRegistry.downloadsFlow.collectAsState()
+                val tvDownload = remember(film.id, downloads) {
+                    OfflineRegistry.findDownloadFor(film.id, context = context)
+                }
+                var showNoUsbDialog by remember { mutableStateOf(false) }
+
+                if (showNoUsbDialog) {
+                    TvNoUsbDialog(onDismiss = { showNoUsbDialog = false })
+                }
+
                 TvCompactAction(label = if (inLater.value) "✓ Ver más tarde" else "Ver más tarde") {
                     UserLibrary.toggleWatchLater(context, film)
                     inLater.value = !inLater.value
@@ -321,6 +336,25 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                 TvCompactAction(label = if (inFavorites.value) "★ Favorito" else "☆ Favorito") {
                     UserLibrary.toggleFavorite(context, film)
                     inFavorites.value = !inFavorites.value
+                }
+
+                val downloadLabel = when (tvDownload?.state) {
+                    DownloadState.COMPLETED -> "✓ En USB (${tvDownload.formattedSize})"
+                    DownloadState.DOWNLOADING -> "Descargando ${tvDownload.progressPercent}%"
+                    DownloadState.QUEUED -> "En cola USB…"
+                    else -> "💾 Descargar en USB"
+                }
+
+                TvCompactAction(label = downloadLabel) {
+                    if (tvDownload?.state == DownloadState.COMPLETED) {
+                        onPlay(EpisodePlay(code = tvDownload.playUri))
+                    } else {
+                        try {
+                            OfflineDownloadManager.enqueueDownload(context, film)
+                        } catch (_: TvStorageRequiredException) {
+                            showNoUsbDialog = true
+                        }
+                    }
                 }
             }
 

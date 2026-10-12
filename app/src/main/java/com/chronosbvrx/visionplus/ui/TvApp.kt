@@ -44,6 +44,7 @@ import com.chronosbvrx.visionplus.ui.tv.TvSettingsScreen
 import com.chronosbvrx.visionplus.ui.tv.TvSportsScreen
 import com.chronosbvrx.visionplus.ui.tv.TvCategoryScreen
 import com.chronosbvrx.visionplus.ui.tv.TvLibraryScreen
+import com.chronosbvrx.visionplus.ui.tv.TvDownloadsScreen
 import com.chronosbvrx.visionplus.ui.tv.TvTitleScreen
 import com.chronosbvrx.visionplus.ui.tv.landingFocus
 import com.chronosbvrx.visionplus.ui.tv.rememberLandingFocus
@@ -190,6 +191,10 @@ private fun TvRoute(
                 onFilmPick(it.id)
                 nav.push(Route.Title(it))
             },
+        )
+        Route.Downloads -> TvDownloadsScreen(
+            onPlayFilm = { nav.push(Route.Player(it)) },
+            onBack = { nav.pop() },
         )
         Route.Live -> TvLiveScreen(onPlay = { ch, codes, scope ->
             nav.push(Route.LivePlayer(ch, channelCodes = codes, groupTitle = scope))

@@ -158,6 +158,22 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
         PlayerScreen(film.copy(id = "xtv:$cid", videoUrl = "xtv:$cid"), isTv, onBack, episode, resumeMs)
         return
     }
+    // A downloaded vault film (`vault:<id>`): reproduce inmediatamente desde el búnker cifrado
+    if (film.videoUrl.startsWith("vault:")) {
+        PlayerCore(
+            title = film.title,
+            subtitle = film.metaLine(),
+            url = film.videoUrl,
+            isLive = false,
+            isTv = isTv,
+            onBack = onBack,
+            showIntro = false,
+            resumeInfo = ResumeInfo(film.videoUrl, film.title, film.posterUrl, film.videoUrl),
+            resumeMs = resumeMs,
+            declaredDurationMs = if (episode != null && episode.durationMs > 0) episode.durationMs else if (film.durationMin > 0) film.durationMin * 60_000L else 0L,
+        )
+        return
+    }
     // An XTV film (`xtv:<contentId>`) or live channel (`xtvlive:<code>`): the portal mints the
     // play codes here and the X4K engine (its own process) does the streaming. The handoff
     // screen holds the room until the player takes over.
@@ -642,7 +658,12 @@ private fun PlayerCore(
             origin?.takeIf { it.isNotBlank() }?.let { put("Origin", it) }
         }
         if (headers.isNotEmpty()) http.setDefaultRequestProperties(headers)
-        val mediaSourceFactory = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
+        val baseDataSourceFactory = if (url.startsWith("vault:")) {
+            com.chronosbvrx.visionplus.data.offline.EncryptedVaultDataSource.Factory(context)
+        } else {
+            DefaultDataSource.Factory(context, http)
+        }
+        val mediaSourceFactory = DefaultMediaSourceFactory(baseDataSourceFactory)
         if (!drmKey.isNullOrBlank()) {
             val clearKeyJson = com.chronosbvrx.visionplus.data.sports.GeeSportsFallback.buildClearKeyJson(drmKey)
             if (clearKeyJson != null) {
@@ -822,12 +843,18 @@ private fun PlayerCore(
     }
 
     // Full screen while the player is open: system bars hidden, back to normal on leaving.
-    DisposableEffect(activity) {
+    DisposableEffect(activity, url) {
         val window = activity?.window
+        if (url.startsWith("vault:")) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
         val insets = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
         insets?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         insets?.hide(WindowInsetsCompat.Type.systemBars())
         onDispose {
+            if (url.startsWith("vault:")) {
+                window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            }
             insets?.show(WindowInsetsCompat.Type.systemBars())
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }

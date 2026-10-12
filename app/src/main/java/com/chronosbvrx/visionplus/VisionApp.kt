@@ -21,6 +21,7 @@ import coil.ImageLoaderFactory
 class VisionApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
+        com.chronosbvrx.visionplus.data.offline.OfflineRegistry.init(this)
     }
 
     override fun newImageLoader(): ImageLoader {

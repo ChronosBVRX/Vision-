@@ -57,6 +57,12 @@ import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import coil.compose.AsyncImage
 import org.json.JSONObject
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.collectAsState
+import com.chronosbvrx.visionplus.data.offline.DownloadState
+import com.chronosbvrx.visionplus.data.offline.OfflineDownloadManager
+import com.chronosbvrx.visionplus.data.offline.OfflineRegistry
+import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -211,17 +217,60 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                 }
                             },
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 6.dp),
+                        ) {
                             val inLater = remember(film.id) { mutableStateOf(UserLibrary.isWatchLater(context, film.id)) }
                             val inFavorites = remember(film.id) { mutableStateOf(UserLibrary.isFavorite(context, film.id)) }
+                            val downloads by OfflineRegistry.downloadsFlow.collectAsState()
+                            val downloadItem = remember(film.id, downloads) {
+                                OfflineRegistry.findDownloadFor(film.id, context = context)
+                            }
+
                             TextButton(onClick = {
                                 UserLibrary.toggleWatchLater(context, film)
                                 inLater.value = !inLater.value
                             }) { Text(if (inLater.value) "✓ Ver más tarde" else "+ Ver más tarde", color = Color.White) }
+
                             TextButton(onClick = {
                                 UserLibrary.toggleFavorite(context, film)
                                 inFavorites.value = !inFavorites.value
                             }) { Text(if (inFavorites.value) "★ Favorito" else "☆ Favorito", color = Color.White) }
+
+                            // Botón de Descarga Offline
+                            when (downloadItem?.state) {
+                                DownloadState.COMPLETED -> {
+                                    TextButton(onClick = { onPlay(EpisodePlay(code = downloadItem.playUri)) }) {
+                                        Text("✓ Descargado", color = VisionBlue, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                DownloadState.DOWNLOADING -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
+                                        CircularProgressIndicator(
+                                            progress = { downloadItem.progressFraction },
+                                            modifier = Modifier.size(16.dp),
+                                            color = VisionBlue,
+                                            strokeWidth = 2.dp,
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("${downloadItem.progressPercent}%", color = VisionBlue, style = MaterialTheme.typography.labelMedium)
+                                    }
+                                }
+                                DownloadState.QUEUED -> {
+                                    TextButton(onClick = { }) {
+                                        Text("En cola…", color = VisionTextSecondary)
+                                    }
+                                }
+                                else -> {
+                                    TextButton(onClick = {
+                                        OfflineDownloadManager.enqueueDownload(context, film)
+                                    }) {
+                                        Text("⬇ Descargar", color = VisionBlue)
+                                    }
+                                }
+                            }
                         }
                         if (film.seasons.size > 1 || episodes.isNotEmpty()) {
                             MobileSeriesSelectorSection(

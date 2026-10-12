@@ -5,14 +5,31 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.48**
-  (versionCode **284**, release OTA v2.5.48). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.49**
+  (versionCode **285**, release OTA v2.5.49). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Modo Offline Blindado y Búnker Criptográfico Anti-Piratería ("Hardware-Encrypted Vault & Strict Removable Storage Policy")** (v2.5.49):
+  - **Arquitectura de Búnker Criptográfico (Cero Fugas / Anti-Copia / Grado Comercial)**:
+    - *Cifrado de Hardware*: Hardware-backed `AndroidKeyStore` (AES-256 en modo CTR) con vector de inicialización seguro de 16 bytes y cálculo instantáneo de saltos $O(1)$ (`computeIvForOffset = baseIv + (offset / 16)`). Cabecera binaria `VPVAULT1` (33 bytes) conteniendo magic bytes, versión, base IV y tamaño original. Si el archivo `.vpack` es copiado o transferido a una PC o teléfono externo, es matemáticamente imposible de abrir o reproducir sin el chip seguro del dispositivo original.
+    - *Descifrado al Vuelo en RAM Directa (`EncryptedVaultDataSource`)*: Fuente de datos binaria personalizada para Media3 ExoPlayer que descifra fragmentos directamente en memoria volátil conforme el decodificador de video solicita bytes. Ningún frame o archivo temporal descifrado toca jamás el disco flash.
+    - *Anti-Grabación de Pantalla (`FLAG_SECURE`)*: `PlayerScreen` activa `FLAG_SECURE` durante la reproducción de esquemas offline `vault:`, protegiendo el contenido contra capturas de pantalla o grabadores externos.
+  - **Política Estricta de Almacenamiento en Smart TV ("Política de USB Obligatoria")**:
+    - *Diagnóstico y Prevención de Saturación*: Los dispositivos Smart TV (Chromecast con Google TV, Xiaomi Stick, TV Box ZTE B866F) cuentan con memorias de 4 a 8 GB compartidas con el SO y caché de apps. Permitir descargas internas provocaría saturación del almacenamiento, bloqueos del lanzador y muertes por `lmkd`.
+    - *Regla*: En Smart TV (`DeviceKind.isTelevision()`), las descargas están terminantemente deshabilitadas en memoria interna y exigen un almacenamiento USB o disco externo extraíble (`isRemovable == true`).
+    - *UX Informativo*: Si no hay memoria USB conectada, la app despliega el modal interactivo `TvNoUsbDialog` informando con claridad los requerimientos de almacenamiento USB antes de permitir la descarga.
+  - **Experiencia en Móviles y Tablets**:
+    - Almacenamiento seguro en sandbox de la app (`filesDir/vision_vault/`) o ranura MicroSD si está disponible.
+    - Medidor visual en barra de almacenamiento (`DownloadsScreen`) que desglosa el espacio ocupado por Vision+ versus espacio libre en el dispositivo.
+  - **Integración UI Completa**:
+    - Fichas de detalle (`TitleScreen` y `TvTitleScreen`): Botón `[ ⬇ Descargar ]` / `[ 💾 Descargar en USB ]` con diálogo de selección de calidad e indicador circular de avance porcentual en vivo.
+    - Pestaña "Descargas" en el menú lateral principal, en "Mi lista" (`LibraryScreen` y `TvLibraryScreen`), y en los hubs rápidos del Home (`SELECTIONS` y `TV_QUICK_HUBS`).
+  - **Validación**: 176 pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) y 34 pruebas de backend (`pytest server/tests/`) pasando al 100%. Release OTA v2.5.49.
 
 - **Depuración Integral de Fuentes de Fútbol en Vivo y Erradicación de Canales Falsos ("Zero Non-Sports & Catalog-Only Linking")** (v2.5.48):
   - **Diagnóstico y Corrección de "TNT Series en Partidos de Fútbol"**:

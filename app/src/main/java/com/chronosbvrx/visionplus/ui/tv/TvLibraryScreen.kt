@@ -17,11 +17,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.chronosbvrx.visionplus.data.offline.DownloadState
+import com.chronosbvrx.visionplus.data.offline.OfflineRegistry
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -40,20 +43,24 @@ import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 @Composable
 fun TvLibraryScreen(catalog: XuperCatalog, returnFilmId: String? = null, onOpenFilm: (Film) -> Unit) {
     LaunchedEffect(Unit) { catalog.refreshPersonal() }
-    var favoritesTab by rememberSaveable { mutableStateOf(true) }
-    val landing = rememberLandingFocus(favoritesTab)
+    var activeTab by rememberSaveable { mutableStateOf(0) } // 0: Favoritos, 1: Ver más tarde, 2: Descargas USB
+    val landing = rememberLandingFocus(activeTab)
     // Al volver de una ficha: primero la tarjeta exacta; si no está compuesta, la primera la respalda.
     val returnRequester = remember { FocusRequester() }
-    LaunchedEffect(favoritesTab, returnFilmId) {
+    LaunchedEffect(activeTab, returnFilmId) {
         if (returnFilmId == null) return@LaunchedEffect
         repeat(8) {
             runCatching { returnRequester.requestFocus() }
             kotlinx.coroutines.delay(80)
         }
     }
-    val rawFilms = catalog.personalRows
-        .firstOrNull { it.id == if (favoritesTab) "favorites" else "watch-later" }
-        ?.films.orEmpty()
+    val downloads by OfflineRegistry.downloadsFlow.collectAsState()
+
+    val rawFilms = when (activeTab) {
+        0 -> catalog.personalRows.firstOrNull { it.id == "favorites" }?.films.orEmpty()
+        1 -> catalog.personalRows.firstOrNull { it.id == "watch-later" }?.films.orEmpty()
+        else -> downloads.filter { it.state == DownloadState.COMPLETED }.map { it.toFilm() }
+    }
     val films = remember(rawFilms) { rawFilms.distinctBy { it.id } }
     // Sin películas no hay tarjeta a la que aterrizar: el chip seleccionado es el
     // destino del foco, o el mando se queda sin nada enfocado en esta pantalla.
@@ -62,23 +69,34 @@ fun TvLibraryScreen(catalog: XuperCatalog, returnFilmId: String? = null, onOpenF
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Mi lista", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(Modifier.width(20.dp))
-            TvChoiceChip("★ Favoritos", selected = favoritesTab, onClick = { favoritesTab = true },
-                modifier = if (favoritesTab) emptyLanding else Modifier)
+            TvChoiceChip("★ Favoritos", selected = activeTab == 0, onClick = { activeTab = 0 },
+                modifier = if (activeTab == 0) emptyLanding else Modifier)
             Spacer(Modifier.width(10.dp))
-            TvChoiceChip("Ver más tarde", selected = !favoritesTab, onClick = { favoritesTab = false },
-                modifier = if (!favoritesTab) emptyLanding else Modifier)
+            TvChoiceChip("Ver más tarde", selected = activeTab == 1, onClick = { activeTab = 1 },
+                modifier = if (activeTab == 1) emptyLanding else Modifier)
+            Spacer(Modifier.width(10.dp))
+            TvChoiceChip("💾 Descargas (USB)", selected = activeTab == 2, onClick = { activeTab = 2 },
+                modifier = if (activeTab == 2) emptyLanding else Modifier)
         }
         Spacer(Modifier.padding(top = 10.dp))
         if (films.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        if (favoritesTab) "Todavía no tienes favoritos" else "Nada para ver más tarde",
+                        when (activeTab) {
+                            0 -> "Todavía no tienes favoritos"
+                            1 -> "Nada para ver más tarde"
+                            else -> "No tienes descargas en tu memoria USB"
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         color = Color.White,
                     )
                     Text(
-                        "En la ficha de una película elige «☆ Favorito» o «Ver más tarde».",
+                        when (activeTab) {
+                            0 -> "En la ficha de una película elige «☆ Favorito»."
+                            1 -> "En la ficha de una película elige «Ver más tarde»."
+                            else -> "Conecta una memoria USB y elige «Descargar en USB» para ver sin internet."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = VisionTextSecondary,
                         modifier = Modifier.padding(top = 6.dp),

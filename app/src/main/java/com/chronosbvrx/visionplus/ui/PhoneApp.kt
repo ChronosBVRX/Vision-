@@ -82,6 +82,9 @@ import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.title.TitleScreen
 import kotlinx.coroutines.launch
 
+import androidx.compose.material.icons.filled.Download
+import com.chronosbvrx.visionplus.ui.phone.DownloadsScreen
+
 private data class Tab(val route: Route, val label: String, val icon: ImageVector)
 
 private val TABS = listOf(
@@ -90,6 +93,7 @@ private val TABS = listOf(
     Tab(Route.Section("series", "Series"), "Series", Icons.Default.Theaters),
     Tab(Route.Live, "En vivo", Icons.Default.LiveTv),
     Tab(Route.Library, "Mi lista", Icons.Default.Bookmark),
+    Tab(Route.Downloads, "Descargas", Icons.Default.Download),
     Tab(Route.Settings, "Ajustes", Icons.Default.Settings),
     Tab(Route.About, "Acerca de", Icons.Default.Info),
 )
@@ -261,6 +265,11 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
                     )
                     Route.Sports -> SportsScreen(padding, onPlay = { nav.push(Route.LivePlayer(it)) })
                     Route.Library -> LibraryScreen(catalog, padding, onOpenFilm = { nav.push(Route.Title(it)) })
+                    Route.Downloads -> DownloadsScreen(
+                        contentPadding = padding,
+                        onOpenFilm = { nav.push(Route.Player(it)) },
+                        onBack = { nav.pop() },
+                    )
                     Route.Live -> LiveScreen(padding, onPlay = { ch, codes, scope ->
                         nav.push(Route.LivePlayer(ch, channelCodes = codes, groupTitle = scope))
                     })
