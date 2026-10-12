@@ -173,6 +173,31 @@ object SportsLinker {
         return if (filtered.isNotEmpty()) filtered else baseTokens
     }
 
+    private val NON_SPORTS_EXCLUSIONS = setOf(
+        "series", "serie", "novelas", "novela", "cinema", "cine",
+        "peliculas", "pelicula", "movies", "movie", "kids", "infantil",
+        "musica", "music", "religion", "religioso", "documental",
+        "documentales", "history", "discovery"
+    )
+
+    /**
+     * Determina si un canal en vivo es elegible para transmitir deportes.
+     * Excluye estrictamente canales de series (e.g. TNT Series, Warner, Star Channel),
+     * novelas (TNT Novelas, TLNovelas), películas, infantiles, música o religión.
+     */
+    internal fun isEligibleSportsChannel(channel: LiveChannel): Boolean {
+        val nameNorm = norm(channel.name)
+        val toks = tokens(channel.name)
+        if (toks.any { it in NON_SPORTS_EXCLUSIONS } ||
+            nameNorm.contains("tnt series") ||
+            nameNorm.contains("tnt novelas")
+        ) {
+            return false
+        }
+        val genre = LiveTaxonomy.genreFor(channel.name)
+        return genre == LiveTaxonomy.GENRE_SPORTS || genre == LiveTaxonomy.GENRE_ENTERTAINMENT
+    }
+
     internal data class BrandInfo(
         val brand: String,
         val edition: String?,
@@ -206,7 +231,7 @@ object SportsLinker {
         val edition: String?
 
         when {
-            cleanToks.contains("espn") || (cleanToks.contains("elite") && cleanToks.contains("hub")) || cleanToks.contains("disney") || (cleanToks.contains("star") && !cleanToks.contains("action")) -> {
+            cleanToks.contains("espn") || (cleanToks.contains("elite") && cleanToks.contains("hub")) || cleanToks.contains("disney") || (cleanToks.contains("star") && (cleanToks.contains("plus") || rawName.contains("+") || rawName.contains("☆+"))) -> {
                 brand = "espn"
                 edition = when {
                     toks.contains("deportes") && !n.contains("azteca") -> "deportes"
@@ -244,19 +269,27 @@ object SportsLinker {
                 brand = "vix"
                 edition = if (cleanToks.contains("premium")) "premium" else null
             }
-            cleanToks.contains("claro") -> {
+            cleanToks.contains("claro") && (cleanToks.contains("sports") || cleanToks.contains("sport") || cleanToks.contains("deportes") || !cleanToks.any { it in NON_SPORTS_EXCLUSIONS }) -> {
                 brand = "claro sports"
                 edition = cleanToks.firstOrNull { it in EDITIONS }
             }
-            cleanToks.contains("tnt") -> {
+            cleanToks.contains("tnt") && (cleanToks.contains("sports") || cleanToks.contains("sport") || cleanToks.contains("deportes") || n.contains("tnt sport")) -> {
                 brand = "tnt sports"
                 edition = cleanToks.firstOrNull { it in EDITIONS }
+            }
+            cleanToks.contains("tnt") && cleanToks.contains("series") -> {
+                brand = "tnt series"
+                edition = null
+            }
+            cleanToks.contains("tnt") && cleanToks.contains("novelas") -> {
+                brand = "tnt novelas"
+                edition = null
             }
             cleanToks.contains("directv") || cleanToks.contains("dsports") -> {
                 brand = "directv sports"
                 edition = cleanToks.firstOrNull { it in EDITIONS }
             }
-            cleanToks.contains("movistar") -> {
+            cleanToks.contains("movistar") && (cleanToks.contains("futbol") || cleanToks.contains("laliga") || cleanToks.contains("campeones") || cleanToks.contains("deportes") || cleanToks.contains("plus") || !cleanToks.any { it in NON_SPORTS_EXCLUSIONS }) -> {
                 brand = "movistar futbol"
                 edition = null
             }
@@ -290,7 +323,7 @@ object SportsLinker {
                 brand = "universo"
                 edition = null
             }
-            cleanToks.contains("win") -> {
+            cleanToks.contains("win") && (cleanToks.contains("sports") || cleanToks.contains("sport") || cleanToks.contains("plus") || !cleanToks.any { it in NON_SPORTS_EXCLUSIONS }) -> {
                 brand = "win sports"
                 edition = if (cleanToks.contains("plus") || cleanToks.contains("premium")) "plus" else cleanToks.firstOrNull { it in EDITIONS }
             }
@@ -312,6 +345,8 @@ object SportsLinker {
     }
 
     internal fun scoreChannel(query: String, channel: LiveChannel, leagueId: String? = null): Int {
+        if (!isEligibleSportsChannel(channel)) return 0
+
         val qInfo = extractBrandInfo(query)
         val chInfo = extractBrandInfo(channel.name)
 
@@ -364,7 +399,7 @@ object SportsLinker {
             }
         }
 
-        // 3. Puntuación y preferencia por país
+        // 3. Puntuación y preferencia por país (sin penalizar feeds internacionales válidos)
         val targetCountry = qInfo.targetCountry
         if (targetCountry != null) {
             if (chCountry == targetCountry) {
@@ -375,10 +410,14 @@ object SportsLinker {
         } else {
             when (chCountry) {
                 "México" -> score += 80
-                "España" -> score += 50
+                "España" -> score += 60
+                "Argentina" -> score += 50
+                "Chile" -> score += 50
+                "Colombia" -> score += 50
+                "Perú" -> score += 50
                 "Internacional" -> score += 40
-                "EE. UU." -> score += 20
-                else -> score -= 70
+                "EE. UU." -> score += 30
+                else -> score += 20
             }
         }
 
@@ -423,37 +462,19 @@ object SportsLinker {
         return list
     }
 
+    /**
+     * Resuelve los canales reales del catálogo que transmiten el partido.
+     * Solo retorna canales que de verdad existen en la lista en vivo del usuario (XTV),
+     * garantizando que cada fuente mostrada funcione y lleve al partido.
+     */
     private fun buildLinkWithFallback(
         match: SportMatch,
         channels: List<LiveChannel>,
     ): Link {
         val queries = targetQueryNames(match)
         val primary = resolveChannels(queries, channels, match.league.id)
-        val extraOptions = GeeSportsFallback.fallbackFor(queries, match.league.id)
-        val combined = LinkedHashMap<String, LiveChannel>()
-        val nameCounts = HashMap<String, Int>()
-        for (ch in primary) {
-            if (combined.putIfAbsent(ch.url, ch) == null) {
-                val key = norm(ch.name)
-                nameCounts[key] = (nameCounts[key] ?: 0) + 1
-            }
-        }
-        for (opt in extraOptions) {
-            if (combined.size >= MAX_TOTAL_WITH_FALLBACK) break
-            if (!combined.containsKey(opt.url)) {
-                val key = norm(opt.name)
-                val nextCount = (nameCounts[key] ?: 0) + 1
-                nameCounts[key] = nextCount
-                val finalChannel = if (nextCount > 1) {
-                    opt.copy(name = "${opt.name} · Opción $nextCount")
-                } else {
-                    opt
-                }
-                combined[opt.url] = finalChannel
-            }
-        }
         return Link(
-            candidates = combined.values.toList(),
+            candidates = primary,
             confirmed = null,
             epgPrograms = emptyMap(),
         )

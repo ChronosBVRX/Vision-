@@ -5,14 +5,28 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.47**
-  (versionCode **283**, release OTA v2.5.47). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.48**
+  (versionCode **284**, release OTA v2.5.48). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Depuración Integral de Fuentes de Fútbol en Vivo y Erradicación de Canales Falsos ("Zero Non-Sports & Catalog-Only Linking")** (v2.5.48):
+  - **Diagnóstico y Corrección de "TNT Series en Partidos de Fútbol"**:
+    - *Causa Raíz*: En `SportsLinker.kt`, la regla de tokenización `cleanToks.contains("tnt")` asignaba incondicionalmente `brand = "tnt sports"`. Al evaluar canales en vivo como `TNT SERIES HD` o `TNT NOVELAS HD`, `cleanToks` contenía `"tnt"`, por lo que el normalizador les asignaba la marca `"tnt sports"`. Además, en `scoreChannel`, los canales de series recibían una puntuación alta (+260) por coincidencia de marca y país. Al buscar partidos emitidos por TNT Sports (o en la plataforma Max), `SportsLinker` seleccionaba `TNT SERIES HD` en lugar del canal deportivo real.
+    - *Solución*:
+      1. *Identificación Rigurosa de Marca*: `cleanToks.contains("tnt")` sólo asigna `"tnt sports"` si el nombre del canal contiene explícitamente `"sports"`, `"sport"`, `"deportes"` o `"tnt sport"`. Si contiene `"series"`, se marca como `"tnt series"`, y si contiene `"novelas"`, como `"tnt novelas"`. Canales como `STAR CHANNEL HD` o `WARNER HD` quedan excluidos de marcas deportivas como ESPN.
+      2. *Filtro de Elegibilidad Estricta (`isEligibleSportsChannel`)*: En `SportsLinker`, ningún canal perteneciente a géneros no deportivos (`GENRE_SERIES`, `GENRE_NOVELAS`, `GENRE_MOVIES`, `GENRE_KIDS`, `GENRE_MUSIC`, `GENRE_RELIGION`, `GENRE_DOCS`) ni con palabras clave como `"series"`, `"serie"`, `"novelas"`, `"novela"`, `"cinema"`, `"movies"`, `"kids"` puede puntuar (`score = 0`). Sólo canales en `GENRE_SPORTS` y cadenas abiertas en `GENRE_ENTERTAINMENT` (Canal 5, Azteca 7, Telemundo, Universo) son elegibles.
+  - **Erradicación de Fuentes Fantasma / Enlaces Rotos ("Solo si de verdad tenemos el canal")**:
+    - *Causa Raíz*: `buildLinkWithFallback` invocaba `GeeSportsFallback.fallbackFor()`, inyectando hasta 12 enlaces externos muertos/rotos (`redima.pro`, `170.82.37.21`, etc.) que confundían al usuario y fallaban al reproducir. Además, en el backend (`server/sync/sports.py`), a cada partido de liga internacional se le agregaban incondicionalmente todos los canales de la liga (`assigned_channels.append(ch)`), haciendo que partidos exclusivos aparecieran con 6 canales incorrectos.
+    - *Solución*:
+      1. *Catálogo Real Exclusivo*: `buildLinkWithFallback` ahora devuelve única y exclusivamente los canales verificados de `primary` presentes en la lista en vivo de Vision+ (`xtvlive:`). Si Vision+ no cuenta con el canal del partido, no inventa fuentes y muestra honestamente `"Sin canal en tu lista · por [Cadena]"` / `"No está en tu lista"`, evitando pantallas negras y enlaces engañosos.
+      2. *Puntuación de Países Sin Penalización*: Se eliminó la penalización de -70 puntos a feeds de Sudamérica (Chile, Argentina, Colombia, Perú), permitiendo que canales legítimos presentes en XTV como `TNT SPORTS CHILE HD`, `TNT SPORTS PREMIUM`, `WIN SPORTS` o `TYC SPORTS` puntúen positivamente cuando emiten el encuentro.
+      3. *Backend Limpio (`sports.py`)*: Cuando un partido ya tiene canales asignados por LiveSoccerTV o ESPN, no se diluyen anexando toda la lista de canales de la liga.
+  - **Validación**: 167 pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) y 34 pruebas de backend (`pytest server/tests/`) pasando al 100%.
 
 - **Catálogo Indexado Canónico, Normalización Universal VOD y Erradicación de Errores al Iniciar ("Auto-Retry Zero Touch")** (v2.5.47):
   - **Diagnóstico y Corrección de "Título no trae direcciones de reproducción" (Caso Pequeños Calvarios y similares)**:

@@ -323,4 +323,55 @@ class SportsLinkerTest {
         assertTrue(options.all { it.url.startsWith("http") })
         assertTrue(options.none { it.name.contains("(Alt)", ignoreCase = true) || it.name.contains("Gee", ignoreCase = true) || it.name.contains("Fallback", ignoreCase = true) })
     }
+
+    @Test
+    fun tntSeriesAndNonSportsChannelsNeverResolveForSports() {
+        val mixedCatalog = listOf(
+            channel("TNT SERIES HD", "tnt_series"),
+            channel("TNT NOVELAS HD", "tnt_novelas"),
+            channel("TNT HD", "tnt_regular"),
+            channel("WARNER HD", "warner"),
+            channel("STAR CHANNEL HD", "star_channel"),
+            channel("HBO HD", "hbo"),
+            channel("TNT SPORTS FHD", "tnt_sports_real"),
+        )
+
+        // Búsqueda de TNT Sports debe excluir categóricamente TNT Series, Novelas, etc. y dar solo el canal real de deportes
+        val resolved = SportsLinker.resolveChannels(listOf("TNT Sports"), mixedCatalog)
+        assertEquals(listOf("xtvlive:tnt_sports_real"), resolved.map { it.url })
+
+        // Si el catálogo solo tiene canales de series/novelas de TNT pero NO el deportivo, debe retornar vacío
+        val seriesOnlyCatalog = listOf(
+            channel("TNT SERIES HD", "tnt_series"),
+            channel("TNT NOVELAS HD", "tnt_novelas"),
+            channel("TNT HD", "tnt_regular"),
+        )
+        val resolvedEmpty = SportsLinker.resolveChannels(listOf("TNT Sports"), seriesOnlyCatalog)
+        assertTrue("No debe haber fuentes si solo existen canales de series", resolvedEmpty.isEmpty())
+
+        // Verificación directa de elegibilidad
+        assertFalse(SportsLinker.isEligibleSportsChannel(channel("TNT SERIES HD", "1")))
+        assertFalse(SportsLinker.isEligibleSportsChannel(channel("TNT NOVELAS HD", "2")))
+        assertFalse(SportsLinker.isEligibleSportsChannel(channel("STAR CHANNEL HD", "3")))
+        assertFalse(SportsLinker.isEligibleSportsChannel(channel("WARNER HD", "4")))
+        assertTrue(SportsLinker.isEligibleSportsChannel(channel("TNT SPORTS FHD", "5")))
+        assertTrue(SportsLinker.isEligibleSportsChannel(channel("TNT SPORTS CHILE HD", "6")))
+        assertTrue(SportsLinker.isEligibleSportsChannel(channel("CANAL 5 HD", "7")))
+        assertTrue(SportsLinker.isEligibleSportsChannel(channel("AZTECA 7 HD", "8")))
+    }
+
+    @Test
+    fun quickResolveReturnsOnlyRealCatalogChannels() {
+        SportsLinker.clearCache()
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val matchWithoutChannel = match().copy(
+            id = "non_existent_match",
+            league = SportLeague("other.1", "Liga Sin Canal", ""),
+            channels = listOf("Canal Inexistente 999"),
+            broadcasts = emptyList(),
+        )
+        val link = SportsLinker.quickResolve(context, matchWithoutChannel)
+        // No debe inventar fuentes ni enlaces rotos si el canal no está en el catálogo real
+        assertTrue(link.candidates.isEmpty())
+    }
 }

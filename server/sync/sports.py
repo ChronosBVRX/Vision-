@@ -429,10 +429,6 @@ def _parse_event(
             assigned_channels = _mexico_home_team_channels(h_side["name"])
         else:
             assigned_channels = list(channels)
-    elif league_id != "mex.1":
-        for ch in channels:
-            if ch and ch not in assigned_channels:
-                assigned_channels.append(ch)
 
     return {
         "id": event_id,
