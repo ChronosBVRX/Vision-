@@ -35,6 +35,7 @@ import com.chronosbvrx.visionplus.DevicePerformance
 import com.chronosbvrx.visionplus.R
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 
 /** Exit fade duration, in ms. */
 private const val EXIT_MS = 260
@@ -87,6 +88,13 @@ fun VisionSplash(isTv: Boolean, canExit: Boolean, onFinished: () -> Unit) {
                     modifier = Modifier.size(30.dp),
                     color = VisionBlue,
                     strokeWidth = 3.dp,
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "Iniciando Vision+...",
+                    color = VisionTextSecondary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
                 )
             }
         } else {

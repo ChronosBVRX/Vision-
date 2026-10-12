@@ -8,7 +8,10 @@ import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -299,13 +302,17 @@ object X4KApi {
     }
 
     /** The SLB entries + play params the engine needs (re-minted with each session). */
-    suspend fun ensureEngineData(context: Context, force: Boolean = false) = withContext(Dispatchers.IO) {
+    suspend fun ensureEngineData(
+        context: Context,
+        force: Boolean = false,
+        deferPrewarm: Boolean = false,
+    ) = withContext(Dispatchers.IO) {
         val p = prefs(context)
         val fresh = p.getString(K_ENTRIES, null)?.isNotBlank() == true &&
             p.getString(K_PARAMS, null)?.isNotBlank() == true &&
             System.currentTimeMillis() - p.getLong(K_ENGINE_AT, 0L) < ENGINE_TTL_MS
         if (fresh && !force) {
-            prewarmEngine(context)
+            if (!deferPrewarm) prewarmEngine(context)
             return@withContext
         }
         val slb = callWithSession(context, "/api/portalCore/v14/getSlbInfo") { token ->
@@ -330,20 +337,37 @@ object X4KApi {
             .putString(K_PARAMS, slb.optString("play_params"))
             .putLong(K_ENGINE_AT, System.currentTimeMillis())
             .apply()
-        prewarmEngine(context)
+        if (!deferPrewarm) prewarmEngine(context)
+    }
+
+    /** Precalienta el motor :x4k de forma estrictamente diferida tras la renderización inicial del Home. */
+    fun scheduleDeferredWarmup(context: Context, delayMs: Long = 6_000L) {
+        val appCtx = context.applicationContext
+        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            kotlinx.coroutines.delay(delayMs)
+            runCatching {
+                ensureEngineData(appCtx, deferPrewarm = false)
+            }
+        }
     }
 
     private const val USER_ID = "967111326"
 
-    /** The XTV shelves for Home: featured, movies, series, kids and anime. */
-    suspend fun homeRows(context: Context): List<CatalogRow> = withContext(Dispatchers.IO) {
+    /** The XTV shelves for Home: featured, movies, series, kids and anime. Streams rows progressively. */
+    suspend fun homeRows(
+        context: Context,
+        onRowLoaded: ((CatalogRow) -> Unit)? = null,
+    ): List<CatalogRow> = withContext(Dispatchers.IO) {
         val p = prefs(context)
         val cached = p.getString(K_ROWS, null)
         val at = p.getLong(K_ROWS_AT, 0L)
         if (!cached.isNullOrBlank() && System.currentTimeMillis() - at < ROWS_TTL_MS) {
-            return@withContext guarded { rowsFromJson(JSONArray(cached)) }.orEmpty()
+            val cachedList = guarded { rowsFromJson(JSONArray(cached)) }.orEmpty()
+            if (cachedList.isNotEmpty()) {
+                cachedList.forEach { onRowLoaded?.invoke(it) }
+                return@withContext cachedList
+            }
         }
-        ensureEngineData(context)
         val rows = ArrayList<CatalogRow>()
         val plan = listOf(
             "masnew_featured" to 4,
@@ -404,7 +428,9 @@ object X4KApi {
                 }
                 if (films.isEmpty()) continue
                 val shelfTitle = cleanShelfTitle(shelf.optString("name"))
-                rows += CatalogRow(id = "xtv-$code-$i", title = shelfTitle, films = films)
+                val newRow = CatalogRow(id = "xtv-$code-$i", title = shelfTitle, films = films)
+                rows += newRow
+                onRowLoaded?.invoke(newRow)
                 taken++
                 if (taken >= maxShelves) break
             }

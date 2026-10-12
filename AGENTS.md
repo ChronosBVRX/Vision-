@@ -5,14 +5,27 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.40**
-  (versionCode **276**, release OTA v2.5.40). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.41**
+  (versionCode **277**, release OTA v2.5.41). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Política Estricta de Arranque Seguro en Smart TV / Chromecast (Zero-Crash Cold Start & Non-Empty Catalog)** (v2.5.41):
+  - **Diagnóstico Integral de Crashes en Primer Arranque en Chromecast**:
+    1. *Bifurcación Prematura en Dos Procesos*: Durante el arranque en frío, `homeRows` invocaba `ensureEngineData` de forma síncrona, enviando un broadcast a `X4KWarmupReceiver` y forzando a Android a levantar de inmediato el proceso secundario `:x4k`. En los 1.5 GB - 2 GB de RAM de un Chromecast (donde el sistema operativo ya consume ~1.2 GB), dos procesos ART concurrentes provocaban la muerte fulminante por `lmkd` (*Low Memory Killer Daemon*).
+    2. *Extracción Masiva de Binarios en Flash Lenta*: En el primer arranque, el proceso `:x4k` extraía de golpe 3 DEX y 6 librerías `.so` nativas (`libijkffmpeg.so`, etc.) desde los assets a `filesDir/x4k`. Escribir decenas de MB en el almacenamiento eMMC saturaba el bus I/O y los 4 núcleos de CPU, congelando el hilo principal a 0 FPS.
+    3. *Tormenta de Red y Timeout de Catálogo Vacío*: Al no tener caché, se ejecutaban a la vez consultas SLB, tokens, 5 categorías VOD, el índice remoto de 25k títulos, 1,000+ canales en vivo y proxy HLS. Si la red tardaba > 9s (`BOOT_CAP_MS`), `status` caía en `NO_SOURCE`, dejando la app vacía o forzando cierres.
+  - **Reglas Universales Inviolables de Arranque**:
+    - **Regla 1 (Precalentamiento Estrictamente Diferido)**: Queda terminantemente prohibido levantar el proceso secundario `:x4k` o invocar `ensureEngineData` / `prewarmEngine` de forma síncrona durante `catalog.load()` o la fase inicial de arranque. El precalentamiento del reproductor debe ejecutarse de forma diferida (mínimo 6 a 7.5 segundos después de que el Home esté interactivo) o bajo demanda antes de reproducir.
+    - **Regla 2 (Emisión Progresiva de Filas / Row Streaming)**: `X4KApi.homeRows` y `XuperCatalog` no retienen las filas esperando a que las 5 consultas del portal terminen; emiten y pintan cada fila (en especial la fila 1 de Destacados / Hero) inmediatamente a través de `onRowLoaded`.
+    - **Regla 3 (Catálogo Semilla Fallback Inmediato en 0 ms)**: `CatalogSeed` provee una selección curada de títulos populares con metadatos completos y URLs de pósteres de alta calidad. En arranque en frío sin caché previa, `XuperCatalog` asigna la semilla en 0 ms, garantizando que el usuario jamás vea un inicio vacío ni espere en pantalla negra.
+    - **Regla 4 (Escalonamiento Estricto de Tareas Secundarias)**: Canales en vivo (1,000+ canales), índice remoto masivo (25k títulos), comprobación de updates y proxy HLS se programan con retardos progresivos (2s, 4.5s, 7.5s, 9.5s) para garantizar un uso de CPU < 35% durante el arranque.
+    - **Regla 5 (Feedback Activo en Splash de TV)**: `VisionSplash` en TV incorpora indicador de estado activo ("Iniciando Vision+...") y spinner continuo, mientras `MainActivity` retrasa la verificación de actualizaciones en GitHub para no saturar el ancho de banda.
+  - **Validación**: 146 tests unitarios de Android (`:app:testNormalDebugUnitTest`) y 33 de backend pasando al 100%. Release OTA v2.5.41.
 
 - **Botón "Siguiente Episodio" en Reproductor y Reproducción Limpia en Series, Novelas y Anime** (v2.5.40):
   - **Botón Rápido de Siguiente Episodio en Controles**:

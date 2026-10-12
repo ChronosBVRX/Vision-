@@ -105,17 +105,37 @@ class XuperCatalog(context: Context) {
         loading = true
         try {
             // Lo cacheado del índice se pinta al instante (Categorías con contenido mientras llega lo fresco).
-            RemoteIndexSource.cached(app).takeIf { it.isNotEmpty() }?.let { indexRows = it }
+            val cachedIndex = RemoteIndexSource.cached(app)
+            if (cachedIndex.isNotEmpty()) {
+                indexRows = cachedIndex
+            }
+            // En frío sin caché: semilla inmediata en 0 ms para garantizar que el usuario jamás vea un inicio vacío.
+            if (rows.isEmpty()) {
+                val estrenosRow = cachedIndex.firstOrNull { it.id == "estrenos" }
+                if (estrenosRow != null && estrenosRow.films.isNotEmpty()) {
+                    rows = listOf(estrenosRow)
+                } else {
+                    rows = CatalogSeed.initialRows()
+                }
+                status = XuperStatus.READY
+                message = null
+            }
             refreshPersonal()
-            // The portal's rows come first; the XTV proxy boots in the background and adds its
-            // own rows on the next load when it manages to start.
             xuper.prime(app)
-            CoroutineScope(Dispatchers.IO).launch { xuper.ensureProxied(app) }
 
-            // The XTV source (Xuper's own tenant): its shelves and live line join Home as soon
-            // as the portal answers, without ever blocking the other rows.
+            // Emisión progresiva de filas del portal: cada fila nueva se pinta en la UI en cuanto llega de la red.
+            val progressiveRows = ArrayList<CatalogRow>()
             val xtvRows = runCatching {
-                com.chronosbvrx.visionplus.data.xuper.X4KApi.homeRows(app)
+                com.chronosbvrx.visionplus.data.xuper.X4KApi.homeRows(app) { newRow ->
+                    progressiveRows += newRow
+                    val curEstrenos = indexRows.firstOrNull { it.id == "estrenos" }
+                    rows = buildList {
+                        if (curEstrenos != null && curEstrenos.films.isNotEmpty()) add(curEstrenos)
+                        addAll(progressiveRows.filterNot { it.id == "estrenos" })
+                    }
+                    status = XuperStatus.READY
+                    message = null
+                }
             }.getOrDefault(emptyList())
             val xtvLive = runCatching {
                 com.chronosbvrx.visionplus.data.xuper.X4KApi.liveRow(app)
@@ -147,9 +167,10 @@ class XuperCatalog(context: Context) {
                 if (xtvLive != null) add(xtvLive)
                 addAll(baseRows)
             }
-            // The remote index fills Categorías/Búsqueda in the background: Home keeps the
-            // curated rows while the full index (25k+ títulos) arrives from the server.
+            // Sincronización diferida del índice remoto (25k+ títulos) tras 3.5 segundos:
+            // la pantalla de inicio conserva las filas curadas mientras se descarga el índice para Búsqueda.
             CoroutineScope(Dispatchers.IO).launch {
+                kotlinx.coroutines.delay(3_500L)
                 runCatching { RemoteIndexSource.rows(app) }
                     .getOrDefault(emptyList())
                     .takeIf { it.isNotEmpty() }
@@ -167,17 +188,24 @@ class XuperCatalog(context: Context) {
                         }
                     }
             }
-            // Precalentamiento de secciones VOD, canales de TV en vivo y agenda de fútbol en memoria RAM:
-            // mientras corre el Splash de Vision+ o el usuario ve Inicio, se calientan en RAM
-            // para que cambiar de pestaña abra en 0 ms.
+            // Escalonamiento estricto de precalentamiento para Smart TV / Chromecast:
+            // 1. xuper proxy se inicia tras 2 segundos.
+            // 2. Canales en vivo y agenda deportiva se calientan tras 4.5 segundos.
+            // 3. El motor nativo :x4k y SLB se calientan tras 7.5 segundos (sin competir con la UI en frío).
+            // 4. El precalentamiento de secciones se sincroniza tras 9.5 segundos.
             CoroutineScope(Dispatchers.IO).launch {
-                runCatching { RemoteIndexSource.prewarm(app) }
-                runCatching { com.chronosbvrx.visionplus.data.xuper.X4KApi.ensureEngineData(app) }
+                kotlinx.coroutines.delay(2_000L)
+                runCatching { xuper.ensureProxied(app) }
+                kotlinx.coroutines.delay(2_500L)
                 runCatching { com.chronosbvrx.visionplus.data.xuper.X4KApi.liveChannelsFor(app) }
                 runCatching {
                     val today = com.chronosbvrx.visionplus.data.sports.SportsSource.todayIso()
                     com.chronosbvrx.visionplus.data.sports.SportsSource.matches(app, today)
                 }
+                kotlinx.coroutines.delay(3_000L)
+                runCatching { com.chronosbvrx.visionplus.data.xuper.X4KApi.ensureEngineData(app, deferPrewarm = false) }
+                kotlinx.coroutines.delay(2_000L)
+                runCatching { RemoteIndexSource.prewarm(app) }
             }
             if (rows.isNotEmpty()) {
                 status = XuperStatus.READY

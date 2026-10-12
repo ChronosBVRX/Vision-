@@ -78,7 +78,10 @@ class MainActivity : ComponentActivity() {
                         }
                         minSplash.join()
                         bootReady = true
-                        AppUpdate.check(this@MainActivity)
+                        launch(kotlinx.coroutines.Dispatchers.IO) {
+                            delay(4_000L)
+                            AppUpdate.check(this@MainActivity)
+                        }
                     }
                     Box(Modifier.fillMaxSize().background(VisionBlack)) {
                         if (needsActivation) {
