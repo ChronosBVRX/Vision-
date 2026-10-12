@@ -76,6 +76,12 @@ object PlaybackHistory {
         write(p, read(p).filterNot { it.key == key })
     }
 
+    /** Borra todas las entradas guardadas del historial de reproducción. */
+    fun clear(context: Context) {
+        val p = prefs(context)
+        p.edit().remove(K_ENTRIES).apply()
+    }
+
     /** Entradas + fichas del catálogo como tarjetas, recientes primero. */
     fun continueCards(context: Context, films: List<Film>, limit: Int = 10): List<ResumeCard> =
         matchCards(list(context), films).take(limit)

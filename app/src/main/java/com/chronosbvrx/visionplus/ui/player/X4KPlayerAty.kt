@@ -549,10 +549,20 @@ class X4KPlayerAty : ComponentActivity() {
         curCode = code
         curTitle = title
         curBaseTitle = title.substringBefore(" · T").substringBefore(" · C").ifBlank { title }
-        curAspect = aspect
+        curAspect = if (aspect == 0 && com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultAspect != 0) {
+            com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultAspect
+        } else {
+            aspect
+        }
         curMedias = ArrayList(medias)
-        currentMediaName = medias.firstOrNull()?.name.orEmpty()
-        curQuality = medias.firstOrNull()?.quality.orEmpty()
+        val preferredQ = com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality
+        val initialMedia = if (preferredQ != "Auto") {
+            medias.firstOrNull { it.quality.contains(preferredQ, ignoreCase = true) } ?: medias.firstOrNull()
+        } else {
+            medias.firstOrNull()
+        }
+        currentMediaName = initialMedia?.name.orEmpty()
+        curQuality = initialMedia?.quality.orEmpty()
         X4KTitan.bindView(v)
 
         X4KTitan.setPlayerListener(
@@ -2090,9 +2100,14 @@ class X4KPlayerAty : ComponentActivity() {
                     return@runOnUiThread
                 }
                 curMedias = ArrayList(medias)
-                val firstMedia = medias.firstOrNull()
-                currentMediaName = firstMedia?.name.orEmpty()
-                curQuality = firstMedia?.quality.orEmpty()
+                val preferredQ = com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality
+                val chosenMedia = if (preferredQ != "Auto") {
+                    medias.firstOrNull { it.quality.contains(preferredQ, ignoreCase = true) } ?: medias.firstOrNull()
+                } else {
+                    medias.firstOrNull()
+                }
+                currentMediaName = chosenMedia?.name.orEmpty()
+                curQuality = chosenMedia?.quality.orEmpty()
                 qualityBtn?.text = "⚙ " + formatQualityShort(curQuality)
                 declaredLanguages = medias.first().audio
                     .split(',').map { it.trim() }.filter { it.isNotBlank() }
@@ -2208,9 +2223,16 @@ class X4KPlayerAty : ComponentActivity() {
                     resumeExplicitlyRequested = false,
                 )
             ) {
-                pendingResumeEntry = entry
-                playerView?.let { X4KTitan.pause(it) }
-                showResumeDialog(entry)
+                if (com.chronosbvrx.visionplus.ui.settings.VisionSettings.autoResume) {
+                    resumeMs = entry.positionMs
+                    resumeApplied = true
+                    playerView?.let { X4KTitan.seekTo(it, entry.positionMs) }
+                    Toast.makeText(this, "Continuando en " + formatResume(entry.positionMs), Toast.LENGTH_SHORT).show()
+                } else {
+                    pendingResumeEntry = entry
+                    playerView?.let { X4KTitan.pause(it) }
+                    showResumeDialog(entry)
+                }
             }
         }
     }

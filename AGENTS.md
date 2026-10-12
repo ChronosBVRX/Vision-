@@ -5,8 +5,8 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.43**
-  (versionCode **279**, release OTA v2.5.43). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.44**
+  (versionCode **280**, release OTA v2.5.44). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
@@ -14,7 +14,29 @@
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
 
-- **Rediseño Integral UI/UX en Smart TV y Móvil / Catálogo Optimizado para Dispositivos Limitados** (v2.5.43):
+- **Reingeniería Integral del Menú de Opciones y Erradicación de Placebos del Sistema** (v2.5.44):
+  - **Eliminación Total de Código Placebo y Obsoleto**:
+    - Erradicado `DemoSettings.kt` y la pestaña entera de maquetas de subtítulos (sliders de tamaño, opacidad, sombra, grosor y preview 16:9 que no afectaban a los reproductores de video reales).
+    - Eliminados los interruptores falsos de reproducción (*"Datos curiosos"*, *"Saltar intro en anime"*) y el selector placebo de *"DNS seguro"* que no interactuaba con la pila de red.
+    - Purgado `DemoCompanion.kt` y todo el código huérfano de emparejamiento por IP simulada, códigos falsos (`482 913`) y dispositivos fantasma (*"TV de la sala"*).
+  - **Nuevo Gestor Persistente de Configuraciones (`VisionSettings.kt`)**:
+    - **Reproducción y Calidad**:
+      - Selector de calidad preferida (`Auto`, `1080p`, `720p`, `480p`) persistido en `SharedPreferences` y respetado tanto por el motor nativo Titan (`X4KPlayerAty.kt`) como por ExoPlayer (`PlayerScreen.kt`).
+      - Ajuste de relación de aspecto predeterminado (`Ajustar 16:9` vs `Rellenar pantalla / Zoom`) aplicado al iniciar videos en Titan y ExoPlayer.
+      - Opción de reanudación automática de reproducción (`autoResume`), permitiendo continuar directo desde el punto guardado sin interrumpir con preguntas al usuario.
+      - Opción de reproducción continua automática de series (`autoPlayNext`).
+    - **Rendimiento y Pantalla**:
+      - Selector de rendimiento de interfaz unificado (`Auto`, `Ligero`, `Completo`) con persistencia en `vision_performance`.
+      - Selector de amortiguamiento en vivo (`Rápido 0.5s` vs `Estable 3s`).
+    - **Almacenamiento y Mantenimiento**:
+      - Cálculo en tiempo real del tamaño de caché (disco + Coil) y acción directa para liberar memoria interna (`clearCache`).
+      - Función `PlaybackHistory.clear(context)` para vaciar el historial de "Seguir viendo" desde ajustes.
+    - **Diagnóstico y Red**:
+      - Detección de tipo de red activa (`Wi-Fi`, `Ethernet`, `Datos móviles`) y estado de servidores XTV.
+  - **Rediseño UI/UX en Móvil y Smart TV**:
+    - `SettingsScreen.kt` (Móvil/Tablet): Diseño modular en tarjetas con pestañas *Reproducción* y *Sistema y Rendimiento*.
+    - `TvSettingsScreen.kt` (Smart TV): Navegación D-pad Leanback completa, soporte de teclas izquierda/derecha para ciclar valores (`TvStepOption`) y accesibilidad total.
+  - **Validación**: 161 pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) pasando al 100%, incluyendo la nueva suite `VisionSettingsTest.kt`.
   - **Smart TV (Android TV Leanback D-pad Experience)**:
     - En `TvCategoryScreen.kt` (Películas, Series, Novelas, Anime, Fútbol), incorporado selector deslizable horizontal de categorías (`TvCategoryPill`) con foco de D-pad, cápsula `"Todo / Destacados"` por defecto y géneros dinámicos.
     - **Modo Feed Curado por Módulos**: Hero superior inmersivo + carruseles horizontales con `TvPosterCard` (proporción 2:3, ancho 140.dp) con badge de rating numérico (`★ 8.2`), badge de estado (`NUEVO`, `TOP 10`), y variante Top 10 con número de posición gigante estilizado en degradado azul plateado (`1..10`).

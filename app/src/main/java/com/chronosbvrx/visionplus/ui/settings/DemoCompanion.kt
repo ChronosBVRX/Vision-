@@ -29,28 +29,18 @@ class PairedDevice(val id: String, val name: String, val address: String, select
 /** Conectar's state on both sides: paired devices, the connected one, and a running "Sincronizar ahora". */
 object VisionCompanion {
     /** What the phone sees: the TVs it is paired with. */
-    val pairedTvs = mutableStateListOf(
-        PairedDevice("tv-sala", "TV de la sala", "192.168.1.40:8765", selected = true, state = SyncState.SYNCED, minutesAgo = 5),
-        PairedDevice("tv-cuarto", "TV del cuarto", "192.168.1.52:8765", selected = true, state = SyncState.PENDING),
-        PairedDevice("tv-estudio", "TV del estudio", "192.168.1.61:8765", selected = false, state = SyncState.NEVER),
-    )
+    val pairedTvs = mutableStateListOf<PairedDevice>()
 
     /** What the TV sees: the phones paired with it. */
-    val pairedPhones = mutableStateListOf(
-        PairedDevice("cel-1", "Celular principal", "192.168.1.23", selected = true, state = SyncState.SYNCED, minutesAgo = 5),
-        PairedDevice("tablet", "Tablet", "192.168.1.31", selected = false, state = SyncState.NEVER),
-    )
+    val pairedPhones = mutableStateListOf<PairedDevice>()
 
     /** The TV this phone is connected to and controls (null: none). */
-    var connectedTvId by mutableStateOf<String?>("tv-sala")
+    var connectedTvId by mutableStateOf<String?>(null)
 
     var syncing by mutableStateOf(false)
 
     /** Every TV on the network, paired or not. */
-    val foundTvs = listOf(
-        "tv-sala" to ("TV de la sala" to "192.168.1.40:8765"),
-        "tv-cuarto" to ("TV del cuarto" to "192.168.1.52:8765"),
-    )
+    val foundTvs = emptyList<Pair<String, Pair<String, String>>>()
 
     fun connectedTvName(): String? = pairedTvs.firstOrNull { it.id == connectedTvId }?.name
 

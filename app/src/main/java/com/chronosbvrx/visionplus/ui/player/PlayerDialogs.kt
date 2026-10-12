@@ -55,7 +55,9 @@ internal class PlayerMenuState {
 }
 
 @Composable
-internal fun rememberPlayerMenuState(): PlayerMenuState = remember { PlayerMenuState() }
+internal fun rememberPlayerMenuState(
+    initialQuality: String = com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality,
+): PlayerMenuState = remember { PlayerMenuState().apply { quality = initialQuality } }
 
 /** "+0,5 s", "−1,2 s", "0 s". */
 internal fun subtitleDelayLabel(ms: Int): String {

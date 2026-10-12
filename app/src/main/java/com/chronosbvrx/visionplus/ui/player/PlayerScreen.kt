@@ -1010,6 +1010,8 @@ private fun PlayerCore(
             update = { view ->
                 view.resizeMode = if (introPlaying) {
                     AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                } else if (com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultAspect == 1) {
+                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                 } else {
                     AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
