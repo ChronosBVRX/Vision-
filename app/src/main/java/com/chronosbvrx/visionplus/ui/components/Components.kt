@@ -22,35 +22,176 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
+import com.chronosbvrx.visionplus.ui.theme.VisionBlueDark
+import java.util.Locale
 
-/** Poster-shaped (2:3) cover with the title below. */
+/**
+ * Portada en proporción 2:3 estilo streaming prémium: esquinas redondeadas,
+ * badge de calificación (círculo translúcido con borde neón/azul), badge de estado opcional,
+ * variante Top 10 con número de posición gigante estilizado, y decodificación acotada para
+ * bajo consumo de RAM en dispositivos limitados.
+ */
 @Composable
 fun PosterCard(
     title: String,
     imageUrl: String?,
     modifier: Modifier = Modifier,
     meta: String? = null,
+    score: Double = 0.0,
+    badge: String? = null,
+    rank: Int? = null,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     Column(modifier = modifier.clickable(onClick = onClick)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(VisionSurfaceHigh),
+                .aspectRatio(2f / 3f),
         ) {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
+            // Contenedor de la portada con esquinas redondeadas
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(VisionSurfaceHigh),
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        .crossfade(150)
+                        .size(320, 480)
+                        .build(),
+                    contentDescription = title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+
+                // Gradiente inferior oscuro para contraste
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                0.62f to Color.Transparent,
+                                1f to Color.Black.copy(alpha = 0.85f),
+                            ),
+                        ),
+                )
+
+                // Badge de Calificación (Esquina superior izquierda):
+                // Fondo translúcido con borde neón/azul brillante
+                if (score > 0.0) {
+                    val formattedScore = if (score % 1.0 == 0.0) {
+                        score.toInt().toString()
+                    } else {
+                        String.format(Locale.US, "%.1f", score)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .background(
+                                color = Color(0xDD0B1220),
+                                shape = RoundedCornerShape(8.dp),
+                            )
+                            .border(
+                                BorderStroke(1.dp, VisionBlue.copy(alpha = 0.85f)),
+                                shape = RoundedCornerShape(8.dp),
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = "★ $formattedScore",
+                            style = TextStyle(
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                        )
+                    }
+                }
+
+                // Badge de Estado (Esquina superior derecha):
+                // Rectángulo neón con gradiente de marca (ej. NUEVO, TOP 10, 4K)
+                if (!badge.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .background(
+                                Brush.horizontalGradient(listOf(VisionBlue, VisionBlueDark)),
+                                shape = RoundedCornerShape(4.dp),
+                            )
+                            .padding(horizontal = 5.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = badge.uppercase(),
+                            style = TextStyle(
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 0.4.sp,
+                            ),
+                        )
+                    }
+                }
+            }
+
+            // Componente Card "Top 10" (Variante con Número):
+            // Tipografía estilizada de gran tamaño (outline neón con degradado)
+            // superpuesta en la esquina inferior izquierda
+            if (rank != null && rank in 1..10) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .offset(x = 6.dp, y = 6.dp),
+                ) {
+                    Text(
+                        text = rank.toString(),
+                        style = TextStyle(
+                            fontSize = 48.sp,
+                            fontWeight = FontWeight.Black,
+                            drawStyle = Stroke(width = 4f, join = StrokeJoin.Round),
+                            color = VisionBlueBright,
+                        ),
+                    )
+                    Text(
+                        text = rank.toString(),
+                        style = TextStyle(
+                            fontSize = 48.sp,
+                            fontWeight = FontWeight.Black,
+                            brush = Brush.verticalGradient(
+                                listOf(Color.White, VisionBlueBright, VisionSurfaceHigh),
+                            ),
+                        ),
+                    )
+                }
+            }
         }
+
         Text(
             text = title,
             style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
@@ -87,10 +228,73 @@ fun EmptyState(title: String, modifier: Modifier = Modifier, subtitle: String? =
     }
 }
 
-/** Row/section header ("Continuar viendo", "Mi biblioteca"). */
+/** Row/section header ("Tendencias ahora", "Top 10") con enlace opcional "Ver todo →". */
 @Composable
-fun SectionHeader(text: String, modifier: Modifier = Modifier) {
-    Text(text = text, style = MaterialTheme.typography.titleLarge, modifier = modifier.padding(vertical = 8.dp))
+fun SectionHeader(
+    text: String,
+    modifier: Modifier = Modifier,
+    onSeeAll: (() -> Unit)? = null,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (onSeeAll != null) {
+            Text(
+                text = "Ver todo →",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = VisionBlue,
+                modifier = Modifier
+                    .clickable(onClick = onSeeAll)
+                    .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
+            )
+        }
+    }
+}
+
+/** Píldora / Chip horizontal para selección de categorías y filtros con estilo prémium. */
+@Composable
+fun CategoryPill(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val containerBg = if (selected) {
+        Brush.horizontalGradient(listOf(VisionBlue, VisionBlueDark))
+    } else {
+        Brush.horizontalGradient(listOf(VisionSurfaceHigh, VisionSurfaceHigh))
+    }
+    val borderColor = if (selected) VisionBlueBright else Color.White.copy(alpha = 0.08f)
+    val textColor = if (selected) Color.White else VisionTextSecondary
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(containerBg)
+            .border(BorderStroke(1.dp, borderColor), shape = RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = textColor,
+            maxLines = 1,
+        )
+    }
 }
 
 /** Landscape (16:9) thumbnail with a red progress bar, for "Continuar viendo". */

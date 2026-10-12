@@ -634,5 +634,108 @@ class PlayerNavigationTest {
             ),
         )
     }
+
+    @Test
+    fun isBufferWindowDurationDetectsSlidingPacketBufferWindow() {
+        // Película con duración declarada de 105 min (6,300,000 ms), usuario en el minuto 5 (300,000 ms).
+        val declaredDur = 105 * 60_000L
+        val currentPos = 5 * 60_000L
+
+        // El motor IjkPlayer reporta (pos + 120s) = 7 minutos (420,000 ms): "dos minutos más del minuto actual".
+        val slidingBufferWindow = currentPos + 120_000L
+        assertTrue(
+            "La ventana de búfer deslizante del decodificador (pos + 120s) debe ser detectada y rechazada",
+            isBufferWindowDuration(
+                engineDur = slidingBufferWindow,
+                currentPos = currentPos,
+                declaredDurationMs = declaredDur,
+                isLive = false,
+            ),
+        )
+
+        // Si el motor reporta la duración real completa del archivo (105 min): NO es ventana de búfer.
+        assertFalse(
+            "La duración real completa del archivo debe ser aceptada",
+            isBufferWindowDuration(
+                engineDur = declaredDur,
+                currentPos = currentPos,
+                declaredDurationMs = declaredDur,
+                isLive = false,
+            ),
+        )
+
+        // Caso sin duración previa declarada (declaredDurationMs = 0), pero engineDur reporta un chunk de 2 minutos al segundo 0:
+        assertTrue(
+            "Un chunk de solo 2 minutos al inicio debe ser descartado como ventana de búfer",
+            isBufferWindowDuration(
+                engineDur = 120_000L,
+                currentPos = 0L,
+                declaredDurationMs = 0L,
+                isLive = false,
+            ),
+        )
+
+        // Caso sin duración declarada pero engineDur reporta un contenedor real de 45 minutos:
+        assertFalse(
+            "Una duración legítima de 45 min sin previa declaración debe ser aceptada",
+            isBufferWindowDuration(
+                engineDur = 45 * 60_000L,
+                currentPos = 0L,
+                declaredDurationMs = 0L,
+                isLive = false,
+            ),
+        )
+    }
+
+    @Test
+    fun resolveStableTotalDurationPreventsAlternatingFlicker() {
+        val declaredDur = 105 * 60_000L // 1:45:00
+        val currentPos = 5 * 60_000L   // 05:00
+        val slidingBufferWindow = currentPos + 120_000L // 07:00
+
+        // Cuando el poller de IjkPlayer sondea y obtiene 7 minutos:
+        val stableTotal = resolveStableTotalDuration(
+            declaredDurationMs = declaredDur,
+            engineDurationMs = slidingBufferWindow,
+            currentPos = currentPos,
+            isLive = false,
+        )
+        assertEquals(
+            "La duración total debe mantenerse fija en la duración real declarada (105 min) y no alternar a 7 min",
+            declaredDur,
+            stableTotal,
+        )
+
+        // En TV en vivo, la duración total debe ser 0L
+        assertEquals(
+            0L,
+            resolveStableTotalDuration(
+                declaredDurationMs = declaredDur,
+                engineDurationMs = slidingBufferWindow,
+                currentPos = currentPos,
+                isLive = true,
+            ),
+        )
+    }
+
+    @Test
+    fun videoQualityFormattingHelpers() {
+        assertEquals("1080p", formatQualityShort("1080p"))
+        assertEquals("1080p", formatQualityShort("1080"))
+        assertEquals("1080p", formatQualityShort("FHD"))
+        assertEquals("720p", formatQualityShort("720p"))
+        assertEquals("720p", formatQualityShort("HD"))
+        assertEquals("480p", formatQualityShort("480p"))
+        assertEquals("480p", formatQualityShort("SD"))
+        assertEquals("4K", formatQualityShort("4k"))
+        assertEquals("4K", formatQualityShort("2160p"))
+        assertEquals("Auto", formatQualityShort(""))
+
+        assertEquals("1080p FHD", formatQualityLabel("1080p"))
+        assertEquals("720p HD", formatQualityLabel("720p"))
+        assertEquals("480p SD", formatQualityLabel("480p"))
+        assertEquals("4K Ultra HD", formatQualityLabel("4k"))
+        assertEquals("Automática (Alta definición)", formatQualityLabel(""))
+    }
 }
 

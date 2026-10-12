@@ -13,8 +13,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = 277
-        versionName = "2.5.41"
+        versionCode = 278
+        versionName = "2.5.42"
     }
 
     flavorDimensions += "laboratorio"
@@ -27,6 +27,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            signingConfig = signingConfigs.getByName("debug")
         }
         // Build de laboratorio para sondas nativas: firma debug, sin debuggable
         // (para librerías que rechazan procesos con debugging activado).

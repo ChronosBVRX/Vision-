@@ -118,7 +118,14 @@ fun CategoriesScreen(
                 }
             }
             items(openRow.films, key = { it.id }) { film ->
-                PosterCard(title = film.title, imageUrl = film.posterUrl, meta = film.metaLine(), onClick = { onOpenFilm(film) })
+                PosterCard(
+                    title = film.title,
+                    imageUrl = film.posterUrl,
+                    meta = film.metaLine(),
+                    score = film.score,
+                    badge = if (film.year >= 2025) "NUEVO" else null,
+                    onClick = { onOpenFilm(film) },
+                )
             }
         }
         return

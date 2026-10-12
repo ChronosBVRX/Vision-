@@ -733,8 +733,11 @@ private fun PlayerCore(
                 buffering = state == Player.STATE_BUFFERING || state == Player.STATE_IDLE && error == null
                 if (state == Player.STATE_READY && !introPlaying) {
                     val d = player.duration.coerceAtLeast(0L)
-                    if (d > 0L && (declaredDurationMs <= 0L || d >= declaredDurationMs * 0.5)) {
-                        durationMs = d
+                    val pos = player.currentPosition.coerceAtLeast(0L)
+                    if (!isBufferWindowDuration(d, pos, declaredDurationMs, isLive)) {
+                        if (d > 0L) durationMs = d
+                    } else if (durationMs <= 0L && declaredDurationMs > 0L) {
+                        durationMs = declaredDurationMs
                     }
                 }
                 if (state == Player.STATE_ENDED && introPlaying) startMainItem() else if (state == Player.STATE_ENDED) controls.bump()
@@ -752,13 +755,25 @@ private fun PlayerCore(
         }
     }
 
+    // Dynamic video quality constraint on ExoPlayer
+    LaunchedEffect(menu.quality, player) {
+        val builder = player.trackSelectionParameters.buildUpon()
+        when (menu.quality) {
+            "1080p" -> builder.setMaxVideoSize(1920, 1080).setMinVideoSize(1280, 720)
+            "720p" -> builder.setMaxVideoSize(1280, 720).setMinVideoSize(854, 480)
+            "480p" -> builder.setMaxVideoSize(854, 480).setMinVideoSize(0, 0)
+            else -> builder.clearVideoSizeConstraints()
+        }
+        player.trackSelectionParameters = builder.build()
+    }
+
     // Progress is polled: the position moves continuously and has no listener of its own.
     LaunchedEffect(player) {
         while (true) {
             positionMs = player.currentPosition.coerceAtLeast(0L)
             val d = player.duration
-            if (!introPlaying && d > 0L && (declaredDurationMs <= 0L || d >= declaredDurationMs * 0.5)) {
-                durationMs = d
+            if (!introPlaying && !isBufferWindowDuration(d, positionMs, declaredDurationMs, isLive)) {
+                if (d > 0L) durationMs = d
             } else if (durationMs <= 0L && declaredDurationMs > 0L) {
                 durationMs = declaredDurationMs
             }
@@ -1264,7 +1279,7 @@ private fun PlayerCore(
                         if (!introPlaying) {
                             TransportButton(
                                 icon = Icons.Default.Subtitles,
-                                contentDescription = "Audio y subtítulos",
+                                contentDescription = "Audio, subtítulos y calidad",
                                 onClick = { if (canExecuteControlAction()) { showTracks = true; controls.bump() } },
                                 iconSize = 26.dp,
                                 modifier = if (!isTv) Modifier else Modifier

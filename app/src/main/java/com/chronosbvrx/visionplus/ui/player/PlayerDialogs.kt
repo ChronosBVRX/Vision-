@@ -41,11 +41,14 @@ internal val SERVERS = listOf("Opción 1", "Opción 2", "Opción 3")
 internal const val SUBTITLE_STEP_MS = 100
 internal const val SUBTITLE_BIG_STEP_MS = 500
 
-/** What the "Audio y subtítulos" menu shows for this video: the subtitle offset and the copy on screen. */
+internal val QUALITIES = listOf("Auto", "1080p", "720p", "480p")
+
+/** What the "Audio y subtítulos" menu shows for this video: the subtitle offset, copy and video quality. */
 @Stable
 internal class PlayerMenuState {
     var subtitleDelayMs by mutableIntStateOf(0)
     var server by mutableIntStateOf(0)
+    var quality by mutableStateOf("Auto")
 
     /** The copy being opened after a pick, while its note shows; null when none is. */
     var trying by mutableStateOf<Int?>(null)
@@ -65,7 +68,7 @@ internal fun subtitleDelayLabel(ms: Int): String {
 /** The note while another copy opens, as the automatic fallback words it. */
 internal fun tryingServerNote(index: Int): String = "Probando otro servidor: ${SERVERS[index]} (${index + 1} de ${SERVERS.size})…"
 
-/** "Audio y subtítulos": the copy (Servidor), the audio and subtitle tracks, and the subtitle sync. */
+/** "Audio y subtítulos": the copy (Servidor), video quality, the audio and subtitle tracks, and subtitle sync. */
 @Composable
 internal fun AudioAndSubtitlesDialog(state: PlayerMenuState, onDismiss: () -> Unit) {
     val first = rememberDialogLanding()
@@ -78,7 +81,7 @@ internal fun AudioAndSubtitlesDialog(state: PlayerMenuState, onDismiss: () -> Un
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = VisionSurface,
-        title = { Text("Audio y subtítulos") },
+        title = { Text("Audio, subtítulos y calidad") },
         text = {
             Column(
                 Modifier
@@ -93,6 +96,21 @@ internal fun AudioAndSubtitlesDialog(state: PlayerMenuState, onDismiss: () -> Un
                     ) { if (i != state.server && state.trying == null) state.trying = i }
                 }
                 state.trying?.let { MenuNote(tryingServerNote(it)) }
+
+                MenuSectionTitle("Calidad de video")
+                QUALITIES.forEach { q ->
+                    val isSelected = (q == state.quality)
+                    val label = when (q) {
+                        "Auto" -> "Auto (Automática según red)"
+                        "1080p" -> "1080p FHD"
+                        "720p" -> "720p HD"
+                        "480p" -> "480p SD"
+                        else -> q
+                    }
+                    MenuOption((if (isSelected) "✓ " else "  ") + label) {
+                        state.quality = q
+                    }
+                }
 
                 MenuSectionTitle("Audio")
                 MenuOption("✓ Original") {}

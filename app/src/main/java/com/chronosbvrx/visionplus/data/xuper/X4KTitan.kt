@@ -500,6 +500,17 @@ object X4KTitan {
         runCatching { view.javaClass.methods.first { it.name == "B" && it.parameterCount == 0 }.invoke(view) }
     }
 
+    /** Switches active video stream/resolution to the specified media code (`view.setMedia(mediaCode)`). */
+    fun setMedia(view: View, mediaCode: String): Boolean = try {
+        view.javaClass.methods.first { it.name == "setMedia" && it.parameterCount == 1 }
+            .invoke(view, mediaCode)
+        Log.i(TAG, "setMedia X4K exitoso: $mediaCode")
+        true
+    } catch (e: Exception) {
+        Log.w(TAG, "setMedia X4K falló: ${e.cause ?: e}")
+        false
+    }
+
     /** Aspect mode (Bilibili measure helper scale): 0 fit, 1 fill, 2 wrap, 3 stretch, 4 16:9, 5 4:3. */
     fun setAspect(view: View, ratio: Int) {
         runCatching {

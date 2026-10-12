@@ -267,6 +267,82 @@ internal fun shouldPromptResume(
     return true
 }
 
+/**
+ * Determina si la duración reportada por el motor multimedia (IjkPlayer / ExoPlayer)
+ * corresponde a la ventana temporal del búfer demuxer deslizante (buffer window)
+ * en lugar de la duración total real del video (película/serie).
+ *
+ * En transmisiones MPEG-TS / HLS sin cabecera de duración fija en el contenedor,
+ * IjkPlayer evalúa la duración como (posición_actual + audio_cached_duration),
+ * retornando exactamente ~120 s (2 minutos) por encima del minuto actual.
+ *
+ * Si engineDur está dentro de 180s de la posición actual, o si es sustancialmente menor
+ * a la duración declarada conocida (ej. < 75% de declaredDurationMs), debe descartarse.
+ */
+internal fun isBufferWindowDuration(
+    engineDur: Long,
+    currentPos: Long,
+    declaredDurationMs: Long,
+    isLive: Boolean = false,
+): Boolean {
+    if (isLive) return false
+    if (engineDur <= 0L) return true
+    if (engineDur <= currentPos + 180_000L) return true
+    if (declaredDurationMs > 0L && engineDur < (declaredDurationMs * 0.75f).toLong()) return true
+    return false
+}
+
+/**
+ * Resuelve la duración canónica inmutable que debe mostrar la barra de reproducción
+ * y el contador de tiempo total, protegiendo la UI contra alternancias y parpadeos
+ * causados por el búfer deslizante del decodificador.
+ */
+internal fun resolveStableTotalDuration(
+    declaredDurationMs: Long,
+    engineDurationMs: Long,
+    currentPos: Long,
+    isLive: Boolean = false,
+): Long {
+    if (isLive) return 0L
+    if (declaredDurationMs > 0L) return declaredDurationMs
+    if (!isBufferWindowDuration(engineDurationMs, currentPos, declaredDurationMs, isLive)) {
+        return engineDurationMs
+    }
+    return 0L
+}
+
+/**
+ * Formato corto para etiquetas de píldoras y botones de calidad (ej. "1080p", "720p", "480p", "4K", "Auto").
+ */
+internal fun formatQualityShort(raw: String): String {
+    val q = raw.trim().lowercase()
+    return when {
+        q.contains("1080") || q.contains("fhd") -> "1080p"
+        q.contains("720") || q.contains("hd") -> "720p"
+        q.contains("480") || q.contains("sd") -> "480p"
+        q.contains("4k") || q.contains("2160") || q.contains("uhd") -> "4K"
+        q.contains("360") -> "360p"
+        q.isNotBlank() -> raw.trim()
+        else -> "Auto"
+    }
+}
+
+/**
+ * Formato legible para el menú y selector de calidad (ej. "1080p FHD", "720p HD", "480p SD", "4K Ultra HD").
+ */
+internal fun formatQualityLabel(raw: String): String {
+    val q = raw.trim().lowercase()
+    return when {
+        q.contains("1080") || q.contains("fhd") -> "1080p FHD"
+        q.contains("720") || q.contains("hd") -> "720p HD"
+        q.contains("480") || q.contains("sd") -> "480p SD"
+        q.contains("4k") || q.contains("2160") || q.contains("uhd") -> "4K Ultra HD"
+        q.contains("360") -> "360p SD"
+        q.isNotBlank() -> raw.trim().uppercase()
+        else -> "Automática (Alta definición)"
+    }
+}
+
 @Composable
 internal fun rememberControlsState(): ControlsState = remember { ControlsState() }
 

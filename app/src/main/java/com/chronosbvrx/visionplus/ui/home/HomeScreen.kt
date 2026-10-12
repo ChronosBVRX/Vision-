@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
@@ -168,7 +169,22 @@ fun HomeScreen(
             }
         }
         items(rows, key = { it.id }) { row ->
-            FilmRow(row = row, posterWidth = sizes.posterWidth, onOpen = onOpenFilm)
+            val seeAllAction: (() -> Unit)? = remember(row) {
+                val t = row.title.lowercase()
+                when {
+                    t.contains("película") || t.contains("cine") -> { { onGoSection(Route.Section("movies", "Películas")) } }
+                    t.contains("serie") -> { { onGoSection(Route.Section("series", "Series")) } }
+                    t.contains("anime") -> { { onGoSection(Route.Section("anime", "Anime")) } }
+                    t.contains("novela") -> { { onGoSection(Route.Section("novelas", "Novelas")) } }
+                    else -> null
+                }
+            }
+            FilmRow(
+                row = row,
+                posterWidth = sizes.posterWidth,
+                onOpen = onOpenFilm,
+                onSeeAll = seeAllAction,
+            )
         }
         item(key = "home-note") {
             Text(
@@ -283,28 +299,60 @@ private fun HeroSkeleton(sizes: HomeSizes) {
     )
 }
 
-/** A Home row: its title and a horizontal line of poster cards. */
+/** A Home row: its title, optional "Ver todo →" link, and a horizontal carousel of posters. */
 @Composable
-private fun FilmRow(row: CatalogRow, posterWidth: Dp, onOpen: (Film) -> Unit) {
+private fun FilmRow(
+    row: CatalogRow,
+    posterWidth: Dp,
+    onOpen: (Film) -> Unit,
+    onSeeAll: (() -> Unit)? = null,
+) {
+    if (row.films.isEmpty()) return
+    val isTopRow = row.title.contains("top 10", ignoreCase = true) ||
+        row.title.contains("más vistas", ignoreCase = true) ||
+        row.title.contains("tendencia", ignoreCase = true)
+
     Column(Modifier.padding(top = 22.dp)) {
-        Text(
-            row.title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+        ) {
+            Text(
+                row.title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (onSeeAll != null) {
+                Text(
+                    text = "Ver todo →",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = VisionBlue,
+                    modifier = Modifier
+                        .clickable(onClick = onSeeAll)
+                        .padding(start = 8.dp, top = 2.dp, bottom = 2.dp),
+                )
+            }
+        }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(row.films, key = { "${row.id}-${it.id}" }) { film ->
+            itemsIndexed(row.films.take(15), key = { _, film -> "${row.id}-${film.id}" }) { index, film ->
+                val rank = if (isTopRow && index in 0..9) index + 1 else null
                 PosterCard(
                     title = film.title,
                     imageUrl = film.posterUrl,
                     meta = film.metaLine().ifBlank { null },
+                    score = film.score,
+                    badge = if (film.year >= 2025) "NUEVO" else null,
+                    rank = rank,
                     modifier = Modifier.width(posterWidth),
                     onClick = { onOpen(film) },
                 )

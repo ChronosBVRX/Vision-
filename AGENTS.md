@@ -5,14 +5,46 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.41**
-  (versionCode **277**, release OTA v2.5.41). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.42**
+  (versionCode **278**, release OTA v2.5.42). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Rediseño UI/UX de Vistas Principales y Catálogo Optimizado para Dispositivos Limitados** (v2.5.42):
+  - **Cabecera Fija y Selector de Categorías (Chips / Pills)**:
+    - En `SectionScreen.kt` (Películas, Series, Novelas, Anime), incorporado selector deslizable horizontal de categorías/géneros mediante `CategoryPill` (`Todo / Destacados` inicial canónico + géneros desduplicados).
+    - Conmutación reactiva fluida: modo `"Todo / Destacados"` activa el feed curado por módulos; seleccionar un género oculta los carruseles y activa la vista en cuadrícula (Grid) paginada.
+    - Soporte integrado de navegación: `BackHandler` regresa al modo "Todo / Destacados" antes de abandonar la sección.
+  - **Estructura del Feed Curado y Cards de Streaming Prémium**:
+    - Carruseles horizontales limitados estrictamente a **máximo 15 elementos** (`LIMIT 15` / `take(15)`) para salvaguardar la memoria RAM en Chromecast y dispositivos de 1.5 GB - 2 GB.
+    - Encabezados de módulo con enlace interactivo `"Ver todo →"`, conmutando directamente a la cuadrícula de esa categoría.
+    - Componente `PosterCard` (proporción 2:3) rediseñado:
+      - Esquinas redondeadas (`RoundedCornerShape(12.dp)`), placeholder y protección de decodificación Coil acotada a `size(320, 480)` con `crossfade(150)`.
+      - **Badge de Calificación**: Contenedor translúcido (`#0B1220`) con borde neón/azul brillante (`VisionBlue`) en la esquina superior izquierda con rating numérico (`★ 8.2`).
+      - **Badge de Estado**: Cápsula de gradiente neón en la esquina superior derecha (`NUEVO`, `TOP 10`, `4K`).
+      - **Variante Top 10 con Número (Rank)**: Tipografía estilizada de gran tamaño (stroke outline en `VisionBlueBright` con degradado plateado/azul) superpuesta en la esquina inferior izquierda (`1..10`).
+  - **Vista de Catálogo en Cuadrícula con Paginación Infinita Optimizada**:
+    - Cuadrícula adaptativa de 3 columnas (móvil) y 5 columnas (tablets).
+    - Paginación infinita basada en `derivedStateOf` en lotes de 24 elementos (`batchSize = 24`), evitando instanciación masiva de nodos en Compose y manteniendo 60 FPS estables.
+  - **Validación**: 153 pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) pasando al 100%.
+
+- **Estabilización Total de la Duración ("Anti-Buffer Shadowing") y Selector Dinámico de Resolución en Series y Películas** (v2.5.42):
+  - **Diagnóstico y Solución de la Duración Alternante ("Dos Minutos Más del Minuto Actual")**:
+    - *Causa Raíz*: En `X4KPlayerAty.kt`, el bucle de sondeo cada 500 ms consultaba `X4KTitan.durationMs(v)`. En transmisiones MPEG-TS/HLS sin cabecera de duración fija en el contenedor, IjkPlayer reporta la duración como la ventana del búfer demuxer deslizante (`current_position + audio_cached_duration`), exactamente ~120 s (2 min) por encima del minuto actual. La condición previa `if (declaredDurationMs <= 0L || Math.abs(declaredDurationMs - engineDur) > 120_000L)` sobreescribía la duración real del catálogo (ej. 105 min) con la ventana de búfer (ej. 7 min en el minuto 5), provocando un parpadeo constante entre 1:45:00 y 07:00 y saltos erráticos de la barra entre 5% y 71%.
+    - *Solución*: Implementadas las funciones `isBufferWindowDuration` y `resolveStableTotalDuration` en `ControlsState.kt`. Cualquier duración reportada por el decodificador que cumpla `engineDur <= currentPos + 180_000L` o `declaredDurationMs > 0L && engineDur < declaredDurationMs * 0.75f` es identificada como búfer deslizante y estrictamente descartada. Una vez establecida la duración canónica desde el catálogo o metadatos del portal, queda anclada de forma inmutable. Aplicado transversalmente a `X4KPlayerAty` (`poller`, `onDuration`, `onCreate`, `performSeekBy`, `progressMs`) y a `PlayerScreen` (`PlayerCore` en ExoPlayer).
+  - **Selector de Resolución y Calidad de Video en Series y Películas**:
+    - *Reproductor Nativo Titan (`X4KPlayerAty`)*:
+      - Incorporada píldora interactiva `qualityBtn` (`"⚙ 1080p"`, `"⚙ 720p"`, `"⚙ Auto"`) en los controles de transporte VOD, con navegación D-pad completa y retención de foco al descartar modales (`lastPickerSourceBtn`).
+      - Modal con diseño premium Vision+ (`ModalDimLayout` y paleta `#121A2A` / `#2D7DF6`) mostrando las resoluciones disponibles del portal (`1080p FHD`, `720p HD`, `480p SD`, `4K Ultra HD`), indicando la activa (`✓ (Actual)`) o notificando cuando el título cuenta con una única calidad nativa óptima.
+      - Conmutación de flujo dual: llamada primaria a `X4KTitan.setMedia(v, target.name)` (método nativo `ed.e.setMedia`), con fallback automático reordenando la lista de streams y reiniciando con seek imperceptible al minuto actual.
+    - *Reproductor ExoPlayer (`PlayerScreen.kt` & `PlayerDialogs.kt`)*:
+      - Agregada sección "Calidad de video" en `AudioAndSubtitlesDialog` (`Auto`, `1080p FHD`, `720p HD`, `480p SD`).
+      - Enlazado con `trackSelectionParameters` dinámico sobre ExoPlayer mediante `setMaxVideoSize` y `setMinVideoSize`.
+  - **Validación**: 149 pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) y 33 de backend pasando al 100%. Release OTA v2.5.42.
 
 - **Política Estricta de Arranque Seguro en Smart TV / Chromecast (Zero-Crash Cold Start & Non-Empty Catalog)** (v2.5.41):
   - **Diagnóstico Integral de Crashes en Primer Arranque en Chromecast**:

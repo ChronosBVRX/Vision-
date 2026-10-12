@@ -83,6 +83,10 @@ class X4KPlayerAty : ComponentActivity() {
     private var picker: View? = null
     private var audioBtn: TextView? = null
     private var subsBtn: TextView? = null
+    private var qualityBtn: TextView? = null
+    private var curMedias = ArrayList<X4KTitan.MediaSpec>()
+    private var currentMediaName = ""
+    private var curQuality = ""
     private var introView: View? = null
     private var pendingPlay: (() -> Unit)? = null
     private var contentRoot: FrameLayout? = null
@@ -312,7 +316,7 @@ class X4KPlayerAty : ComponentActivity() {
                 }
                 if (d > 0L) {
                     runOnUiThread {
-                        if (declaredDurationMs <= 0L || Math.abs(declaredDurationMs - d) > 120_000L) {
+                        if (declaredDurationMs <= 0L || (d > declaredDurationMs && declaredDurationMs < 60_000L)) {
                             declaredDurationMs = d
                             timeTotal?.text = fmt(d)
                             val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
@@ -546,6 +550,9 @@ class X4KPlayerAty : ComponentActivity() {
         curTitle = title
         curBaseTitle = title.substringBefore(" · T").substringBefore(" · C").ifBlank { title }
         curAspect = aspect
+        curMedias = ArrayList(medias)
+        currentMediaName = medias.firstOrNull()?.name.orEmpty()
+        curQuality = medias.firstOrNull()?.quality.orEmpty()
         X4KTitan.bindView(v)
 
         X4KTitan.setPlayerListener(
@@ -557,14 +564,17 @@ class X4KPlayerAty : ComponentActivity() {
                     }
                 },
                 onDuration = { dur ->
-                    if (dur > 0L) {
-                        durationMs = dur
-                        declaredDurationMs = dur
-                        runOnUiThread {
-                            timeTotal?.text = fmt(dur)
-                            val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
-                            if (!scrubbing && dur > 0) {
-                                seekBar?.progress = ((pos * 1000) / dur).toInt().coerceIn(0, 1000)
+                    val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
+                    if (!isBufferWindowDuration(dur, pos, declaredDurationMs, liveMode)) {
+                        if (dur > 0L) {
+                            durationMs = dur
+                            if (declaredDurationMs <= 0L) declaredDurationMs = dur
+                            runOnUiThread {
+                                val total = resolveStableTotalDuration(declaredDurationMs, durationMs, pos, liveMode)
+                                timeTotal?.text = if (total > 0L) fmt(total) else "--:--"
+                                if (!scrubbing && total > 0) {
+                                    seekBar?.progress = ((pos * 1000) / total).toInt().coerceIn(0, 1000)
+                                }
                             }
                         }
                     }
@@ -1153,12 +1163,18 @@ class X4KPlayerAty : ComponentActivity() {
             audio.tvControl()
             val subs = pill("□ Subtítulos") { showLanguagePicker(forSubtitle = true) }
             subs.tvControl()
+            val qDisplay = formatQualityShort(curQuality)
+            val quality = pill("⚙ $qDisplay") { showQualityPicker() }
+            quality.tvControl()
             buttons.addView(audio)
             buttons.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
             buttons.addView(subs)
+            buttons.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
+            buttons.addView(quality)
             playPauseBtn = playPause
             audioBtn = audio
             subsBtn = subs
+            qualityBtn = quality
         }
 
         // En pantallas angostas (móvil vertical) la fila rueda a los lados; en TV y en
@@ -1216,12 +1232,14 @@ class X4KPlayerAty : ComponentActivity() {
                 val forward = fwdBtn
                 val audio = audioBtn
                 val subs = subsBtn
+                val quality = qualityBtn
                 if (rewind != null && playPause != null && forward != null && audio != null && subs != null) {
                     val rewindId = View.generateViewId().also { rewind.id = it }
                     val playId = View.generateViewId().also { playPause.id = it }
                     val forwardId = View.generateViewId().also { forward.id = it }
                     val audioId = View.generateViewId().also { audio.id = it }
                     val subsId = View.generateViewId().also { subs.id = it }
+                    val qualityId = if (quality != null) View.generateViewId().also { quality.id = it } else -1
                     seek.isFocusable = true
                     seek.isFocusableInTouchMode = false
                     playerControls.add(seek)
@@ -1338,8 +1356,16 @@ class X4KPlayerAty : ComponentActivity() {
                     audio.nextFocusDownId = audioId
 
                     subs.nextFocusLeftId = audioId
+                    subs.nextFocusRightId = if (qualityId != -1) qualityId else subsId
                     subs.nextFocusUpId = upId
                     subs.nextFocusDownId = subsId
+
+                    if (qualityId != -1) {
+                        quality?.nextFocusLeftId = subsId
+                        quality?.nextFocusRightId = qualityId
+                        quality?.nextFocusUpId = upId
+                        quality?.nextFocusDownId = qualityId
+                    }
 
                     seek.nextFocusUpId = seekId
                     seek.nextFocusDownId = playId
@@ -1541,6 +1567,148 @@ class X4KPlayerAty : ComponentActivity() {
         }
         lastPickerSourceBtn = null
         scheduleHide()
+    }
+
+    // ---------------------------------------------------------------- quality picker
+
+    private fun showQualityPicker() {
+        if (liveMode) return
+        lastPickerSourceBtn = qualityBtn
+        val v = playerView ?: return
+        val distinctQualities = curMedias.distinctBy { it.quality.ifBlank { it.name } }
+
+        val dim = ModalDimLayout(this).apply {
+            setBackgroundColor(0xCC000000.toInt())
+            setOnClickListener { dismissPicker() }
+            isFocusable = false
+        }
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                cornerRadius = dp(18).toFloat()
+                setColor(0xFF121A2A.toInt())
+                setStroke(dp(1), 0x332D7DF6.toInt())
+            }
+            setPadding(dp(16), dp(16), dp(16), dp(14))
+            setOnClickListener { }
+            isFocusable = false
+        }
+        card.addView(TextView(this).apply {
+            text = "Calidad y Resolución"
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(12), 0, dp(12), dp(4))
+        })
+        card.addView(TextView(this).apply {
+            text = if (distinctQualities.size > 1) "Selecciona la resolución para la reproducción:" else "Resolución actual de la transmisión:"
+            setTextColor(0x99FFFFFF.toInt())
+            textSize = 12f
+            setPadding(dp(12), 0, dp(12), dp(10))
+        })
+
+        val optionViews = ArrayList<View>()
+        if (distinctQualities.size > 1) {
+            distinctQualities.forEachIndexed { index, spec ->
+                val isCurrent = (spec.name == currentMediaName) || (spec.quality == curQuality && currentMediaName.isBlank())
+                val label = (if (isCurrent) "✓ " else "  ") + formatQualityLabel(spec.quality) + (if (isCurrent) " (Actual)" else "")
+                val option = TextView(this).apply {
+                    text = label
+                    setTextColor(if (isCurrent) blueBright else Color.WHITE)
+                    textSize = 14f
+                    typeface = if (isCurrent) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                    background = roundBackground(if (isCurrent) 0x2E2D7DF6 else surface, 10)
+                    setPadding(dp(16), dp(12), dp(16), dp(12))
+                    setOnClickListener {
+                        dismissPicker()
+                        if (!isCurrent) {
+                            switchQuality(spec)
+                        }
+                    }
+                }
+                option.tvControl(if (isCurrent) 0x2E2D7DF6 else surface, 10)
+                option.id = View.generateViewId()
+                if (index > 0) {
+                    val prev = optionViews[index - 1]
+                    prev.nextFocusDownId = option.id
+                    option.nextFocusUpId = prev.id
+                }
+                optionViews += option
+                card.addView(option)
+                if (index != distinctQualities.lastIndex) {
+                    card.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(6)))
+                }
+            }
+        } else {
+            val singleSpec = curMedias.firstOrNull()
+            val qName = formatQualityLabel(singleSpec?.quality.orEmpty())
+            val singleView = TextView(this).apply {
+                text = "● $qName (Máxima calidad disponible)"
+                setTextColor(blueBright)
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                background = roundBackground(0x2E2D7DF6, 10)
+                setPadding(dp(16), dp(12), dp(16), dp(12))
+            }
+            card.addView(singleView)
+            card.addView(TextView(this).apply {
+                text = "Este contenido se transmite en su calidad nativa óptima."
+                setTextColor(0x80FFFFFF.toInt())
+                textSize = 11f
+                setPadding(dp(12), dp(8), dp(12), dp(12))
+            })
+            val closeBtn = pill("Cerrar") { dismissPicker() }.apply {
+                tvControl(surface)
+                id = View.generateViewId()
+            }
+            optionViews += closeBtn
+            card.addView(closeBtn, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.END
+            })
+        }
+
+        if (optionViews.isNotEmpty()) {
+            optionViews.first().nextFocusUpId = optionViews.first().id
+            optionViews.last().nextFocusDownId = optionViews.last().id
+        }
+
+        dim.addView(card, FrameLayout.LayoutParams(
+            (resources.displayMetrics.widthPixels * 0.72f).toInt(),
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER,
+        ))
+        root().addView(dim, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        ))
+        picker = dim
+        picking = true
+        setBackgroundFocusBlocked(true)
+        handler.removeCallbacks(hideRunnable)
+        if (isTv) optionViews.firstOrNull()?.let { first -> first.post { first.requestFocus() } }
+    }
+
+    private fun switchQuality(target: X4KTitan.MediaSpec) {
+        val v = playerView ?: return
+        val curPos = X4KTitan.positionMs().coerceAtLeast(0L)
+        currentMediaName = target.name
+        curQuality = target.quality
+        qualityBtn?.text = "⚙ " + formatQualityShort(target.quality)
+        Toast.makeText(this, "Cambiando a ${formatQualityShort(target.quality)}…", Toast.LENGTH_SHORT).show()
+
+        // 1. Intento directo con el método nativo ed.e.setMedia(mediaCode)
+        val switched = X4KTitan.setMedia(v, target.name)
+        if (!switched) {
+            // 2. Fallback sin fricción: reordenar la lista de medias y reiniciar con seek transparente
+            val reordered = ArrayList<X4KTitan.MediaSpec>()
+            reordered.add(target)
+            reordered.addAll(curMedias.filter { it.name != target.name })
+            curMedias = reordered
+            X4KTitan.play(v, "vod", curCode, curTitle, reordered)
+            if (curPos > 0L) {
+                handler.postDelayed({ playerView?.let { X4KTitan.seekTo(it, curPos) } }, 250L)
+            }
+        }
     }
 
     // ---------------------------------------------------------------- siguiente capítulo
@@ -1921,6 +2089,11 @@ class X4KPlayerAty : ComponentActivity() {
                     showError()
                     return@runOnUiThread
                 }
+                curMedias = ArrayList(medias)
+                val firstMedia = medias.firstOrNull()
+                currentMediaName = firstMedia?.name.orEmpty()
+                curQuality = firstMedia?.quality.orEmpty()
+                qualityBtn?.text = "⚙ " + formatQualityShort(curQuality)
                 declaredLanguages = medias.first().audio
                     .split(',').map { it.trim() }.filter { it.isNotBlank() }
                 subtitleLanguages = prep.subsLangs
@@ -3032,16 +3205,18 @@ class X4KPlayerAty : ComponentActivity() {
                 val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
                 if (!liveMode) {
                     val engineDur = com.chronosbvrx.visionplus.data.xuper.X4KTitan.durationMs(v)
-                    if (engineDur > 0L) {
-                        if (engineDur != durationMs) {
-                            durationMs = engineDur
-                        }
-                        if (declaredDurationMs <= 0L || Math.abs(declaredDurationMs - engineDur) > 120_000L) {
-                            declaredDurationMs = engineDur
+                    if (!isBufferWindowDuration(engineDur, pos, declaredDurationMs, liveMode)) {
+                        if (engineDur > 0L) {
+                            if (engineDur != durationMs) {
+                                durationMs = engineDur
+                            }
+                            if (declaredDurationMs <= 0L) {
+                                declaredDurationMs = engineDur
+                            }
                         }
                     }
                 }
-                val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
+                val total = resolveStableTotalDuration(declaredDurationMs, durationMs, pos, liveMode)
                 val hasLivePlayback = liveMode && (pos > 0 || X4KTitan.isPlaying(v) || (System.currentTimeMillis() - startedAtMs > 1200))
                 if (pos > 0 || hasLivePlayback) {
                     if (loadingOverlay?.visibility == View.VISIBLE && !loadingFading) {
@@ -3093,8 +3268,8 @@ class X4KPlayerAty : ComponentActivity() {
     private fun performSeekBy(deltaMs: Long) {
         if (liveMode) return
         val v = playerView ?: return
-        val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
         val currentPos = X4KTitan.positionMs().coerceAtLeast(0L)
+        val total = resolveStableTotalDuration(declaredDurationMs, durationMs, currentPos, liveMode)
         val targetPos = if (total > 0) (currentPos + deltaMs).coerceIn(0L, total) else (currentPos + deltaMs).coerceAtLeast(0L)
         X4KTitan.seekTo(v, targetPos)
         if (total > 0) {
@@ -3105,7 +3280,7 @@ class X4KPlayerAty : ComponentActivity() {
     }
 
     private fun progressMs(): Long {
-        val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
+        val total = resolveStableTotalDuration(declaredDurationMs, durationMs, 0L, liveMode)
         val sb = seekBar ?: return 0L
         return if (total > 0) (sb.progress.toLong() * total) / 1000 else 0L
     }
