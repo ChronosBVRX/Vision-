@@ -287,7 +287,7 @@ async def build(pool) -> int:
             """
             insert into title_categories (title_id, category_id, position)
             select id, 'estrenos', row_number() over (order by year desc nulls last, score desc nulls last, title)
-            from titles where year is not null and year >= $1 or is_premiere
+            from titles where (year is not null and year >= $1 or is_premiere) and source != 'magis'
             on conflict do nothing
             """,
             datetime.now().year - 1,

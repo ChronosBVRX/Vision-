@@ -151,9 +151,11 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
     // Al abrir una película alimenta las recomendaciones del inicio.
     val libraryContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(film.id) { com.chronosbvrx.visionplus.data.UserLibrary.recordPlay(libraryContext, film) }
-    // A portal film (`magisvod:<contentId>`) plays through the provider's own engine.
+    // A portal film (`magisvod:<contentId>`): en Vision+, el catálogo masnew reproduce a través
+    // del motor nativo XTV (X4K Titan en proceso :x4k). Normalizamos directamente a `xtv:<contentId>`.
     if (film.videoUrl.startsWith("magisvod:")) {
-        TitanVodPlayerScreen(film, onBack)
+        val cid = film.videoUrl.removePrefix("magisvod:")
+        PlayerScreen(film.copy(id = "xtv:$cid", videoUrl = "xtv:$cid"), isTv, onBack, episode, resumeMs)
         return
     }
     // An XTV film (`xtv:<contentId>`) or live channel (`xtvlive:<code>`): the portal mints the
@@ -471,7 +473,14 @@ fun TitanVodPlayerScreen(film: Film, onBack: () -> Unit) {
             runCatching { MagisClient(context).startPlayVodRecovering(contentId) }.getOrDefault(emptyList())
         }
         if (medias.isEmpty()) {
-            error = "Este título no trae direcciones de reproducción."
+            val playedXtv = withContext(Dispatchers.IO) {
+                com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(context, contentId, film.title)
+            }
+            if (!playedXtv) {
+                error = "Este título no está disponible en este momento."
+            } else {
+                onBack()
+            }
             return@LaunchedEffect
         }
         val played = withContext(Dispatchers.Main) { TitanSdk.playVod(view, contentId, film.title, medias) }
@@ -1534,7 +1543,17 @@ private fun XtvHandoff(
     LaunchedEffect(attempt) {
         failed = false
         prepared = false
-        val ok = withContext(Dispatchers.IO) { runCatching { prepare() }.getOrDefault(false) }
+        var ok = false
+        // Auto-reintento transparente de hasta 3 intentos con pausas escalonadas (400ms, 800ms):
+        // Resuelve picos transitorios de red, handshakes fríos y renovación de sesión sin
+        // interrumpir la experiencia del usuario con la pantalla de error "No se pudo abrir".
+        for (retryIndex in 0..2) {
+            ok = withContext(Dispatchers.IO) { runCatching { prepare() }.getOrDefault(false) }
+            if (ok) break
+            if (retryIndex < 2) {
+                delay(400L * (retryIndex + 1))
+            }
+        }
         if (!ok) {
             failed = true
         } else {

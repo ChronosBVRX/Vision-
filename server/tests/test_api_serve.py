@@ -97,3 +97,11 @@ def test_search_fold_normalization():
     assert app._fold("  terminator   2  ") == "terminator 2"
 
 
+def test_film_normalizes_magisvod_to_xtv():
+    row = _record(id="magis:E019F33B862F", play_ref="magisvod:E019F33B862F", source="magis")
+    out = app.film(row)
+    assert out["id"] == "xtv:E019F33B862F"
+    assert out["videoUrl"] == "xtv:E019F33B862F"
+    assert out["sourceUrl"] == "xtv"
+
+

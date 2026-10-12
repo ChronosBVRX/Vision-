@@ -2086,16 +2086,28 @@ class X4KPlayerAty : ComponentActivity() {
         hideControls()
 
         Thread {
-            val prep = kotlinx.coroutines.runBlocking {
+            var prep = kotlinx.coroutines.runBlocking {
                 X4KApi.prepareVod(this@X4KPlayerAty, code, title, series, 0L)
+            }
+            if (prep == null) {
+                Thread.sleep(450)
+                prep = kotlinx.coroutines.runBlocking {
+                    X4KApi.prepareVod(this@X4KPlayerAty, code, title, series, 0L)
+                }
             }
             runOnUiThread {
                 if (prep == null) {
                     showError()
                     return@runOnUiThread
                 }
-                val medias = runCatching { parseMedias(prep.mediasJson) }.getOrDefault(ArrayList())
-                if (medias.isEmpty() || !X4KTitan.play(v, "vod", code, title, medias)) {
+                var medias = runCatching { parseMedias(prep.mediasJson) }.getOrDefault(ArrayList())
+                var played = medias.isNotEmpty() && X4KTitan.play(v, "vod", code, title, medias)
+                if (!played) {
+                    // Segundo intento si el primer cuadro falló
+                    medias = runCatching { parseMedias(prep.mediasJson) }.getOrDefault(ArrayList())
+                    played = medias.isNotEmpty() && X4KTitan.play(v, "vod", code, title, medias)
+                }
+                if (!played) {
                     showError()
                     return@runOnUiThread
                 }

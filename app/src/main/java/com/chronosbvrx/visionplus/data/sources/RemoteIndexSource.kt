@@ -132,10 +132,24 @@ object RemoteIndexSource {
             if (id.isBlank()) continue
             val filmsJson = category.optJSONArray("films") ?: JSONArray()
             val films = ArrayList<Film>(filmsJson.length())
+            val seenFilms = HashSet<String>()
             for (j in 0 until filmsJson.length()) {
                 val f = filmsJson.optJSONObject(j) ?: continue
-                val filmId = f.optString("id")
-                if (filmId.isBlank()) continue
+                val rawFilmId = f.optString("id")
+                if (rawFilmId.isBlank()) continue
+                val rawVideoUrl = f.optString("videoUrl")
+                val (filmId, videoUrl) = when {
+                    rawVideoUrl.startsWith("magisvod:") -> {
+                        val cid = rawVideoUrl.removePrefix("magisvod:")
+                        "xtv:$cid" to "xtv:$cid"
+                    }
+                    rawFilmId.startsWith("magis:") && !rawVideoUrl.startsWith("http") -> {
+                        val cid = rawFilmId.removePrefix("magis:")
+                        "xtv:$cid" to "xtv:$cid"
+                    }
+                    else -> rawFilmId to rawVideoUrl
+                }
+                if (!seenFilms.add(filmId)) continue
                 films += Film(
                     id = filmId,
                     title = f.optString("title"),
@@ -143,7 +157,7 @@ object RemoteIndexSource {
                     durationMin = f.optInt("durationMin"),
                     synopsis = f.optString("synopsis"),
                     posterUrl = f.optString("posterUrl"),
-                    videoUrl = f.optString("videoUrl"),
+                    videoUrl = videoUrl,
                     sourceUrl = f.optString("sourceUrl"),
                     score = f.optDouble("score", 0.0),
                     groupId = f.optString("groupId"),
@@ -255,10 +269,24 @@ object RemoteIndexSource {
             val root = JSONObject(text)
             val filmsJson = root.optJSONArray("films") ?: JSONArray()
             val films = ArrayList<Film>(filmsJson.length())
+            val seenFilms = HashSet<String>()
             for (i in 0 until filmsJson.length()) {
                 val f = filmsJson.optJSONObject(i) ?: continue
-                val filmId = f.optString("id")
-                if (filmId.isBlank()) continue
+                val rawFilmId = f.optString("id")
+                if (rawFilmId.isBlank()) continue
+                val rawVideoUrl = f.optString("videoUrl")
+                val (filmId, videoUrl) = when {
+                    rawVideoUrl.startsWith("magisvod:") -> {
+                        val cid = rawVideoUrl.removePrefix("magisvod:")
+                        "xtv:$cid" to "xtv:$cid"
+                    }
+                    rawFilmId.startsWith("magis:") && !rawVideoUrl.startsWith("http") -> {
+                        val cid = rawFilmId.removePrefix("magis:")
+                        "xtv:$cid" to "xtv:$cid"
+                    }
+                    else -> rawFilmId to rawVideoUrl
+                }
+                if (!seenFilms.add(filmId)) continue
                 films += Film(
                     id = filmId,
                     title = f.optString("title"),
@@ -266,7 +294,7 @@ object RemoteIndexSource {
                     durationMin = f.optInt("durationMin"),
                     synopsis = f.optString("synopsis"),
                     posterUrl = f.optString("posterUrl"),
-                    videoUrl = f.optString("videoUrl"),
+                    videoUrl = videoUrl,
                     sourceUrl = f.optString("sourceUrl"),
                     score = f.optDouble("score", 0.0),
                     groupId = f.optString("groupId"),

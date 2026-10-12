@@ -247,10 +247,22 @@ object X4KApi {
         return userToken
     }
 
-    /** Solo esto significa «la sesión ya no sirve»; un error de negocio NO debe renovar. */
+    /** Solo esto significa «la sesión ya no sirve»; detecta exhaustivamente errores de sesión del portal. */
     private fun isSessionFailure(e: Exception): Boolean {
-        val m = e.message.orEmpty()
-        return m.contains("portal aaa") || m.contains("portal200001") || m.contains("HTTP 4")
+        val m = e.message.orEmpty().lowercase()
+        return m.contains("portal aaa") ||
+            m.contains("portal200001") ||
+            m.contains("portal 200001") ||
+            m.contains("portal 100001") ||
+            m.contains("portal 100002") ||
+            m.contains("portal 100003") ||
+            m.contains("portal 100008") ||
+            m.contains("portal 200000") ||
+            m.contains("portal 200002") ||
+            m.contains("portal 300001") ||
+            m.contains("http 401") ||
+            m.contains("http 403") ||
+            m.contains("http 4")
     }
 
     /**
@@ -1056,7 +1068,7 @@ object X4KApi {
             }
             var medias: JSONArray? = null
             for (type in listOf("2", "1")) {
-                val d = runCatching {
+                var d = runCatching {
                     callWithSession(context, "/api/portalCore/v10/startPlayVOD") { token ->
                         JSONObject().apply {
                             put("userToken", token)
@@ -1070,17 +1082,37 @@ object X4KApi {
                             put("episodeNumberList", JSONArray().put(1))
                         }
                     }
-                }.getOrNull() ?: continue
-                if (durMs <= 0L) {
-                    durMs = extractDurationMs(d)
-                    if (durMs <= 0L) {
-                        durMs = extractDurationMs(d.optJSONArray("episodeList")?.optJSONObject(0))
-                    }
+                }.getOrNull()
+                // Si la sesión guardada estaba desincronizada o el portal rechazó inicialmente,
+                // renovar sesión explícitamente y reintentar de inmediato antes de descartar.
+                if (d == null || collectMedias(d).length() == 0) {
+                    d = runCatching {
+                        val freshToken = renewSession(context)
+                        post("/api/portalCore/v10/startPlayVOD", JSONObject().apply {
+                            put("userToken", freshToken)
+                            put("userId", USER_ID)
+                            put("portalCode", PORTAL)
+                            put("contentId", cid)
+                            put("seriesContentId", sid)
+                            put("type", type)
+                            put("startTime", 0)
+                            put("authType", "0")
+                            put("episodeNumberList", JSONArray().put(1))
+                        })
+                    }.getOrNull() ?: d
                 }
-                val list = collectMedias(d)
-                if (list.length() > 0) {
-                    medias = list
-                    break
+                if (d != null) {
+                    if (durMs <= 0L) {
+                        durMs = extractDurationMs(d)
+                        if (durMs <= 0L) {
+                            durMs = extractDurationMs(d.optJSONArray("episodeList")?.optJSONObject(0))
+                        }
+                    }
+                    val list = collectMedias(d)
+                    if (list.length() > 0) {
+                        medias = list
+                        break
+                    }
                 }
             }
             val m = medias ?: return@guarded null
@@ -1165,7 +1197,12 @@ object X4KApi {
         if (cleanSeriesId.isNotBlank() && cid == cleanSeriesId && resolvedEpIds.isNotEmpty()) {
             cid = resolvedEpIds[resolvedEpIndex.coerceIn(0, resolvedEpIds.lastIndex)]
         }
-        val prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs) ?: return@withContext false
+        var prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs)
+        if (prep == null) {
+            kotlinx.coroutines.delay(400)
+            prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs)
+        }
+        if (prep == null) return@withContext false
         val finalDuration = if (prep.durationMs > 0L) prep.durationMs else fallbackDurationMs
         launch(
             context = context,

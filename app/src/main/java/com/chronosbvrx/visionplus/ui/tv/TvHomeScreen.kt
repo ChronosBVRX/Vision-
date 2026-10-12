@@ -173,7 +173,13 @@ fun TvHomeScreen(
 
     // Colección unificada de títulos disponibles para curar Tendencias y Estrenos
     val allAvailableFilms = remember(rows, catalog.indexRows) {
-        (rows + catalog.indexRows).flatMap { it.films }.distinctBy { it.id }
+        val nonSeedFilms = (rows + catalog.indexRows).flatMap { it.films }
+            .filter { !it.id.contains("seed_") && it.videoUrl.isNotBlank() }
+        val candidates = if (nonSeedFilms.isNotEmpty()) nonSeedFilms else (rows + catalog.indexRows).flatMap { it.films }
+        candidates.distinctBy {
+            val cleanCid = it.videoUrl.substringAfter(':').substringBefore('|')
+            if (cleanCid.isNotBlank()) cleanCid.lowercase() else it.id.lowercase()
+        }
     }
 
     // 1. Top 10 Tendencias: películas/series con mejor calificación e impacto
@@ -185,19 +191,26 @@ fun TvHomeScreen(
     }
 
     // 2. Novedades y Estrenos: catálogo 2024-2026 y repisa de estrenos
-    val estrenosFilms = remember(allAvailableFilms, catalog.rows) {
-        val shelf = catalog.rows.firstOrNull { it.id.contains("estrenos", ignoreCase = true) }?.films.orEmpty()
+    val estrenosFilms = remember(allAvailableFilms, catalog.rows, catalog.indexRows) {
+        val shelf = (catalog.indexRows + catalog.rows)
+            .firstOrNull { it.id.contains("estrenos", ignoreCase = true) }?.films.orEmpty()
+            .filter { !it.id.contains("seed_") }
         (shelf + allAvailableFilms.filter { it.year >= 2024 }.sortedByDescending { it.year * 100 + it.score })
-            .distinctBy { it.id }
+            .distinctBy {
+                val cleanCid = it.videoUrl.substringAfter(':').substringBefore('|')
+                if (cleanCid.isNotBlank()) cleanCid.lowercase() else it.id.lowercase()
+            }
             .take(15)
     }
 
     // 3. Filas restantes del catálogo (evitando duplicar estrenos y listas personales en la cabecera)
     val otherRows = remember(rows) {
+        val hasRealRows = rows.any { !it.id.startsWith("seed-") }
         rows.filterNot { row ->
             row.id.contains("estrenos", ignoreCase = true) ||
                 row.id == "favorites" ||
-                row.id == "watch-later"
+                row.id == "watch-later" ||
+                (hasRealRows && row.id.startsWith("seed-"))
         }
     }
 

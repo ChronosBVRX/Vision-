@@ -137,7 +137,13 @@ fun HomeScreen(
         onDispose { homeLifecycle.lifecycle.removeObserver(observer) }
     }
     val allAvailableFilms = remember(rows, catalog.indexRows) {
-        (rows + catalog.indexRows).flatMap { it.films }.distinctBy { it.id }
+        val nonSeedFilms = (rows + catalog.indexRows).flatMap { it.films }
+            .filter { !it.id.contains("seed_") && it.videoUrl.isNotBlank() }
+        val candidates = if (nonSeedFilms.isNotEmpty()) nonSeedFilms else (rows + catalog.indexRows).flatMap { it.films }
+        candidates.distinctBy {
+            val cleanCid = it.videoUrl.substringAfter(':').substringBefore('|')
+            if (cleanCid.isNotBlank()) cleanCid.lowercase() else it.id.lowercase()
+        }
     }
     val top10Films = remember(allAvailableFilms) {
         allAvailableFilms
@@ -145,17 +151,24 @@ fun HomeScreen(
             .sortedByDescending { it.score * 10 + (if (it.year >= 2024) 8 else 0) }
             .take(10)
     }
-    val estrenosFilms = remember(allAvailableFilms, catalog.rows) {
-        val shelf = catalog.rows.firstOrNull { it.id.contains("estrenos", ignoreCase = true) }?.films.orEmpty()
+    val estrenosFilms = remember(allAvailableFilms, catalog.rows, catalog.indexRows) {
+        val shelf = (catalog.indexRows + catalog.rows)
+            .firstOrNull { it.id.contains("estrenos", ignoreCase = true) }?.films.orEmpty()
+            .filter { !it.id.contains("seed_") }
         (shelf + allAvailableFilms.filter { it.year >= 2024 }.sortedByDescending { it.year * 100 + it.score })
-            .distinctBy { it.id }
+            .distinctBy {
+                val cleanCid = it.videoUrl.substringAfter(':').substringBefore('|')
+                if (cleanCid.isNotBlank()) cleanCid.lowercase() else it.id.lowercase()
+            }
             .take(15)
     }
     val otherRows = remember(rows) {
+        val hasRealRows = rows.any { !it.id.startsWith("seed-") }
         rows.filterNot { row ->
             row.id.contains("estrenos", ignoreCase = true) ||
                 row.id == "favorites" ||
-                row.id == "watch-later"
+                row.id == "watch-later" ||
+                (hasRealRows && row.id.startsWith("seed-"))
         }
     }
 

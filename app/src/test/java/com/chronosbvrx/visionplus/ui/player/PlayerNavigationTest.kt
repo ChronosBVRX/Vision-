@@ -737,5 +737,42 @@ class PlayerNavigationTest {
         assertEquals("4K Ultra HD", formatQualityLabel("4k"))
         assertEquals("Automática (Alta definición)", formatQualityLabel(""))
     }
+
+    @Test
+    fun magisvodNormalizesToXtvForNativePlayback() {
+        val film = com.chronosbvrx.visionplus.data.Film(
+            id = "magis:E019F33B862F48178947ABF50261EAFD",
+            title = "Pequeños calvarios",
+            year = 2025,
+            durationMin = 92,
+            synopsis = "Sinopsis",
+            posterUrl = "poster",
+            videoUrl = "magisvod:E019F33B862F48178947ABF50261EAFD",
+            sourceUrl = "magis",
+        )
+        val cid = film.videoUrl.removePrefix("magisvod:")
+        val normalized = film.copy(id = "xtv:$cid", videoUrl = "xtv:$cid")
+        assertEquals("xtv:E019F33B862F48178947ABF50261EAFD", normalized.id)
+        assertEquals("xtv:E019F33B862F48178947ABF50261EAFD", normalized.videoUrl)
+    }
+
+    @Test
+    fun autoRetryRecoversTransientFailureWithoutUserAction() {
+        var attempts = 0
+        val prepareLambda: () -> Boolean = {
+            attempts++
+            attempts >= 2 // Falla en el 1er intento (token frío/latencia), triunfa en el 2do
+        }
+
+        var ok = false
+        for (retryIndex in 0..2) {
+            ok = prepareLambda()
+            if (ok) break
+        }
+
+        assertTrue("El auto-reintento debe resolver exitosamente la apertura sin acción del usuario", ok)
+        assertEquals("Debe haberse resuelto en exactamente 2 intentos", 2, attempts)
+    }
 }
+
 

@@ -82,15 +82,24 @@ def film(record: asyncpg.Record, enr=None) -> dict:
         overview = (enr["overview"] or "").strip()
         if overview:
             synopsis = overview
+    video_url = record["play_ref"]
+    source_url = record["source"]
+    film_id = record["id"]
+    if video_url.startswith("magisvod:"):
+        cid = video_url.removeprefix("magisvod:")
+        video_url = f"xtv:{cid}"
+        if film_id.startswith("magis:"):
+            film_id = f"xtv:{cid}"
+        source_url = "xtv"
     return {
-        "id": record["id"],
+        "id": film_id,
         "title": title,
         "year": year or 0,
         "durationMin": record["duration_min"] or 0,
         "synopsis": synopsis or "",
         "posterUrl": record["poster_url"] or "",
-        "videoUrl": record["play_ref"],
-        "sourceUrl": record["source"],
+        "videoUrl": video_url,
+        "sourceUrl": source_url,
         "score": float(rating or 0),
     }
 
@@ -476,14 +485,20 @@ async def search(
 
     member_of, seasons_by_group, base_of_group = await _group_maps()
     enr = await _enrichment_map([r["id"] for r in rows])
-    seen: set[str] = set()
+    seen_groups: set[str] = set()
+    seen_cids: set[str] = set()
     out = []
     for r in rows:
         entry, group_id = _grouped_entry(r, member_of, seasons_by_group, base_of_group)
+        cid = entry["id"].split(":", 1)[-1] if ":" in entry["id"] else entry["id"]
+        clean_key = f"{cid.lower()}:{_fold(entry['title'])}"
+        if clean_key in seen_cids:
+            continue
+        seen_cids.add(clean_key)
         if group_id is not None:
-            if group_id in seen:
+            if group_id in seen_groups:
                 continue
-            seen.add(group_id)
+            seen_groups.add(group_id)
         out.append(entry)
 
     if len(_SEARCH_CACHE) > 300:

@@ -5,14 +5,30 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.46**
-  (versionCode **282**, release OTA v2.5.46). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.47**
+  (versionCode **283**, release OTA v2.5.47). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Catálogo Indexado Canónico, Normalización Universal VOD y Erradicación de Errores al Iniciar ("Auto-Retry Zero Touch")** (v2.5.47):
+  - **Diagnóstico y Corrección de "Título no trae direcciones de reproducción" (Caso Pequeños Calvarios y similares)**:
+    - *Causa Raíz*: En el índice del servidor y feed remoto `/v1/index`, títulos sincronizados desde el conector secundario Magis (`magis:E019F33B862F...`) conservaban referencias `magisvod:<cid>` y se integraban a categorías como "Estrenos y Novedades" o colecciones de catálogo. Al abrir dichos títulos, la app los enrutaba hacia `TitanVodPlayerScreen` con `MagisClient`, el cual fallaba por cuentas no activas arrojando el error `Este título no trae direcciones de reproducción`, a pesar de que el contenido comparte el mismo `contentId` universal de la plataforma y cuenta con streaming 100% activo bajo el motor nativo XTV (`xtv:<cid>`).
+    - *Solución*:
+      1. *En Backend (`server/api/app.py` y `server/sync/index_build.py`)*: La función `film()` mapea automáticamente cualquier referencia `magisvod:<cid>` al esquema canónico nativo `xtv:<cid>` con `sourceUrl = 'xtv'`. En `/v1/search`, implementada desduplicación estricta por `contentId` y título, asegurando que jamás se entreguen dos entradas (una rota y una funcional) para el mismo título. En `index_build.py`, la repisa especial de Estrenos filtra estrictamente `source != 'magis'`, garantizando que sólo ingresen títulos con reproducción nativa verificada.
+      2. *En la App (`RemoteIndexSource.kt`)*: Tanto `parseRows` como `search` normalizan cualquier `magisvod:<cid>` a `xtv:<cid>` y desduplican títulos dentro de cada fila por `contentId`.
+      3. *En `PlayerScreen.kt`*: Redirección de primer nivel de cualquier ref `magisvod:` a `PlayerScreen(xtvFilm)` con `xtv:<cid>`, más fallback resiliente en `TitanVodPlayerScreen` hacia `X4KApi.playVod`.
+      4. *En `HomeScreen.kt` y `TvHomeScreen.kt`*: `allAvailableFilms` y `estrenosFilms` desduplican por `cleanCid`, eliminan entradas dummy/semilla (`seed_`) cuando hay datos del índice y garantizan que lo mostrado en billboard, Top 10, Estrenos y Recomendados esté plenamente indexado en nuestra BD con streams activos.
+  - **Erradicación del Error Inicial de Reproducción ("Error al abrir pero le das reintentar y ahora sí abre")**:
+    - *Causa Raíz*: `XtvHandoff` en `PlayerScreen.kt` invocaba `prepare()` una sola vez de forma rígida. Si el primer intento fallaba por handshake frío de red, token guardado en SharedPreferences revocado por el portal tras horas de inactividad o ligera latencia de conexión, saltaba de inmediato a `failed = true`, mostrando el overlay "No se pudo abrir" con el botón manual "Reintentar". Al hacer clic manual, el segundo intento ya encontraba la sesión renovada y abría exitosamente.
+    - *Solución*:
+      1. *Auto-Retry Transparente en `XtvHandoff`*: Implementado bucle de reintento automático de hasta 3 intentos totales (intento inicial + 2 reintentos transparentes) con retardos progresivos (400 ms, 800 ms). Si ocurre un fallo transitorio en el primer intento, se auto-recupera en milisegundos de forma transparente, abriendo el video directo sin interrumpir al usuario ni exigir pulsar "Reintentar".
+      2. *Auto-Recuperación de Sesión en `X4KApi.kt`*: En `prepareVod`, si la consulta a `/v10/startPlayVOD` no obtiene medios en la primera pasada, invoca de inmediato `renewSession(context)` y reintenta la llamada. En `isSessionFailure`, incorporada detección exhaustiva de códigos del portal (`portal 100001..100008`, `200000..200002`, `300001`, `HTTP 401..403`).
+      3. *Resiliencia en `playVod` y `X4KPlayerAty.kt`*: Reintento automático interno en `playVod` y en el cambio de capítulo de series (`playEpisode`).
+  - **Validación**: 165+ pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) y 34 pruebas de backend (`pytest server/tests/`) pasando al 100%. Release OTA v2.5.47.
 
 - **Simplificación Integral del Menú Lateral (6 Pilares Globales), Colecciones Rápidas y Corrección Definitiva de Pérdida de Foco D-Pad al Regresar** (v2.5.46):
   - **Diagnóstico y Corrección de Pérdida de Foco D-Pad al Regresar de Ficha ("Back Focus Orphan")**:

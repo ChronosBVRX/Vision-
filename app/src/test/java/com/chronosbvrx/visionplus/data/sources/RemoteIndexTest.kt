@@ -102,4 +102,21 @@ class RemoteIndexTest {
         assertEquals(listOf("ok"), RemoteIndexSource.parseRows(mixed).map { it.id })
         assertTrue(RemoteIndexSource.parseRows(JSONObject().optJSONArray("nope") ?: JSONArray()).isEmpty())
     }
+
+    @Test
+    fun magisvodNormalizesToXtvAndDedupes() {
+        val categories = JSONArray(
+            """[{"id":"estrenos","title":"Estrenos","films":[
+                  {"id":"magis:E019F33B862F","title":"Pequeños calvarios","year":2025,"durationMin":92,"synopsis":"s",
+                   "posterUrl":"p","videoUrl":"magisvod:E019F33B862F","sourceUrl":"magis","score":7.2},
+                  {"id":"xtv:E019F33B862F","title":"Pequeños calvarios","year":2025,"durationMin":92,"synopsis":"s",
+                   "posterUrl":"p","videoUrl":"xtv:E019F33B862F","sourceUrl":"xtv","score":7.2}
+                ]}]""",
+        )
+        val rows = RemoteIndexSource.parseRows(categories)
+        assertEquals(1, rows.size)
+        val film = rows.single().films.single()
+        assertEquals("xtv:E019F33B862F", film.id)
+        assertEquals("xtv:E019F33B862F", film.videoUrl)
+    }
 }
