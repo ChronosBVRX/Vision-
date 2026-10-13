@@ -3,10 +3,10 @@
 import grouping
 
 
-def _row(id, title, kind="series", score=7.0, year=2020):
+def _row(id, title, kind="series", score=7.0, year=2020, program_type="teleplay"):
     return {"id": id, "title": title, "kind": kind, "source": "xtv",
             "year": year, "score": score, "poster_url": "",
-            "synopsis": "", "play_ref": f"xtv:{id}"}
+            "synopsis": "", "play_ref": f"xtv:{id}", "program_type": program_type}
 
 
 class FakeTx:
@@ -115,3 +115,35 @@ def test_marked_never_becomes_plain():
     statements = asyncio.run(_run_group(rows))
     members = [s for s in statements if "insert into group_members" in s[0]]
     assert sorted(m[1][2] for m in members) == [1, 2]
+
+
+def test_is_groupable_only_real_series():
+    assert grouping.is_groupable("series", "teleplay")
+    assert grouping.is_groupable("kids", "teleplay")
+    assert grouping.is_groupable("anime", "")
+    assert not grouping.is_groupable("series", "movie")
+    assert not grouping.is_groupable("kids", "movie")
+    assert not grouping.is_groupable("movie", "movie")
+
+
+def test_movie_never_joins_a_season_group():
+    """«Zootopia» (película kids) + «Zootopia+» (serie): jamás un grupo de temporadas."""
+    import asyncio
+    rows = [
+        _row("m", "Zootopia", "kids", program_type="movie"),
+        _row("s", "Zootopia+ Temp.1", "kids", program_type="teleplay"),
+    ]
+    statements = asyncio.run(_run_group(rows))
+    assert [s for s in statements if "insert into title_groups" in s[0]] == []
+    assert [s for s in statements if "insert into group_members" in s[0]] == []
+
+
+def test_movie_sequels_never_group_as_seasons():
+    """«Intensa mente» + «Intensa mente 2» son dos películas, no T1/T2 de una serie."""
+    import asyncio
+    rows = [
+        _row("a", "Intensa mente", "anime", program_type="movie"),
+        _row("b", "Intensa mente 2", "anime", program_type="movie"),
+    ]
+    statements = asyncio.run(_run_group(rows))
+    assert [s for s in statements if "insert into title_groups" in s[0]] == []

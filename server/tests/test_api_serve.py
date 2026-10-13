@@ -124,3 +124,28 @@ def test_film_prefers_enrichment_popularity():
     assert out["voteCount"] == 200000
 
 
+class _FakeDb:
+    def __init__(self, rows):
+        self.rows = rows
+
+    async def fetch(self, *a):
+        return self.rows
+
+
+@pytest.mark.anyio
+async def test_group_maps_prunes_single_season_leftovers(monkeypatch):
+    """Un grupo al que el filtro de películas deja con 1 temporada se suelta entero."""
+    rows = [
+        {"title_id": "xtv:S", "season": 1, "group_id": "g",
+         "base_title": "Show", "play_ref": "xtv:S", "source": "xtv"},
+        {"title_id": "xtv:S2", "season": 2, "group_id": "g",
+         "base_title": "Show", "play_ref": "xtv:S2", "source": "xtv"},
+        {"title_id": "xtv:L", "season": 1, "group_id": "g2",
+         "base_title": "Zootopia", "play_ref": "xtv:L", "source": "xtv"},
+    ]
+    monkeypatch.setattr(app, "db", lambda: _FakeDb(rows))
+    member_of, seasons, base = await app._group_maps()
+    assert len(seasons["g"]) == 2 and "xtv:S" in member_of
+    assert "g2" not in seasons and "xtv:L" not in member_of and "g2" not in base
+
+

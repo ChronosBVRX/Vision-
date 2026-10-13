@@ -5,6 +5,27 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Fix "películas que se seguían identificando como series" — el agrupador y el API ya no mezclan cine con series**
+  (2026-10-13, servidor VPS; 50 tests backend en verde):
+  - *Causa raíz*: `grouping.py` agrupaba por nombre base todo `kind ∈ {series, anime, kids}`, pero el portal
+    mete películas en esas columnas (`program_type='movie'`): «Zootopia» (película 2016) + «Zootopia+» (serie)
+    quedaban como UN grupo con la película de "temporada 0/Completa"; «Intensa mente» + «Intensa mente 2»,
+    «Kung Fu Panda 4», «Toy Story 5», «Shrek 2»… agrupadas como T2/T4/T5. El API (`_grouped_entry`) servía el
+    grupo como una sola ficha con la película de representante (primer miembro XTV por temporada) → la app
+    pintaba «SERIE · VISION+», «Reproducir · Completa · Capítulo 1» y selector de temporadas sobre una película
+    (`isSeriesTitle = episodes.size > 1 || film.seasons.size > 1`; `seasonIds.size > 1` en el player).
+  - *Alcance medido (2026-10-13)*: 54 grupos con fichas-película (77 fichas), 50 con la película como
+    representante servido, 45 visibles en secciones. Muestra de la sección Series (top-40/fila, 397 únicos):
+    389 series reales y 8 fichas de un solo programa (3 por el agrupador — Zootopia, Jimmy Neutrón, Rango — y
+    5 por metadatos del portal). Fichas de películas normales: 53/53 con 1 programa (gate v2.5.54 OK).
+  - *Fix*: `grouping.is_groupable()` — una ficha `program_type='movie'` jamás es temporada; `_group_maps()` del
+    API ignora miembros-película al servir y suelta grupos que queden con 1 sola temporada (efecto inmediato).
+    Compromiso: ~7 series con metadato de repisa "movie" (Ao no Miburo T1, Jersey Shore T3, Heirs of the Night T1…)
+    pierden el agrupado de temporadas (tarjetas separadas) a cambio de que ninguna película sea "temporada".
+  - *Guardianes*: `test_is_groupable_only_real_series`, `test_movie_never_joins_a_season_group`,
+    `test_movie_sequels_never_group_as_seasons`, `test_group_maps_prunes_single_season_leftovers`.
+  - *Desplegado en VPS*: api+sync reconstruidos, grupos rebobinados (3638→3594; 0 con película, 0 representantes
+    película) y versión del índice 45. La app refresca la sección en ≤15 min (TTL) y el índice con el bump.
 - **LÍNEA ESTABLE v2.5.62** (2026-10-13): 224 tests Android en verde + prueba física en A32.
   **Fix "descargar se pelea con reproducir en línea" (pausa con aviso)**:
   - *Causa raíz*: descarga y reproducción comparten el proceso `:x4k` y el motor nativo
@@ -984,6 +1005,11 @@
 - POCO a veces sin internet (DNS) — no es bug de la app.
 
 ## Pendientes / ideas
+- Catálogo: metadatos del portal que aún mienten — «LIMPIAR» (2020, 109 min, es película) viene como `teleplay`
+  en la repisa y aparece en filas de Series; 4 series traen ficha de 1 capítulo (Amor eterno T1, La tienda de
+  ramen de los chicos flores T1, La vida después de la muerte con Tyler Henry T1, Los crímenes del cementerio
+  de animales T1) y su ficha se comporta como película. Propuesta: pasada de verificación por ficha
+  (`getItemData` type 0/1) para sospechosos (series/teleplay con duración ≥80 y sin marca: solo 4 hoy).
 - App: paginación on-demand al abrir una categoría del índice (hoy llegan 100 por categoría;
   el resto ya está en el servidor vía `/v1/category/{id}?page=`).
 - Subdominio propio para el índice (opcional; hoy va por `https://la20.com.mx/catalogo`).

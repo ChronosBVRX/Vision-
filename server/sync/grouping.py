@@ -5,8 +5,10 @@ detecta la marca, se separa el título base y los miembros se guardan como tempo
 grupo (`title_groups` + `group_members`). El API devuelve una entrada por grupo con sus
 temporadas, así el teléfono/TV navegan menos y sin repetidos.
 
-Reglas: solo series/anime/kids; se exige que el título base termine en la marca de temporada
+Reglas: solo series/anime/kids con ficha de serie; se exige que el título base termine en la marca de temporada
 (T1, T2, tem1, Temporada 3, Season 4, 2ª Temporada, con HD/Completa y año final opcionales); no se toca «Parte N».
+Las películas que el portal mete en esas columnas (kind kids/anime con program_type «movie»: «Zootopia»,
+«Intensa mente 2») jamás son temporadas de un grupo.
 Un título sin marca que coincide exactamente con la base entra como temporada 0 (serie completa).
 """
 
@@ -105,17 +107,29 @@ def split_season(title: str, kind: str = "series") -> tuple[str, int] | None:
     return None
 
 
+def is_groupable(kind: str, program_type: str) -> bool:
+    """¿Esta ficha puede ser temporada de un grupo? Solo series reales.
+
+    El portal mete películas en las columnas kids/anime (kind kids/anime con
+    program_type «movie»): «Zootopia» (película 2016) + «Zootopia+» (serie) o
+    «Intensa mente» + «Intensa mente 2» no son temporadas de una misma serie.
+    """
+    return kind in ("series", "anime", "kids") and (program_type or "").strip().lower() != "movie"
+
+
 async def group(pool) -> int:
     """Reconstruye los grupos de temporada desde cero (la tabla es chica y así no hay restos)."""
     rows = await pool.fetch(
         """
-        select id, title, kind, source, year, score, poster_url, synopsis, play_ref
+        select id, title, kind, source, year, score, poster_url, synopsis, play_ref, program_type
         from titles where kind in ('series', 'anime', 'kids')
         """
     )
     by_fold: dict[tuple[str, str], dict] = {}
     marked: dict[tuple[str, str], list] = {}
     for row in rows:
+        if not is_groupable(row["kind"], row["program_type"]):
+            continue
         title = row["title"] or ""
         split = split_season(title, row["kind"])
         if split is None:

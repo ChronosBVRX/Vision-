@@ -196,13 +196,19 @@ SECTIONS = {"movies": "Películas", "series": "Series", "novelas": "Novelas", "a
 
 
 async def _group_maps():
-    """Temporadas agrupadas: título -> grupo, grupo -> temporadas, grupo -> título base."""
+    """Temporadas agrupadas: título -> grupo, grupo -> temporadas, grupo -> título base.
+
+    Las películas nunca son temporadas: si un grupo viejo mezclaba una película
+    («Zootopia» + «Zootopia+»), aquí se ignora ese miembro y, si al grupo le queda
+    una sola temporada, sus miembros se sirven sueltos con su título original.
+    """
     group_rows = await db().fetch(
         """
         select gm.title_id, gm.season, gm.group_id, g.base_title, t.play_ref, t.source
         from group_members gm
         join title_groups g on g.id = gm.group_id
         join titles t on t.id = gm.title_id
+        where coalesce(t.program_type, '') != 'movie'
         order by gm.group_id, gm.season, (t.source = 'xtv') desc
         """
     )
@@ -215,6 +221,12 @@ async def _group_maps():
             {"n": gr["season"], "titleId": gr["title_id"], "videoUrl": gr["play_ref"]}
         )
         base_of_group[gr["group_id"]] = gr["base_title"]
+    for group_id, seasons in list(seasons_by_group.items()):
+        if len(seasons) < 2:
+            del seasons_by_group[group_id]
+            base_of_group.pop(group_id, None)
+            for season in seasons:
+                member_of.pop(season["titleId"], None)
     return member_of, seasons_by_group, base_of_group
 
 
