@@ -5,8 +5,8 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.54**
-  (versionCode **290**, release OTA v2.5.54). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.58**
+  (versionCode **294**, release OTA v2.5.58). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
@@ -14,8 +14,50 @@
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
 
-- **Películas sin UI de Serie ("Movie-Only Player & Series Gate")** (v2.5.54):
-  - **Problema**: el reproductor mostraba "Siguiente episodio" y selector de
+- **Descargas offline verificadas en A32 ("Bean play_url & Facade x")** (v2.5.55):  - **Causa del "sigue sin descargar"**: `GetStatus {"instance":0,"name":…}` vía
+    `NativeJni.a` devuelve vacío SIEMPRE (probado con video reproduciéndose: no existe
+    esa vía de sondeo). La URL real vive en el bean `uc.c` (`p(0)` → `d()` = play_url):
+    proxy local `http://127.0.0.1:<puerto-dinámico>/vod/0/<code>.m3u8` (HLS). La vía
+    `NativeJni.o/g` en instance=1 era el SIGSEGV (`star_file_cache`, slot 1 sin init).
+  - **App**: `playHeadless` = facade `x(0, code, program, "vod")` (la llamada que
+    `ed.e.A()` hace; sin vista/Surface/audio); `beanPlayUrl` + `queryStatusUrls`
+    leen `d()`; `stopHeadless` = `H(0, code)`; guard de player-activo; sondas DlProbe
+    retiradas. Principal jamás toca Ranger (delegación a `:x4k` + broadcasts).
+  - **Validación**: 204 pruebas Android en verde + prueba física en A32 (logcat):
+    Spider-Man 2 → 1,166,536,428 B cifrados → COMPLETED → play offline con video+audio.
+    POCO F7 (Android 16) verificado por ADB: descarga y COMPLETED OK (757 MB, otro título).
+    Ojo: el CDN rinde ~2 MB/s por conexión (con VPN del usuario, peor); 1 GB tarda
+    ~10 min y el % parece quieto — no es bug. Mejora futura: segmentos HLS en paralelo.
+    Release OTA v2.5.55.
+- **Descargas estables (v2.5.56)**:
+  - HLS en paralelo (4 conexiones) PROBADO Y REVERTIDO en POCO: el proxy local de
+    Ranger sirve un solo cliente; con 4 conexiones responde HTTP 404/cortes y mata
+    la descarga. Secuencial = el que completa (A32 1.09 GB + POCO Toy Story 5 829 MB).
+    El cuello es el upstream P2P (~2 MB/s); paralelizar de verdad exige handshake
+    directo con el CDN (futuro).
+  - `OfflineRegistry.reconcileWithDisk` al iniciar: `.vpack` válido → COMPLETED
+    adoptado (cubre broadcast perdido con app muerta); fantasma → descarte;
+    DOWNLOADING/QUEUED → PAUSED. Constante única `MIN_VALID_VAULT_BYTES`.
+    Blindajes: parts-dir único por corrida, guard anti-doble-corrida por id.
+  - **Validación**: 206 pruebas Android en verde. Release OTA v2.5.56.
+- **Fix regresión Chromecast + resolve acotado (v2.5.57)**:
+  - Chromecast se reiniciaba en arranque (patrón doble-proceso v2.5.41): el service
+    era `START_STICKY` y Android relanzaba `:x4k` solo tras kills/reboots → LMK en
+    1.5 GB. Ahora `START_NOT_STICKY` siempre; nada levanta `:x4k` sin tap/play.
+  - `prepareVod` con `withTimeout(60s)` x2: ERROR honesto en vez de 0% por minutos.
+  - **Validación**: 206 pruebas en verde. A32 se quedó sin red a mitad de la
+    verificación headless (`Network is unreachable` en shell: ambiental, no app).
+    El path de descarga ya estaba probado 2 veces en físico (A32 1.09 GB + POCO
+    829 MB). Release OTA v2.5.57.
+- **Progreso en vivo + notificación con % (v2.5.58)**:
+  - En POCO/HyperOS los broadcasts `:x4k`→principal se envían (historial del sistema)
+    pero `onReceive` jamás corre (emisor y receptor verificados vivos por ADB): la UI
+    quedaba en 0% aunque el disco crecía. En A32 sí llegan.
+  - Puente por archivo: el servicio escribe `<id>.progress` (1/s) y
+    `OfflineProgressSync` (ticker 2 s en `VisionApp` principal) lo refleja en el
+    registro. Notificación FGS con % en título + `FOREGROUND_SERVICE_IMMEDIATE`.
+  - **Validación**: 207 pruebas en verde. Release OTA v2.5.58.
+- **Películas sin UI de Serie ("Movie-Only Player & Series Gate")** (v2.5.54):  - **Problema**: el reproductor mostraba "Siguiente episodio" y selector de
     temporadas/capítulos en películas. Causa: 3 definiciones distintas de "es
     serie" (`buildControls` y `showEpisodePicker` aceptaban `seriesId` suelto) y
     `parseEpisodePrograms` aceptaba 1 programa como serie (la ficha de película
@@ -814,6 +856,9 @@
   Bonus del deploy: `/v1/categories` ya devuelve su JSON (le faltaba el `return`).
 
 ## Pitfalls (lecciones)
+- Bean `uc.c` (verificado en jadx + dispositivo): `d()` = play_url http local, `c()` = duración,
+  `b()` = buss, `f()` = tracks; links solo tiene setter `m()` (sin getter). `GetStatus` por
+  `NativeJni.a` no sirve para sondear (vacío aun reproduciendo).
 - Deformación de video: si los callbacks del motor van a proxies vacíos, el tamaño real nunca llega →
   usar `routingProxy` (reenviar a la vista activa).
 - "Solo la primera película abre": el motor no acepta un segundo programa distinto en el mismo proceso;

@@ -7,11 +7,8 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
-import android.view.View
 import androidx.core.app.NotificationCompat
 import com.chronosbvrx.visionplus.R
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
@@ -19,8 +16,6 @@ import com.chronosbvrx.visionplus.data.xuper.X4KTitan
 import com.chronosbvrx.visionplus.ui.player.X4KPlayerAty
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +24,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 
 /**
@@ -40,9 +36,9 @@ import org.json.JSONArray
  * directo en instance=1 con programJson manual) provocaba SIGSEGV en
  * `libranger-jni` (`star_file_cache.cpp`) y se eliminó de `X4KTitan`.
  *
- * Flujo: `prepareVod` (portal) → vista headless + `X4KTitan.play` (idéntico al
- * player) → sondeo read-only de `GetStatus` hasta ver `play_url` http → descarga
- * +cifrado con [OfflineHttpDownloader] → reporte al principal vía
+ * Flujo: `prepareVod` (portal) → `playHeadless` (facade x(0,…), la misma llamada que
+ * `ed.e.A()` hace al abrir) → sondeo read-only de `GetStatus` hasta ver `play_url`
+ * http → descarga +cifrado con [OfflineHttpDownloader] → reporte al principal vía
  * [OfflineProgressBus]. La reproducción normal no pasa por aquí.
  */
 class X4KDownloadService : Service() {
@@ -62,7 +58,7 @@ class X4KDownloadService : Service() {
         const val EXTRA_DURATION_MS = "duration_ms"
         const val EXTRA_TOTAL_BYTES = "total_bytes"
 
-        const val MIN_VALID_VIDEO_BYTES = 16 * 1024L
+        const val MIN_VALID_VIDEO_BYTES = MIN_VALID_VAULT_BYTES
         private const val RESOLVE_TIMEOUT_MS = 25_000L
 
         private const val CHANNEL_ID = "vision_downloads"
@@ -99,6 +95,8 @@ class X4KDownloadService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = ConcurrentHashMap<String, Job>()
+    /** Ids con corrida en curso: segunda corrida concurrente del mismo id sale sin pelear. */
+    private val runningIds = ConcurrentHashMap.newKeySet<String>()
     private var startedForeground = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -114,14 +112,18 @@ class X4KDownloadService : Service() {
             ACTION_DOWNLOAD -> {
                 val id = intent.getStringExtra(EXTRA_ID).orEmpty()
                 if (id.isBlank()) return START_NOT_STICKY
-                if (activeJobs[id]?.isActive == true) return START_STICKY
+                if (activeJobs[id]?.isActive == true) return START_NOT_STICKY
                 ensureForeground("Preparando descarga…")
                 activeJobs[id] = scope.launch {
                     runDownload(intent)
                 }
             }
         }
-        return START_STICKY
+        // NOT_STICKY a propósito (regresión Chromecast v2.5.57): un servicio STICKY
+        // relanza el proceso `:x4k` solo tras un kill/reboot = doble proceso en boot
+        // y muerte por LMK en 1.5 GB. Si el sistema mata una descarga, el registro la
+        // deja en PAUSED (reconcile) y el usuario la reanuda con un tap.
+        return START_NOT_STICKY
     }
 
     private suspend fun runDownload(intent: Intent) {
@@ -138,7 +140,12 @@ class X4KDownloadService : Service() {
         val fallbackTotal = intent.getLongExtra(EXTRA_TOTAL_BYTES, 0L).takeIf { it > 0L }
             ?: estimateTotalBytes(durationMs, quality)
         val dest = File(vaultPath)
-        var headlessView: View? = null
+        // Sin doble corrida: si ya hay una en curso para este id, esta sale en silencio.
+        if (!runningIds.add(id)) {
+            Log.i(TAG, "Descarga $id ya en curso, se omite duplicada")
+            activeJobs.remove(id)
+            return
+        }
         try {
             if (code.isBlank() || vaultPath.isBlank()) {
                 throw IllegalStateException("Datos de descarga incompletos")
@@ -150,13 +157,19 @@ class X4KDownloadService : Service() {
             }
             updateNotif("Resolviendo $title…")
 
+            // Fail-fast acotado: el portal puede tardar minutos con red mala; mejor un
+            // ERROR honesto y reintento que un 0% infinito (congelaba la UI en POCO).
             var metaMedia = runCatching {
-                X4KApi.prepareVod(app, code, title, seriesId, durationMs)
+                withTimeout(60_000L) {
+                    X4KApi.prepareVod(app, code, title, seriesId, durationMs)
+                }
             }.getOrNull()
             if (metaMedia == null) {
                 delay(450L)
                 metaMedia = runCatching {
-                    X4KApi.prepareVod(app, code, title, seriesId, durationMs)
+                    withTimeout(60_000L) {
+                        X4KApi.prepareVod(app, code, title, seriesId, durationMs)
+                    }
                 }.getOrNull()
             }
             val mediasJson = metaMedia?.mediasJson.orEmpty()
@@ -190,30 +203,33 @@ class X4KDownloadService : Service() {
                 throw IllegalStateException("No se pudo establecer enlace con el servidor de descarga")
             }
 
-            // Vía del reproductor: vista headless + view.A (la secuencia que sí funciona).
-            val (view, started) = resolveWithHeadlessView(app, code, title, mediaSpecs)
-            headlessView = view
-            if (!started || view == null) {
+            // Vía del reproductor a nivel facade: x(0, code, program) — la misma llamada
+            // que ed.e.A() hace al abrir. Sin vista, sin Surface, sin audio.
+            val started = resolveWithHeadlessEngine(app, code, title, mediaSpecs)
+            if (!started) {
                 throw IllegalStateException("No se pudo resolver el stream (motor ocupado, inténtalo de nuevo)")
             }
-            updateNotif("Conectando stream de $title…")
-            val candidateUrls = pollPlayUrls(code, RESOLVE_TIMEOUT_MS)
-            if (candidateUrls.isEmpty()) {
-                throw IllegalStateException("El servidor no entregó dirección de descarga (inténtalo de nuevo)")
+            try {
+                updateNotif("Conectando stream de $title…")
+                val candidateUrls = pollPlayUrls(code, RESOLVE_TIMEOUT_MS)
+                if (candidateUrls.isEmpty()) {
+                    throw IllegalStateException("El servidor no entregó dirección de descarga (inténtalo de nuevo)")
+                }
+                downloadCandidates(app, id, title, quality, dest, fallbackTotal, candidateUrls)
+            } finally {
+                runCatching { X4KTitan.stopHeadless(code) }
             }
-            downloadCandidates(app, id, title, quality, dest, fallbackTotal, candidateUrls)
         } catch (e: Exception) {
             if (e is CancellationException) {
                 Log.i(TAG, "Descarga cancelada: $id")
             } else {
                 Log.e(TAG, "Fallo descarga $id: ${e.message}", e)
                 OfflineProgressBus.sendError(app, id, e.message ?: "Error de red al descargar")
+                runCatching { dest.parentFile?.let { OfflineProgressFile.clear(it, id) } }
                 runCatching { File("$vaultPath.downloading").delete() }
             }
         } finally {
-            headlessView?.let { v ->
-                runOnMain { runCatching { X4KTitan.stop(v) } }
-            }
+            runningIds.remove(id)
             activeJobs.remove(id)
             if (activeJobs.isEmpty()) {
                 runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
@@ -223,16 +239,15 @@ class X4KDownloadService : Service() {
     }
 
     /**
-     * Crea la vista en el hilo principal de `:x4k` (las vistas exigen Looper) y
-     * lanza el programa con la misma llamada que el reproductor. Todo lo nativo
-     * queda dentro de `view.A`, ya probado en producción.
+     * Configura el motor y arranca el programa vía facade (x(0, …)), sin vista.
+     * Devuelve true si la orden se encoló; la URL real se sondea con GetStatus.
      */
-    private suspend fun resolveWithHeadlessView(
+    private suspend fun resolveWithHeadlessEngine(
         app: Context,
         code: String,
         title: String,
         medias: List<X4KTitan.MediaSpec>,
-    ): Pair<View?, Boolean> {
+    ): Boolean {
         val apiPrefs = app.getSharedPreferences("x4k_api", Context.MODE_PRIVATE)
         val entriesJson = apiPrefs.getString("entries_json", null)
         val playParams = apiPrefs.getString("play_params", "").orEmpty()
@@ -249,15 +264,9 @@ class X4KDownloadService : Service() {
                 playParams = playParams,
             )
         }.getOrDefault(false)
-        if (!configured) return null to false
-        if (X4KPlayerAty.isPlayerActive) return null to false
-
-        val view = runOnMainSync { runCatching { X4KTitan.newVideoView(app) }.getOrNull() }
-            ?: return null to false
-        val started = runOnMainSync {
-            runCatching { X4KTitan.play(view, "vod", code, title, medias) }.getOrDefault(false)
-        } == true
-        return view to started
+        if (!configured) return false
+        if (X4KPlayerAty.isPlayerActive) return false
+        return runCatching { X4KTitan.playHeadless(code, "vod", title, medias) }.getOrDefault(false)
     }
 
     /** Sondeo read-only de GetStatus hasta que Ranger publique URLs http. */
@@ -295,6 +304,9 @@ class X4KDownloadService : Service() {
                     preferredQuality = quality,
                     onProgress = { written, total ->
                         OfflineProgressBus.sendProgress(app, id, written, total)
+                        runCatching {
+                            dest.parentFile?.let { OfflineProgressFile.write(it, id, written, total) }
+                        }
                         updateNotifThrottled(title, written, total)
                     },
                     isCancelled = { activeJobs[id]?.isActive != true },
@@ -312,6 +324,7 @@ class X4KDownloadService : Service() {
             throw lastErr ?: IllegalStateException("No se pudo descargar el flujo de video")
         }
         OfflineProgressBus.sendDone(app, id, downloadedBytes)
+        runCatching { dest.parentFile?.let { OfflineProgressFile.clear(it, id) } }
         Log.i(TAG, "Descarga completada: $title ($downloadedBytes bytes)")
     }
 
@@ -323,27 +336,6 @@ class X4KDownloadService : Service() {
             else -> 80_000L
         }
         return secs * bps
-    }
-
-    /** Ejecuta en el hilo principal de `:x4k` y espera el resultado (las vistas lo exigen). */
-    private fun <T> runOnMainSync(block: () -> T): T? {
-        if (Looper.myLooper() == Looper.getMainLooper()) return runCatching { block() }.getOrNull()
-        var result: T? = null
-        val latch = CountDownLatch(1)
-        Handler(Looper.getMainLooper()).post {
-            result = runCatching { block() }.getOrNull()
-            latch.countDown()
-        }
-        latch.await(15, TimeUnit.SECONDS)
-        return result
-    }
-
-    private fun runOnMain(block: () -> Unit) {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            runCatching { block() }
-        } else {
-            Handler(Looper.getMainLooper()).post { runCatching { block() } }
-        }
     }
 
     private fun ensureForeground(text: String) {
@@ -376,12 +368,18 @@ class X4KDownloadService : Service() {
     }
 
     private fun buildNotif(text: String, written: Long, total: Long): Notification {
+        val percent = if (written >= 0 && total > 0) (written * 100L / total.coerceAtLeast(1L)).toInt().coerceIn(0, 100) else -1
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Vision+ · Descarga offline")
+            .setContentTitle(if (percent >= 0) "Vision+ · Descargando $percent%" else "Vision+ · Descarga offline")
             .setContentText(text)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        }
         if (written >= 0 && total > 0) {
             builder.setProgress(total.toInt().coerceAtLeast(1), written.toInt().coerceAtLeast(0), false)
         } else {

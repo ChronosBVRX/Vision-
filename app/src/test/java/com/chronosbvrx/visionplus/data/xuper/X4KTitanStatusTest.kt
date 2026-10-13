@@ -57,15 +57,30 @@ class X4KTitanStatusTest {
     }
 
     @Test
-    fun `servicio offline usa via del reproductor, no nativa directa`() {
+    fun `servicio offline usa via facade, no nativa directa`() {
         val src = java.io.File(
             "app/src/main/java/com/chronosbvrx/visionplus/data/offline/X4KDownloadService.kt",
         )
         if (src.exists()) {
             val text = src.readText()
-            assertTrue(text.contains("X4KTitan.play("))
+            assertTrue(text.contains("playHeadless("))
             assertTrue(text.contains("queryStatusUrls"))
+            assertTrue(text.contains("stopHeadless("))
             assertFalse(text.contains("resolveVodStream"))
+            assertFalse(text.contains("newVideoView"))
         }
+    }
+
+    @Test
+    fun `playHeadless rechaza entradas vacias sin tocar nativo`() {
+        assertFalse(X4KTitan.playHeadless("", "vod", "T", emptyList()))
+        assertFalse(
+            X4KTitan.playHeadless(
+                "abc",
+                "vod",
+                "T",
+                emptyList(),
+            ),
+        )
     }
 }

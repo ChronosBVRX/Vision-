@@ -56,24 +56,13 @@ object OfflineRegistry {
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
                 val item = OfflineDownload.fromJson(obj)
-                // Purgar activos simulados residuales de v2.5.49 (<= 512 bytes)
-                val isSimulatedStub = item.state == DownloadState.COMPLETED &&
-                    item.bytesDownloaded in 1L..512L &&
-                    item.totalBytes in 1L..512L
-                if (isSimulatedStub) {
-                    if (item.vaultFilePath.isNotBlank()) {
-                        runCatching { File(item.vaultFilePath).delete() }
-                    }
+                val reconciled = reconcileWithDisk(item)
+                if (reconciled == null) {
                     dirty = true
                     continue
                 }
-                val normalized = if (item.state == DownloadState.DOWNLOADING || item.state == DownloadState.QUEUED) {
-                    dirty = true
-                    item.copy(state = DownloadState.PAUSED)
-                } else {
-                    item
-                }
-                memoryMap[normalized.id] = normalized
+                if (reconciled != item) dirty = true
+                memoryMap[reconciled.id] = reconciled
             }
             if (dirty) {
                 persistLocked()
@@ -83,8 +72,44 @@ object OfflineRegistry {
         }
     }
 
-    private fun persistLocked() {
-        val p = prefs() ?: return
+    /**
+     * Concilia un registro con el disco (lógica pura, testeable). Retorna null si debe
+     * descartarse. Reglas:
+     * - `.vpack` final válido (>= 16 KB) → COMPLETED adoptado aunque el broadcast de
+     *   fin se haya perdido (proceso principal muerto al completar).
+     * - Stubs simulados v2.5.49 (<= 512 B) → se purgan con archivo.
+     * - COMPLETED fantasma (sin archivo) → se descarta (re-descargable).
+     * - DOWNLOADING/QUEUED al arrancar → PAUSED (reanuda el usuario, no solo).
+     */
+    internal fun reconcileWithDisk(item: OfflineDownload): OfflineDownload? {
+        val vaultOk = item.vaultFilePath.isNotBlank() &&
+            runCatching { File(item.vaultFilePath) }.getOrNull()?.let { it.exists() && it.length() >= MIN_VALID_VAULT_BYTES } == true
+        if (vaultOk) {
+            val len = runCatching { File(item.vaultFilePath).length() }.getOrDefault(item.bytesDownloaded)
+            return item.copy(
+                state = DownloadState.COMPLETED,
+                bytesDownloaded = len,
+                totalBytes = len.coerceAtLeast(1L),
+                errorMessage = null,
+            )
+        }
+        val isSimulatedStub = item.state == DownloadState.COMPLETED &&
+            item.bytesDownloaded in 1L..512L &&
+            item.totalBytes in 1L..512L
+        if (isSimulatedStub) {
+            if (item.vaultFilePath.isNotBlank()) {
+                runCatching { File(item.vaultFilePath).delete() }
+            }
+            return null
+        }
+        if (item.state == DownloadState.COMPLETED) return null
+        if (item.state == DownloadState.DOWNLOADING || item.state == DownloadState.QUEUED) {
+            return item.copy(state = DownloadState.PAUSED)
+        }
+        return item
+    }
+
+    private fun persistLocked() {        val p = prefs() ?: return
         val arr = JSONArray()
         memoryMap.values.forEach { arr.put(it.toJson()) }
         p.edit().putString(K_ITEMS, arr.toString()).apply()

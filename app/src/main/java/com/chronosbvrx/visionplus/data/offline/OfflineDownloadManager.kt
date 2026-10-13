@@ -36,7 +36,6 @@ class TvStorageRequiredException(message: String) : Exception(message)
 object OfflineDownloadManager {
 
     private const val TAG = "OfflineDownloadManager"
-    internal const val MIN_VALID_VIDEO_BYTES = 16 * 1024L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = ConcurrentHashMap<String, Job>()
@@ -206,7 +205,7 @@ object OfflineDownloadManager {
                 },
                 isCancelled = { activeJobs[item.id]?.isActive != true },
             )
-            if (downloaded < MIN_VALID_VIDEO_BYTES) {
+            if (downloaded < MIN_VALID_VAULT_BYTES) {
                 destinationFile.delete()
                 throw IllegalStateException("Flujo de video incompleto ($downloaded bytes)")
             }
@@ -283,6 +282,12 @@ object OfflineDownloadManager {
                 runCatching {
                     it.applicationContext.startService(X4KDownloadService.cancelIntent(it.applicationContext, id))
                 }
+            }
+        }
+        val doomed = OfflineRegistry.get(id, context)
+        if (doomed != null) {
+            runCatching {
+                File(doomed.vaultFilePath).parentFile?.let { OfflineProgressFile.clear(it, id) }
             }
         }
         OfflineRegistry.remove(id, context)

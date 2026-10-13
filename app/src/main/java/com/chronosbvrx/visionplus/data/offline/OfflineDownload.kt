@@ -13,6 +13,9 @@ enum class DownloadState {
     val isTerminal: Boolean get() = this == COMPLETED || this == ERROR
 }
 
+/** Mínimo de bytes reales para considerar válido un `.vpack` (anti-stubs). */
+internal const val MIN_VALID_VAULT_BYTES = 16 * 1024L
+
 /**
  * Representa una película o episodio descargado (o en proceso de descarga) en Vision+.
  */

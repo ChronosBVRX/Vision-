@@ -506,6 +506,52 @@ object X4KTitan {
         runCatching { view.javaClass.methods.first { it.name == "B" && it.parameterCount == 0 }.invoke(view) }
     }
 
+    /**
+     * Arranca un programa SIN vista, por la misma llamada que `ed.e.A()` hace por dentro
+     * (`yc.h.x(0, code, program, buss)`). Es lo que el reproductor ejecuta al abrir; aquí
+     * sirve al Modo Offline para que el motor resuelva la `play_url` sin renderizar.
+     *
+     * Solo instance 0 (la que `boot` inicializa; la 1 nunca se prepara y su uso directo
+     * provocaba el SIGSEGV de `star_file_cache`). No Surface, no ventana, no audio.
+     * Llamar solo con el reproductor inactivo (una vista activa por proceso).
+     */
+    fun playHeadless(code: String, buss: String, title: String, medias: List<MediaSpec>): Boolean {
+        if (code.isBlank() || medias.isEmpty()) return false
+        val pClass = programClass ?: return false
+        val f = facade ?: return false
+        return try {
+            val mediaObjs = buildMedias(medias)
+            val program = pClass.getConstructor(
+                String::class.java, String::class.java, String::class.java, String::class.java,
+                String::class.java, String::class.java, List::class.java, String::class.java,
+                java.lang.Long.TYPE,
+            ).newInstance(code, buss, title, "-1", "-1", "user", mediaObjs, medias.first().name, 0L)
+            f.javaClass.methods.first {
+                it.name == "x" && it.parameterCount == 4 &&
+                    it.parameterTypes[0] == java.lang.Integer.TYPE &&
+                    it.parameterTypes[1] == String::class.java
+            }.invoke(f, 0, code, program, buss)
+            Log.i(TAG, "playHeadless $buss $code (${medias.size} medias)")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "playHeadless falló: ${e.cause ?: e}")
+            false
+        }
+    }
+
+    /** Libera el programa headless (espejo de `ed.e.B()` → `yc.h.H(0, code)`). */
+    fun stopHeadless(code: String) {
+        if (code.isBlank()) return
+        val f = facade ?: return
+        runCatching {
+            f.javaClass.methods.first {
+                it.name == "H" && it.parameterCount == 2 &&
+                    it.parameterTypes[0] == java.lang.Integer.TYPE &&
+                    it.parameterTypes[1] == String::class.java
+            }.invoke(f, 0, code)
+        }
+    }
+
     /** Switches active video stream/resolution to the specified media code (`view.setMedia(mediaCode)`). */
     fun setMedia(view: View, mediaCode: String): Boolean = try {
         view.javaClass.methods.first { it.name == "setMedia" && it.parameterCount == 1 }
@@ -743,6 +789,12 @@ object X4KTitan {
      * que causaba la vía anterior (`NativeJni.o/g` directo en instance=1, eliminada).
      */
     fun queryStatusUrls(code: String): Pair<String, List<String>> {
+        // Vía primaria: el bean de estado uc.c publicado por el motor tras x()
+        // (d() = play_url http, verificado en dispositivo real).
+        runCatching {
+            val beanUrl = beanPlayUrl()
+            if (beanUrl.startsWith("http")) return beanUrl to emptyList()
+        }
         return try {
             val cl = loader ?: return "" to emptyList()
             val nativeJniClass = runCatching { cl.loadClass("com.titan.ranger.NativeJni") }.getOrNull()
@@ -763,8 +815,25 @@ object X4KTitan {
         }
     }
 
-    /** Parsea `(play_url, links)` de un `GetStatus` (lógica pura, testeable). */
-    internal fun parseStatusUrls(rawRes: String): Pair<String, List<String>> {
+    /**
+     * Lee la `play_url` del bean de estado `uc.c` (`p(0)` → `d()`): es donde el motor
+     * publica la dirección http local tras `x()` (verificado en dispositivo: el player
+     * la expone ahí mientras reproduce). Solo lectura, jamás modifica nada.
+     */
+    internal fun beanPlayUrl(): String {
+        return try {
+            val f = facade ?: return ""
+            val status = f.javaClass.methods.firstOrNull {
+                it.name == "p" && it.parameterCount == 1 && it.parameterTypes[0] == java.lang.Integer.TYPE
+            }?.invoke(f, 0) ?: return ""
+            (status.javaClass.methods.firstOrNull { it.name == "d" && it.parameterCount == 0 }
+                ?.invoke(status) as? String).orEmpty()
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    /** Parsea `(play_url, links)` de un `GetStatus` (lógica pura, testeable). */    internal fun parseStatusUrls(rawRes: String): Pair<String, List<String>> {
         if (rawRes.isBlank()) return "" to emptyList()
         return runCatching {
             val outer = org.json.JSONObject(rawRes)

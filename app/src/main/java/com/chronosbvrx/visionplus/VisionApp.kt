@@ -28,6 +28,8 @@ class VisionApp : Application(), ImageLoaderFactory {
             runCatching {
                 com.chronosbvrx.visionplus.data.offline.OfflineProgressReceiver.register(this)
             }
+            // Respaldo por archivo del progreso (POCO/HyperOS no siempre entrega broadcasts).
+            com.chronosbvrx.visionplus.data.offline.OfflineProgressSync.start(this)
         }
     }
 

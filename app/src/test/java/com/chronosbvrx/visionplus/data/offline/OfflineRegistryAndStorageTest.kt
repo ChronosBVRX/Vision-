@@ -158,6 +158,68 @@ class OfflineRegistryAndStorageTest {
     }
 
     @Test
+    fun testReconcileAdoptsValidVaultOnDisk() {
+        val vault = File(context.filesDir, "adopted.vpack").apply { writeBytes(ByteArray(64 * 1024)) }
+        val stale = OfflineDownload(
+            id = "xtv:stale",
+            contentId = "stale",
+            title = "Stale",
+            state = DownloadState.DOWNLOADING,
+            bytesDownloaded = 10L,
+            totalBytes = 999L,
+            vaultFilePath = vault.absolutePath,
+        )
+        val adopted = OfflineRegistry.reconcileWithDisk(stale)
+        assertNotNull(adopted)
+        assertEquals(DownloadState.COMPLETED, adopted?.state)
+        assertEquals(vault.length(), adopted?.bytesDownloaded)
+        vault.delete()
+    }
+
+    @Test
+    fun testReconcileDropsGhostCompleted() {
+        val ghost = OfflineDownload(
+            id = "xtv:ghost",
+            contentId = "ghost",
+            title = "Ghost",
+            state = DownloadState.COMPLETED,
+            bytesDownloaded = 9000L,
+            totalBytes = 9000L,
+            vaultFilePath = File(context.filesDir, "noexiste.vpack").absolutePath,
+        )
+        assertNull(OfflineRegistry.reconcileWithDisk(ghost))
+    }
+
+    @Test
+    fun testProgressFileRoundtripAndSync() {
+        val vaultDir = File(context.filesDir, "vaultsync").apply { mkdirs() }
+        val item = OfflineDownload(
+            id = "xtv:syncme",
+            contentId = "syncme",
+            title = "Sync",
+            state = DownloadState.DOWNLOADING,
+            bytesDownloaded = 0L,
+            totalBytes = 1000L,
+            vaultFilePath = File(vaultDir, "x.vpack").absolutePath,
+        )
+        OfflineRegistry.put(item, context)
+        assertNull(OfflineProgressFile.read(vaultDir, item.id))
+        // Escrituras dentro del mismo segundo se fusionan (throttle 1/s): el sync
+        // adopta la primera y la segunda tras 1 s.
+        OfflineProgressFile.write(vaultDir, item.id, 400L, 1000L)
+        OfflineProgressFile.write(vaultDir, item.id, 700L, 1000L)
+        assertEquals(1, OfflineProgressSync.syncOnce(context))
+        assertEquals(400L, OfflineRegistry.get(item.id, context)?.bytesDownloaded)
+        Thread.sleep(1100L)
+        OfflineProgressFile.write(vaultDir, item.id, 700L, 1000L)
+        assertEquals(1, OfflineProgressSync.syncOnce(context))
+        assertEquals(700L, OfflineRegistry.get(item.id, context)?.bytesDownloaded)
+        OfflineProgressFile.clear(vaultDir, item.id)
+        assertNull(OfflineProgressFile.read(vaultDir, item.id))
+        vaultDir.deleteRecursively()
+    }
+
+    @Test
     fun testNetworkMonitorConnectivityTransitions() {
         try {
             NetworkMonitor.setOnlineForTesting(false)
