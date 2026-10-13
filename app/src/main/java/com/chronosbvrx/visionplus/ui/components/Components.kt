@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.chronosbvrx.visionplus.ui.LocalReducedEffects
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueDark
@@ -60,6 +61,7 @@ fun PosterCard(
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
+    val reduced = LocalReducedEffects.current
     Column(modifier = modifier.clickable(onClick = onClick)) {
         Box(
             modifier = Modifier
@@ -76,7 +78,7 @@ fun PosterCard(
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(imageUrl)
-                        .crossfade(150)
+                        .crossfade(if (reduced) 0 else 150)
                         .size(320, 480)
                         .build(),
                     contentDescription = title,
@@ -307,6 +309,7 @@ fun ContinueCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     Column(modifier = modifier.clickable(onClick = onClick)) {
         Box(
             modifier = Modifier
@@ -315,7 +318,16 @@ fun ContinueCard(
                 .clip(RoundedCornerShape(8.dp))
                 .background(VisionSurfaceHigh),
         ) {
-            AsyncImage(model = imageUrl, contentDescription = title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(imageUrl)
+                    .crossfade(0)
+                    .size(480, 270)
+                    .build(),
+                contentDescription = title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)

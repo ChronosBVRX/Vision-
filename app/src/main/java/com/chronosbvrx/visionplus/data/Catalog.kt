@@ -63,19 +63,36 @@ internal fun scoreLabel(portalScore: String?, fallbackScore: Double): String {
 
 /**
  * The films whose title or synopsis contains every word of [query], ignoring case and accents.
- * A blank query matches everything. Optimized for TV and low-end CPU: checks title first.
+ * A blank query matches everything. Optimized for TV and low-end CPU: the catalogue's films and
+ * their folded titles are computed once per rows set (antes se normalizaba todo en cada tecla).
  */
 fun searchFilms(rows: List<CatalogRow>, query: String): List<Film> {
     val cleanQuery = fold(query).trim()
     val words = cleanQuery.split(' ').filter { it.isNotBlank() }
-    val films = allFilms(rows)
-    if (words.isEmpty()) return films
-    return films.filter { film ->
-        val titleNorm = fold(film.title)
-        if (words.all { it in titleNorm }) return@filter true
-        val haystack = "$titleNorm ${fold(film.synopsis)} ${film.year}"
+    val corpus = searchCorpus(rows)
+    if (words.isEmpty()) return corpus.films
+    return corpus.films.filterIndexed { index, film ->
+        val titleNorm = corpus.titles[index]
+        if (words.all { it in titleNorm }) return@filterIndexed true
+        val haystack = "$titleNorm ${fold(film.synopsis)} ${corpus.years[index]}"
         words.all { it in haystack }
     }
+}
+
+/** The films of [rows] with their folded titles precomputed; rebuilt only when rows change. */
+private class SearchCorpus(val films: List<Film>, val titles: List<String>, val years: List<Int>)
+
+private var searchCorpusRows: List<CatalogRow>? = null
+private var searchCorpusCache = SearchCorpus(emptyList(), emptyList(), emptyList())
+
+@Synchronized
+private fun searchCorpus(rows: List<CatalogRow>): SearchCorpus {
+    if (searchCorpusRows == rows) return searchCorpusCache
+    val films = allFilms(rows)
+    val built = SearchCorpus(films, films.map { fold(it.title) }, films.map { it.year })
+    searchCorpusRows = rows
+    searchCorpusCache = built
+    return built
 }
 
 private val DIACRITICS = Regex("\\p{Mn}+")

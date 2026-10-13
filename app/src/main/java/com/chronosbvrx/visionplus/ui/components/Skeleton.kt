@@ -29,6 +29,7 @@ import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 /**
  * The loading ghosts: rounded grey blocks with a slow sheen where cards will land, so the screen
  * never feels empty while the catalogue is on its way. Still (no sheen) with reduced effects on.
+ * The sheen is a single transition per row, shared by every block (antes: una por caja).
  */
 @Composable
 private fun ghostBrush(): Brush {
@@ -51,13 +52,13 @@ private fun ghostBrush(): Brush {
 
 /** A rounded grey block: the unit of every skeleton. */
 @Composable
-fun GhostBox(width: Dp, height: Dp, radius: Dp = 10.dp, modifier: Modifier = Modifier) {
+private fun GhostBox(brush: Brush, width: Dp, height: Dp, radius: Dp = 10.dp, modifier: Modifier = Modifier) {
     Spacer(
         modifier
             .width(width)
             .height(height)
             .clip(RoundedCornerShape(radius))
-            .background(ghostBrush()),
+            .background(brush),
     )
 }
 
@@ -70,11 +71,12 @@ fun GhostRow(
     horizontalPadding: Dp = 16.dp,
     modifier: Modifier = Modifier,
 ) {
+    val brush = ghostBrush()
     Column(modifier.padding(horizontal = horizontalPadding, vertical = 10.dp)) {
-        GhostBox(width = 132.dp, height = 14.dp, radius = 7.dp)
+        GhostBox(brush, width = 132.dp, height = 14.dp, radius = 7.dp)
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            repeat(count) { GhostBox(width = cardWidth, height = cardHeight) }
+            repeat(count) { GhostBox(brush, width = cardWidth, height = cardHeight) }
         }
     }
 }

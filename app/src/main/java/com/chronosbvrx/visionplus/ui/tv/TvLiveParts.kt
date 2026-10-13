@@ -163,7 +163,11 @@ internal fun TvChannelTile(channel: LiveChannel, modifier: Modifier = Modifier) 
         val logo = channel.logo
         if (logo != null) {
             AsyncImage(
-                model = logo,
+                model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                    .data(logo)
+                    .crossfade(0)
+                    .size(96, 96)
+                    .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize().padding(4.dp),
@@ -225,7 +229,11 @@ internal fun TvLivePreview(channel: LiveChannel?, modifier: Modifier = Modifier)
                 val logo = channel.logo
                 if (logo != null) {
                     AsyncImage(
-                        model = logo,
+                        model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                            .data(logo)
+                            .crossfade(0)
+                            .size(640, 360)
+                            .build(),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize().padding(24.dp),

@@ -72,8 +72,9 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import com.chronosbvrx.visionplus.data.CatalogRow
+import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.HomeCurated
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.ResumeCard
@@ -88,6 +89,7 @@ import com.chronosbvrx.visionplus.ui.components.GhostRow
 import com.chronosbvrx.visionplus.ui.plugins.PluginUpdatesBellIcon
 import com.chronosbvrx.visionplus.ui.plugins.appUpdateBadgeCount
 import com.chronosbvrx.visionplus.ui.rememberHeroDrift
+import com.chronosbvrx.visionplus.ui.rememberScreenPx
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
@@ -173,38 +175,23 @@ fun TvHomeScreen(
         else -> "Tu contenido no está disponible ahora mismo. Revisa tu conexión e intenta de nuevo."
     }
 
-    // Colección curada propia: filas de Vision+ + hileras curadas del índice (estrenos,
-    // recomendados, géneros). Las colecciones de marca del portal no entran a portada.
-    val allAvailableFilms = remember(rows, catalog.indexRows) {
-        Popularity.homePool(rows, catalog.indexRows)
-    }
-
-    // 1. Top 10 Tendencias reales: impacto (rating con confianza + popularidad + recencia).
-    val top10Films = remember(allAvailableFilms) {
-        Popularity.topTrending(allAvailableFilms, limit = 10)
-    }
-
-    // 2. Estrenos de verdad: año actual y anterior, populares primero. Si el pool aún
-    //    no alcanza, se usa la hilera propia «Estrenos y Novedades» del servidor.
-    val estrenosFilms = remember(allAvailableFilms, rows) {
-        Popularity.realPremieres(allAvailableFilms, limit = 15).ifEmpty {
-            rows.firstOrNull { it.id == "estrenos" }?.films?.take(15).orEmpty()
+    // El curado del Inicio (pool propio + Top 10 + Novedades + filas por tipo + héroe)
+    // se calcula en segundo plano: con miles de films del índice, hacerlo en el hilo
+    // de composición congelaba el D-pad en gama baja. Se conserva el valor anterior
+    // hasta que llega el nuevo (sin parpadeos).
+    val curated by androidx.compose.runtime.produceState(
+        HomeCurated(),
+        rows,
+        catalog.indexRows,
+    ) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            Popularity.homeCurated(rows, catalog.indexRows)
         }
     }
-
-    // 3. Filas propias por tipo: populares en general, sin nicho ni desconocidas.
-    val ownKindRows = remember(allAvailableFilms) {
-        listOf(
-            "movie" to "🎬 Películas populares",
-            "series" to "📺 Series populares",
-            "anime" to "🌸 Anime",
-            "kids" to "🧸 Para chicos",
-        ).mapNotNull { (kind, label) ->
-            Popularity.popularByKind(allAvailableFilms, kind, limit = 20)
-                .takeIf { it.size >= 4 }
-                ?.let { CatalogRow("home-kind-$kind", label, it) }
-        }
-    }
+    val allAvailableFilms = curated.pool
+    val top10Films = curated.top10
+    val estrenosFilms = curated.premieres
+    val ownKindRows = curated.kindRows
 
     // 3. Filas restantes del catálogo (evitando duplicar estrenos y listas personales en la cabecera)
     val otherRows = remember(rows) {
@@ -298,13 +285,18 @@ fun TvHomeScreen(
     }
 
     val heroDrift by rememberHeroDrift(reduced, HERO_DRIFT_MS)
+    val screenPx = rememberScreenPx()
 
     Box(Modifier.fillMaxSize().background(VisionBlack)) {
         // Fondo cinemático inmersivo con drift y degradado suave
         Crossfade(targetState = featured?.imageUrl, animationSpec = backdropFadeSpec(reduced), label = "bg") { url ->
             Box(Modifier.fillMaxSize()) {
                 AsyncImage(
-                    model = url,
+                    model = ImageRequest.Builder(context)
+                        .data(url)
+                        .crossfade(0)
+                        .size(screenPx.width, screenPx.height)
+                        .build(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier

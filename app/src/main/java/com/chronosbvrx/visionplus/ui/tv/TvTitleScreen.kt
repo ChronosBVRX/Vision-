@@ -38,6 +38,7 @@ import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import org.json.JSONObject
 import androidx.compose.runtime.collectAsState
 import com.chronosbvrx.visionplus.data.offline.DownloadState
@@ -155,8 +156,13 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
     }
 
     Box(Modifier.fillMaxSize().background(VisionBlack)) {
+        val screenPx = com.chronosbvrx.visionplus.ui.rememberScreenPx()
         AsyncImage(
-            model = backdrop,
+            model = coil.request.ImageRequest.Builder(context)
+                .data(backdrop)
+                .crossfade(0)
+                .size(screenPx.width, screenPx.height)
+                .build(),
             contentDescription = film.title,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),

@@ -61,8 +61,12 @@ import java.util.Locale
 fun SearchScreen(rows: List<CatalogRow>, onBack: () -> Unit, onOpenFilm: (Film) -> Unit) {
     val context = LocalContext.current
     var text by rememberSaveable { mutableStateOf("") }
-    val initialFilms = remember(rows) { allFilms(rows).take(60) }
-    var results by remember { mutableStateOf<List<Film>>(initialFilms) }
+    // El catálogo inicial (todos los films) se prepara en segundo plano: con el
+    // índice completo en el hilo de UI la pantalla tardaba en abrir en gama baja.
+    val initialFilms by androidx.compose.runtime.produceState(emptyList<Film>(), rows) {
+        value = withContext(Dispatchers.Default) { allFilms(rows).take(60) }
+    }
+    var results by remember { mutableStateOf<List<Film>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
 
     val voiceLauncher = rememberLauncherForActivityResult(
@@ -90,7 +94,7 @@ fun SearchScreen(rows: List<CatalogRow>, onBack: () -> Unit, onOpenFilm: (Film) 
         }
     }
 
-    LaunchedEffect(text, rows) {
+    LaunchedEffect(text, rows, initialFilms) {
         val q = text.trim()
         if (q.isBlank()) {
             results = initialFilms

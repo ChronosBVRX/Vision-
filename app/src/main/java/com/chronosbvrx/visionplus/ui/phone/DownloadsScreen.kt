@@ -464,7 +464,11 @@ private fun DownloadItemCard(
             ) {
                 if (item.posterUrl.isNotBlank()) {
                     AsyncImage(
-                        model = item.posterUrl,
+                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                            .data(item.posterUrl)
+                            .crossfade(0)
+                            .size(192, 288)
+                            .build(),
                         contentDescription = item.title,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,

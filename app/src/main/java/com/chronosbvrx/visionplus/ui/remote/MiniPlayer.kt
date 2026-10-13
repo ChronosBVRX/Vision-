@@ -177,7 +177,11 @@ private fun MiniPlayerBar(film: Film, tvName: String, onOpen: () -> Unit, onPick
             )
             Row(Modifier.height(66.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 AsyncImage(
-                    film.posterUrl,
+                    coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                        .data(film.posterUrl)
+                        .crossfade(0)
+                        .size(176, 176)
+                        .build(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.08f)),
@@ -221,8 +225,13 @@ private fun MiniPlayerScreen(
         Surface(color = VisionBlack, modifier = Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize()) {
                 // Blur needs Android 12; before that the gradient alone darkens the art.
+                val screenPx = com.chronosbvrx.visionplus.ui.rememberScreenPx()
                 AsyncImage(
-                    film.posterUrl,
+                    coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                        .data(film.posterUrl)
+                        .crossfade(0)
+                        .size(screenPx.width, screenPx.height)
+                        .build(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize().let { if (Build.VERSION.SDK_INT >= 31) it.blur(32.dp) else it },
@@ -244,7 +253,11 @@ private fun MiniPlayerScreen(
                     }
                     Spacer(Modifier.weight(0.4f))
                     AsyncImage(
-                        film.posterUrl,
+                        coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                            .data(film.posterUrl)
+                            .crossfade(0)
+                            .size(480, 720)
+                            .build(),
                         contentDescription = film.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxWidth(0.55f).widthIn(max = 260.dp).aspectRatio(2f / 3f)

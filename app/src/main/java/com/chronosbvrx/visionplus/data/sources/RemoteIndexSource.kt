@@ -37,6 +37,49 @@ object RemoteIndexSource {
     private const val K_VERSION = "version"
     private const val K_AT = "rows_at"
 
+    /** El índice vive en un archivo, no en SharedPreferences: con varios MB, el XML de prefs
+     *  se carga completo en memoria al primer acceso y causaba ANR/jank en el arranque. */
+    private const val INDEX_FILE = "remote_index.json"
+    private const val SECTION_FILE_PREFIX = "remote_section_"
+
+    private fun indexFile(context: Context) = java.io.File(context.applicationContext.filesDir, INDEX_FILE)
+
+    private fun sectionFile(context: Context, name: String) =
+        java.io.File(context.applicationContext.filesDir, "$SECTION_FILE_PREFIX$name.json")
+
+    /** El JSON del índice guardado (archivo nuevo o prefs de versiones anteriores, que migra). */
+    private fun readIndexPayload(context: Context): String? {
+        val file = indexFile(context)
+        if (file.exists()) return runCatching { file.readText() }.getOrNull()
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val legacy = prefs.getString(K_PAYLOAD, null)
+        if (!legacy.isNullOrBlank()) {
+            runCatching { file.writeText(legacy) }
+            prefs.edit().remove(K_PAYLOAD).apply()
+        }
+        return legacy
+    }
+
+    private fun writeIndexPayload(context: Context, json: String) {
+        runCatching { indexFile(context).writeText(json) }
+    }
+
+    private fun readSectionPayload(context: Context, name: String): String? {
+        val file = sectionFile(context, name)
+        if (file.exists()) return runCatching { file.readText() }.getOrNull()
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val legacy = prefs.getString("section_$name", null)
+        if (!legacy.isNullOrBlank()) {
+            runCatching { file.writeText(legacy) }
+            prefs.edit().remove("section_$name").apply()
+        }
+        return legacy
+    }
+
+    private fun writeSectionPayload(context: Context, name: String, json: String) {
+        runCatching { sectionFile(context, name).writeText(json) }
+    }
+
     /** How long a fetched copy is trusted before asking the server again. */
     private const val TTL_MS = 10L * 60 * 1000
     private const val SECTION_TTL_MS = 15L * 60 * 1000
@@ -71,8 +114,8 @@ object RemoteIndexSource {
         if (fetched.second.isNotEmpty()) {
             memoryIndexRows = fetched.second
             memoryIndexRowsAt = System.currentTimeMillis()
+            writeIndexPayload(context, payloadToJson(fetched.first, fetched.second))
             prefs.edit()
-                .putString(K_PAYLOAD, payloadToJson(fetched.first, fetched.second))
                 .putInt(K_VERSION, fetched.first)
                 .putLong(K_AT, System.currentTimeMillis())
                 .apply()
@@ -85,8 +128,7 @@ object RemoteIndexSource {
     fun cached(context: Context): List<CatalogRow> {
         memoryIndexRows?.takeIf { it.isNotEmpty() }?.let { return it }
         val rows = runCatching {
-            val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            parseIndex(prefs.getString(K_PAYLOAD, null).orEmpty()).rows
+            parseIndex(readIndexPayload(context).orEmpty()).rows
         }.getOrDefault(emptyList())
         if (rows.isNotEmpty()) {
             memoryIndexRows = rows
@@ -175,8 +217,7 @@ object RemoteIndexSource {
     /** Obtiene la sección desde memoria RAM al instante (0 ms) o desde disco si existe. */
     fun cachedSection(context: Context, name: String): List<CatalogRow>? {
         memorySections[name]?.takeIf { it.isNotEmpty() }?.let { return it }
-        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val raw = prefs.getString("section_$name", null) ?: return null
+        val raw = readSectionPayload(context, name) ?: return null
         return runCatching {
             val rows = parseRows(JSONArray(raw))
             if (rows.isNotEmpty()) {
@@ -204,8 +245,6 @@ object RemoteIndexSource {
     }
 
     private fun fetchSectionNetwork(context: Context, name: String, limit: Int = 40): List<CatalogRow>? {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val cacheKey = "section_$name"
         val connection = (URL("$BASE_URL/v1/section/$name?limit=$limit")
             .openConnection() as HttpURLConnection).apply {
             connectTimeout = 8_000
@@ -222,7 +261,7 @@ object RemoteIndexSource {
             if (rows.isNotEmpty()) {
                 memorySections[name] = rows
                 memorySectionsAt[name] = System.currentTimeMillis()
-                prefs.edit().putString(cacheKey, rowsToJson(rows).toString()).apply()
+                writeSectionPayload(context, name, rowsToJson(rows).toString())
                 Log.i(TAG, "sección $name actualizada: ${rows.size} hileras")
             }
             rows

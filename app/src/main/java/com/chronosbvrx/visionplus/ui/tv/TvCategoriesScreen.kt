@@ -62,12 +62,12 @@ fun TvCategoriesScreen(
     Column(Modifier.fillMaxSize().background(VisionBlack).padding(vertical = 28.dp)) {
         Text("Categorías", style = MaterialTheme.typography.headlineSmall, color = Color.White, modifier = Modifier.padding(start = 48.dp, bottom = 12.dp))
         LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), contentPadding = PaddingValues(bottom = 32.dp)) {
-            items(safeRows, key = { it.id }) { row ->
+            items(safeRows, key = { it.id }, contentType = { "category-row" }) { row ->
                 val safeFilms = remember(row.films) { row.films.distinctBy { it.id }.take(15) }
                 val firstFilmId = safeFilms.firstOrNull()?.id
                 TvRowLabel(row.title, 26.dp)
                 LazyRow(contentPadding = PaddingValues(horizontal = 48.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(safeFilms, key = { "${row.id}-${it.id}" }) { film ->
+                    items(safeFilms, key = { "${row.id}-${it.id}" }, contentType = { "landscape-card" }) { film ->
                         val isLanding = row.id == firstRowId && film.id == firstFilmId
                         val isReturn = film.id == returnFilmId
                         TvLandscapeCard(

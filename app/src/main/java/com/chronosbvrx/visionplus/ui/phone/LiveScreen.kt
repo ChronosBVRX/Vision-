@@ -123,12 +123,17 @@ fun LiveScreen(
         }
 
         val searching = state.query.isNotBlank()
-        val baseChannels = when {
-            searching -> state.channels.filter { it.name.contains(state.query.trim(), ignoreCase = true) }
-            else -> state.shown
+        // Memoizado: con 1,000+ canales, recalcular géneros/países/filtros en cada
+        // recomposición (teclear, cambiar chip) congelaba el hilo de UI.
+        val baseChannels = remember(state.channels, state.query, state.group) {
+            if (searching) {
+                state.channels.filter { it.name.contains(state.query.trim(), ignoreCase = true) }
+            } else {
+                state.shown
+            }
         }
-        val genres = LiveTaxonomy.genresOf(baseChannels.map { it.name })
-        val countries = LiveTaxonomy.countriesOf(baseChannels.map { it.name })
+        val genres = remember(baseChannels) { LiveTaxonomy.genresOf(baseChannels.map { it.name }) }
+        val countries = remember(baseChannels) { LiveTaxonomy.countriesOf(baseChannels.map { it.name }) }
 
         // País: chips horizontales
         if (countries.size > 1) {
@@ -184,9 +189,11 @@ fun LiveScreen(
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = VisionBlue)
         }
 
-        val channels = baseChannels.filter { ch ->
-            (selectedGenre == null || ch.effectiveGroup() == selectedGenre) &&
-            (selectedCountry == null || LiveTaxonomy.countryFor(ch.name) == selectedCountry)
+        val channels = remember(baseChannels, selectedGenre, selectedCountry) {
+            baseChannels.filter { ch ->
+                (selectedGenre == null || ch.effectiveGroup() == selectedGenre) &&
+                    (selectedCountry == null || LiveTaxonomy.countryFor(ch.name) == selectedCountry)
+            }
         }
         val shown = channels
         val activeScopeTitle = when {
@@ -196,10 +203,12 @@ fun LiveScreen(
             selectedGenre != null -> selectedGenre
             else -> null
         }
-        val activeChannelCodes = if (activeScopeTitle != null) {
-            shown.map { it.url.removePrefix("xtvlive:") }
-        } else {
-            emptyList()
+        val activeChannelCodes = remember(shown, activeScopeTitle) {
+            if (activeScopeTitle != null) {
+                shown.map { it.url.removePrefix("xtvlive:") }
+            } else {
+                emptyList()
+            }
         }
 
         if (shown.isEmpty()) {
@@ -296,7 +305,11 @@ private fun ChannelCard(channel: LiveChannel, onClick: () -> Unit) {
             val logo = channel.logo
             if (logo != null) {
                 AsyncImage(
-                    model = logo,
+                    model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                        .data(logo)
+                        .crossfade(0)
+                        .size(480, 270)
+                        .build(),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().padding(12.dp),

@@ -125,4 +125,46 @@ object Popularity {
         val rest = ranked.filterNot { it.voteCount > 0 || it.popularity > 0 }
         return withSignal + rest.take(limit - withSignal.size)
     }
+
+    /** Las filas propias por tipo del Inicio, en el orden en que se pintan. */
+    internal val HOME_KIND_ROWS = listOf(
+        "movie" to "🎬 Películas populares",
+        "series" to "📺 Series populares",
+        "anime" to "🌸 Anime",
+        "kids" to "🧸 Para chicos",
+    )
+
+    /**
+     * Todo lo curado del Inicio en una sola pasada: pool, Top 10, Novedades, filas por
+     * tipo y héroe. Puro y pesado a propósito: las pantallas lo calculan fuera del hilo
+     * de composición (con miles de films del índice, hacerlo al componer causaba jank).
+     */
+    internal fun homeCurated(rows: List<CatalogRow>, indexRows: List<CatalogRow>, yearNow: Int = nowYear()): HomeCurated {
+        val pool = homePool(rows, indexRows)
+        val top10 = topTrending(pool, limit = 10, yearNow = yearNow)
+        val premieres = realPremieres(pool, limit = 15, yearNow = yearNow).ifEmpty {
+            rows.firstOrNull { it.id == "estrenos" }?.films?.take(15).orEmpty()
+        }
+        val kindRows = HOME_KIND_ROWS.mapNotNull { (kind, label) ->
+            popularByKind(pool, kind, limit = 20, yearNow = yearNow)
+                .takeIf { it.size >= 4 }
+                ?.let { CatalogRow("home-kind-$kind", label, it) }
+        }
+        return HomeCurated(
+            pool = pool,
+            top10 = top10,
+            premieres = premieres,
+            kindRows = kindRows,
+            hero = pickHero(top10, premieres, pool.firstOrNull()),
+        )
+    }
 }
+
+/** El contenido curado del Inicio, calculado de una vez fuera del hilo de composición. */
+internal data class HomeCurated(
+    val pool: List<Film> = emptyList(),
+    val top10: List<Film> = emptyList(),
+    val premieres: List<Film> = emptyList(),
+    val kindRows: List<CatalogRow> = emptyList(),
+    val hero: Film? = null,
+)

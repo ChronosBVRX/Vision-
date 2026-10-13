@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.HomeCurated
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.ResumeCard
@@ -76,11 +77,13 @@ import com.chronosbvrx.visionplus.ui.Route
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.components.PosterCard
 import com.chronosbvrx.visionplus.ui.isLandscapeTablet
+import com.chronosbvrx.visionplus.ui.rememberScreenPx
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import kotlinx.coroutines.launch
 
 /** Home sizes based on the screen's shape. */
@@ -121,47 +124,36 @@ fun HomeScreen(
 ) {
     val sizes = homeSizes()
     val rows = catalog.personalRows + catalog.rows
-    // Pool curado propio: filas de Vision+ + hileras curadas del índice (estrenos,
-    // recomendados, géneros). Nada de las colecciones de marca tal cual las enumera
-    // el portal: la portada muestra el catálogo ordenado por Vision+.
-    val allAvailableFilms = remember(rows, catalog.indexRows) {
-        Popularity.homePool(rows, catalog.indexRows)
-    }
-    // Tendencias reales: impacto (rating con confianza + popularidad TMDB + recencia),
-    // no score puro. El relleno oscuro sin señal no entra.
-    val top10Films = remember(allAvailableFilms) {
-        Popularity.topTrending(allAvailableFilms, limit = 10)
-    }
-    // Estrenos de verdad: solo año actual y anterior, populares primero.
-    // Un éxito 2025 supera a un oscuro 2026 (antes mandaba el año puro).
-    val estrenosFilms = remember(allAvailableFilms, catalog.rows) {
-        Popularity.realPremieres(allAvailableFilms, limit = 15).ifEmpty {
-            catalog.rows.firstOrNull { it.id == "estrenos" }?.films?.take(15).orEmpty()
+    // El curado del Inicio (pool propio + Top 10 + Novedades + filas por tipo + héroe)
+    // se calcula en segundo plano: con miles de films del índice, hacerlo en el hilo
+    // de composición causaba jank en gama baja. El valor anterior se conserva hasta
+    // que llega el nuevo (sin parpadeos).
+    val curated by androidx.compose.runtime.produceState(
+        HomeCurated(),
+        rows,
+        catalog.indexRows,
+    ) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            Popularity.homeCurated(rows, catalog.indexRows)
         }
     }
-    // Filas propias por tipo: populares en general, sin nicho ni desconocidas.
-    val ownKindRows = remember(allAvailableFilms) {
-        listOf(
-            "movie" to "🎬 Películas populares",
-            "series" to "📺 Series populares",
-            "anime" to "🌸 Anime",
-            "kids" to "🧸 Para chicos",
-        ).mapNotNull { (kind, label) ->
-            Popularity.popularByKind(allAvailableFilms, kind, limit = 20)
-                .takeIf { it.size >= 4 }
-                ?.let { CatalogRow("home-kind-$kind", label, it) }
-        }
-    }
-    val hero = remember(top10Films, estrenosFilms, allAvailableFilms) {
-        Popularity.pickHero(top10Films, estrenosFilms, allAvailableFilms.firstOrNull())
-    }
+    val allAvailableFilms = curated.pool
+    val top10Films = curated.top10
+    val estrenosFilms = curated.premieres
+    val ownKindRows = curated.kindRows
+    val hero = curated.hero
     androidx.compose.runtime.LaunchedEffect(Unit) { catalog.refreshPersonal() }
     val context = LocalContext.current
-    // «Seguir viendo»: se recarga al volver del reproductor.
+    // «Seguir viendo»: se recarga al volver del reproductor, con el cruce de fichas
+    // fuera del hilo principal (el índice puede tener miles de títulos).
     var continueCards by remember { mutableStateOf<List<ResumeCard>>(emptyList()) }
+    val homeScope = rememberCoroutineScope()
     fun reloadContinue() {
-        val films = allFilms(catalog.personalRows + catalog.rows + catalog.indexRows)
-        continueCards = PlaybackHistory.continueCards(context, films)
+        homeScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            val films = allFilms(catalog.personalRows + catalog.rows + catalog.indexRows)
+            val cards = PlaybackHistory.continueCards(context, films)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { continueCards = cards }
+        }
     }
     LaunchedEffect(Unit) { reloadContinue() }
     val homeLifecycle = LocalLifecycleOwner.current
@@ -292,13 +284,20 @@ private fun Hero(
     onPlay: () -> Unit,
     onDetails: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val screenPx = rememberScreenPx()
+    val heroPx = with(androidx.compose.ui.platform.LocalDensity.current) { sizes.heroHeight.roundToPx() }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(sizes.heroHeight),
     ) {
         AsyncImage(
-            model = backdropUrl,
+            model = ImageRequest.Builder(context)
+                .data(backdropUrl)
+                .crossfade(0)
+                .size(screenPx.width, heroPx)
+                .build(),
             contentDescription = title,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),

@@ -19,6 +19,8 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.CardScale
 
@@ -77,4 +79,21 @@ fun effectExit(reduced: Boolean, full: ExitTransition): ExitTransition = if (red
 fun isLandscapeTablet(): Boolean {
     val config = LocalConfiguration.current
     return config.smallestScreenWidthDp >= 600 && config.orientation == Configuration.ORIENTATION_LANDSCAPE
+}
+
+/**
+ * El tamaño real de la pantalla en píxeles. Los fondos a pantalla completa (hero/fichas) lo usan
+ * para pedirle a Coil la imagen al tamaño de despliegue y no a la resolución fuente (en TV eso
+ * baja la decodificación de 1920x1080 a lo que de verdad se ve, cuidando memoria y CPU).
+ */
+@Composable
+fun rememberScreenPx(): IntSize {
+    val config = LocalConfiguration.current
+    val density = LocalDensity.current.density
+    return remember(config.screenWidthDp, config.screenHeightDp, density) {
+        IntSize(
+            (config.screenWidthDp * density).toInt().coerceAtLeast(480),
+            (config.screenHeightDp * density).toInt().coerceAtLeast(320),
+        )
+    }
 }

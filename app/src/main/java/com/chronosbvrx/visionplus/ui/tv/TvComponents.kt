@@ -154,7 +154,7 @@ fun TvPosterCard(
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(imageUrl)
-                        .crossfade(150)
+                        .crossfade(if (reduced) 0 else 150)
                         .size(320, 480)
                         .build(),
                     contentDescription = title,
@@ -285,10 +285,12 @@ fun TvLandscapeCard(
     onFocus: () -> Unit = {},
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val reduced = LocalReducedEffects.current
     Card(
         onClick = onClick,
         modifier = modifier.height(cardHeight).onFocusChanged { if (it.isFocused) onFocus() },
-        scale = cardFocusScale(LocalReducedEffects.current),
+        scale = cardFocusScale(reduced),
         colors = CardDefaults.colors(containerColor = VisionSurfaceHigh),
         border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color.White))),
     ) {
@@ -302,7 +304,11 @@ fun TvLandscapeCard(
                 CardPlaceholder()
             } else {
                 AsyncImage(
-                    model = imageUrl,
+                    model = ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        .crossfade(if (reduced) 0 else 150)
+                        .size(480, 270)
+                        .build(),
                     contentDescription = title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),

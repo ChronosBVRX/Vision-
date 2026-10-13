@@ -121,4 +121,27 @@ class PopularityTest {
         assertEquals(20, rows.size)
         assertTrue(rows.none { it.id == "pending" })
     }
+
+    @Test
+    fun homeCuratedBundlesOwnRowsAndHero() {
+        val estrenos = CatalogRow("estrenos", "Estrenos", listOf(film("e1", score = 8.0, year = 2026, popularity = 100.0)))
+        val movies = (1..4).map { i -> film("m$i", score = 7.0, year = 2025, popularity = i * 10.0).copy(kind = "movie") }
+        val series = (1..4).map { i -> film("s$i", score = 7.0, year = 2025, popularity = i * 10.0).copy(kind = "series") }
+        val genre = CatalogRow("genero-accion", "Acción", movies + series)
+        val curated = Popularity.homeCurated(listOf(estrenos), listOf(estrenos, genre))
+        assertEquals(setOf("e1") + movies.map { it.id } + series.map { it.id }, curated.pool.map { it.id }.toSet())
+        assertTrue(curated.top10.isNotEmpty())
+        assertTrue(curated.premieres.isNotEmpty())
+        assertEquals(listOf("home-kind-movie", "home-kind-series"), curated.kindRows.map { it.id })
+        assertTrue(curated.hero != null)
+    }
+
+    @Test
+    fun homeCuratedFallsBackToServerPremieres() {
+        // El pool no tiene estrenos del año: manda la hilera «Estrenos y Novedades» del servidor.
+        val old = film("old1", score = 7.0, year = 2010, popularity = 30.0)
+        val estrenos = CatalogRow("estrenos", "Estrenos", listOf(film("e1", score = 0.0, year = 0)))
+        val curated = Popularity.homeCurated(listOf(estrenos), listOf(CatalogRow("genero-x", "X", listOf(old))))
+        assertEquals(listOf("e1"), curated.premieres.map { it.id })
+    }
 }

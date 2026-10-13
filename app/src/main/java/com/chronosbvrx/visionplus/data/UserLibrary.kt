@@ -97,17 +97,23 @@ object UserLibrary {
         if (played.isEmpty() || indexRows.isEmpty()) return null
         val playedIds = played.map { it.id }.toSet()
         val skip = setOf("estrenos", "recomendados", "tv-en-vivo")
+        // Índice filmId -> hileras (una sola pasada): antes era O(15 × filas × films) por llamada.
+        val rowsById = HashMap<String, CatalogRow>(indexRows.size)
+        val filmRows = HashMap<String, MutableList<String>>()
+        indexRows.forEach { row ->
+            rowsById[row.id] = row
+            if (row.id in skip) return@forEach
+            row.films.forEach { film ->
+                filmRows.getOrPut(film.id) { ArrayList(2) }.add(row.id)
+            }
+        }
         val hits = LinkedHashMap<String, Int>()
         played.take(15).forEach { film ->
-            indexRows.forEach { row ->
-                if (row.id !in skip && row.films.any { it.id == film.id }) {
-                    hits[row.id] = (hits[row.id] ?: 0) + 1
-                }
-            }
+            filmRows[film.id]?.forEach { rowId -> hits[rowId] = (hits[rowId] ?: 0) + 1 }
         }
         val top = hits.entries.sortedByDescending { it.value }.take(4).map { it.key }
         if (top.isEmpty()) return null
-        val sources = top.mapNotNull { id -> indexRows.firstOrNull { it.id == id } }
+        val sources = top.mapNotNull { rowsById[it] }
         val anchor = sources.firstOrNull()?.title.orEmpty()
         val films = sources.flatMap { it.films }.distinctBy { it.id }
             .filter { it.id !in playedIds }

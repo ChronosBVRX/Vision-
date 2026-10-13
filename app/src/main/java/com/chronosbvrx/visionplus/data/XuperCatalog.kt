@@ -105,7 +105,8 @@ class XuperCatalog(context: Context) {
         loading = true
         try {
             // Lo cacheado del índice se pinta al instante (Categorías con contenido mientras llega lo fresco).
-            val cachedIndex = RemoteIndexSource.cached(app)
+            // El parseo del JSON va en IO: el payload puede pesar varios MB y bloquear el arranque.
+            val cachedIndex = kotlinx.coroutines.withContext(Dispatchers.IO) { RemoteIndexSource.cached(app) }
             if (cachedIndex.isNotEmpty()) {
                 indexRows = cachedIndex
             }

@@ -137,8 +137,14 @@ internal fun TvKeyboard(text: String, onTextChange: (String) -> Unit, firstKey: 
 fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFilmId: String? = null) {
     val context = LocalContext.current
     var text by rememberSaveable { mutableStateOf("") }
-    val initialFilms = remember(rows) { allFilms(rows).take(60) }
-    var results by remember { mutableStateOf<List<Film>>(initialFilms) }
+    // El catálogo inicial se prepara fuera del hilo de UI (el índice completo en
+    // composición retrasaba la apertura del buscador en Chromecast/TV boxes).
+    val initialFilms by androidx.compose.runtime.produceState(emptyList<Film>(), rows) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            allFilms(rows).take(60)
+        }
+    }
+    var results by remember { mutableStateOf<List<Film>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
 
     val voiceLauncher = rememberLauncherForActivityResult(
@@ -166,7 +172,7 @@ fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFil
         }
     }
 
-    LaunchedEffect(text, rows) {
+    LaunchedEffect(text, rows, initialFilms) {
         val q = text.trim()
         if (q.isBlank()) {
             results = initialFilms

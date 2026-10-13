@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -38,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -131,7 +133,9 @@ fun CategoriesScreen(
         return
     }
 
-    val shown = rows.filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) }
+    val shown = remember(rows, query) {
+        rows.filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) }
+    }
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         modifier = Modifier.fillMaxSize(),
@@ -213,7 +217,16 @@ private fun CategoryCard(title: String, imageUrl: String?, onClick: () -> Unit) 
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
             if (!imageUrl.isNullOrBlank()) {
-                AsyncImage(model = imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                AsyncImage(
+                    model = coil.request.ImageRequest.Builder(LocalContext.current)
+                        .data(imageUrl)
+                        .crossfade(0)
+                        .size(640, 220)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
         Text(

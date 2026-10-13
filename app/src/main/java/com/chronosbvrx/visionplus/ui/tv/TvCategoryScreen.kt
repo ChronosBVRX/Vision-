@@ -120,10 +120,18 @@ fun TvCategoryScreen(
         Popularity.reorderRow(raw)
     }
     val featured = remember(films) { films.maxByOrNull { Popularity.rankScore(it) } }
-    val topRated = remember(films) {
-        Popularity.reorderRow(films.filter { it.score > 0 || it.popularity > 0 || it.voteCount > 0 })
+    // En modo sección (películas/series/…) estas dos solo se usan en la vista genérica:
+    // no se calculan sobre miles de films si no van a pintarse.
+    val topRated = remember(films, section) {
+        if (section == null) {
+            Popularity.reorderRow(films.filter { it.score > 0 || it.popularity > 0 || it.voteCount > 0 })
+        } else {
+            emptyList()
+        }
     }
-    val novelties = remember(films) { Popularity.realPremieres(films, limit = 100) }
+    val novelties = remember(films, section) {
+        if (section == null) Popularity.realPremieres(films, limit = 100) else emptyList()
+    }
     val forYou = remember(films) {
         val played = UserLibrary.played(context).map { it.id }.toSet()
         val candidates = films.filter { it.id !in played && (it.score > 0 || it.popularity > 0) }
@@ -443,11 +451,17 @@ private fun TvCategoryGrid(
 @Composable
 private fun Hero(film: Film, landing: LandingFocus?, onOpenFilm: (Film) -> Unit) {
     val context = LocalContext.current
+    val screenPx = com.chronosbvrx.visionplus.ui.rememberScreenPx()
+    val heroPx = with(androidx.compose.ui.platform.LocalDensity.current) { 320.dp.roundToPx() }
     var inLater by remember(film.id) { mutableStateOf(UserLibrary.isWatchLater(context, film.id)) }
     var inFavorites by remember(film.id) { mutableStateOf(UserLibrary.isFavorite(context, film.id)) }
     Box(Modifier.fillMaxWidth().height(320.dp)) {
         AsyncImage(
-            model = film.posterUrl,
+            model = coil.request.ImageRequest.Builder(context)
+                .data(film.posterUrl)
+                .crossfade(0)
+                .size(screenPx.width, heroPx)
+                .build(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),

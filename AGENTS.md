@@ -5,6 +5,26 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **LÍNEA ESTABLE v2.5.60** (2026-10-13): 215 tests Android + 46 backend en verde.
+  **Optimización para bajos recursos (Chromecast/TV boxes), sin perder funciones**:
+  - **Imágenes**: las 15 `AsyncImage` que decodificaban a resolución fuente ya piden
+    `size()` (heroes de Home/fichas al tamaño real de pantalla con `rememberScreenPx()`,
+    `TvLandscapeCard` 480x270, logos de canales, miniaturas de Descargas/MiniPlayer).
+    El crossfade de las tarjetas se apaga en modo ligero (`LocalReducedEffects`).
+  - **Home fuera del hilo de composición**: pool + Top 10 + Novedades + filas por tipo
+    + héroe se calculan con `Popularity.homeCurated()` en `Dispatchers.Default` vía
+    `produceState` (móvil y TV); «Seguir viendo» del móvil también en background.
+  - **Índice remoto**: el payload (varios MB) salió de SharedPreferences a archivo
+    (`remote_index.json` + `remote_section_*.json`, migración automática) y el parseo
+    del arranque corre en IO (`XuperCatalog.load`).
+  - **Micro**: skeletons con una sola transición por fila, filtro de Categorías
+    memoizado, `topRated`/`novelties` de TvCategory solo en modo genérico, búsqueda
+    local con títulos normalizados precomputados (`searchCorpus`), recomendaciones con
+    índice film→hileras O(1), LiveScreen móvil memoizado (canales/géneros/países),
+    catálogo inicial de los buscadores en `Dispatchers.Default`, `contentType` en
+    listas de Categorías TV.
+  - **Guardianes nuevos**: `PopularityTest.homeCuratedBundlesOwnRowsAndHero`,
+    `homeCuratedFallsBackToServerPremieres`.
 - **LÍNEA ESTABLE v2.5.59** (2026-10-13): 212 tests Android + 46 backend en verde.
   **Catálogo propio en Inicio + Novedades rescatadas de Xuper + popularidad real
   (fin del nicho)**:
@@ -54,8 +74,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.58**
-  (versionCode **294**, release OTA v2.5.58). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.60**
+  (versionCode **296**, release OTA v2.5.60). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

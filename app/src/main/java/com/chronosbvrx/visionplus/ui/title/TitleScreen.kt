@@ -50,6 +50,7 @@ import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.data.scoreLabel
+import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.ui.EpisodePlay
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import com.chronosbvrx.visionplus.ui.isLandscapeTablet
@@ -704,9 +705,15 @@ private fun audioLabel(code: String): String = when (code.lowercase().trim()) {
 
 @Composable
 private fun Hero(film: Film) {
+    val context = LocalContext.current
+    val screenPx = com.chronosbvrx.visionplus.ui.rememberScreenPx()
     Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
         AsyncImage(
-            model = film.posterUrl,
+            model = coil.request.ImageRequest.Builder(context)
+                .data(film.posterUrl)
+                .crossfade(0)
+                .size(screenPx.width, (screenPx.width * 9 / 16).coerceAtLeast(240))
+                .build(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
