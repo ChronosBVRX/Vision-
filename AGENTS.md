@@ -5,6 +5,27 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **LÍNEA ESTABLE v2.5.62** (2026-10-13): 224 tests Android en verde + prueba física en A32.
+  **Fix "descargar se pelea con reproducir en línea" (pausa con aviso)**:
+  - *Causa raíz*: descarga y reproducción comparten el proceso `:x4k` y el motor nativo
+    solo admite **un programa a la vez**. `X4KDownloadService` mantiene el programa
+    headless vivo durante TODA la descarga (`stopHeadless` recién en el `finally`); abrir
+    una peli en ese momento lanzaba un segundo programa → la peli se buggeaba y/o moría
+    la descarga; salir del reproductor mata el proceso (`killProcess`) y con él la
+    descarga. El candado existía solo en una dirección (la descarga no inicia si hay
+    player activo).
+  - *App*: `EngineDownloadGate` (PlayerScreen) intercepta `xtv:`/`xtvlive:` con descarga
+    XTV activa → diálogo honesto «Pausar y ver ahora / Seguir descargando» (al reanudar
+    empieza de cero: no hay reanudación por offset). El fallback Titan→XTV avisa en vez
+    de fallar. `pauseDownload(id, context)` ahora **detiene de verdad** al servicio
+    (antes solo cambiaba la etiqueta y seguía bajando por detrás).
+  - *Servicio*: `ACTION_PAUSE` cancela el job, **suelta el motor al instante**
+    (`stopHeadless` sincrónico) y confirma con el marcador `.paused`; el reproductor
+    espera el ack (candado `pauseLock` + arbitraje por marca de emisión del intent: sin
+    carreras ni marcas pegadas). La pausa/cancelación limpia el parcial `.downloading`.
+  - *Guardianes*: `OfflinePlaybackCoordinationTest` (política de bloqueo, ack por
+    archivo, servicio y puerta). Prueba física A32: diálogo → seguir (baja) → pausar y
+    ver (PAUSED, motor libre, la peli abre a los ~1 s) → reanudar (reinicia de cero).
 - **LÍNEA ESTABLE v2.5.61** (2026-10-13): 219 tests Android + 46 backend en verde.
   **Fix de la regresión "error al primer intento, Reintentar sí reproduce"**:
   - *Causa raíz*: el worker del VPS usa el mismo SN que la app (`XTV_SERVER_SN` vacío):
@@ -94,8 +115,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.61**
-  (versionCode **297**, release OTA v2.5.61). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.62**
+  (versionCode **298**, release OTA v2.5.62). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

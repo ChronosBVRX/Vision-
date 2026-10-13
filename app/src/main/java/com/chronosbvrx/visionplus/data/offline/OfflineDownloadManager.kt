@@ -12,7 +12,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -254,14 +256,72 @@ object OfflineDownloadManager {
         }
     }
 
-    fun pauseDownload(id: String) {
+    fun pauseDownload(id: String, context: Context? = null) {
         activeJobs[id]?.cancel()
         activeJobs.remove(id)
-        if (delegatedIds.remove(id)) {
-            // Pedir al servicio que detenga el trabajo (best-effort, sin bloquear UI).
-            // El receiver marcará PAUSED abajo.
+        val wasDelegated = delegatedIds.remove(id)
+        val item = OfflineRegistry.get(id, context)
+        if (context != null && item != null && (wasDelegated || needsRemoteResolve(item.videoUrl))) {
+            // Para refs `xtv:` el trabajo real vive en el servicio :x4k: sin este aviso,
+            // "pausar" solo cambiaba la etiqueta y la descarga seguía por detrás.
+            runCatching {
+                val app = context.applicationContext
+                app.startService(X4KDownloadService.pauseIntent(app, id, item.vaultFilePath))
+            }
         }
         OfflineRegistry.updateState(id, DownloadState.PAUSED)
+    }
+
+    /**
+     * Descargas que ocupan el motor nativo (refs `xtv:`/`magisvod:` en DOWNLOADING):
+     * mientras existan, el reproductor en línea no puede arrancar (mismo motor, mismo
+     * proceso `:x4k`). Puro para testear.
+     */
+    internal fun engineDownloadsToPause(items: List<OfflineDownload>): List<OfflineDownload> =
+        items.filter { it.state == DownloadState.DOWNLOADING && needsRemoteResolve(it.videoUrl) }
+
+    /** La primera descarga que bloquea el motor nativo, o null si el motor está libre. */
+    fun activeEngineDownload(context: Context): OfflineDownload? =
+        engineDownloadsToPause(OfflineRegistry.getAll(context)).firstOrNull()
+
+    /**
+     * Pausa TODA descarga que esté ocupando el motor antes de reproducir en línea y
+     * espera el ack del servicio (`.paused`): al volver, `stopHeadless` ya corrió y el
+     * reproductor puede arrancar sin cruzarse. Devuelve true si el motor quedó libre.
+     */
+    suspend fun pauseEngineDownloadsForPlayback(context: Context, timeoutMs: Long = 12_000L): Boolean =
+        withContext(Dispatchers.IO) {
+            val app = context.applicationContext
+            var allFree = true
+            for (item in engineDownloadsToPause(OfflineRegistry.getAll(app))) {
+                if (!pauseForPlayback(app, item, timeoutMs)) allFree = false
+            }
+            allFree
+        }
+
+    private suspend fun pauseForPlayback(app: Context, item: OfflineDownload, timeoutMs: Long): Boolean {
+        val dir = runCatching { File(item.vaultFilePath).parentFile }.getOrNull()
+        activeJobs[item.id]?.cancel()
+        activeJobs.remove(item.id)
+        delegatedIds.remove(item.id)
+        // Marcador viejo fuera: se espera el NUEVO ack de esta pausa.
+        runCatching { dir?.let { OfflineProgressFile.clearPauseFlag(it, item.id) } }
+        OfflineRegistry.updateState(item.id, DownloadState.PAUSED)
+        if (!needsRemoteResolve(item.videoUrl)) return true
+        runCatching {
+            app.startService(X4KDownloadService.pauseIntent(app, item.id, item.vaultFilePath))
+        }
+        if (dir == null) return true
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (OfflineProgressFile.hasPauseFlag(dir, item.id)) {
+                OfflineProgressFile.clearPauseFlag(dir, item.id)
+                return true
+            }
+            delay(150L)
+        }
+        runCatching { OfflineProgressFile.clearPauseFlag(dir, item.id) }
+        return false
     }
 
     fun resumeDownload(context: Context, id: String) {
@@ -289,6 +349,8 @@ object OfflineDownloadManager {
             runCatching {
                 File(doomed.vaultFilePath).parentFile?.let { OfflineProgressFile.clear(it, id) }
             }
+            // El parcial cifrado no sirve tras borrar (no hay reanudación por offset).
+            runCatching { File("${doomed.vaultFilePath}.downloading").delete() }
         }
         OfflineRegistry.remove(id, context)
     }

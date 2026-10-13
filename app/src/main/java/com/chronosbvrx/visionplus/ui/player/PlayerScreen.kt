@@ -109,6 +109,8 @@ import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.ResumeInfo
 import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.metaLine
+import com.chronosbvrx.visionplus.data.offline.OfflineDownload
+import com.chronosbvrx.visionplus.data.offline.OfflineDownloadManager
 import com.chronosbvrx.visionplus.data.xuper.MagisClient
 import com.chronosbvrx.visionplus.data.xuper.MagisTitan
 import com.chronosbvrx.visionplus.data.xuper.TitanSdk
@@ -178,31 +180,35 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
     // play codes here and the X4K engine (its own process) does the streaming. The handoff
     // screen holds the room until the player takes over.
     if (film.videoUrl.startsWith("xtv:") || film.videoUrl.startsWith("xtvlive:")) {
-        val context = androidx.compose.ui.platform.LocalContext.current
-        val live = film.videoUrl.startsWith("xtvlive:")
-        val code = film.videoUrl.substringAfter(':')
-        // El capítulo llega con su contexto: el handoff ("Abriendo…") sale al instante y el
-        // portal resuelve detrás, en vez del click muerto de lanzar el play en segundo plano.
-        val ep = episode
-        val fallbackDuration = if (ep != null && ep.durationMs > 0) ep.durationMs else if (film.durationMin > 0) film.durationMin * 60_000L else 0L
-        XtvHandoff(
-            title = film.title + (ep?.titleSuffix.orEmpty()),
-            prepare = {
-                if (live) com.chronosbvrx.visionplus.data.xuper.X4KApi.playLive(context, code, film.title)
-                else if (ep != null) com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(
-                    context, ep.code, film.title + ep.titleSuffix, seriesId = ep.seriesId,
-                    episodeIds = ep.episodeIds, episodeNames = ep.episodeNames, episodeIndex = ep.episodeIndex,
-                    seasonIds = ep.seasonIds, seasonNames = ep.seasonNames, seasonIndex = ep.seasonIndex,
-                    resumeMs = ep.resumeMs, posterUrl = film.posterUrl,
-                    fallbackDurationMs = fallbackDuration,
-                )
-                else com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(
-                    context, code, film.title, resumeMs = resumeMs, posterUrl = film.posterUrl,
-                    fallbackDurationMs = fallbackDuration,
-                )
-            },
-            onDone = onBack,
-        )
+        // El motor nativo solo puede con una cosa a la vez y la descarga lo ocupa entero:
+        // con una descarga activa se ofrece pausarla antes de abrir (nunca se cruzan).
+        EngineDownloadGate(isTv = isTv, onCancel = onBack) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val live = film.videoUrl.startsWith("xtvlive:")
+            val code = film.videoUrl.substringAfter(':')
+            // El capítulo llega con su contexto: el handoff ("Abriendo…") sale al instante y el
+            // portal resuelve detrás, en vez del click muerto de lanzar el play en segundo plano.
+            val ep = episode
+            val fallbackDuration = if (ep != null && ep.durationMs > 0) ep.durationMs else if (film.durationMin > 0) film.durationMin * 60_000L else 0L
+            XtvHandoff(
+                title = film.title + (ep?.titleSuffix.orEmpty()),
+                prepare = {
+                    if (live) com.chronosbvrx.visionplus.data.xuper.X4KApi.playLive(context, code, film.title)
+                    else if (ep != null) com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(
+                        context, ep.code, film.title + ep.titleSuffix, seriesId = ep.seriesId,
+                        episodeIds = ep.episodeIds, episodeNames = ep.episodeNames, episodeIndex = ep.episodeIndex,
+                        seasonIds = ep.seasonIds, seasonNames = ep.seasonNames, seasonIndex = ep.seasonIndex,
+                        resumeMs = ep.resumeMs, posterUrl = film.posterUrl,
+                        fallbackDurationMs = fallbackDuration,
+                    )
+                    else com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(
+                        context, code, film.title, resumeMs = resumeMs, posterUrl = film.posterUrl,
+                        fallbackDurationMs = fallbackDuration,
+                    )
+                },
+                onDone = onBack,
+            )
+        }
         return
     }
     // The url of a film may be a ref (`ia:identifier|title`): resolve it into a real url once,
@@ -247,21 +253,24 @@ fun LivePlayerScreen(
     // engine (its own process) takes over with the full zapper. The handoff screen holds the
     // room until the player takes over, so the menu never flashes back in between.
     if (channel.url.startsWith("xtvlive:")) {
-        val context = androidx.compose.ui.platform.LocalContext.current
-        val code = channel.url.substringAfter(':')
-        XtvHandoff(
-            title = channel.name,
-            prepare = {
-                com.chronosbvrx.visionplus.data.xuper.X4KApi.playLive(
-                    context,
-                    code,
-                    channel.name,
-                    channelCodes = channelCodes,
-                    groupTitle = groupTitle,
-                )
-            },
-            onDone = onBack,
-        )
+        // Mismo motor que las descargas: con una XTV activa se ofrece pausarla antes de abrir.
+        EngineDownloadGate(isTv = isTv, onCancel = onBack) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val code = channel.url.substringAfter(':')
+            XtvHandoff(
+                title = channel.name,
+                prepare = {
+                    com.chronosbvrx.visionplus.data.xuper.X4KApi.playLive(
+                        context,
+                        code,
+                        channel.name,
+                        channelCodes = channelCodes,
+                        groupTitle = groupTitle,
+                    )
+                },
+                onDone = onBack,
+            )
+        }
         return
     }
     // A portal channel (`magis:<code>|…`) plays through the provider's own engine, inside the app.
@@ -489,6 +498,15 @@ fun TitanVodPlayerScreen(film: Film, onBack: () -> Unit) {
             runCatching { MagisClient(context).startPlayVodRecovering(contentId) }.getOrDefault(emptyList())
         }
         if (medias.isEmpty()) {
+            // Respaldo XTV: toca el mismo motor que una descarga activa. Sin coordinar,
+            // el play se buggea; mejor un aviso honesto que un fallo raro.
+            val engineBusy = withContext(Dispatchers.IO) {
+                runCatching { OfflineDownloadManager.activeEngineDownload(context) }.getOrNull()
+            }
+            if (engineBusy != null) {
+                error = "Hay una descarga en curso: pausa la descarga en «Descargas» para ver este título en línea."
+                return@LaunchedEffect
+            }
             val playedXtv = withContext(Dispatchers.IO) {
                 com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(context, contentId, film.title)
             }
@@ -1545,6 +1563,88 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+/**
+ * Puerta de coordinación descarga ↔ reproducción en línea.
+ *
+ * El motor nativo del proveedor vive en un único proceso (`:x4k`) y solo mantiene un
+ * programa: una descarga XTV activa lo ocupa durante todo el transfer y el reproductor
+ * no puede abrir mientras tanto (al forzarlo, la película se buggea y la descarga muere).
+ * Antes de lanzar el reproductor se detecta esa descarga, se pregunta con honestidad y,
+ * si el usuario acepta, se pausa esperando el ack del servicio: al continuar, el motor
+ * ya está libre. "Seguir descargando" cancela la reproducción.
+ */
+@Composable
+private fun EngineDownloadGate(isTv: Boolean, onCancel: () -> Unit, content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    var checked by remember { mutableStateOf(false) }
+    var blocking by remember { mutableStateOf<OfflineDownload?>(null) }
+    var pausing by remember { mutableStateOf(false) }
+    var proceed by remember { mutableStateOf(false) }
+    val confirmFocus = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        val found = withContext(Dispatchers.IO) {
+            runCatching { OfflineDownloadManager.activeEngineDownload(context) }.getOrNull()
+        }
+        blocking = found
+        checked = true
+        if (found == null) proceed = true
+    }
+
+    if (proceed) {
+        content()
+        return
+    }
+    Box(
+        Modifier.fillMaxSize().background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (!checked) CircularProgressIndicator(color = VisionBlue)
+        blocking?.let { item ->
+            AlertDialog(
+                onDismissRequest = { if (!pausing) onCancel() },
+                modifier = Modifier.modalFocusTrap(),
+                title = { Text("Descarga en curso") },
+                text = {
+                    Text(
+                        buildString {
+                            append("«${item.title}» va al ${item.progressPercent}%. ")
+                            append("Vision+ usa el mismo motor de video para descargar y para reproducir: ")
+                            append("para ver en línea ahora hay que pausar la descarga. ")
+                            append("Al reanudarla empezará desde el principio.")
+                            if (pausing) append("\n\nPausando descarga…")
+                        },
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = { pausing = true },
+                        enabled = !pausing,
+                        modifier = Modifier.focusRequester(confirmFocus),
+                    ) { Text(if (pausing) "Pausando…" else "Pausar y ver ahora") }
+                },
+                dismissButton = {
+                    TextButton(onClick = onCancel, enabled = !pausing) { Text("Seguir descargando") }
+                },
+            )
+            LaunchedEffect(item.id) {
+                if (isTv) {
+                    delay(300)
+                    runCatching { confirmFocus.requestFocus() }
+                }
+            }
+            if (pausing) {
+                LaunchedEffect(item.id) {
+                    withContext(Dispatchers.IO) {
+                        runCatching { OfflineDownloadManager.pauseEngineDownloadsForPlayback(context) }
+                    }
+                    proceed = true
+                }
+            }
+        }
+    }
 }
 
 /**

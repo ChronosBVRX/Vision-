@@ -48,6 +48,7 @@ class X4KDownloadService : Service() {
 
         const val ACTION_DOWNLOAD = "com.chronosbvrx.visionplus.action.OFFLINE_DOWNLOAD"
         const val ACTION_CANCEL = "com.chronosbvrx.visionplus.action.OFFLINE_CANCEL"
+        const val ACTION_PAUSE = "com.chronosbvrx.visionplus.action.OFFLINE_PAUSE"
 
         const val EXTRA_ID = "download_id"
         const val EXTRA_CODE = "portal_code"
@@ -57,6 +58,7 @@ class X4KDownloadService : Service() {
         const val EXTRA_VAULT_PATH = "vault_path"
         const val EXTRA_DURATION_MS = "duration_ms"
         const val EXTRA_TOTAL_BYTES = "total_bytes"
+        const val EXTRA_ISSUED_AT = "issued_at"
 
         const val MIN_VALID_VIDEO_BYTES = MIN_VALID_VAULT_BYTES
         private const val RESOLVE_TIMEOUT_MS = 25_000L
@@ -84,6 +86,9 @@ class X4KDownloadService : Service() {
             putExtra(EXTRA_VAULT_PATH, vaultPath)
             putExtra(EXTRA_DURATION_MS, durationMs)
             putExtra(EXTRA_TOTAL_BYTES, totalBytes)
+            // Marca de emisión: si una pausa llega DESPUÉS de este momento, gana la
+            // pausa aunque los intents se procesen en otro orden (carrera cerrada).
+            putExtra(EXTRA_ISSUED_AT, System.currentTimeMillis())
         }
 
         fun cancelIntent(context: Context, id: String): Intent =
@@ -91,13 +96,40 @@ class X4KDownloadService : Service() {
                 action = ACTION_CANCEL
                 putExtra(EXTRA_ID, id)
             }
+
+        /**
+         * Pausa coordinada con la reproducción: el principal la pide antes de abrir el
+         * reproductor nativo (mismo proceso `:x4k`, mismo motor) y espera el marcador
+         * `.paused` que el servicio deja al soltar el motor.
+         */
+        fun pauseIntent(context: Context, id: String, vaultPath: String): Intent =
+            Intent(context, X4KDownloadService::class.java).apply {
+                action = ACTION_PAUSE
+                putExtra(EXTRA_ID, id)
+                putExtra(EXTRA_VAULT_PATH, vaultPath)
+            }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = ConcurrentHashMap<String, Job>()
     /** Ids con corrida en curso: segunda corrida concurrente del mismo id sale sin pelear. */
     private val runningIds = ConcurrentHashMap.newKeySet<String>()
+    /** Código headless en curso por id: permite soltar el motor al instante al pausar. */
+    private val activeCodes = ConcurrentHashMap<String, String>()
+    /** vaultDir de cada corrida: dónde queda el ack `.paused` que el principal espera. */
+    private val activeVaultDirs = ConcurrentHashMap<String, File>()
+    /**
+     * Momento (wall clock) de la última pausa pedida por id. Una corrida captura la
+     * marca de emisión de su intent: si la pausa llegó después, gana la pausa (aunque
+     * los intents se procesen en otro orden). Sin marcas pegadas: una reanudación
+     * futura emite una marca mayor y arranca normal.
+     */
+    private val pauseRequestedAtMs = ConcurrentHashMap<String, Long>()
+    /** Candado anti-carrera entre "pausar" y "encender el motor": jamás se cruzan. */
+    private val pauseLock = Any()
     private var startedForeground = false
+
+    private fun pauseRequestedAt(id: String): Long = pauseRequestedAtMs[id] ?: 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -107,6 +139,15 @@ class X4KDownloadService : Service() {
                 val id = intent.getStringExtra(EXTRA_ID).orEmpty()
                 activeJobs[id]?.cancel()
                 activeJobs.remove(id)
+                // Soltar el motor ya (el reproductor vive en este mismo proceso).
+                releaseHeadlessNow(id)
+                if (activeJobs.isEmpty()) stopSelfResult(startId)
+            }
+            ACTION_PAUSE -> {
+                val id = intent.getStringExtra(EXTRA_ID).orEmpty()
+                if (id.isNotBlank()) {
+                    requestPause(id, intent.getStringExtra(EXTRA_VAULT_PATH).orEmpty())
+                }
                 if (activeJobs.isEmpty()) stopSelfResult(startId)
             }
             ACTION_DOWNLOAD -> {
@@ -140,6 +181,11 @@ class X4KDownloadService : Service() {
         val fallbackTotal = intent.getLongExtra(EXTRA_TOTAL_BYTES, 0L).takeIf { it > 0L }
             ?: estimateTotalBytes(durationMs, quality)
         val dest = File(vaultPath)
+        dest.parentFile?.let { activeVaultDirs[id] = it }
+        // Marca de emisión del intent: la pausa gana si llegó después de este momento.
+        val myIssuedAt = intent.getLongExtra(EXTRA_ISSUED_AT, 0L).takeIf { it > 0L }
+            ?: System.currentTimeMillis()
+        fun pauseWins() = pauseRequestedAt(id) >= myIssuedAt
         // Sin doble corrida: si ya hay una en curso para este id, esta sale en silencio.
         if (!runningIds.add(id)) {
             Log.i(TAG, "Descarga $id ya en curso, se omite duplicada")
@@ -154,6 +200,11 @@ class X4KDownloadService : Service() {
             // proceso: si el reproductor está activo, no competir (error honesto).
             if (X4KPlayerAty.isPlayerActive) {
                 throw IllegalStateException("Reproducción en curso: pausa el video e inténtalo de nuevo")
+            }
+            // Pausa pedida antes de encender nada: el ack ya lo escribió requestPause.
+            if (pauseWins()) {
+                Log.i(TAG, "Descarga $id pausada antes de arrancar el motor")
+                return
             }
             updateNotif("Resolviendo $title…")
 
@@ -205,8 +256,19 @@ class X4KDownloadService : Service() {
 
             // Vía del reproductor a nivel facade: x(0, code, program) — la misma llamada
             // que ed.e.A() hace al abrir. Sin vista, sin Surface, sin audio.
-            val started = resolveWithHeadlessEngine(app, code, title, mediaSpecs)
+            // Candado anti-carrera: si la pausa llegó justo ahora, el motor jamás se
+            // enciende (y si ya estaba, requestPause lo suelta detrás de este candado).
+            val started = synchronized(pauseLock) {
+                if (pauseWins()) {
+                    false
+                } else {
+                    resolveWithHeadlessEngine(app, code, title, mediaSpecs).also { ok ->
+                        if (ok) activeCodes[id] = code
+                    }
+                }
+            }
             if (!started) {
+                if (pauseWins()) throw CancellationException("Descarga pausada: el motor pasa al reproductor")
                 throw IllegalStateException("No se pudo resolver el stream (motor ocupado, inténtalo de nuevo)")
             }
             try {
@@ -220,8 +282,11 @@ class X4KDownloadService : Service() {
                 runCatching { X4KTitan.stopHeadless(code) }
             }
         } catch (e: Exception) {
-            if (e is CancellationException) {
-                Log.i(TAG, "Descarga cancelada: $id")
+            if (e is CancellationException || pauseWins()) {
+                Log.i(TAG, "Descarga pausada o cancelada: $id")
+                // El parcial cifrado no sirve (no hay reanudación por offset): fuera,
+                // no dejes GB tirados cuando la pausa corta el stream antes del check.
+                runCatching { File("$vaultPath.downloading").delete() }
             } else {
                 Log.e(TAG, "Fallo descarga $id: ${e.message}", e)
                 OfflineProgressBus.sendError(app, id, e.message ?: "Error de red al descargar")
@@ -231,6 +296,8 @@ class X4KDownloadService : Service() {
         } finally {
             runningIds.remove(id)
             activeJobs.remove(id)
+            activeCodes.remove(id)
+            activeVaultDirs.remove(id)
             if (activeJobs.isEmpty()) {
                 runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
                 stopSelf()
@@ -239,10 +306,45 @@ class X4KDownloadService : Service() {
     }
 
     /**
+     * Pausa pedida por el principal antes de reproducir en línea: cancela el job,
+     * suelta el motor nativo DE INMEDIATO (el reproductor vive en este mismo proceso)
+     * y confirma con el marcador `.paused` que el principal espera. Sin este aviso,
+     * "pausar" dejaba al servicio bajando por detrás.
+     */
+    private fun requestPause(id: String, vaultPath: String) {
+        // La marca gana antes que nada: si el intent de descarga se procesa después
+        // (orden alterado), su corrida verá la pausa y no encenderá el motor.
+        pauseRequestedAtMs[id] = System.currentTimeMillis()
+        activeJobs.remove(id)?.cancel()
+        synchronized(pauseLock) {
+            releaseHeadlessLocked(id)
+            val dir = activeVaultDirs[id]
+                ?: vaultPath.takeIf { it.isNotBlank() }?.let { File(it).parentFile }
+            if (dir != null) {
+                OfflineProgressFile.clear(dir, id)
+                OfflineProgressFile.writePauseFlag(dir, id)
+            }
+        }
+    }
+
+    /** Suelta el programa headless ya, sin esperar a que el job en vuelo se desmonte. */
+    private fun releaseHeadlessNow(id: String) {
+        synchronized(pauseLock) { releaseHeadlessLocked(id) }
+    }
+
+    private fun releaseHeadlessLocked(id: String) {
+        val code = activeCodes[id].orEmpty()
+        if (code.isNotBlank()) {
+            runCatching { X4KTitan.stopHeadless(code) }
+        }
+    }
+
+    /**
      * Configura el motor y arranca el programa vía facade (x(0, …)), sin vista.
      * Devuelve true si la orden se encoló; la URL real se sondea con GetStatus.
+     * Bloqueante a propósito (sin suspensiones): puede correr bajo el candado de pausa.
      */
-    private suspend fun resolveWithHeadlessEngine(
+    private fun resolveWithHeadlessEngine(
         app: Context,
         code: String,
         title: String,

@@ -250,7 +250,7 @@ fun DownloadsScreen(
                                 }
                             },
                             onPause = {
-                                OfflineDownloadManager.pauseDownload(item.id)
+                                OfflineDownloadManager.pauseDownload(item.id, context)
                             },
                             onDelete = {
                                 OfflineDownloadManager.deleteDownload(context, item.id)
