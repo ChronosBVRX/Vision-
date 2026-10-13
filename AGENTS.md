@@ -5,6 +5,14 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **LÍNEA ESTABLE v2.5.58** (commit `f3343b2`, tag `v2.5.58`, 2026-10-13): 207 tests
+  Android + 38 backend en verde; offline probado en físico (A32 1.09 GB + POCO 829 MB
+  + play offline con video/audio); reproducción intacta. **Regla anti-regresión**:
+  no tocar `data/offline/*`, `X4KTitan.play/stop/queryStatusUrls/beanPlayUrl`,
+  `X4KPlayerAty.onCreate/play` ni `VisionApp.onCreate` sin (1) tests en verde y
+  (2) prueba física en A32/POCO si cambia runtime. Guardianes:
+  `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
+  avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
 - App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.58**
   (versionCode **294**, release OTA v2.5.58). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
