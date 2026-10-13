@@ -164,6 +164,7 @@ object RemoteIndexSource {
                     voteCount = f.optInt("voteCount", 0),
                     groupId = f.optString("groupId"),
                     seasons = parseSeasons(f.optJSONArray("seasons")),
+                    kind = f.optString("kind"),
                 )
             }
             rows += CatalogRow(id, category.optString("title"), films)
@@ -303,6 +304,7 @@ object RemoteIndexSource {
                     voteCount = f.optInt("voteCount", 0),
                     groupId = f.optString("groupId"),
                     seasons = parseSeasons(f.optJSONArray("seasons")),
+                    kind = f.optString("kind"),
                 )
             }
             if (memorySearchCache.size > 100) {
@@ -357,6 +359,7 @@ object RemoteIndexSource {
                 put("score", f.score)
                 put("popularity", f.popularity)
                 put("voteCount", f.voteCount)
+                if (f.kind.isNotBlank()) put("kind", f.kind)
                 if (f.groupId.isNotBlank()) put("groupId", f.groupId)
                 if (f.seasons.isNotEmpty()) {
                     val seasons = JSONArray()

@@ -23,6 +23,8 @@ data class Film(
     val groupId: String = "",
     /** Las temporadas del grupo (vacío cuando no hay varias). */
     val seasons: List<SeasonRef> = emptyList(),
+    /** Tipo del catálogo en el servidor: movie/series/anime/kids (vacío si no lo trae). */
+    val kind: String = "",
 )
 
 /** Una temporada dentro de un grupo: su número (0 = serie completa) y su ref de reproducción. */

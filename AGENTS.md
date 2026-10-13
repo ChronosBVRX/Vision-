@@ -5,6 +5,47 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **LÍNEA ESTABLE v2.5.59** (2026-10-13): 212 tests Android + 46 backend en verde.
+  **Catálogo propio en Inicio + Novedades rescatadas de Xuper + popularidad real
+  (fin del nicho)**:
+  - **Inicio 100% propio**: `XuperCatalog.load` ya no fusiona las repisas crudas del
+    portal («HBO Movie», «Maldición misteriosa», «All», «Tráiler»…) en `rows`; el
+    portal se consulta solo por metadatos de fichas (K_META) y por `liveRow`. Home
+    móvil y TV arman su pool con `Popularity.homePool` (filas propias + hileras
+    curadas del índice: `estrenos`, `recomendados`, `genero-*`) y pintan filas
+    propias por tipo (`popularByKind`): «🎬 Películas populares», «📺 Series
+    populares», «🌸 Anime», «🧸 Para chicos». Las filas `magis-*` se excluyen del
+    Inicio. El hero/estrenos usan fallback al pool propio (no a un canal de TV).
+  - **Novedades = destacados de Xuper rescatados**: el portal no tiene endpoint de
+    «destacados» (probado `getColumnRecommendResource`/`specialFlag`: vacíos); sus
+    destacados son las repisas de estreno por sección («2026», «2026 Peliculas
+    teatrales», «Últimas Actualizaciones»). `xtv.is_premiere_shelf` las detecta en
+    el sync y las enlaza a `xtv-{sección}-destacados` (kind source, 70). `index_build`
+    las pone al frente de `estrenos` global y de `xtv-{sección}-estrenos` (intercalado
+    por rango de sección; relleno por popularidad desde la posición 1000). La fila
+    «✨ Novedades y Estrenos» existe siempre (fallback a la hilera del servidor).
+  - **Popularidad real (nicho fuera)**:
+    - `index_build` excluye de filas curadas lo descartado por TMDB
+      (`NOT_UNMATCHED`: `match_confidence < 0.5`) — «El Temible Quemador», «Las
+      Panteras» y similares ya no aparecen — y ordena `popularity desc` (los
+      pendientes de clasificar caen al final).
+    - `tmdb.py`: `clean_query` quita la marca de temporada antes de buscar (el 96%
+      de las series fallaba buscando «Eagleheart T1» tal cual); en tv el año ya no
+      filtra la búsqueda (solo pondera confianza); anime/kids buscan tv+movie;
+      `rematch_batch` reintenta los ~19k «sin match» (cooldown 14 días);
+      `backfill_popularity` rellena popularidad/votos de los ~10.5k matches viejos.
+      Batches: `TMDB_REMATCH_BATCH=2500`, `TMDB_BACKFILL_BATCH=3000` (por ciclo).
+      OJO: el relleno total toma ~1-2 días; el orden mejora ciclo a ciclo.
+    - Bug latente corregido: `magis.py`/`archive_ia.py` armaban tuplas de 18 columnas
+      contra `TITLE_SQL` de 20 → sus conectores fallaban en cada ciclo desde v2.5.53;
+      ahora usan `title_row()` puro con tests de aridad.
+  - **API**: `film()` sirve `kind` (lo usan las filas propias del Home); `Film.kind`
+    parseado en `RemoteIndexSource` (payload, búsqueda y caché).
+  - **Guardianes nuevos**: `PopularityTest.homePoolOnlyTakesCuratedIndexRows`,
+    `popularByKindOrdersByImpactAndFillsWithUnclassified`,
+    `RemoteIndexTest.kindSurvivesTheParseForHomeRows`, `test_premiere_shelf_detection`,
+    `test_clean_query_strips_season_marks`, `test_magis_row_matches_sql_arity`,
+    `test_ia_row_matches_sql_arity`, `test_curated_rows_exclude_unmatched_titles`.
 - **LÍNEA ESTABLE v2.5.58** (commit `f3343b2`, tag `v2.5.58`, 2026-10-13): 207 tests
   Android + 38 backend en verde; offline probado en físico (A32 1.09 GB + POCO 829 MB
   + play offline con video/audio); reproducción intacta. **Regla anti-regresión**:

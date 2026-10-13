@@ -38,6 +38,29 @@ SECTIONS = {
 
 SECTION_MIN_TITLES = 5
 
+# Un título que TMDB descartó (match_confidence 0.0 = no existe en el catálogo mundial)
+# no entra a las filas curadas: el portal le pone score inflado (9.3 a una película de
+# nicho) y antes dominaba géneros y estrenos. Pendientes (sin fila) sí entran y se
+# ordenan después de los ya clasificados.
+NOT_UNMATCHED = (
+    "not exists (select 1 from enrichment e where e.title_id = t.id and e.match_confidence < 0.5)"
+)
+
+# Posiciones de las repisas de «destacados» del portal (xtv-{sección}-destacados)
+# por delante del relleno: los estrenos que Xuper promueve van al frente.
+DESTACADOS_FIRST_SQL = """
+insert into title_categories (title_id, category_id, position)
+select tc.title_id, $1, row_number() over (order by tc.position, tc.title_id)
+from title_categories tc
+join titles t on t.id = tc.title_id
+where tc.category_id = $2 and {where}
+on conflict do nothing
+"""
+
+# El resto de la fila, ordenado por impacto real, arranca en 1000 para no adelantarse
+# a los destacados del portal (que ocupan 1..N).
+REST_OFFSET = 1000
+
 
 def _canonical_key(title: str) -> str:
     """La clave de agrupación: mismo nombre (sin acentos ni mayúsculas) = misma categoría.
@@ -134,6 +157,39 @@ def _shift_sql(clause: str, shift: int = 2) -> str:
     return re.sub(r"\$(\d+)", lambda m: f"${int(m.group(1)) + shift}", clause)
 
 
+def section_filters(anime_ids: list[str], novela_ids: list[str]) -> dict[str, tuple[str, list]]:
+    """Los WHERE mutuamente excluyentes de cada sección (con el filtro de nicho)."""
+    series_shelf = (
+        "exists (select 1 from title_categories tc2 where tc2.title_id = t.id"
+        " and tc2.category_id = 'xtv-series-all')"
+    )
+    return {
+        "anime": (
+            "t.id = any($1::text[]) and " + NOT_UNMATCHED,
+            [anime_ids],
+        ),
+        "novelas": (
+            "t.id = any($1::text[]) and " + NOT_UNMATCHED,
+            [novela_ids],
+        ),
+        "movies": (
+            "t.kind = 'movie' and coalesce(t.program_type, '') not in ('series', 'teleplay', 'anime')"
+            f" and not ({series_shelf})"
+            " and not (t.id = any($1::text[])) and not (t.id = any($2::text[]))"
+            " and " + NOT_UNMATCHED,
+            [anime_ids, novela_ids],
+        ),
+        "series": (
+            "(t.program_type in ('series', 'teleplay')"
+            " or (t.kind = 'series' and coalesce(t.program_type, '') not in ('movie', 'anime'))"
+            f" or {series_shelf})"
+            " and not (t.id = any($1::text[])) and not (t.id = any($2::text[]))"
+            " and " + NOT_UNMATCHED,
+            [anime_ids, novela_ids],
+        ),
+    }
+
+
 async def build_section_genres(pool) -> int:
     """Géneros propios de cada sección del riel (Películas/Series/Novelas/Anime).
 
@@ -193,34 +249,7 @@ async def build_section_genres(pool) -> int:
         )
         novela_ids = [r["id"] for r in novela_rows]
 
-        series_shelf = (
-            "exists (select 1 from title_categories tc2 where tc2.title_id = t.id"
-            " and tc2.category_id = 'xtv-series-all')"
-        )
-
-        filters = {
-            "anime": (
-                "t.id = any($1::text[])",
-                [anime_ids],
-            ),
-            "novelas": (
-                "t.id = any($1::text[])",
-                [novela_ids],
-            ),
-            "movies": (
-                "t.kind = 'movie' and coalesce(t.program_type, '') not in ('series', 'teleplay', 'anime')"
-                f" and not ({series_shelf})"
-                " and not (t.id = any($1::text[])) and not (t.id = any($2::text[]))",
-                [anime_ids, novela_ids],
-            ),
-            "series": (
-                "(t.program_type in ('series', 'teleplay')"
-                " or (t.kind = 'series' and coalesce(t.program_type, '') not in ('movie', 'anime'))"
-                f" or {series_shelf})"
-                " and not (t.id = any($1::text[])) and not (t.id = any($2::text[]))",
-                [anime_ids, novela_ids],
-            ),
-        }
+        filters = section_filters(anime_ids, novela_ids)
 
         SECTION_PREMIERE_TITLES = {
             "movies": "Estrenos de Películas",
@@ -232,16 +261,23 @@ async def build_section_genres(pool) -> int:
 
         for section, (base_where, extra) in filters.items():
             # 1. Hilera de estrenos / novedades de la sección (posición 1):
-            #    estrenos DE VERDAD primero = impacto (popularidad TMDB) antes que año puro.
-            #    Antes: año DESC aplastaba (oscuro 2026 score 0 vencía a éxito 2025).
+            #    los destacados del portal van al frente; después, el resto por
+            #    impacto (popularidad TMDB) antes que año puro.
             estrenos_cid = f"xtv-{section}-estrenos"
             estrenos_title = SECTION_PREMIERE_TITLES.get(section, f"Estrenos de {SECTIONS.get(section, section)}")
             await conn.execute(CAT_SQL, estrenos_cid, estrenos_title, "section", 1)
+            dest_args = [estrenos_cid, f"xtv-{section}-destacados"] + list(extra)
+            dest_where = _shift_sql(base_where, 2)
+            tag_dest = await conn.execute(
+                DESTACADOS_FIRST_SQL.format(where=dest_where),
+                *dest_args,
+            )
+            changed += _rows(tag_dest)
             prem_args = [estrenos_cid, current_year - 1] + list(extra)
             prem_where = _shift_sql(base_where, 2)
             tag_prem = await conn.execute(
                 "insert into title_categories (title_id, category_id, position) "
-                "select t.id, $1, row_number() over (order by coalesce(t.popularity, 0) desc, "
+                "select t.id, $1, 1000 + row_number() over (order by coalesce(t.popularity, 0) desc, "
                 "t.score desc nulls last, t.year desc nulls last, t.title) "
                 f"from titles t where (t.year is not null and t.year >= $2 or t.is_premiere) and {prem_where} "
                 "on conflict do nothing",
@@ -286,11 +322,37 @@ async def build(pool) -> int:
         # --- Estrenos ---
         await conn.execute(CAT_SQL, "estrenos", "Estrenos y Novedades", "special", 1)
         await conn.execute("delete from title_categories where category_id = 'estrenos'")
+        # 1. Los destacados de cada sección del portal (repisas de estreno rescatadas)
+        #    van al frente: eso muestra Xuper como «destacados» y aquí son «Novedades».
+        #    Se intercalan por rango dentro de cada sección (1.º de cada una, 2.º de
+        #    cada una…) para que ninguna (p. ej. anime con 1k) acapare el corte de 100.
         tag = await conn.execute(
             """
             insert into title_categories (title_id, category_id, position)
-            select id, 'estrenos', row_number() over (order by coalesce(popularity, 0) desc, year desc nulls last, score desc nulls last, title)
-            from titles where (year is not null and year >= $1 or is_premiere) and source != 'magis'
+            select title_id, 'estrenos',
+                   row_number() over (order by sec_rank, category_id, title_id)
+            from (
+                select tc.title_id, tc.category_id,
+                       row_number() over (
+                           partition by tc.category_id order by tc.position, tc.title_id
+                       ) as sec_rank
+                from title_categories tc
+                join categories c on c.id = tc.category_id
+                join titles t on t.id = tc.title_id
+                where c.id like 'xtv-%-destacados' and t.source != 'magis'
+                  and not exists (select 1 from enrichment e where e.title_id = t.id and e.match_confidence < 0.5)
+            ) as ranked
+            on conflict do nothing
+            """
+        )
+        changed += _rows(tag)
+        # 2. El resto por impacto real (popularidad TMDB), sin el nicho sin match.
+        tag = await conn.execute(
+            f"""
+            insert into title_categories (title_id, category_id, position)
+            select t.id, 'estrenos', 1000 + row_number() over (order by coalesce(t.popularity, 0) desc, t.year desc nulls last, t.score desc nulls last, t.title)
+            from titles t where (t.year is not null and t.year >= $1 or t.is_premiere) and t.source != 'magis'
+              and {NOT_UNMATCHED}
             on conflict do nothing
             """,
             datetime.now().year - 1,
@@ -298,7 +360,9 @@ async def build(pool) -> int:
         changed += _rows(tag)
 
         # --- Géneros (desde titles.genres, ya traducidos por los conectores) ---
-        rows = await conn.fetch("select id, genres from titles where cardinality(genres) > 0")
+        rows = await conn.fetch(
+            "select t.id, t.genres from titles t where cardinality(t.genres) > 0 and " + NOT_UNMATCHED
+        )
         catalog: dict[str, str] = {}
         title_ids: list[str] = []
         category_ids: list[str] = []

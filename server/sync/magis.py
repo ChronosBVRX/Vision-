@@ -173,6 +173,27 @@ def _pick_poster(posters) -> str:
     return ""
 
 
+def title_row(asset: dict, short: str) -> tuple | None:
+    """Una fila de asset de Magis para TITLE_SQL (20 columnas, como xtv.title_row)."""
+    cid = asset.get("contentId") or ""
+    if not cid or not asset.get("name"):
+        return None
+    tags = asset.get("tags") or ""
+    program_type = (asset.get("programType") or "").lower()
+    kind = "series" if program_type in ("series", "teleplay") else "movie"
+    year = _parse_year(tags)
+    return (
+        f"magis:{cid}", "magis", cid, kind, asset.get("name") or "",
+        asset.get("alias") or None, year, asset.get("description") or "",
+        _pick_poster(asset.get("posterList")),
+        _parse_duration_min(asset.get("duration") or ""), None,
+        _parse_genres(tags), asset.get("actorDisplay") or "",
+        asset.get("director") or "", f"magisvod:{cid}",
+        bool(year and year >= datetime.now().year - 1),
+        not short == "movies", program_type, 0.0, 0,
+    )
+
+
 async def sync(pool) -> int:
     from xtv import CAT_SQL, LINK_SQL, TITLE_SQL  # comparte SQL
 
@@ -218,24 +239,11 @@ async def sync(pool) -> int:
             assets = row.get("assetList") or []
             title_rows, links = [], []
             for i, asset in enumerate(assets):
-                cid = asset.get("contentId") or ""
-                if not cid or not asset.get("name"):
+                row = title_row(asset, short)
+                if row is None:
                     continue
-                tags = asset.get("tags") or ""
-                program_type = (asset.get("programType") or "").lower()
-                kind = "series" if program_type in ("series", "teleplay") else "movie"
-                year = _parse_year(tags)
-                title_rows.append((
-                    f"magis:{cid}", "magis", cid, kind, asset.get("name") or "",
-                    asset.get("alias") or None, year, asset.get("description") or "",
-                    _pick_poster(asset.get("posterList")),
-                    _parse_duration_min(asset.get("duration") or ""), None,
-                    _parse_genres(tags), asset.get("actorDisplay") or "",
-                    asset.get("director") or "", f"magisvod:{cid}",
-                    bool(year and year >= datetime.now().year - 1),
-                    not short == "movies", program_type,
-                ))
-                links.append((f"magis:{cid}", category_id, i))
+                title_rows.append(row)
+                links.append((row[0], category_id, i))
             if not title_rows:
                 continue
             async with pool.acquire() as conn:

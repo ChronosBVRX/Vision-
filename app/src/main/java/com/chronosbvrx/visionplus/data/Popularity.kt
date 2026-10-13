@@ -96,4 +96,33 @@ object Popularity {
             ?: trending.firstOrNull()
             ?: premieres.firstOrNull()
             ?: fallback
+
+    /**
+     * El pool curado del Inicio: filas propias (estrenos, TV en vivo, listas personales)
+     * + hileras curadas del índice propio (estrenos, recomendados y géneros). Las
+     * colecciones de marca del portal (xtv-*) no entran: Inicio es catálogo de Vision+.
+     */
+    internal fun homePool(rows: List<CatalogRow>, indexRows: List<CatalogRow>): List<Film> {
+        val curatedIndex = indexRows.filter {
+            it.id == "estrenos" || it.id == "recomendados" || it.id.startsWith("genero-")
+        }
+        val ownRows = rows.filterNot { it.id.startsWith("xtv-masnew") }
+        val all = (ownRows + curatedIndex).flatMap { it.films }
+        val nonSeed = all.filter { !it.id.contains("seed_") && it.videoUrl.isNotBlank() }
+        val candidates = if (nonSeed.isNotEmpty()) nonSeed else all
+        return dedupe(candidates)
+    }
+
+    /**
+     * Una fila propia del Inicio para un tipo del catálogo (movie/series/anime/kids):
+     * impacto real primero; el contenido sin señal TMDB (aún sin clasificar) rellena
+     * al final para que la fila nunca se vea vacía durante el backfill.
+     */
+    internal fun popularByKind(films: List<Film>, kind: String, limit: Int = 20, yearNow: Int = nowYear()): List<Film> {
+        val ranked = reorderRow(films.filter { it.kind == kind }, yearNow)
+        val withSignal = ranked.filter { it.voteCount > 0 || it.popularity > 0 }
+        if (withSignal.size >= limit) return withSignal.take(limit)
+        val rest = ranked.filterNot { it.voteCount > 0 || it.popularity > 0 }
+        return withSignal + rest.take(limit - withSignal.size)
+    }
 }

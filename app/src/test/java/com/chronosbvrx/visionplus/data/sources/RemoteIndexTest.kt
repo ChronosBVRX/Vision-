@@ -118,6 +118,31 @@ class RemoteIndexTest {
     }
 
     @Test
+    fun kindSurvivesTheParseForHomeRows() {
+        val categories = JSONArray(
+            """[{"id":"ok","title":"Buena","films":[
+                  {"id":"f1","title":"Una","year":2025,"durationMin":90,"synopsis":"s",
+                   "posterUrl":"p","videoUrl":"xtv:f1","sourceUrl":"xtv","score":7.5,
+                   "popularity":180.5,"voteCount":200000,"kind":"movie"}
+                ]}]""",
+        )
+        val film = RemoteIndexSource.parseRows(categories).single().films.single()
+        assertEquals("movie", film.kind)
+    }
+
+    @Test
+    fun kindDefaultsToBlankForOldPayloads() {
+        val categories = JSONArray(
+            """[{"id":"ok","title":"Buena","films":[
+                  {"id":"f1","title":"Una","year":0,"durationMin":0,"synopsis":"s",
+                   "posterUrl":"p","videoUrl":"xtv:f1","sourceUrl":"xtv"}
+                ]}]""",
+        )
+        val film = RemoteIndexSource.parseRows(categories).single().films.single()
+        assertEquals("", film.kind)
+    }
+
+    @Test
     fun magisvodNormalizesToXtvAndDedupes() {        val categories = JSONArray(
             """[{"id":"estrenos","title":"Estrenos","films":[
                   {"id":"magis:E019F33B862F","title":"Pequeños calvarios","year":2025,"durationMin":92,"synopsis":"s",

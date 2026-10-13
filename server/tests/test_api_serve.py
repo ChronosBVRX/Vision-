@@ -111,6 +111,11 @@ def test_film_defaults_popularity_without_columns():
     assert out["voteCount"] == 0
 
 
+def test_film_carries_kind_for_home_rows():
+    assert app.film(_record())["kind"] == "series"
+    assert app.film(_record(kind="anime"))["kind"] == "anime"
+
+
 def test_film_prefers_enrichment_popularity():
     enr = {"rating": 7.7, "year": 2025, "overview": "",
            "popularity": 180.5, "vote_count": 200000}

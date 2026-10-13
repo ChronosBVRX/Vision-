@@ -53,6 +53,32 @@ VOD_ROOTS = {
 }
 LIVE_COLUMN = 76182
 
+# La opción «destacados» de cada sección en la app Xuper son sus repisas de estreno:
+# ahí viven los títulos nuevos que el portal promueve. Se rescatan en una categoría
+# propia para alimentar siempre la fila «Novedades» del índice.
+PREMIERE_SHELF_HINTS = (
+    "estren", "novedad", "ultima-actualizacion", "ultimas-actualizaciones",
+    "recien-agregad", "recien-subid", "ultimos-lanzamientos", "ultimas-peliculas",
+)
+PREMIERE_CATEGORY_TITLES = {
+    "movies": "Novedades de Películas",
+    "series": "Novedades de Series",
+    "kids": "Novedades Kids",
+    "anime": "Novedades de Anime",
+}
+
+
+def is_premiere_shelf(name: str, year: int | None = None) -> bool:
+    """¿La repisa del portal es de estrenos/novedades? («2026», «2026 Peliculas
+    teatrales», «Últimas Actualizaciones», «Novedades», «Recién agregadas»)."""
+    folded = slug(name)
+    if not folded or "trailer" in folded:
+        return False
+    ref = year or datetime.now().year
+    if str(ref) in folded or str(ref - 1) in folded:
+        return True
+    return any(hint in folded for hint in PREMIERE_SHELF_HINTS)
+
 GENRES_ES = {
     "action": "Acción", "action & adventure": "Acción y Aventuras",
     "adventure": "Aventuras", "animación": "Animación", "animation": "Animación",
@@ -330,7 +356,7 @@ def title_row(asset: dict, kind: str, recommended: bool) -> tuple:
 
 async def _sync_column(pool, client: XtvClient, column_id: int, kind: str, category_id: str,
                        category_title: str, max_pages: int, delay: float, recommended: bool = False,
-                       category_kind: str = "source") -> tuple[int, XtvClient]:
+                       category_kind: str = "source", extra_category: str | None = None) -> tuple[int, XtvClient]:
     inserted = 0
     page = 1
     total = None
@@ -356,7 +382,11 @@ async def _sync_column(pool, client: XtvClient, column_id: int, kind: str, categ
         if page == 1 and total:
             log.info("XTV: %s trae %s en el portal (tope 10000 por listado)", category_id, total)
         rows = [title_row(a, kind, recommended) for a in assets if a.get("contentId")]
-        links = [(r[0], category_id, i) for i, r in enumerate(rows)]
+        base_pos = (page - 1) * 100
+        links = [(r[0], category_id, base_pos + i) for i, r in enumerate(rows)]
+        if extra_category:
+            # La repisa de estreno también alimenta «Novedades» de su sección.
+            links += [(r[0], extra_category, base_pos + i) for i, r in enumerate(rows)]
         async with pool.acquire() as conn:
             await conn.executemany(TITLE_SQL, rows)
             await conn.executemany(LINK_SQL, links)
@@ -493,6 +523,15 @@ async def sync(pool) -> int:
                 (c for c in children if (c.get("name") or "").strip().lower() in ("all", "todas", "todos")),
                 None,
             )
+            premiere_cat = f"xtv-{short}-destacados"
+            premiere_children = {
+                str(c.get("id")) for c in children if is_premiere_shelf(c.get("name") or "")
+            }
+            if premiere_children:
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        CAT_SQL, premiere_cat, PREMIERE_CATEGORY_TITLES.get(short, "Novedades"), "source", 70
+                    )
             for child in children:
                 name = (child.get("name") or "").strip()
                 if not name:
@@ -509,6 +548,7 @@ async def sync(pool) -> int:
                     count, client = await _sync_column(
                         pool, client, int(child["id"]), kind, category_id, title,
                         pages, delay, recommended=False,
+                        extra_category=premiere_cat if str(child.get("id")) in premiere_children else None,
                     )
                     log.info("XTV: %s [%s] %s títulos", category_id, name, count)
                     total += count

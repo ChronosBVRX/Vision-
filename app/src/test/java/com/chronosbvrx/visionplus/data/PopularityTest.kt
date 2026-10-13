@@ -88,4 +88,37 @@ class PopularityTest {
         val ordered = Popularity.reorderRow(films, yearNow = 2026)
         assertEquals(listOf("top", "mid", "low"), ordered.map { it.id })
     }
+
+    @Test
+    fun homePoolOnlyTakesCuratedIndexRows() {
+        // Las colecciones de marca del portal (xtv-masnew-*) no entran al pool del Inicio:
+        // «HBO Movie»/«All» no deben decidir qué es popular.
+        val curated = CatalogRow("genero-accion", "Acción", listOf(film("a")))
+        val estrenos = CatalogRow("estrenos", "Estrenos", listOf(film("b")))
+        val brandShelf = CatalogRow("xtv-masnew-movies-5", "HBO Movie", listOf(film("c")))
+        val pool = Popularity.homePool(listOf(brandShelf), listOf(curated, estrenos))
+        assertEquals(setOf("a", "b"), pool.map { it.id }.toSet())
+    }
+
+    @Test
+    fun popularByKindOrdersByImpactAndFillsWithUnclassified() {
+        val popularMovie = film("hit", score = 7.7, popularity = 200.0, votes = 150_000)
+            .copy(kind = "movie")
+        val nicheMovie = film("niche", score = 9.3, year = 2025).copy(kind = "movie")
+        val series = film("show", score = 8.0, popularity = 90.0).copy(kind = "series")
+        val rows = Popularity.popularByKind(listOf(nicheMovie, popularMovie, series), "movie", limit = 10, yearNow = 2026)
+        assertEquals(listOf("hit", "niche"), rows.map { it.id })
+        // El tipo ajeno no se cuela.
+        assertTrue(rows.none { it.id == "show" })
+    }
+
+    @Test
+    fun popularByKindLimitsToSignalWhenThereIsEnough() {
+        val films = (1..30).map { i ->
+            film("k$i", score = 7.0, popularity = i.toDouble(), votes = i * 1000).copy(kind = "movie")
+        } + film("pending", score = 9.9, year = 2026).copy(kind = "movie")
+        val rows = Popularity.popularByKind(films, "movie", limit = 20, yearNow = 2026)
+        assertEquals(20, rows.size)
+        assertTrue(rows.none { it.id == "pending" })
+    }
 }

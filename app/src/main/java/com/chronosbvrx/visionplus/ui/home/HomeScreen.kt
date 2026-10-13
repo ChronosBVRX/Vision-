@@ -121,11 +121,11 @@ fun HomeScreen(
 ) {
     val sizes = homeSizes()
     val rows = catalog.personalRows + catalog.rows
+    // Pool curado propio: filas de Vision+ + hileras curadas del índice (estrenos,
+    // recomendados, géneros). Nada de las colecciones de marca tal cual las enumera
+    // el portal: la portada muestra el catálogo ordenado por Vision+.
     val allAvailableFilms = remember(rows, catalog.indexRows) {
-        val nonSeedFilms = (rows + catalog.indexRows).flatMap { it.films }
-            .filter { !it.id.contains("seed_") && it.videoUrl.isNotBlank() }
-        val candidates = if (nonSeedFilms.isNotEmpty()) nonSeedFilms else (rows + catalog.indexRows).flatMap { it.films }
-        Popularity.dedupe(candidates)
+        Popularity.homePool(rows, catalog.indexRows)
     }
     // Tendencias reales: impacto (rating con confianza + popularidad TMDB + recencia),
     // no score puro. El relleno oscuro sin señal no entra.
@@ -134,11 +134,26 @@ fun HomeScreen(
     }
     // Estrenos de verdad: solo año actual y anterior, populares primero.
     // Un éxito 2025 supera a un oscuro 2026 (antes mandaba el año puro).
-    val estrenosFilms = remember(allAvailableFilms) {
-        Popularity.realPremieres(allAvailableFilms, limit = 15)
+    val estrenosFilms = remember(allAvailableFilms, catalog.rows) {
+        Popularity.realPremieres(allAvailableFilms, limit = 15).ifEmpty {
+            catalog.rows.firstOrNull { it.id == "estrenos" }?.films?.take(15).orEmpty()
+        }
     }
-    val hero = remember(top10Films, estrenosFilms, rows) {
-        Popularity.pickHero(top10Films, estrenosFilms, rows.firstOrNull()?.films?.firstOrNull())
+    // Filas propias por tipo: populares en general, sin nicho ni desconocidas.
+    val ownKindRows = remember(allAvailableFilms) {
+        listOf(
+            "movie" to "🎬 Películas populares",
+            "series" to "📺 Series populares",
+            "anime" to "🌸 Anime",
+            "kids" to "🧸 Para chicos",
+        ).mapNotNull { (kind, label) ->
+            Popularity.popularByKind(allAvailableFilms, kind, limit = 20)
+                .takeIf { it.size >= 4 }
+                ?.let { CatalogRow("home-kind-$kind", label, it) }
+        }
+    }
+    val hero = remember(top10Films, estrenosFilms, allAvailableFilms) {
+        Popularity.pickHero(top10Films, estrenosFilms, allAvailableFilms.firstOrNull())
     }
     androidx.compose.runtime.LaunchedEffect(Unit) { catalog.refreshPersonal() }
     val context = LocalContext.current
@@ -211,6 +226,14 @@ fun HomeScreen(
         }
         if (continueCards.isNotEmpty()) {
             item(key = "continue") { ContinueRow(cards = continueCards, onResume = onResume) }
+        }
+        items(ownKindRows, key = { it.id }) { row ->
+            FilmRow(
+                row = row,
+                posterWidth = sizes.posterWidth,
+                onOpen = onOpenFilm,
+                onSeeAll = { onGoSection(Route.Categories) },
+            )
         }
         if (rows.isEmpty()) {
             item(key = "empty") {

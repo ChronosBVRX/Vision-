@@ -35,6 +35,28 @@ def _search(query: str, sort: str, rows: int = 100) -> list[dict]:
     return (payload.get("response") or {}).get("docs") or []
 
 
+def title_row(doc: dict) -> tuple | None:
+    """Una fila del Internet Archive para TITLE_SQL (20 columnas, como xtv.title_row)."""
+    identifier = doc.get("identifier") or ""
+    if not identifier:
+        return None
+    raw = doc.get("title")
+    if isinstance(raw, list):
+        raw = raw[0] if raw else ""
+    raw_title = str(raw or "").strip()
+    title = raw_title.split("(")[0].strip() or identifier
+    year = doc.get("year")
+    try:
+        year = int(year) if year else None
+    except Exception:  # noqa: BLE001
+        year = None
+    return (
+        f"ia-{identifier}", "ia", identifier, "movie", title, None, year, "",
+        f"https://archive.org/services/img/{identifier}", 0, None, [], "", "",
+        f"ia:{identifier}|{title}", bool(year and year >= 2000), False, "movie", 0.0, 0,
+    )
+
+
 async def sync(pool) -> int:
     total = 0
     for row_id, label, query, sort in ROWS:
@@ -46,25 +68,11 @@ async def sync(pool) -> int:
         category_id = f"ia-{row_id}"
         title_rows, links = [], []
         for i, doc in enumerate(docs):
-            identifier = doc.get("identifier") or ""
-            if not identifier:
+            row = title_row(doc)
+            if row is None:
                 continue
-            raw = doc.get("title")
-            if isinstance(raw, list):
-                raw = raw[0] if raw else ""
-            raw_title = str(raw or "").strip()
-            title = raw_title.split("(")[0].strip() or identifier
-            year = doc.get("year")
-            try:
-                year = int(year) if year else None
-            except Exception:
-                year = None
-            title_rows.append((
-                f"ia-{identifier}", "ia", identifier, "movie", title, None, year, "",
-                f"https://archive.org/services/img/{identifier}", 0, None, [], "", "",
-                f"ia:{identifier}|{title}", bool(year and year >= 2000), False, "movie",
-            ))
-            links.append((f"ia-{identifier}", category_id, i))
+            title_rows.append(row)
+            links.append((row[0], category_id, i))
         if not title_rows:
             continue
         async with pool.acquire() as conn:

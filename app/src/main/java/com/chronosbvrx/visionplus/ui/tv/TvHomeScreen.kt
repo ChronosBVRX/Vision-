@@ -173,12 +173,10 @@ fun TvHomeScreen(
         else -> "Tu contenido no está disponible ahora mismo. Revisa tu conexión e intenta de nuevo."
     }
 
-    // Colección unificada de títulos disponibles para curar Tendencias y Estrenos
+    // Colección curada propia: filas de Vision+ + hileras curadas del índice (estrenos,
+    // recomendados, géneros). Las colecciones de marca del portal no entran a portada.
     val allAvailableFilms = remember(rows, catalog.indexRows) {
-        val nonSeedFilms = (rows + catalog.indexRows).flatMap { it.films }
-            .filter { !it.id.contains("seed_") && it.videoUrl.isNotBlank() }
-        val candidates = if (nonSeedFilms.isNotEmpty()) nonSeedFilms else (rows + catalog.indexRows).flatMap { it.films }
-        Popularity.dedupe(candidates)
+        Popularity.homePool(rows, catalog.indexRows)
     }
 
     // 1. Top 10 Tendencias reales: impacto (rating con confianza + popularidad + recencia).
@@ -186,9 +184,26 @@ fun TvHomeScreen(
         Popularity.topTrending(allAvailableFilms, limit = 10)
     }
 
-    // 2. Estrenos de verdad: año actual y anterior, populares primero.
-    val estrenosFilms = remember(allAvailableFilms) {
-        Popularity.realPremieres(allAvailableFilms, limit = 15)
+    // 2. Estrenos de verdad: año actual y anterior, populares primero. Si el pool aún
+    //    no alcanza, se usa la hilera propia «Estrenos y Novedades» del servidor.
+    val estrenosFilms = remember(allAvailableFilms, rows) {
+        Popularity.realPremieres(allAvailableFilms, limit = 15).ifEmpty {
+            rows.firstOrNull { it.id == "estrenos" }?.films?.take(15).orEmpty()
+        }
+    }
+
+    // 3. Filas propias por tipo: populares en general, sin nicho ni desconocidas.
+    val ownKindRows = remember(allAvailableFilms) {
+        listOf(
+            "movie" to "🎬 Películas populares",
+            "series" to "📺 Series populares",
+            "anime" to "🌸 Anime",
+            "kids" to "🧸 Para chicos",
+        ).mapNotNull { (kind, label) ->
+            Popularity.popularByKind(allAvailableFilms, kind, limit = 20)
+                .takeIf { it.size >= 4 }
+                ?.let { CatalogRow("home-kind-$kind", label, it) }
+        }
     }
 
     // 3. Filas restantes del catálogo (evitando duplicar estrenos y listas personales en la cabecera)
@@ -206,7 +221,7 @@ fun TvHomeScreen(
     var featured by remember {
         mutableStateOf(
             top10Films.firstOrNull()?.featured()
-                ?: rows.firstOrNull()?.films?.firstOrNull()?.featured(),
+                ?: allAvailableFilms.firstOrNull()?.featured(),
         )
     }
 
@@ -235,13 +250,13 @@ fun TvHomeScreen(
     }
 
     // El primer elemento al cargar obtiene el protagonismo en el billboard
-    LaunchedEffect(top10Films, rows) {
+    LaunchedEffect(top10Films, allAvailableFilms) {
         if (featured == null) {
             featured = top10Films.firstOrNull()?.featured()
-                ?: rows.firstOrNull()?.films?.firstOrNull()?.featured()
+                ?: allAvailableFilms.firstOrNull()?.featured()
         }
         delay(150)
-        if (!FocusRescue.screenHasFocus && returnFilmId == null && (top10Films.isNotEmpty() || rows.isNotEmpty())) {
+        if (!FocusRescue.screenHasFocus && returnFilmId == null && (top10Films.isNotEmpty() || allAvailableFilms.isNotEmpty())) {
             landing.request()
         }
     }
@@ -418,7 +433,20 @@ fun TvHomeScreen(
                         }
                     }
 
-                    // 6. RESTO DE FILAS CURADAS POR GÉNEROS Y SECCIONES DEL PORTAL
+                    // 6. FILAS PROPIAS POR TIPO (populares, no nicho)
+                    items(ownKindRows, key = { it.id }) { row ->
+                        val limitedFilms = remember(row.films) { row.films.take(15) }
+                        HomePosterRow(
+                            title = row.title,
+                            films = limitedFilms,
+                            returnRequester = returnRequester,
+                            returnFilmId = returnFilmId,
+                            onFocusFilm = { focusFilm = it },
+                            onOpenFilm = onOpenFilm,
+                        )
+                    }
+
+                    // 7. RESTO DE FILAS: TV EN VIVO Y LAS FUENTES PROPIAS
                     items(otherRows, key = { it.id }) { row ->
                         val limitedFilms = remember(row.films) { row.films.take(15) }
                         HomePosterRow(

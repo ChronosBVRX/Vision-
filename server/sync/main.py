@@ -183,6 +183,14 @@ async def main() -> None:
                     changed += await tmdb.enrich_batch(pool)
                 except Exception:  # noqa: BLE001
                     log.exception("el enriquecimiento TMDB falló")
+                try:
+                    changed += await tmdb.rematch_batch(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el re-match TMDB falló")
+                try:
+                    changed += await tmdb.backfill_popularity(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el backfill de popularidad TMDB falló")
                 if changed:
                     await bump_version(pool)
                     log.info("versión del índice actualizada (%s cambios)", changed)

@@ -126,6 +126,7 @@ def film(record: asyncpg.Record, enr=None) -> dict:
         "score": float(rating or 0),
         "popularity": popularity,
         "voteCount": votes,
+        "kind": record["kind"] or "",
     }
 
 

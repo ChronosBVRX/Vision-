@@ -123,30 +123,21 @@ class XuperCatalog(context: Context) {
             refreshPersonal()
             xuper.prime(app)
 
-            // Emisión progresiva de filas del portal: cada fila nueva se pinta en la UI en cuanto llega de la red.
-            val progressiveRows = ArrayList<CatalogRow>()
-            val xtvRows = runCatching {
-                com.chronosbvrx.visionplus.data.xuper.X4KApi.homeRows(app) { newRow ->
-                    progressiveRows += newRow
-                    val curEstrenos = indexRows.firstOrNull { it.id == "estrenos" }
-                    rows = buildList {
-                        if (curEstrenos != null && curEstrenos.films.isNotEmpty()) add(curEstrenos)
-                        addAll(progressiveRows.filterNot { it.id == "estrenos" })
-                    }
-                    status = XuperStatus.READY
-                    message = null
-                }
-            }.getOrDefault(emptyList())
+            // El portal se consulta SOLO por los metadatos profesionales de las fichas
+            // (score, reparto, géneros en K_META). Sus hileras crudas («HBO Movie»,
+            // «Maldición misteriosa», «All»…) ya no se muestran en Inicio: el catálogo
+            // visible lo construye Vision+ sobre su propio índice (novedades + ranking).
+            runCatching { com.chronosbvrx.visionplus.data.xuper.X4KApi.homeRows(app) }
+
             val xtvLive = runCatching {
                 com.chronosbvrx.visionplus.data.xuper.X4KApi.liveRow(app)
             }.getOrNull()
 
             val estrenosRow = indexRows.firstOrNull { it.id == "estrenos" }
 
-            if (xtvRows.isNotEmpty() || xtvLive != null) {
+            if (estrenosRow != null || xtvLive != null) {
                 rows = buildList {
                     if (estrenosRow != null && estrenosRow.films.isNotEmpty()) add(estrenosRow)
-                    addAll(xtvRows.filterNot { it.id == "estrenos" })
                     if (xtvLive != null) add(xtvLive)
                 }
                 status = XuperStatus.READY
@@ -159,11 +150,10 @@ class XuperCatalog(context: Context) {
                 } ?: emptyList()
             } catch (_: Exception) {
                 emptyList()
-            }
+            }.filterNot { it.id.startsWith("magis") }
 
             rows = buildList {
                 if (estrenosRow != null && estrenosRow.films.isNotEmpty()) add(estrenosRow)
-                addAll(xtvRows.filterNot { it.id == "estrenos" })
                 if (xtvLive != null) add(xtvLive)
                 addAll(baseRows)
             }
