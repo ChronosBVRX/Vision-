@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -28,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.ui.about.TvAboutScreen
@@ -96,6 +98,9 @@ private fun TvRoute(
     filmReturn: String?,
     onFilmPick: (String) -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
     val rows = catalog.rows
     // El índice remoto manda en Categorías y Búsqueda; Home conserva las filas curadas.
     val indexRows = catalog.indexRows.ifEmpty { rows }
@@ -114,6 +119,23 @@ private fun TvRoute(
         },
         modifier = if (label == railReturn) Modifier.landingFocus(railLanding) else Modifier,
     )
+
+    if (route !is Route.Player && !isOnline) {
+        TvDownloadsScreen(
+            isOfflineMode = true,
+            onRetryConnection = {
+                if (com.chronosbvrx.visionplus.data.offline.NetworkMonitor.refresh(context)) {
+                    scope.launch {
+                        catalog.load()
+                    }
+                }
+            },
+            onPlayFilm = { nav.push(Route.Player(it)) },
+            onBack = {},
+        )
+        return
+    }
+
     when (route) {
         Route.Home -> TvHomeScreen(
             catalog = catalog,

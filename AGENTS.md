@@ -5,14 +5,27 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.49**
-  (versionCode **285**, release OTA v2.5.49). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.50**
+  (versionCode **286**, release OTA v2.5.50). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Descarga Real de Streams de Video XTV/HLS/HTTP y Conmutación Automática a Interfaz Especial Sin Conexión ("Real Stream Engine & Auto Offline Mode")** (v2.5.50):
+  - **Diagnóstico y Corrección de "En cuanto pongo descargar dice descargado"**:
+    - *Causa Raíz*: En `OfflineDownloadManager.kt`, `X4KApi.prepareVod` entrega el `playCode` y la `license` del portal XTV (cuyo identificador `"n"` no inicia con `"http"`). Al no ser una URL HTTP directa, `OfflineDownloadManager` caía en el bloque de respaldo `simulateEncryptedOfflineAsset`, escribiendo un texto placeholder de ~60 bytes y marcando la descarga como `COMPLETED` al instante.
+    - *Solución*:
+      1. *Resolución Real de Streams con `X4KTitan.resolveVodStream`*: Implementada resolución en segundo plano sobre la instancia secundaria del motor nativo Ranger (`instance = 1`) configurada en modo `"exo"` (`NativeJni.g(1, "exo", 0)`), obligando al motor a servir un flujo HTTP estándar (en lugar de `mem://`) a través del callback `JniHandler$a` y sondeo `GetStatus`. Directorio de trabajo aislado por proceso (`x4k-luna` vs `x4k-luna-main`) para evitar bloqueos entre el proceso principal y `:x4k`.
+      2. *Soporte Completo para Flujos Progresivos (MP4/MPEG-TS) y Listas HLS (`.m3u8`)*: `OfflineDownloadManager` descarga y cifra byte a byte tanto streams progresivos como manifiestos HLS (incluyendo selección de variante por resolución `1080p`/`720p`/`480p`, segmentos `#EXT-X-MAP` y descifrado de transporte `#EXT-X-KEY:METHOD=AES-128`), actualizando el progreso real en `OfflineRegistry`.
+      3. *Erradicación Total de Placeholders y Auto-Purga*: Eliminado `simulateEncryptedOfflineAsset`, exigido un mínimo de bytes reales de video (`MIN_VALID_VIDEO_BYTES`) y añadida auto-purga automática en `OfflineRegistry.loadFromPrefs` para limpiar cualquier registro simulado `<= 512` bytes de v2.5.49.
+      4. *Seeking Instantáneo en Contenedores MP4 y MPEG-TS*: Configurado `DefaultExtractorsFactory` con `setConstantBitrateSeekingEnabled(true)` en `PlayerScreen.kt`.
+  - **Detección Reactiva de Red e Interfaz Especial Sin Conexión (`NetworkMonitor.kt`)**:
+    - *Detección en Tiempo Real y Arranque en Frío*: `NetworkMonitor` supervisa `ConnectivityManager` (`NetworkCallback` + validación de transporte activo). Si la app inicia sin conexión a internet, `MainActivity` omite la espera de 9 segundos del catálogo y abre en 600 ms directamente en la **Interfaz Especial Sin Conexión ("Modo Sin Conexión · Vision+ Offline")**.
+    - *Conmutación Automática en Móvil/Tablet (`PhoneApp.kt` / `DownloadsScreen.kt`) y Smart TV (`TvApp.kt` / `TvDownloadsScreen.kt`)*: Al perder la conexión (mientras no se esté reproduciendo un video), la app redirige automáticamente a la interfaz dedicada "Vision+ Offline" con banner de estado sin conexión, botón `[ 🔄 Reintentar conexión ]`, medidor de almacenamiento y acceso en un clic para reproducir las películas y series descargadas. Cuando regresa el internet, recarga el catálogo automáticamente y restaura la navegación completa.
+  - **Validación**: 178 pruebas unitarias de Android (`:app:testNormalDebugUnitTest`) pasando al 100%. Release OTA v2.5.50.
 
 - **Modo Offline Blindado y Búnker Criptográfico Anti-Piratería ("Hardware-Encrypted Vault & Strict Removable Storage Policy")** (v2.5.49):
   - **Arquitectura de Búnker Criptográfico (Cero Fugas / Anti-Copia / Grado Comercial)**:

@@ -46,6 +46,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -135,11 +136,30 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
         )
     }
 
+    val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
+
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
     BackHandler(enabled = !drawerState.isOpen && nav.stack.size > 1 && route !is Route.Player && route !is Route.LivePlayer) { nav.pop() }
 
     when (route) {
         is Route.Player -> { PlayerScreen(route.film, isTv = false, onBack = { nav.pop() }, episode = route.episode, resumeMs = route.resumeMs); return }
+        else -> Unit
+    }
+
+    if (!isOnline) {
+        DownloadsScreen(
+            isOfflineMode = true,
+            onRetryConnection = {
+                if (com.chronosbvrx.visionplus.data.offline.NetworkMonitor.refresh(context)) {
+                    scope.launch { catalog.load() }
+                }
+            },
+            onOpenFilm = { nav.push(Route.Player(it)) },
+        )
+        return
+    }
+
+    when (route) {
         is Route.LivePlayer -> {
             LivePlayerScreen(
                 channel = route.channel,

@@ -119,4 +119,56 @@ class OfflineRegistryAndStorageTest {
         assertEquals("450 MB", OfflineStoragePolicy.formatBytes(450L * 1024L * 1024L))
         assertEquals("1.5 GB", OfflineStoragePolicy.formatBytes((1.5 * 1024.0 * 1024.0 * 1024.0).toLong()))
     }
+
+    @Test
+    fun testSimulatedStubPurgedOnInit() {
+        val fakeFile = File(context.filesDir, "fake_stub.vpack").apply { writeText("VISION_PLUS_PROTECTED_ASSET:stub") }
+        val realFile = File(context.filesDir, "real_movie.vpack").apply { writeBytes(ByteArray(32 * 1024)) }
+
+        val fakeItem = OfflineDownload(
+            id = "xtv:fake_stub",
+            contentId = "fake_stub",
+            title = "Stub Movie",
+            state = DownloadState.COMPLETED,
+            bytesDownloaded = 64L,
+            totalBytes = 64L,
+            vaultFilePath = fakeFile.absolutePath,
+        )
+        val realItem = OfflineDownload(
+            id = "xtv:real_movie",
+            contentId = "real_movie",
+            title = "Real Movie",
+            state = DownloadState.COMPLETED,
+            bytesDownloaded = 250_000_000L,
+            totalBytes = 250_000_000L,
+            vaultFilePath = realFile.absolutePath,
+        )
+
+        OfflineRegistry.put(fakeItem, context)
+        OfflineRegistry.put(realItem, context)
+
+        // Simular reinicio de la app recargando desde SharedPreferences
+        OfflineRegistry.resetForTesting(null)
+        OfflineRegistry.init(context)
+
+        assertNull("El stub simulado <= 512B debe purgarse al iniciar", OfflineRegistry.get("xtv:fake_stub", context))
+        assertFalse("El archivo .vpack del stub debe eliminarse", fakeFile.exists())
+        assertNotNull("La descarga real debe conservarse", OfflineRegistry.get("xtv:real_movie", context))
+        realFile.delete()
+    }
+
+    @Test
+    fun testNetworkMonitorConnectivityTransitions() {
+        try {
+            NetworkMonitor.setOnlineForTesting(false)
+            assertFalse(NetworkMonitor.refresh(context))
+            assertFalse(NetworkMonitor.isOnline.value)
+
+            NetworkMonitor.setOnlineForTesting(true)
+            assertTrue(NetworkMonitor.refresh(context))
+            assertTrue(NetworkMonitor.isOnline.value)
+        } finally {
+            NetworkMonitor.setOnlineForTesting(null)
+        }
+    }
 }

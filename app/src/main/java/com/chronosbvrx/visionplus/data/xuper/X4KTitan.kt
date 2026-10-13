@@ -323,7 +323,13 @@ object X4KTitan {
                     Log.e(TAG, "sin callbacks, no se puede arrancar")
                     return false
                 }
-                val workPath = File(context.applicationContext.filesDir, "x4k-luna").apply { mkdirs() }.absolutePath
+                val procName = runCatching {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        android.app.Application.getProcessName()
+                    } else ""
+                }.getOrDefault("")
+                val dirName = if (procName.endsWith(":x4k")) "x4k-luna" else "x4k-luna-main"
+                val workPath = File(context.applicationContext.filesDir, dirName).apply { mkdirs() }.absolutePath
                 instance.javaClass.methods.first { it.name == "r" && it.parameterCount == 3 }
                     .invoke(instance, workPath, cb1, cb2)
                 booted = true
@@ -725,6 +731,223 @@ object X4KTitan {
         runCatching {
             view.javaClass.methods.first { it.name == "setPlayerListener" && it.parameterCount == 1 }
                 .invoke(view, listener)
+        }
+    }
+
+    data class ResolvedVodStream(
+        val playUrl: String,
+        val links: List<String>,
+        val code: String,
+    )
+
+    /**
+     * Resuelve el stream HTTP real de un VOD del catálogo XTV sin abrir interfaz de reproductor,
+     * utilizando la instancia secundaria del motor Ranger (`instance = 1`) en modo `"exo"` para que
+     * el proxy local sirva una URL HTTP estándar (MP4 / MPEG-TS / HLS) apta para descarga cifrada.
+     */
+    fun resolveVodStream(
+        context: Context,
+        code: String,
+        title: String,
+        medias: List<MediaSpec>,
+        preferredQuality: String = "1080p",
+        timeoutMs: Long = 14_000L,
+    ): ResolvedVodStream? {
+        if (medias.isEmpty() || code.isBlank()) return null
+        return try {
+            val app = context.applicationContext
+            val apiPrefs = app.getSharedPreferences("x4k_api", Context.MODE_PRIVATE)
+            val entriesJson = apiPrefs.getString("entries_json", null)
+            val playParams = apiPrefs.getString("play_params", "").orEmpty()
+            val androidId = runCatching {
+                android.provider.Settings.Secure.getString(app.contentResolver, android.provider.Settings.Secure.ANDROID_ID).orEmpty()
+            }.getOrDefault("")
+
+            if (!ensureConfigured(
+                    context = app,
+                    userId = "967111326",
+                    devId = "2392fe5186d83d73508a2c8c60a26ef6",
+                    androidId = androidId,
+                    entriesJson = entriesJson,
+                    playParams = playParams,
+                )
+            ) {
+                return null
+            }
+
+            val cl = loader ?: return null
+            val pClass = programClass ?: return null
+
+            // Seleccionar media acorde a la calidad solicitada
+            val qLower = preferredQuality.lowercase()
+            val selectedMedia = medias.firstOrNull { m ->
+                val mq = m.quality.lowercase()
+                when {
+                    qLower.contains("1080") -> mq.contains("1080") || mq.contains("fhd") || mq == "3" || mq == "4"
+                    qLower.contains("720") -> mq.contains("720") || mq.contains("hd") || mq == "2"
+                    qLower.contains("480") -> mq.contains("480") || mq.contains("sd") || mq == "1"
+                    else -> false
+                }
+            } ?: medias.first()
+
+            val mediaObjs = buildMedias(listOf(selectedMedia) + medias.filter { it != selectedMedia })
+            val program = pClass.getConstructor(
+                String::class.java, String::class.java, String::class.java, String::class.java,
+                String::class.java, String::class.java, List::class.java, String::class.java,
+                java.lang.Long.TYPE,
+            ).newInstance(code, "vod", title, "-1", "-1", "user", mediaObjs, selectedMedia.name, 0L)
+
+            // Serializar Program a JSON usando el Gson interno del SDK (zc.a.a().toJson(program))
+            val gsonHolderClass = cl.loadClass("zc.a")
+            val gson = gsonHolderClass.methods.first { it.name == "a" && it.parameterCount == 0 }.invoke(null)
+            val programJson = gson.javaClass.methods.first {
+                it.name == "toJson" && it.parameterCount == 1 && it.parameterTypes[0] == Any::class.java
+            }.invoke(gson, program) as? String ?: return null
+
+            val latch = java.util.concurrent.CountDownLatch(1)
+            val callbackUrlRef = java.util.concurrent.atomic.AtomicReference("")
+            val callbackLinksRef = java.util.concurrent.atomic.AtomicReference<List<String>>(emptyList())
+
+            // Registrar callback JniHandler$a en instance = 1
+            val jniHandlerClass = cl.loadClass("com.titan.ranger.JniHandler")
+            val cbInterface = cl.loadClass("com.titan.ranger.JniHandler\$a")
+            val proxy = Proxy.newProxyInstance(cl, arrayOf(cbInterface), InvocationHandler { _, method, args ->
+                when (method.name) {
+                    "b" -> 1 // Identificador de instancia = 1
+                    "d" -> {
+                        val event = args?.getOrNull(1) as? String ?: ""
+                        val statusObj = args?.getOrNull(2)
+                        if (statusObj != null) {
+                            val pUrl = runCatching {
+                                statusObj.javaClass.getMethod("getPlay_url").invoke(statusObj) as? String
+                            }.getOrNull().orEmpty()
+                            val pLinks = runCatching {
+                                @Suppress("UNCHECKED_CAST")
+                                (statusObj.javaClass.getMethod("getLinks").invoke(statusObj) as? List<String>).orEmpty()
+                            }.getOrDefault(emptyList())
+                            if (pUrl.startsWith("http") || pLinks.any { it.startsWith("http") } ||
+                                event == "media_prepared" || event == "cast_prepared"
+                            ) {
+                                if (pUrl.isNotBlank()) callbackUrlRef.set(pUrl)
+                                if (pLinks.isNotEmpty()) callbackLinksRef.set(pLinks)
+                                if (callbackUrlRef.get().startsWith("http") || callbackLinksRef.get().any { it.startsWith("http") }) {
+                                    latch.countDown()
+                                }
+                            }
+                        }
+                        0
+                    }
+                    else -> when (method.returnType) {
+                        java.lang.Boolean.TYPE -> false
+                        java.lang.Integer.TYPE -> 0
+                        java.lang.Long.TYPE -> 0L
+                        else -> null
+                    }
+                }
+            })
+
+            jniHandlerClass.methods.first {
+                it.name == "d" && it.parameterCount == 2 && it.parameterTypes[0] == java.lang.Integer.TYPE
+            }.invoke(null, 1, proxy)
+
+            val nativeJniClass = cl.loadClass("com.titan.ranger.NativeJni")
+            val nativeJni = nativeJniClass.methods.first { it.name == "c" && it.parameterCount == 0 }.invoke(null)
+
+            // Detener cualquier sesión previa en instance = 1
+            runCatching {
+                nativeJni.javaClass.methods.first { it.name == "u" && it.parameterCount == 2 }
+                    .invoke(nativeJni, 1, code)
+            }
+
+            // Configurar instance = 1 como "exo" para obligar salida HTTP estándar (no mem://)
+            nativeJni.javaClass.methods.first { it.name == "g" && it.parameterCount == 3 }
+                .invoke(nativeJni, 1, "exo", 0)
+
+            // Preparar el programa VOD en instance = 1
+            nativeJni.javaClass.methods.first { it.name == "o" && it.parameterCount == 4 }
+                .invoke(nativeJni, 1, code, programJson, "vod")
+
+            val getStatusMethod = nativeJni.javaClass.methods.firstOrNull {
+                it.name == "a" && it.parameterCount == 2 &&
+                    it.parameterTypes[0] == String::class.java && it.parameterTypes[1] == String::class.java
+            }
+
+            val deadline = System.currentTimeMillis() + timeoutMs
+            while (System.currentTimeMillis() < deadline) {
+                if (latch.await(350, java.util.concurrent.TimeUnit.MILLISECONDS)) break
+
+                // Sondeo de respaldo a GetStatus en instance = 1
+                val rawRes = runCatching {
+                    getStatusMethod?.invoke(nativeJni, "GetStatus", "{\"instance\":1,\"name\":\"$code\"}") as? String
+                }.getOrNull().orEmpty()
+                if (rawRes.isNotBlank()) {
+                    runCatching {
+                        val outer = org.json.JSONObject(rawRes)
+                        val resStr = outer.optString("res")
+                        if (resStr.isNotBlank() && resStr.startsWith("{")) {
+                            val st = org.json.JSONObject(resStr)
+                            val pUrl = st.optString("play_url")
+                            val linksArr = st.optJSONArray("links")
+                            val linksList = ArrayList<String>()
+                            if (linksArr != null) {
+                                for (i in 0 until linksArr.length()) {
+                                    val l = linksArr.optString(i)
+                                    if (l.isNotBlank()) linksList.add(l)
+                                }
+                            }
+                            if (pUrl.startsWith("http")) callbackUrlRef.set(pUrl)
+                            if (linksList.isNotEmpty()) callbackLinksRef.set(linksList)
+                        }
+                    }
+                    if (callbackUrlRef.get().startsWith("http") || callbackLinksRef.get().any { it.startsWith("http") }) {
+                        break
+                    }
+                }
+            }
+
+            val callbackUrl = callbackUrlRef.get()
+            val callbackLinks = callbackLinksRef.get()
+            val finalUrl = when {
+                callbackUrl.startsWith("http") -> callbackUrl
+                else -> callbackLinks.firstOrNull { it.startsWith("http") }.orEmpty()
+            }
+            if (finalUrl.isBlank()) {
+                Log.w(TAG, "resolveVodStream no obtuvo URL HTTP para $code (url=$callbackUrl, links=${callbackLinks.size})")
+                stopBackgroundVod(code)
+                return null
+            }
+
+            // Notificar a Ranger que la reproducción inició para mantener vivo el flujo del proxy local
+            runCatching {
+                val notifyOp = nativeJni.javaClass.methods.first { it.name == "l" && it.parameterCount == 4 }
+                val setProg = nativeJni.javaClass.methods.first { it.name == "p" && it.parameterCount == 2 }
+                notifyOp.invoke(nativeJni, 1, "setDataSource", finalUrl, 0L)
+                notifyOp.invoke(nativeJni, 1, "prepare(Async)", "", 0L)
+                setProg.invoke(nativeJni, 1, code)
+                notifyOp.invoke(nativeJni, 1, "start", "", 0L)
+            }
+
+            Log.i(TAG, "resolveVodStream exitoso para $code -> $finalUrl (links=${callbackLinks.size})")
+            ResolvedVodStream(
+                playUrl = finalUrl,
+                links = callbackLinks.filter { it.startsWith("http") },
+                code = code,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "resolveVodStream falló para $code: ${e.cause ?: e}", e)
+            null
+        }
+    }
+
+    /** Detiene la sesión de descarga en segundo plano de la instancia 1 de Ranger. */
+    fun stopBackgroundVod(code: String) {
+        if (code.isBlank()) return
+        runCatching {
+            val cl = loader ?: return
+            val nativeJniClass = cl.loadClass("com.titan.ranger.NativeJni")
+            val nativeJni = nativeJniClass.methods.first { it.name == "c" && it.parameterCount == 0 }.invoke(null)
+            nativeJni.javaClass.methods.first { it.name == "u" && it.parameterCount == 2 }
+                .invoke(nativeJni, 1, code)
         }
     }
 }

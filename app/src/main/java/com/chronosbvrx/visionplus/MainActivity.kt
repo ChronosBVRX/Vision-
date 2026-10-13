@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,8 @@ class MainActivity : ComponentActivity() {
         isTv = DeviceKind.isTelevision(this)
         val nav = Navigator(listOf(Route.Home))
         com.chronosbvrx.visionplus.ui.settings.VisionSettings.init(this)
+        com.chronosbvrx.visionplus.data.offline.OfflineRegistry.init(this)
+        com.chronosbvrx.visionplus.data.offline.NetworkMonitor.init(this)
 
         setContent {
             VisionTheme {
@@ -69,18 +72,31 @@ class MainActivity : ComponentActivity() {
                     var bootReady by remember { mutableStateOf(false) }
                     val navigator = remember { nav }
                     val catalog = remember { XuperCatalog(this@MainActivity) }
-                    // The boot wait: the catalogue (films AND live channels) loads behind the
-                    // splash; a cap keeps a dead network from holding the door.
+                    val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
+
+                    // Si el dispositivo arranca sin internet, abrimos en 600 ms directo a la interfaz
+                    // especial de Modo Sin Conexión sin esperar los 9 segundos de timeout de red.
                     LaunchedEffect(Unit) {
                         val minSplash = launch { delay(600L) }
-                        withTimeoutOrNull(BOOT_CAP_MS) {
-                            catalog.load()
+                        if (com.chronosbvrx.visionplus.data.offline.NetworkMonitor.refresh(this@MainActivity)) {
+                            withTimeoutOrNull(BOOT_CAP_MS) {
+                                catalog.load()
+                            }
                         }
                         minSplash.join()
                         bootReady = true
-                        launch(kotlinx.coroutines.Dispatchers.IO) {
-                            delay(4_000L)
-                            AppUpdate.check(this@MainActivity, force = true)
+                        if (com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.value) {
+                            launch(kotlinx.coroutines.Dispatchers.IO) {
+                                delay(4_000L)
+                                AppUpdate.check(this@MainActivity, force = true)
+                            }
+                        }
+                    }
+
+                    // Cuando regresa la conexión a internet, cargamos el catálogo automáticamente
+                    LaunchedEffect(isOnline) {
+                        if (isOnline && bootReady && catalog.rows.isEmpty()) {
+                            catalog.load()
                         }
                     }
                     Box(Modifier.fillMaxSize().background(VisionBlack)) {

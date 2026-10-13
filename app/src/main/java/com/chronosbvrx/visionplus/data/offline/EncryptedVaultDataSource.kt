@@ -142,7 +142,7 @@ class EncryptedVaultDataSource(
         }
 
         // 3. Buscar en el registro offline por ID
-        val item = OfflineRegistry.get(cleanId)
+        val item = OfflineRegistry.get(cleanId, context)
         if (item != null && item.vaultFilePath.isNotBlank()) {
             val f = File(item.vaultFilePath)
             if (f.exists()) return f

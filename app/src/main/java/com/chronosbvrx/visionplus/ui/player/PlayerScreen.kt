@@ -663,7 +663,10 @@ private fun PlayerCore(
         } else {
             DefaultDataSource.Factory(context, http)
         }
-        val mediaSourceFactory = DefaultMediaSourceFactory(baseDataSourceFactory)
+        val extractorsFactory = androidx.media3.extractor.DefaultExtractorsFactory()
+            .setConstantBitrateSeekingEnabled(true)
+            .setConstantBitrateSeekingAlwaysEnabled(true)
+        val mediaSourceFactory = DefaultMediaSourceFactory(baseDataSourceFactory, extractorsFactory)
         if (!drmKey.isNullOrBlank()) {
             val clearKeyJson = com.chronosbvrx.visionplus.data.sports.GeeSportsFallback.buildClearKeyJson(drmKey)
             if (clearKeyJson != null) {

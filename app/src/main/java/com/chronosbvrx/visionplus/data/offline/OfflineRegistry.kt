@@ -52,12 +52,34 @@ object OfflineRegistry {
         runCatching {
             val arr = JSONArray(raw)
             memoryMap.clear()
+            var dirty = false
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
                 val item = OfflineDownload.fromJson(obj)
-                memoryMap[item.id] = item
+                // Purgar activos simulados residuales de v2.5.49 (<= 512 bytes)
+                val isSimulatedStub = item.state == DownloadState.COMPLETED &&
+                    item.bytesDownloaded in 1L..512L &&
+                    item.totalBytes in 1L..512L
+                if (isSimulatedStub) {
+                    if (item.vaultFilePath.isNotBlank()) {
+                        runCatching { File(item.vaultFilePath).delete() }
+                    }
+                    dirty = true
+                    continue
+                }
+                val normalized = if (item.state == DownloadState.DOWNLOADING || item.state == DownloadState.QUEUED) {
+                    dirty = true
+                    item.copy(state = DownloadState.PAUSED)
+                } else {
+                    item
+                }
+                memoryMap[normalized.id] = normalized
             }
-            _downloadsFlow.value = memoryMap.values.toList()
+            if (dirty) {
+                persistLocked()
+            } else {
+                _downloadsFlow.value = memoryMap.values.toList()
+            }
         }
     }
 

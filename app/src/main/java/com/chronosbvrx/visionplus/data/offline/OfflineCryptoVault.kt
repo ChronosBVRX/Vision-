@@ -204,7 +204,7 @@ object OfflineCryptoVault {
                 val encLen = cipher.update(inBuf, 0, read, outBuf, 0)
                 if (encLen > 0) {
                     outStream.write(outBuf, 0, encLen)
-                    bytesWritten += read
+                    bytesWritten += encLen
                 }
 
                 val now = System.currentTimeMillis()
@@ -217,6 +217,7 @@ object OfflineCryptoVault {
             val finalLen = cipher.doFinal(outBuf, 0)
             if (finalLen > 0) {
                 outStream.write(outBuf, 0, finalLen)
+                bytesWritten += finalLen
             }
             outStream.flush()
         }
