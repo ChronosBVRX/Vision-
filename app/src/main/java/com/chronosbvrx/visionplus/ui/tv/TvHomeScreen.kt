@@ -457,8 +457,21 @@ fun TvHomeScreen(
         // Campana de actualizaciones del sistema
         var showPluginUpdates by rememberSaveable { mutableStateOf(false) }
         val updatesBadge = appUpdateBadgeCount()
+        val tvContext = androidx.compose.ui.platform.LocalContext.current
+        androidx.compose.runtime.LaunchedEffect(updatesBadge) {
+            if (updatesBadge > 0) {
+                val latest = com.chronosbvrx.visionplus.data.AppUpdate.latest?.version.orEmpty()
+                val skipped = tvContext.getSharedPreferences("updates", 0).getString("skipped", "")
+                if (latest.isNotBlank() && skipped != latest) showPluginUpdates = true
+            }
+        }
         if (showPluginUpdates) {
-            TvAppUpdatesDialog(onDismiss = { showPluginUpdates = false })
+            TvAppUpdatesDialog(onDismiss = {
+                showPluginUpdates = false
+                com.chronosbvrx.visionplus.data.AppUpdate.latest?.version?.let { v ->
+                    tvContext.getSharedPreferences("updates", 0).edit().putString("skipped", v).apply()
+                }
+            })
         }
         Surface(
             onClick = { showPluginUpdates = true },

@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
                         bootReady = true
                         launch(kotlinx.coroutines.Dispatchers.IO) {
                             delay(4_000L)
-                            AppUpdate.check(this@MainActivity)
+                            AppUpdate.check(this@MainActivity, force = true)
                         }
                     }
                     Box(Modifier.fillMaxSize().background(VisionBlack)) {
