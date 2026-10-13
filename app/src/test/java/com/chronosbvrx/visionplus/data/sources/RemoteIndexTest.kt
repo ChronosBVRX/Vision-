@@ -104,8 +104,21 @@ class RemoteIndexTest {
     }
 
     @Test
-    fun magisvodNormalizesToXtvAndDedupes() {
+    fun popularitySurvivesTheParse() {
         val categories = JSONArray(
+            """[{"id":"ok","title":"Buena","films":[
+                  {"id":"f1","title":"Una","year":2025,"durationMin":90,"synopsis":"s",
+                   "posterUrl":"p","videoUrl":"xtv:f1","sourceUrl":"xtv","score":7.5,
+                   "popularity":180.5,"voteCount":200000}
+                ]}]""",
+        )
+        val film = RemoteIndexSource.parseRows(categories).single().films.single()
+        assertEquals(180.5, film.popularity, 0.001)
+        assertEquals(200000, film.voteCount)
+    }
+
+    @Test
+    fun magisvodNormalizesToXtvAndDedupes() {        val categories = JSONArray(
             """[{"id":"estrenos","title":"Estrenos","films":[
                   {"id":"magis:E019F33B862F","title":"Pequeños calvarios","year":2025,"durationMin":92,"synopsis":"s",
                    "posterUrl":"p","videoUrl":"magisvod:E019F33B862F","sourceUrl":"magis","score":7.2},

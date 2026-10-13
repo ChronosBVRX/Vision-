@@ -46,6 +46,7 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
@@ -107,22 +108,26 @@ fun TvCategoryScreen(
     }
 
     val films = remember(rows, key, sectionRows) {
-        if (section != null) {
+        val raw = if (section != null) {
             (sectionRows ?: emptyList()).flatMap { it.films }.distinctBy { it.id }
         } else {
             val byId = rows.firstOrNull { it.id.equals(key, ignoreCase = true) }
             val byTitle = byId ?: rows.firstOrNull { fold(it.title).contains(fold(title)) }
             byTitle?.films?.takeIf { it.isNotEmpty() } ?: searchFallback(rows, title)
         }
+        // Reordenado por impacto (rating con confianza + popularidad + recencia):
+        // robusto ante caché vieja del servidor ordenada solo por score/año.
+        Popularity.reorderRow(raw)
     }
-    val featured = remember(films) { films.maxByOrNull { it.score * 100 + it.year.coerceAtLeast(0) } }
-    val topRated = remember(films) { films.filter { it.score > 0 }.sortedByDescending { it.score } }
-    val novelties = remember(films) { films.filter { it.year > 0 }.sortedByDescending { it.year } }
+    val featured = remember(films) { films.maxByOrNull { Popularity.rankScore(it) } }
+    val topRated = remember(films) {
+        Popularity.reorderRow(films.filter { it.score > 0 || it.popularity > 0 || it.voteCount > 0 })
+    }
+    val novelties = remember(films) { Popularity.realPremieres(films, limit = 100) }
     val forYou = remember(films) {
         val played = UserLibrary.played(context).map { it.id }.toSet()
-        films.filter { it.id !in played && it.score > 0 }
-            .sortedByDescending { it.score }
-            .ifEmpty { films }
+        val candidates = films.filter { it.id !in played && (it.score > 0 || it.popularity > 0) }
+        Popularity.reorderRow(candidates).ifEmpty { films }
     }
 
     if (section != null && sectionRows == null) {
@@ -267,7 +272,7 @@ fun TvCategoryScreen(
     } else {
         // MODO 2: VISTA DE CATÁLOGO COMPLETO EN CUADRÍCULA (GRID)
         val categoryFilms = remember(activeCategory, loaded, films, topRated, novelties, forYou) {
-            when {
+            val raw = when {
                 loaded != null -> {
                     val matchingRow = loaded.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
                     matchingRow?.films ?: loaded.flatMap { it.films }
@@ -282,6 +287,7 @@ fun TvCategoryScreen(
                 activeCategory == "Recomendado para ti" -> forYou
                 else -> films
             }
+            Popularity.reorderRow(raw)
         }
 
         TvCategoryGrid(
@@ -505,7 +511,7 @@ private fun SectionRow(
     returnRequester: FocusRequester? = null,
     returnFilmId: String? = null,
 ) {
-    val safeFilms = remember(films) { films.distinctBy { it.id }.take(CAROUSEL_LIMIT) }
+    val safeFilms = remember(films) { Popularity.reorderRow(films.distinctBy { it.id }).take(CAROUSEL_LIMIT) }
     if (safeFilms.isEmpty()) return
 
     // Encabezado de Sección: Título a la izquierda + "Ver todo →" a la derecha

@@ -420,12 +420,13 @@ object X4KApi {
                     films += Film(
                         id = cid,
                         title = a.optString("name"),
-                        year = 0,
+                        year = portalYear(a),
                         durationMin = 0,
                         synopsis = a.optString("description"),
                         posterUrl = poster,
                         videoUrl = "xtv:$cid",
                         sourceUrl = "visionplus.tv",
+                        score = portalScore(a),
                     )
                     // Professional metadata (score, cast, genres) kept for the details page.
                     metaStore.put(cid, JSONObject().apply {
@@ -459,6 +460,30 @@ object X4KApi {
             }
         }
         rows
+    }
+
+    /** Score del portal como Double (0 cuando no lo trae): hidrata el ranking del Home. */
+    internal fun portalScore(a: JSONObject): Double {
+        val raw = a.optString("score").trim()
+        if (raw.isBlank()) return a.optDouble("score", 0.0)
+        return raw.toDoubleOrNull()?.takeIf { it > 0.0 } ?: a.optDouble("score", 0.0)
+    }
+
+    /** Año del portal desde releaseTime/año directo (0 si no lo trae). */
+    internal fun portalYear(a: JSONObject): Int {
+        val candidates = listOf(
+            a.optString("releaseTime"),
+            a.optString("releaseDate"),
+            a.optString("year"),
+        )
+        for (raw in candidates) {
+            val digits = raw.filter { it.isDigit() }
+            if (digits.length >= 4) {
+                val y = digits.take(4).toIntOrNull() ?: continue
+                if (y in 1900..2100) return y
+            }
+        }
+        return a.optInt("year", 0).takeIf { it in 1900..2100 } ?: 0
     }
 
     internal fun cleanShelfTitle(raw: String): String {
@@ -796,10 +821,13 @@ object X4KApi {
                 ?: (i + 1)
             raw += IndexedEp(EpisodeProgram(episodeId, explicitNum, name), i)
         }
-        return raw
+        val distinct = raw
             .distinctBy { it.ep.contentId }
             .sortedWith(compareBy<IndexedEp> { it.ep.number }.thenBy { it.rawOrder })
             .map { it.ep }
+        // Una película devuelve su propia ficha como único "capítulo": no es serie.
+        // Se exige 2+ capítulos, igual que parsePlayEpisodePrograms.
+        return if (distinct.size <= 1) emptyList() else distinct
     }
 
     /**
@@ -973,6 +1001,8 @@ object X4KApi {
                     put("s", f.synopsis)
                     put("p", f.posterUrl)
                     put("v", f.videoUrl)
+                    put("y", f.year)
+                    put("sc", f.score)
                 })
             }
             arr.put(JSONObject().put("id", row.id).put("title", row.title).put("films", fj))
@@ -991,12 +1021,13 @@ object X4KApi {
                 films += Film(
                     id = f.optString("id"),
                     title = f.optString("t"),
-                    year = 0,
+                    year = f.optInt("y", 0),
                     durationMin = 0,
                     synopsis = f.optString("s"),
                     posterUrl = f.optString("p"),
                     videoUrl = f.optString("v"),
                     sourceUrl = "xuper.tv",
+                    score = f.optDouble("sc", 0.0),
                 )
             }
             rows += CatalogRow(id = o.optString("id"), title = o.optString("title"), films = films)
@@ -1183,7 +1214,7 @@ object X4KApi {
         var resolvedEpIds = episodeIds
         var resolvedEpNames = episodeNames
         var resolvedEpIndex = episodeIndex
-        val cleanSeriesId = if (seriesId.isNotBlank()) xtvPortalId(seriesId) else ""
+        var cleanSeriesId = if (seriesId.isNotBlank()) xtvPortalId(seriesId) else ""
         if (cleanSeriesId.isNotBlank() && resolvedEpIds.isEmpty()) {
             val programs = episodeProgramsFor(context, cleanSeriesId)
             if (programs.isNotEmpty()) {
@@ -1192,6 +1223,14 @@ object X4KApi {
                 val idx = resolvedEpIds.indexOf(xtvPortalId(contentId))
                 resolvedEpIndex = if (idx >= 0) idx else episodeIndex.coerceIn(0, resolvedEpIds.lastIndex)
             }
+        }
+        // Película con contexto de serie residual (1 capítulo / 1 temporada / seriesId
+        // suelto): se degrada a película suelta para no pintar UI de serie.
+        if (resolvedEpIds.size <= 1 && seasonIds.size <= 1) {
+            cleanSeriesId = ""
+            resolvedEpIds = emptyList()
+            resolvedEpNames = emptyList()
+            resolvedEpIndex = 0
         }
         var cid = xtvPortalId(contentId)
         if (cleanSeriesId.isNotBlank() && cid == cleanSeriesId && resolvedEpIds.isNotEmpty()) {
@@ -1204,6 +1243,7 @@ object X4KApi {
         }
         if (prep == null) return@withContext false
         val finalDuration = if (prep.durationMs > 0L) prep.durationMs else fallbackDurationMs
+        val isSeries = cleanSeriesId.isNotBlank() && (resolvedEpIds.size > 1 || seasonIds.size > 1)
         launch(
             context = context,
             mode = "vod",
@@ -1212,13 +1252,13 @@ object X4KApi {
             mediasJson = prep.mediasJson,
             durationMs = finalDuration,
             subsLangs = prep.subsLangs,
-            seriesId = cleanSeriesId,
-            episodeIds = resolvedEpIds,
-            episodeNames = resolvedEpNames,
-            episodeIndex = resolvedEpIndex,
-            seasonIds = seasonIds,
-            seasonNames = seasonNames,
-            seasonIndex = seasonIndex,
+            seriesId = if (isSeries) cleanSeriesId else "",
+            episodeIds = if (isSeries) resolvedEpIds else emptyList(),
+            episodeNames = if (isSeries) resolvedEpNames else emptyList(),
+            episodeIndex = if (isSeries) resolvedEpIndex else 0,
+            seasonIds = if (isSeries) seasonIds else emptyList(),
+            seasonNames = if (isSeries) seasonNames else emptyList(),
+            seasonIndex = if (isSeries) seasonIndex else 0,
             resumeMs = resumeMs,
             posterUrl = posterUrl,
         )
@@ -1416,7 +1456,7 @@ object X4KApi {
             if (subsLangs.isNotBlank()) putExtra("subsLangs", subsLangs)
             if (entries.isNotBlank()) putExtra("entriesB64", b64(entries))
             if (params.isNotBlank()) putExtra("playParamsB64", b64(params))
-            if (seriesId.isNotBlank()) {
+            if (seriesId.isNotBlank() && (episodeIds.size > 1 || seasonIds.size > 1)) {
                 putExtra("seriesId", seriesId)
                 putStringArrayListExtra("epIds", ArrayList(episodeIds))
                 putStringArrayListExtra("epNames", ArrayList(episodeNames))

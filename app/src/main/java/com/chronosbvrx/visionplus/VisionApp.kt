@@ -22,6 +22,22 @@ class VisionApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         com.chronosbvrx.visionplus.data.offline.OfflineRegistry.init(this)
+        // El puente de progreso offline solo vive en el proceso principal: el `:x4k`
+        // emite, el principal escucha. Registrarlo en `:x4k` duplicaría eventos.
+        if (isMainProcess()) {
+            runCatching {
+                com.chronosbvrx.visionplus.data.offline.OfflineProgressReceiver.register(this)
+            }
+        }
+    }
+
+    private fun isMainProcess(): Boolean {
+        val proc = runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                android.app.Application.getProcessName()
+            } else ""
+        }.getOrDefault("")
+        return !proc.endsWith(":x4k")
     }
 
     override fun newImageLoader(): ImageLoader {

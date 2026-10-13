@@ -109,7 +109,10 @@ object UserLibrary {
         if (top.isEmpty()) return null
         val sources = top.mapNotNull { id -> indexRows.firstOrNull { it.id == id } }
         val anchor = sources.firstOrNull()?.title.orEmpty()
-        val films = sources.flatMap { it.films }.distinctBy { it.id }.filter { it.id !in playedIds }.take(limit)
+        val films = sources.flatMap { it.films }.distinctBy { it.id }
+            .filter { it.id !in playedIds }
+            .sortedByDescending { Popularity.rankScore(it) }
+            .take(limit)
         return if (films.isEmpty()) null else anchor to films
     }
 }

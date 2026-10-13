@@ -38,6 +38,10 @@ create table if not exists titles (
 -- program_type real del portal (movie | series | teleplay | anime | ...): manda
 -- sobre kind para clasificar secciones (kind se reescribe entre columnas).
 alter table titles add column if not exists program_type text not null default '';
+-- Popularidad TMDB para ordenar tendencias/estrenos como app profesional
+-- (rating solo no distingue un 8.0 oscuro de un 7.7 con 200k votos).
+alter table titles add column if not exists popularity numeric(10,3) not null default 0;
+alter table titles add column if not exists vote_count integer not null default 0;
 
 create table if not exists categories (
     id text primary key,                       -- estrenos | recomendados | genero-accion | xtv-movies-…
@@ -68,6 +72,10 @@ create table if not exists enrichment (
 
 -- Sinopsis es-MX de TMDB (fase 3): la API la prefiere sobre la descripción del portal.
 alter table enrichment add column if not exists overview text not null default '';
+-- Señales de impacto TMDB para ponderar el rating (evitan que un oscuro 9.0
+-- tape a un blockbuster 7.7): se sirven al API y ordenan estrenos/géneros.
+alter table enrichment add column if not exists popularity numeric(10,3) not null default 0;
+alter table enrichment add column if not exists vote_count integer not null default 0;
 
 create index if not exists idx_titles_source on titles (source);
 create index if not exists idx_title_categories_category on title_categories (category_id, position);

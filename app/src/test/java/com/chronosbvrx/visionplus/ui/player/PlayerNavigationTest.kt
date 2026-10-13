@@ -508,8 +508,7 @@ class PlayerNavigationTest {
     }
 
     @Test
-    fun seriesNextEpisodeAvailabilityLogic() {
-        // En vivo: nunca hay siguiente episodio
+    fun seriesNextEpisodeAvailabilityLogic() {        // En vivo: nunca hay siguiente episodio
         assertFalse(
             hasNextEpisodeAvailable(
                 isLive = true,
@@ -772,6 +771,53 @@ class PlayerNavigationTest {
 
         assertTrue("El auto-reintento debe resolver exitosamente la apertura sin acción del usuario", ok)
         assertEquals("Debe haberse resuelto en exactamente 2 intentos", 2, attempts)
+    }
+
+    @Test
+    fun movieNeverShowsSeriesUiWithSingleEpisodeOrStraySeriesId() {
+        // Fuente única de verdad: solo 2+ capítulos o 2+ temporadas es serie.
+        assertFalse(isSeriesContent(epCount = 0, seasonCount = 0))
+        assertFalse(isSeriesContent(epCount = 1, seasonCount = 0))
+        assertFalse(isSeriesContent(epCount = 0, seasonCount = 1))
+        assertFalse(isSeriesContent(epCount = 1, seasonCount = 1))
+        assertTrue(isSeriesContent(epCount = 2, seasonCount = 0))
+        assertTrue(isSeriesContent(epCount = 0, seasonCount = 2))
+        assertTrue(isSeriesContent(epCount = 10, seasonCount = 2))
+
+        // Película contaminada: seriesId suelto + 1 capítulo + 1 temporada -> sin siguiente.
+        assertFalse(
+            "Película con seriesId residual no debe ofrecer siguiente episodio",
+            hasNextEpisodeAvailable(
+                isLive = false,
+                curEpIndex = 0,
+                epCount = 1,
+                curSeries = "movie_as_series",
+                curSeasonIndex = 0,
+                seasonCount = 1,
+            ),
+        )
+        // Película sin contexto alguno -> sin siguiente.
+        assertFalse(
+            hasNextEpisodeAvailable(
+                isLive = false,
+                curEpIndex = 0,
+                epCount = 0,
+                curSeries = "",
+                curSeasonIndex = 0,
+                seasonCount = 0,
+            ),
+        )
+        // Serie real de 1 temporada con 10 capítulos -> sí hay siguiente.
+        assertTrue(
+            hasNextEpisodeAvailable(
+                isLive = false,
+                curEpIndex = 0,
+                epCount = 10,
+                curSeries = "sid_123",
+                curSeasonIndex = 0,
+                seasonCount = 1,
+            ),
+        )
     }
 }
 

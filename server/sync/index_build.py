@@ -231,7 +231,9 @@ async def build_section_genres(pool) -> int:
         current_year = datetime.now().year
 
         for section, (base_where, extra) in filters.items():
-            # 1. Hilera de estrenos / novedades de la sección (posición 1)
+            # 1. Hilera de estrenos / novedades de la sección (posición 1):
+            #    estrenos DE VERDAD primero = impacto (popularidad TMDB) antes que año puro.
+            #    Antes: año DESC aplastaba (oscuro 2026 score 0 vencía a éxito 2025).
             estrenos_cid = f"xtv-{section}-estrenos"
             estrenos_title = SECTION_PREMIERE_TITLES.get(section, f"Estrenos de {SECTIONS.get(section, section)}")
             await conn.execute(CAT_SQL, estrenos_cid, estrenos_title, "section", 1)
@@ -239,15 +241,16 @@ async def build_section_genres(pool) -> int:
             prem_where = _shift_sql(base_where, 2)
             tag_prem = await conn.execute(
                 "insert into title_categories (title_id, category_id, position) "
-                "select t.id, $1, row_number() over (order by t.year desc nulls last, "
-                "t.score desc nulls last, t.title) "
+                "select t.id, $1, row_number() over (order by coalesce(t.popularity, 0) desc, "
+                "t.score desc nulls last, t.year desc nulls last, t.title) "
                 f"from titles t where (t.year is not null and t.year >= $2 or t.is_premiere) and {prem_where} "
                 "on conflict do nothing",
                 *prem_args,
             )
             changed += _rows(tag_prem)
 
-            # 2. Hileras de género de la sección (posiciones 10+)
+            # 2. Hileras de género de la sección (posiciones 10+): populares primero.
+            #    Antes: score puro (oscuro 9.0 con 5 votos vencía a blockbuster 7.7).
             args = list(extra) + [SECTION_MIN_TITLES]
             min_ph = f"${len(args)}"
             genre_counts = await conn.fetch(
@@ -263,8 +266,8 @@ async def build_section_genres(pool) -> int:
                 link_where = _shift_sql(base_where, 2)
                 tag = await conn.execute(
                     "insert into title_categories (title_id, category_id, position) "
-                    "select t.id, $1, row_number() over (order by t.score desc nulls last, "
-                    "t.year desc nulls last, t.title) "
+                    "select t.id, $1, row_number() over (order by coalesce(t.popularity, 0) desc, "
+                    "t.score desc nulls last, t.year desc nulls last, t.title) "
                     "from titles t, unnest(t.genres) gg "
                     f"where gg = $2 and {link_where} "
                     "on conflict do nothing",
@@ -286,7 +289,7 @@ async def build(pool) -> int:
         tag = await conn.execute(
             """
             insert into title_categories (title_id, category_id, position)
-            select id, 'estrenos', row_number() over (order by year desc nulls last, score desc nulls last, title)
+            select id, 'estrenos', row_number() over (order by coalesce(popularity, 0) desc, year desc nulls last, score desc nulls last, title)
             from titles where (year is not null and year >= $1 or is_premiere) and source != 'magis'
             on conflict do nothing
             """,

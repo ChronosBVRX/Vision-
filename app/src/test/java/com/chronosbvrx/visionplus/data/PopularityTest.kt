@@ -1,0 +1,91 @@
+package com.chronosbvrx.visionplus.data
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Anti-regresión del motor de popularidad: Home, secciones y héroe deben
+ * mostrar lo popular primero, no el relleno oscuro con rating huérfano.
+ */
+class PopularityTest {
+
+    private fun film(
+        id: String,
+        score: Double = 0.0,
+        year: Int = 2025,
+        popularity: Double = 0.0,
+        votes: Int = 0,
+        poster: String = "p",
+        video: String = "xtv:$id",
+    ) = Film(
+        id = id, title = "T $id", year = year, durationMin = 90,
+        synopsis = "s", posterUrl = poster, videoUrl = video,
+        sourceUrl = "xtv", score = score, popularity = popularity, voteCount = votes,
+    )
+
+    @Test
+    fun obscureHighRatingLosesToPopularBlockbuster() {
+        val obscure = film("dark", score = 9.0, year = 2026)
+        val blockbuster = film("hit", score = 7.7, year = 2025, popularity = 180.0, votes = 200_000)
+        assertTrue(Popularity.rankScore(blockbuster, 2026) > Popularity.rankScore(obscure, 2026))
+        val top = Popularity.topTrending(listOf(obscure, blockbuster), yearNow = 2026)
+        assertEquals("hit", top.first().id)
+    }
+
+    @Test
+    fun votesAloneGiveConfidenceOverOrphanRating() {
+        val orphan = film("orphan", score = 8.5, year = 2024)
+        val voted = film("voted", score = 7.0, year = 2024, votes = 5_000)
+        assertTrue(Popularity.rankScore(voted, 2026) > Popularity.rankScore(orphan, 2026))
+    }
+
+    @Test
+    fun realPremieresPreferPopularOverNewerObscure() {
+        // Antes: año puro (oscuro 2026 vencía a éxito 2025). Ahora: impacto manda.
+        val obscureNew = film("obs26", score = 0.0, year = 2026)
+        val hitLastYear = film("hit25", score = 8.2, year = 2025, popularity = 120.0, votes = 80_000)
+        val list = Popularity.realPremieres(listOf(obscureNew, hitLastYear), yearNow = 2026)
+        assertEquals("hit25", list.first().id)
+    }
+
+    @Test
+    fun realPremieresOnlyCurrentAndPreviousYear() {
+        val old = film("old", score = 9.0, year = 2020, popularity = 300.0, votes = 500_000)
+        val recent = film("new", score = 6.5, year = 2026, popularity = 10.0)
+        val list = Popularity.realPremieres(listOf(old, recent), yearNow = 2026)
+        assertEquals(listOf("new"), list.map { it.id })
+    }
+
+    @Test
+    fun trendingExcludesSignalFreeFiller() {
+        val filler = film("fill", score = 0.0, year = 2026)
+        assertTrue(Popularity.topTrending(listOf(filler), yearNow = 2026).isEmpty())
+    }
+
+    @Test
+    fun heroPrefersPosterOverBlank() {
+        val blank = film("blank", score = 8.0, year = 2026, popularity = 200.0, poster = "")
+        val withArt = film("art", score = 7.5, year = 2026, popularity = 50.0, poster = "p")
+        val hero = Popularity.pickHero(listOf(blank, withArt), emptyList(), null)
+        assertEquals("art", hero?.id)
+    }
+
+    @Test
+    fun dedupeKeepsSingleContentId() {
+        val a = film("xtv:ABC", video = "xtv:ABC")
+        val b = film("xtv:abc", video = "xtv:ABC|extra")
+        assertEquals(1, Popularity.dedupe(listOf(a, b)).size)
+    }
+
+    @Test
+    fun reorderRowIsDescendingByImpact() {
+        val films = listOf(
+            film("low", score = 5.0, year = 2010),
+            film("mid", score = 7.0, year = 2024, popularity = 30.0),
+            film("top", score = 8.0, year = 2025, popularity = 200.0, votes = 100_000),
+        )
+        val ordered = Popularity.reorderRow(films, yearNow = 2026)
+        assertEquals(listOf("top", "mid", "low"), ordered.map { it.id })
+    }
+}

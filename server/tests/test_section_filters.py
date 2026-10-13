@@ -77,3 +77,24 @@ def test_section_premiere_titles_defined():
         cid = f"xtv-{s}-estrenos"
         assert cid.startswith(f"xtv-{s}-")
 
+
+def test_title_row_carries_impact_defaults():
+    asset = {
+        "contentId": "M9",
+        "name": "Hit",
+        "tags": "Acción",
+        "programType": "movie",
+    }
+    row = xtv.title_row(asset, kind="movie", recommended=False)
+    assert len(row) == xtv.TITLE_SQL.count("$")
+    # popularity y votos viajan al final de la tupla (0 hasta que TMDB los llene).
+    assert row[-2] == 0.0
+    assert row[-1] == 0
+
+
+def test_tmdb_confidence_rewards_close_year():
+    import tmdb
+    # Match exacto + año cercano = confianza alta (el que ordena estrenos).
+    assert tmdb._confidence("Duna", {"title": "Duna", "release_date": "2024-03-01"},
+                            "movie", 2024) >= 0.9
+

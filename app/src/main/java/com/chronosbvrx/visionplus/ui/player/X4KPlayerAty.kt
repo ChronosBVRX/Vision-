@@ -334,6 +334,17 @@ class X4KPlayerAty : ComponentActivity() {
         intent.getStringArrayListExtra("seasonIds")?.let { seasonIds = it }
         intent.getStringArrayListExtra("seasonNames")?.let { seasonNames = it }
         curSeasonIndex = intent.getIntExtra("seasonIndex", 0)
+        // Normalización serie vs película: historiales o intents viejos pueden traer un
+        // seriesId suelto con 0-1 capítulos; sin 2+ capítulos o 2+ temporadas es película.
+        if (epIds.size <= 1 && seasonIds.size <= 1) {
+            curSeries = ""
+            epIds.clear()
+            epNames.clear()
+            seasonIds.clear()
+            seasonNames.clear()
+            curEpIndex = 0
+            curSeasonIndex = 0
+        }
         resumeMs = intent.getLongExtra("resumeMs", 0L)
         intentPoster = intent.getStringExtra("posterUrl").orEmpty()
         if (!liveMode && curSeries.isNotBlank() && (epIds.isEmpty() || epNames.isEmpty())) {
@@ -1148,7 +1159,7 @@ class X4KPlayerAty : ComponentActivity() {
             })
             buttons.addView(forward)
             buttons.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-            if (curSeries.isNotBlank() || epIds.size > 1 || seasonIds.size > 1) {
+            if (isSeriesContent(epIds.size, seasonIds.size)) {
                 val nextEp = pill("⏭ Sig. episodio") {
                     if (canExecuteControlAction()) playNextEpisodeFromControls()
                 }
@@ -1738,6 +1749,7 @@ class X4KPlayerAty : ComponentActivity() {
     /** "Siguiente capítulo" estilo premium al terminar un episodio (series con continuidad). */
     private fun showNextCard() {
         if (liveMode || nextVisible) return
+        if (!isSeriesContent(epIds.size, seasonIds.size)) return
         val hasEp = curEpIndex + 1 < epIds.size
         val hasSeason = curSeries.isNotBlank() && curSeasonIndex + 1 < seasonIds.size
         if (!hasEp && !hasSeason) return
@@ -2179,6 +2191,7 @@ class X4KPlayerAty : ComponentActivity() {
             return
         }
         if (!shouldKeep(pos, total)) return
+        val series = isSeriesContent(epIds.size, seasonIds.size)
         PlaybackHistory.save(
             this,
             ResumeEntry(
@@ -2187,12 +2200,12 @@ class X4KPlayerAty : ComponentActivity() {
                 posterUrl = intentPoster,
                 videoUrl = "",
                 xtvCode = key,
-                seriesId = curSeries,
-                episodeIds = epIds.toList(),
-                episodeIndex = curEpIndex,
-                seasonIds = seasonIds.toList(),
-                seasonNames = seasonNames.toList(),
-                seasonIndex = curSeasonIndex,
+                seriesId = if (series) curSeries else "",
+                episodeIds = if (series) epIds.toList() else emptyList(),
+                episodeIndex = if (series) curEpIndex else 0,
+                seasonIds = if (series) seasonIds.toList() else emptyList(),
+                seasonNames = if (series) seasonNames.toList() else emptyList(),
+                seasonIndex = if (series) curSeasonIndex else 0,
                 positionMs = pos,
                 durationMs = total,
                 updatedAt = System.currentTimeMillis(),
@@ -2226,7 +2239,7 @@ class X4KPlayerAty : ComponentActivity() {
         if (!resumeAsked) {
             resumeAsked = true
             val entry = PlaybackHistory.get(this, curCode)
-            val isSeries = curSeries.isNotBlank() || epIds.isNotEmpty()
+            val isSeries = isSeriesContent(epIds.size, seasonIds.size)
             if (entry != null && shouldPromptResume(
                     isLive = liveMode,
                     isSeries = isSeries,
@@ -2797,10 +2810,10 @@ class X4KPlayerAty : ComponentActivity() {
     private fun seasonLabel(idx: Int): String =
         seasonNames.getOrNull(idx)?.takeIf { it.isNotBlank() } ?: "T${idx + 1}"
 
-    /** Capítulos (y temporadas) sin salir del reproductor: VOD con contexto de serie. */
+    /** Capítulos (y temporadas) sin salir del reproductor: solo series reales (2+ cap. o temp.). */
     private fun showEpisodePicker() {
         if (liveMode) return
-        if (epIds.isEmpty() && seasonIds.isEmpty() && curSeries.isBlank()) return
+        if (!isSeriesContent(epIds.size, seasonIds.size)) return
         lastPickerSourceBtn = episodesBtn
         openEpisodePicker()
     }

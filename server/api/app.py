@@ -25,7 +25,8 @@ SPORTS_TZ = "America/Mexico_City"
 
 FILM_COLUMNS = """
     t.id, t.title, t.year, t.duration_min, t.synopsis,
-    t.poster_url, t.play_ref, t.source, t.score, t.kind
+    t.poster_url, t.play_ref, t.source, t.score, t.kind,
+    t.popularity, t.vote_count
 """
 
 pool: asyncpg.Pool | None = None
@@ -74,6 +75,18 @@ def film(record: asyncpg.Record, enr=None) -> dict:
     year = record["year"]
     synopsis = record["synopsis"]
     title = strip_season_mark(record["title"], record["kind"])
+    popularity = 0.0
+    votes = 0
+    try:
+        if "popularity" in record.keys():
+            popularity = float(record["popularity"] or 0)
+    except (TypeError, ValueError, KeyError):
+        popularity = 0.0
+    try:
+        if "vote_count" in record.keys():
+            votes = int(record["vote_count"] or 0)
+    except (TypeError, ValueError, KeyError):
+        votes = 0
     if enr is not None:
         if enr["rating"] is not None:
             rating = enr["rating"]
@@ -82,6 +95,16 @@ def film(record: asyncpg.Record, enr=None) -> dict:
         overview = (enr["overview"] or "").strip()
         if overview:
             synopsis = overview
+        try:
+            if "popularity" in enr.keys() and enr["popularity"] is not None:
+                popularity = float(enr["popularity"] or 0)
+        except (TypeError, ValueError, KeyError, AttributeError):
+            pass
+        try:
+            if "vote_count" in enr.keys() and enr["vote_count"] is not None:
+                votes = int(enr["vote_count"] or 0)
+        except (TypeError, ValueError, KeyError, AttributeError):
+            pass
     video_url = record["play_ref"]
     source_url = record["source"]
     film_id = record["id"]
@@ -101,6 +124,8 @@ def film(record: asyncpg.Record, enr=None) -> dict:
         "videoUrl": video_url,
         "sourceUrl": source_url,
         "score": float(rating or 0),
+        "popularity": popularity,
+        "voteCount": votes,
     }
 
 
@@ -110,7 +135,7 @@ async def _enrichment_map(ids) -> dict:
     if not unique:
         return {}
     rows = await db().fetch(
-        """select title_id, rating, year, overview from enrichment
+        """select title_id, rating, year, overview, popularity, vote_count from enrichment
            where title_id = any($1::text[]) and coalesce(match_confidence, 0) >= 0.5""",
         unique,
     )
@@ -457,6 +482,7 @@ async def search(
                 when unaccent(lower(coalesce(t.original_title, ''))) like $2 then 5
                 else 6
             end,
+            t.popularity desc nulls last,
             t.score desc nulls last,
             t.year desc nulls last
         limit ${limit_idx}
@@ -477,6 +503,7 @@ async def search(
                     when lower(t.title) ilike lower($2 || '%') then 2
                     else 3
                 end,
+                t.popularity desc nulls last,
                 t.score desc nulls last,
                 t.year desc nulls last
             limit $3
@@ -489,7 +516,7 @@ async def search(
     seen_cids: set[str] = set()
     out = []
     for r in rows:
-        entry, group_id = _grouped_entry(r, member_of, seasons_by_group, base_of_group)
+        entry, group_id = _grouped_entry(r, member_of, seasons_by_group, base_of_group, enr.get(r["id"]))
         cid = entry["id"].split(":", 1)[-1] if ":" in entry["id"] else entry["id"]
         clean_key = f"{cid.lower()}:{_fold(entry['title'])}"
         if clean_key in seen_cids:

@@ -105,3 +105,17 @@ def test_film_normalizes_magisvod_to_xtv():
     assert out["sourceUrl"] == "xtv"
 
 
+def test_film_defaults_popularity_without_columns():
+    out = app.film(_record())
+    assert out["popularity"] == 0.0
+    assert out["voteCount"] == 0
+
+
+def test_film_prefers_enrichment_popularity():
+    enr = {"rating": 7.7, "year": 2025, "overview": "",
+           "popularity": 180.5, "vote_count": 200000}
+    out = app.film(_record(), enr)
+    assert out["popularity"] == 180.5
+    assert out["voteCount"] == 200000
+
+

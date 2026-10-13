@@ -121,6 +121,14 @@ def _match(kind: str, title: str, original: str | None, year: int | None) -> tup
     detail_year = int(date[:4]) if len(date) >= 4 else year
     imdb_id = (details.get("external_ids") or {}).get("imdb_id")
     rating = details.get("vote_average")
+    try:
+        votes = int(details.get("vote_count") or 0)
+    except (TypeError, ValueError):
+        votes = 0
+    try:
+        popularity = float(details.get("popularity") or 0.0)
+    except (TypeError, ValueError):
+        popularity = 0.0
     return {
         "tmdb_id": int(tmdb_id),
         "imdb_id": imdb_id,
@@ -129,6 +137,8 @@ def _match(kind: str, title: str, original: str | None, year: int | None) -> tup
         "year": detail_year,
         "genres": genres,
         "overview": (details.get("overview") or "").strip(),
+        "vote_count": votes,
+        "popularity": round(popularity, 3),
     }, False
 
 
@@ -163,16 +173,27 @@ async def enrich_batch(pool) -> int:
             async with pool.acquire() as conn:
                 await conn.execute(
                     """
-                    insert into enrichment (title_id, imdb_id, tmdb_id, match_confidence, rating, year, genres, overview, updated_at)
-                    values ($1, $2, $3, $4, $5, $6, $7, $8, now())
+                    insert into enrichment (title_id, imdb_id, tmdb_id, match_confidence, rating, year, genres, overview, popularity, vote_count, updated_at)
+                    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
                     on conflict (title_id) do update set
                         imdb_id = excluded.imdb_id, tmdb_id = excluded.tmdb_id,
                         match_confidence = excluded.match_confidence, rating = excluded.rating,
                         year = excluded.year, genres = excluded.genres,
-                        overview = excluded.overview, updated_at = now()
+                        overview = excluded.overview, popularity = excluded.popularity,
+                        vote_count = excluded.vote_count, updated_at = now()
                     """,
                     row["id"], match["imdb_id"], match["tmdb_id"], match["confidence"],
                     match["rating"], match["year"], match["genres"], match["overview"],
+                    match.get("popularity", 0.0), match.get("vote_count", 0),
+                )
+                # Propaga el impacto a titles para que el índice ordene por
+                # popularidad sin joins por fila (estrenos/géneros profesionales).
+                await conn.execute(
+                    """
+                    update titles set popularity = $2, vote_count = $3, updated_at = now()
+                    where id = $1
+                    """,
+                    row["id"], match.get("popularity", 0.0), match.get("vote_count", 0),
                 )
             done += 1
         elif not had_error:

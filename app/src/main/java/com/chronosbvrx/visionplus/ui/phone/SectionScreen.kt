@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.ui.components.CategoryPill
@@ -194,8 +195,10 @@ fun SectionScreen(
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         itemsIndexed(loaded, key = { _, row -> row.id }) { index, row ->
+                            // Reordenado por impacto en cliente: robusto ante caché vieja del servidor.
+                            val ranked = remember(row.films) { Popularity.reorderRow(row.films) }
                             CuratedSectionModule(
-                                row = row,
+                                row = row.copy(films = ranked),
                                 rowIndex = index,
                                 onOpenFilm = onOpenFilm,
                                 onSeeAll = { selectedCategory = row.title },
@@ -208,9 +211,10 @@ fun SectionScreen(
                         loaded.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
                     }
                     val films = remember(categoryRow, loaded) {
-                        categoryRow?.films ?: loaded.flatMap { it.films }
+                        val raw = categoryRow?.films ?: loaded.flatMap { it.films }
                             .filter { it.synopsis.contains(activeCategory, ignoreCase = true) }
                             .distinctBy { it.id }
+                        Popularity.reorderRow(raw)
                     }
 
                     CategoryGridFeed(
@@ -272,7 +276,7 @@ private fun CuratedSectionModule(
             )
         }
 
-        // Carrusel Horizontal acotado a máximo 15 elementos (LIMIT 15)
+        // Carrusel Horizontal acotado a máximo 15 elementos (LIMIT 15), ya rankeado por impacto.
         val limitedFilms = remember(row.films) { row.films.take(CAROUSEL_LIMIT) }
 
         LazyRow(

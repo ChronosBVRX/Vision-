@@ -144,10 +144,12 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
     }
     val activeSeasonLabel = seasonNameList.getOrElse(seasonIdx) { "T${seasonIdx + 1}" }
     val seasonTitlePrefix = if (film.seasons.size > 1) " · $activeSeasonLabel" else ""
+    // Solo es serie con 2+ capítulos o 2+ temporadas: 1 capítulo suelto del portal es película.
+    val isSeriesTitle = episodes.size > 1 || film.seasons.size > 1
     val playButtonLabel = when {
-        episodes.isNotEmpty() && watchedCount > 0 ->
+        isSeriesTitle && watchedCount > 0 ->
             "Continuar$seasonTitlePrefix · Capítulo ${nextEpisodeIndex + 1}"
-        episodes.isNotEmpty() ->
+        isSeriesTitle ->
             "Reproducir$seasonTitlePrefix · Capítulo 1"
         else -> "Reproducir"
     }
@@ -179,7 +181,7 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                 val targetIdx = nextEpisodeIndex.coerceIn(0, (episodes.size - 1).coerceAtLeast(0))
                                 val targetEp = episodes.getOrNull(targetIdx)
                                 when {
-                                    targetEp != null -> {
+                                    isSeriesTitle && targetEp != null -> {
                                         UserLibrary.markEpisodeWatched(context, activeId, targetIdx + 1)
                                         watchedTick++
                                         onPlay(
@@ -197,7 +199,7 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                             ),
                                         )
                                     }
-                                    film.seasons.isNotEmpty() -> onPlay(
+                                    film.seasons.size > 1 && isSeriesTitle -> onPlay(
                                         EpisodePlay(
                                             code = activeId,
                                             titleSuffix = "$seasonTitlePrefix · C1",
@@ -265,14 +267,42 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                 }
                                 else -> {
                                     TextButton(onClick = {
-                                        OfflineDownloadManager.enqueueDownload(context, film)
+                                        // Las series descargan el capítulo objetivo (mismo que Reproducir),
+                                        // no la ficha: sin esto siempre intentaba el seriesId y fallaba.
+                                        val targetIdx = nextEpisodeIndex.coerceIn(0, (episodes.size - 1).coerceAtLeast(0))
+                                        val targetEp = episodes.getOrNull(targetIdx)
+                                        val ep = when {
+                                            isSeriesTitle && targetEp != null -> EpisodePlay(
+                                                code = targetEp,
+                                                titleSuffix = "$seasonTitlePrefix · C${targetIdx + 1}",
+                                                seriesId = activeId,
+                                                episodeIds = episodes,
+                                                episodeNames = episodeNames,
+                                                episodeIndex = targetIdx,
+                                                seasonIds = seasonIdList,
+                                                seasonNames = seasonNameList,
+                                                seasonIndex = seasonIdx,
+                                                durationMs = itemDurationMs,
+                                            )
+                                            film.seasons.size > 1 && isSeriesTitle -> EpisodePlay(
+                                                code = activeId,
+                                                titleSuffix = "$seasonTitlePrefix · C1",
+                                                seriesId = activeId,
+                                                seasonIds = seasonIdList,
+                                                seasonNames = seasonNameList,
+                                                seasonIndex = seasonIdx,
+                                                durationMs = itemDurationMs,
+                                            )
+                                            else -> null
+                                        }
+                                        OfflineDownloadManager.enqueueDownload(context, film, ep)
                                     }) {
                                         Text("⬇ Descargar", color = VisionBlue)
                                     }
                                 }
                             }
                         }
-                        if (film.seasons.size > 1 || episodes.isNotEmpty()) {
+                        if (episodes.size > 1 || film.seasons.size > 1) {
                             MobileSeriesSelectorSection(
                                 seasons = film.seasons,
                                 activeId = activeId,

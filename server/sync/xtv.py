@@ -262,8 +262,8 @@ def new_session(sn: str = "") -> tuple[str, str]:
 TITLE_SQL = """
 insert into titles (id, source, source_id, kind, title, original_title, year, synopsis,
                     poster_url, duration_min, score, genres, cast_list, director, play_ref,
-                    is_premiere, is_recommended, program_type)
-values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+                    is_premiere, is_recommended, program_type, popularity, vote_count)
+values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
 on conflict (id) do update set
     kind = case
         when titles.kind in ('anime', 'series', 'kids') and excluded.kind = 'movie' then titles.kind
@@ -297,12 +297,12 @@ on conflict (id) do update set title = excluded.title, kind = excluded.kind, pos
 
 
 def live_title_row(ch: dict) -> tuple:
-    """Una fila de canal en vivo para TITLE_SQL (18 columnas, como title_row)."""
+    """Una fila de canal en vivo para TITLE_SQL (20 columnas, como title_row)."""
     code = ch.get("channelCode") or ""
     return (
         f"xtv-live-{code}", "xtv", code, "live", ch.get("name") or "",
         None, None, "", pick_poster(ch.get("posterList"), "icon", "logo"), 0, None,
-        [], "", "", f"xtvlive:{code}", False, False, "",
+        [], "", "", f"xtvlive:{code}", False, False, "", 0.0, 0,
     )
 
 
@@ -324,7 +324,7 @@ def title_row(asset: dict, kind: str, recommended: bool) -> tuple:
         genres, asset.get("actorDisplay") or "",
         asset.get("director") or "", f"xtv:{content_id}",
         bool(year and year >= datetime.now().year - 1), recommended,
-        program_type,
+        program_type, 0.0, 0,
     )
 
 

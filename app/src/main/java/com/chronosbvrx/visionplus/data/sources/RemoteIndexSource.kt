@@ -160,6 +160,8 @@ object RemoteIndexSource {
                     videoUrl = videoUrl,
                     sourceUrl = f.optString("sourceUrl"),
                     score = f.optDouble("score", 0.0),
+                    popularity = f.optDouble("popularity", 0.0),
+                    voteCount = f.optInt("voteCount", 0),
                     groupId = f.optString("groupId"),
                     seasons = parseSeasons(f.optJSONArray("seasons")),
                 )
@@ -297,6 +299,8 @@ object RemoteIndexSource {
                     videoUrl = videoUrl,
                     sourceUrl = f.optString("sourceUrl"),
                     score = f.optDouble("score", 0.0),
+                    popularity = f.optDouble("popularity", 0.0),
+                    voteCount = f.optInt("voteCount", 0),
                     groupId = f.optString("groupId"),
                     seasons = parseSeasons(f.optJSONArray("seasons")),
                 )
@@ -351,6 +355,8 @@ object RemoteIndexSource {
                 put("videoUrl", f.videoUrl)
                 put("sourceUrl", f.sourceUrl)
                 put("score", f.score)
+                put("popularity", f.popularity)
+                put("voteCount", f.voteCount)
                 if (f.groupId.isNotBlank()) put("groupId", f.groupId)
                 if (f.seasons.isNotEmpty()) {
                     val seasons = JSONArray()

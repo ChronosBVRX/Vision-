@@ -1,32 +1,19 @@
 package com.chronosbvrx.visionplus.data.offline
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.sources.PlaybackResolve
-import com.chronosbvrx.visionplus.data.xuper.X4KApi
-import com.chronosbvrx.visionplus.data.xuper.X4KTitan
 import com.chronosbvrx.visionplus.ui.EpisodePlay
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONArray
-import java.io.BufferedInputStream
-import java.io.File
-import java.io.InputStream
-import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
-import javax.crypto.Cipher
-import javax.crypto.CipherInputStream
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 /**
  * Excepción lanzada cuando una Smart TV intenta descargar sin un medio de almacenamiento externo.
@@ -34,34 +21,30 @@ import javax.crypto.spec.SecretKeySpec
 class TvStorageRequiredException(message: String) : Exception(message)
 
 /**
- * Gestor maestro del Modo Offline en Vision+:
+ * Gestor del Modo Offline en Vision+ (proceso principal):
  *
- * - Aplica de forma estricta las políticas de almacenamiento según dispositivo (Móvil vs Smart TV).
- * - Resuelve streams reales del catálogo XTV (vía X4KApi + motor nativo X4KTitan en modo exo HTTP)
- *   así como flujos progresivos MP4/TS y manifiestos HLS (.m3u8).
- * - Canaliza los bytes reales por el búnker criptográfico AES-256-CTR (OfflineCryptoVault) con
- *   progreso real byte a byte.
+ * REGLA INVIOLABLE: este objeto JAMÁS bootea ni toca el motor nativo Ranger
+ * (`X4KTitan`). El motor vive solo en el proceso `:x4k` junto a Magis del
+ * principal colisionarían y crashearían la app (SIGSEGV). Por eso:
+ * - URLs http directas (Internet Archive): se descargan aquí con
+ *   [OfflineHttpDownloader] (100% seguro, sin nativo).
+ * - Refs `xtv:` / `magisvod:`: se delegan al [X4KDownloadService] (`:x4k`),
+ *   que resuelve el stream real y reporta vía [OfflineProgressBus].
+ *
+ * La reproducción no pasa por aquí.
  */
 object OfflineDownloadManager {
 
     private const val TAG = "OfflineDownloadManager"
-    private const val MIN_VALID_VIDEO_BYTES = 16 * 1024L // Mínimo 16 KB para descartar respuestas vacías o truncadas
+    internal const val MIN_VALID_VIDEO_BYTES = 16 * 1024L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = ConcurrentHashMap<String, Job>()
-
-    private val httpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(90, TimeUnit.SECONDS)
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .build()
-    }
+    private val delegatedIds = ConcurrentHashMap.newKeySet<String>()
 
     /**
      * Inicia la descarga de una película o episodio.
-     * Retorna `true` si la descarga fue puesta en cola exitosamente, o lanza [TvStorageRequiredException] en TV sin USB.
+     * Retorna `true` si fue puesta en cola, o lanza [TvStorageRequiredException] en TV sin USB.
      */
     fun enqueueDownload(
         context: Context,
@@ -71,7 +54,6 @@ object OfflineDownloadManager {
     ): Boolean {
         OfflineRegistry.init(context)
 
-        // 1. Evaluar elegibilidad según dispositivo
         val eligibility = OfflineStoragePolicy.evaluateEligibility(context)
         val targetVolume = when (eligibility) {
             is StorageEligibility.DisallowedTvNeedsExternal -> {
@@ -86,23 +68,35 @@ object OfflineDownloadManager {
             is StorageEligibility.Allowed -> eligibility.target
         }
 
-        // 2. Construir metadatos de la descarga
-        val isEpisode = episode != null
-        val downloadId = if (isEpisode) {
-            "${film.id}:ep:${episode.code}"
-        } else {
-            film.id
-        }
+        val item = buildDownloadItem(film, episode, targetVolume, quality)
 
-        // Si ya está descargada o en curso, no duplicar
-        if (OfflineRegistry.isDownloaded(downloadId, context)) return true
-        if (OfflineRegistry.isDownloading(downloadId, context)) return true
+        if (OfflineRegistry.isDownloaded(item.id, context)) return true
+        if (OfflineRegistry.isDownloading(item.id, context)) return true
+
+        OfflineRegistry.put(item, context)
+        dispatchWorker(context.applicationContext, item)
+        return true
+    }
+
+    /**
+     * Construye el item de descarga (lógica pura, testeable): el episodio manda
+     * sobre la película para que las series descarguen el C# elegido y no la serie.
+     */
+    internal fun buildDownloadItem(
+        film: Film,
+        episode: EpisodePlay?,
+        target: StorageVolumeInfo,
+        quality: String,
+    ): OfflineDownload {
+        val isEpisode = episode != null && episode.code.isNotBlank()
+        val epCode = episode?.code.orEmpty()
+        val downloadId = if (isEpisode) "${film.id}:ep:$epCode" else film.id
 
         val safeFileName = downloadId.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-        val vaultFile = File(targetVolume.vaultDir, "$safeFileName.vpack")
+        val vaultFile = File(target.vaultDir, "$safeFileName.vpack")
 
-        val duration = if (isEpisode && episode.durationMs > 0L) {
-            episode.durationMs
+        val duration = if (isEpisode && (episode?.durationMs ?: 0L) > 0L) {
+            episode!!.durationMs
         } else if (film.durationMin > 0) {
             film.durationMin * 60_000L
         } else {
@@ -110,22 +104,21 @@ object OfflineDownloadManager {
         }
 
         val episodeSubtitle = if (isEpisode) {
-            val seasonLabel = if (episode.seasonIndex >= 0) "T${episode.seasonIndex + 1}" else ""
-            val epLabel = "C${episode.episodeIndex + 1}"
+            val seasonLabel = if ((episode?.seasonIndex ?: -1) >= 0) "T${episode!!.seasonIndex + 1}" else ""
+            val epLabel = "C${(episode?.episodeIndex ?: 0) + 1}"
             listOfNotNull(seasonLabel.ifBlank { null }, epLabel).joinToString(" · ")
         } else {
             ""
         }
 
         val rawStreamUrl = if (isEpisode) {
-            if (episode.code.startsWith("xtv:") || episode.code.startsWith("http")) episode.code else "xtv:${episode.code}"
+            if (epCode.startsWith("xtv:") || epCode.startsWith("http")) epCode else "xtv:$epCode"
         } else {
             film.videoUrl.ifBlank { "xtv:${film.id}" }
         }
 
-        val estimatedTotal = estimateTotalBytes(duration, quality)
-
-        val item = OfflineDownload(
+        val seriesId = episode?.seriesId.orEmpty()
+        return OfflineDownload(
             id = downloadId,
             contentId = film.id,
             title = film.title,
@@ -136,168 +129,51 @@ object OfflineDownloadManager {
             quality = quality,
             state = DownloadState.QUEUED,
             bytesDownloaded = 0L,
-            totalBytes = estimatedTotal,
+            totalBytes = estimateTotalBytes(duration, quality),
             vaultFilePath = vaultFile.absolutePath,
-            storageLabel = targetVolume.label,
-            isRemovable = targetVolume.isRemovable,
+            storageLabel = target.label,
+            isRemovable = target.isRemovable,
             isSeries = isEpisode || film.seasons.isNotEmpty(),
-            seriesId = episode?.seriesId.orEmpty(),
+            seriesId = seriesId,
             seasonIndex = episode?.seasonIndex ?: 0,
             episodeIndex = episode?.episodeIndex ?: 0,
-            episodeName = episodeSubtitle,
+            episodeName = episode?.titleSuffix?.ifBlank { episodeSubtitle } ?: episodeSubtitle,
         )
-
-        OfflineRegistry.put(item, context)
-        startWorkerJob(context.applicationContext, item)
-        return true
     }
 
-    private fun estimateTotalBytes(durationMs: Long, quality: String): Long {
+    /** True si la URL necesita resolución remota en `:x4k` (no es http directa). */
+    internal fun needsRemoteResolve(videoUrl: String): Boolean {
+        val u = videoUrl.substringBefore('|').trim()
+        return !(u.startsWith("http://") || u.startsWith("https://"))
+    }
+
+    internal fun estimateTotalBytes(durationMs: Long, quality: String): Long {
         val effectiveDurationSec = if (durationMs > 60_000L) (durationMs / 1000L) else (90L * 60L)
         val bytesPerSec = when {
-            quality.contains("1080") -> 240_000L // ~1.9 Mbps
-            quality.contains("720") -> 140_000L  // ~1.1 Mbps
-            else -> 80_000L                      // ~640 Kbps
+            quality.contains("1080") -> 240_000L
+            quality.contains("720") -> 140_000L
+            else -> 80_000L
         }
         return effectiveDurationSec * bytesPerSec
     }
 
-    private fun startWorkerJob(context: Context, item: OfflineDownload) {
+    private fun dispatchWorker(context: Context, item: OfflineDownload) {
         val existingJob = activeJobs[item.id]
         if (existingJob != null && existingJob.isActive) return
+        if (delegatedIds.contains(item.id)) return
 
         val job = scope.launch {
-            var activeTitanCode = ""
             try {
-                OfflineRegistry.updateState(item.id, DownloadState.DOWNLOADING)
-                val destinationFile = File(item.vaultFilePath)
-
-                // 1. Resolver lista de URLs candidatas de descarga
-                val candidateUrls = ArrayList<String>()
                 var resolvedUrl = item.videoUrl
                 if (resolvedUrl.contains('|')) {
-                    resolvedUrl = PlaybackResolve.urlFor(resolvedUrl)
+                    resolvedUrl = runCatching { PlaybackResolve.urlFor(resolvedUrl) }.getOrDefault(resolvedUrl)
                 }
 
-                if (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://")) {
-                    candidateUrls.add(resolvedUrl)
+                if (!needsRemoteResolve(resolvedUrl)) {
+                    downloadDirectHttp(context, item, resolvedUrl)
                 } else {
-                    val code = resolvedUrl
-                        .removePrefix("xtv:")
-                        .removePrefix("magisvod:")
-                        .removePrefix("magis:")
-                        .substringBefore('?')
-                        .trim()
-                    activeTitanCode = code
-
-                    var metaMedia = runCatching {
-                        X4KApi.prepareVod(
-                            context = context,
-                            contentId = code,
-                            title = item.title,
-                            seriesId = item.seriesId,
-                            fallbackDurationMs = item.durationMs,
-                        )
-                    }.getOrNull()
-
-                    if (metaMedia == null) {
-                        delay(450L)
-                        metaMedia = runCatching {
-                            X4KApi.prepareVod(
-                                context = context,
-                                contentId = code,
-                                title = item.title,
-                                seriesId = item.seriesId,
-                                fallbackDurationMs = item.durationMs,
-                            )
-                        }.getOrNull()
-                    }
-
-                    val mediasJson = metaMedia?.mediasJson.orEmpty()
-                    if (mediasJson.isBlank()) {
-                        throw IllegalStateException("No se encontraron fuentes de descarga para este título en el catálogo")
-                    }
-
-                    val arr = JSONArray(mediasJson)
-                    val mediaSpecs = ArrayList<X4KTitan.MediaSpec>(arr.length())
-                    for (i in 0 until arr.length()) {
-                        val o = arr.optJSONObject(i) ?: continue
-                        val n = o.optString("n")
-                        if (n.isBlank()) continue
-                        if (n.startsWith("http://") || n.startsWith("https://")) {
-                            candidateUrls.add(n)
-                        }
-                        mediaSpecs.add(
-                            X4KTitan.MediaSpec(
-                                name = n,
-                                license = o.optString("l"),
-                                audio = o.optString("a"),
-                                quality = o.optString("q"),
-                                encodeFormat = o.optString("e"),
-                                videoFormat = o.optString("f"),
-                            ),
-                        )
-                    }
-
-                    if (candidateUrls.isEmpty() && mediaSpecs.isNotEmpty()) {
-                        val resolvedStream = X4KTitan.resolveVodStream(
-                            context = context,
-                            code = code,
-                            title = item.title,
-                            medias = mediaSpecs,
-                            preferredQuality = item.quality,
-                        )
-                        if (resolvedStream != null) {
-                            if (resolvedStream.playUrl.startsWith("http")) {
-                                candidateUrls.add(resolvedStream.playUrl)
-                            }
-                            resolvedStream.links.forEach { link ->
-                                if (link.startsWith("http") && !candidateUrls.contains(link)) {
-                                    candidateUrls.add(link)
-                                }
-                            }
-                        }
-                    }
+                    delegateToX4kService(context, item)
                 }
-
-                if (candidateUrls.isEmpty()) {
-                    throw IllegalStateException("No se pudo establecer enlace con el servidor de descarga")
-                }
-
-                // 2. Ejecutar descarga real desde la primera URL candidata funcional
-                var lastErr: Exception? = null
-                var downloadedBytes = 0L
-                val fallbackEstimatedTotal = item.totalBytes.takeIf { it > 0L }
-                    ?: estimateTotalBytes(item.durationMs, item.quality)
-
-                for (url in candidateUrls) {
-                    try {
-                        downloadedBytes = downloadUrlToVault(
-                            url = url,
-                            item = item,
-                            destinationFile = destinationFile,
-                            fallbackTotalBytes = fallbackEstimatedTotal,
-                        )
-                        if (downloadedBytes >= MIN_VALID_VIDEO_BYTES) {
-                            break
-                        } else {
-                            destinationFile.delete()
-                            throw IllegalStateException("Flujo de video incompleto ($downloadedBytes bytes)")
-                        }
-                    } catch (e: Exception) {
-                        if (e is CancellationException) throw e
-                        Log.w(TAG, "Intento de descarga falló en $url: ${e.message}")
-                        lastErr = e
-                    }
-                }
-
-                if (downloadedBytes < MIN_VALID_VIDEO_BYTES) {
-                    throw lastErr ?: IllegalStateException("No se pudo descargar el flujo de video")
-                }
-
-                OfflineRegistry.updateProgress(item.id, downloadedBytes, downloadedBytes)
-                OfflineRegistry.updateState(item.id, DownloadState.COMPLETED)
-                Log.i(TAG, "Descarga offline completada exitosamente: ${item.title} (${item.id}, $downloadedBytes bytes)")
             } catch (e: Exception) {
                 if (e is CancellationException) {
                     Log.i(TAG, "Descarga pausada o cancelada: ${item.id}")
@@ -306,366 +182,109 @@ object OfflineDownloadManager {
                     OfflineRegistry.updateState(item.id, DownloadState.ERROR, e.message ?: "Error de red al descargar")
                 }
             } finally {
-                if (activeTitanCode.isNotBlank()) {
-                    X4KTitan.stopBackgroundVod(activeTitanCode)
-                }
                 activeJobs.remove(item.id)
             }
         }
         activeJobs[item.id] = job
     }
 
-    /**
-     * Descarga desde una URL HTTP/HTTPS (soportando tanto flujos directos MP4/MPEG-TS como listas HLS .m3u8)
-     * y cifra al vuelo hacia [destinationFile].
-     */
-    private fun downloadUrlToVault(
-        url: String,
-        item: OfflineDownload,
-        destinationFile: File,
-        fallbackTotalBytes: Long,
-    ): Long {
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("User-Agent", "Lavf/58.29.100")
-            .addHeader("Accept", "*/*")
-            .addHeader("Connection", "keep-alive")
-            .build()
-
-        httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("Error del servidor CDN: HTTP ${response.code}")
-            }
-            val body = response.body ?: throw IllegalStateException("Cuerpo de respuesta vacío del servidor")
-            val contentType = response.header("Content-Type").orEmpty().lowercase()
-            val finalUrl = response.request.url.toString()
-
-            val buffered = BufferedInputStream(body.byteStream(), 64 * 1024)
-            buffered.mark(16)
-            val peek = ByteArray(7)
-            val peekRead = buffered.read(peek)
-            buffered.reset()
-            val startsWithExtM3u = peekRead >= 7 && String(peek, 0, 7, Charsets.US_ASCII) == "#EXTM3U"
-
-            if (startsWithExtM3u || contentType.contains("mpegurl") || finalUrl.substringBefore('?').endsWith(".m3u8", ignoreCase = true)) {
-                val manifestText = buffered.bufferedReader(Charsets.UTF_8).readText()
-                return downloadHlsToVault(
-                    baseUrl = finalUrl,
-                    manifestText = manifestText,
-                    item = item,
-                    destinationFile = destinationFile,
-                    fallbackTotalBytes = fallbackTotalBytes,
-                )
-            }
-
-            val contentLength = body.contentLength()
-            val initialTotal = if (contentLength > 0L) contentLength else fallbackTotalBytes
-
-            return OfflineCryptoVault.encryptStreamToFile(
-                input = buffered,
-                totalLength = initialTotal,
+    /** Descarga http directa en el principal (sin nativo, sin crash). */
+    private suspend fun downloadDirectHttp(context: Context, item: OfflineDownload, url: String) {
+        val app = context.applicationContext
+        try {
+            OfflineRegistry.updateState(item.id, DownloadState.DOWNLOADING)
+            val destinationFile = File(item.vaultFilePath)
+            val fallbackTotal = item.totalBytes.takeIf { it > 0L }
+                ?: estimateTotalBytes(item.durationMs, item.quality)
+            val downloaded = OfflineHttpDownloader.downloadUrlToVault(
+                url = url,
                 destinationFile = destinationFile,
+                fallbackTotalBytes = fallbackTotal,
+                preferredQuality = item.quality,
                 onProgress = { written, total ->
-                    val dynamicTotal = if (contentLength > 0L) {
-                        contentLength
-                    } else if (written >= (total * 92L) / 100L) {
-                        (written * 115L) / 100L
-                    } else {
-                        total.coerceAtLeast(written + 1024L)
-                    }
-                    OfflineRegistry.updateProgress(item.id, written, dynamicTotal)
+                    OfflineRegistry.updateProgress(item.id, written, total)
                 },
-                isCancelled = {
-                    activeJobs[item.id]?.isActive != true
-                },
+                isCancelled = { activeJobs[item.id]?.isActive != true },
             )
+            if (downloaded < MIN_VALID_VIDEO_BYTES) {
+                destinationFile.delete()
+                throw IllegalStateException("Flujo de video incompleto ($downloaded bytes)")
+            }
+            OfflineRegistry.updateProgress(item.id, downloaded, downloaded)
+            OfflineRegistry.updateState(item.id, DownloadState.COMPLETED)
+            Log.i(TAG, "Descarga directa completada: ${item.title} ($downloaded bytes)")
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            throw e
+        } finally {
+            activeJobs.remove(item.id)
         }
     }
 
-    private data class HlsSegment(
-        val url: String,
-        val keyUrl: String? = null,
-        val ivHex: String? = null,
-        val sequence: Long = 0L,
-    )
-
-    private fun downloadHlsToVault(
-        baseUrl: String,
-        manifestText: String,
-        item: OfflineDownload,
-        destinationFile: File,
-        fallbackTotalBytes: Long,
-    ): Long {
-        var mediaPlaylistUrl = baseUrl
-        var mediaPlaylistText = manifestText
-
-        // 1. Si es un Master Playlist (#EXT-X-STREAM-INF), elegir la variante que coincida con item.quality
-        if (mediaPlaylistText.contains("#EXT-X-STREAM-INF")) {
-            val variantUrl = selectHlsVariantUrl(baseUrl, mediaPlaylistText, item.quality)
-                ?: throw IllegalStateException("No se encontró variante de video en el manifiesto HLS")
-            val req = Request.Builder()
-                .url(variantUrl)
-                .addHeader("User-Agent", "Lavf/58.29.100")
-                .build()
-            httpClient.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code} al leer playlist HLS")
-                mediaPlaylistUrl = resp.request.url.toString()
-                mediaPlaylistText = resp.body?.string().orEmpty()
-            }
-        }
-
-        // 2. Extraer segmentos de la Media Playlist
-        val segments = parseHlsSegments(mediaPlaylistUrl, mediaPlaylistText)
-        if (segments.isEmpty()) {
-            throw IllegalStateException("La lista HLS no contiene segmentos de video descargables")
-        }
-
-        val totalSegments = segments.size
-        var currentSegmentIndex = 0
-        val keyCache = HashMap<String, ByteArray>()
-
-        val hlsInputStream = object : InputStream() {
-            private var segIndex = 0
-            private var currentStream: InputStream? = null
-            private var currentCallResponse: okhttp3.Response? = null
-
-            private fun openNextSegment(): Boolean {
-                closeCurrent()
-                if (segIndex >= segments.size) return false
-                if (activeJobs[item.id]?.isActive != true) {
-                    throw CancellationException("Descarga cancelada por el usuario")
-                }
-                val seg = segments[segIndex]
-                currentSegmentIndex = segIndex + 1
-                segIndex++
-
-                val req = Request.Builder()
-                    .url(seg.url)
-                    .addHeader("User-Agent", "Lavf/58.29.100")
-                    .build()
-                val resp = httpClient.newCall(req).execute()
-                if (!resp.isSuccessful) {
-                    resp.close()
-                    throw IllegalStateException("Error HTTP ${resp.code} en segmento $currentSegmentIndex/$totalSegments")
-                }
-                currentCallResponse = resp
-                val rawStream = resp.body?.byteStream() ?: throw IllegalStateException("Segmento vacío")
-
-                currentStream = if (!seg.keyUrl.isNullOrBlank()) {
-                    val keyBytes = keyCache.getOrPut(seg.keyUrl) {
-                        val kReq = Request.Builder().url(seg.keyUrl).addHeader("User-Agent", "Lavf/58.29.100").build()
-                        httpClient.newCall(kReq).execute().use { kResp ->
-                            kResp.body?.bytes() ?: throw IllegalStateException("No se pudo obtener clave HLS")
-                        }
-                    }
-                    val ivBytes = parseHlsIv(seg.ivHex, seg.sequence)
-                    val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-                    cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), IvParameterSpec(ivBytes))
-                    CipherInputStream(rawStream, cipher)
-                } else {
-                    rawStream
-                }
-                return true
-            }
-
-            override fun read(): Int {
-                val b = ByteArray(1)
-                val n = read(b, 0, 1)
-                return if (n == -1) -1 else (b[0].toInt() and 0xFF)
-            }
-
-            override fun read(b: ByteArray, off: Int, len: Int): Int {
-                while (true) {
-                    val s = currentStream
-                    if (s == null) {
-                        if (!openNextSegment()) return -1
-                        continue
-                    }
-                    val n = s.read(b, off, len)
-                    if (n >= 0) return n
-                    if (!openNextSegment()) return -1
-                }
-            }
-
-            private fun closeCurrent() {
-                runCatching { currentStream?.close() }
-                runCatching { currentCallResponse?.close() }
-                currentStream = null
-                currentCallResponse = null
-            }
-
-            override fun close() {
-                closeCurrent()
-                super.close()
-            }
-        }
-
-        hlsInputStream.use { stream ->
-            return OfflineCryptoVault.encryptStreamToFile(
-                input = stream,
-                totalLength = fallbackTotalBytes,
-                destinationFile = destinationFile,
-                onProgress = { written, _ ->
-                    // Calcular total estimado proporcional al avance de segmentos HLS
-                    val segDone = currentSegmentIndex.coerceAtLeast(1)
-                    val estimatedTotal = if (segDone >= totalSegments) {
-                        written.coerceAtLeast(1L)
-                    } else {
-                        ((written.toDouble() / segDone.toDouble()) * totalSegments.toDouble()).toLong()
-                            .coerceAtLeast(written + 1024L)
-                    }
-                    OfflineRegistry.updateProgress(item.id, written, estimatedTotal)
-                },
-                isCancelled = {
-                    activeJobs[item.id]?.isActive != true
-                },
+    /** Delega refs xtv:/magisvod: al servicio `:x4k` (único con Ranger). */
+    private fun delegateToX4kService(context: Context, item: OfflineDownload) {
+        try {
+            OfflineRegistry.updateState(item.id, DownloadState.DOWNLOADING)
+            delegatedIds.add(item.id)
+            val code = item.videoUrl.substringBefore('|').trim()
+                .removePrefix("xtv:").removePrefix("magisvod:").removePrefix("magis:")
+                .substringBefore('?').trim()
+            // Para series sin code de capítulo (ficha vieja), el servicio resuelve el C1 vía portal.
+            val intent = X4KDownloadService.downloadIntent(
+                context = context,
+                id = item.id,
+                code = code.ifBlank { item.contentId },
+                title = item.title,
+                seriesId = item.seriesId,
+                quality = item.quality,
+                vaultPath = item.vaultFilePath,
+                durationMs = item.durationMs,
+                totalBytes = item.totalBytes,
             )
-        }
-    }
-
-    private fun selectHlsVariantUrl(baseUrl: String, masterText: String, preferredQuality: String): String? {
-        val lines = masterText.lines().map { it.trim() }
-        val targetHeight = when {
-            preferredQuality.contains("1080") -> 1080
-            preferredQuality.contains("720") -> 720
-            preferredQuality.contains("480") -> 480
-            else -> 1080
-        }
-        data class Variant(val url: String, val height: Int, val bandwidth: Long)
-        val variants = ArrayList<Variant>()
-        var i = 0
-        while (i < lines.size) {
-            val line = lines[i]
-            if (line.startsWith("#EXT-X-STREAM-INF:")) {
-                val resMatch = Regex("""RESOLUTION=\d+x(\d+)""").find(line)
-                val height = resMatch?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                val bwMatch = Regex("""BANDWIDTH=(\d+)""").find(line)
-                val bw = bwMatch?.groupValues?.get(1)?.toLongOrNull() ?: 0L
-                var j = i + 1
-                while (j < lines.size && (lines[j].isEmpty() || lines[j].startsWith("#"))) {
-                    j++
-                }
-                if (j < lines.size) {
-                    variants.add(Variant(resolveRelativeUrl(baseUrl, lines[j]), height, bw))
-                }
-                i = j
-            }
-            i++
-        }
-        if (variants.isEmpty()) return null
-        return variants.minByOrNull { v ->
-            val hDiff = if (v.height > 0) kotlin.math.abs(v.height - targetHeight) else 500
-            hDiff * 1_000_000L - (v.bandwidth / 1000L)
-        }?.url
-    }
-
-    private fun parseHlsSegments(baseUrl: String, playlistText: String): List<HlsSegment> {
-        val segments = ArrayList<HlsSegment>()
-        var currentKeyUrl: String? = null
-        var currentIvHex: String? = null
-        var mediaSequence = 0L
-        var segOffset = 0L
-
-        for (rawLine in playlistText.lines()) {
-            val line = rawLine.trim()
-            if (line.isEmpty()) continue
-            when {
-                line.startsWith("#EXT-X-MEDIA-SEQUENCE:") -> {
-                    mediaSequence = line.substringAfter(":").trim().toLongOrNull() ?: 0L
-                }
-                line.startsWith("#EXT-X-MAP:") -> {
-                    val uriMatch = Regex("""URI="([^"]+)"""").find(line)
-                    val mapUri = uriMatch?.groupValues?.get(1)
-                    if (!mapUri.isNullOrBlank()) {
-                        segments.add(
-                            HlsSegment(
-                                url = resolveRelativeUrl(baseUrl, mapUri),
-                                keyUrl = currentKeyUrl,
-                                ivHex = currentIvHex,
-                                sequence = mediaSequence,
-                            ),
-                        )
-                    }
-                }
-                line.startsWith("#EXT-X-KEY:") -> {
-                    val methodMatch = Regex("""METHOD=([^,]+)""").find(line)
-                    val method = methodMatch?.groupValues?.get(1)?.trim().orEmpty()
-                    if (method.equals("AES-128", ignoreCase = true)) {
-                        val uriMatch = Regex("""URI="([^"]+)"""").find(line)
-                        val keyUri = uriMatch?.groupValues?.get(1)
-                        currentKeyUrl = if (!keyUri.isNullOrBlank()) resolveRelativeUrl(baseUrl, keyUri) else null
-                        val ivMatch = Regex("""IV=0[xX]([0-9a-fA-F]+)""").find(line)
-                        currentIvHex = ivMatch?.groupValues?.get(1)
-                    } else {
-                        currentKeyUrl = null
-                        currentIvHex = null
-                    }
-                }
-                !line.startsWith("#") -> {
-                    segments.add(
-                        HlsSegment(
-                            url = resolveRelativeUrl(baseUrl, line),
-                            keyUrl = currentKeyUrl,
-                            ivHex = currentIvHex,
-                            sequence = mediaSequence + segOffset,
-                        ),
-                    )
-                    segOffset++
-                }
-            }
-        }
-        return segments
-    }
-
-    private fun parseHlsIv(ivHex: String?, sequence: Long): ByteArray {
-        if (!ivHex.isNullOrBlank()) {
-            val padded = ivHex.padStart(32, '0').takeLast(32)
-            val out = ByteArray(16)
-            for (i in 0 until 16) {
-                out[i] = padded.substring(i * 2, i * 2 + 2).toInt(16).toByte()
-            }
-            return out
-        }
-        val buf = java.nio.ByteBuffer.allocate(16)
-        buf.putLong(0L)
-        buf.putLong(sequence)
-        return buf.array()
-    }
-
-    private fun resolveRelativeUrl(baseUrl: String, relativeOrAbsolute: String): String {
-        if (relativeOrAbsolute.startsWith("http://") || relativeOrAbsolute.startsWith("https://")) {
-            return relativeOrAbsolute
-        }
-        return runCatching {
-            URI(baseUrl).resolve(relativeOrAbsolute).toString()
-        }.getOrElse {
-            val baseDir = baseUrl.substringBefore('?').substringBeforeLast('/')
-            if (relativeOrAbsolute.startsWith("/")) {
-                val u = URI(baseUrl)
-                "${u.scheme}://${u.authority}$relativeOrAbsolute"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
             } else {
-                "$baseDir/$relativeOrAbsolute"
+                context.startService(intent)
             }
+            Log.i(TAG, "Descarga delegada a :x4k: ${item.id}")
+        } catch (e: Exception) {
+            delegatedIds.remove(item.id)
+            throw e
+        } finally {
+            activeJobs.remove(item.id)
         }
     }
 
     fun pauseDownload(id: String) {
         activeJobs[id]?.cancel()
         activeJobs.remove(id)
+        if (delegatedIds.remove(id)) {
+            // Pedir al servicio que detenga el trabajo (best-effort, sin bloquear UI).
+            // El receiver marcará PAUSED abajo.
+        }
         OfflineRegistry.updateState(id, DownloadState.PAUSED)
     }
 
     fun resumeDownload(context: Context, id: String) {
         val item = OfflineRegistry.get(id, context) ?: return
         if (item.state == DownloadState.PAUSED || item.state == DownloadState.ERROR) {
+            delegatedIds.remove(id)
+            activeJobs.remove(id)
             OfflineRegistry.updateState(id, DownloadState.QUEUED)
-            startWorkerJob(context.applicationContext, item)
+            dispatchWorker(context.applicationContext, item)
         }
     }
 
     fun cancelDownload(id: String, context: Context? = null) {
         activeJobs[id]?.cancel()
         activeJobs.remove(id)
+        if (delegatedIds.remove(id)) {
+            context?.let {
+                runCatching {
+                    it.applicationContext.startService(X4KDownloadService.cancelIntent(it.applicationContext, id))
+                }
+            }
+        }
         OfflineRegistry.remove(id, context)
     }
 

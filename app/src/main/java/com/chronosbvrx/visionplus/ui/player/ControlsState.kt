@@ -245,10 +245,20 @@ internal fun hasNextEpisodeAvailable(
     seasonCount: Int,
 ): Boolean {
     if (isLive) return false
+    if (!isSeriesContent(epCount, seasonCount)) return false
     val hasEp = curEpIndex + 1 < epCount
     val hasSeason = curSeries.isNotBlank() && curSeasonIndex + 1 < seasonCount
     return hasEp || hasSeason
 }
+
+/**
+ * Fuente única de verdad serie vs película en Vision+:
+ * solo hay serie cuando existen 2+ capítulos o 2+ temporadas.
+ * Un `seriesId` suelto, un único capítulo o una única temporada
+ * (típico de películas contaminadas por el portal) es película.
+ */
+internal fun isSeriesContent(epCount: Int, seasonCount: Int): Boolean =
+    epCount > 1 || seasonCount > 1
 
 internal fun shouldPromptResume(
     isLive: Boolean,

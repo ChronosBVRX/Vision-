@@ -75,6 +75,7 @@ import coil.compose.AsyncImage
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.PlaybackHistory
+import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.ResumeCard
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.XuperCatalog
@@ -177,31 +178,17 @@ fun TvHomeScreen(
         val nonSeedFilms = (rows + catalog.indexRows).flatMap { it.films }
             .filter { !it.id.contains("seed_") && it.videoUrl.isNotBlank() }
         val candidates = if (nonSeedFilms.isNotEmpty()) nonSeedFilms else (rows + catalog.indexRows).flatMap { it.films }
-        candidates.distinctBy {
-            val cleanCid = it.videoUrl.substringAfter(':').substringBefore('|')
-            if (cleanCid.isNotBlank()) cleanCid.lowercase() else it.id.lowercase()
-        }
+        Popularity.dedupe(candidates)
     }
 
-    // 1. Top 10 Tendencias: películas/series con mejor calificación e impacto
+    // 1. Top 10 Tendencias reales: impacto (rating con confianza + popularidad + recencia).
     val top10Films = remember(allAvailableFilms) {
-        allAvailableFilms
-            .filter { it.score > 0 }
-            .sortedByDescending { it.score * 10 + (if (it.year >= 2024) 8 else 0) }
-            .take(10)
+        Popularity.topTrending(allAvailableFilms, limit = 10)
     }
 
-    // 2. Novedades y Estrenos: catálogo 2024-2026 y repisa de estrenos
-    val estrenosFilms = remember(allAvailableFilms, catalog.rows, catalog.indexRows) {
-        val shelf = (catalog.indexRows + catalog.rows)
-            .firstOrNull { it.id.contains("estrenos", ignoreCase = true) }?.films.orEmpty()
-            .filter { !it.id.contains("seed_") }
-        (shelf + allAvailableFilms.filter { it.year >= 2024 }.sortedByDescending { it.year * 100 + it.score })
-            .distinctBy {
-                val cleanCid = it.videoUrl.substringAfter(':').substringBefore('|')
-                if (cleanCid.isNotBlank()) cleanCid.lowercase() else it.id.lowercase()
-            }
-            .take(15)
+    // 2. Estrenos de verdad: año actual y anterior, populares primero.
+    val estrenosFilms = remember(allAvailableFilms) {
+        Popularity.realPremieres(allAvailableFilms, limit = 15)
     }
 
     // 3. Filas restantes del catálogo (evitando duplicar estrenos y listas personales en la cabecera)

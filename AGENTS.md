@@ -5,14 +5,60 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.50**
-  (versionCode **286**, release OTA v2.5.50). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.54**
+  (versionCode **290**, release OTA v2.5.54). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
   (actualizaciones in-app); la app detecta sola si es Smart TV y se maneja con mando; todo **premium**
   (azul #2D7DF6); marca "Vision+" sin rastros visibles de "Xuper" ni "Magis"; orientación según teléfono
   y video sin deformar.
+
+- **Películas sin UI de Serie ("Movie-Only Player & Series Gate")** (v2.5.54):
+  - **Problema**: el reproductor mostraba "Siguiente episodio" y selector de
+    temporadas/capítulos en películas. Causa: 3 definiciones distintas de "es
+    serie" (`buildControls` y `showEpisodePicker` aceptaban `seriesId` suelto) y
+    `parseEpisodePrograms` aceptaba 1 programa como serie (la ficha de película
+    del portal), contaminando `EpisodePlay` desde la ficha.
+  - **App**: fuente única `isSeriesContent(ep>1 || temp>1)` en `ControlsState.kt`
+    (`hasNextEpisodeAvailable` la exige); `parseEpisodePrograms` descarta <=1;
+    `playVod`/`launch` degradan a película y no envían extras; `X4KPlayerAty`
+    normaliza intents/historiales viejos, `saveHistory` solo guarda contexto en
+    series, `showNextCard`/`showEpisodePicker`/`onFirstFrame` unificados;
+    `TitleScreen`/`TvTitleScreen`/`resumeRoute` con `isSeriesTitle` y saneo.
+  - **Validación**: 203 pruebas Android + 38 backend en verde (nuevos
+    `movieNeverShowsSeriesUi...` + `X4KApiSeriesTest`). Release OTA v2.5.54.
+
+- **Tendencias y Estrenos Reales con Motor de Popularidad ("Popularity Rank & Real Premieres")** (v2.5.53):
+  - **Problema**: Home y secciones ordenaban por `score` puro (rating sin votos) o año puro;
+    un oscuro 9.0 (5 votos) tapaba a un blockbuster 7.7 (200k votos), y "Estrenos" era
+    `año DESC` (oscuro 2026 score 0 vencía a éxito 2025). Las filas del portal traían
+    `year=0, score=0` (score solo en `K_META`), excluidas del Top 10.
+  - **App**: nuevo `data/Popularity.kt` puro (`rankScore` = rating con confianza +
+    popularidad TMDB log + recencia suave + micro-bono con póster; `topTrending`,
+    `realPremieres` solo año actual/anterior ordenados por impacto, `reorderRow`,
+    `pickHero`, `dedupe`). `Film` suma `popularity`/`voteCount`; `RemoteIndexSource`
+    los parsea/cachea; `X4KApi.homeRows` hidrata `score`/`year` del portal
+    (`portalScore`/`portalYear`, persistidos en caché); `HomeScreen`/`TvHomeScreen`
+    héroe = #1 tendencias con póster; `TvCategoryScreen`/`SectionScreen` reordenan
+    en cliente (robusto ante caché vieja) y cuadrículas rankeadas;
+    `UserLibrary.recommendations` rankeada.
+  - **Servidor**: `schema.sql` agrega `titles/popularity,vote_count` +
+    `enrichment/popularity,vote_count` (idempotente); `tmdb.py` los captura y propaga
+    a `titles`; `index_build.py` ordena estrenos y géneros por `popularity DESC, score,
+    year`; `/v1/search` desempatando por popularidad; `film()` sirve
+    `popularity`/`voteCount` tolerante a registros viejos (+ fix: `search` pasaba
+    `enrichment` a `_grouped_entry`).
+  - **Validación**: 199 pruebas Android (`:app:testNormalDebugUnitTest`) + 38 backend
+    (`pytest server/tests/`) en verde. Release OTA v2.5.53.
+  - **Desplegado en VPS** (2026-10-12): backup `backups/catalog_2026-10-12_2049.dump` (17 MB);
+    subidos `api/app.py` + `sync/{schema.sql,tmdb.py,xtv.py,index_build.py}` +
+    `sync/sports.py` (estaba desactualizado: traía la dilución de canales que v2.5.48
+    quitó en repo — ahora VPS = HEAD) + `.env.example` (docs). `docker compose up -d
+    --build api sync` (postgres intacto); `esquema aplicado`, API sana, `/v1/section`
+    ya sirve `popularity`/`voteCount`. Backfill TMDB 2500/ciclo (~11 ciclos): el orden
+    por popularidad mejora solo ciclo a ciclo; sin regresión mientras tanto (fallback
+    a score/año cuando `popularity=0`).
 
 - **Descarga Real de Streams de Video XTV/HLS/HTTP y Conmutación Automática a Interfaz Especial Sin Conexión ("Real Stream Engine & Auto Offline Mode")** (v2.5.50):
   - **Diagnóstico y Corrección de "En cuanto pongo descargar dice descargado"**:

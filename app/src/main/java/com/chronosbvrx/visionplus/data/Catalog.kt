@@ -15,6 +15,10 @@ data class Film(
     val sourceUrl: String,
     /** Puntuación del portal (TMDB-style); 0 cuando no la trae. */
     val score: Double = 0.0,
+    /** Popularidad TMDB (0 cuando el servidor aún no la sirve): manda sobre el rating solo. */
+    val popularity: Double = 0.0,
+    /** Votos TMDB (0 = desconocido): ponderan la confianza del rating. */
+    val voteCount: Int = 0,
     /** Grupo de temporadas del servidor («La Casa de Papel T1/T2…» = una sola entrada). */
     val groupId: String = "",
     /** Las temporadas del grupo (vacío cuando no hay varias). */

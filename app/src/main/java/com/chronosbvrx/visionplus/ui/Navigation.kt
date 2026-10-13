@@ -96,9 +96,15 @@ fun resumeRoute(card: ResumeCard): Route.Player {
         Route.Player(
             film,
             EpisodePlay(
-                code = e.xtvCode, seriesId = e.seriesId, episodeIds = e.episodeIds,
-                episodeIndex = e.episodeIndex, seasonIds = e.seasonIds,
-                seasonNames = e.seasonNames, seasonIndex = e.seasonIndex, resumeMs = e.positionMs,
+                code = e.xtvCode,
+                // Historiales viejos pueden traer seriesId con 0-1 capítulos: sin 2+ es película.
+                seriesId = if (e.episodeIds.size > 1 || e.seasonIds.size > 1) e.seriesId else "",
+                episodeIds = if (e.episodeIds.size > 1 || e.seasonIds.size > 1) e.episodeIds else emptyList(),
+                episodeIndex = if (e.episodeIds.size > 1 || e.seasonIds.size > 1) e.episodeIndex else 0,
+                seasonIds = if (e.episodeIds.size > 1 || e.seasonIds.size > 1) e.seasonIds else emptyList(),
+                seasonNames = if (e.episodeIds.size > 1 || e.seasonIds.size > 1) e.seasonNames else emptyList(),
+                seasonIndex = if (e.episodeIds.size > 1 || e.seasonIds.size > 1) e.seasonIndex else 0,
+                resumeMs = e.positionMs,
                 durationMs = e.durationMs,
             ),
         )

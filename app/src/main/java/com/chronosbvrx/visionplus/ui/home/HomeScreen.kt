@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.PlaybackHistory
+import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.ResumeCard
 import com.chronosbvrx.visionplus.data.XuperStatus
 import com.chronosbvrx.visionplus.data.allFilms
@@ -120,7 +121,25 @@ fun HomeScreen(
 ) {
     val sizes = homeSizes()
     val rows = catalog.personalRows + catalog.rows
-    val hero = rows.firstOrNull()?.films?.firstOrNull()
+    val allAvailableFilms = remember(rows, catalog.indexRows) {
+        val nonSeedFilms = (rows + catalog.indexRows).flatMap { it.films }
+            .filter { !it.id.contains("seed_") && it.videoUrl.isNotBlank() }
+        val candidates = if (nonSeedFilms.isNotEmpty()) nonSeedFilms else (rows + catalog.indexRows).flatMap { it.films }
+        Popularity.dedupe(candidates)
+    }
+    // Tendencias reales: impacto (rating con confianza + popularidad TMDB + recencia),
+    // no score puro. El relleno oscuro sin señal no entra.
+    val top10Films = remember(allAvailableFilms) {
+        Popularity.topTrending(allAvailableFilms, limit = 10)
+    }
+    // Estrenos de verdad: solo año actual y anterior, populares primero.
+    // Un éxito 2025 supera a un oscuro 2026 (antes mandaba el año puro).
+    val estrenosFilms = remember(allAvailableFilms) {
+        Popularity.realPremieres(allAvailableFilms, limit = 15)
+    }
+    val hero = remember(top10Films, estrenosFilms, rows) {
+        Popularity.pickHero(top10Films, estrenosFilms, rows.firstOrNull()?.films?.firstOrNull())
+    }
     androidx.compose.runtime.LaunchedEffect(Unit) { catalog.refreshPersonal() }
     val context = LocalContext.current
     // «Seguir viendo»: se recarga al volver del reproductor.
@@ -137,32 +156,6 @@ fun HomeScreen(
         }
         homeLifecycle.lifecycle.addObserver(observer)
         onDispose { homeLifecycle.lifecycle.removeObserver(observer) }
-    }
-    val allAvailableFilms = remember(rows, catalog.indexRows) {
-        val nonSeedFilms = (rows + catalog.indexRows).flatMap { it.films }
-            .filter { !it.id.contains("seed_") && it.videoUrl.isNotBlank() }
-        val candidates = if (nonSeedFilms.isNotEmpty()) nonSeedFilms else (rows + catalog.indexRows).flatMap { it.films }
-        candidates.distinctBy {
-            val cleanCid = it.videoUrl.substringAfter(':').substringBefore('|')
-            if (cleanCid.isNotBlank()) cleanCid.lowercase() else it.id.lowercase()
-        }
-    }
-    val top10Films = remember(allAvailableFilms) {
-        allAvailableFilms
-            .filter { it.score > 0 }
-            .sortedByDescending { it.score * 10 + (if (it.year >= 2024) 8 else 0) }
-            .take(10)
-    }
-    val estrenosFilms = remember(allAvailableFilms, catalog.rows, catalog.indexRows) {
-        val shelf = (catalog.indexRows + catalog.rows)
-            .firstOrNull { it.id.contains("estrenos", ignoreCase = true) }?.films.orEmpty()
-            .filter { !it.id.contains("seed_") }
-        (shelf + allAvailableFilms.filter { it.year >= 2024 }.sortedByDescending { it.year * 100 + it.score })
-            .distinctBy {
-                val cleanCid = it.videoUrl.substringAfter(':').substringBefore('|')
-                if (cleanCid.isNotBlank()) cleanCid.lowercase() else it.id.lowercase()
-            }
-            .take(15)
     }
     val otherRows = remember(rows) {
         val hasRealRows = rows.any { !it.id.startsWith("seed-") }
