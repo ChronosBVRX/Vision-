@@ -91,8 +91,27 @@ object X4KApi {
      *  alimenta la tormenta (cada mint expulsa al otro lado, que reacuña a su vez). */
     private const val MINT_COOLDOWN_MS = 30_000L
 
+    /** Si el portal RECHAZÓ el token (patada: aaa100083 y compañía), reacuñar es la única salida;
+     *  este candado corto permite el mint inmediato sin encadenar mints en ráfaga. */
+    private const val FORCED_MINT_COOLDOWN_MS = 10_000L
+
     @Volatile
     private var lastMintAt = 0L
+
+    @Volatile
+    private var lastForcedMintAt = 0L
+
+    /** Códigos del portal que significan «tu sesión ya no sirve» (pateada o expirada). */
+    private val SESSION_CODE_RX = Regex("portal\\s*(?:10000[1-8]|20000[0-2]|30000[1-2])")
+
+    /** ¿Se puede acuñar ahora? [force] (token rechazado) salta el silencio normal pero
+     *  respeta su propio candado corto; puro, para los tests. */
+    internal fun mintAllowed(nowMs: Long, lastMintAt: Long, lastForcedMintAt: Long, force: Boolean): Boolean =
+        if (force) {
+            nowMs - lastForcedMintAt >= FORCED_MINT_COOLDOWN_MS
+        } else {
+            nowMs - lastMintAt >= MINT_COOLDOWN_MS
+        }
 
     /** Entries carry session ids: they are re-minted well before the service forgets them. */
     private const val ENGINE_TTL_MS = 90L * 60 * 1000
@@ -203,24 +222,23 @@ object X4KApi {
         }
     }
 
-    /** Mints a brand new session (salvo cooldown de tormenta) y refresca las entries. */
-    suspend fun renewSession(context: Context): String = withContext(Dispatchers.IO) {
+    /** Mints a brand new session; [force] es para token RECHAZADO (patada), no para capricho. */
+    suspend fun renewSession(context: Context, force: Boolean = false): String = withContext(Dispatchers.IO) {
         synchronized(lock) {
-            renewLocked(context)
+            renewLocked(context, force)
         }
     }
 
-    private fun renewLocked(context: Context): String {
+    private fun renewLocked(context: Context, force: Boolean = false): String {
         val now = System.currentTimeMillis()
         val p = prefs(context)
-        if (now - lastMintAt < MINT_COOLDOWN_MS) {
+        if (!mintAllowed(now, lastMintAt, lastForcedMintAt, force)) {
             val existing = p.getString(K_USER_TOKEN, null)
             if (!existing.isNullOrBlank()) {
-                Log.i(TAG, "sesión acuñada hace menos de 30s; reusando token fresco")
+                Log.i(TAG, "mint en silencio (${if (force) "forzado" else "normal"}); reusando token")
                 return existing
             }
         }
-        lastMintAt = now
         var sn = p.getString(K_SN_TOKEN, null).orEmpty()
         var active: JSONObject? = null
         if (sn.isNotBlank()) {
@@ -239,27 +257,22 @@ object X4KApi {
         val userToken = active.optString("userToken")
         if (userToken.isBlank()) throw IOException("sin userToken")
         storeSession(context, sn, userToken)
+        // La marca de tiempo solo en ÉXITO: un mint fallido no debe bloquear el siguiente intento.
+        lastMintAt = now
+        if (force) lastForcedMintAt = now
         // The entries embed the session: a new session means new entries (y licencias de vivo nuevas).
         memoryLiveMedias.clear()
         memoryLiveArray = null
         p.edit().remove(K_ENTRIES).remove(K_PARAMS).remove(K_ENGINE_AT).remove(K_LIVE).apply()
-        Log.i(TAG, "sesión renovada")
+        Log.i(TAG, "sesión renovada (${if (force) "forzada" else "normal"})")
         return userToken
     }
 
-    /** Solo esto significa «la sesión ya no sirve»; detecta exhaustivamente errores de sesión del portal. */
-    private fun isSessionFailure(e: Exception): Boolean {
+    /** Solo esto significa «la sesión ya no sirve»; detecta los errores de sesión del portal. */
+    internal fun isSessionFailure(e: Exception): Boolean {
         val m = e.message.orEmpty().lowercase()
         return m.contains("portal aaa") ||
-            m.contains("portal200001") ||
-            m.contains("portal 200001") ||
-            m.contains("portal 100001") ||
-            m.contains("portal 100002") ||
-            m.contains("portal 100003") ||
-            m.contains("portal 100008") ||
-            m.contains("portal 200000") ||
-            m.contains("portal 200002") ||
-            m.contains("portal 300001") ||
+            SESSION_CODE_RX.containsMatchIn(m) ||
             m.contains("http 401") ||
             m.contains("http 403") ||
             m.contains("http 4")
@@ -281,7 +294,8 @@ object X4KApi {
         } catch (e: Exception) {
             if (!isSessionFailure(e)) throw e
             Log.w(TAG, "$path falló con la sesión actual; renovando… (${e.message})")
-            val fresh = renewSession(context)
+            // Token rechazado = patada: re-acuñar de inmediato aunque el silencio normal siga.
+            val fresh = renewSession(context, force = true)
             post(path, spec(fresh))
         }
     }
@@ -1118,7 +1132,8 @@ object X4KApi {
                 // renovar sesión explícitamente y reintentar de inmediato antes de descartar.
                 if (d == null || collectMedias(d).length() == 0) {
                     d = runCatching {
-                        val freshToken = renewSession(context)
+                        // Token rechazado: mint forzado (salta el silencio de 30 s).
+                        val freshToken = renewSession(context, force = true)
                         post("/api/portalCore/v10/startPlayVOD", JSONObject().apply {
                             put("userToken", freshToken)
                             put("userId", USER_ID)
@@ -1422,7 +1437,7 @@ object X4KApi {
         return out
     }
 
-    private fun launch(
+    private suspend fun launch(
         context: Context,
         mode: String,
         code: String,
@@ -1443,8 +1458,15 @@ object X4KApi {
         groupTitle: String = "",
     ) {
         val p = prefs(context)
-        val entries = p.getString(K_ENTRIES, "").orEmpty()
-        val params = p.getString(K_PARAMS, "").orEmpty()
+        var entries = p.getString(K_ENTRIES, "").orEmpty()
+        var params = p.getString(K_PARAMS, "").orEmpty()
+        // Una renovación a media preparación borra entries/params; sin SLB el motor no
+        // resuelve el CDN y el play falla. Se piden de nuevo antes de abrir el reproductor.
+        if (entries.isBlank() || params.isBlank()) {
+            runCatching { ensureEngineData(context, deferPrewarm = true) }
+            entries = p.getString(K_ENTRIES, "").orEmpty()
+            params = p.getString(K_PARAMS, "").orEmpty()
+        }
         fun b64(s: String) = Base64.encodeToString(s.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
         val intent = Intent().apply {
             setClassName(context, "com.chronosbvrx.visionplus.ui.player.X4KPlayerAty")

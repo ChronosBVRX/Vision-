@@ -5,6 +5,26 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **LÍNEA ESTABLE v2.5.61** (2026-10-13): 219 tests Android + 46 backend en verde.
+  **Fix de la regresión "error al primer intento, Reintentar sí reproduce"**:
+  - *Causa raíz*: el worker del VPS usa el mismo SN que la app (`XTV_SERVER_SN` vacío):
+    cada acuñado suyo patea la sesión (`aaa100083`). La app intentaba re-acuñar pero
+    `renewLocked` tenía un silencio de 30 s que devolvía el **token ya rechazado**; los
+    3 auto-intentos del handoff viven en ~1.2 s → todos dentro de la ventana envenenada
+    → "No se pudo abrir"; el Reintentar manual (después de los 30 s) ya funcionaba.
+    Se agravó al reiniciar el worker varias veces en los deploys de v2.5.59/60.
+  - *App*: `mintAllowed()` (puro, con test) permite **re-acuñar de inmediato cuando el
+    portal rechazó el token** (`force = true` en `callWithSession` y en `prepareVod`),
+    con candado propio de 10 s anti-ráfaga; `lastMintAt` ahora solo se marca en ÉXITO
+    (un mint fallido no bloquea); `isSessionFailure` cubre 100001..100008, 200000..200002
+    y 300001..300002; el handoff sube a **4 intentos** (400/900/1800 ms); `launch()`
+    re-pide entries/params si una renovación las borró (el motor ya no arranca sin SLB).
+  - *Reproductor nativo*: el primer `X4KTitan.play` se **reintenta una vez a 900 ms**
+    (proceso `:x4k` recién booteado) antes de mostrar error.
+  - *Guardianes*: `X4KApiSessionTest` (patada re-acuña, candado forzado, rangos de
+    códigos, errores de negocio NO renuevan).
+  - **Diagnóstico verificado**: el código del reproductor no cambió desde v2.5.54; la
+    regresión vino del ping-pong de sesión + silencio de mint, no de v2.5.59/60.
 - **LÍNEA ESTABLE v2.5.60** (2026-10-13): 214 tests Android + 46 backend en verde.
   **Optimización para bajos recursos (Chromecast/TV boxes), sin perder funciones**:
   - **Imágenes**: las 15 `AsyncImage` que decodificaban a resolución fuente ya piden
@@ -74,8 +94,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.60**
-  (versionCode **296**, release OTA v2.5.60). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.61**
+  (versionCode **297**, release OTA v2.5.61). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

@@ -624,27 +624,35 @@ class X4KPlayerAty : ComponentActivity() {
         }
 
         val startPlayback: () -> Unit = {
-            startedAtMs = System.currentTimeMillis()
-            if (!X4KTitan.play(v, mode, code, title, medias)) {
-                Log.e(TAG, "play devolvió false")
-                showError()
-            } else {
-                if (!liveMode) {
-                    // El cuadro entra con un fundido: pre-roll → película se sienten una sola secuencia.
-                    v.alpha = 0f
-                    v.animate().alpha(1f).setStartDelay(250).setDuration(650).start()
+            fun attemptPlay(retriesLeft: Int) {
+                startedAtMs = System.currentTimeMillis()
+                if (X4KTitan.play(v, mode, code, title, medias)) {
+                    if (!liveMode) {
+                        // El cuadro entra con un fundido: pre-roll → película se sienten una sola secuencia.
+                        v.alpha = 0f
+                        v.animate().alpha(1f).setStartDelay(250).setDuration(650).start()
+                    } else {
+                        v.alpha = 1f
+                    }
+                    // The engine may reset the render surface on start: re-apply the aspect a few times.
+                    listOf(200L, 700L, 1500L, 3000L, 5000L).forEach { delay ->
+                        handler.postDelayed({ playerView?.let { X4KTitan.setAspect(it, aspect) } }, delay)
+                    }
+                    handler.post(poller)
+                    if (liveMode && code.isNotBlank()) {
+                        loadEpg(code)
+                    }
+                } else if (retriesLeft > 0) {
+                    // El motor puede tardar un instante en aceptar el play tras el boot
+                    // (proceso :x4k recién levantado): un segundo intento evita el error visible.
+                    Log.w(TAG, "play devolvió false; reintentando…")
+                    handler.postDelayed({ attemptPlay(retriesLeft - 1) }, 900L)
                 } else {
-                    v.alpha = 1f
-                }
-                // The engine may reset the render surface on start: re-apply the aspect a few times.
-                listOf(200L, 700L, 1500L, 3000L, 5000L).forEach { delay ->
-                    handler.postDelayed({ playerView?.let { X4KTitan.setAspect(it, aspect) } }, delay)
-                }
-                handler.post(poller)
-                if (liveMode && code.isNotBlank()) {
-                    loadEpg(code)
+                    Log.e(TAG, "play devolvió false")
+                    showError()
                 }
             }
+            attemptPlay(1)
         }
         if (introView == null) startPlayback() else pendingPlay = startPlayback
     }

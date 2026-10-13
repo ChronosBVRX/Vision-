@@ -1574,14 +1574,15 @@ private fun XtvHandoff(
         failed = false
         prepared = false
         var ok = false
-        // Auto-reintento transparente de hasta 3 intentos con pausas escalonadas (400ms, 800ms):
-        // Resuelve picos transitorios de red, handshakes fríos y renovación de sesión sin
-        // interrumpir la experiencia del usuario con la pantalla de error "No se pudo abrir".
-        for (retryIndex in 0..2) {
+        // Auto-reintento transparente de hasta 4 intentos con pausas escalonadas (400/900/1800 ms):
+        // resuelve picos de red, handshakes fríos y, sobre todo, la sesión pateada por el
+        // servidor (el mint forzado ya no queda bloqueado por el silencio de 30 s).
+        val backoffs = longArrayOf(400L, 900L, 1800L)
+        for (retryIndex in 0..3) {
             ok = withContext(Dispatchers.IO) { runCatching { prepare() }.getOrDefault(false) }
             if (ok) break
-            if (retryIndex < 2) {
-                delay(400L * (retryIndex + 1))
+            if (retryIndex < backoffs.size) {
+                delay(backoffs[retryIndex])
             }
         }
         if (!ok) {
