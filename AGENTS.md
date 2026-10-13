@@ -5,7 +5,7 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- **LÍNEA ESTABLE v2.5.60** (2026-10-13): 215 tests Android + 46 backend en verde.
+- **LÍNEA ESTABLE v2.5.60** (2026-10-13): 214 tests Android + 46 backend en verde.
   **Optimización para bajos recursos (Chromecast/TV boxes), sin perder funciones**:
   - **Imágenes**: las 15 `AsyncImage` que decodificaban a resolución fuente ya piden
     `size()` (heroes de Home/fichas al tamaño real de pantalla con `rememberScreenPx()`,
