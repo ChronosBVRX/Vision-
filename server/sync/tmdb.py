@@ -31,6 +31,11 @@ REQUEST_GAP = float(os.environ.get("ENRICH_REQUEST_GAP_SECONDS", "0.3"))
 # Re-match de los marcados «sin match» con la búsqueda corregida (marcas de temporada).
 REMATCH_BATCH = int(os.environ.get("TMDB_REMATCH_BATCH", "2500"))
 REMATCH_COOLDOWN_DAYS = int(os.environ.get("TMDB_REMATCH_COOLDOWN_DAYS", "14"))
+# Versión del emparejador: al mejorar el buscador se sube esta etiqueta y TODOS los «sin
+# match» reciben una pasada fresca (una vez), sin esperar el cooldown. Así una mejora
+# nunca vuelve a quedar bloqueada por el reintento anterior (lección del backlog de series:
+# el fix del buscador llegó justo después de una pasada que marcó 16k y quedó congelado).
+ALGO_VERSION = "2"
 # Backfill de popularidad/votos para matches viejos (los que llegaron antes de las columnas).
 BACKFILL_BATCH = int(os.environ.get("TMDB_BACKFILL_BATCH", "3000"))
 
@@ -201,18 +206,19 @@ async def _store_match(pool, title_id: str, match: dict) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            insert into enrichment (title_id, imdb_id, tmdb_id, match_confidence, rating, year, genres, overview, popularity, vote_count, updated_at)
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+            insert into enrichment (title_id, imdb_id, tmdb_id, match_confidence, rating, year, genres, overview, popularity, vote_count, match_algo, updated_at)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
             on conflict (title_id) do update set
                 imdb_id = excluded.imdb_id, tmdb_id = excluded.tmdb_id,
                 match_confidence = excluded.match_confidence, rating = excluded.rating,
                 year = excluded.year, genres = excluded.genres,
                 overview = excluded.overview, popularity = excluded.popularity,
-                vote_count = excluded.vote_count, updated_at = now()
+                vote_count = excluded.vote_count, match_algo = excluded.match_algo,
+                updated_at = now()
             """,
             title_id, match["imdb_id"], match["tmdb_id"], match["confidence"],
             match["rating"], match["year"], match["genres"], match["overview"],
-            match.get("popularity", 0.0), match.get("vote_count", 0),
+            match.get("popularity", 0.0), match.get("vote_count", 0), ALGO_VERSION,
         )
         # Propaga el impacto a titles para que el índice ordene por popularidad
         # sin joins por fila (estrenos/géneros profesionales).
@@ -226,11 +232,12 @@ async def _mark_no_match(pool, title_id: str) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            insert into enrichment (title_id, match_confidence, updated_at)
-            values ($1, 0.0, now())
-            on conflict (title_id) do update set match_confidence = 0.0, updated_at = now()
+            insert into enrichment (title_id, match_confidence, match_algo, updated_at)
+            values ($1, 0.0, $2, now())
+            on conflict (title_id) do update set
+                match_confidence = 0.0, match_algo = $2, updated_at = now()
             """,
-            title_id,
+            title_id, ALGO_VERSION,
         )
 
 
@@ -278,7 +285,12 @@ async def enrich_batch(pool) -> int:
 
 async def rematch_batch(pool) -> int:
     """Reintenta los marcados «sin match» con la búsqueda corregida (sin marca de
-    temporada). Sin esto, 16k series quedaron fuera de TMDB para siempre."""
+    temporada). Sin esto, 16k series quedaron fuera de TMDB para siempre.
+
+    El candado es por VERSIÓN del emparejador (`match_algo`): subir [ALGO_VERSION] da una
+    pasada fresca a todo el backlog, una sola vez; el cooldown de días solo aplica a los
+    intentos hechos por la versión actual.
+    """
     if not KEY:
         return 0
     async with pool.acquire() as conn:
@@ -289,7 +301,8 @@ async def rematch_batch(pool) -> int:
             join titles t on t.id = e.title_id
             where coalesce(e.match_confidence, 0) < 0.5
               and e.tmdb_id is null
-              and e.updated_at < now() - make_interval(days => $1)
+              and (e.match_algo is distinct from $3
+                   or e.updated_at < now() - make_interval(days => $1))
             order by case t.kind
                          when 'series' then 0
                          when 'anime' then 1
@@ -301,6 +314,7 @@ async def rematch_batch(pool) -> int:
             """,
             REMATCH_COOLDOWN_DAYS,
             REMATCH_BATCH,
+            ALGO_VERSION,
         )
     if not pending:
         return 0
@@ -355,3 +369,33 @@ async def backfill_popularity(pool) -> int:
             await asyncio.sleep(DELAY)
     log.info("TMDB: %s/%s popularidad rellenada", done, len(pending))
     return done
+
+
+async def coverage(pool) -> list[dict]:
+    """Cobertura de fichas por tipo (total, con match y sin intentar) — el medidor del ciclo."""
+    if not KEY:
+        return []
+    rows = await pool.fetch(
+        """
+        select t.kind,
+               count(*) as total,
+               count(*) filter (where e.tmdb_id is not null) as matched,
+               count(*) filter (where e.title_id is null) as fresh
+        from titles t
+        left join enrichment e on e.title_id = t.id
+        where t.kind in ('movie', 'series', 'anime', 'kids')
+        group by 1
+        """
+    )
+    return [dict(r) for r in rows]
+
+
+def format_coverage(rows) -> str:
+    """Una línea de log: «series 12000/17198 (70%) · anime …» (mayor primero)."""
+    parts = []
+    for row in sorted(rows, key=lambda r: -int(r["total"] or 0)):
+        total = int(row["total"] or 0)
+        matched = int(row["matched"] or 0)
+        pct = round(100.0 * matched / total) if total else 0
+        parts.append(f"{row['kind']} {matched}/{total} ({pct}%)")
+    return " · ".join(parts)

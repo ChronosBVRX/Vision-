@@ -5,6 +5,25 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Índice TMDB: backlog desbloqueado y candado por versión del emparejador** (2026-10-14; 87 tests backend):
+  - *Diagnóstico*: el buscador corregido (`clean_query`, v2.5.59) **sí funciona** —muestra en vivo
+    contra TMDB: **50/52 títulos (96%)** del backlog emparechan— pero el re-match estaba congelado:
+    los ~16.6k «sin match» quedaron marcados entre el 9 y 13 de octubre y el cooldown de 14 días
+    dejaba **0 elegibles hasta ~el 23**. El fix llegó justo después de una pasada que marcó todo el
+    backlog y quedó bloqueado por su propio candado.
+  - *Fix permanente*: el candado ahora es por **VERSIÓN del emparejador** (`enrichment.match_algo` +
+    `ALGO_VERSION` en `sync/tmdb.py`): al mejorar el buscador se sube la versión y TODO el backlog
+    recibe una pasada fresca, una sola vez, sin esperar. Una mejora ya no puede volver a quedar
+    bloqueada por el reintento anterior.
+  - *Desbloqueo (desplegado en VPS)*: mini-lote de prueba 40 → **38 matches** (series 560→598 al
+    instante); el worker masticará ~2,500/ciclo (~10k/día): backlog de 16.6k en ~2 días. El re-match
+    también rellena popularidad, así que **mejora el orden de Tendencias/Estrenos** además de la
+    cobertura de marcadores.
+  - *Medidores*: línea por ciclo `TMDB cobertura: …` en el log del worker + **`GET /v1/stats`**
+    (API key): cobertura TMDB por tipo (total/matched/noMatch/fresh + %) y estado de `skip_markers`.
+  - *Guardianes*: `server/tests/test_tmdb_rematch.py` (libera con cambio de versión, cada intento
+    firma su versión, el medidor se lee como medidor). Estado al desplegar: series 3% · movie 89%
+    · anime 66% · kids 58%.
 - **Omitir intro y créditos con bases globales comunitarias («skip markers»)** (2026-10-13; 280 tests Android + 81 backend):
   - *Qué*: series/novelas/anime usan los tiempos comunitarios de **TheIntroDB** (theintrodb.org, por
     tmdb_id) e **IntroDB.app** (por imdb_id) —las mismas bases que alimentan los plugins de

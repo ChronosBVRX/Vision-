@@ -1210,3 +1210,56 @@ async def markers_save(request: Request, x_api_key: str | None = Header(default=
     )
     return {"ok": True, "ref": key, "episode": ep, "kind": kind, "cleared": clear}
 
+
+# ----- estado del índice (/v1/stats) -----
+# Una foto para vigilar que el catálogo mejore: cobertura de fichas TMDB/IMDb por tipo
+# (lo que habilita marcadores, sinopsis es-MX y el orden por popularidad) y el estado
+# de la caché de marcadores de salto. Solo lectura, misma API key que el resto.
+
+
+@app.get("/v1/stats")
+async def stats(x_api_key: str | None = Header(default=None)):
+    require_key(x_api_key)
+    rows = await db().fetch(
+        """
+        select t.kind,
+               count(*) as total,
+               count(*) filter (where e.tmdb_id is not null) as matched,
+               count(*) filter (where e.title_id is not null and e.tmdb_id is null) as no_match,
+               count(*) filter (where e.title_id is null) as fresh
+        from titles t
+        left join enrichment e on e.title_id = t.id
+        where t.kind in ('movie', 'series', 'anime', 'kids')
+        group by 1 order by 2 desc
+        """
+    )
+    kinds = {}
+    for row in rows:
+        total = int(row["total"] or 0)
+        matched = int(row["matched"] or 0)
+        kinds[row["kind"]] = {
+            "total": total,
+            "matched": matched,
+            "noMatch": int(row["no_match"] or 0),
+            "fresh": int(row["fresh"] or 0),
+            "coverage": round(100.0 * matched / total) if total else 0,
+        }
+    markers = await db().fetchrow(
+        """
+        select count(*) as rows_total,
+               count(*) filter (where segments <> '{}'::jsonb) as with_data,
+               max(fetched_at) as last_fetch
+        from skip_markers
+        """
+    )
+    version = await db().fetchval("select version from sync_state where id = 1") or 1
+    return {
+        "indexVersion": int(version),
+        "kinds": kinds,
+        "markers": {
+            "rows": int(markers["rows_total"] or 0),
+            "withData": int(markers["with_data"] or 0),
+            "lastFetch": markers["last_fetch"].isoformat() if markers["last_fetch"] else None,
+        },
+    }
+

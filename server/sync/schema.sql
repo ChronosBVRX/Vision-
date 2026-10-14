@@ -76,6 +76,9 @@ alter table enrichment add column if not exists overview text not null default '
 -- tape a un blockbuster 7.7): se sirven al API y ordenan estrenos/géneros.
 alter table enrichment add column if not exists popularity numeric(10,3) not null default 0;
 alter table enrichment add column if not exists vote_count integer not null default 0;
+-- Versión del emparejador TMDB que intentó por última vez cada fila: subir ALGO_VERSION
+-- en tmdb.py da una pasada fresca a TODOS los «sin match» sin esperar el cooldown.
+alter table enrichment add column if not exists match_algo text not null default '';
 
 create index if not exists idx_titles_source on titles (source);
 create index if not exists idx_title_categories_category on title_categories (category_id, position);

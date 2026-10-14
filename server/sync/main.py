@@ -193,6 +193,13 @@ async def main() -> None:
                     changed += await tmdb.backfill_popularity(pool)
                 except Exception:  # noqa: BLE001
                     log.exception("el backfill de popularidad TMDB falló")
+                try:
+                    # El medidor del ciclo: sin verlo, «el índice mejora» es una promesa.
+                    rows = await tmdb.coverage(pool)
+                    if rows:
+                        log.info("TMDB cobertura: %s", tmdb.format_coverage(rows))
+                except Exception:  # noqa: BLE001
+                    log.exception("el medidor de cobertura TMDB falló")
                 if changed:
                     await bump_version(pool)
                     log.info("versión del índice actualizada (%s cambios)", changed)
