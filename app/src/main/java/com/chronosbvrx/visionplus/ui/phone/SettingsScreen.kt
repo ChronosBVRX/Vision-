@@ -23,15 +23,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -225,6 +229,7 @@ private fun SystemTab() {
     }
     var showNotices by rememberSaveable { mutableStateOf(false) }
     if (showNotices) OssNoticesDialog(onDismiss = { showNotices = false })
+    var showReportDialog by rememberSaveable { mutableStateOf(false) }
 
     SettingsSection("Rendimiento y Pantalla") {
         SettingsBlock {
@@ -305,10 +310,20 @@ private fun SystemTab() {
             supporting = "Crashes y errores técnicos se envían al servidor para corregirlos. Sin datos personales ni historial.",
         )
         SettingsRow(
-            title = "Enviar diagnóstico ahora",
-            supporting = "Adjunta versión, dispositivo y estado actual al servidor",
-            onClick = {
-                com.chronosbvrx.visionplus.data.diag.Diagnostics.feedback("Diagnóstico manual desde Ajustes")
+            title = "Reportar un problema",
+            supporting = "Cuéntanos qué pasó; se adjunta el estado técnico (sin datos personales)",
+            onClick = { showReportDialog = true },
+        )
+    }
+
+    if (showReportDialog) {
+        DiagnosticsReportDialog(
+            onDismiss = { showReportDialog = false },
+            onSend = { text ->
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.feedback(
+                    text.ifBlank { "Diagnóstico manual desde Ajustes" },
+                )
+                showReportDialog = false
                 Toast.makeText(context, "Diagnóstico enviado", Toast.LENGTH_SHORT).show()
             },
         )
@@ -327,4 +342,32 @@ private fun SystemTab() {
             onClick = { showNotices = true },
         )
     }
+}
+
+/** Reporte manual con texto libre: se adjunta al diagnóstico técnico (sin datos personales). */
+@Composable
+private fun DiagnosticsReportDialog(onDismiss: () -> Unit, onSend: (String) -> Unit) {
+    var text by rememberSaveable { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Reportar un problema") },
+        text = {
+            Column {
+                Text(
+                    "Describe qué pasó (opcional). Se adjuntan versión, dispositivo y estado técnico; nunca datos personales.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VisionTextSecondary,
+                )
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { if (it.length <= 500) text = it },
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    minLines = 3,
+                    placeholder = { Text("p. ej. el video se cortó al minuto 5") },
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSend(text.trim()) }) { Text("Enviar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
 }

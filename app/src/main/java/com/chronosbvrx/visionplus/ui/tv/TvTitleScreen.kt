@@ -346,14 +346,18 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                     inFavorites.value = !inFavorites.value
                 }
 
+                val downloadsOn = remember(film.id) {
+                    com.chronosbvrx.visionplus.data.config.RemoteConfig.flag(context, "downloads_enabled", true)
+                }
                 val downloadLabel = when (tvDownload?.state) {
                     DownloadState.COMPLETED -> "✓ En USB (${tvDownload.formattedSize})"
                     DownloadState.DOWNLOADING -> "Descargando ${tvDownload.progressPercent}%"
                     DownloadState.QUEUED -> "En cola USB…"
-                    else -> "💾 Descargar en USB"
+                    else -> if (downloadsOn) "💾 Descargar en USB" else "Descargas desactivadas"
                 }
 
                 TvCompactAction(label = downloadLabel) {
+                    if (!downloadsOn && tvDownload?.state != DownloadState.COMPLETED) return@TvCompactAction
                     if (tvDownload?.state == DownloadState.COMPLETED) {
                         onPlay(EpisodePlay(code = tvDownload.playUri))
                     } else {

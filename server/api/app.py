@@ -20,6 +20,9 @@ from starlette.middleware.gzip import GZipMiddleware
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 API_KEY = os.environ["API_KEY"]
+# Llave de administración para escribir la configuración remota (Fase 2). Sin ella,
+# POST /v1/config queda deshabilitado (403): la API_KEY viaja en el APK y no basta.
+CONFIG_ADMIN_KEY = os.environ.get("CONFIG_ADMIN_KEY", "").strip()
 
 # Los partidos se agrupan por día en hora de México (el worker baja en UTC).
 SPORTS_TZ = "America/Mexico_City"
@@ -987,4 +990,56 @@ async def diag_summary(
             "sample": sample,
         })
     return {"reports": reports}
+
+
+# ----- configuración remota (Fase 2) -----
+# Flags que la app lee al arrancar (TTL 6 h) para mitigar problemas sin publicar OTA.
+# Escritura protegida por CONFIG_ADMIN_KEY (la API_KEY viaja en el APK: no basta).
+
+
+def _config_admin_ok(header: str | None, expected: str) -> bool:
+    """True si el header coincide con la llave de administración configurada."""
+    return bool(expected) and bool(header) and hmac.compare_digest(header, expected)
+
+
+@app.get("/v1/config")
+async def remote_config(x_api_key: str | None = Header(default=None)):
+    require_key(x_api_key)
+    rows = await db().fetch("select key, value, updated_at from remote_config")
+    flags = {}
+    for row in rows:
+        value = row["value"]
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except Exception:  # noqa: BLE001
+                pass
+        flags[row["key"]] = value
+    version = int(max((r["updated_at"].timestamp() for r in rows), default=0))
+    return {"version": version, "flags": flags}
+
+
+@app.post("/v1/config")
+async def set_remote_config(request: Request, x_admin_key: str | None = Header(default=None)):
+    if not _config_admin_ok(x_admin_key, CONFIG_ADMIN_KEY):
+        raise HTTPException(status_code=403, detail="llave de administración inválida")
+    raw = await request.body()
+    if len(raw) > 16 * 1024:
+        raise HTTPException(status_code=413, detail="config demasiado grande")
+    try:
+        body = json.loads(raw.decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    for key, value in body.items():
+        await db().execute(
+            """
+            insert into remote_config (key, value, updated_at) values ($1, $2, now())
+            on conflict (key) do update set value = excluded.value, updated_at = now()
+            """,
+            _clean_diag_text(key, 64),
+            json.dumps(value, ensure_ascii=False),
+        )
+    return {"ok": True}
 

@@ -267,7 +267,12 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                     }
                                 }
                                 else -> {
-                                    TextButton(onClick = {
+                                    val downloadsOn = remember(film.id) {
+                                        com.chronosbvrx.visionplus.data.config.RemoteConfig.flag(context, "downloads_enabled", true)
+                                    }
+                                    TextButton(
+                                        enabled = downloadsOn,
+                                        onClick = {
                                         // Las series descargan el capítulo objetivo (mismo que Reproducir),
                                         // no la ficha: sin esto siempre intentaba el seriesId y fallaba.
                                         val targetIdx = nextEpisodeIndex.coerceIn(0, (episodes.size - 1).coerceAtLeast(0))
@@ -297,8 +302,12 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                             else -> null
                                         }
                                         OfflineDownloadManager.enqueueDownload(context, film, ep)
-                                    }) {
-                                        Text("⬇ Descargar", color = VisionBlue)
+                                    },
+                                    ) {
+                                        Text(
+                                            if (downloadsOn) "⬇ Descargar" else "Descargas desactivadas",
+                                            color = if (downloadsOn) VisionBlue else VisionTextSecondary,
+                                        )
                                     }
                                 }
                             }

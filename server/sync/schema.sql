@@ -188,3 +188,11 @@ create table if not exists diag_alert_state (
     resolved_at timestamptz
 );
 
+-- Configuración remota (Fase 2): flags para mitigar un problema sin publicar OTA
+-- (p. ej. downloads_enabled=false apaga las descargas al instante).
+create table if not exists remote_config (
+    key text primary key,
+    value jsonb not null default 'true'::jsonb,
+    updated_at timestamptz not null default now()
+);
+

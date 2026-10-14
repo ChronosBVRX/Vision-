@@ -54,6 +54,10 @@ object OfflineDownloadManager {
         quality: String = "1080p",
     ): Boolean {
         OfflineRegistry.init(context)
+        if (!com.chronosbvrx.visionplus.data.config.RemoteConfig.flag(context, "downloads_enabled", true)) {
+            Log.w(TAG, "Descargas desactivadas por configuración remota")
+            return false
+        }
 
         val eligibility = OfflineStoragePolicy.evaluateEligibility(context)
         val targetVolume = when (eligibility) {

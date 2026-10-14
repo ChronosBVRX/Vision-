@@ -5,6 +5,21 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Fase 2 — Mitigación remota (kill-switches) y reporte con texto** (2026-10-13; 231 tests Android + 56 backend):
+  - *Servidor*: tabla `remote_config` + `GET /v1/config` (flags para la app, TTL 6 h) y `POST /v1/config`
+    protegido con `CONFIG_ADMIN_KEY` (header `X-Admin-Key`; la API_KEY viaja en el APK y no basta). La
+    llave quedó en `/opt/streaming-backend/.env` y en `.visionplus/CREDENCIALES.txt` (respaldar).
+  - *App*: `data/config/RemoteConfig.kt` (caché en prefs, refresco al arrancar y cada 6 h, defaults
+    seguros). Flags honrados hoy: `downloads_enabled` (apaga descargas en el manager y en las fichas
+    móvil/TV) y `diagnostics_forced_off` (apaga el diagnóstico aunque el usuario lo tenga activo).
+  - *UI*: en Ajustes móvil, «Enviar diagnóstico ahora» pasó a **«Reportar un problema»** con texto libre
+    (máx. 500 caracteres) que viaja como `USER_FEEDBACK`.
+  - *Verificado en emulador (Vision_Phone)*: POST con llave mala → 403; con llave buena → flag servido;
+    la app lee `config remota: 2 flags`; con `downloads_enabled=false` la ficha muestra «Descargas
+    desactivadas» (kill-switch real); el reporte con texto llegó al VPS (`USER_FEEDBACK` con el texto);
+    y el CrashGuard capturó un crash real del `:x4k` (UnsatisfiedLinkError del motor en x86_64, stack
+    completo). Flag restaurado a `true` al terminar.
+  - *OTA v2.5.63 publicada* (release OTA v2.5.63, asset `VisionPlus.apk`, misma firma histórica).
 - **Fase 1 — Diagnóstico de campo (crashes/ANR/anomalías → VPS)** (2026-10-13; 228 tests Android + 54 backend):
   - *App (`data/diag/Diagnostics.kt`)*: `CrashGuard` (handler global; también corre en `:x4k`),
     `AnrWatchdog` (main bloqueado >5 s), y anomalías no-fatales en los puntos clave (handoff del
@@ -160,8 +175,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.62**
-  (versionCode **298**, release OTA v2.5.62). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.63**
+  (versionCode **299**, release OTA v2.5.63). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

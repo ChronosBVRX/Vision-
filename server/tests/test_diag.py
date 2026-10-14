@@ -33,3 +33,15 @@ def test_diag_endpoints_registered():
     paths = {r.path for r in app.app.routes}
     assert "/v1/diag" in paths
     assert "/v1/diag/summary" in paths
+
+
+def test_config_admin_ok():
+    assert app._config_admin_ok("secreta", "secreta")
+    assert not app._config_admin_ok("otra", "secreta")
+    assert not app._config_admin_ok(None, "secreta")
+    assert not app._config_admin_ok("secreta", "")
+
+
+def test_config_endpoints_registered():
+    paths = {r.path for r in app.app.routes}
+    assert "/v1/config" in paths

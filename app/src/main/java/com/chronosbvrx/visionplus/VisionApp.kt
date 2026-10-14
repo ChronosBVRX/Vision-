@@ -26,6 +26,8 @@ class VisionApp : Application(), ImageLoaderFactory {
         // Corre también en `:x4k` (crashes del reproductor) y encola ahí; la subida
         // la hace el proceso principal para no duplicar envíos.
         com.chronosbvrx.visionplus.data.diag.Diagnostics.init(this)
+        // Configuración remota (Fase 2): kill-switches que el servidor puede activar sin OTA.
+        com.chronosbvrx.visionplus.data.config.RemoteConfig.init(this)
         // El puente de progreso offline solo vive en el proceso principal: el `:x4k`
         // emite, el principal escucha. Registrarlo en `:x4k` duplicaría eventos.
         if (isMainProcess()) {
