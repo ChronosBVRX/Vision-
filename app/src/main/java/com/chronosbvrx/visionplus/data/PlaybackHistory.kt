@@ -3,6 +3,7 @@ package com.chronosbvrx.visionplus.data
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 /**
  * Dónde quedó cada reproducción: la app recuerda el minuto y ofrece continuar después,
@@ -50,20 +51,49 @@ object PlaybackHistory {
     /** Al terminar del todo (créditos), con este margen menor también se borra. */
     internal const val END_MARGIN_MS = 30_000L
 
+    /** Al saltar a otro capítulo con este margen o menos del final, el saliente cuenta como visto. */
+    internal const val WATCHED_SKIP_MARGIN_MS = 120_000L
+
+    /** Bajo esta duración no se cree el margen (nada de avisos por un clip de un minuto). */
+    internal const val WATCHED_MIN_DURATION_MS = 60_000L
+
+    /** El XML de SharedPreferences donde vive el historial (lo lee [listFresh] directo del disco). */
+    internal const val PREFS_XML_FILE = "playback_history.xml"
+
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun list(context: Context): List<ResumeEntry> =
-        prune(read(prefs(context)), System.currentTimeMillis())
+        prune(listFresh(context), System.currentTimeMillis())
+
+    /**
+     * El historial tal como está en disco. El reproductor vive en `:x4k` y escribe ahí el minuto:
+     * las SharedPreferences no se sincronizan entre procesos, así que la copia en memoria del
+     * proceso principal puede quedarse vieja (tarjetas sin el último capítulo o con un minuto
+     * atrasado). Se lee el XML directo y solo se cae a la copia en memoria si no se puede leer.
+     */
+    internal fun listFresh(context: Context): List<ResumeEntry> =
+        entriesFromXml(runCatching { prefsFile(context).readText() }.getOrNull())
+            ?: read(prefs(context))
 
     fun get(context: Context, key: String): ResumeEntry? =
         list(context).firstOrNull { it.key == key }
 
-    /** Guarda (o borra si terminó). [immediate] usa commit: para el onDestroy del player. */
+    /**
+     * Guarda (o borra si terminó). [immediate] usa commit: para el onDestroy del player.
+     * De una serie vive un solo recuerdo: guardar un capítulo retira los anteriores (así la
+     * fila «Seguir viendo» no se llena de episodios a medias ni el tope de 20 expulsa al resto).
+     */
     fun save(context: Context, entry: ResumeEntry, immediate: Boolean = false) {
         val p = prefs(context)
-        val entries = read(p).filterNot { it.key == entry.key }
-        val next = if (isFinished(entry.positionMs, entry.durationMs)) {
+        val finished = isFinished(entry.positionMs, entry.durationMs)
+        val series = if (finished) null else seriesKeyOf(entry)
+        // Base fresca del disco: reescribir sobre la copia en memoria del proceso tiraría lo
+        // que el reproductor (:x4k) acaba de guardar.
+        val entries = listFresh(context).filterNot {
+            it.key == entry.key || (series != null && seriesKeyOf(it) == series)
+        }
+        val next = if (finished) {
             entries
         } else {
             prune(listOf(entry) + entries, entry.updatedAt)
@@ -73,7 +103,7 @@ object PlaybackHistory {
 
     fun delete(context: Context, key: String) {
         val p = prefs(context)
-        write(p, read(p).filterNot { it.key == key })
+        write(p, listFresh(context).filterNot { it.key == key })
     }
 
     /** Borra todas las entradas guardadas del historial de reproducción. */
@@ -82,9 +112,9 @@ object PlaybackHistory {
         p.edit().remove(K_ENTRIES).apply()
     }
 
-    /** Entradas + fichas del catálogo como tarjetas, recientes primero. */
+    /** Entradas + fichas del catálogo como tarjetas, recientes primero y una sola por serie. */
     fun continueCards(context: Context, films: List<Film>, limit: Int = 10): List<ResumeCard> =
-        matchCards(list(context), films).take(limit)
+        matchCards(latestBySeries(list(context)), films).take(limit)
 
     private fun read(p: android.content.SharedPreferences): List<ResumeEntry> {
         val raw = p.getString(K_ENTRIES, null) ?: return emptyList()
@@ -139,6 +169,29 @@ object PlaybackHistory {
         if (arr == null) return emptyList()
         return List(arr.length()) { i -> arr.optString(i) }.filter { it.isNotBlank() }
     }
+
+    /**
+     * El XML de preferencias → entradas del historial. null cuando no se pudo leer (el archivo
+     * puede estar a medio escribir por el otro proceso); lista vacía cuando aún no hay historial.
+     */
+    internal fun entriesFromXml(xml: String?): List<ResumeEntry>? {
+        if (xml.isNullOrEmpty()) return null
+        val open = "<string name=\"entries\">"
+        val start = xml.indexOf(open)
+        if (start < 0) return emptyList()
+        val valueStart = start + open.length
+        val end = xml.indexOf("</string>", valueStart)
+        if (end < 0) return null
+        val json = unescapeXmlEntities(xml.substring(valueStart, end))
+        return runCatching {
+            val arr = JSONArray(json)
+            List(arr.length()) { i -> entryFromJson(arr.optJSONObject(i) ?: JSONObject()) }
+                .filter { it.key.isNotBlank() && it.positionMs > 0 }
+        }.getOrNull()
+    }
+
+    private fun prefsFile(context: Context): File =
+        File(File(context.applicationContext.dataDir, "shared_prefs"), PREFS_XML_FILE)
 }
 
 /** Vale la pena recordarla: arrancada y lejos del final. */
@@ -149,6 +202,38 @@ internal fun shouldKeep(positionMs: Long, durationMs: Long): Boolean =
 /** Terminada: al reabrirla se empieza de cero. */
 internal fun isFinished(positionMs: Long, durationMs: Long): Boolean =
     durationMs > 0 && positionMs >= durationMs - PlaybackHistory.END_MARGIN_MS
+
+/** Un recuerdo de capítulo: con 2+ capítulos o temporadas es serie (la misma regla de la app). */
+internal fun isEpisodeEntry(e: ResumeEntry): Boolean =
+    e.episodeIds.size > 1 || e.seasonIds.size > 1
+
+/**
+ * La serie de un capítulo tal como el usuario la ve: el nombre base del título («Serie · T2 · C3»).
+ * El id queda de respaldo cuando el título no trae la marca; jamás se usa como clave principal
+ * porque al cruzar de temporada el reproductor guarda el id de la temporada nueva y la misma
+ * serie se partiría en dos tarjetas. null en películas y sueltos.
+ */
+internal fun seriesKeyOf(e: ResumeEntry): String? {
+    if (!isEpisodeEntry(e)) return null
+    val base = e.title.substringBefore(" · T").substringBefore(" · C").trim().lowercase()
+    if (base.isNotBlank()) return "t:$base"
+    val sid = e.seriesId.trim()
+    return if (sid.isNotBlank()) "s:$sid" else null
+}
+
+/** De cada serie solo el capítulo más reciente (las entradas ya vienen ordenadas); lo demás pasa. */
+internal fun latestBySeries(entries: List<ResumeEntry>): List<ResumeEntry> {
+    val seen = HashSet<String>(entries.size * 2)
+    return entries.filter { e ->
+        val key = seriesKeyOf(e)
+        key == null || seen.add(key)
+    }
+}
+
+/** Saltar a este margen o menos del final cuenta como visto (los créditos al frente). */
+internal fun shouldCountWatchedOnSkip(positionMs: Long, durationMs: Long): Boolean =
+    durationMs > PlaybackHistory.WATCHED_MIN_DURATION_MS &&
+        positionMs >= durationMs - PlaybackHistory.WATCHED_SKIP_MARGIN_MS
 
 /** Recientes primero, tope y sin momias de más de 90 días. */
 internal fun prune(entries: List<ResumeEntry>, nowMs: Long): List<ResumeEntry> {
@@ -194,3 +279,11 @@ internal fun matchCards(entries: List<ResumeEntry>, films: List<Film>): List<Res
         ResumeCard(entry, film, progress)
     }
 }
+
+/** El texto del XML escapa `&`, `<`, `>` (y comillas): al leer hay que devolverlos. */
+private fun unescapeXmlEntities(text: String): String = text
+    .replace("&quot;", "\"")
+    .replace("&apos;", "'")
+    .replace("&lt;", "<")
+    .replace("&gt;", ">")
+    .replace("&amp;", "&")

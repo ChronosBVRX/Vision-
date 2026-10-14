@@ -20,6 +20,60 @@
     y el CrashGuard capturó un crash real del `:x4k` (UnsatisfiedLinkError del motor en x86_64, stack
     completo). Flag restaurado a `true` al terminar.
   - *OTA v2.5.63 publicada* (release OTA v2.5.63, asset `VisionPlus.apk`, misma firma histórica).
+- **Recomendaciones en el launcher de Google TV — canal Watch Next («Continuar viendo»)** (2026-10-13; 254 tests Android):
+  - *Qué*: «Seguir viendo» se espeja al canal **Watch Next** del sistema (`TvContractCompat.WatchNextPrograms`,
+    androidx `tvprovider:1.1.0`). En Google TV se ve como «Continuar viendo»/«Play Next» y **no requiere
+    allowlist** (el «Para ti» completo es de Google/socios; esto es la vía pública). Al seleccionar una
+    tarjeta, el launcher dispara un `intent_uri` (`visionplus://watch/<clave>`) y la app reanuda la
+    película/capítulo en el minuto exacto (reusa `resumeRoute`); si el historial ya se podó, el enlace trae
+    respaldo (`c` playCode XTV, `u` videoUrl) y abre desde el principio.
+  - *App*: `data/launcher/WatchNextPlan.kt` (puro: specs del historial —una entrada por serie, tope 10—,
+    reconciliación insertar/actualizar/borrar y filtro de descartes), `LauncherWatchNext.kt` (publicador:
+    query + reconcile contra el provider; tarjeta con `last_playback_position`, `duration`,
+    `last_engagement` y `WATCH_NEXT_TYPE_CONTINUE`), `LauncherArt.kt` + `LauncherArtProvider` (pósters
+    cacheados en `filesDir/launcher_art`, servidos `content://` de solo lectura a otra app —el launcher—,
+    con respaldo a la URL remota), `WatchNextRemovedReceiver` («No me interesa» → borra y anota el descarte
+    en archivo; no vuelve hasta un avance nuevo), `ui/LauncherDeepLink.kt` (deep link → ruta). Manifest:
+    permiso `WRITE_EPG_DATA`, `<intent-filter>` VIEW `visionplus://watch`, `launchMode="singleTask"`
+    (onNewIntent, nunca una segunda instancia), provider y receiver exportados.
+  - *Triggers*: al salir del reproductor XTV (`X4KPlayerAty.onStop`, proceso `:x4k`), al volver a la app y al
+    navegar (`MainActivity.onResume` + efecto por ruta) y al limpiar historial en Ajustes (forzado). Freno
+    propio de 15 s; todo envuelto: en teléfono el canal no existe y el publicador se apaga solo con
+    `DeviceKind.isTelevision`.
+  - *Ojo (lección)*: las SharedPreferences **no se sincronizan entre procesos** y el historial lo escribe
+    `:x4k`. El publicador lee el XML del archivo (`WatchNextHistory.kt`) para no espejar una copia vieja, y
+    protege cada tarjeta con la marca de último toque: una escritura atrasada jamás retrocede una más nueva.
+  - *Verificado*: deep link en frío abre el reproductor con el título correcto (emulador, «Velvet. El Nuevo
+    Imperio») y en caliente entra por `onNewIntent` sin duplicar instancia; el provider de pósters lo lee
+    otra app (shell) y bloquea traversal/nombres inválidos; 254 tests en verde, incluido el ciclo completo
+    del canal en Robolectric con un TV provider falso (publicar, actualizar minuto, retirar, descartes).
+    Nota: el AVD `Vision_Chromecast_TV` resultó ser imagen de teléfono (sin TV provider), así que el canal
+    no se puede probar ahí; en teléfono el publicador se apaga por diseño.
+  - *Pendiente*: probar en la TV real (Chromecast con Google TV): ver la fila «Continuar viendo» de Vision+,
+    seleccionar una tarjeta y confirmar que reanuda; el APK va incluido en la OTA v2.5.64.
+- **Fix «Seguir viendo»: una sola tarjeta por serie (el último capítulo) y avance siempre guardado** (2026-10-13; 261 tests Android):
+  - *Qué*: al ver una serie, la fila «Seguir viendo» del Inicio (móvil y TV) mostraba TODOS los capítulos
+    vistos y casi siempre a medias (al saltar los créditos con «⏭ Sig.» el capítulo quedaba en ~95%);
+    ahora sale **una sola tarjeta por serie: el capítulo más reciente**, para continuar en orden. Además
+    se cerraron las fugas por las que «a veces no se guardaba el avance».
+  - *Historial (`data/PlaybackHistory.kt`)*: `seriesKeyOf(entry)` (nombre base del título; el id queda de
+    respaldo — al cruzar de temporada el player guarda el id de la temporada nueva y la serie se partía en
+    dos tarjetas), `latestBySeries` aplicado en `continueCards` (el canal Watch Next usa la misma clave) y
+    `save()` guarda **un solo recuerdo por serie** (retira los capítulos anteriores): el tope de 20 ya no
+    lo consume una sola serie.
+  - *Avance confiable*: (1) `X4KPlayerAty.playEpisode` llama `flushOutgoingEpisode()` antes de detener el
+    motor: guarda con commit el minuto exacto del capítulo que se deja (el tic periódico quedaba hasta
+    10 s atrás) y lo marca visto si el salto fue dentro de los últimos 2 min; (2) `exitPlayer()` guarda
+    con el motor todavía vivo (antes, al detenerlo, la posición se perdía) y `onStop()` hace un commit de
+    seguridad; (3) `PlaybackHistory.list/save/delete` leen el **XML del archivo** (el reproductor vive en
+    `:x4k` y las SharedPreferences no cruzan procesos: la copia en memoria dejaba tarjetas viejas o
+    borraba lo recién guardado). `WatchNextHistory` delega ahora en el historial central.
+  - *Guardianes*: `PlaybackHistoryTest` (dedupe por serie, salto de temporada, películas no se colapsan,
+    umbral de visto al saltar), `PlaybackHistoryStoreTest` (Robolectric: guardar un capítulo reemplaza al
+    anterior + lectura del archivo fresco pese a copia en memoria vieja),
+    `WatchNextPlanTest.specsCollapseOneSeriesAcrossSeasons`.
+  - *OTA v2.5.64 publicada* (release OTA v2.5.64, asset `VisionPlus.apk`, misma firma histórica) — incluye
+    el canal Watch Next que estaba pendiente.
 - **Fase 1 — Diagnóstico de campo (crashes/ANR/anomalías → VPS)** (2026-10-13; 228 tests Android + 54 backend):
   - *App (`data/diag/Diagnostics.kt`)*: `CrashGuard` (handler global; también corre en `:x4k`),
     `AnrWatchdog` (main bloqueado >5 s), y anomalías no-fatales en los puntos clave (handoff del
@@ -951,6 +1005,10 @@
   (TABS de `PhoneApp.kt`) y en el riel de `TvApp.kt` (reemplaza la categoría "futbol" de títulos).
 - Manifest: `REQUEST_INSTALL_PACKAGES`, FileProvider `${applicationId}.updates` (+`res/xml/update_paths.xml`),
   leanback optional, touchscreen no requerido, banner, LEANBACK_LAUNCHER.
+- `data/launcher/` — launcher de TV (canal Watch Next): `WatchNextPlan.kt` (puro), `LauncherWatchNext.kt`
+  (publicador), `LauncherArt.kt` + `LauncherArtProvider.kt` (pósters `content://`), `WatchNextHistory.kt`
+  (lectura fresca del historial), `WatchNextRemovedReceiver.kt`; deep link en `ui/LauncherDeepLink.kt`
+  (`visionplus://watch/<clave>`).
 
 ## Artefactos de investigación (temp, reutilizables)
 `C:\Users\AXELRO~1\AppData\Local\Temp\opencode\`:

@@ -33,8 +33,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = 299
-        versionName = "2.5.63"
+        versionCode = 300
+        versionName = "2.5.64"
     }
 
     signingConfigs {
@@ -113,6 +113,9 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.tv:tv-material:1.0.0")
+
+    // Canal Watch Next: «Continuar viendo» en el launcher de Android TV / Google TV.
+    implementation("androidx.tvprovider:tvprovider:1.1.0")
 
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.11.1")

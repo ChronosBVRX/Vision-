@@ -46,6 +46,7 @@ import com.chronosbvrx.visionplus.data.LiveTaxonomy
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.isFinished
+import com.chronosbvrx.visionplus.data.shouldCountWatchedOnSkip
 import com.chronosbvrx.visionplus.data.shouldKeep
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import com.chronosbvrx.visionplus.data.xuper.X4KTitan
@@ -2075,6 +2076,10 @@ class X4KPlayerAty : ComponentActivity() {
         nextDismissed = false
         endedShown = false
 
+        // El capítulo que se deja conserva su minuto exacto: sin este cierre quedaba el último
+        // tic (hasta 10 s atrás) y al saltar los créditos con «Sig.» el avance parecía perdido.
+        flushOutgoingEpisode()
+
         // Detener inmediatamente la reproducción previa para que positionMs()
         // no retorne la posición del capítulo anterior mientras carga el nuevo.
         X4KTitan.stop(v)
@@ -2224,6 +2229,23 @@ class X4KPlayerAty : ComponentActivity() {
             ),
             immediate,
         )
+    }
+
+    /**
+     * Cierra el capítulo actual antes de saltar a otro («Sig.», selector o automático): guarda
+     * su minuto con commit —el tic periódico pudo quedar hasta 10 s atrás y al detener el motor
+     * la posición se pierde— y, si el salto fue cerca del final, lo marca visto.
+     */
+    private fun flushOutgoingEpisode() {
+        if (liveMode || curCode.isBlank()) return
+        runCatching {
+            val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
+            val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
+            if (curSeries.isNotBlank() && shouldCountWatchedOnSkip(pos, total)) {
+                UserLibrary.markEpisodeWatched(this, curSeries, curEpIndex + 1)
+            }
+        }
+        saveHistory(immediate = true)
     }
 
     /** Al primer cuadro: reanuda lo pedido desde Inicio, o pregunta si quedó a medias. */
@@ -3223,6 +3245,9 @@ class X4KPlayerAty : ComponentActivity() {
     }
 
     private fun exitPlayer() {
+        // Con el motor todavía vivo: al detenerlo la posición se pierde y el cierre guardaba
+        // un minuto viejo (o nada). El commit deja el avance exacto antes de morir el proceso.
+        saveHistory(immediate = true)
         playerView?.let { X4KTitan.stop(it) }
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         finish()
@@ -3602,6 +3627,19 @@ class X4KPlayerAty : ComponentActivity() {
             }
         }
         scheduleHide()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Cierre de seguridad al dejar la app (botón Inicio, pantalla apagada): el tic periódico
+        // va con apply y el sistema puede matar el proceso en segundo plano sin pasar por
+        // onDestroy; un commit deja el minuto en disco para la fila «Seguir viendo».
+        saveHistory(immediate = true)
+        // El canal «Continuar viendo» del launcher de TV (Google TV) se actualiza al salir del
+        // reproductor: este es el proceso que trae el minuto fresco del historial. La llamada es
+        // silenciosa y con freno propio; si el proceso muere al salir (Atrás), el proceso
+        // principal re-sincroniza al volver, ya con el commit final en disco.
+        runCatching { com.chronosbvrx.visionplus.data.launcher.LauncherWatchNext.syncAsync(this) }
     }
 
     override fun onDestroy() {

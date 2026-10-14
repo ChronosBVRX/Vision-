@@ -15,6 +15,7 @@
 | Navegación | `ui/NavigationTest.kt` | `push` sin duplicados, `pop` con Home base, `goTab`, payload de `Title`/`Player`/`LivePlayer` |
 | M3U | `data/M3uTest.kt` | nombres/logos/grupos/VLC-opts, duplicados, URLs no-http |
 | Foco TV (D-pad) | `ui/tv/TvFocusTest.kt` (Robolectric) | cada pantalla deja foco, mover el D-pad no lo pierde, Home→Ficha→Player→atrás, rail, tabs de En vivo |
+| Launcher TV (Watch Next) | `data/launcher/WatchNextPlanTest.kt`, `WatchNextValuesTest.kt`, `LauncherWatchNextSyncTest.kt` (Robolectric), `ui/LauncherDeepLinkTest.kt` | specs del historial (una por serie, tope), reconciliación (una escritura atrasada no retrocede tarjetas), XML del historial entre procesos, values del canal (tipo/minuto/intent), deep link → ruta (reanudar o respaldo), ciclo completo contra un TV provider falso (publicar/actualizar/retirar/descartes) |
 | Servidor (sync/api) | `server/tests/` (pytest, sin red ni DB) | marcas de temporada, unión por kind/doblaje, aridad de tuplas vs TITLE_SQL, limpieza al servir, preferencia XTV/TMDB |
 
 Comando local (Windows, PowerShell, desde la raíz del repo):
@@ -66,6 +67,7 @@ Los unit tests no ven video, foco real ni red del portal. Antes de cada release:
 - [ ] **Móvil**: Fútbol (Hoy/Ayer/Mañana), partido con canal → "Ver en vivo".
 - [ ] **Móvil**: Categorías + Búsqueda con red y en modo avión (caché).
 - [ ] **TV con mando**: Home → Ficha → Reproductor; foco siempre visible; OK y Atrás.
+- [ ] **TV (launcher)**: abrir algo, salir y ver la tarjeta de Vision+ en «Continuar viendo» → seleccionarla y confirmar que reanuda donde quedó.
 - [ ] **TV**: riel (Categorías/Fútbol/En vivo/Ajustes), En vivo (categoría + tabs).
 - [ ] **TV**: Ajustes → "Versión instalada" = la que se va a publicar.
 - [ ] Salir del reproductor no rompe el siguiente programa (proceso `:x4k` se mata).
@@ -77,6 +79,8 @@ Los unit tests no ven video, foco real ni red del portal. Antes de cada release:
 - Test rojo de `SportsSourceTest` → cambió el JSON de `/v1/sports` o el orden.
 - Test rojo de `RemoteIndexTest` → cambió `/v1/index` o `/v1/section`.
 - Test rojo de `TvFocusTest` → una pantalla TV perdió el foco inicial o el D-pad.
+- Test rojo de `WatchNextPlanTest`/`LauncherWatchNextSyncTest` → cambió el espejo del historial al canal
+  Watch Next del launcher (tipos, posición, reconciliación) o el `intent_uri` del deep link.
 - Fallo solo en dispositivo (sesión `aaa100083`, EPG vacía, sin internet) → ver
   `AGENTS.md` → "Pitfalls"; no es regresión de código hasta probar con red/sesión sana.
 

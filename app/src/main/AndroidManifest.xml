@@ -6,6 +6,8 @@
 <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+<!-- Canal Watch Next («Continuar viendo») del launcher de Android TV / Google TV. -->
+<uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" />
 
     <!-- The one source: Vision+ talks to the XuperPlugin app on the device for its catalog. -->
     <queries>
@@ -38,11 +40,19 @@
             android:banner="@drawable/ic_banner"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:exported="true"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.Vision.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <!-- Tarjetas del launcher (canal Watch Next): reanudan la película o el capítulo. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="visionplus" android:host="watch" />
             </intent-filter>
         </activity>
 
@@ -61,6 +71,22 @@
             android:name=".data.xuper.X4KWarmupReceiver"
             android:exported="false"
             android:process=":x4k" />
+
+        <!-- El usuario descartó una tarjeta de Vision+ en el launcher: se quita del canal. -->
+        <receiver
+            android:name=".data.launcher.WatchNextRemovedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.media.tv.ACTION_WATCH_NEXT_PROGRAM_BROWSABLE_DISABLED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Sirve los pósters cacheados de las tarjetas del launcher (solo lectura). -->
+        <provider
+            android:name=".data.launcher.LauncherArtProvider"
+            android:authorities="${applicationId}.launcherart"
+            android:exported="true"
+            android:grantUriPermissions="false" />
 
         <service
             android:name=".data.offline.X4KDownloadService"

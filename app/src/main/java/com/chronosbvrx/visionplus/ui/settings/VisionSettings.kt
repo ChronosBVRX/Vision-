@@ -148,6 +148,8 @@ object VisionSettings {
 
     fun clearPlaybackHistory(context: Context) {
         PlaybackHistory.clear(context)
+        // El canal «Continuar viendo» del launcher también se vacía de inmediato.
+        com.chronosbvrx.visionplus.data.launcher.LauncherWatchNext.syncAsync(context, force = true)
     }
 
     fun getNetworkInfo(context: Context): String {

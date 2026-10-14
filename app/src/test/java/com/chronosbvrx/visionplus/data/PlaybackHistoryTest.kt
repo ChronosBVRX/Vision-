@@ -86,4 +86,49 @@ class PlaybackHistoryTest {
         assertEquals(null, cards.single().film)
         assertEquals("perdida", cards.single().entry.key)
     }
+
+    // ---- Una sola tarjeta por serie en «Seguir viendo» (el último capítulo) ----
+
+    @Test
+    fun latestBySeriesKeepsOnlyTheNewestEpisode() {
+        val c1 = entry("e1", updatedAt = 10L)
+            .copy(title = "Serie · T1 · C1", episodeIds = listOf("x", "y"), episodeIndex = 0)
+        val c2 = entry("e2", updatedAt = 30L)
+            .copy(title = "Serie · T1 · C2", episodeIds = listOf("x", "y"), episodeIndex = 1)
+        val movie = entry("m1", updatedAt = 20L)
+        val other = entry("o1", updatedAt = 5L)
+            .copy(title = "Otra · C1", episodeIds = listOf("a", "b"))
+        // Como los entrega list(): recientes primero.
+        val kept = latestBySeries(listOf(c2, movie, c1, other))
+        assertEquals(listOf("e2", "m1", "o1"), kept.map { it.key })
+    }
+
+    @Test
+    fun latestBySeriesSurvivesTheSeasonIdSwitch() {
+        // Al cruzar de temporada el reproductor guarda el id de la temporada nueva: la misma
+        // serie no debe partirse en dos tarjetas.
+        val s1 = entry("e10", updatedAt = 10L).copy(
+            title = "Serie · T1 · C10", seriesId = "serie-1",
+            episodeIds = listOf("x", "y"), seasonIds = listOf("t1", "t2"),
+        )
+        val s2 = entry("e21", updatedAt = 20L).copy(
+            title = "Serie · T2 · C1", seriesId = "temporada-2",
+            episodeIds = listOf("x", "y"), seasonIds = listOf("t1", "t2"),
+        )
+        assertEquals(listOf("e21"), latestBySeries(listOf(s2, s1)).map { it.key })
+    }
+
+    @Test
+    fun latestBySeriesNeverCollapsesLooseFilms() {
+        val a = entry("a", updatedAt = 1L)
+        val b = entry("b", updatedAt = 2L)
+        assertEquals(listOf("b", "a"), latestBySeries(listOf(b, a)).map { it.key })
+    }
+
+    @Test
+    fun skippingNearTheEndCountsWatched() {
+        assertTrue(shouldCountWatchedOnSkip(2_280_000, 2_400_000))   // 95%: créditos al frente
+        assertFalse(shouldCountWatchedOnSkip(2_000_000, 2_400_000))  // 83%: le falta mucho
+        assertFalse(shouldCountWatchedOnSkip(100_000, 0))            // sin duración no hay juicio
+    }
 }
