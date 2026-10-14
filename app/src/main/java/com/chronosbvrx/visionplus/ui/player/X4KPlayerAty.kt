@@ -825,6 +825,10 @@ class X4KPlayerAty : ComponentActivity() {
     }
 
     private fun showError() {
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.engine("error")
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+            "PLAYER_ERROR", "overlay de error del reproductor nativo",
+        )
         errorShown = true
         removeIntro()
         handler.removeCallbacks(hideRunnable)

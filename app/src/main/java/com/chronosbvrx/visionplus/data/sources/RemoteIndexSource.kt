@@ -106,7 +106,13 @@ object RemoteIndexSource {
             return@withContext cached
         }
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val fetched = runCatching { download(prefs.getInt(K_VERSION, 0), cached) }.getOrNull()
+        val fetched = runCatching { download(prefs.getInt(K_VERSION, 0), cached) }
+            .onFailure {
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "INDEX_FETCH_FAIL", "${it.javaClass.simpleName}: ${it.message}",
+                )
+            }
+            .getOrNull()
             ?: run {
                 Log.w(TAG, "índice remoto inalcanzable; se usa la copia local (${cached.size} categorías)")
                 return@withContext cached

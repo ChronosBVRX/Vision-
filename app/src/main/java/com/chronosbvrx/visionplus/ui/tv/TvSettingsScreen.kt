@@ -190,6 +190,14 @@ private fun ColumnScope.TvSystemTab() {
     TvSectionTitle("Diagnóstico y Red")
     Note("Conexión: ${s.getNetworkInfo(context)}")
     Note("Servidor de streaming: En línea (XTV Masnew)")
+    TvActionOption("Enviar diagnósticos: ${if (s.diagnosticsEnabled) "Sí" else "No"}") {
+        s.setDiagnosticsEnabled(context, !s.diagnosticsEnabled)
+    }
+    Note("Crashes y errores técnicos se envían al servidor para corregirlos (sin datos personales).")
+    TvActionOption("Enviar diagnóstico ahora") {
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.feedback("Diagnóstico manual desde Ajustes (TV)")
+        Toast.makeText(context, "Diagnóstico enviado", Toast.LENGTH_SHORT).show()
+    }
 
     TvSectionTitle("Actualizaciones y Sistema")
     Note("Versión instalada: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})")

@@ -164,6 +164,7 @@ object OfflineDownloadManager {
         if (delegatedIds.contains(item.id)) return
 
         val job = scope.launch {
+            com.chronosbvrx.visionplus.data.diag.Diagnostics.phase("descarga")
             try {
                 var resolvedUrl = item.videoUrl
                 if (resolvedUrl.contains('|')) {
@@ -180,6 +181,9 @@ object OfflineDownloadManager {
                     Log.i(TAG, "Descarga pausada o cancelada: ${item.id}")
                 } else {
                     Log.e(TAG, "Fallo al procesar descarga: ${item.id} - ${e.message}", e)
+                    com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                        "DOWNLOAD_FAIL", "${e.javaClass.simpleName}: ${e.message}",
+                    )
                     OfflineRegistry.updateState(item.id, DownloadState.ERROR, e.message ?: "Error de red al descargar")
                 }
             } finally {

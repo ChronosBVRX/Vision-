@@ -297,6 +297,23 @@ private fun SystemTab() {
         )
     }
 
+    SettingsSection("Diagnóstico y Soporte") {
+        SettingsSwitchRow(
+            title = "Enviar diagnósticos",
+            checked = s.diagnosticsEnabled,
+            onCheckedChange = { s.setDiagnosticsEnabled(context, it) },
+            supporting = "Crashes y errores técnicos se envían al servidor para corregirlos. Sin datos personales ni historial.",
+        )
+        SettingsRow(
+            title = "Enviar diagnóstico ahora",
+            supporting = "Adjunta versión, dispositivo y estado actual al servidor",
+            onClick = {
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.feedback("Diagnóstico manual desde Ajustes")
+                Toast.makeText(context, "Diagnóstico enviado", Toast.LENGTH_SHORT).show()
+            },
+        )
+    }
+
     SettingsSection("Actualizaciones y Sistema") {
         SettingsRow(
             title = if (update.checking) "Buscando…" else "Buscar actualizaciones",

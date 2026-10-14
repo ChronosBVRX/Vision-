@@ -23,6 +23,7 @@ object VisionSettings {
     private const val KEY_AUTO_RESUME = "auto_resume"
     private const val KEY_DEFAULT_ASPECT = "default_aspect"
     private const val KEY_LIVE_BUFFER = "live_buffer"
+    private const val KEY_DIAGNOSTICS = "diagnostics_enabled"
 
     val qualityOptions = listOf("Auto", "1080p", "720p", "480p")
     val aspectOptions = listOf("Ajustar (16:9)", "Rellenar pantalla")
@@ -33,6 +34,7 @@ object VisionSettings {
     var autoResume by mutableStateOf(true)
     var defaultAspect by mutableStateOf(0) // 0: Fit (16:9 original), 1: Fill / Zoom
     var liveBuffer by mutableStateOf("Rápido (0.5s)")
+    var diagnosticsEnabled by mutableStateOf(true)
     var cacheSizeBytes by mutableLongStateOf(0L)
 
     var effectsMode by mutableStateOf(EffectsMode.AUTO)
@@ -50,8 +52,20 @@ object VisionSettings {
         autoResume = p.getBoolean(KEY_AUTO_RESUME, true)
         defaultAspect = p.getInt(KEY_DEFAULT_ASPECT, 0)
         liveBuffer = p.getString(KEY_LIVE_BUFFER, "Rápido (0.5s)") ?: "Rápido (0.5s)"
+        diagnosticsEnabled = p.getBoolean(KEY_DIAGNOSTICS, true)
         effectsMode = DevicePerformance.getEffectsMode(context)
         refreshCacheSize(context)
+    }
+
+    /** Lectura directa (sin depender de [init]) para el arranque del diagnóstico. */
+    fun isDiagnosticsEnabled(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getBoolean(KEY_DIAGNOSTICS, true)
+
+    fun setDiagnosticsEnabled(context: Context, enabled: Boolean) {
+        diagnosticsEnabled = enabled
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_DIAGNOSTICS, enabled).apply()
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.setEnabled(enabled)
     }
 
     fun setDefaultQuality(context: Context, quality: String) {

@@ -229,7 +229,17 @@ object X4KApi {
         }
     }
 
-    private fun renewLocked(context: Context, force: Boolean = false): String {
+    /** Envuelve la acuñación: si falla queda como anomalía (diagnóstico) y se relanza. */
+    private fun renewLocked(context: Context, force: Boolean = false): String = try {
+        renewLockedInner(context, force)
+    } catch (e: Exception) {
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+            "SESSION_RENEW_FAIL", "${e.javaClass.simpleName}: ${e.message}",
+        )
+        throw e
+    }
+
+    private fun renewLockedInner(context: Context, force: Boolean = false): String {
         val now = System.currentTimeMillis()
         val p = prefs(context)
         if (!mintAllowed(now, lastMintAt, lastForcedMintAt, force)) {

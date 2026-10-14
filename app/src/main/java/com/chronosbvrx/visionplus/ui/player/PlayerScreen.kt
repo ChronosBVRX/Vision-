@@ -1671,6 +1671,7 @@ private fun XtvHandoff(
     val errorLanding = rememberLandingFocus(failed)
 
     LaunchedEffect(attempt) {
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.phase("reproductor")
         failed = false
         prepared = false
         var ok = false
@@ -1678,14 +1679,18 @@ private fun XtvHandoff(
         // resuelve picos de red, handshakes fríos y, sobre todo, la sesión pateada por el
         // servidor (el mint forzado ya no queda bloqueado por el silencio de 30 s).
         val backoffs = longArrayOf(400L, 900L, 1800L)
+        var lastError = ""
         for (retryIndex in 0..3) {
-            ok = withContext(Dispatchers.IO) { runCatching { prepare() }.getOrDefault(false) }
+            val attempt = withContext(Dispatchers.IO) { runCatching { prepare() } }
+            ok = attempt.getOrDefault(false)
+            attempt.exceptionOrNull()?.let { lastError = "${it.javaClass.simpleName}: ${it.message}" }
             if (ok) break
             if (retryIndex < backoffs.size) {
                 delay(backoffs[retryIndex])
             }
         }
         if (!ok) {
+            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly("PLAYBACK_HANDOFF_FAIL", lastError)
             failed = true
         } else {
             // Cold-starting the player's own process can bounce a spurious resume on some ROMs

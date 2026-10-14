@@ -22,6 +22,10 @@ class VisionApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         com.chronosbvrx.visionplus.data.offline.OfflineRegistry.init(this)
+        // Diagnóstico de campo (Fase 1): crashes, ANRs y anomalías hacia el VPS.
+        // Corre también en `:x4k` (crashes del reproductor) y encola ahí; la subida
+        // la hace el proceso principal para no duplicar envíos.
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.init(this)
         // El puente de progreso offline solo vive en el proceso principal: el `:x4k`
         // emite, el principal escucha. Registrarlo en `:x4k` duplicaría eventos.
         if (isMainProcess()) {

@@ -7,6 +7,7 @@ Todos los endpoints /v1/* requieren el header X-Api-Key.
 """
 
 import hmac
+import json
 import os
 import re
 import time
@@ -14,7 +15,7 @@ import unicodedata
 from contextlib import asynccontextmanager
 
 import asyncpg
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from starlette.middleware.gzip import GZipMiddleware
 
 DATABASE_URL = os.environ["DATABASE_URL"]
@@ -864,4 +865,126 @@ async def epg(
         "norm": norm,
         "programs": programs,
     }
+
+
+# ----- diagnóstico de campo (Fase 1) -----
+# La app reporta crashes/ANRs/anomalías (sin tokens ni datos personales) y el worker
+# `diag.py` avisa de huellas nuevas y autocierra las resueltas.
+
+DIAG_MAX_BODY = 256 * 1024  # 256 KB por reporte
+DIAG_RATE_LIMIT = 60        # reportes por minuto por IP
+_diag_bucket: dict[str, list[float]] = {}
+
+
+def _diag_rate_ok(bucket: dict[str, list[float]], ip: str, now: float,
+                  limit: int = DIAG_RATE_LIMIT, window: float = 60.0) -> bool:
+    """Ventana deslizante en memoria: True si la IP puede enviar otro reporte."""
+    hits = [t for t in bucket.get(ip, []) if now - t < window]
+    if len(hits) >= limit:
+        bucket[ip] = hits
+        return False
+    hits.append(now)
+    bucket[ip] = hits
+    if len(bucket) > 2000:  # higiene: sin fugas de memoria por IPs efímeras
+        for key in [k for k, v in bucket.items() if not v or now - v[-1] > window]:
+            bucket.pop(key, None)
+    return True
+
+
+def _clean_diag_text(value, limit: int) -> str:
+    """Texto corto y seguro para la base (sin NUL ni campos gigantes)."""
+    text = str(value or "").strip().replace("\x00", "")
+    return text[:limit]
+
+
+@app.post("/v1/diag")
+async def diag_report(request: Request, x_api_key: str | None = Header(default=None)):
+    require_key(x_api_key)
+    raw = await request.body()
+    if len(raw) > DIAG_MAX_BODY:
+        raise HTTPException(status_code=413, detail="reporte demasiado grande")
+    try:
+        body = json.loads(raw.decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    ip = request.client.host if request.client else "?"
+    if not _diag_rate_ok(_diag_bucket, ip, time.time()):
+        raise HTTPException(status_code=429, detail="demasiados reportes")
+    kind = _clean_diag_text(body.get("kind"), 16).lower() or "anomaly"
+    if kind not in ("crash", "anr", "anomaly", "feedback"):
+        kind = "anomaly"
+    payload = body.get("payload") if isinstance(body.get("payload"), dict) else {}
+    await db().execute(
+        """
+        insert into diag_reports (fingerprint, kind, code, app_version, version_code,
+                                  device, android, payload)
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        """,
+        _clean_diag_text(body.get("fingerprint"), 64) or "sin-huella",
+        kind,
+        _clean_diag_text(body.get("code"), 64),
+        _clean_diag_text(body.get("appVersion"), 24),
+        int(body.get("versionCode") or 0),
+        _clean_diag_text(body.get("device"), 80),
+        _clean_diag_text(body.get("android"), 40),
+        json.dumps(payload, ensure_ascii=False)[:20000],
+    )
+    return {"ok": True}
+
+
+@app.get("/v1/diag/summary")
+async def diag_summary(
+    days: int = Query(default=30, ge=1, le=365),
+    limit: int = Query(default=60, ge=1, le=200),
+    x_api_key: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    rows = await db().fetch(
+        """
+        select fingerprint,
+               (array_agg(kind order by created_at desc))[1] as kind,
+               (array_agg(code order by created_at desc))[1] as code,
+               (array_agg(app_version order by created_at desc))[1] as latest_version,
+               (array_agg(version_code order by created_at desc))[1] as latest_code,
+               count(*) as hits,
+               count(distinct device) as devices,
+               min(created_at) as first_seen,
+               max(created_at) as last_seen,
+               (array_agg(payload order by created_at desc))[1] as sample
+        from diag_reports
+        where created_at > now() - make_interval(days => $1)
+        group by fingerprint
+        order by max(created_at) desc
+        limit $2
+        """,
+        days,
+        limit,
+    )
+    now = time.time()
+    reports = []
+    for r in rows:
+        last = r["last_seen"].timestamp() if r["last_seen"] else 0.0
+        sample = r["sample"]
+        if isinstance(sample, str):
+            try:
+                sample = json.loads(sample)
+            except Exception:  # noqa: BLE001
+                sample = {}
+        reports.append({
+            "fingerprint": r["fingerprint"],
+            "kind": r["kind"],
+            "code": r["code"],
+            "latestVersion": r["latest_version"],
+            "latestVersionCode": r["latest_code"],
+            "hits": r["hits"],
+            "devices": r["devices"],
+            "firstSeen": r["first_seen"].isoformat() if r["first_seen"] else None,
+            "lastSeen": r["last_seen"].isoformat() if r["last_seen"] else None,
+            # Sin reportes en 48 h: el fix salió o el problema dejó de ocurrir.
+            "resolved": (now - last) > 48 * 3600,
+            "sample": sample,
+        })
+    return {"reports": reports}
 

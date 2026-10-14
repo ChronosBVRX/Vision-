@@ -164,3 +164,27 @@ create table if not exists epg_programs (
 create index if not exists idx_epg_norm_time on epg_programs (norm_name, start_time, end_time);
 create index if not exists idx_epg_end_time on epg_programs (end_time);
 
+-- Diagnóstico de campo (Fase 1): crashes, ANRs y anomalías que la app reporta.
+-- El worker hace triage (huella nueva → alerta; sin reportes 48 h → resuelta).
+create table if not exists diag_reports (
+    id bigserial primary key,
+    fingerprint text not null,
+    kind text not null default 'anomaly',      -- crash | anr | anomaly | feedback
+    code text not null default '',
+    app_version text not null default '',
+    version_code integer not null default 0,
+    device text not null default '',
+    android text not null default '',
+    payload jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now()
+);
+create index if not exists idx_diag_fingerprint on diag_reports (fingerprint, created_at desc);
+create index if not exists idx_diag_created on diag_reports (created_at desc);
+
+-- Estado de alertas por huella (evita repetir el aviso y permite autocerrar).
+create table if not exists diag_alert_state (
+    fingerprint text primary key,
+    alerted_at timestamptz not null default now(),
+    resolved_at timestamptz
+);
+

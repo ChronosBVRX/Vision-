@@ -5,6 +5,23 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Fase 1 — Diagnóstico de campo (crashes/ANR/anomalías → VPS)** (2026-10-13; 228 tests Android + 54 backend):
+  - *App (`data/diag/Diagnostics.kt`)*: `CrashGuard` (handler global; también corre en `:x4k`),
+    `AnrWatchdog` (main bloqueado >5 s), y anomalías no-fatales en los puntos clave (handoff del
+    reproductor, overlay de error, sesión XTV, descarga, catálogo, índice remoto, carga del motor
+    nativo). Snapshot sin PII (modelo, RAM, red, almacenamiento, pantalla, fase, motor, device id
+    **hasheado**); huella estable (tipo+código+6 frames sin números de línea); cola en disco (40 máx.)
+    con reintentos y subida cada 60 s desde el proceso principal. Ajustes móvil y TV: interruptor
+    «Enviar diagnósticos» + «Enviar diagnóstico ahora».
+  - *Servidor*: `POST /v1/diag` (API key, 256 KB, rate-limit 60/min) y `GET /v1/diag/summary`
+    (agrupado por huella; `resolved` a las 48 h sin reportes) + tablas `diag_reports`/`diag_alert_state`;
+    worker `sync/diag.py` hace triage cada 5 min, **avisa** huellas nuevas (Telegram/webhook o log) y
+    **autocierra** las resueltas.
+  - *Alertas*: configurar en `/opt/streaming-backend/.env`: `DIAG_TELEGRAM_TOKEN` + `DIAG_TELEGRAM_CHAT`
+    (o `DIAG_ALERT_WEBHOOK`); sin config, la alerta queda en el log del worker.
+  - *Verificado end-to-end en A32*: una anomalía real (`HOME_ROWS_FAIL`, timeout de red) y el reporte
+    manual (`USER_FEEDBACK`, screen=Settings) llegaron al VPS y el triage avisó a los ~5 min.
+    `PRIVACY.md` actualizado (con opt-out).
 - **Fix "películas que se seguían identificando como series" — el agrupador y el API ya no mezclan cine con series**
   (2026-10-13, servidor VPS; 50 tests backend en verde):
   - *Causa raíz*: `grouping.py` agrupaba por nombre base todo `kind ∈ {series, anime, kids}`, pero el portal
@@ -1027,6 +1044,8 @@
 - POCO a veces sin internet (DNS) — no es bug de la app.
 
 ## Pendientes / ideas
+- Fase 2 (diagnóstico): remote config / kill-switch (apagar una función problemática sin OTA) + botón de
+  reporte con texto libre del usuario; configurar el canal de alertas (Telegram/webhook) en el `.env` del VPS.
 - Catálogo: metadatos del portal que aún mienten — «LIMPIAR» (2020, 109 min, es película) viene como `teleplay`
   en la repisa y aparece en filas de Series; 4 series traen ficha de 1 capítulo (Amor eterno T1, La tienda de
   ramen de los chicos flores T1, La vida después de la muerte con Tyler Henry T1, Los crímenes del cementerio

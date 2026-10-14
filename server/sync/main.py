@@ -15,6 +15,7 @@ from pathlib import Path
 import asyncpg
 
 import archive_ia
+import diag
 import epg
 import grouping
 import index_build
@@ -164,10 +165,11 @@ async def main() -> None:
         await apply_schema(pool)
         if SEED_DEMO:
             await seed_demo(pool)
-        # La agenda de fútbol y la guía EPG corren aparte con sus propios intervalos:
-        # no tocan el índice de catálogo ni su versión.
+        # La agenda de fútbol, la guía EPG y el triage de diagnóstico corren aparte con
+        # sus propios intervalos: no tocan el índice de catálogo ni su versión.
         sports_task = asyncio.create_task(sports.loop(pool))
         epg_task = asyncio.create_task(epg.loop(pool))
+        diag_task = asyncio.create_task(diag.loop(pool))
         try:
             while True:
                 changed = await run_connectors(pool)
@@ -199,12 +201,17 @@ async def main() -> None:
         finally:
             sports_task.cancel()
             epg_task.cancel()
+            diag_task.cancel()
             try:
                 await sports_task
             except asyncio.CancelledError:
                 pass
             try:
                 await epg_task
+            except asyncio.CancelledError:
+                pass
+            try:
+                await diag_task
             except asyncio.CancelledError:
                 pass
     finally:

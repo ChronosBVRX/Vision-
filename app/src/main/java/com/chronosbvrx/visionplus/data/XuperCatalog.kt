@@ -149,7 +149,10 @@ class XuperCatalog(context: Context) {
                 withTimeoutOrNull(2000L) {
                     gateway.homeRows()
                 } ?: emptyList()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "HOME_ROWS_FAIL", "${e.javaClass.simpleName}: ${e.message}",
+                )
                 emptyList()
             }.filterNot { it.id.startsWith("magis") }
 

@@ -110,6 +110,7 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val route = nav.current
+    LaunchedEffect(route) { com.chronosbvrx.visionplus.data.diag.Diagnostics.screen(route.toString()) }
     val rows = catalog.rows
     val isTab = TABS.any { it.route == route }
     val isWide = isLandscapeTablet()

@@ -191,9 +191,14 @@ object X4KTitan {
                     "SDK X4K cargado: env=${envClass != null} program=${programClass != null} " +
                         "media=${mediaClass != null} entry=${entryClass != null} view=${viewClass != null}",
                 )
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.engine("cargado")
                 true
             } catch (e: Exception) {
                 Log.e(TAG, "no se pudo cargar el SDK X4K: ${e.message}")
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.engine("error")
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "ENGINE_LOAD_FAIL", "${e.javaClass.simpleName}: ${e.message}",
+                )
                 false
             }
         }

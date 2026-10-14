@@ -55,6 +55,7 @@ import com.chronosbvrx.visionplus.ui.tv.rememberLandingFocus
 @Composable
 fun TvApp(catalog: XuperCatalog, nav: Navigator) {
     val route = nav.current
+    LaunchedEffect(route) { com.chronosbvrx.visionplus.data.diag.Diagnostics.screen(route.toString()) }
     BackHandler(enabled = nav.stack.size > 1 && route !is Route.Player && route !is Route.LivePlayer) { nav.pop() }
     // Each place keeps its saved state (scroll, the card Back returns to) while another one is on top.
     val saved = rememberSaveableStateHolder()
