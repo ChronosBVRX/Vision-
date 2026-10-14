@@ -220,6 +220,9 @@ fun TvHomeScreen(
 
     val landing = rememberLandingFocus(if (railReturn.isEmpty()) Unit else null)
     val returnRequester = remember { FocusRequester() }
+    // Primera tarjeta de cada fila compuesta: el rescate del regreso enfoca algo visible
+    // aunque la tarjeta exacta ya no exista o su fila esté fuera de pantalla.
+    val rowEntry = remember { FocusRequester() }
     val rowsListState = rememberLazyListState()
 
     // Al regresar de la ficha, restaurar foco en la tarjeta exacta (o el héroe, si era su
@@ -233,6 +236,7 @@ fun TvHomeScreen(
         requester = returnRequester,
         landing = landing,
         contentKey = curated.pool.size,
+        entryRequester = rowEntry,
     )
 
     // El primer elemento al cargar obtiene el protagonismo en el billboard
@@ -390,6 +394,7 @@ fun TvHomeScreen(
                                 isTop10 = true,
                                 returnRequester = returnRequester,
                                 returnFilmId = returnFilmId,
+                                entryRequester = rowEntry,
                                 onFocusFilm = { focusFilm = it },
                                 onOpenFilm = onOpenFilm,
                             )
@@ -405,6 +410,7 @@ fun TvHomeScreen(
                                 isNew = true,
                                 returnRequester = returnRequester,
                                 returnFilmId = returnFilmId,
+                                entryRequester = rowEntry,
                                 onFocusFilm = { focusFilm = it },
                                 onOpenFilm = onOpenFilm,
                             )
@@ -418,6 +424,7 @@ fun TvHomeScreen(
                                 cards = continueCards,
                                 returnRequester = returnRequester,
                                 returnFilmId = returnFilmId,
+                                entryRequester = rowEntry,
                                 onFocusFilm = { focusFilm = it },
                                 onResume = onResume,
                             )
@@ -432,6 +439,7 @@ fun TvHomeScreen(
                             films = limitedFilms,
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
+                            entryRequester = rowEntry,
                             onFocusFilm = { focusFilm = it },
                             onOpenFilm = onOpenFilm,
                         )
@@ -445,6 +453,7 @@ fun TvHomeScreen(
                             films = limitedFilms,
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
+                            entryRequester = rowEntry,
                             onFocusFilm = { focusFilm = it },
                             onOpenFilm = onOpenFilm,
                         )
@@ -748,6 +757,7 @@ private fun HomePosterRow(
     isNew: Boolean = false,
     returnRequester: FocusRequester? = null,
     returnFilmId: String? = null,
+    entryRequester: FocusRequester? = null,
     onFocusFilm: (Film) -> Unit,
     onOpenFilm: (Film) -> Unit,
 ) {
@@ -776,7 +786,11 @@ private fun HomePosterRow(
                             score = film.score,
                             badge = badge,
                             rank = rank,
-                            modifier = if (isReturn) Modifier.focusRequester(returnRequester) else Modifier,
+                            modifier = when {
+                                isReturn -> Modifier.focusRequester(returnRequester)
+                                idx == 0 && entryRequester != null -> Modifier.focusRequester(entryRequester)
+                                else -> Modifier
+                            },
                             onFocus = { onFocusFilm(film) },
                             onClick = { onOpenFilm(film) },
                         )
@@ -805,6 +819,7 @@ private fun ContinueRow(
     cards: List<ResumeCard>,
     returnRequester: FocusRequester? = null,
     returnFilmId: String? = null,
+    entryRequester: FocusRequester? = null,
     onFocusFilm: (Film) -> Unit,
     onResume: (ResumeCard) -> Unit,
 ) {
@@ -816,7 +831,7 @@ private fun ContinueRow(
                 contentPadding = PaddingValues(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                items(cards, key = { it.entry.key }) { card ->
+                itemsIndexed(cards, key = { _, card -> card.entry.key }) { idx, card ->
                     val film = card.film
                     val title = film?.title ?: card.entry.title
                     val isReturn = returnRequester != null && (film?.id == returnFilmId || card.entry.key == returnFilmId || card.entry.xtvCode == returnFilmId)
@@ -825,7 +840,11 @@ private fun ContinueRow(
                             title = title,
                             imageUrl = film?.posterUrl ?: card.entry.posterUrl.takeIf { it.isNotBlank() },
                             cardHeight = 110.dp,
-                            modifier = if (isReturn) Modifier.focusRequester(returnRequester) else Modifier,
+                            modifier = when {
+                                isReturn -> Modifier.focusRequester(returnRequester)
+                                idx == 0 && entryRequester != null -> Modifier.focusRequester(entryRequester)
+                                else -> Modifier
+                            },
                             onFocus = { film?.let(onFocusFilm) },
                             onClick = { onResume(card) },
                         )

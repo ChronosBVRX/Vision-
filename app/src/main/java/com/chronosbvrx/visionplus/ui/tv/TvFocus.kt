@@ -71,10 +71,13 @@ private const val RETURN_RETRY_MS = 100L
 
 /**
  * Restauración del foco al volver de una ficha: pide la tarjeta exacta ([filmId]) una y otra
- * vez mientras la pantalla siga sin foco. Las pantallas pintan sus filas en segundo plano y en
- * gama baja tardan más que un par de reintentos, así que el intento se re-arma cada vez que
- * cambia [contentKey] (los datos que alimentan las filas): el regreso nunca termina con el
- * mando muerto — si la tarjeta no aparece, el foco cae al destino de la pantalla ([landing]).
+ * vez mientras la pantalla siga sin foco. El primer intento va sin condiciones (al volver nadie
+ * tiene el mando todavía); después cede si alguien ya tomó el foco, y el intento se re-arma
+ * cuando llega contenido nuevo ([contentKey], las filas se pintan en segundo plano en gama
+ * baja). Si la tarjeta no aparece —fila fuera de pantalla, contenido que cambió— el foco cae a
+ * la primera tarjeta visible ([entryRequester], una por fila compuesta) o al destino de la
+ * pantalla ([landing]): el mando nunca se queda muerto. Si de plano nada tomó el foco, se
+ * reporta `FOCUS_LOST` con el contexto (para diagnóstico en la tele real).
  */
 @Composable
 fun rememberReturnFocus(
@@ -82,16 +85,36 @@ fun rememberReturnFocus(
     requester: FocusRequester,
     landing: LandingFocus,
     contentKey: Any? = null,
+    entryRequester: FocusRequester? = null,
 ) {
+    // Solo el primer regreso (el que sigue a abrir la ficha) pide el foco sin preguntar.
+    var forceFirstAttempt by remember(filmId) { mutableStateOf(true) }
     LaunchedEffect(filmId, contentKey) {
         if (filmId == null) return@LaunchedEffect
-        repeat(RETURN_ATTEMPTS) {
-            if (FocusRescue.screenHasFocus) return@LaunchedEffect
-            runCatching { requester.requestFocus() }
+        val forced = forceFirstAttempt
+        forceFirstAttempt = false
+        var attempts = 0
+        var attached = false
+        repeat(RETURN_ATTEMPTS) { attempt ->
+            if (attempt > 0 || !forced) {
+                if (FocusRescue.screenHasFocus) return@LaunchedEffect
+            }
+            attempts++
+            val ok = runCatching { requester.requestFocus() }.isSuccess
+            if (ok) attached = true
             if (FocusRescue.screenHasFocus) return@LaunchedEffect
             delay(RETURN_RETRY_MS)
         }
+        if (FocusRescue.screenHasFocus) return@LaunchedEffect
+        // Último recurso: cualquier tarjeta visible y, si no, el destino de la pantalla.
+        val rescued = entryRequester != null && runCatching { entryRequester.requestFocus() }.isSuccess
         if (!FocusRescue.screenHasFocus) landing.request()
+        if (!FocusRescue.screenHasFocus) {
+            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                "FOCUS_LOST",
+                "id=$filmId intentos=$attempts adjunta=$attached entrada=$rescued clave=$contentKey",
+            )
+        }
     }
 }
 

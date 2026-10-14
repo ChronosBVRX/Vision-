@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -37,6 +38,8 @@ fun TvCategoriesScreen(
 ) {
     val landing = rememberLandingFocus()
     val returnRequester = remember { FocusRequester() }
+    // Primera tarjeta de cada fila compuesta: rescate del regreso si la tarjeta exacta no existe.
+    val rowEntry = remember { FocusRequester() }
     val safeRows = remember(rows) { rows.distinctBy { it.id } }
     val firstRowId = safeRows.firstOrNull()?.id
 
@@ -46,6 +49,7 @@ fun TvCategoriesScreen(
         requester = returnRequester,
         landing = landing,
         contentKey = safeRows.size,
+        entryRequester = rowEntry,
     )
 
     // Las filas del índice pueden llegar después de abrir la pantalla: si el foco quedó huérfano, vuelve.
@@ -61,7 +65,7 @@ fun TvCategoriesScreen(
                 val firstFilmId = safeFilms.firstOrNull()?.id
                 TvRowLabel(row.title, 26.dp)
                 LazyRow(contentPadding = PaddingValues(horizontal = 48.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(safeFilms, key = { "${row.id}-${it.id}" }, contentType = { "landscape-card" }) { film ->
+                    itemsIndexed(safeFilms, key = { _, film -> "${row.id}-${film.id}" }, contentType = { _, _ -> "landscape-card" }) { idx, film ->
                         val isLanding = row.id == firstRowId && film.id == firstFilmId
                         val isReturn = film.id == returnFilmId
                         TvLandscapeCard(
@@ -71,6 +75,7 @@ fun TvCategoriesScreen(
                             modifier = when {
                                 isReturn -> Modifier.focusRequester(returnRequester)
                                 isLanding -> Modifier.landingFocus(landing)
+                                idx == 0 -> Modifier.focusRequester(rowEntry)
                                 else -> Modifier
                             },
                             onClick = { onOpenFilm(film) },

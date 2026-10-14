@@ -83,6 +83,9 @@ fun TvCategoryScreen(
     val context = LocalContext.current
     val landing = rememberLandingFocus(section ?: key)
     val returnRequester = remember { FocusRequester() }
+    // Primera tarjeta visible de cada fila compuesta: rescate del regreso cuando la tarjeta
+    // exacta no existe o el héroe ya no está compuesto (el usuario venía con scroll abajo).
+    val rowEntry = remember { FocusRequester() }
     var sectionRows by remember(section) {
         mutableStateOf(if (section != null) RemoteIndexSource.cachedSection(context, section) else null)
     }
@@ -120,6 +123,7 @@ fun TvCategoryScreen(
         requester = returnRequester,
         landing = landing,
         contentKey = films.size,
+        entryRequester = rowEntry,
     )
     val featured = remember(films) { films.maxByOrNull { Popularity.rankScore(it) } }
     // En modo sección (películas/series/…) estas dos solo se usan en la vista genérica:
@@ -210,8 +214,9 @@ fun TvCategoryScreen(
                                 isTopRow = true,
                                 onOpenFilm = onOpenFilm,
                                 onSeeAll = { selectedCategory = premiereRow.title },
-                                returnRequester = if (premiereRow.films.any { it.id == returnFilmId }) returnRequester else null,
+                                returnRequester = returnRequester,
                                 returnFilmId = returnFilmId,
+                                entryRequester = rowEntry,
                             )
                         }
                     }
@@ -222,6 +227,9 @@ fun TvCategoryScreen(
                             isTopRow = false,
                             onOpenFilm = onOpenFilm,
                             onSeeAll = { selectedCategory = "Recomendado para ti" },
+                            returnRequester = returnRequester,
+                            returnFilmId = returnFilmId,
+                            entryRequester = rowEntry,
                         )
                     }
                     itemsIndexed(otherRows, key = { _, row -> row.id }) { index, row ->
@@ -232,8 +240,9 @@ fun TvCategoryScreen(
                             isTopRow = isTop,
                             onOpenFilm = onOpenFilm,
                             onSeeAll = { selectedCategory = row.title },
-                            returnRequester = if (row.films.any { it.id == returnFilmId }) returnRequester else null,
+                            returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
+                            entryRequester = rowEntry,
                         )
                     }
                 }
@@ -245,6 +254,9 @@ fun TvCategoryScreen(
                         isTopRow = true,
                         onOpenFilm = onOpenFilm,
                         onSeeAll = { selectedCategory = "Mejor valoradas" },
+                        returnRequester = returnRequester,
+                        returnFilmId = returnFilmId,
+                        entryRequester = rowEntry,
                     )
                 }
                 item(key = "new") {
@@ -254,6 +266,9 @@ fun TvCategoryScreen(
                         isTopRow = false,
                         onOpenFilm = onOpenFilm,
                         onSeeAll = { selectedCategory = "Novedades" },
+                        returnRequester = returnRequester,
+                        returnFilmId = returnFilmId,
+                        entryRequester = rowEntry,
                     )
                 }
                 item(key = "foryou") {
@@ -263,6 +278,9 @@ fun TvCategoryScreen(
                         isTopRow = false,
                         onOpenFilm = onOpenFilm,
                         onSeeAll = { selectedCategory = "Recomendado para ti" },
+                        returnRequester = returnRequester,
+                        returnFilmId = returnFilmId,
+                        entryRequester = rowEntry,
                     )
                 }
                 item(key = "all") {
@@ -274,6 +292,7 @@ fun TvCategoryScreen(
                         onSeeAll = { selectedCategory = title },
                         returnRequester = returnRequester,
                         returnFilmId = returnFilmId,
+                        entryRequester = rowEntry,
                     )
                 }
             }
@@ -309,6 +328,9 @@ fun TvCategoryScreen(
             },
             onBackToAll = { selectedCategory = null },
             onOpenFilm = onOpenFilm,
+            returnRequester = returnRequester,
+            returnFilmId = returnFilmId,
+            entryRequester = rowEntry,
         )
     }
 }
@@ -343,6 +365,9 @@ private fun TvCategoryGrid(
     onSelectChip: (String) -> Unit,
     onBackToAll: () -> Unit,
     onOpenFilm: (Film) -> Unit,
+    returnRequester: FocusRequester? = null,
+    returnFilmId: String? = null,
+    entryRequester: FocusRequester? = null,
 ) {
     var visibleCount by remember(categoryName) { mutableIntStateOf(GRID_BATCH_SIZE) }
     val displayedFilms = remember(films, visibleCount) { films.take(visibleCount) }
@@ -422,7 +447,8 @@ private fun TvCategoryGrid(
                 verticalArrangement = Arrangement.spacedBy(20.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                itemsIndexed(displayedFilms, key = { _, film -> "grid-${film.id}" }) { _, film ->
+                itemsIndexed(displayedFilms, key = { _, film -> "grid-${film.id}" }) { index, film ->
+                    val isReturn = returnRequester != null && film.id == returnFilmId
                     Column(
                         modifier = Modifier.width(140.dp),
                         horizontalAlignment = Alignment.Start,
@@ -432,7 +458,13 @@ private fun TvCategoryGrid(
                             imageUrl = film.posterUrl,
                             score = film.score,
                             badge = if (film.year >= 2025) "NUEVO" else null,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().then(
+                                when {
+                                    isReturn -> Modifier.focusRequester(returnRequester)
+                                    index % 5 == 0 && entryRequester != null -> Modifier.focusRequester(entryRequester)
+                                    else -> Modifier
+                                },
+                            ),
                             onClick = { onOpenFilm(film) },
                         )
                         Text(
@@ -526,6 +558,7 @@ private fun SectionRow(
     onSeeAll: (() -> Unit)? = null,
     returnRequester: FocusRequester? = null,
     returnFilmId: String? = null,
+    entryRequester: FocusRequester? = null,
 ) {
     val safeFilms = remember(films) { Popularity.reorderRow(films.distinctBy { it.id }).take(CAROUSEL_LIMIT) }
     if (safeFilms.isEmpty()) return
@@ -557,6 +590,7 @@ private fun SectionRow(
     ) {
         itemsIndexed(safeFilms, key = { _, film -> "${label}-${film.id}" }) { idx, film ->
             val rank = if (isTopRow && idx in 0..9) idx + 1 else null
+            val isReturn = returnRequester != null && film.id == returnFilmId
             Column(Modifier.width(140.dp)) {
                 TvPosterCard(
                     title = film.title,
@@ -564,7 +598,11 @@ private fun SectionRow(
                     score = film.score,
                     badge = if (film.year >= 2025) "NUEVO" else null,
                     rank = rank,
-                    modifier = if (returnRequester != null && film.id == returnFilmId) Modifier.focusRequester(returnRequester) else Modifier,
+                    modifier = when {
+                        isReturn -> Modifier.focusRequester(returnRequester)
+                        idx == 0 && entryRequester != null -> Modifier.focusRequester(entryRequester)
+                        else -> Modifier
+                    },
                     onClick = { onOpenFilm(film) },
                 )
                 Text(

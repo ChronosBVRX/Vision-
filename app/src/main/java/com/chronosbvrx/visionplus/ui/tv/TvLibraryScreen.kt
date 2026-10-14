@@ -48,6 +48,8 @@ fun TvLibraryScreen(catalog: XuperCatalog, returnFilmId: String? = null, onOpenF
     // Al volver de una ficha: primero la tarjeta exacta; si no está compuesta, la primera la respalda.
     // «Mi lista» se carga en segundo plano, así que el intento se re-arma con cada lista nueva.
     val returnRequester = remember { FocusRequester() }
+    // Primera tarjeta visible de cada renglón de la cuadrícula: rescate del regreso.
+    val rowEntry = remember { FocusRequester() }
     val downloads by OfflineRegistry.downloadsFlow.collectAsState()
 
     val rawFilms = when (activeTab) {
@@ -61,6 +63,7 @@ fun TvLibraryScreen(catalog: XuperCatalog, returnFilmId: String? = null, onOpenF
         requester = returnRequester,
         landing = landing,
         contentKey = films.size,
+        entryRequester = rowEntry,
     )
     // Sin películas no hay tarjeta a la que aterrizar: el chip seleccionado es el
     // destino del foco, o el mando se queda sin nada enfocado en esta pantalla.
@@ -126,6 +129,7 @@ fun TvLibraryScreen(catalog: XuperCatalog, returnFilmId: String? = null, onOpenF
                                 when {
                                     film.id == returnFilmId -> Modifier.focusRequester(returnRequester)
                                     index == 0 -> Modifier.landingFocus(landing)
+                                    index % 5 == 0 -> Modifier.focusRequester(rowEntry)
                                     else -> Modifier
                                 },
                             ),
