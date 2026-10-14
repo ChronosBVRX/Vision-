@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -63,8 +64,14 @@ fun TvCategoriesScreen(
             items(safeRows, key = { it.id }, contentType = { "category-row" }) { row ->
                 val safeFilms = remember(row.films) { row.films.distinctBy { it.id }.take(15) }
                 val firstFilmId = safeFilms.firstOrNull()?.id
+                // Al volver, la fila se desplaza sola hasta la tarjeta abierta.
+                val rowState = rememberLazyListState()
+                val returnIndex = remember(safeFilms, returnFilmId) {
+                    if (returnFilmId == null) -1 else safeFilms.indexOfFirst { it.id == returnFilmId }
+                }
+                LaunchedEffect(returnIndex, safeFilms) { rowState.revealReturnIndex(returnIndex) }
                 TvRowLabel(row.title, 26.dp)
-                LazyRow(contentPadding = PaddingValues(horizontal = 48.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LazyRow(state = rowState, contentPadding = PaddingValues(horizontal = 48.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     itemsIndexed(safeFilms, key = { _, film -> "${row.id}-${film.id}" }, contentType = { _, _ -> "landscape-card" }) { idx, film ->
                         val isLanding = row.id == firstRowId && film.id == firstFilmId
                         val isReturn = film.id == returnFilmId

@@ -764,10 +764,19 @@ private fun HomePosterRow(
     val safeFilms = remember(films) { films.distinctBy { it.id }.take(15) }
     if (safeFilms.isEmpty()) return
 
+    // Al volver de una ficha, la fila se desplaza sola hasta la tarjeta abierta: así el foco
+    // encuentra algo ya dibujado aunque el scroll restaurado no la dejara en la ventana.
+    val rowState = rememberLazyListState()
+    val returnIndex = remember(safeFilms, returnFilmId) {
+        if (returnFilmId == null) -1 else safeFilms.indexOfFirst { it.id == returnFilmId }
+    }
+    LaunchedEffect(returnIndex, safeFilms) { rowState.revealReturnIndex(returnIndex) }
+
     Column(modifier = Modifier.padding(top = 18.dp)) {
         TvRowLabel(title, 26.dp)
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
+                state = rowState,
                 contentPadding = PaddingValues(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -824,10 +833,23 @@ private fun ContinueRow(
     onResume: (ResumeCard) -> Unit,
 ) {
     if (cards.isEmpty()) return
+    // Al volver, la fila se desplaza sola hasta la tarjeta abierta (el foco solo cae en lo dibujado).
+    val rowState = rememberLazyListState()
+    val returnIndex = remember(cards, returnFilmId) {
+        if (returnFilmId == null) {
+            -1
+        } else {
+            cards.indexOfFirst { card ->
+                card.film?.id == returnFilmId || card.entry.key == returnFilmId || card.entry.xtvCode == returnFilmId
+            }
+        }
+    }
+    LaunchedEffect(returnIndex, cards) { rowState.revealReturnIndex(returnIndex) }
     Column(modifier = Modifier.padding(top = 18.dp)) {
         TvRowLabel("⏱️ Seguir viendo", 26.dp)
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
+                state = rowState,
                 contentPadding = PaddingValues(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {

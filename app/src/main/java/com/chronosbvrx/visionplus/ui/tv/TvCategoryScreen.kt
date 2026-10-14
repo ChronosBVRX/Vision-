@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -373,6 +374,12 @@ private fun TvCategoryGrid(
     val displayedFilms = remember(films, visibleCount) { films.take(visibleCount) }
     val gridState = rememberLazyGridState()
 
+    // Al volver de una ficha, la cuadrícula se desplaza sola hasta la tarjeta abierta.
+    val returnIndex = remember(displayedFilms, returnFilmId) {
+        if (returnFilmId == null) -1 else displayedFilms.indexOfFirst { it.id == returnFilmId }
+    }
+    LaunchedEffect(returnIndex, displayedFilms) { gridState.revealReturnIndex(returnIndex) }
+
     val shouldLoadMore by remember {
         derivedStateOf {
             val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -563,6 +570,14 @@ private fun SectionRow(
     val safeFilms = remember(films) { Popularity.reorderRow(films.distinctBy { it.id }).take(CAROUSEL_LIMIT) }
     if (safeFilms.isEmpty()) return
 
+    // Al volver de una ficha, la fila se desplaza sola hasta la tarjeta abierta: el foco solo
+    // puede caer en algo ya dibujado, así no depende de que el scroll se haya restaurado.
+    val rowState = rememberLazyListState()
+    val returnIndex = remember(safeFilms, returnFilmId) {
+        if (returnFilmId == null) -1 else safeFilms.indexOfFirst { it.id == returnFilmId }
+    }
+    LaunchedEffect(returnIndex, safeFilms) { rowState.revealReturnIndex(returnIndex) }
+
     // Encabezado de Sección: Título a la izquierda + "Ver todo →" a la derecha
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -585,6 +600,7 @@ private fun SectionRow(
     }
 
     LazyRow(
+        state = rowState,
         contentPadding = PaddingValues(horizontal = 48.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {

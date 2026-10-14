@@ -310,6 +310,45 @@ class TvFocusTest {
     }
 
     @Test
+    fun seriesFromSectionRowDeepRightBackKeepsTheSameCard() {
+        // Variante del caso reportado: la serie estaba al final de la fila (scroll horizontal).
+        // Al volver, la fila se desplaza sola y el foco cae en ESA tarjeta, no en la primera.
+        val sectionRows = listOf(
+            CatalogRow("xtv-series-estrenos", "Estrenos de Series", (1..15).map { seriesFilm(it) }),
+            CatalogRow("xtv-series-genero-drama", "Drama", (21..40).map { seriesFilm(it) }),
+        )
+        writeSectionCache("pruebaregreso2", sectionRows)
+        val nav = startWith(emptyList(), Route.Home, Route.Section("pruebaregreso2", "Series"))
+        assertLanded("Series")
+
+        // Baja a la fila «Recomendado para ti» y avanza a la derecha hasta el final de la fila.
+        var labelTop: Float? = null
+        var guard = 0
+        while (guard++ < 12) {
+            val labels = compose.onAllNodesWithText("Recomendado para ti").fetchSemanticsNodes()
+            val c = focusedCenter()
+            if (labels.isNotEmpty()) {
+                labelTop = labels.first().boundsInRoot.top
+                if (c != null && c.y > labelTop) break
+            }
+            press(Key.DirectionDown)
+        }
+        repeat(10) { press(Key.DirectionRight) }
+        val before = focusedCenter()
+        assertTrue("Debe haber una tarjeta enfocada", before != null)
+        press(Key.DirectionCenter)
+        assertTrue("Debe abrir la ficha de la serie", nav.current is Route.Title)
+        back()
+        assertEquals(Route.Section("pruebaregreso2", "Series"), nav.current)
+        assertLanded("Series tras volver")
+        val after = focusedCenter()
+        assertTrue(
+            "El foco debe volver a la MISMA tarjeta (antes=$before, después=$after)",
+            after != null && before != null && (after - before).getDistance() < 8f,
+        )
+    }
+
+    @Test
     fun filmBackKeepsFocus() {
         val nav = start(Route.Home)
         assertLanded("Inicio")

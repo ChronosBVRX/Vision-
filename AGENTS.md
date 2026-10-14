@@ -28,14 +28,21 @@
     `screenHasFocus`, que puede llegar tarde en la tele); y si de plano nada toma el foco se
     reporta `FOCUS_LOST` al VPS (pantalla, intentos, adjunta/entrada, clave) para no volver a
     adivinar.
+  - *Ajuste v2.5.69 (el foco vuelve a la MISMA tarjeta)*: la fila se **desplaza sola** hasta la
+    tarjeta abierta si quedó fuera de la ventana (`revealReturnIndex` en `TvFocus.kt`: espera 60 ms
+    el scroll restaurado, comprueba la ventana y solo entonces desplaza) y el regreso ya no se rinde
+    cuando el único foco es el automático de la pantalla (`landing.focused`): sigue intentando la
+    tarjeta exacta y en cuanto el usuario mueve el mando con otra cosa, deja de intervenir. Aplicado
+    en filas del Inicio, Categorías, SectionRow, cuadrículas (Todo/Mi lista).
   - *Guardianes*: `TvFocusTest` — `seriesFromSectionRecommendedRowBackKeepsTheSameCard` (falla con
-    el código viejo), `homeToSeriesFichaAndBackKeepsFocus`, `homeSeriesBackWithLateContentStillKeepsFocus`,
+    el código viejo), `seriesFromSectionRowDeepRightBackKeepsTheSameCard` (tarjeta al final de la
+    fila), `homeToSeriesFichaAndBackKeepsFocus`, `homeSeriesBackWithLateContentStillKeepsFocus`,
     `categoriesRecomendadosSeriesBackKeepsFocus` y `categoriesDeepRowSeriesBackRestoresSameCard`
-    (fila lejana + scroll horizontal). 285 tests Android en verde (suite completa; ojo: los 2 tests
+    (fila lejana + scroll horizontal). 286 tests Android en verde (suite completa; ojo: los 2 tests
     de `TvLiveScreenTest` son sensibles a la carga de la máquina — 60 s de reloj real de Espresso).
-  - **OTA v2.5.67 y v2.5.68 publicadas** (asset `VisionPlus.apk`, misma firma histórica
+  - **OTA v2.5.67, v2.5.68 y v2.5.69 publicadas** (asset `VisionPlus.apk`, misma firma histórica
     `9593cb0d…`). Pendiente: prueba física en la TV del usuario (secciones → «Recomendado para ti»
-    → serie → Atrás).
+    → serie → Atrás; el foco debe quedar en esa misma tarjeta).
 - **Índice TMDB: backlog desbloqueado y candado por versión del emparejador** (2026-10-14; 87 tests backend):
   - *Diagnóstico*: el buscador corregido (`clean_query`, v2.5.59) **sí funciona** —muestra en vivo
     contra TMDB: **50/52 títulos (96%)** del backlog emparechan— pero el re-match estaba congelado:

@@ -1,6 +1,8 @@
 package com.chronosbvrx.visionplus.ui.tv
 
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -71,13 +73,13 @@ private const val RETURN_RETRY_MS = 100L
 
 /**
  * Restauración del foco al volver de una ficha: pide la tarjeta exacta ([filmId]) una y otra
- * vez mientras la pantalla siga sin foco. El primer intento va sin condiciones (al volver nadie
- * tiene el mando todavía); después cede si alguien ya tomó el foco, y el intento se re-arma
- * cuando llega contenido nuevo ([contentKey], las filas se pintan en segundo plano en gama
- * baja). Si la tarjeta no aparece —fila fuera de pantalla, contenido que cambió— el foco cae a
- * la primera tarjeta visible ([entryRequester], una por fila compuesta) o al destino de la
- * pantalla ([landing]): el mando nunca se queda muerto. Si de plano nada tomó el foco, se
- * reporta `FOCUS_LOST` con el contexto (para diagnóstico en la tele real).
+ * vez. Se re-arma cuando llega contenido nuevo ([contentKey], las filas se pintan en segundo
+ * plano en gama baja) y no se rinde hasta que la pantalla tenga un foco elegido por el usuario:
+ * el único foco que corrige es el automático ([landing]); apenas el usuario toma el mando con
+ * otra cosa, deja de intervenir. Si la tarjeta no aparece —fila fuera de pantalla, contenido que
+ * cambió— el foco cae a la primera tarjeta visible ([entryRequester]) o al destino de la
+ * pantalla: el mando nunca se queda muerto, y si de plano nada tomó el foco se reporta
+ * `FOCUS_LOST` con el contexto (diagnóstico en la tele real).
  */
 @Composable
 fun rememberReturnFocus(
@@ -87,25 +89,22 @@ fun rememberReturnFocus(
     contentKey: Any? = null,
     entryRequester: FocusRequester? = null,
 ) {
-    // Solo el primer regreso (el que sigue a abrir la ficha) pide el foco sin preguntar.
-    var forceFirstAttempt by remember(filmId) { mutableStateOf(true) }
     LaunchedEffect(filmId, contentKey) {
         if (filmId == null) return@LaunchedEffect
-        val forced = forceFirstAttempt
-        forceFirstAttempt = false
         var attempts = 0
         var attached = false
-        repeat(RETURN_ATTEMPTS) { attempt ->
-            if (attempt > 0 || !forced) {
-                if (FocusRescue.screenHasFocus) return@LaunchedEffect
-            }
+        // Si el foco ya lo eligió alguien (el usuario moviéndose), se respeta. El único foco que
+        // se puede corregir es el automático de la pantalla ([landing], el héroe): ese no lo
+        // eligió nadie, así que seguimos intentando la tarjeta exacta en cuanto componga.
+        repeat(RETURN_ATTEMPTS) {
+            if (FocusRescue.screenHasFocus && !landing.focused) return@LaunchedEffect
             attempts++
             val ok = runCatching { requester.requestFocus() }.isSuccess
             if (ok) attached = true
-            if (FocusRescue.screenHasFocus) return@LaunchedEffect
+            if (FocusRescue.screenHasFocus && !landing.focused) return@LaunchedEffect
             delay(RETURN_RETRY_MS)
         }
-        if (FocusRescue.screenHasFocus) return@LaunchedEffect
+        if (FocusRescue.screenHasFocus && !landing.focused) return@LaunchedEffect
         // Último recurso: cualquier tarjeta visible y, si no, el destino de la pantalla.
         val rescued = entryRequester != null && runCatching { entryRequester.requestFocus() }.isSuccess
         if (!FocusRescue.screenHasFocus) landing.request()
@@ -116,6 +115,29 @@ fun rememberReturnFocus(
             )
         }
     }
+}
+
+/** Deja un par de cuadros para que el scroll restaurado del regreso se asiente antes de decidir. */
+private const val REVEAL_SETTLE_MS = 60L
+
+/**
+ * Si la tarjeta del regreso quedó fuera de la ventana (el scroll no se restauró), la lista se
+ * desplaza hasta dejarla a la vista: el foco solo puede caer en algo ya dibujado. Si ya está
+ * visible no toca nada (se respeta la posición restaurada).
+ */
+suspend fun LazyListState.revealReturnIndex(index: Int) {
+    if (index <= 0) return
+    delay(REVEAL_SETTLE_MS)
+    if (layoutInfo.visibleItemsInfo.any { it.index == index }) return
+    scrollToItem((index - 1).coerceAtLeast(0))
+}
+
+/** Igual, para las cuadrículas. */
+suspend fun LazyGridState.revealReturnIndex(index: Int) {
+    if (index <= 0) return
+    delay(REVEAL_SETTLE_MS)
+    if (layoutInfo.visibleItemsInfo.any { it.index == index }) return
+    scrollToItem(index)
 }
 
 /**

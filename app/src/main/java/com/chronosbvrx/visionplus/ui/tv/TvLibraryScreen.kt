@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
@@ -65,6 +66,12 @@ fun TvLibraryScreen(catalog: XuperCatalog, returnFilmId: String? = null, onOpenF
         contentKey = films.size,
         entryRequester = rowEntry,
     )
+    // Al volver de una ficha, la cuadrícula se desplaza sola hasta la tarjeta abierta.
+    val gridState = rememberLazyGridState()
+    val returnIndex = remember(films, returnFilmId) {
+        if (returnFilmId == null) -1 else films.indexOfFirst { it.id == returnFilmId }
+    }
+    LaunchedEffect(returnIndex, films) { gridState.revealReturnIndex(returnIndex) }
     // Sin películas no hay tarjeta a la que aterrizar: el chip seleccionado es el
     // destino del foco, o el mando se queda sin nada enfocado en esta pantalla.
     val emptyLanding = if (films.isEmpty()) Modifier.landingFocus(landing) else Modifier
@@ -109,6 +116,7 @@ fun TvLibraryScreen(catalog: XuperCatalog, returnFilmId: String? = null, onOpenF
             return@Column
         }
         LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Fixed(5),
             contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
