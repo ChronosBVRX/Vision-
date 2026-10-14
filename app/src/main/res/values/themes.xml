@@ -9,7 +9,7 @@
     </style>
 
     <!--
-      Startup theme: the system paints the logo's ring over the brand background from the very
+      Startup theme: the system paints the Vision+ emblem over the brand background from the very
       first frame, then hands over to Theme.Vision, where the Compose intro continues the sequence.
     -->
     <style name="Theme.Vision.Starting" parent="Theme.SplashScreen">

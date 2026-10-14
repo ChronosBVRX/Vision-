@@ -5,6 +5,22 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Icono de la app con la identidad Vision+ (fuera el anillo placeholder)** (2026-10-13; 267 tests Android):
+  - *Qué*: el icono del launcher móvil seguía con el placeholder viejo (anillo blanco + punto azul,
+    `ic_launcher_foreground.xml`), mientras TV, banner y splash ya usaban la identidad. Ahora el icono
+    es el MISMO emblema oficial (`ic_vision_mark.png`: la «V» con el botón de play y el «+», estelas
+    incluidas) sobre el fondo de marca `#070B13`.
+  - *Assets*: PNGs pre-renderizados (System.Drawing, reescalado progresivo HighQualityBicubic) desde el
+    emblema: `mipmap-{mdpi..xxxhdpi}/ic_launcher_foreground.png` (canvas adaptativo 108 dp, emblema
+    62 dp de ancho → radio máx. 33.6 dp: entra completo en el círculo garantizado de 66 dp y sin
+    recortes visibles bajo ninguna máscara), `ic_launcher.png` (heredado 48 dp, cuadro redondeado 22 %,
+    emblema 0.78) e `ic_launcher_round.png` (círculo, emblema 0.72). Los adaptativos
+    (`mipmap-anydpi-v26/*.xml`) apuntan al foreground nuevo; se retiraron `drawable/ic_launcher_foreground.xml`
+    (anillo), los layer-list `mipmap/ic_launcher*.xml` y el color huérfano `vision_logo_blue`.
+  - *Verificado*: render contra el asset original (geometría y colores idénticos), simulacros de máscara
+    círculo 66/72 dp y squircle sin recortes visibles, APK release con R8 (versionCode 302, firma histórica
+    `9593cb0d…`) y emulador Vision_Phone con el release instalado: el cajón «All apps» muestra «Vision+»
+    con el emblema íntegro bajo la máscara circular. OTA v2.5.66 publicada.
 - **Inicio: TOP 10 real de popularidad (ya no repite «Novedades y Estrenos»)** (2026-10-14; 267 tests Android + 60 backend):
   - *Qué*: el «Top 10 en Vision+ Hoy» salía del mismo pool reciente que «Novedades y Estrenos»
     (ambos por `rankScore`), así que mostraban casi los mismos títulos. Ahora es un Top 10 de
@@ -250,8 +266,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.65**
-  (versionCode **301**, release OTA v2.5.65). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.66**
+  (versionCode **302**, release OTA v2.5.66). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
