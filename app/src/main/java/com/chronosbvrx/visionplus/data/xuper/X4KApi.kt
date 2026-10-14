@@ -10,9 +10,11 @@ import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -1261,12 +1263,33 @@ object X4KApi {
         if (cleanSeriesId.isNotBlank() && cid == cleanSeriesId && resolvedEpIds.isNotEmpty()) {
             cid = resolvedEpIds[resolvedEpIndex.coerceIn(0, resolvedEpIds.lastIndex)]
         }
+        // Marcadores de salto («omitir intro» / «pasar en créditos»): se piden en paralelo
+        // al handshake del portal (tope 2.5 s) y viajan por el intent al reproductor; si no
+        // hay dato, no se pinta nada (el handoff jamás espera de más por esto).
+        val markersJob = if (cleanSeriesId.isNotBlank() && (resolvedEpIds.size > 1 || seasonIds.size > 1)) {
+            async {
+                runCatching {
+                    withTimeoutOrNull(2_500L) {
+                        com.chronosbvrx.visionplus.data.markers.MarkersStore.fetchForPlayer(
+                            context,
+                            ref = if (seriesId.isNotBlank()) seriesId else cleanSeriesId,
+                            ep = resolvedEpIndex + 1,
+                        )
+                    }
+                }.getOrNull().orEmpty()
+            }
+        } else {
+            null
+        }
         var prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs)
         if (prep == null) {
             kotlinx.coroutines.delay(400)
             prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs)
         }
-        if (prep == null) return@withContext false
+        if (prep == null) {
+            markersJob?.cancel()
+            return@withContext false
+        }
         val finalDuration = if (prep.durationMs > 0L) prep.durationMs else fallbackDurationMs
         val isSeries = cleanSeriesId.isNotBlank() && (resolvedEpIds.size > 1 || seasonIds.size > 1)
         launch(
@@ -1286,6 +1309,7 @@ object X4KApi {
             seasonIndex = if (isSeries) seasonIndex else 0,
             resumeMs = resumeMs,
             posterUrl = posterUrl,
+            markersJson = markersJob?.await().orEmpty(),
         )
         true
     }
@@ -1466,6 +1490,7 @@ object X4KApi {
         posterUrl: String = "",
         channelCodes: List<String> = emptyList(),
         groupTitle: String = "",
+        markersJson: String = "",
     ) {
         val p = prefs(context)
         var entries = p.getString(K_ENTRIES, "").orEmpty()
@@ -1499,6 +1524,7 @@ object X4KApi {
             }
             if (resumeMs > 0) putExtra("resumeMs", resumeMs)
             if (posterUrl.isNotBlank()) putExtra("posterUrl", posterUrl)
+            if (markersJson.isNotBlank()) putExtra("markersJson", markersJson)
             if (channelCodes.isNotEmpty()) {
                 putStringArrayListExtra("channelCodes", ArrayList(channelCodes))
             }

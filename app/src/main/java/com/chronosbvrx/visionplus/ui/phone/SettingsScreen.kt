@@ -204,11 +204,27 @@ private fun PlaybackTab() {
     }
 
     SettingsSection("Series y Continuidad") {
+        SettingsBlock {
+            Text("Omitir intro y créditos", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Con los tiempos de la comunidad, el botón aparece durante la entrada de series, novelas y anime; al llegar a los créditos, la tarjeta de siguiente capítulo sale antes del final.",
+                style = MaterialTheme.typography.bodySmall,
+                color = VisionTextSecondary,
+                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                s.skipIntroModeOptions.forEach { mode ->
+                    VisionChip(s.skipIntroModeLabel(mode), selected = s.skipIntroMode == mode) {
+                        s.setSkipIntroMode(context, mode)
+                    }
+                }
+            }
+        }
         SettingsSwitchRow(
             title = "Reproducir siguiente episodio automáticamente",
             checked = s.autoPlayNext,
             onCheckedChange = { s.setAutoPlayNext(context, it) },
-            supporting = "Al terminar los créditos, arranca de inmediato con el siguiente capítulo.",
+            supporting = "Al llegar a los créditos (o al terminar el capítulo), arranca de inmediato con el siguiente.",
         )
         SettingsSwitchRow(
             title = "Reanudar automáticamente",

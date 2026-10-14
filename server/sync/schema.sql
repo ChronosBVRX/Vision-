@@ -196,3 +196,18 @@ create table if not exists remote_config (
     updated_at timestamptz not null default now()
 );
 
+-- Marcadores de salto (/v1/markers): caché de las bases globales comunitarias
+-- (TheIntroDB / IntroDB.app) + las marcas aprendidas del usuario, por episodio.
+-- `segments` guarda un objeto por tipo (intro/recap/credits) con src/votos; {} es
+-- caché negativa («se consultó y no había dato») y se revalida a los 2 días.
+create table if not exists skip_markers (
+    ref text not null,                         -- fila de temporada (xtv:…) tal como la app la conoce
+    episode integer not null,                  -- índice 1-based dentro de la temporada
+    season integer not null default 1,
+    segments jsonb not null default '{}'::jsonb,
+    fetched_at timestamptz not null default now(),
+    primary key (ref, episode)
+);
+
+create index if not exists idx_skip_markers_fetched on skip_markers (fetched_at);
+

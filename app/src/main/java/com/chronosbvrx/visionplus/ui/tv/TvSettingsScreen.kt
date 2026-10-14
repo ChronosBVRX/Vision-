@@ -132,10 +132,15 @@ private fun ColumnScope.TvPlaybackTab() {
     Note("Define cómo se escala el reproductor en pantalla por defecto.")
 
     TvSectionTitle("Series y Continuidad")
+    TvActionOption("Omitir intro: ${s.skipIntroModeLabel(s.skipIntroMode)}") {
+        s.setSkipIntroMode(context, s.nextSkipIntroMode(s.skipIntroMode))
+    }
+    Note("Botón durante la entrada (como Netflix), automático sin botón, o desactivado. Los tiempos vienen de la comunidad; en los créditos, la tarjeta de siguiente capítulo aparece antes del final.")
+
     TvActionOption("Siguiente episodio automático: ${if (s.autoPlayNext) "Sí" else "No"}") {
         s.setAutoPlayNext(context, !s.autoPlayNext)
     }
-    Note("Al terminar un capítulo, arranca de inmediato con el siguiente.")
+    Note("Al llegar a los créditos (o al terminar el capítulo), arranca de inmediato con el siguiente.")
 
     TvActionOption("Reanudar automáticamente: ${if (s.autoResume) "Sí" else "No"}") {
         s.setAutoResume(context, !s.autoResume)

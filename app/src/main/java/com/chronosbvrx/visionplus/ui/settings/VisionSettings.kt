@@ -24,10 +24,17 @@ object VisionSettings {
     private const val KEY_DEFAULT_ASPECT = "default_aspect"
     private const val KEY_LIVE_BUFFER = "live_buffer"
     private const val KEY_DIAGNOSTICS = "diagnostics_enabled"
+    private const val KEY_SKIP_INTRO_MODE = "skip_intro_mode"
 
     val qualityOptions = listOf("Auto", "1080p", "720p", "480p")
     val aspectOptions = listOf("Ajustar (16:9)", "Rellenar pantalla")
     val liveBufferOptions = listOf("Rápido (0.5s)", "Estable (3s)")
+
+    /** «Omitir intro»: botón durante la entrada (como Netflix), automático o desactivado. */
+    const val SKIP_INTRO_BUTTON = "button"
+    const val SKIP_INTRO_AUTO = "auto"
+    const val SKIP_INTRO_NEVER = "never"
+    val skipIntroModeOptions = listOf(SKIP_INTRO_BUTTON, SKIP_INTRO_AUTO, SKIP_INTRO_NEVER)
 
     var defaultQuality by mutableStateOf("Auto")
     var autoPlayNext by mutableStateOf(true)
@@ -35,6 +42,7 @@ object VisionSettings {
     var defaultAspect by mutableStateOf(0) // 0: Fit (16:9 original), 1: Fill / Zoom
     var liveBuffer by mutableStateOf("Rápido (0.5s)")
     var diagnosticsEnabled by mutableStateOf(true)
+    var skipIntroMode by mutableStateOf(SKIP_INTRO_BUTTON)
     var cacheSizeBytes by mutableLongStateOf(0L)
 
     var effectsMode by mutableStateOf(EffectsMode.AUTO)
@@ -53,8 +61,37 @@ object VisionSettings {
         defaultAspect = p.getInt(KEY_DEFAULT_ASPECT, 0)
         liveBuffer = p.getString(KEY_LIVE_BUFFER, "Rápido (0.5s)") ?: "Rápido (0.5s)"
         diagnosticsEnabled = p.getBoolean(KEY_DIAGNOSTICS, true)
+        skipIntroMode = p.getString(KEY_SKIP_INTRO_MODE, SKIP_INTRO_BUTTON) ?: SKIP_INTRO_BUTTON
         effectsMode = DevicePerformance.getEffectsMode(context)
         refreshCacheSize(context)
+    }
+
+    /** Lectura directa (sin depender de [init]) para el proceso del reproductor `:x4k`. */
+    fun skipIntroModeOf(context: Context): String =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_SKIP_INTRO_MODE, SKIP_INTRO_BUTTON) ?: SKIP_INTRO_BUTTON
+
+    /** Lectura directa del auto-avance (el reproductor nativo lo honra de verdad). */
+    fun autoPlayNextOf(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AUTO_PLAY_NEXT, true)
+
+    fun skipIntroModeLabel(mode: String): String = when (mode) {
+        SKIP_INTRO_AUTO -> "Automático"
+        SKIP_INTRO_NEVER -> "Nunca"
+        else -> "Botón"
+    }
+
+    fun nextSkipIntroMode(mode: String): String = when (mode) {
+        SKIP_INTRO_BUTTON -> SKIP_INTRO_AUTO
+        SKIP_INTRO_AUTO -> SKIP_INTRO_NEVER
+        else -> SKIP_INTRO_BUTTON
+    }
+
+    fun setSkipIntroMode(context: Context, mode: String) {
+        skipIntroMode = mode
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_SKIP_INTRO_MODE, mode).apply()
     }
 
     /** Lectura directa (sin depender de [init]) para el arranque del diagnóstico. */

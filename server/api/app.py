@@ -6,6 +6,7 @@ La reproducción NO pasa por aquí: la app sigue acuñando licencias en el dispo
 Todos los endpoints /v1/* requieren el header X-Api-Key.
 """
 
+import asyncio
 import hmac
 import json
 import os
@@ -17,6 +18,8 @@ from contextlib import asynccontextmanager
 import asyncpg
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from starlette.middleware.gzip import GZipMiddleware
+
+import markers as skip_markers
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 API_KEY = os.environ["API_KEY"]
@@ -1042,4 +1045,168 @@ async def set_remote_config(request: Request, x_admin_key: str | None = Header(d
             json.dumps(value, ensure_ascii=False),
         )
     return {"ok": True}
+
+
+# ----- marcadores de salto (intro / recap / créditos) -----
+# La app pregunta por (fila de temporada, episodio) antes de abrir un capítulo: aquí se
+# resuelve la ficha → (tmdb / imdb, temporada), se consultan las bases globales comunitarias
+# (TheIntroDB / IntroDB.app) en un thread aparte y se cachea el resultado en Postgres.
+# Las marcas del usuario (POST) pisan a las globales por tipo y viajan a todos los equipos.
+
+MARKERS_POS_TTL = 30 * 24 * 3600   # dato encontrado: se revalida cada 30 días
+MARKERS_NEG_TTL = 2 * 24 * 3600    # «aquí no hay dato»: se reintenta a los 2 días
+MARKERS_EPISODE_MAX = 400
+MARKERS_MAX_BODY = 2048
+_markers_bucket: dict[str, list[float]] = {}
+
+_MARKERS_TITLE_SQL = """
+    select t.id, t.title, t.kind, t.duration_min,
+           e.tmdb_id, e.imdb_id, e.match_confidence,
+           (select gm.season from group_members gm where gm.title_id = t.id limit 1) as group_season
+    from titles t
+    left join enrichment e on e.title_id = t.id
+    where t.id = any($1::text[]) or t.play_ref = any($1::text[])
+    limit 1
+"""
+
+
+async def _markers_season(key: str) -> int:
+    """Temporada de la fila (grupo de temporadas o marca del título); 1 si no se sabe."""
+    title = await db().fetchrow(_MARKERS_TITLE_SQL, skip_markers.ref_variants(key))
+    if title is None:
+        return 1
+    if title["group_season"]:
+        return int(title["group_season"])
+    return skip_markers.season_from_title(title["title"], title["kind"]) or 1
+
+
+@app.get("/v1/markers")
+async def markers_get(
+    ref: str = Query(min_length=1, max_length=80),
+    ep: int = Query(ge=1, le=MARKERS_EPISODE_MAX),
+    x_api_key: str | None = Header(default=None),
+):
+    """Marcadores de un episodio: caché local → bases globales → caché negativa.
+
+    `ref` es la fila de temporada tal como la app la conoce (`xtv:…`); `ep` el índice
+    1-based del capítulo dentro de la temporada (el próximo capítulo repite el mismo
+    intro: un desfase de numeración de ±1 es inofensivo).
+    """
+    require_key(x_api_key)
+    key = skip_markers.normalize_ref(ref)
+    if not key:
+        raise HTTPException(status_code=400, detail="referencia inválida")
+    row = await db().fetchrow(
+        "select season, segments, fetched_at from skip_markers where ref = $1 and episode = $2",
+        key, ep,
+    )
+    if row is not None:
+        cached = skip_markers.segments_of(row["segments"])
+        age = time.time() - (row["fetched_at"].timestamp() if row["fetched_at"] else 0.0)
+        ttl = MARKERS_POS_TTL if cached else MARKERS_NEG_TTL
+        if age < ttl:
+            return skip_markers.payload(key, ep, row["season"], cached)
+
+    season = int(row["season"]) if row is not None else 1
+    found = {}
+    title = await db().fetchrow(_MARKERS_TITLE_SQL, skip_markers.ref_variants(key))
+    if title is not None:
+        if title["group_season"]:
+            season = int(title["group_season"])
+        else:
+            season = skip_markers.season_from_title(title["title"], title["kind"]) or season
+        confidence = float(title["match_confidence"] or 0.0)
+        tmdb_id = int(title["tmdb_id"]) if (title["tmdb_id"] and confidence >= 0.5) else None
+        imdb_id = (title["imdb_id"] or "").strip() if confidence >= 0.5 else ""
+        if tmdb_id or imdb_id:
+            try:
+                raw = await asyncio.to_thread(
+                    skip_markers.fetch_global, tmdb_id, imdb_id, season, ep
+                )
+            except Exception:  # noqa: BLE001 — fuente caída: se sirve lo que haya
+                raw = {}
+            found = skip_markers.sanitize(raw, int(title["duration_min"] or 0))
+
+    # Las marcas del usuario jamás se pierden: mandan sobre lo recién llegado.
+    if row is not None:
+        user = {
+            k: v
+            for k, v in skip_markers.segments_of(row["segments"]).items()
+            if (v or {}).get("src") == "user"
+        }
+        found = skip_markers.overlay(found, user)
+
+    await db().execute(
+        """
+        insert into skip_markers (ref, episode, season, segments, fetched_at)
+        values ($1, $2, $3, $4::jsonb, now())
+        on conflict (ref, episode) do update set
+            season = excluded.season, segments = excluded.segments, fetched_at = now()
+        """,
+        key, ep, season, json.dumps(found, ensure_ascii=False),
+    )
+    return skip_markers.payload(key, ep, season, found)
+
+
+@app.post("/v1/markers")
+async def markers_save(request: Request, x_api_key: str | None = Header(default=None)):
+    """Marca del usuario («aquí acabó el intro» / «aquí empiezan los créditos»).
+
+    Queda como plantilla de la fila de temporada para todos los capítulos y equipos;
+    `clear` la borra (y fuerza revalidar la base global en la siguiente consulta).
+    """
+    require_key(x_api_key)
+    raw = await request.body()
+    if len(raw) > MARKERS_MAX_BODY:
+        raise HTTPException(status_code=413, detail="marca demasiado grande")
+    try:
+        body = json.loads(raw.decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    ip = request.client.host if request.client else "?"
+    if not _diag_rate_ok(_markers_bucket, ip, time.time(), limit=30):
+        raise HTTPException(status_code=429, detail="demasiadas marcas")
+
+    key = skip_markers.normalize_ref(body.get("ref"))
+    kind = str(body.get("kind") or "").strip().lower()
+    try:
+        ep = int(body.get("ep") or 0)
+    except (TypeError, ValueError):
+        ep = 0
+    if not key or kind not in skip_markers.KINDS or not (1 <= ep <= MARKERS_EPISODE_MAX):
+        raise HTTPException(status_code=400, detail="marca inválida")
+    clear = bool(body.get("clear"))
+    start = skip_markers.ms_or_none(body.get("startMs"))
+    end = skip_markers.ms_or_none(body.get("endMs"))
+    if not clear:
+        if kind == "intro" and end is None:
+            raise HTTPException(status_code=400, detail="el fin del intro es obligatorio")
+        if kind == "credits" and start is None:
+            raise HTTPException(status_code=400, detail="el inicio de los créditos es obligatorio")
+        if kind == "intro" and start is not None and start >= end:
+            raise HTTPException(status_code=400, detail="rango de intro inválido")
+        if kind == "credits" and end is not None and start >= end:
+            raise HTTPException(status_code=400, detail="rango de créditos inválido")
+
+    row = await db().fetchrow(
+        "select season, segments from skip_markers where ref = $1 and episode = $2", key, ep
+    )
+    segments = skip_markers.segments_of(row["segments"]) if row is not None else {}
+    if clear:
+        segments.pop(kind, None)
+    else:
+        segments[kind] = {"s": start, "e": end, "src": "user", "votes": 1}
+    season = int(row["season"]) if row is not None else await _markers_season(key)
+    await db().execute(
+        """
+        insert into skip_markers (ref, episode, season, segments, fetched_at)
+        values ($1, $2, $3, $4::jsonb, case when $5 then to_timestamp(0) else now() end)
+        on conflict (ref, episode) do update set
+            season = excluded.season, segments = excluded.segments, fetched_at = excluded.fetched_at
+        """,
+        key, ep, season, json.dumps(segments, ensure_ascii=False), clear,
+    )
+    return {"ok": True, "ref": key, "episode": ep, "kind": kind, "cleared": clear}
 
