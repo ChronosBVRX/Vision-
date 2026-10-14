@@ -144,4 +144,67 @@ class PopularityTest {
         val curated = Popularity.homeCurated(listOf(estrenos), listOf(CatalogRow("genero-x", "X", listOf(old))))
         assertEquals(listOf("e1"), curated.premieres.map { it.id })
     }
+
+    @Test
+    fun topPopularRanksRealPopularityOverRecency() {
+        // El Top 10 es de popularidad, no de estrenos: un clásico popular le gana a un
+        // estreno oscuro con mejor rating.
+        val classic = film("classic", score = 7.2, year = 2011, popularity = 250.0, votes = 300_000)
+        val recentNiche = film("niche26", score = 9.0, year = 2026, popularity = 6.0, votes = 40)
+        val list = Popularity.topPopular(emptyList(), listOf(recentNiche, classic), yearNow = 2026)
+        assertEquals("classic", list.first().id)
+    }
+
+    @Test
+    fun topPopularKeepsTheServerTrendingOrder() {
+        val a = film("a", popularity = 10.0, votes = 100)
+        val b = film("b", popularity = 90.0, votes = 50)
+        val list = Popularity.topPopular(listOf(b, a), emptyList())
+        assertEquals(listOf("b", "a"), list.map { it.id })
+    }
+
+    @Test
+    fun homeCuratedTop10ComesFromTrendingRowNotPremieres() {
+        // Regresión del reporte: el Top 10 salía del mismo pool reciente que
+        // «Novedades y Estrenos» y ambas filas mostraban casi los mismos títulos.
+        val classic = film("classic", score = 7.0, year = 2011, popularity = 300.0, votes = 400_000)
+        val fresh = film("fresh", score = 9.0, year = 2026, popularity = 15.0, votes = 200)
+        val tendencias = CatalogRow("tendencias", "Tendencias", listOf(classic))
+        val estrenos = CatalogRow("estrenos", "Estrenos", listOf(fresh, classic))
+        val curated = Popularity.homeCurated(listOf(estrenos), listOf(tendencias, estrenos), yearNow = 2026)
+        assertEquals("classic", curated.top10.first().id)
+        assertTrue(curated.premieres.any { it.id == "fresh" })
+        assertTrue(curated.premieres.none { it.id == "classic" })
+        assertTrue(curated.top10.first().id != curated.premieres.first().id)
+    }
+
+    @Test
+    fun homeCuratedTop10FallsBackWhenServerHasNoTrendingRow() {
+        // Servidor viejo o caché previa (sin «tendencias»): manda el motor de siempre.
+        val rated = film("rated", score = 8.0, year = 2026)
+        val pooled = CatalogRow("genero-drama", "Drama", listOf(rated))
+        val curated = Popularity.homeCurated(emptyList(), listOf(pooled), yearNow = 2026)
+        assertEquals(listOf("rated"), curated.top10.map { it.id })
+    }
+
+    @Test
+    fun topPopularCollapsesPortalPluralDuplicates() {
+        // El portal duplica la misma ficha cambiando el plural (doblajes): una sola tarjeta.
+        val latino = film("simpson-lat", popularity = 346.0, votes = 11_069, year = 1989)
+            .copy(title = "Los Simpson")
+        val espana = film("simpson-es", popularity = 346.0, votes = 11_069, year = 1989)
+            .copy(title = "Los Simpsons")
+        val list = Popularity.topPopular(emptyList(), listOf(latino, espana))
+        assertEquals(1, list.size)
+        assertEquals("simpson-lat", list.first().id)
+    }
+
+    @Test
+    fun topPopularKeepsRealSequelsApart() {
+        val one = film("spider1", popularity = 300.0, year = 2026).copy(title = "Spider-Man")
+        val two = film("spider2", popularity = 200.0, year = 2026).copy(title = "Spider-Man 2")
+        val other = film("other", popularity = 100.0, year = 2019).copy(title = "The Boys")
+        val list = Popularity.topPopular(emptyList(), listOf(one, two, other))
+        assertEquals(listOf("spider1", "spider2", "other"), list.map { it.id })
+    }
 }

@@ -5,6 +5,27 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Inicio: TOP 10 real de popularidad (ya no repite «Novedades y Estrenos»)** (2026-10-14; 267 tests Android + 60 backend):
+  - *Qué*: el «Top 10 en Vision+ Hoy» salía del mismo pool reciente que «Novedades y Estrenos»
+    (ambos por `rankScore`), así que mostraban casi los mismos títulos. Ahora es un Top 10 de
+    popularidad real de TODO el catálogo: películas, series y anime, sin importar el año.
+  - *Servidor*: nueva categoría especial `tendencias` (`TENDENCIAS_SQL` en `sync/index_build.py`)
+    = títulos reproducibles con póster ordenados `popularity desc, vote_count desc, score desc,
+    year desc` (sin nicho sin match TMDB ni magis); `normalize()` la deja en posición 1
+    (estrenos 2, recomendados 3, tv-en-vivo 4). Desplegada en el VPS: 12,347 enlaces, índice **v48**.
+    En Categorías (móvil/TV) aparece como «Tendencias».
+  - *App (`data/Popularity.kt`)*: `topPopular(ranking, pool)` = orden por popularidad real (el
+    pool solo rellena si un servidor viejo aún no manda la hilera); `homePool` suma `tendencias`;
+    el héroe/billboard pasa a ser el #1 de popularidad. `nearDuplicateKey`: el portal duplica
+    fichas con el plural cambiado («Los Simpson»/«Los Simpsons») y el Top 10 muestra una sola
+    tarjeta (misma base ±«s» final de palabra y mismo año; las secuelas no se tocan).
+  - *Guardianes*: `PopularityTest` (popularidad > recencia, orden del servidor, Top 10 desde
+    «tendencias» vs novedades, fallback sin hilera, duplicados plurales, secuelas aparte) +
+    `server/tests/test_tendencias.py` (SQL: popularidad manda, sin filtro de año, póster y
+    play_ref obligatorios, posición en `normalize`).
+  - *Verificado*: emulador Vision_Phone (release R8, firma histórica): arranque en frío con
+    Top 10 = Spider-Man, La Noche del Demonio, Ley y orden (1999)…, un solo «Los Simpsons»,
+    Novedades ya es otra fila; logcat sin crashes. OTA v2.5.65 publicada.
 - **Fase 2 — Mitigación remota (kill-switches) y reporte con texto** (2026-10-13; 231 tests Android + 56 backend):
   - *Servidor*: tabla `remote_config` + `GET /v1/config` (flags para la app, TTL 6 h) y `POST /v1/config`
     protegido con `CONFIG_ADMIN_KEY` (header `X-Admin-Key`; la API_KEY viaja en el APK y no basta). La
@@ -229,8 +250,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.63**
-  (versionCode **299**, release OTA v2.5.63). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.65**
+  (versionCode **301**, release OTA v2.5.65). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

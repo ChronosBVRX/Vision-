@@ -61,6 +61,22 @@ on conflict do nothing
 # a los destacados del portal (que ocupan 1..N).
 REST_OFFSET = 1000
 
+# Tendencias: el Top de popularidad real de TODO el catálogo (la hilera que alimenta
+# el «Top 10» del Inicio). Manda TMDB (popularidad + votos), no la fecha: un clásico
+# que hoy está en boca de todos le gana a un estreno oscuro. Solo entra lo que tiene
+# ficha visible (póster) y reproducción; el nicho descartado por TMDB queda fuera.
+TENDENCIAS_SQL = (
+    "insert into title_categories (title_id, category_id, position) "
+    "select t.id, $1, row_number() over (order by coalesce(t.popularity, 0) desc, "
+    "t.vote_count desc nulls last, t.score desc nulls last, t.year desc nulls last, t.title) "
+    "from titles t "
+    "where t.source != 'magis' and {not_unmatched} "
+    "and coalesce(t.popularity, 0) > 0 "
+    "and coalesce(t.poster_url, '') <> '' "
+    "and coalesce(t.play_ref, '') <> '' "
+    "on conflict do nothing"
+)
+
 
 def _canonical_key(title: str) -> str:
     """La clave de agrupación: mismo nombre (sin acentos ni mayúsculas) = misma categoría.
@@ -117,10 +133,12 @@ async def normalize(pool) -> int:
             await conn.execute("delete from categories where id = any($1::text[])", duplicates)
             merged += len(duplicates)
 
-        # Orden curado: especiales arriba, géneros después, colecciones al final.
-        await conn.execute("update categories set position = 1 where id = 'estrenos'")
-        await conn.execute("update categories set position = 2 where id = 'recomendados'")
-        await conn.execute("update categories set position = 3 where id = 'tv-en-vivo'")
+        # Orden curado: especiales arriba (Tendencias lidera: es el «Top 10» del Inicio),
+        # géneros después, colecciones al final.
+        await conn.execute("update categories set position = 1 where id = 'tendencias'")
+        await conn.execute("update categories set position = 2 where id = 'estrenos'")
+        await conn.execute("update categories set position = 3 where id = 'recomendados'")
+        await conn.execute("update categories set position = 4 where id = 'tv-en-vivo'")
         await conn.execute(
             "update categories set position = 100 + (position % 100) where kind = 'genre'"
         )
@@ -319,6 +337,17 @@ async def build_section_genres(pool) -> int:
 async def build(pool) -> int:
     changed = 0
     async with pool.acquire() as conn:
+        # --- Tendencias: el Top de popularidad de todo el catálogo ---
+        # El «Top 10» del Inicio bebe de aquí: popularidad real (TMDB) sin importar
+        # el año, para no repetir lo que ya muestra «Novedades y Estrenos».
+        await conn.execute(CAT_SQL, "tendencias", "Tendencias", "special", 1)
+        await conn.execute("delete from title_categories where category_id = 'tendencias'")
+        tag = await conn.execute(
+            TENDENCIAS_SQL.format(not_unmatched=NOT_UNMATCHED),
+            "tendencias",
+        )
+        changed += _rows(tag)
+
         # --- Estrenos ---
         await conn.execute(CAT_SQL, "estrenos", "Estrenos y Novedades", "special", 1)
         await conn.execute("delete from title_categories where category_id = 'estrenos'")

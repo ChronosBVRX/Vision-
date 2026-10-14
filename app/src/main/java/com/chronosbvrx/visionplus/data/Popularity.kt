@@ -21,6 +21,8 @@ import kotlin.math.log10
  *
  * Funciones puras (`internal`) para los tests anti-regresión.
  */
+private val DIACRITICS = Regex("\\p{Mn}+")
+
 object Popularity {
 
     internal fun nowYear(): Int = Calendar.getInstance().get(Calendar.YEAR)
@@ -98,13 +100,56 @@ object Popularity {
             ?: fallback
 
     /**
+     * El Top de popularidad real: los más populares del catálogo entero, sin importar
+     * el año. La hilera «tendencias» del servidor llega ya rankeada (todo el catálogo);
+     * el pool local solo rellena cuando un servidor viejo aún no la sirve.
+     */
+    internal fun topPopular(ranking: List<Film>, pool: List<Film>, limit: Int = 10, yearNow: Int = nowYear()): List<Film> {
+        val ranked = (ranking + pool)
+            .filter { it.videoUrl.isNotBlank() && it.popularity > 0.0 }
+            .sortedWith(
+                compareByDescending<Film> { it.popularity }
+                    .thenByDescending { it.voteCount }
+                    .thenByDescending { it.score }
+                    .thenByDescending { it.year },
+            )
+            .let(::dedupe)
+        val seen = HashSet<String>(limit * 2)
+        val top = ArrayList<Film>(limit)
+        for (film in ranked) {
+            if (seen.add(nearDuplicateKey(film))) top += film
+            if (top.size == limit) return top
+        }
+        // Relleno (catálogo aún sin clasificar por TMDB): el motor de siempre.
+        val fill = topTrending(pool, limit = limit + ranked.size, yearNow = yearNow)
+            .filterNot { it in ranked }
+            .filter { seen.add(nearDuplicateKey(it)) }
+        return (top + fill).take(limit)
+    }
+
+    /**
+     * Clave laxa solo para el Top 10: el portal a veces duplica la misma ficha cambiando
+     * el plural («Los Simpson»/«Los Simpsons»). Se igualan títulos que difieren en una
+     * «s» final de una palabra y comparten año; el resto del catálogo no se toca.
+     */
+    internal fun nearDuplicateKey(film: Film): String {
+        val folded = java.text.Normalizer
+            .normalize(film.title.lowercase(), java.text.Normalizer.Form.NFD)
+            .replace(DIACRITICS, "")
+        val words = folded.map { if (it.isLetterOrDigit()) it else ' ' }
+            .joinToString("").split(' ').filter { it.isNotBlank() }
+        val base = words.joinToString(" ") { w -> if (w.length > 4 && w.endsWith("s")) w.dropLast(1) else w }
+        return "$base:${film.year}"
+    }
+
+    /**
      * El pool curado del Inicio: filas propias (estrenos, TV en vivo, listas personales)
-     * + hileras curadas del índice propio (estrenos, recomendados y géneros). Las
-     * colecciones de marca del portal (xtv-*) no entran: Inicio es catálogo de Vision+.
+     * + hileras curadas del índice propio (tendencias, estrenos, recomendados y géneros).
+     * Las colecciones de marca del portal (xtv-*) no entran: Inicio es catálogo de Vision+.
      */
     internal fun homePool(rows: List<CatalogRow>, indexRows: List<CatalogRow>): List<Film> {
         val curatedIndex = indexRows.filter {
-            it.id == "estrenos" || it.id == "recomendados" || it.id.startsWith("genero-")
+            it.id == "tendencias" || it.id == "estrenos" || it.id == "recomendados" || it.id.startsWith("genero-")
         }
         val ownRows = rows.filterNot { it.id.startsWith("xtv-masnew") }
         val all = (ownRows + curatedIndex).flatMap { it.films }
@@ -141,7 +186,11 @@ object Popularity {
      */
     internal fun homeCurated(rows: List<CatalogRow>, indexRows: List<CatalogRow>, yearNow: Int = nowYear()): HomeCurated {
         val pool = homePool(rows, indexRows)
-        val top10 = topTrending(pool, limit = 10, yearNow = yearNow)
+        // «Top 10»: popularidad real de todo el catálogo (la hilera «tendencias» del
+        // servidor). Antes salía del mismo pool reciente que «Novedades y Estrenos»,
+        // así que ambas filas mostraban casi los mismos títulos.
+        val serverTrending = indexRows.firstOrNull { it.id == "tendencias" }?.films.orEmpty()
+        val top10 = topPopular(serverTrending, pool, limit = 10, yearNow = yearNow)
         val premieres = realPremieres(pool, limit = 15, yearNow = yearNow).ifEmpty {
             rows.firstOrNull { it.id == "estrenos" }?.films?.take(15).orEmpty()
         }
