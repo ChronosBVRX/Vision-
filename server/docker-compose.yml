@@ -97,6 +97,11 @@ services:
       TMDB_API_KEY: "${TMDB_API_KEY:-}"
       ENRICH_BATCH: "${ENRICH_BATCH:-300}"
       ENRICH_DELAY_SECONDS: "${ENRICH_DELAY_SECONDS:-0.25}"
+      # Re-match del backlog «sin match»: lote por ciclo (el candado por versión permite
+      # subirlo para catch-ups sin esperar el enfriamiento) y días de enfriamiento.
+      TMDB_REMATCH_BATCH: "${TMDB_REMATCH_BATCH:-2500}"
+      TMDB_REMATCH_COOLDOWN_DAYS: "${TMDB_REMATCH_COOLDOWN_DAYS:-14}"
+      TMDB_BACKFILL_BATCH: "${TMDB_BACKFILL_BATCH:-3000}"
       TZ: "${TZ:-America/Mexico_City}"
     depends_on:
       postgres:

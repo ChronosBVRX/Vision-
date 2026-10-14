@@ -57,6 +57,11 @@
     instante); el worker masticará ~2,500/ciclo (~10k/día): backlog de 16.6k en ~2 días. El re-match
     también rellena popularidad, así que **mejora el orden de Tendencias/Estrenos** además de la
     cobertura de marcadores.
+  - *Catch-up (2026-10-14)*: lote subido a **`TMDB_REMATCH_BATCH=16000`** en el `.env` del VPS (el
+    compose ahora mapea la variable) para vaciar los ~15k pendientes en **una sola pasada** (~4 h de
+    matching; el resto del ciclo sigue normal). Con el candado por versión ya no es obligatorio
+    bajarlo después: en régimen normal solo procesa lo que haya pendiente. Primer lote real con el
+    fix: 2,280/2,500 (91%) → series 4%→30% en un ciclo.
   - *Medidores*: línea por ciclo `TMDB cobertura: …` en el log del worker + **`GET /v1/stats`**
     (API key): cobertura TMDB por tipo (total/matched/noMatch/fresh + %) y estado de `skip_markers`.
   - *Guardianes*: `server/tests/test_tmdb_rematch.py` (libera con cambio de versión, cada intento
