@@ -26,6 +26,13 @@
     `test_movie_sequels_never_group_as_seasons`, `test_group_maps_prunes_single_season_leftovers`.
   - *Desplegado en VPS*: api+sync reconstruidos, grupos rebobinados (3638→3594; 0 con película, 0 representantes
     película) y versión del índice 45. La app refresca la sección en ≤15 min (TTL) y el índice con el bump.
+  - *Verificación post-deploy (2026-10-13)*: 224 tests Android re-corridos (0 fallos) + 50 backend. API: 0
+    películas con 2+ temporadas, 0 grupos servidos de 1 temporada, secciones sin filas vacías, búsqueda OK,
+    grupos legítimos intactos (Los Simpsons 2, Miraculous 6, Big Mouth 15); payload de la app (limitFilms=100):
+    2.16 MB gzip en 5.6 s. A32 (equipo viejo, v2.5.62): arranque en frío sin crashes, adoptó `version=45` y la
+    pestaña Series refrescada con 0 películas-como-series (Zootopia+/Jimmy Neutrón serie en su lugar). Versiones
+    viejas: el cliente del índice existe desde v2.5.36 y parsea con `opt*` (esquema sin cambios); anteriores ni
+    lo consumen. El worker renovó la sesión del portal una vez (patea la app; se recupera sola, v2.5.61).
 - **LÍNEA ESTABLE v2.5.62** (2026-10-13): 224 tests Android en verde + prueba física en A32.
   **Fix "descargar se pelea con reproducir en línea" (pausa con aviso)**:
   - *Causa raíz*: descarga y reproducción comparten el proceso `:x4k` y el motor nativo
