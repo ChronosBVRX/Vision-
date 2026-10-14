@@ -14,10 +14,17 @@
 Requisitos: **JDK 17 o superior** y **Android SDK** (API 35/36).
 
 ```bash
-./gradlew assembleNormalDebug        # Genera app-normal-debug.apk
-./gradlew assembleNormalRelease      # Genera APK de producción optimizado
+./gradlew assembleNormalDebug        # Genera app-normal-debug.apk (pruebas)
+./gradlew assembleNormalRelease      # Genera APK de producción optimizado (R8)
 ./gradlew testNormalDebugUnitTest    # Ejecuta la suite de pruebas unitarias
 ```
+
+- **Firma de release**: coloca `keystore.properties` en la raíz (ignorado por git) con `storeFile`,
+  `storePassword`, `keyAlias` y `keyPassword`; también acepta `VISION_KEYSTORE_FILE`,
+  `VISION_KEYSTORE_PASSWORD`, `VISION_KEY_ALIAS` y `VISION_KEY_PASSWORD` como variables de entorno
+  (CI). Sin llave, el release se firma con debug para poder validar R8 sin exponer secretos.
+- **R8**: el motor X4K (DEX en assets) se carga en runtime; `app/proguard-rules.pro` conserva el
+  puente, `okhttp3legacy` y `kotlinx.serialization`. No quitar esas reglas.
 
 - Paquete: `com.chronosbvrx.visionplus`
 - Kotlin + Jetpack Compose (+ Compose for TV), AndroidX Media3 (ExoPlayer), Coil, OkHttp.

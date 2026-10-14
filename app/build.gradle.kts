@@ -1,9 +1,29 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
+
+// Firma de release: la llave vive FUERA del repo (keystore.properties está en .gitignore;
+// también acepta variables de entorno para CI). Sin llave, el release se firma con debug
+// para poder probar R8 en local/CI sin exponer secretos.
+val keystoreProps = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+fun signingValue(prop: String, env: String): String? =
+    keystoreProps.getProperty(prop) ?: System.getenv(env)
+val releaseStoreFile = signingValue("storeFile", "VISION_KEYSTORE_FILE")?.let { file(it) }
+val releaseStorePassword = signingValue("storePassword", "VISION_KEYSTORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "VISION_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "VISION_KEY_PASSWORD")
+val hasReleaseSigning = releaseStoreFile?.exists() == true &&
+    !releaseStorePassword.isNullOrBlank() &&
+    !releaseKeyAlias.isNullOrBlank() &&
+    !releaseKeyPassword.isNullOrBlank()
 
 android {
     namespace = "com.chronosbvrx.visionplus"
@@ -17,6 +37,17 @@ android {
         versionName = "2.5.62"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     flavorDimensions += "laboratorio"
     productFlavors {
         create("normal") { dimension = "laboratorio" }
@@ -26,8 +57,12 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            // Llave propia si existe (keystore.properties / env); si no, debug para pruebas.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
         // Build de laboratorio para sondas nativas: firma debug, sin debuggable
         // (para librerías que rechazan procesos con debugging activado).
