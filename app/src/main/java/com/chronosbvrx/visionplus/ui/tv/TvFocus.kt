@@ -65,6 +65,36 @@ fun rememberLandingFocus(key: Any? = Unit): LandingFocus {
 fun Modifier.landingFocus(landing: LandingFocus): Modifier =
     focusRequester(landing.requester).onFocusChanged { landing.focused = it.isFocused }
 
+/** Intentos del regreso a una ficha (y su espera): cubren el rato en que el contenido tarda en pintar. */
+private const val RETURN_ATTEMPTS = 60
+private const val RETURN_RETRY_MS = 100L
+
+/**
+ * Restauración del foco al volver de una ficha: pide la tarjeta exacta ([filmId]) una y otra
+ * vez mientras la pantalla siga sin foco. Las pantallas pintan sus filas en segundo plano y en
+ * gama baja tardan más que un par de reintentos, así que el intento se re-arma cada vez que
+ * cambia [contentKey] (los datos que alimentan las filas): el regreso nunca termina con el
+ * mando muerto — si la tarjeta no aparece, el foco cae al destino de la pantalla ([landing]).
+ */
+@Composable
+fun rememberReturnFocus(
+    filmId: String?,
+    requester: FocusRequester,
+    landing: LandingFocus,
+    contentKey: Any? = null,
+) {
+    LaunchedEffect(filmId, contentKey) {
+        if (filmId == null) return@LaunchedEffect
+        repeat(RETURN_ATTEMPTS) {
+            if (FocusRescue.screenHasFocus) return@LaunchedEffect
+            runCatching { requester.requestFocus() }
+            if (FocusRescue.screenHasFocus) return@LaunchedEffect
+            delay(RETURN_RETRY_MS)
+        }
+        if (!FocusRescue.screenHasFocus) landing.request()
+    }
+}
+
 /**
  * Confinamiento de foco (focus trap) para ventanas modales y diálogos:
  * impide que la navegación con D-pad escape del modal hacia el contenido que está por debajo.

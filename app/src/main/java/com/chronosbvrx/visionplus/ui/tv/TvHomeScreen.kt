@@ -222,19 +222,18 @@ fun TvHomeScreen(
     val returnRequester = remember { FocusRequester() }
     val rowsListState = rememberLazyListState()
 
-    // Al regresar de la ficha de una película, restaurar foco en la tarjeta exacta
-    LaunchedEffect(returnFilmId) {
-        if (returnFilmId == null) return@LaunchedEffect
-        repeat(12) {
-            if (FocusRescue.screenHasFocus) return@LaunchedEffect
-            val ok = runCatching { returnRequester.requestFocus() }.isSuccess
-            if (ok) return@LaunchedEffect
-            delay(60)
-        }
-        if (!FocusRescue.screenHasFocus) {
-            landing.request()
-        }
-    }
+    // Al regresar de la ficha, restaurar foco en la tarjeta exacta (o el héroe, si era su
+    // título). El curado del Inicio se pinta en segundo plano —en gama baja tardaba más que
+    // los reintentos de antes—, así que el intento se re-arma cuando llega el contenido y, de
+    // plano, cae al destino de la pantalla: el mando nunca se queda muerto. El regreso solo
+    // vale cuando se llegó aquí abriendo una ficha (el riel tiene su propio destino).
+    val returnPending = returnFilmId != null && railReturn.isEmpty()
+    rememberReturnFocus(
+        filmId = if (returnPending) returnFilmId else null,
+        requester = returnRequester,
+        landing = landing,
+        contentKey = curated.pool.size,
+    )
 
     // El primer elemento al cargar obtiene el protagonismo en el billboard
     LaunchedEffect(top10Films, allAvailableFilms) {
@@ -243,7 +242,7 @@ fun TvHomeScreen(
                 ?: allAvailableFilms.firstOrNull()?.featured()
         }
         delay(150)
-        if (!FocusRescue.screenHasFocus && returnFilmId == null && (top10Films.isNotEmpty() || allAvailableFilms.isNotEmpty())) {
+        if (!returnPending && !FocusRescue.screenHasFocus && (top10Films.isNotEmpty() || allAvailableFilms.isNotEmpty())) {
             landing.request()
         }
     }

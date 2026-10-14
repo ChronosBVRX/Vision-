@@ -83,13 +83,6 @@ fun TvCategoryScreen(
     val context = LocalContext.current
     val landing = rememberLandingFocus(section ?: key)
     val returnRequester = remember { FocusRequester() }
-    LaunchedEffect(section ?: key, returnFilmId) {
-        if (returnFilmId == null) return@LaunchedEffect
-        repeat(8) {
-            runCatching { returnRequester.requestFocus() }
-            kotlinx.coroutines.delay(80)
-        }
-    }
     var sectionRows by remember(section) {
         mutableStateOf(if (section != null) RemoteIndexSource.cachedSection(context, section) else null)
     }
@@ -119,6 +112,15 @@ fun TvCategoryScreen(
         // robusto ante caché vieja del servidor ordenada solo por score/año.
         Popularity.reorderRow(raw)
     }
+
+    // Al volver de la ficha: la tarjeta exacta. El contenido de la sección puede llegar
+    // después (red/caché fría), así que el intento se re-arma con cada contenido nuevo.
+    rememberReturnFocus(
+        filmId = returnFilmId,
+        requester = returnRequester,
+        landing = landing,
+        contentKey = films.size,
+    )
     val featured = remember(films) { films.maxByOrNull { Popularity.rankScore(it) } }
     // En modo sección (películas/series/…) estas dos solo se usan en la vista genérica:
     // no se calculan sobre miles de films si no van a pintarse.

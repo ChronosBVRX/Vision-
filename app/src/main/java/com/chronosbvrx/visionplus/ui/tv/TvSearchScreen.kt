@@ -200,14 +200,14 @@ fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFil
 
     val landing = rememberLandingFocus()
     // Al volver de una ficha: la tarjeta exacta que la abrió (el teclado queda de respaldo).
+    // La lista se reconstruye al entrar, así que el intento se re-arma cuando llega.
     val returnRequester = remember { FocusRequester() }
-    LaunchedEffect(returnFilmId) {
-        if (returnFilmId == null) return@LaunchedEffect
-        repeat(8) {
-            runCatching { returnRequester.requestFocus() }
-            kotlinx.coroutines.delay(80)
-        }
-    }
+    rememberReturnFocus(
+        filmId = returnFilmId,
+        requester = returnRequester,
+        landing = landing,
+        contentKey = initialFilms.size,
+    )
 
     Box(Modifier.fillMaxSize().background(VisionBlack)) {
         Row(Modifier.fillMaxSize()) {

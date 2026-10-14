@@ -54,14 +54,26 @@ class TvFocusTest {
         videoUrl = "https://example.com/v$i.m3u8",
         sourceUrl = "test",
     )
+
+    /** Una serie real (2+ temporadas): la ficha muestra el panel de temporadas. */
+    private fun seriesFilm(i: Int) = film(i).copy(
+        seasons = listOf(
+            SeasonRef(1, "s${i}1", "https://example.com/s${i}1"),
+            SeasonRef(2, "s${i}2", "https://example.com/s${i}2"),
+        ),
+    )
     private val focused = SemanticsMatcher.expectValue(SemanticsProperties.Focused, true)
 
     private lateinit var nav: Navigator
 
-    private fun start(vararg stack: Route): Navigator {
+    private fun start(vararg stack: Route): Navigator = startWith(rows, *stack)
+
+    private lateinit var catalog: XuperCatalog
+
+    private fun startWith(seedRows: List<CatalogRow>, vararg stack: Route): Navigator {
         nav = Navigator(stack.toList())
-        val catalog = XuperCatalog(ApplicationProvider.getApplicationContext())
-        catalog.seed(rows)
+        catalog = XuperCatalog(ApplicationProvider.getApplicationContext())
+        catalog.seed(seedRows)
         compose.setContent { VisionTheme { TvApp(catalog, nav) } }
         compose.mainClock.advanceTimeBy(1_000)
         compose.waitForIdle()
@@ -124,6 +136,38 @@ class TvFocusTest {
     }
 
     @Test
+    fun homeSeriesBackWithLateContentStillKeepsFocus() {
+        // En gama baja el Inicio pinta sus filas en segundo plano (curado + pintado) y al
+        // volver de una ficha el contenido puede tardar más que los reintentos: el mando no
+        // puede quedarse muerto por eso.
+        val seriesRows = listOf(
+            CatalogRow("destacadas", "Destacadas", (1..6).map { seriesFilm(it) }),
+        )
+        val nav = startWith(seriesRows, Route.Home)
+        assertLanded("Inicio")
+        press(Key.DirectionRight)
+        press(Key.DirectionCenter)
+        assertTrue("Debe abrir la ficha de la serie", nav.current is Route.Title)
+
+        // Al volver, el Inicio todavía no tiene sus filas (como cuando el curado sigue corriendo).
+        compose.runOnIdle { catalog.seed(emptyList()) }
+        back()
+        assertEquals("Al volver debe regresar a Home", Route.Home, nav.current)
+        compose.mainClock.advanceTimeBy(6_000) // se agotan los reintentos de antaño
+        compose.waitForIdle()
+
+        // Llegan las filas: el foco debe caer solo, sin tocar el mando.
+        compose.runOnIdle { catalog.seed(seriesRows) }
+        compose.waitUntil(timeoutMillis = 5_000) { focusedCount() >= 1 }
+        assertTrue("screenHasFocus debe reflejar el foco real", FocusRescue.screenHasFocus)
+        assertLanded("Inicio con filas llegadas tarde tras volver de la serie")
+        press(Key.DirectionDown)
+        assertTrue("Inicio tras serie: el foco se perdió al bajar", focusedCount() >= 1)
+        press(Key.DirectionRight)
+        assertTrue("Inicio tras serie: el foco se perdió al navegar", focusedCount() >= 1)
+    }
+
+    @Test
     fun filmBackKeepsFocus() {
         val nav = start(Route.Home)
         assertLanded("Inicio")
@@ -136,6 +180,30 @@ class TvFocusTest {
         assertLanded("Inicio tras ficha")
         press(Key.DirectionDown)
         assertTrue("Inicio: focus lost after Down", focusedCount() >= 1)
+    }
+
+    @Test
+    fun homeToSeriesFichaAndBackKeepsFocus() {
+        // El caso reportado: abrir la ficha de una SERIE desde el Inicio y volver con Atrás
+        // dejaba el mando sin foco. Se recorre el flujo real (el OK de la tarjeta es el que
+        // registra el id de retorno), con todas las fichas siendo series con temporadas.
+        val seriesRows = listOf(
+            CatalogRow("destacadas", "Destacadas", (1..6).map { seriesFilm(it) }),
+            CatalogRow("series", "Series", (7..9).map { seriesFilm(it) }),
+        )
+        val nav = startWith(seriesRows, Route.Home)
+        assertLanded("Inicio")
+        press(Key.DirectionRight)
+        press(Key.DirectionCenter)
+        assertTrue("Debe abrir la ficha de la serie", nav.current is Route.Title)
+        assertLanded("Ficha de serie")
+        back()
+        assertEquals("Al volver debe regresar a Home", Route.Home, nav.current)
+        assertLanded("Inicio tras ficha de serie")
+        press(Key.DirectionDown)
+        assertTrue("Inicio tras serie: el foco se perdió al bajar", focusedCount() >= 1)
+        press(Key.DirectionRight)
+        assertTrue("Inicio tras serie: el foco se perdió al navegar", focusedCount() >= 1)
     }
 
     @Test

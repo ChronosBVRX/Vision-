@@ -40,19 +40,13 @@ fun TvCategoriesScreen(
     val safeRows = remember(rows) { rows.distinctBy { it.id } }
     val firstRowId = safeRows.firstOrNull()?.id
 
-    // Al regresar de la ficha de una película, restaurar foco en la tarjeta exacta
-    LaunchedEffect(returnFilmId) {
-        if (returnFilmId == null) return@LaunchedEffect
-        repeat(12) {
-            if (FocusRescue.screenHasFocus) return@LaunchedEffect
-            val ok = runCatching { returnRequester.requestFocus() }.isSuccess
-            if (ok) return@LaunchedEffect
-            delay(60)
-        }
-        if (!FocusRescue.screenHasFocus) {
-            landing.request()
-        }
-    }
+    // Al regresar de la ficha: la tarjeta exacta, re-armado cuando llegan las filas del índice.
+    rememberReturnFocus(
+        filmId = returnFilmId,
+        requester = returnRequester,
+        landing = landing,
+        contentKey = safeRows.size,
+    )
 
     // Las filas del índice pueden llegar después de abrir la pantalla: si el foco quedó huérfano, vuelve.
     LaunchedEffect(rows) {

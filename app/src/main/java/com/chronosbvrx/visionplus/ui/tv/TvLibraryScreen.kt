@@ -46,14 +46,8 @@ fun TvLibraryScreen(catalog: XuperCatalog, returnFilmId: String? = null, onOpenF
     var activeTab by rememberSaveable { mutableStateOf(0) } // 0: Favoritos, 1: Ver más tarde, 2: Descargas USB
     val landing = rememberLandingFocus(activeTab)
     // Al volver de una ficha: primero la tarjeta exacta; si no está compuesta, la primera la respalda.
+    // «Mi lista» se carga en segundo plano, así que el intento se re-arma con cada lista nueva.
     val returnRequester = remember { FocusRequester() }
-    LaunchedEffect(activeTab, returnFilmId) {
-        if (returnFilmId == null) return@LaunchedEffect
-        repeat(8) {
-            runCatching { returnRequester.requestFocus() }
-            kotlinx.coroutines.delay(80)
-        }
-    }
     val downloads by OfflineRegistry.downloadsFlow.collectAsState()
 
     val rawFilms = when (activeTab) {
@@ -62,6 +56,12 @@ fun TvLibraryScreen(catalog: XuperCatalog, returnFilmId: String? = null, onOpenF
         else -> downloads.filter { it.state == DownloadState.COMPLETED }.map { it.toFilm() }
     }
     val films = remember(rawFilms) { rawFilms.distinctBy { it.id } }
+    rememberReturnFocus(
+        filmId = returnFilmId,
+        requester = returnRequester,
+        landing = landing,
+        contentKey = films.size,
+    )
     // Sin películas no hay tarjeta a la que aterrizar: el chip seleccionado es el
     // destino del foco, o el mando se queda sin nada enfocado en esta pantalla.
     val emptyLanding = if (films.isEmpty()) Modifier.landingFocus(landing) else Modifier

@@ -5,6 +5,27 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Fix D-pad: el foco se perdía al volver de una ficha/serie en el Inicio de Smart TV** (2026-10-14; 282 tests Android):
+  - *Causa raíz*: al regresar de una ficha, el Inicio arma su contenido en segundo plano
+    (`Popularity.homeCurated` en `produceState`, desde v2.5.60): en gama baja (índice de 25k+
+    títulos) las filas y el héroe tardan más que los reintentos del regreso (12×60 ms ≈ 0.7 s) y
+    que el destino de la pantalla (3 s), y el rescate «llegó contenido y nadie tiene foco» quedaba
+    **bloqueado para siempre** por `returnFilmId != null` (el id de retorno no se limpia en toda la
+    sesión). Resultado: al volver de una serie/película el mando se quedaba sin nada enfocado y la
+    navegación D-pad moría (había que reiniciar la app).
+  - *Fix*: guardián compartido **`rememberReturnFocus`** (`ui/tv/TvFocus.kt`): pide la tarjeta exacta
+    mientras la pantalla siga sin foco (60×100 ms), **se re-arma** cada vez que cambia el contenido
+    que alimenta las filas (`contentKey`) y, si la tarjeta no aparece, cae al destino de la pantalla
+    (`landing`). En `TvHomeScreen` solo aplica cuando se llegó abriendo una ficha (`railReturn`
+    vacío) y se re-arma con `curated.pool.size`; el rescate «llegó contenido» usa ese mismo
+    `returnPending`. Aplicado también a `TvCategoriesScreen` (filas del índice), `TvCategoryScreen`
+    (secciones `/v1/section`, contenido por red), `TvSearchScreen` y `TvLibraryScreen`.
+  - *Guardianes*: `TvFocusTest.homeToSeriesFichaAndBackKeepsFocus` (flujo real: Inicio → ficha de
+    serie → Atrás → navegar) y `homeSeriesBackWithLateContentStillKeepsFocus` (las filas llegan
+    **después** del regreso, como en la TV real; con el código viejo el test falla y reproduce el
+    mando muerto). 282 tests Android en verde (suite completa). **OTA v2.5.67 publicada** (release OTA
+    v2.5.67, asset `VisionPlus.apk`, misma firma histórica `9593cb0d…`). Pendiente: prueba física en
+    la TV del usuario.
 - **Índice TMDB: backlog desbloqueado y candado por versión del emparejador** (2026-10-14; 87 tests backend):
   - *Diagnóstico*: el buscador corregido (`clean_query`, v2.5.59) **sí funciona** —muestra en vivo
     contra TMDB: **50/52 títulos (96%)** del backlog emparechan— pero el re-match estaba congelado:
