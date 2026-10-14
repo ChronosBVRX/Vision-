@@ -19,10 +19,12 @@ Requisitos: **JDK 17 o superior** y **Android SDK** (API 35/36).
 ./gradlew testNormalDebugUnitTest    # Ejecuta la suite de pruebas unitarias
 ```
 
-- **Firma de release**: coloca `keystore.properties` en la raíz (ignorado por git) con `storeFile`,
-  `storePassword`, `keyAlias` y `keyPassword`; también acepta `VISION_KEYSTORE_FILE`,
-  `VISION_KEYSTORE_PASSWORD`, `VISION_KEY_ALIAS` y `VISION_KEY_PASSWORD` como variables de entorno
-  (CI). Sin llave, el release se firma con debug para poder validar R8 sin exponer secretos.
+- **Firma de release**: se usa la **llave histórica de la app** (`visionplus-historic.keystore`, alias
+  `androiddebugkey`) para que las actualizaciones sigan siendo directas sobre la base instalada; vive en
+  `.visionplus` (fuera del repo) y `keystore.properties` (gitignored) la apunta. También acepta
+  `VISION_KEYSTORE_FILE`, `VISION_KEYSTORE_PASSWORD`, `VISION_KEY_ALIAS` y `VISION_KEY_PASSWORD` como
+  variables de entorno (CI). Sin llave, el release se firma con debug para poder validar R8 sin exponer
+  secretos. **No cambiar la firma**: rompería el update de los usuarios actuales.
 - **R8**: el motor X4K (DEX en assets) se carga en runtime; `app/proguard-rules.pro` conserva el
   puente, `okhttp3legacy` y `kotlinx.serialization`. No quitar esas reglas.
 

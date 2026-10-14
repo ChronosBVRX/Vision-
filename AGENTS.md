@@ -933,15 +933,21 @@
 - Build: `$env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:assembleNormalDebug`
   (workdir `Vision+`; **correr en foreground con timeout largo**; los Start-Process con sleeps largos
   a veces son matados por el wrapper).
-- **Release firmado (producción, listo 2026-10-13)**: llave propia en
-  `C:\Users\Axel Rosete\.visionplus\visionplus-release.keystore` (+ `CREDENCIALES.txt` — **respaldar**);
-  `keystore.properties` en la raíz (gitignored) hace que `:app:assembleNormalRelease` firme solo
-  (SHA-256 `6C:DA:BF:60:CA:31:3B:59:…`); sin el archivo el release firma debug (CI). R8 con
-  `app/proguard-rules.pro` **verificado en A32**: Home, motor nativo XTV (historial avanzando) y bóveda
-  offline OK; CI tiene job `release-build` que valida R8 en cada push.
-  **Cambio de firma pendiente de decidir**: al publicar el release firmado, los equipos con la app
-  debug-signed deben desinstalar/reinstalar UNA vez (las descargas cifradas se pierden: la llave del
-  vault vive en el Keystore y Android la borra al desinstalar). Avisar antes de subir la próxima OTA.
+- **Firma — decisión 2026-10-13: NO se cambia la firma** (la base instalada no se arriesga). La app
+  distribuida (A32, POCO, TV y el APK público de GitHub) está firmada con la llave histórica de debug
+  (`CN=Android Debug`, SHA-256 `9593cb0d2b44b8c5a47c157c13342c3d4a55629843d562d2c049331ec77473f3`),
+  verificada en la app instalada y en el asset público. Esa llave es ahora la llave de producción:
+  copia respaldada y con contraseña fuerte en
+  `C:\Users\Axel Rosete\.visionplus\visionplus-historic.keystore` (alias `androiddebugkey`; el original
+  `~/.android/debug.keystore` no se toca) y `keystore.properties` apunta ahí → `:app:assembleNormalRelease`
+  firma con la MISMA identidad. Probado con `pm install -r` encima de la app del A32: **Success y datos
+  intactos** (índice + bóvedas). La llave nueva (`visionplus-release.keystore`, SHA-256 `6C:DA:BF:60…`)
+  queda reservada para un canal futuro (Play / App ID nuevo), **nunca** para esta base. Respaldar
+  `.visionplus` completa (ver `CREDENCIALES.txt`).
+- **OTA con R8 activo**: a partir de la próxima versión, publicar `:app:assembleNormalRelease` (minificado
+  + shrinkResources: 101.5 MB vs 125 MB del debug) firmado con la llave histórica; R8 con
+  `app/proguard-rules.pro` **verificado en A32** (Home, motor nativo XTV, bóveda offline) y job
+  `release-build` en CI que valida R8 en cada push.
 - Instalar: push a `/data/local/tmp/vp.apk` + `pm install -r`. A32: `adb -s 192.168.1.130:43981`
   (wireless, rooted). POCO: `adb -s df0a78c4` (USB; HyperOS puede pedir "Instalar vía USB").
   adb exe: `C:\Users\Axel Rosete\AppData\Local\Android\Sdk\platform-tools\adb.exe`.
@@ -1034,6 +1040,6 @@
 - Fútbol: afinar el mapa liga→canales si algún partido sale con "Sin canal en tu lista" (p. ej. feeds
   sudamericanos); valorar aviso/recordatorio de partidos próximos.
 - Buscador de eventos específicos sobre la EPG (idea del usuario, no implementado).
-- Build **release firmada**: LISTO (ver "Build / OTA"). Falta decidir el cambio de firma en los
-  equipos (desinstalar una vez) y publicar la próxima OTA ya con el release.
+- Próxima OTA: publicar el release minificado (`:app:assembleNormalRelease`, firma histórica intacta) con
+  el bump de versión; el update es directo (sin reinstalar). R8 ya verificado en A32.
 - Series (teleplay): el flujo usa `startPlayVOD` type 2→1 con episodeNumberList [1]; refinar episodios si hace falta.
