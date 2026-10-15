@@ -1168,6 +1168,48 @@ object X4KApi {
     /** A VOD play resolved to data, without launching: the player reuses it for "next" in place. */
     data class VodMedia(val mediasJson: String, val durationMs: Long, val subsLangs: String)
 
+    /** Handshake adelantado desde la ficha (una sola reproducción por entrada). */
+    private class PrefetchedVod(val atMs: Long, val media: VodMedia)
+
+    private val vodPrefetch = java.util.concurrent.ConcurrentHashMap<String, PrefetchedVod>()
+    private const val PREFETCH_TTL_MS = 90_000L
+
+    /**
+     * Adelanta el handshake de reproducción mientras el usuario mira la ficha: al pulsar
+     * Reproducir no se espera al portal (en cajas lentas esas llamadas cuestan 1-4 s y
+     * la app original del proveedor las pide al abrir la ficha, no al pulsar). La
+     * entrada se consume UNA vez (licencia fresca por reproducción) y caduca a los 90 s.
+     * Silencioso: cualquier fallo se ignora y el play normal lo repite.
+     */
+    suspend fun prewarmVod(
+        context: Context,
+        contentId: String,
+        seriesId: String = "",
+        fallbackDurationMs: Long = 0L,
+        epNumber: Int = 1,
+    ): Unit = withContext(Dispatchers.IO) {
+        val cid = xtvPortalId(contentId)
+        if (cid.isBlank()) return@withContext
+        val now = System.currentTimeMillis()
+        vodPrefetch[cid]?.takeIf { now - it.atMs < PREFETCH_TTL_MS }?.let { return@withContext }
+        val cleanSeries = if (seriesId.isNotBlank()) xtvPortalId(seriesId) else ""
+        runCatching {
+            val prep = prepareVod(context, cid, "", cleanSeries, fallbackDurationMs)
+            if (prep != null) vodPrefetch[cid] = PrefetchedVod(now, prep)
+        }
+        // Los marcadores de la serie también quedan calientes (su caché es de 6 h).
+        if (cleanSeries.isNotBlank()) {
+            runCatching {
+                withTimeoutOrNull(2_500L) {
+                    com.chronosbvrx.visionplus.data.markers.MarkersStore.fetchForPlayer(
+                        ref = cleanSeries,
+                        ep = epNumber.coerceAtLeast(1),
+                    )
+                }
+            }
+        }
+    }
+
     /**
      * Resolves a VOD play (playCode + license + duration + subs) without launching anything.
      * Returns null when the portal gives no playable media.
@@ -1180,6 +1222,13 @@ object X4KApi {
         fallbackDurationMs: Long = 0L,
     ): VodMedia? = withContext(Dispatchers.IO) {
         guarded {
+            val prefetchCid = xtvPortalId(contentId)
+            vodPrefetch.remove(prefetchCid)?.let {
+                if (System.currentTimeMillis() - it.atMs < PREFETCH_TTL_MS) {
+                    Log.i(TAG, "play adelantado desde la ficha: $prefetchCid (${it.media.durationMs} ms)")
+                    return@guarded it.media
+                }
+            }
             // Auto-reparado del motor: si PlayerRecovery rotó la carpeta de trabajo tras
             // fallos silenciosos, renovar la sesión y forzar SLB/params frescas para que el
             // arranque limpio no herede nada viejo.
@@ -1196,11 +1245,17 @@ object X4KApi {
             ensureEngineData(context, force = healed)
             val cid = xtvPortalId(contentId)
             val sid = xtvPortalId(seriesId)
-            // The editorial card carries the true running time; a flaky network gets a second try.
-            var item = itemInfo(context, cid)
-            if (item == null) {
-                kotlinx.coroutines.delay(800)
+            // La ficha editorial solo se pide si aún no sabemos la duración: en cajas
+            // lentas cada llamada cuesta 0.2-0.7 s y el reproductor la recupera en
+            // segundo plano para el rótulo. Con duración conocida, directo a la licencia.
+            var item: JSONObject? = null
+            if (fallbackDurationMs <= 0L) {
+                // The editorial card carries the true running time; a flaky network gets a second try.
                 item = itemInfo(context, cid)
+                if (item == null) {
+                    kotlinx.coroutines.delay(800)
+                    item = itemInfo(context, cid)
+                }
             }
             var durMs = extractDurationMs(item)
             // Los capítulos de serie no suelen traer duración propia: heredar de la ficha de la serie.

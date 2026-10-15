@@ -149,6 +149,24 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
     val seasonTitlePrefix = if (film.seasons.size > 1) " · $activeSeasonLabel" else ""
     // Solo es serie con 2+ capítulos o 2+ temporadas: 1 capítulo suelto del portal es película.
     val isSeriesTitle = episodes.size > 1 || film.seasons.size > 1
+
+    // Adelanta el handshake del portal mientras se mira la ficha: pulsar Reproducir
+    // no debe esperar el portal (lo mismo que hace la app del proveedor).
+    LaunchedEffect(activeId, isSeriesTitle, episodes, nextEpisodeIndex, itemDurationMs) {
+        if (!isXtv) return@LaunchedEffect
+        val target = if (isSeriesTitle && episodes.size > 1) {
+            episodes.getOrNull(nextEpisodeIndex.coerceIn(0, episodes.lastIndex))
+        } else {
+            film.videoUrl.substringAfter(':').takeIf { it.isNotBlank() }
+        } ?: return@LaunchedEffect
+        X4KApi.prewarmVod(
+            context = context,
+            contentId = target,
+            seriesId = if (isSeriesTitle) activeId else "",
+            fallbackDurationMs = itemDurationMs,
+            epNumber = if (isSeriesTitle) nextEpisodeIndex + 1 else 1,
+        )
+    }
     val playButtonLabel = when {
         isSeriesTitle && watchedCount > 0 ->
             "Continuar$seasonTitlePrefix · Capítulo ${nextEpisodeIndex + 1}"

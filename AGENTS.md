@@ -5,6 +5,28 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Lote 2.5.80: arranque más rápido en Smart TV (handshake adelantado desde la ficha) — OTA publicada** (2026-10-15; 355 tests Android + 122 backend):
+  - *Pregunta del usuario*: ¿por qué en el celular la reproducción es casi instantánea
+    y en la app original del proveedor en TV también, pero en Vision+ en la TV tarda
+    varios segundos?
+  - *Razón medida*: la caja tarda 0.2-0.7 s por llamada al portal (TLS+JSON) vs
+    0.05-0.15 s del celular, y NUESTRO flujo hacía el handshake (ficha + licencia +
+    SLB) **al pulsar Reproducir**, en serie → 1-4 s antes de abrir el reproductor.
+    La app original pide la licencia **al abrir la ficha** (por eso se siente
+    instantánea). Extra: esa caja tenía el proceso `init.svc.console` comiendo un
+    núcleo (detenido en la sesión 2.5.79).
+  - *Fix*: `X4KApi.prewarmVod()` — al abrir la ficha (TV y móvil) se adelantan la
+    licencia (`prepareVod`) y los marcadores (caché 6 h del MarkersStore) en
+    segundo plano; `prepareVod` consume esa entrada UNA vez (TTL 90 s) y cae al
+    flujo normal si falta o caduca. Además, `prepareVod` ya no pide la ficha
+    editorial cuando el catálogo conoce la duración (`fallbackDurationMs > 0`):
+    una llamada menos en el crítico (subsInfo viaja vacío; el reproductor ya
+    recupera duración/metadatos en segundo plano).
+  - *Verificado*: 355 Android + 122 backend. Es cambio de handoff, no del
+    reproductor. La TV apagó la depuración inalámbrica tras la reinstalación limpia
+    (sin adb al momento de publicar): pendiente sentirlo/verificarlo en la TV al
+    reconectar (el actualizador in-app ofrecerá 2.5.80).
+  - *OTA v2.5.80 publicada* (release R8 vc316, firma histórica).
 - **Lote 2.5.79: re-arranque interno del motor (fin del «error al primer intento»), vivo con espera honesta y foco de regreso — OTA publicada** (2026-10-15; 355 tests Android + 122 backend):
   - *Síntoma (usuario)*: en Chromecast las series dan error al primer intento y con
     «Reintentar» ya reproducen; en la TV box rooteada no abrían nunca; el vivo en la
