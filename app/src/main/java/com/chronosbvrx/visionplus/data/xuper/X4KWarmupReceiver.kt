@@ -38,8 +38,8 @@ class X4KWarmupReceiver : BroadcastReceiver() {
                     }.getOrDefault("")
                     val ok = X4KTitan.ensureConfigured(
                         context = appCtx,
-                        userId = "967111326",
-                        devId = "2392fe5186d83d73508a2c8c60a26ef6",
+                        userId = X4KApi.userIdOf(),
+                        devId = X4KApi.snOf(),
                         androidId = androidId,
                         entriesJson = resolvedEntries,
                         playParams = resolvedParams,

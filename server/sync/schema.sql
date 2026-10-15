@@ -214,3 +214,21 @@ create table if not exists skip_markers (
 
 create index if not exists idx_skip_markers_fetched on skip_markers (fetched_at);
 
+-- Pool de identidades del portal (réplica del modelo Hydra): el tenant no incorpora
+-- dispositivos nuevos, así que el operador carga los SN aprovisionados por el upstream
+-- y cada dispositivo canjea UN código por SU slot (sn + user_id). Un slot = una sesión.
+create table if not exists device_slots (
+    sn text primary key,                          -- identidad del portal (una por usuario)
+    user_id text not null default '',             -- cuenta atada al SN ('' = la de defecto)
+    status text not null default 'free',          -- free|assigned|worker|blocked
+    device_key text unique,                       -- huella de la instalación (una sola slot)
+    claim_code text unique,                       -- código de un solo uso (se quema al canjear)
+    note text not null default '',
+    assigned_at timestamptz,
+    last_seen_at timestamptz
+);
+-- Auto-asignación (sin códigos para el usuario): solo los slots `auto` se entregan
+-- solos al arrancar; el resto se reserva para códigos manuales o el worker.
+alter table device_slots add column if not exists auto boolean not null default true;
+alter table device_slots add column if not exists created_at timestamptz not null default now();
+

@@ -260,6 +260,53 @@ internal fun hasNextEpisodeAvailable(
 internal fun isSeriesContent(epCount: Int, seasonCount: Int): Boolean =
     epCount > 1 || seasonCount > 1
 
+/**
+ * Textos de la pantalla de espera del reproductor nativo. Antes decía «Preparando tu
+ * película…» incluso al abrir una serie y el título quedaba congelado en el primer
+ * capítulo de la sesión: con el contexto real del capítulo la espera se siente premium.
+ */
+internal data class LoadingCardText(
+    val title: String,
+    val subtitle: String,
+    /** Nombre real del capítulo cuando el portal trae uno ("" si es genérico o no hay). */
+    val episodeName: String,
+    /** true cuando el subtítulo es el contexto temporada/capítulo (se pinta en azul de marca). */
+    val accent: Boolean,
+)
+
+internal fun resolveLoadingCardText(
+    isLive: Boolean,
+    isSeries: Boolean,
+    baseTitle: String,
+    rawTitle: String,
+    seasonLabel: String,
+    episodeIndex: Int,
+    episodeName: String = "",
+): LoadingCardText {
+    val raw = rawTitle.trim()
+    if (isLive) return LoadingCardText(raw, "Preparando la señal…", "", accent = false)
+    if (!isSeries) return LoadingCardText(raw, "Preparando tu película…", "", accent = false)
+    val episode = "Capítulo ${episodeIndex.coerceAtLeast(0) + 1}"
+    val season = seasonLabel.trim()
+    return LoadingCardText(
+        title = baseTitle.trim().ifBlank { raw },
+        subtitle = if (season.isBlank()) episode else "$season · $episode",
+        episodeName = cleanEpisodeName(episodeName, episodeIndex),
+        accent = true,
+    )
+}
+
+/**
+ * Un nombre de capítulo que solo repite el número («Capítulo 8», «Episodio 8», «8») no
+ * aporta nada a la espera: se descarta y queda solo el contexto temporada/capítulo.
+ */
+internal fun cleanEpisodeName(name: String, episodeIndex: Int): String {
+    val candidate = name.trim()
+    if (candidate.isBlank()) return ""
+    val n = episodeIndex.coerceAtLeast(0) + 1
+    return if (candidate.lowercase() in setOf("capítulo $n", "capitulo $n", "episodio $n", "$n")) "" else candidate
+}
+
 internal fun shouldPromptResume(
     isLive: Boolean,
     isSeries: Boolean,

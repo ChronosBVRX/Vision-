@@ -333,7 +333,11 @@ object X4KTitan {
                         android.app.Application.getProcessName()
                     } else ""
                 }.getOrDefault("")
-                val dirName = if (procName.endsWith(":x4k")) "x4k-luna" else "x4k-luna-main"
+                // La carpeta de trabajo es el estado persistente del motor: PlayerRecovery la
+                // rota a una generación nueva tras fallos silenciosos repetidos (caja atascada)
+                // para que el arranque limpio no herede el estado envenenado.
+                val mainProcess = !procName.endsWith(":x4k")
+                val dirName = PlayerRecovery.dirNameFor(mainProcess, PlayerRecovery.engineGen(context))
                 val workPath = File(context.applicationContext.filesDir, dirName).apply { mkdirs() }.absolutePath
                 instance.javaClass.methods.first { it.name == "r" && it.parameterCount == 3 }
                     .invoke(instance, workPath, cb1, cb2)

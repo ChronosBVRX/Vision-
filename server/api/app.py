@@ -20,6 +20,7 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request
 from starlette.middleware.gzip import GZipMiddleware
 
 import markers as skip_markers
+import slots as device_slots
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 API_KEY = os.environ["API_KEY"]
@@ -1045,6 +1046,195 @@ async def set_remote_config(request: Request, x_admin_key: str | None = Header(d
             json.dumps(value, ensure_ascii=False),
         )
     return {"ok": True}
+
+
+# ----- pool de identidades del portal (réplica del modelo Hydra) -----
+# El tenant no incorpora dispositivos nuevos: el operador carga los SN aprovisionados
+# (POST /v1/slots/issue, admin) y cada instalación canjea UN código por SU slot
+# (POST /v1/slots/redeem). El código se quema al canjear; la reinstalación reclama
+# con POST /v1/slots/claim (solo devuelve, jamás asigna). Un slot = una sesión.
+
+SLOTS_MAX_BODY = 2048
+
+
+async def _slots_body(request: Request) -> dict:
+    raw = await request.body()
+    if len(raw) > SLOTS_MAX_BODY:
+        raise HTTPException(status_code=413, detail="cuerpo demasiado grande")
+    try:
+        body = json.loads(raw.decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    return body
+
+
+@app.post("/v1/slots/issue")
+async def slots_issue(request: Request, x_admin_key: str | None = Header(default=None)):
+    """El operador registra un SN aprovisionado y recibe su código de un solo uso."""
+    if not _config_admin_ok(x_admin_key, CONFIG_ADMIN_KEY):
+        raise HTTPException(status_code=403, detail="llave de administración inválida")
+    body = await _slots_body(request)
+    sn = device_slots.normalize_sn(body.get("sn"))
+    user_id = str(body.get("user_id") or "").strip()[:32]
+    if not sn:
+        raise HTTPException(status_code=400, detail="sn inválido")
+    for _ in range(3):
+        code = device_slots.generate_code()
+        try:
+            row = await db().fetchrow(
+                """
+                insert into device_slots (sn, user_id, status, claim_code)
+                values ($1, $2, 'free', $3)
+                on conflict (sn) do update set
+                    user_id = excluded.user_id,
+                    claim_code = case when device_slots.status = 'free'
+                        then excluded.claim_code else device_slots.claim_code end
+                returning claim_code
+                """,
+                sn, user_id, code,
+            )
+            return {"sn": sn, "code": row["claim_code"]}
+        except Exception:  # noqa: BLE001  # colisión de código: reintentar
+            continue
+    raise HTTPException(status_code=500, detail="no se pudo emitir el código")
+
+
+@app.post("/v1/slots/redeem")
+async def slots_redeem(request: Request, x_api_key: str | None = Header(default=None)):
+    """Canjear un código por el slot propio. Idempotente por dispositivo."""
+    require_key(x_api_key)
+    body = await _slots_body(request)
+    code = device_slots.normalize_code(body.get("code"))
+    device_key = device_slots.normalize_device_key(body.get("device_key"))
+    if not code:
+        raise HTTPException(status_code=400, detail="código inválido")
+    row = await db().fetchrow(
+        "select sn, user_id, status, device_key from device_slots where claim_code = $1",
+        code,
+    )
+    slot = dict(row) if row is not None else None
+    decision = device_slots.redeem_decision(slot, device_key)
+    if not decision["ok"]:
+        error = decision["error"]
+        if error == "invalid":
+            raise HTTPException(status_code=404, detail="código inválido")
+        if error == "taken":
+            raise HTTPException(status_code=409, detail="código ya usado en otro equipo")
+        if error == "blocked":
+            raise HTTPException(status_code=403, detail="slot bloqueado")
+        raise HTTPException(status_code=400, detail="dispositivo inválido")
+    if slot.get("status") != "assigned" or not slot.get("device_key"):
+        await db().execute(
+            """update device_slots set status = 'assigned', device_key = $2,
+               claim_code = null, assigned_at = now(), last_seen_at = now()
+               where sn = $1""",
+            decision["sn"], device_key,
+        )
+    else:
+        await db().execute(
+            "update device_slots set last_seen_at = now() where sn = $1",
+            decision["sn"],
+        )
+    return {"sn": decision["sn"], "user_id": decision["user_id"]}
+
+
+@app.post("/v1/slots/claim")
+async def slots_claim(request: Request, x_api_key: str | None = Header(default=None)):
+    """Reclamar el slot ya asignado a este dispositivo (reinstalación). Solo devuelve."""
+    require_key(x_api_key)
+    body = await _slots_body(request)
+    device_key = device_slots.normalize_device_key(body.get("device_key"))
+    if not device_key:
+        raise HTTPException(status_code=400, detail="dispositivo inválido")
+    row = await db().fetchrow(
+        "select sn, user_id from device_slots where device_key = $1",
+        device_key,
+    )
+    found = device_slots.claim_decision(dict(row) if row is not None else None)
+    if found is None:
+        raise HTTPException(status_code=404, detail="sin slot asignado")
+    await db().execute(
+        "update device_slots set last_seen_at = now() where device_key = $1",
+        device_key,
+    )
+    return found
+
+
+@app.post("/v1/slots/auto")
+async def slots_auto(request: Request, x_api_key: str | None = Header(default=None)):
+    """Auto-asignación al arrancar: cero códigos para el usuario.
+
+    Con asignación previa la devuelve; si no, entrega el slot libre auto-entregable
+    más viejo (transacción con SKIP LOCKED: dos equipos a la vez jamás comparten
+    slot). Sin libres → 409 (el operador carga más con /v1/slots/issue)."""
+    require_key(x_api_key)
+    body = await _slots_body(request)
+    device_key = device_slots.normalize_device_key(body.get("device_key"))
+    if not device_key:
+        raise HTTPException(status_code=400, detail="dispositivo inválido")
+    async with db().acquire() as conn:
+        async with conn.transaction():
+            existing = await conn.fetchrow(
+                "select sn, user_id from device_slots where device_key = $1",
+                device_key,
+            )
+            free = None
+            if existing is None:
+                free = await conn.fetchrow(
+                    """select sn, user_id from device_slots
+                       where status = 'free' and auto is true
+                       order by created_at, sn limit 1 for update skip locked"""
+                )
+            decision = device_slots.auto_decision(
+                dict(existing) if existing is not None else None,
+                dict(free) if free is not None else None,
+            )
+            if not decision["ok"]:
+                raise HTTPException(status_code=409, detail="sin slots libres")
+            if decision["fresh"]:
+                await conn.execute(
+                    """update device_slots set status = 'assigned', device_key = $2,
+                       claim_code = null, assigned_at = now(), last_seen_at = now()
+                       where sn = $1 and status = 'free'""",
+                    decision["sn"], device_key,
+                )
+            else:
+                await conn.execute(
+                    "update device_slots set last_seen_at = now() where device_key = $1",
+                    device_key,
+                )
+    return {"sn": decision["sn"], "user_id": decision["user_id"]}
+
+
+@app.get("/v1/slots/status")
+async def slots_status(x_admin_key: str | None = Header(default=None)):
+    """Conteo del pool para el operador."""
+    if not _config_admin_ok(x_admin_key, CONFIG_ADMIN_KEY):
+        raise HTTPException(status_code=403, detail="llave de administración inválida")
+    rows = await db().fetch("select status from device_slots")
+    return device_slots.pool_summary([dict(r) for r in rows])
+
+
+@app.post("/v1/slots/worker")
+async def slots_worker(request: Request, x_admin_key: str | None = Header(default=None)):
+    """Marcar qué SN usa el worker del catálogo (para que no patee a la app)."""
+    if not _config_admin_ok(x_admin_key, CONFIG_ADMIN_KEY):
+        raise HTTPException(status_code=403, detail="llave de administración inválida")
+    body = await _slots_body(request)
+    sn = device_slots.normalize_sn(body.get("sn"))
+    user_id = str(body.get("user_id") or "").strip()[:32]
+    if not sn:
+        raise HTTPException(status_code=400, detail="sn inválido")
+    await db().execute(
+        """
+        insert into device_slots (sn, user_id, status) values ($1, $2, 'worker')
+        on conflict (sn) do update set user_id = excluded.user_id, status = 'worker'
+        """,
+        sn, user_id,
+    )
+    return {"sn": sn}
 
 
 # ----- marcadores de salto (intro / recap / créditos) -----

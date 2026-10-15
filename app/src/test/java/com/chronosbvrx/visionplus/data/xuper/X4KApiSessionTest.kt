@@ -39,7 +39,6 @@ class X4KApiSessionTest {
         assertTrue(X4KApi.isSessionFailure(IOException("portal aaa100083")))
         assertTrue(X4KApi.isSessionFailure(IOException("portal 100001 expired")))
         assertTrue(X4KApi.isSessionFailure(IOException("portal 100004")))
-        assertTrue(X4KApi.isSessionFailure(IOException("portal 100008")))
         assertTrue(X4KApi.isSessionFailure(IOException("portal 200002")))
         assertTrue(X4KApi.isSessionFailure(IOException("portal 300002")))
         assertTrue(X4KApi.isSessionFailure(IOException("HTTP 403")))
@@ -49,5 +48,9 @@ class X4KApiSessionTest {
     fun businessErrorsAreNotSessionFailures() {
         assertFalse(X4KApi.isSessionFailure(IOException("portal 999999 licencia no disponible")))
         assertFalse(X4KApi.isSessionFailure(IOException("respuesta ilegible")))
+        // «No existe» es un error de CONTENIDO: renovar por él pateaba la sesión en tormenta
+        // (y un mint real borra entries/params a media reproducción).
+        assertFalse(X4KApi.isSessionFailure(IOException("portal portal100006 剧集不存在")))
+        assertFalse(X4KApi.isSessionFailure(IOException("portal portal100008 节目不存在")))
     }
 }

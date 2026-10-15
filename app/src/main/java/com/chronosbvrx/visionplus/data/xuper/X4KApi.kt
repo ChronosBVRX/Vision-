@@ -62,14 +62,17 @@ object X4KApi {
         0xe1.toByte(), 0xae.toByte(), 0x39.toByte(), 0xed.toByte(), 0xfe.toByte(), 0xb8.toByte(),
     )
 
-    private const val HOST_MAIN = "fuxok.nguvmqhpk.com"
-    private const val HOST_BACKUP = "mptec.dhkrxuzcy.com"
+    internal const val HOST_MAIN = "fuxok.nguvmqhpk.com"
+    internal const val HOST_BACKUP = "mptec.dhkrxuzcy.com"
 
-    private const val SN = "2392fe5186d83d73508a2c8c60a26ef6"
+    /** Identidad compartida de siempre (legado): todas las instalaciones sin slot propio
+     *  la usan. Con slot, el equipo acuña SU sesión y nadie patea a nadie. */
+    private const val LEGACY_SN = "2392fe5186d83d73508a2c8c60a26ef6"
+    internal const val LEGACY_USER_ID = "967111326"
     private const val PORTAL = "masnew"
-    private const val APP_ID = "com.android.msandroid"
-    private const val APK_VER = "43404"
-    private const val SPKG_VER = "2025-03-11 02:26:11_33_13_4.14.186-27270957"
+    internal const val APP_ID = "com.android.msandroid"
+    internal const val APK_VER = "43404"
+    internal const val SPKG_VER = "2025-03-11 02:26:11_33_13_4.14.186-27270957"
 
     private const val PREFS = "x4k_api"
     private const val K_USER_TOKEN = "user_token"
@@ -103,8 +106,56 @@ object X4KApi {
     @Volatile
     private var lastForcedMintAt = 0L
 
+    /** Slot propio del equipo (pool del servidor). Nulo = identidad compartida (legado).
+     *  Volátil por proceso: cada proceso (`:x4k` incluido) lo inicializa al arrancar. */
+    @Volatile
+    internal var slotSn: String? = null
+
+    @Volatile
+    internal var slotUserId: String? = null
+
+    @Volatile
+    private var slotsReady = false
+
+    /** Identidad efectiva del portal: la propia si hay slot, la compartida si no. */
+    internal fun snOf(): String = slotSn?.takeIf { it.isNotBlank() } ?: LEGACY_SN
+
+    internal fun userIdOf(): String = slotUserId?.takeIf { it.isNotBlank() } ?: LEGACY_USER_ID
+
+    /** Carga el slot propio (una vez por proceso; barato tras la primera). */
+    fun initSlots(context: Context) {
+        if (slotsReady) return
+        slotsReady = true
+        try {
+            SlotStore.load(context)?.let {
+                slotSn = it.sn
+                slotUserId = it.userId
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Fija el slot recién canjeado y jubila la sesión vieja (era de otra identidad). */
+    fun applySlot(context: Context, slot: DeviceSlot) {
+        SlotStore.save(context, slot)
+        slotSn = slot.sn
+        slotUserId = slot.userId
+        slotsReady = true
+        try {
+            prefs(context).edit()
+                .remove(K_USER_TOKEN).remove(K_SN_TOKEN).remove(K_SESSION_AT)
+                .remove(K_ENTRIES).remove(K_PARAMS).remove(K_ENGINE_AT)
+                .apply()
+        } catch (_: Exception) {
+        }
+    }
+
     /** Códigos del portal que significan «tu sesión ya no sirve» (pateada o expirada). */
-    private val SESSION_CODE_RX = Regex("portal\\s*(?:10000[1-8]|20000[0-2]|30000[1-2])")
+    // 100006/100007/100008 son errores de CONTENIDO («no existe»), no de sesión: tratarlos
+    // como patada renovaba la sesión en tormenta cada vez que un título desaparecía del
+    // portal (y un mint real borra entries/params a media reproducción). Solo 100001..100005,
+    // 200000..200002 y 300001..300002 significan «la sesión ya no sirve».
+    private val SESSION_CODE_RX = Regex("portal\\s*(?:10000[1-5]|20000[0-2]|30000[1-2])")
 
     /** ¿Se puede acuñar ahora? [force] (token rechazado) salta el silencio normal pero
      *  respeta su propio candado corto; puro, para los tests. */
@@ -136,7 +187,7 @@ object X4KApi {
         put("model", "SM-A325M")
         put("product", "a32ub")
         put("reserve1", "000000000000")
-        put("sn", SN)
+        put("sn", snOf())
         put("sysVersion", "13")
         val keys = specific.keys()
         while (keys.hasNext()) {
@@ -195,13 +246,46 @@ object X4KApi {
             put("portalCode", PORTAL)
         }).optString("snToken")
 
-    private fun activeCall(snToken: String): JSONObject =
+    private fun activeCall(snToken: String, snOverride: String? = null): JSONObject =
         post("/api/portalCore/v8/active", JSONObject().apply {
             put("snToken", snToken)
             put("macAddr", "02:00:00:00:00:00")
             put("channel", "default")
             put("portalCode", PORTAL)
+            if (!snOverride.isNullOrBlank()) put("sn", snOverride)
         })
+
+    /** Sal compartida de la familia (misma en Xuper/Hydra/Crystal): el portal acepta el
+     *  SN autoderivado `MD5(snToken + SALT)` sin aprovisionar nada (lo verificado). */
+    internal const val SELF_MINT_SALT = "ntFT65w6itH!lHCPw7D=@qnsFC5adD28"
+
+    /** SN propio a partir del snToken virgen; puro, para los tests. */
+    internal fun deriveSn(snToken: String): String {
+        val digest = java.security.MessageDigest.getInstance("MD5")
+            .digest((snToken + SELF_MINT_SALT).toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }.lowercase()
+    }
+
+    /** Alta automática (réplica Hydra, cero pool): snToken virgen → SN derivado → active.
+     *  Devuelve el slot propio ya aplicado, o lanza si el portal lo rechaza. */
+    suspend fun mintOwnSlot(context: Context): DeviceSlot = withContext(Dispatchers.IO) {
+        synchronized(lock) {
+            SlotStore.load(context)?.let { return@synchronized it }
+            val snToken = snTokenCall()
+            if (snToken.isBlank()) throw java.io.IOException("sin snToken")
+            val sn = deriveSn(snToken)
+            val active = activeCall(snToken, snOverride = sn)
+            val userToken = active.optString("userToken")
+            val userId = active.optString("userId")
+            if (userToken.isBlank() || userId.isBlank()) throw java.io.IOException("auto-alta rechazada")
+            val slot = DeviceSlot(sn, userId)
+            applySlot(context, slot)
+            storeSession(context, snToken, userToken)
+            val now = System.currentTimeMillis()
+            lastMintAt = now
+            slot
+        }
+    }
 
     private fun storeSession(context: Context, snToken: String, userToken: String) {
         prefs(context).edit()
@@ -356,7 +440,7 @@ object X4KApi {
         val slb = callWithSession(context, "/api/portalCore/v14/getSlbInfo") { token ->
             JSONObject().apply {
                 put("userToken", token)
-                put("userId", USER_ID)
+                put("userId", userIdOf())
                 put("hasPay", "0")
                 put("userIdentity", "1")
                 put("portalCode", PORTAL)
@@ -389,8 +473,6 @@ object X4KApi {
         }
     }
 
-    private const val USER_ID = "967111326"
-
     /** The XTV shelves for Home: featured, movies, series, kids and anime. Streams rows progressively. */
     suspend fun homeRows(
         context: Context,
@@ -420,7 +502,7 @@ object X4KApi {
             val d = guarded {
                 callWithSession(context, "/api/portalCore/getNextColumns") { token ->
                     JSONObject().apply {
-                        put("userId", USER_ID)
+                        put("userId", userIdOf())
                         put("userToken", token)
                         put("portalCode", PORTAL)
                         put("pageNum", 1)
@@ -733,7 +815,7 @@ object X4KApi {
                     put("columnId", 76182)
                     put("type", "1")
                     put("userToken", token)
-                    put("userId", USER_ID)
+                    put("userId", userIdOf())
                 }
             }
             val list = d.optJSONArray("programList") ?: JSONArray()
@@ -908,7 +990,7 @@ object X4KApi {
                     callWithSession(context, "/api/portalCore/v4/getItemData") { token ->
                         JSONObject().apply {
                             put("userToken", token)
-                            put("userId", USER_ID)
+                            put("userId", userIdOf())
                             put("portalCode", PORTAL)
                             put("contentId", cid)
                             put("type", type)
@@ -934,7 +1016,7 @@ object X4KApi {
                     callWithSession(context, "/api/portalCore/v4/getItemData") { token ->
                         JSONObject().apply {
                             put("userToken", token)
-                            put("userId", USER_ID)
+                            put("userId", userIdOf())
                             put("portalCode", PORTAL)
                             put("contentId", cid)
                             put("type", type)
@@ -957,7 +1039,7 @@ object X4KApi {
                     callWithSession(context, "/api/portalCore/v10/startPlayVOD") { token ->
                         JSONObject().apply {
                             put("userToken", token)
-                            put("userId", USER_ID)
+                            put("userId", userIdOf())
                             put("portalCode", PORTAL)
                             put("contentId", cid)
                             put("seriesContentId", "")
@@ -986,7 +1068,7 @@ object X4KApi {
             callWithSession(context, "/api/portalCore/v6/getLiveData") { token ->
                 JSONObject().apply {
                     put("userToken", token)
-                    put("userId", USER_ID)
+                    put("userId", userIdOf())
                     put("portalCode", PORTAL)
                     put("columnId", 76182)
                     put("dataVersion", "")
@@ -1098,7 +1180,20 @@ object X4KApi {
         fallbackDurationMs: Long = 0L,
     ): VodMedia? = withContext(Dispatchers.IO) {
         guarded {
-            ensureEngineData(context)
+            // Auto-reparado del motor: si PlayerRecovery rotó la carpeta de trabajo tras
+            // fallos silenciosos, renovar la sesión y forzar SLB/params frescas para que el
+            // arranque limpio no herede nada viejo.
+            val healed = PlayerRecovery.consumeGenChange(context) != null
+            if (healed) {
+                runCatching { renewSession(context, force = true) }
+                // El motor legado Xuper, con una sesión rancia, rota contra el mismo portal y
+                // tira la reproducción XTV: se desarma junto con el resto del estado del motor.
+                runCatching { XuperEngine.disable(context) }
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "PLAYER_HEAL_APPLIED", "sesion+slb frescas",
+                )
+            }
+            ensureEngineData(context, force = healed)
             val cid = xtvPortalId(contentId)
             val sid = xtvPortalId(seriesId)
             // The editorial card carries the true running time; a flaky network gets a second try.
@@ -1129,7 +1224,7 @@ object X4KApi {
                     callWithSession(context, "/api/portalCore/v10/startPlayVOD") { token ->
                         JSONObject().apply {
                             put("userToken", token)
-                            put("userId", USER_ID)
+                            put("userId", userIdOf())
                             put("portalCode", PORTAL)
                             put("contentId", cid)
                             put("seriesContentId", sid)
@@ -1148,7 +1243,7 @@ object X4KApi {
                         val freshToken = renewSession(context, force = true)
                         post("/api/portalCore/v10/startPlayVOD", JSONObject().apply {
                             put("userToken", freshToken)
-                            put("userId", USER_ID)
+                            put("userId", userIdOf())
                             put("portalCode", PORTAL)
                             put("contentId", cid)
                             put("seriesContentId", sid)

@@ -86,6 +86,9 @@ class XuperSource : Source {
     suspend fun channelCatalog(context: Context): List<LiveChannel> {
         if (!this::store.isInitialized) store = LiveStore(context.applicationContext)
         appCtx = context.applicationContext
+        // Origen desarmado (una sesión rancia tiraba la reproducción XTV del mismo portal):
+        // no se construye el cliente legado ni se regenera su almacén.
+        if (XuperEngine.isDisabled(context)) return emptyList()
         val client = XuperApiClient(context)
         val fetched = withContext(Dispatchers.IO) {
             runCatching { client.getLiveData().getOrNull().orEmpty() }.getOrDefault(emptyList())

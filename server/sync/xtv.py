@@ -410,6 +410,21 @@ _REVALIDATE_BUDGET = 8
 _REVALIDATED = 0
 
 
+async def _worker_slot(pool) -> tuple[str, str]:
+    """SN propio del worker (tabla device_slots, status 'worker'): con slot propio el
+    worker jamás patea a la app. Sin slot marcado: env o legado (como antes)."""
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "select sn, user_id from device_slots where status = 'worker' limit 1"
+            )
+        if row and (row["sn"] or "").strip():
+            return row["sn"].strip(), (row["user_id"] or "").strip()
+    except Exception as exc:  # noqa: BLE001 - sin tabla (schema viejo) se sigue como antes
+        log.warning("XTV: no se pudo leer el slot del worker (%s)", exc)
+    return "", ""
+
+
 async def _revalidate(pool):
     """Sesión nueva con tope por ciclo (None si se acabó el presupuesto o falla)."""
     global _REVALIDATED
@@ -417,11 +432,11 @@ async def _revalidate(pool):
         return None
     _REVALIDATED += 1
     try:
-        token, _ = await session_for(pool)
+        token, user_id = await session_for(pool)
     except Exception as exc:  # noqa: BLE001
         log.warning("XTV: revalidación falló (%s)", exc)
         return None
-    return XtvClient(token, XTV_USER_ID)
+    return XtvClient(token, user_id)
 
 
 async def _columns_retry(pool, client, column_id):
@@ -450,14 +465,15 @@ async def session_for(pool) -> tuple[str, str]:
     async with pool.acquire() as conn:
         row = await conn.fetchrow("select user_token from portal_sessions where portal = 'xtv'")
     token = (row["user_token"] if row else "") or ""
+    wsn, wuid = await _worker_slot(pool)
     if token:
         try:
-            await asyncio.to_thread(XtvClient(token, XTV_USER_ID).columns)
+            await asyncio.to_thread(XtvClient(token, wuid or XTV_USER_ID).columns)
             log.info("XTV: sesión guardada reutilizada")
-            return token, XTV_USER_ID
+            return token, wuid or XTV_USER_ID
         except Exception:  # noqa: BLE001
             log.warning("XTV: la sesión guardada no sirve; se renueva")
-    fresh, user_id = await asyncio.to_thread(new_session)
+    fresh, user_id = await asyncio.to_thread(new_session, wsn)
     async with pool.acquire() as conn:
         await conn.execute(
             """
@@ -467,7 +483,7 @@ async def session_for(pool) -> tuple[str, str]:
             """,
             fresh,
         )
-    return fresh, user_id or XTV_USER_ID
+    return fresh, user_id or wuid or XTV_USER_ID
 
 
 async def sync(pool) -> int:

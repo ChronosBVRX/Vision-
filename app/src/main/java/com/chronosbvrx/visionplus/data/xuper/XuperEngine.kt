@@ -36,6 +36,11 @@ object XuperEngine {
      * try already happened seconds ago, its answer repeats instead of hammering the backend.
      */
     suspend fun ensureReady(context: Context): Result<String> = withContext(Dispatchers.Main) {
+        // Desarmado permanente: ni cliente ni red; el origen legado ya no puede rotar contra
+        // el portal compartido (sus rotaciones rompían la reproducción XTV de la misma cuenta).
+        if (isDisabled(context)) {
+            return@withContext Result.failure(SourceError("el origen legado está desarmado"))
+        }
         if (isRunning()) return@withContext Result.success(proxy!!.getProxyUrl())
         lastFailure?.let { cached ->
             if (System.currentTimeMillis() - lastFailureAt < RETRY_BACKOFF_MS) {
@@ -48,9 +53,12 @@ object XuperEngine {
         val client = try {
             XuperApiClient(context.applicationContext)
         } catch (e: Exception) {
-            Log.w(TAG, "sin cliente XTV (${e.message}); se reintenta con backoff")
+            Log.w(TAG, "sin cliente XTV (${e.message}); se desarma el origen legado")
             lastFailure = e
             lastFailureAt = System.currentTimeMillis()
+            // Un almacén que ni abre (keyset roto tras un update) no se cura reintentando:
+            // se desarma para no fallar en bucle ni tocar el keystore una y otra vez.
+            disable(context)
             return@withContext Result.failure(e)
         }
         try {
@@ -59,14 +67,14 @@ object XuperEngine {
             // The playlist may simply be dead (a 404 from the backend, an expired one-time
             // path): that is not an exception, it is the moment to rotate and try again.
             Log.w(TAG, "la lista no respondió; rotando sesión y reintentando")
-            runCatching { rotateSession(client) }
+            runCatching { rotateSession(client, context) }
             val second = serveAndVerify(context, client)
             if (second.isSuccess) return@withContext second
             return@withContext first
         } catch (first: Exception) {
             Log.w(TAG, "arranque falló (${first.message}); rotando sesión y reintentando")
             runCatching {
-                rotateSession(client)
+                rotateSession(client, context)
                 serveAndVerify(context, client)
             }.recover {
                 Result.failure(first)
@@ -136,7 +144,7 @@ object XuperEngine {
         if (config.segmentPath.isNotBlank()) "$scheme://$host${config.segmentPath}" else ""
 
     /** The session stopped working: log in with the carried account and mint a fresh playlist path. */
-    private suspend fun rotateSession(client: XuperApiClient) = withContext(Dispatchers.IO) {
+    private suspend fun rotateSession(client: XuperApiClient, context: Context) = withContext(Dispatchers.IO) {
         val login = client.loginV8()
         Log.i(TAG, "auto-login: ${login.getOrNull() ?: login.exceptionOrNull()?.message}")
         if (login.isFailure) runCatching { client.probePortalBootstrap() }
@@ -149,7 +157,36 @@ object XuperEngine {
             if (client.probeGetLiveData().getOrNull()?.apiSuccess == true && mintFreshPlaylist(client)) return@withContext
         }
         Log.w(TAG, "nada de la rotación produjo una lista nueva")
+        // La sesión quedó inservible y rotar no la revive: desarmar el origen de forma
+        // permanente evita que siga pidiendo bootstrap/play al portal compartido (rompía la
+        // reproducción XTV del mismo portal en la misma cuenta).
+        disable(context)
     }
+
+    /**
+     * Desarma el origen legado de forma PERMANENTE. Su configuración capturada renace del
+     * código (borrar el almacén no basta — y el almacén es COMPARTIDO con el gate y Magis),
+     * y con una sesión rancia sus rotaciones martillan el portal compartido y tiran la
+     * reproducción XTV. El auto-reparado del reproductor también lo llama.
+     */
+    fun disable(context: Context) {
+        stop()
+        lastFailure = null
+        lastFailureAt = 0L
+        runCatching {
+            context.applicationContext.getSharedPreferences(FLAG_PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(FLAG_DISABLED, true).commit()
+        }
+        Log.w(TAG, "origen legado desarmado (no volverá a rotar)")
+    }
+
+    internal fun isDisabled(context: Context): Boolean =
+        context.applicationContext.getSharedPreferences(FLAG_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(FLAG_DISABLED, false)
+
+    /** Plain prefs (sin keystore): marca el desarme permanente del origen legado. */
+    private const val FLAG_PREFS = "xuper_engine"
+    private const val FLAG_DISABLED = "disabled"
 
     /** Live data again? With channel codes, `startPlayLive` grants a fresh one-time playlist path. */
     private suspend fun mintFreshPlaylist(client: XuperApiClient): Boolean = withContext(Dispatchers.IO) {
@@ -186,7 +223,7 @@ object XuperEngine {
                 return@withContext Result.success(proxy!!.getProxyUrl())
             }
             val client = XuperApiClient(context.applicationContext)
-            ensureSession(client)
+            ensureSession(client, context)
             runCatching {
                 val play = withContext(Dispatchers.IO) { client.startPlayLive(channelCode).getOrThrow() }
                 val path = playlistPathOf(play)
@@ -215,9 +252,9 @@ object XuperEngine {
     }
 
     /** The session must be alive before any per-channel request: rotate on a dead one. */
-    private suspend fun ensureSession(client: XuperApiClient) {
+    private suspend fun ensureSession(client: XuperApiClient, context: Context) {
         if (client.isSessionReady()) return
-        runCatching { rotateSession(client) }
+        runCatching { rotateSession(client, context) }
         if (!client.isSessionReady()) throw SourceError("la sesión integrada no tiene cookies (d/s/t)")
     }
 }

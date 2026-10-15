@@ -74,6 +74,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Identidad propia automática (cero códigos para el usuario): si el servidor
+        // ya conoce al equipo lo reclama; si hay pool libre, le asigna el más viejo.
+        // Alcance manual en IO (sin lifecycle-runtime-ktx en el proyecto).
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            runCatching {
+                com.chronosbvrx.visionplus.data.gate.SlotClient.ensureSlot(this@MainActivity)
+            }
+        }
         enableEdgeToEdge()
         isTv = DeviceKind.isTelevision(this)
         com.chronosbvrx.visionplus.ui.settings.VisionSettings.init(this)

@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -195,6 +196,23 @@ private fun ColumnScope.TvSystemTab() {
     TvSectionTitle("Diagnóstico y Red")
     Note("Conexión: ${s.getNetworkInfo(context)}")
     Note("Servidor de streaming: En línea (XTV Masnew)")
+    var showSlotDialog by rememberSaveable { mutableStateOf(false) }
+    var slotTick by remember { mutableStateOf(0) }
+    val slotStatus = remember(slotTick) {
+        com.chronosbvrx.visionplus.data.gate.SlotClient.statusText(context)
+    }
+    if (showSlotDialog) {
+        com.chronosbvrx.visionplus.ui.settings.SlotCodeDialog(
+            onDismiss = { showSlotDialog = false },
+            onRedeemed = {
+                showSlotDialog = false
+                slotTick++
+                Toast.makeText(context, "Equipo con identidad propia", Toast.LENGTH_SHORT).show()
+            },
+        )
+    }
+    TvActionOption("Identidad del equipo: $slotStatus") { showSlotDialog = true }
+    Note("Se asigna sola al arrancar; el código del operador es solo respaldo.")
     TvActionOption("Enviar diagnósticos: ${if (s.diagnosticsEnabled) "Sí" else "No"}") {
         s.setDiagnosticsEnabled(context, !s.diagnosticsEnabled)
     }

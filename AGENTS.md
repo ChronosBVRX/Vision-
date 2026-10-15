@@ -5,6 +5,151 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Subtítulos del proveedor dentro del reproductor (por fin de verdad) — OTA v2.5.74** (2026-10-14; 327 tests Android):
+  - *Diagnóstico (el usuario tenía razón: «idioma sí, subtítulos no»)*: en el SDK embarcado la llave
+    `"subtitle"` de la fachada es **un no-op** (`yc/h$l`: solo llama al motor para volume/audio/speed/
+    thumbnail/polling_period/mediacodec; subtitle/subtitle_delay/buffer_time/hdr_map/latency/default_subtitle
+    solo hacen `equals` y `return`) y el motor/vista tampoco saben pintar subtítulos. El APK oficial los
+    resuelve en la app: **servicio del portal** `POST /api/subs/terminal/metadata` con `{"programId":…}`
+    cifrado con llave propia (`NxZZ7EYgaJiJSBHjnq7sDxYvYRm32tPQ`, mismo sobre DESede+base64+hex de la casa),
+    respuesta `{returnCode, data:<hex cifrado>}` → lista de idiomas con SRTs → **descarga del .srt y
+    render por la app** (TextView overlay, como el `bb.g`/SubtitleManger del APK original; el motor no participa).
+  - *Replicado y verificado en vivo contra masnew*: `data/subs/Subs.kt` (puro: parser de la lista, parser
+    SRT con BOM/UTF-8/Latin-1, cues con búsqueda binaria, etiquetas de idioma) + `data/subs/SubsStore.kt`
+    (red con host de respaldo, caché de 24 h del índice en archivo —cruza `:x4k`—, SRT en
+    `filesDir/subs/<programa>/<idioma>_<idx>.srt`, elección por título+serie en `selection.json` con
+    «__off__» explícito). Vector de request/response capturado EN VIVO y clavado en `SubsTest`, más
+    `SubsStoreTest` (Robolectric: caché con formato del dispositivo, selección por serie, SRT cacheado).
+  - *Reproductor (`X4KPlayerAty`)*: overlay `TextView` sin foco (sube cuando los controles están visibles),
+    tic propio que se re-agenda al siguiente cambio de cue (tope 1 s), carga de la lista al abrir el
+    programa (y al cambiar de capítulo), auto-reactivación de la elección guardada, picker con la lista
+    REAL del servicio («✓ Desactivados / Español / Inglés»; sin lista: «Sin subtítulos disponibles»;
+    mientras viaja: «Buscando subtítulos…» y se reabre solo). El viejo camino (pistas del motor / `subsInfo`)
+    quedó fuera: era placebo.
+  - *Trampas cazadas en el camino*: (1) regex ICU de Android — `{\\[^}]*}` revienta en `Pattern.compile`
+    del `<clinit>` (JVM de escritorio lo acepta): corregida a `\{\\[^}]*\}` y por eso CUALQUIER 2.5.74
+    previo debe rehacerse; (2) el caché del índice se guardaba en un formato que el parser no releía
+    («Sin subtítulos disponibles» falso) — ahora escribe el mismo sobre que el servicio y un caché
+    ilegible se descarta y se reintenta; (3) en el A32 la fila de píldoras queda dentro de la zona de
+    gestos (tap en y≤2266): los scripts de prueba deben picar arriba de y=2274.
+  - *Verificado en el A32 (release R8, firma histórica)*: lista n=2 (es/en), `es_0.srt` de 56 KB,
+    901 cues, `subs activo 'es' … overlay=true`, captura con subtítulo en pantalla («Mientras más furia
+    sientes…»), elección persistida y auto-restaurada al reabrir; cero crashes.
+  - *Ojo (lecciones)*: los SRT del proveedor traen cues CORTOS y con huecos largos — una captura puede
+    caer entre cues y parecer «no funciona» (verificar con ráfaga + logs `subs list/activo`, no con una
+    sola foto). Y la lista de idiomas sale del servicio, no de `subsInfo` (que solo es texto).
+
+- **Espera del reproductor con contenido real (sin decir «película» en series) y refrescada por capítulo — pendiente OTA** (2026-10-14; 325 tests Android):
+  - *Pedido*: la espera decía «Preparando tu película…» incluso al abrir series, y al cambiar de capítulo
+    seguía mostrando el PRIMER capítulo de la sesión (4x3 aunque se viera el 4x8): el overlay se
+    construía UNA vez (título cocido) y en `playEpisode` solo se volvía a mostrar tal cual.
+  - *Fix*: `applyLoadingContent()` en `X4KPlayerAty` refresca la espera en cada cambio (mountUi,
+    playEpisode, zap de canal y cuando la lista de capítulos llega tarde). Puro `resolveLoadingCardText`
+    en `ControlsState.kt`: serie → título base + «T1 · Capítulo 8» en azul (más el nombre real del
+    capítulo si el portal lo trae; los genéricos «Capítulo N» se descartan); película → «Preparando tu
+    película…»; vivo → «Preparando la señal…». El nombre del canal también se refresca al zappear.
+  - *Guardianes*: `PlayerLoadingCardTest` (8 pruebas). Suite Android completa 325/325 en verde.
+  - *Handoff para el agente de subtítulos*: `docs/HANDOFF_ESPERA_REPRODUCTOR.md` (funciones exactas,
+    invariantes a respetar y la trampa de regex ICU).
+  - *Verificado en A32*: APK debug (vc310) instalado; reproducción con video OK, sin crash. La captura
+    de la espera en serie quedó pendiente: el teléfono estaba en uso concurrente (otra sesión probando
+    subtítulos). **Falta prueba física/OTA.**
+  - *CRÍTICO (subtítulos en curso, hallado de paso)*: un build 2.5.74 (R8) se caía al abrir CUALQUIER
+    título en `:x4k` (`ExceptionInInitializerError` en el `<clinit>` por `Pattern.compile`): **Android
+    (ICU) rechaza el patrón `\{\\[^}]*}`** (el `}` final sin escapar) mientras que en
+    JVM de escritorio compila — trampa solo-Android. La fuente ya tiene la variante válida
+    `\{\\[^}]*\}` (`data/subs/Subs.kt:119`). Comprobado con un dex lanzado en el propio teléfono:
+    `\{\\[^}]*}` → BAD, `\{\\[^}]*\}` → OK. **Cualquier 2.5.74 construido antes del fix debe rehacerse.**
+    También se repararon los imports rotos de `SubsStore.kt` (constantes viven dentro de `X4KApi`) para
+    que el árbol compile.
+- **Alta automática en el portal (réplica Hydra COMPLETA) — v2.5.73** (2026-10-14; 302 tests Android + 101 backend):
+  - *El usuario tenía razón*: Hydra no compra cuentas. En Crystal (`ac/a1.java`) el `isNew=="1"`
+    deriva local `SN = MD5(snToken + "ntFT65w6itH!lHCPw7D=@qnsFC5adD28")` — sal idéntica en los
+    3 APK (X4K original, Hydra, Crystal). El portal valida recomputando: sin `sn` derivado el
+    active da 100059; con él, `rc=0` con usuario visitante NUEVO.
+  - *Verificado contra masnew (no adivinado)*: sesión `969423096/identity=1` abre 10 repisas,
+    ficha y **licencia VOD real de Moana** (mismo playCode que la principal). `X4KApi.mintOwnSlot`
+    + `deriveSn` (vector MD5 en tests); orden: local → reclamo → auto-alta gratis → pool.
+  - *Verificado en el A32*: 2.5.73 se autodió de alta sola («Propia (771d970d…)») y Moana
+    reproduce con video y cero patadas. La primera revisión dijo «sin slot» por revisar a los
+    75 s: el mint tarda ~2 min con red lenta (logs `SlotClient` agregados). **OTA v2.5.73 publicada.**
+  - *Nota*: el pool de SN queda como respaldo VIP/manual; para el caso común ya no hace falta
+    upstream. Cada instalación = una sesión = fin de las patadas.
+- **Auto-asignación de identidad (cero códigos) — v2.5.72** (2026-10-14; 301 tests Android + 101 backend):
+  - *Pedido*: que ningún usuario escriba códigos. `POST /v1/slots/auto`: con asignación previa
+    la devuelve (reinstalación sin gastar); si no, entrega el libre `auto` más viejo en transacción
+    `SKIP LOCKED`; agotado → 409 y se sigue compartido en silencio. Columnas `auto`/`created_at`
+    (ALTER idempotente al arrancar el sync). La app lo intenta sola al arrancar (`ensureSlot`:
+    local → reclamo → auto); el canje manual queda de respaldo.
+  - *Verificado*: endpoint en vivo con slot falso (asigna, idempotente, 409 sin pool; falso
+    borrado después); 2.5.72 (vc308, R8, firma histórica) en el ZTE: arranca, identidad Propia
+    intacta, sin regresiones (el duelo teléfono-vs-tele persiste con el SN legado de prueba hasta
+    que haya slots reales — esperado, no regresión). **OTA v2.5.72 publicada.**
+  - *Deploy (ojo, 2 tropiezos)*: `api/Dockerfile` debe copiar `slots.py`; el sync COPIA en build
+    (reiniciar no basta: `up -d --build sync`); el `slots.py` nuevo también hay que subirlo
+    (`AttributeError auto_decision` si queda el viejo).
+- **Pool de identidades del portal (réplica del modelo Hydra) — v2.5.71** (2026-10-14; 301 tests Android + 98 backend):
+  - *Pregunta del usuario*: ¿cómo se distribuye Xuper Hydra sin que todos se pateen con la misma
+    sesión? Quiere lo mismo: instalar y listo, sin pedir cuentas.
+  - *Hallazgo (APK `com.msandroid.mobile` v6.5.7 descompilado con jadx en
+    `Temp/opencode/hydra_src3`)*: Hydra NO trae SN fijo (nuestro `2392fe…` no aparece en sus dex).
+    Manda `SnTokenBean` de 21 campos de huella real (androidId, wifi/eth MAC, serial, CID de la
+    eMMC, cpuId, RAM/ROM, build…) a `v3/snToken` y el portal responde
+    `SnTokenData{snToken, isNew, userId, sn}` — el SN lo asigna el servidor por dispositivo.
+    Flujo `v3/snToken → v6/active → v6/login`, visitante por defecto, `v5/heartbeat`,
+    SN persistido en prefs (`SP_SN_BACKUP`) + archivos + `.wav` en MediaStore (sobrevive
+    reinstalos). Colector en `b1.java`, tabla de endpoints en `utils/a0.java`, API en `db/y1.java`.
+  - *Veredicto para masnew (probado contra el portal, NO adivinado)*: el tenant NO incorpora
+    dispositivos: SN virgen → `v8/active` responde `portal100059`; huella completa real del ZTE
+    (21 campos vía root) → `v3/snToken` devuelve solo `{snToken, isNew:"0"}` y `v6/v8/active`
+    → `rc=1 parámetros anómalos`. La réplica exacta por huella es imposible en masnew; va por pool.
+  - *Sistema (operativo)*: tabla `device_slots` (sn, user_id, free|assigned|worker|blocked,
+    device_key único, claim_code único que se quema) + `POST /v1/slots/issue` (admin, emite código),
+    `POST /v1/slots/redeem` (canje idempotente por equipo), `POST /v1/slots/claim` (reclamo tras
+    reinstalar, solo devuelve), `GET /v1/slots/status` + `POST /v1/slots/worker` (admin). App:
+    `DeviceSlot`/`SlotStore` (cifrado)/`SlotClient`, `X4KApi` con SN/userId por slot (legado = igual
+    que antes si no hay slot), motor nativo (`X4KTitan.ensureConfigured` en player/warmup/descargas)
+    con la misma identidad, Ajustes → «Identidad del equipo» (móvil y TV) + reclamo silencioso al
+    arrancar. El worker lee su slot de la DB (`_worker_slot`) y deja de patear a la app.
+  - *Verificado*: servidor en vivo (status 0/0/0/0, redeem malo 404, issue sin llave 403, stats 200);
+    APK release R8 2.5.71 (vc307, firma histórica `9593cb0d…`) instalado en el ZTE: canje real por
+    D-pad del código `KF6SBGZE` → «Propia (2392fe51…)», slot `assigned` al `device_key` del box en
+    Postgres, Moana reproduce con la identidad aplicada, diagnósticos restaurados a Sí.
+    **OTA v2.5.71 publicada.**
+  - *Operador*: `/tmp/issue_slot.sh <SN> [USER_ID]` en el VPS emite códigos;
+    `POST /v1/slots/worker` fija el SN del worker. OJO: el pool arranca VACÍO y el slot de prueba
+    es el SN legado en el box (mismo comportamiento que antes). Cada usuario real necesita SU SN
+    aprovisionado del upstream — sin eso no hay distribución. Sin slot, todo sigue igual (legado).
+  - *Guardianes*: `DeviceSlotTest`, `X4KApiSlotTest`, `SlotStoreTest` (backend inyectable: Robolectric
+    no tiene AndroidKeyStore), `server/tests/test_slots.py`. Ojo: `api/Dockerfile` debe copiar
+    `slots.py` (se rompió el primer deploy por esto).
+- **Fix reproductor mudo en Smart TV («cajas atascadas») — el motor legado Xuper tumbaba la reproducción XTV** (2026-10-14; 291 tests Android):
+  - *Síntoma*: en el ZTE B866F la reproducción moría en silencio: el motor descargaba el video
+    (segmentos reales en `files/x4k-luna*/block_cache`) pero nunca arrancaba IJK (`FFP_MSG_OPEN_INPUT`
+    jamás salía) → overlay de error a los 20 s, una y otra vez, incluso con títulos que en el
+    teléfono reproducían perfecto. Fases de fallo de ~1–1.5 h que solo se curaban con `pm clear`.
+  - *Causa raíz (cazada con root en la tele)*: el motor LEGADO «Xuper» (`XuperApiClient`/`XuperEngine`,
+    config capturada en código: email/password/cookies, sn `ca0e53ed…`) guardaba una sesión rancia
+    en `xuper_secure` (EncryptedSharedPreferences **compartido** con el Gate y Magis). Sus rotaciones
+    (auto-login/bootstrap/startPlayLive contra el portal masnew) tumbaban la autorización de
+    reproducción del X4K de la misma cuenta — el motor bajaba datos pero el stream nunca arrancaba.
+    A/B con root: quitar el archivo → reproduce; reponerlo → falla; quitarlo → reproduce (3 ciclos
+    limpios). El estado renace del código: borrar el almacén no basta.
+  - *Fix (v2.5.70)*: `XuperEngine.disable()` — desarme permanente por bandera (`xuper_engine.xml`,
+    prefs llanas): tras una rotación que no produce lista nueva, o si el almacén ni abre, el origen
+    legado queda inerte (sin cliente, sin red, sin keystore) para siempre; `ensureReady`,
+    `ensureChannel` y `XuperSource.channelCatalog` respetan la bandera. `PlayerRecovery` (nuevo,
+    `data/xuper/`): racha de fallos silenciosos en archivo (cruza procesos `:x4k`↔principal), a los
+    2 seguidos rota la carpeta del motor (`x4k-luna-gen<N>`), renueva sesión+SLB
+    (`consumeGenChange` en `prepareVod`) y desarma el Xuper — auto-reparado sin que el usuario borre
+    datos. `PLAYER_ERROR` ahora lleva etapa/modo y hay evento `PLAYER_SELF_HEAL`.
+    `SESSION_CODE_RX` ya no renueva por 100006/100008 («no existe» — eran tormentas de renovación).
+  - *Verificado*: 291 tests (PlayerRecoveryTest, XuperEngineDisarmTest, anti-tormenta en
+    X4KApiSessionTest) + prueba física en el ZTE: con el archivo envenenado repuesto a propósito, la
+    app se auto-desarmó al arrancar y 3/3 reproducciones con video. **OTA v2.5.70 publicada.**
+  - *Ojo (lecciones)*: `xuper_secure` es un almacén compartido (Xuper legado + Gate + Magis): NO
+    borrarlo entero (daño colateral + renace); el desarme va por bandera. Y `PLAYER_ERROR` sin
+    etapa costó horas de arqueología: ahora la trae.
 - **Fix D-pad: el foco se perdía al volver de una ficha/serie en el Inicio de Smart TV** (2026-10-14; 285 tests Android):
   - *Primera ronda (v2.5.67, insuficiente)*: al regresar de una ficha, el Inicio arma su contenido
     en segundo plano (`Popularity.homeCurated` en `produceState`, desde v2.5.60) y los reintentos
@@ -361,8 +506,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.66**
-  (versionCode **302**, release OTA v2.5.66). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.74**
+  (versionCode **310**, release OTA v2.5.74). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

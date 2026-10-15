@@ -359,8 +359,8 @@ class X4KDownloadService : Service() {
         val configured = runCatching {
             X4KTitan.ensureConfigured(
                 context = app,
-                userId = "967111326",
-                devId = "2392fe5186d83d73508a2c8c60a26ef6",
+                userId = com.chronosbvrx.visionplus.data.xuper.X4KApi.userIdOf(),
+                devId = com.chronosbvrx.visionplus.data.xuper.X4KApi.snOf(),
                 androidId = androidId,
                 entriesJson = entriesJson,
                 playParams = playParams,

@@ -16,6 +16,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.text.Html
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -49,6 +50,12 @@ import com.chronosbvrx.visionplus.data.isFinished
 import com.chronosbvrx.visionplus.data.markers.MarkersStore
 import com.chronosbvrx.visionplus.data.shouldCountWatchedOnSkip
 import com.chronosbvrx.visionplus.data.shouldKeep
+import com.chronosbvrx.visionplus.data.subs.SrtCue
+import com.chronosbvrx.visionplus.data.subs.SubEntry
+import com.chronosbvrx.visionplus.data.subs.SubsStore
+import com.chronosbvrx.visionplus.data.subs.cueAt
+import com.chronosbvrx.visionplus.data.subs.distinctLanguages
+import com.chronosbvrx.visionplus.data.subs.languageName
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import com.chronosbvrx.visionplus.data.xuper.X4KTitan
 import com.chronosbvrx.visionplus.data.xuper.dedupeTrackLabels
@@ -81,6 +88,9 @@ class X4KPlayerAty : ComponentActivity() {
     }
     private var controls: View? = null
     private var loadingOverlay: View? = null
+    private var loadingTitleView: TextView? = null
+    private var loadingSubView: TextView? = null
+    private var loadingEpNameView: TextView? = null
     private var errorOverlay: View? = null
     private var picker: View? = null
     private var audioBtn: TextView? = null
@@ -224,8 +234,16 @@ class X4KPlayerAty : ComponentActivity() {
     private var errorShown = false
     private var picking = false
     private var declaredLanguages: List<String> = emptyList()
-    private var subtitleLanguages: List<String> = emptyList()
-    private var subtitlesOff = false
+
+    // Subtítulos del proveedor (servicio del portal → SRT → overlay), como el APK oficial:
+    // el motor nativo no sabe ni elegirlos ni pintarlos.
+    private var subsView: TextView? = null
+    private var subsEntries: List<SubEntry> = emptyList()
+    private var subsLoaded = false
+    private var subsCurrent: SubEntry? = null
+    private var subsCues: List<SrtCue> = emptyList()
+    private var subsLoadToken = ""
+    private var subsPickerWaiting = false
 
     private val handler = Handler(Looper.getMainLooper())
     private var controlsVisible = false
@@ -239,6 +257,8 @@ class X4KPlayerAty : ComponentActivity() {
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Identidad del portal en este proceso (:x4k tiene su propia memoria).
+        com.chronosbvrx.visionplus.data.xuper.X4KApi.initSlots(this)
         isPlayerActive = true
         startedAtMs = System.currentTimeMillis()
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
@@ -299,8 +319,6 @@ class X4KPlayerAty : ComponentActivity() {
                 declaredDurationMs = histEntry.durationMs
             }
         }
-        subtitleLanguages = intent.getStringExtra("subsLangs").orEmpty()
-            .split(',').map { it.trim() }.filter { it.isNotBlank() }
         val mediasJson = intent.getStringExtra("mediasB64")?.let {
             runCatching { String(android.util.Base64.decode(it, android.util.Base64.DEFAULT)) }.getOrNull()
         } ?: intent.getStringExtra("medias").orEmpty()
@@ -384,6 +402,8 @@ class X4KPlayerAty : ComponentActivity() {
                         if (epNames.isEmpty()) {
                             epNames = ArrayList(programs.map { it.name })
                         }
+                        // Con la lista real ya resuelta, la espera corrige el capítulo si hacía falta.
+                        applyLoadingContent(curTitle)
                         updateNextButtonState()
                     }
                 }
@@ -462,8 +482,8 @@ class X4KPlayerAty : ComponentActivity() {
                     val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID).orEmpty()
                     val ok = X4KTitan.ensureConfigured(
                         context = this,
-                        userId = "967111326",
-                        devId = "2392fe5186d83d73508a2c8c60a26ef6",
+                        userId = com.chronosbvrx.visionplus.data.xuper.X4KApi.userIdOf(),
+                        devId = com.chronosbvrx.visionplus.data.xuper.X4KApi.snOf(),
                         androidId = androidId,
                         entriesJson = resolvedEntries,
                         playParams = resolvedParams,
@@ -578,6 +598,7 @@ class X4KPlayerAty : ComponentActivity() {
             ),
         )
         playerView = v
+        if (!liveMode) buildSubtitleOverlay(root)
         curCode = code
         curTitle = title
         curBaseTitle = title.substringBefore(" · T").substringBefore(" · C").ifBlank { title }
@@ -635,6 +656,7 @@ class X4KPlayerAty : ComponentActivity() {
         buildLoading(root, title)
         buildError(root)
         wireGestures(root)
+        if (!liveMode && code.isNotBlank()) loadSubs(code)
 
         // While the pre-roll plays, it owns the screen: everything else stays out of its way.
         if (introView != null) {
@@ -670,7 +692,7 @@ class X4KPlayerAty : ComponentActivity() {
                     handler.postDelayed({ attemptPlay(retriesLeft - 1) }, 900L)
                 } else {
                     Log.e(TAG, "play devolvió false")
-                    showError()
+                    showError("motor-no-arranca")
                 }
             }
             attemptPlay(1)
@@ -759,20 +781,37 @@ class X4KPlayerAty : ComponentActivity() {
         box.addView(ProgressBar(this, null, android.R.attr.progressBarStyle).apply {
             indeterminateTintList = android.content.res.ColorStateList.valueOf(blueBright)
         }, LinearLayout.LayoutParams(dp(46), dp(46)).apply { topMargin = dp(26) })
-        box.addView(TextView(this).apply {
-            text = title
+        val titleView = TextView(this).apply {
             setTextColor(Color.WHITE)
             textSize = 17f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             setPadding(0, dp(18), 0, 0)
-        })
-        box.addView(TextView(this).apply {
-            text = if (liveMode) "Preparando la señal…" else "Preparando tu película…"
-            setTextColor(0x80FFFFFF.toInt())
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        loadingTitleView = titleView
+        box.addView(titleView)
+        val subView = TextView(this).apply {
             textSize = 13f
-            setPadding(0, dp(6), 0, 0)
-        })
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, 0)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        loadingSubView = subView
+        box.addView(subView)
+        val epNameView = TextView(this).apply {
+            textSize = 12f
+            setTextColor(0x99FFFFFF.toInt())
+            gravity = Gravity.CENTER
+            setPadding(0, dp(4), 0, 0)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        loadingEpNameView = epNameView
+        box.addView(epNameView)
+        applyLoadingContent(title)
         root.addView(
             box,
             FrameLayout.LayoutParams(
@@ -781,6 +820,30 @@ class X4KPlayerAty : ComponentActivity() {
             ),
         )
         loadingOverlay = box
+    }
+
+    /**
+     * La espera habla del contenido real: película, serie con su temporada/capítulo exacto o
+     * canal en vivo. Se refresca en cada cambio de episodio o de canal para que el título
+     * nunca quede congelado en el primero que se reprodujo.
+     */
+    private fun applyLoadingContent(rawTitle: String) {
+        val isSeries = !liveMode && (isSeriesContent(epIds.size, seasonIds.size) || curSeries.isNotBlank())
+        val card = resolveLoadingCardText(
+            isLive = liveMode,
+            isSeries = isSeries,
+            baseTitle = curBaseTitle,
+            rawTitle = rawTitle,
+            seasonLabel = if (seasonIds.size > 1) seasonLabel(curSeasonIndex) else "",
+            episodeIndex = curEpIndex,
+            episodeName = epNames.getOrNull(curEpIndex).orEmpty(),
+        )
+        loadingTitleView?.text = card.title
+        loadingSubView?.text = card.subtitle
+        loadingSubView?.setTextColor(if (card.accent) blueBright else 0x80FFFFFF.toInt())
+        loadingSubView?.typeface = if (card.accent) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+        loadingEpNameView?.text = card.episodeName
+        loadingEpNameView?.visibility = if (card.episodeName.isBlank()) View.GONE else View.VISIBLE
     }
 
     private fun buildError(root: FrameLayout) {
@@ -845,10 +908,10 @@ class X4KPlayerAty : ComponentActivity() {
         errorOverlay = box
     }
 
-    private fun showError() {
+    private fun showError(stage: String = "") {
         com.chronosbvrx.visionplus.data.diag.Diagnostics.engine("error")
         com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-            "PLAYER_ERROR", "overlay de error del reproductor nativo",
+            "PLAYER_ERROR", "etapa=${stage.ifBlank { "desconocida" }} modo=${if (liveMode) "live" else "vod"}",
         )
         errorShown = true
         removeIntro()
@@ -1504,27 +1567,17 @@ class X4KPlayerAty : ComponentActivity() {
 
     // ---------------------------------------------------------------- language pickers
 
-    private fun showLanguagePicker(forSubtitle: Boolean) {
-        lastPickerSourceBtn = if (forSubtitle) subsBtn else audioBtn
+    /** Audio: pistas del motor o idiomas declarados por el portal (el motor sí sabe elegirlas). */
+    private fun audioOptions(options: MutableList<Pair<String, () -> Unit>>) {
         val v = playerView ?: return
-        val options = ArrayList<Pair<String, () -> Unit>>()
-        val engineTracks = X4KTitan.tracks().filter { it.first == if (forSubtitle) "subtitle" else "audio" }
-        val declared = if (forSubtitle) subtitleLanguages else declaredLanguages
-
-        if (forSubtitle) {
-            options += "Desactivados" to {
-                subtitlesOff = true
-                X4KTitan.selectTrack("subtitle", -1)
-                subsBtn?.text = "\u25A1 Subtítulos"
-            }
-        }
+        val engineTracks = X4KTitan.tracks().filter { it.first == "audio" }
         if (engineTracks.isNotEmpty()) {
             // El motor a veces da el códec ("aac") en vez del idioma: se empareja con lo
             // declarado por el portal cuando los conteos coinciden; si no, cada pista usa
             // lo suyo y las etiquetas repetidas se distinguen por su id.
-            val pairByIndex = engineTracks.size == declared.size
+            val pairByIndex = engineTracks.size == declaredLanguages.size
             val resolved = engineTracks.mapIndexed { index, (_, lang, _) ->
-                trackDisplayLang(lang, declared.getOrNull(index)?.takeIf { pairByIndex })
+                trackDisplayLang(lang, declaredLanguages.getOrNull(index)?.takeIf { pairByIndex })
             }
             val rawLabels = engineTracks.mapIndexed { index, (_, lang, id) ->
                 val r = resolved[index]
@@ -1537,28 +1590,52 @@ class X4KPlayerAty : ComponentActivity() {
                 val pillText = resolved[index].takeIf { it.isNotBlank() }
                     ?.let { languageLabel(it, labels[index]) } ?: labels[index]
                 options += labels[index] to {
-                    X4KTitan.selectTrack(if (forSubtitle) "subtitle" else "audio", id)
-                    if (forSubtitle) {
-                        subtitlesOff = false
-                        subsBtn?.text = "\u25A1 $pillText"
-                    } else {
-                        audioBtn?.text = "\u25C9 $pillText"
-                    }
+                    X4KTitan.selectTrack("audio", id)
+                    audioBtn?.text = "\u25C9 $pillText"
                 }
             }
         } else {
-            declared.forEachIndexed { index, lang ->
+            declaredLanguages.forEachIndexed { index, lang ->
                 options += languageLabel(lang, "Pista ${index + 1}") to {
-                    if (forSubtitle) {
-                        subtitlesOff = false
-                        X4KTitan.selectTrack("subtitle", index + 1)
-                        subsBtn?.text = "\u25A1 " + languageLabel(lang, "Subtítulos")
-                    } else {
-                        X4KTitan.selectAudio(v, lang, index)
-                        audioBtn?.text = "\u25C9 " + languageLabel(lang, "Idioma")
-                    }
+                    X4KTitan.selectAudio(v, lang, index)
+                    audioBtn?.text = "\u25C9 " + languageLabel(lang, "Idioma")
                 }
             }
+        }
+    }
+
+    /** Subtítulos: la lista del servicio del proveedor para ESTE programa, con «Desactivados». */
+    private fun subtitleOptions(options: MutableList<Pair<String, () -> Unit>>) {
+        val langs = distinctLanguages(subsEntries)
+        options += (if (subsCurrent == null) "\u2713 Desactivados" else "Desactivados") to { disableSubs() }
+        when {
+            langs.isNotEmpty() -> langs.forEach { entry ->
+                val name = languageName(entry.language).ifBlank { entry.language.trim().uppercase() }
+                    .ifBlank { "Pista ${entry.index + 1}" }
+                val mark = if (subsCurrent?.langKey == entry.langKey) "\u2713 " else ""
+                options += (mark + name) to { activateSubs(curCode, entry) }
+            }
+            subsLoaded -> options += "Sin subtítulos disponibles" to { }
+            else -> {
+                // La lista aún viaja: se avisa y, cuando llega, el selector se reabre solo.
+                subsPickerWaiting = true
+                options += "Buscando subtítulos\u2026" to { }
+                if (curCode.isNotBlank()) loadSubs(curCode, force = true)
+            }
+        }
+    }
+
+    private fun showLanguagePicker(forSubtitle: Boolean) {
+        lastPickerSourceBtn = if (forSubtitle) subsBtn else audioBtn
+        playerView ?: return
+        val options = ArrayList<Pair<String, () -> Unit>>()
+        subsPickerWaiting = false
+        if (forSubtitle) {
+            // El reproductor nativo no resuelve subtítulos (la llave «subtitle» del SDK es un
+            // no-op): se piden al servicio del portal y se pintan en la app, como el APK oficial.
+            subtitleOptions(options)
+        } else {
+            audioOptions(options)
         }
         if (options.isEmpty()) return
 
@@ -1649,6 +1726,160 @@ class X4KPlayerAty : ComponentActivity() {
         }
         lastPickerSourceBtn = null
         scheduleHide()
+    }
+
+    // ---------------------------------------------------------------- subtitles (provider)
+
+    /** Overlay del subtítulo: sobre el video y bajo los controles, sin foco (el mando no lo pisa). */
+    private fun buildSubtitleOverlay(root: FrameLayout) {
+        val tv = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            textSize = if (isTv) 26f else 16f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setShadowLayer(if (isTv) 6f else 4f, 0f, if (isTv) 2f else 1f, 0xE6000000.toInt())
+            setLineSpacing(dp(3).toFloat(), 1f)
+            setPadding(dp(if (isTv) 64 else 20), 0, dp(if (isTv) 64 else 20), 0)
+            visibility = View.GONE
+            isClickable = false
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        root.addView(
+            tv,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM,
+            ).apply { bottomMargin = subsBottomMargin() },
+        )
+        subsView = tv
+    }
+
+    /** Los subtítulos suben cuando la barra de controles está visible. */
+    private fun subsBottomMargin(): Int =
+        if (controlsVisible) {
+            if (isTv) dp(150) else dp(120)
+        } else {
+            if (isTv) dp(64) else dp(56)
+        }
+
+    private fun applySubsMargins() {
+        val view = subsView ?: return
+        val params = view.layoutParams as? FrameLayout.LayoutParams ?: return
+        if (params.bottomMargin != subsBottomMargin()) {
+            params.bottomMargin = subsBottomMargin()
+            view.layoutParams = params
+        }
+    }
+
+    /** Lista del servicio para [cid] (en hilo aparte); al llegar reabre el aviso y restaura. */
+    private fun loadSubs(cid: String, force: Boolean = false) {
+        if (liveMode || cid.isBlank()) return
+        subsLoadToken = cid
+        Thread {
+            val list = SubsStore.loadList(this, cid, force)
+            runOnUiThread {
+                if (subsLoadToken != cid || curCode != cid) return@runOnUiThread
+                subsEntries = list
+                subsLoaded = true
+                Log.i(TAG, "subs list cid=$cid n=${list.size}")
+                if (subsPickerWaiting && picking) {
+                    subsPickerWaiting = false
+                    dismissPicker()
+                    showLanguagePicker(forSubtitle = true)
+                }
+                maybeRestoreSubs(cid)
+            }
+        }.start()
+    }
+
+    /** La elección guardada del título (o de su serie) se reaplica al abrir el capítulo. */
+    private fun maybeRestoreSubs(cid: String) {
+        if (subsCurrent != null) return
+        val saved = SubsStore.selection(this, cid, curSeries)
+        if (saved.isBlank()) return
+        val entry = distinctLanguages(subsEntries)
+            .firstOrNull { it.langKey == saved.trim().lowercase() } ?: return
+        activateSubs(cid, entry)
+    }
+
+    /** Descarga (o reusa) el SRT elegido, lo parsea y enciende el overlay. */
+    private fun activateSubs(cid: String, entry: SubEntry) {
+        if (cid.isBlank()) return
+        val label = languageName(entry.language).ifBlank { entry.language.trim().uppercase() }
+            .ifBlank { "Subtítulos" }
+        subsBtn?.text = "\u25A1 $label\u2026"
+        Thread {
+            val file = SubsStore.ensureSrtFile(this, cid, entry)
+            val cues = file?.let { SubsStore.readCues(it) }.orEmpty()
+            runOnUiThread {
+                if (curCode != cid) return@runOnUiThread
+                if (cues.isEmpty()) {
+                    Log.w(TAG, "subtítulos sin cues ($cid · ${entry.language})")
+                    subsBtn?.text = "\u25A1 No disponible"
+                    return@runOnUiThread
+                }
+                subsCurrent = entry
+                subsCues = cues
+                subsView?.tag = null
+                SubsStore.saveSelection(this, cid, curSeries, entry.langKey)
+                subsBtn?.text = "\u25A1 $label"
+                Log.i(TAG, "subs activo '${entry.language}' cues=${cues.size} overlay=${subsView != null}")
+                startSubsTicker()
+            }
+        }.start()
+    }
+
+    /** «Desactivados»: apaga el overlay y lo recuerda para este título. */
+    private fun disableSubs(save: Boolean = true) {
+        stopSubsTicker()
+        subsCurrent = null
+        subsCues = emptyList()
+        subsView?.apply {
+            text = ""
+            visibility = View.GONE
+            tag = null
+        }
+        subsBtn?.text = "\u25A1 Subtítulos"
+        if (save && curCode.isNotBlank()) SubsStore.saveSelection(this, curCode, curSeries, "")
+    }
+
+    /**
+     * El tic de subtítulos: pinta el cue activo y se re-agenda al próximo cambio de texto
+     * (fin del cue o inicio del siguiente), con tope de 1 s para que un seek se note rápido.
+     */
+    private val subsTick = object : Runnable {
+        override fun run() {
+            val view = subsView ?: run {
+                Log.w(TAG, "subs overlay ausente")
+                return
+            }
+            if (subsCues.isEmpty()) return
+            val pos = X4KTitan.positionMs().coerceAtLeast(0L)
+            val cue = cueAt(subsCues, pos)
+            if (cue == null) {
+                if (view.visibility != View.GONE) {
+                    view.text = ""
+                    view.visibility = View.GONE
+                    view.tag = null
+                }
+            } else if (view.tag !== cue) {
+                view.tag = cue
+                view.text = Html.fromHtml(cue.text.replace("\n", "<br>"), Html.FROM_HTML_MODE_LEGACY)
+                view.visibility = View.VISIBLE
+            }
+            handler.postDelayed(this, SubsStore.tickDelayMs(subsCues, pos))
+        }
+    }
+
+    private fun startSubsTicker() {
+        handler.removeCallbacks(subsTick)
+        handler.post(subsTick)
+    }
+
+    private fun stopSubsTicker() {
+        handler.removeCallbacks(subsTick)
     }
 
     // ---------------------------------------------------------------- quality picker
@@ -2394,8 +2625,15 @@ class X4KPlayerAty : ComponentActivity() {
         curEpIndex = epIdx
         curSeasonIndex = seasonIdx
         topTitle?.text = title
+        // La espera muestra el capítulo que de verdad se abre (no el primero de la sesión).
+        applyLoadingContent(title)
         // Marcadores: el mismo lote de temporada reusa la ventana del intro; otra, la limpia.
         keepMarkersForSeason(series)
+        // Subtítulos: el capítulo nuevo es otro programId en el servicio — soltar los previos
+        // (la lista y la elección se recuperan al arrancar el nuevo, más abajo).
+        disableSubs(save = false)
+        subsEntries = emptyList()
+        subsLoaded = false
 
         // Reiniciar duración del capítulo previo para que el nuevo episodio tome su duración exacta.
         durationMs = -1L
@@ -2431,7 +2669,7 @@ class X4KPlayerAty : ComponentActivity() {
             }
             runOnUiThread {
                 if (prep == null) {
-                    showError()
+                    showError("sin-medios")
                     return@runOnUiThread
                 }
                 var medias = runCatching { parseMedias(prep.mediasJson) }.getOrDefault(ArrayList())
@@ -2442,7 +2680,7 @@ class X4KPlayerAty : ComponentActivity() {
                     played = medias.isNotEmpty() && X4KTitan.play(v, "vod", code, title, medias)
                 }
                 if (!played) {
-                    showError()
+                    showError("motor-no-arranca")
                     return@runOnUiThread
                 }
                 curMedias = ArrayList(medias)
@@ -2457,8 +2695,8 @@ class X4KPlayerAty : ComponentActivity() {
                 qualityBtn?.text = "⚙ " + formatQualityShort(curQuality)
                 declaredLanguages = medias.first().audio
                     .split(',').map { it.trim() }.filter { it.isNotBlank() }
-                subtitleLanguages = prep.subsLangs
-                    .split(',').map { it.trim() }.filter { it.isNotBlank() }
+                // Subtítulos del capítulo nuevo: lista propia del servicio para este programa.
+                loadSubs(code)
                 if (prep.durationMs > 0 && declaredDurationMs <= 0L) {
                     declaredDurationMs = prep.durationMs
                 }
@@ -2564,6 +2802,8 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** Al primer cuadro: reanuda lo pedido desde Inicio, o pregunta si quedó a medias. */
     private fun onFirstFrame() {
+        // El motor pintó: la racha de fallos silenciosos vuelve a cero (auto-reparado).
+        com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.noteSuccess(this)
         if (liveMode) return
         if (resumeMs > 0 && !resumeApplied) {
             val at = resumeMs
@@ -2782,6 +3022,7 @@ class X4KPlayerAty : ComponentActivity() {
         curCode = code
         curTitle = name
         topTitle?.text = name
+        applyLoadingContent(name)
         epgLine?.text = ""
         updateFavButtonState()
         updateLiveBanner()
@@ -3504,21 +3745,7 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** "spa" -> "Español"; falls back to a role label, then the raw code. */
     private fun languageLabel(code: String, role: String): String {
-        val name = when (code.lowercase().trim()) {
-            "spa", "es", "esp" -> "Español"
-            "eng", "en" -> "Inglés"
-            "por", "pt" -> "Portugués"
-            "fra", "fre", "fr" -> "Francés"
-            "deu", "ger", "de" -> "Alemán"
-            "ita", "it" -> "Italiano"
-            "jpn", "ja" -> "Japonés"
-            "kor", "ko" -> "Coreano"
-            "zho", "chi", "zh" -> "Chino"
-            "rus", "ru" -> "Ruso"
-            "ara", "ar" -> "Árabe"
-            "hin", "hi" -> "Hindi"
-            else -> ""
-        }
+        val name = languageName(code)
         return name.ifBlank { if (code.isBlank()) role else code.trim().replaceFirstChar { it.uppercase() } }
     }
 
@@ -3544,6 +3771,7 @@ class X4KPlayerAty : ComponentActivity() {
         controlsVisible = !controlsVisible
         c.visibility = if (controlsVisible) View.VISIBLE else View.GONE
         if (controlsVisible) scheduleHide()
+        applySubsMargins()
         updateIntroPill(com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L))
     }
 
@@ -3557,12 +3785,14 @@ class X4KPlayerAty : ComponentActivity() {
         root().findFocus()?.clearFocus()
         controlsVisible = false
         controls?.visibility = View.GONE
+        applySubsMargins()
         updateIntroPill(com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L))
     }
 
     private fun exitPlayer() {
         // Con el motor todavía vivo: al detenerlo la posición se pierde y el cierre guardaba
         // un minuto viejo (o nada). El commit deja el avance exacto antes de morir el proceso.
+        stopSubsTicker()
         saveHistory(immediate = true)
         playerView?.let { X4KTitan.stop(it) }
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -3640,7 +3870,19 @@ class X4KPlayerAty : ComponentActivity() {
                 if (!firstFrame && !errorShown &&
                     System.currentTimeMillis() - startedAtMs > 20_000
                 ) {
-                    showError()
+                    // Auto-reparado de cajas atascadas: el motor arrancó pero jamás pintó
+                    // cuadro. Tras dos fallos seguidos se rota el motor a una generación
+                    // nueva; el proceso principal aplicará sesión/SLB frescas al siguiente
+                    // intento y el arranque limpio dejará de heredar el estado envenenado.
+                    val racha = com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.noteFailure(this@X4KPlayerAty)
+                    if (com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.shouldHeal(racha)) {
+                        val gen = com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.bumpEngineGen(this@X4KPlayerAty)
+                        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                            "PLAYER_SELF_HEAL", "gen=$gen racha=$racha modo=${if (liveMode) "live" else "vod"}",
+                        )
+                        Log.w(TAG, "motor atascado: rotado a generación $gen (racha=$racha)")
+                    }
+                    showError("sin-primer-cuadro")
                 }
                 if (!scrubbing) {
                     if (total > 0) {

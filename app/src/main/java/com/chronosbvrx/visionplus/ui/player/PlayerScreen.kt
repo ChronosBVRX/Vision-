@@ -1690,7 +1690,9 @@ private fun XtvHandoff(
             }
         }
         if (!ok) {
-            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly("PLAYBACK_HANDOFF_FAIL", lastError)
+            // El detalle vacío no sirve en campo: sin excepción suele ser prepare=null.
+            val detail = lastError.ifBlank { "sin-medios (prepare=null)" }
+            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly("PLAYBACK_HANDOFF_FAIL", detail)
             failed = true
         } else {
             // Cold-starting the player's own process can bounce a spurious resume on some ROMs

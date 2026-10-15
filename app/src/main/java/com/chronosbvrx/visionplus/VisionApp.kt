@@ -22,6 +22,9 @@ class VisionApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         com.chronosbvrx.visionplus.data.offline.OfflineRegistry.init(this)
+        // Identidad propia del portal (pool del servidor): cada proceso la carga en
+        // memoria una vez; sin slot se sigue con la identidad compartida (legado).
+        com.chronosbvrx.visionplus.data.xuper.X4KApi.initSlots(this)
         // Diagnóstico de campo (Fase 1): crashes, ANRs y anomalías hacia el VPS.
         // Corre también en `:x4k` (crashes del reproductor) y encola ahí; la subida
         // la hace el proceso principal para no duplicar envíos.
