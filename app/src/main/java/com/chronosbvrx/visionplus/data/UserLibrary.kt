@@ -91,7 +91,8 @@ object UserLibrary {
 
     /**
      * Recomendado para ti: cuenta en qué categorías del índice vive lo ya visto y propone títulos
-     * de las más afines. Devuelve (categoría ancla, títulos) o null si aún no hay señales.
+     * de las más afines. Lo reciente pesa más (lo de ayer manda sobre lo de hace meses) y lo ya
+     * visto nunca se propone. Devuelve (categoría ancla, títulos) o null si aún no hay señales.
      */
     fun recommendations(indexRows: List<CatalogRow>, played: List<Film>, limit: Int = 40): Pair<String, List<Film>>? {
         if (played.isEmpty() || indexRows.isEmpty()) return null
@@ -108,8 +109,11 @@ object UserLibrary {
             }
         }
         val hits = LinkedHashMap<String, Int>()
-        played.take(15).forEach { film ->
-            filmRows[film.id]?.forEach { rowId -> hits[rowId] = (hits[rowId] ?: 0) + 1 }
+        val recent = played.take(15)
+        recent.forEachIndexed { idx, film ->
+            // `played` va de lo más reciente a lo más viejo: lo de ayer pesa triple.
+            val weight = 3 - (idx * 2 / recent.size.coerceAtLeast(1))
+            filmRows[film.id]?.forEach { rowId -> hits[rowId] = (hits[rowId] ?: 0) + weight }
         }
         val top = hits.entries.sortedByDescending { it.value }.take(4).map { it.key }
         if (top.isEmpty()) return null

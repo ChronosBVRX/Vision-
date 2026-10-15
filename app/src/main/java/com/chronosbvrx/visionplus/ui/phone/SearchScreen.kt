@@ -10,6 +10,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -108,13 +111,19 @@ fun SearchScreen(rows: List<CatalogRow>, onBack: () -> Unit, onOpenFilm: (Film) 
             RemoteIndexSource.search(q, limit = 60)
         }.getOrDefault(emptyList())
 
-        if (serverResults.isNotEmpty()) {
-            results = serverResults
+        val found = if (serverResults.isNotEmpty()) {
+            serverResults
         } else {
             // 2. Respaldo local optimizado en Dispatchers.Default
-            results = withContext(Dispatchers.Default) {
+            withContext(Dispatchers.Default) {
                 searchFilms(rows, q).take(60)
             }
+        }
+        // Modo niños: la búsqueda del servidor no sabe del bloqueo; se filtra aquí.
+        results = if (com.chronosbvrx.visionplus.data.kids.KidsMode.locked) {
+            found.filter { it.kind == "kids" }
+        } else {
+            found
         }
         isSearching = false
     }
@@ -167,7 +176,25 @@ fun SearchScreen(rows: List<CatalogRow>, onBack: () -> Unit, onOpenFilm: (Film) 
             }
             if (results.isEmpty() && !isSearching && text.isNotBlank()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    Text("Sin resultados para \"$text\"", color = VisionTextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text("🔍", style = MaterialTheme.typography.displayMedium)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "Sin resultados para \"$text\"",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            "Prueba sin acentos, con menos palabras o por actor/director.",
+                            color = VisionTextSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                    }
                 }
             }
             items(results, key = { it.id }) { film ->

@@ -83,6 +83,69 @@ def _get(path: str, **params) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def current_week() -> str:
+    """Etiqueta ISO de la semana (2026-W42): la tendencia se refresca por semana."""
+    import datetime
+
+    year, week, _ = datetime.date.today().isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+def parse_trending(payload, media: str) -> list:
+    """Títulos de `/trending/{movie,tv}/week` → [(tmdb_id, puesto)] (puro, testeable)."""
+    out = []
+    results = (payload or {}).get("results") if isinstance(payload, dict) else None
+    if not isinstance(results, list):
+        return out
+    for rank, item in enumerate(results, start=1):
+        if not isinstance(item, dict):
+            continue
+        try:
+            tmdb_id = int(item.get("id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if tmdb_id > 0:
+            out.append((tmdb_id, rank))
+    return out
+
+
+async def sync_trending(pool) -> int:
+    """Baja lo más visto de la semana (cine + series) y lo deja en `weekly_trending`.
+
+    Dos llamadas por semana (una por tipo): si la semana ya está guardada no hace nada.
+    """
+    if not KEY:
+        return 0
+    week = current_week()
+    async with pool.acquire() as conn:
+        have = await conn.fetchval("select count(*) from weekly_trending where week = $1", week)
+        if have:
+            return 0
+    rows = []
+    try:
+        for media in ("movie", "tv"):
+            payload = await asyncio.to_thread(_get, f"/trending/{media}/week", language="es-MX")
+            rows += [(tmdb_id, media, rank) for tmdb_id, rank in parse_trending(payload, media)]
+    except Exception as exc:  # noqa: BLE001 - sin red no se tumba el ciclo
+        log.warning("TMDB trending falló: %s", exc)
+        return 0
+    if not rows:
+        return 0
+    async with pool.acquire() as conn:
+        await conn.executemany(
+            """
+            insert into weekly_trending (week, tmdb_id, media, rank, updated_at)
+            values ($1, $2, $3, $4, now())
+            on conflict (week, tmdb_id) do update set
+                media = excluded.media, rank = excluded.rank, updated_at = now()
+            """,
+            [(week, tmdb_id, media, rank) for tmdb_id, media, rank in rows],
+        )
+        await conn.execute("delete from weekly_trending where week <> $1", week)
+    log.info("TMDB trending %s: %s títulos", week, len(rows))
+    return len(rows)
+
+
 def _confidence(query: str, candidate: dict, kind: str, year: int | None) -> float:
     title = candidate.get("title") or candidate.get("name") or ""
     original = candidate.get("original_title") or candidate.get("original_name") or ""

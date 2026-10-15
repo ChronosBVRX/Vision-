@@ -21,15 +21,20 @@ import java.util.concurrent.ConcurrentHashMap
  * SharedPreferences no cruzan procesos y este dato se necesita al abrir el capítulo.
  */
 
-/** `intro`: [introStartMs] puede faltar (solo se conoce el fin); `credits`: solo el inicio. */
+/** `intro`/`recap`: [start] puede faltar (solo se conoce el fin); `credits`: solo el inicio. */
 data class EpisodeMarkers(
     val introStartMs: Long = -1L,
     val introEndMs: Long = -1L,
+    val recapStartMs: Long = -1L,
+    val recapEndMs: Long = -1L,
     val creditsStartMs: Long = -1L,
+    val postCreditsStartMs: Long = -1L,
 ) {
     val hasIntro: Boolean get() = introEndMs > 0L
+    val hasRecap: Boolean get() = recapEndMs > 0L
     val hasCredits: Boolean get() = creditsStartMs > 0L
-    val isEmpty: Boolean get() = !hasIntro && !hasCredits
+    val hasPostCredits: Boolean get() = postCreditsStartMs > 0L
+    val isEmpty: Boolean get() = !hasIntro && !hasRecap && !hasCredits && !hasPostCredits
 }
 
 /** Ventana en la que se ofrece «Omitir intro» ([start] = 0 cuando solo se conoce el fin). */
@@ -45,28 +50,53 @@ internal fun inIntroWindow(positionMs: Long, markers: EpisodeMarkers): Boolean {
     return positionMs in window
 }
 
+/** Ventana del resumen («Anteriormente…»): misma regla que el intro. */
+internal fun skipRecapWindow(markers: EpisodeMarkers): LongRange? {
+    if (!markers.hasRecap) return null
+    val start = if (markers.recapStartMs >= 0L) markers.recapStartMs else 0L
+    val end = markers.recapEndMs - 2000L
+    return if (end < start) null else start..end
+}
+
+internal fun inRecapWindow(positionMs: Long, markers: EpisodeMarkers): Boolean {
+    val window = skipRecapWindow(markers) ?: return false
+    return positionMs in window
+}
+
 /** Con marcador de créditos: al llegar al inicio de los créditos el capítulo ya terminó. */
 internal fun shouldOfferCredits(positionMs: Long, markers: EpisodeMarkers): Boolean =
     markers.hasCredits && positionMs >= markers.creditsStartMs
 
-/** JSON del servidor (`{"intro":{"s":…,"e":…},"credits":{"s":…}}`) → marcadores. */
+/** JSON del servidor (`{"intro":{"s":…,"e":…},"recap":{…},"credits":{"s":…}}`) → marcadores. */
 internal fun parseMarkers(json: String?): EpisodeMarkers {
     if (json.isNullOrBlank()) return EpisodeMarkers()
     return runCatching {
         val root = JSONObject(json)
         var intro = -1L
         var introEnd = -1L
+        var recap = -1L
+        var recapEnd = -1L
         var credits = -1L
+        var postCredits = -1L
         root.optJSONObject("intro")?.let { seg ->
             if (!seg.isNull("s")) intro = seg.optLong("s", -1L)
             introEnd = seg.optLong("e", -1L)
         }
+        root.optJSONObject("recap")?.let { seg ->
+            if (!seg.isNull("s")) recap = seg.optLong("s", -1L)
+            recapEnd = seg.optLong("e", -1L)
+        }
         root.optJSONObject("credits")?.let { seg ->
             if (!seg.isNull("s")) credits = seg.optLong("s", -1L)
         }
+        root.optJSONObject("postCredits")?.let { seg ->
+            if (!seg.isNull("s")) postCredits = seg.optLong("s", -1L)
+        }
         if (introEnd <= 0L) intro = -1L
+        if (recapEnd <= 0L) recap = -1L
         if (credits <= 0L) credits = -1L
-        EpisodeMarkers(intro, introEnd, credits)
+        if (postCredits <= 0L) postCredits = -1L
+        EpisodeMarkers(intro, introEnd, recap, recapEnd, credits, postCredits)
     }.getOrDefault(EpisodeMarkers())
 }
 
@@ -79,8 +109,17 @@ internal fun toPlayerJson(markers: EpisodeMarkers): String {
         intro.put("e", markers.introEndMs)
         root.put("intro", intro)
     }
+    if (markers.hasRecap) {
+        val recap = JSONObject()
+        if (markers.recapStartMs >= 0L) recap.put("s", markers.recapStartMs)
+        recap.put("e", markers.recapEndMs)
+        root.put("recap", recap)
+    }
     if (markers.hasCredits) {
         root.put("credits", JSONObject().put("s", markers.creditsStartMs))
+    }
+    if (markers.hasPostCredits) {
+        root.put("postCredits", JSONObject().put("s", markers.postCreditsStartMs))
     }
     return root.toString()
 }

@@ -71,13 +71,25 @@ def test_parse_idb_maps_outro_to_credits():
         "intro": {"start_ms": 44200, "end_ms": 82000, "submission_count": 2, "confidence": 1.0},
         "outro": {"start_ms": 2527000, "end_ms": None, "submission_count": 1},
         "recap": None,
-        "post_credits": {"start_ms": 2600000},
+        "post-credits": {"start_ms": 2600000, "end_ms": 2655000, "submission_count": 1},
     }
     out = markers.parse_idb(payload)
     assert out["intro"]["e"] == 82000
     assert out["credits"]["s"] == 2527000 and out["credits"]["src"] == "introdb"
-    # post-credits no es un segmento de salto de la app: se ignora.
-    assert "post_credits" not in out
+    assert out["postCredits"]["s"] == 2600000 and out["postCredits"]["e"] == 2655000
+
+
+def test_parse_tidb_reads_post_credits_list():
+    payload = {
+        "intro": [],
+        "post_credits": [
+            {"start_ms": 2600000, "end_ms": 2650000, "submission_count": 1},
+            {"start_ms": 2610000, "end_ms": 2660000, "submission_count": 3},
+        ],
+    }
+    out = markers.parse_tidb(payload)
+    assert out["postCredits"]["s"] == 2610000 and out["postCredits"]["votes"] == 3
+    assert "intro" not in out
 
 
 def test_parse_tolerates_garbage():
@@ -130,6 +142,28 @@ def test_sanitize_recap_never_exceeds_five_minutes():
     long = {"s": 30000, "e": 600000, "src": "introdb", "votes": 1, "conf": 1.0}
     assert "recap" in markers.sanitize({"recap": ok})
     assert markers.sanitize({"recap": long}) == {}
+
+
+def test_sanitize_post_credits_must_be_late():
+    good = {"s": 2600000, "e": 2650000, "src": "introdb", "votes": 1, "conf": 1.0}
+    early = {"s": 60000, "e": 120000, "src": "introdb", "votes": 1, "conf": 1.0}
+    assert markers.sanitize({"postCredits": good}, duration_min=45)["postCredits"]["s"] == 2600000
+    assert markers.sanitize({"postCredits": early}, duration_min=45) == {}
+    assert markers.sanitize({"postCredits": {"s": 60000, "e": 60000}}, duration_min=0) == {}
+
+
+def test_merge_includes_post_credits():
+    a = {"postCredits": {"s": 1, "e": 2, "src": "theintrodb", "votes": 1}}
+    b = {"postCredits": {"s": 3, "e": 4, "src": "introdb", "votes": 1}}
+    assert markers.merge(a, b)["postCredits"]["src"] == "introdb"
+    assert markers.merge(a, {})["postCredits"]["s"] == 1
+
+
+def test_payload_carries_post_credits():
+    segments = {"postCredits": {"s": 2600000, "e": None, "src": "introdb", "votes": 1}}
+    out = markers.payload("xtv:ABC", 1, 1, segments)
+    assert out["found"] is True
+    assert out["postCredits"] == {"s": 2600000, "e": None, "src": "introdb"}
 
 
 # ---------------------------------------------------------------- fusión

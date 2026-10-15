@@ -518,6 +518,14 @@ private fun TvMatchChannelsModal(
 
                 Spacer(Modifier.height(14.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    if (match.status == "pre" && match.kickoffMs > System.currentTimeMillis()) {
+                        com.chronosbvrx.visionplus.ui.notify.TvRemindAction(
+                            matchId = match.id,
+                            kickoffMs = match.kickoffMs,
+                            title = "${match.home.name} vs ${match.away.name}",
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
                     TvCompactAction("Cerrar", onClick = onDismiss)
                 }
             }

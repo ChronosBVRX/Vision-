@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,10 +40,20 @@ import com.chronosbvrx.visionplus.BuildConfig
 import com.chronosbvrx.visionplus.DevicePerformance
 import com.chronosbvrx.visionplus.EffectsMode
 import com.chronosbvrx.visionplus.data.AppUpdate
+import com.chronosbvrx.visionplus.data.PlaybackHistory
+import com.chronosbvrx.visionplus.data.UserLibrary
+import com.chronosbvrx.visionplus.data.follow.FollowStore
+import com.chronosbvrx.visionplus.data.kids.KidsMode
+import com.chronosbvrx.visionplus.data.stats.formatMinutes
+import com.chronosbvrx.visionplus.data.stats.kindLabel
+import com.chronosbvrx.visionplus.data.stats.summarize
+import com.chronosbvrx.visionplus.ui.kids.TvKidsPinDialog
 import com.chronosbvrx.visionplus.ui.settings.VisionSettings
 import com.chronosbvrx.visionplus.ui.settings.rememberUpdateCheck
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Pestañas de Ajustes en Smart TV. */
 enum class TvSettingsTab(val label: String) {
@@ -147,6 +158,24 @@ private fun ColumnScope.TvPlaybackTab() {
         s.setAutoResume(context, !s.autoResume)
     }
     Note("Continúa directo desde el minuto guardado sin desplegar el diálogo de confirmación.")
+
+    TvSectionTitle("Subtítulos")
+    TvActionOption("Tamaño: ${s.subSizeLabel(s.subSize)}") {
+        s.setSubSize(context, s.nextSubSize(s.subSize))
+    }
+    Note("Ahora los pinta la app: el tamaño sí se aplica.")
+    val subPosLabel = if (s.subPosition == VisionSettings.SUB_POS_TOP) "Arriba" else "Abajo"
+    TvActionOption("Posición: $subPosLabel") {
+        s.setSubPosition(
+            context,
+            if (s.subPosition == VisionSettings.SUB_POS_TOP) VisionSettings.SUB_POS_BOTTOM
+            else VisionSettings.SUB_POS_TOP,
+        )
+    }
+    TvActionOption("Bajar el siguiente capítulo con WiFi: ${if (s.autoDownloadNext) "Sí" else "No"}") {
+        s.setAutoDownloadNext(context, !s.autoDownloadNext)
+    }
+    Note("Al salir del reproductor deja bajando solo el siguiente capítulo pendiente.")
 }
 
 @Composable
@@ -222,8 +251,101 @@ private fun ColumnScope.TvSystemTab() {
         Toast.makeText(context, "Diagnóstico enviado", Toast.LENGTH_SHORT).show()
     }
 
+    TvSectionTitle("Modo niños")
+    TvKidsSettingsRows()
+    TvSectionTitle("Mi actividad")
+    TvActivityRows()
+
     TvSectionTitle("Actualizaciones y Sistema")
     Note("Versión instalada: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})")
     TvActionOption(if (update.checking) "Buscando…" else "Buscar actualizaciones") { update.run() }
     TvActionOption("Licencias de software libre") { showNotices = true }
+}
+
+/** Filas de Modo niños para Ajustes TV: crear PIN, bloquear y cambiar PIN. */
+@Composable
+private fun ColumnScope.TvKidsSettingsRows() {
+    val context = LocalContext.current
+    var hasPin by remember { mutableStateOf(KidsMode.hasPin(context)) }
+    var lockedTick by remember { mutableStateOf(0) }
+    remember(lockedTick) { KidsMode.locked }
+    var askSetup by rememberSaveable { mutableStateOf(false) }
+    var askUnlock by rememberSaveable { mutableStateOf(false) }
+    var askChange by rememberSaveable { mutableStateOf(false) }
+    if (askSetup) {
+        TvKidsPinDialog(setup = true, onDismiss = { askSetup = false }, onOk = { pin ->
+            if (KidsMode.setPin(context, pin)) {
+                hasPin = true
+                askSetup = false
+                Toast.makeText(context, "PIN creado", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+    if (askUnlock) {
+        TvKidsPinDialog(setup = false, onDismiss = { askUnlock = false }, onOk = { pin ->
+            if (KidsMode.unlock(context, pin)) {
+                askUnlock = false
+                lockedTick++
+            } else {
+                Toast.makeText(context, "PIN incorrecto", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+    if (askChange) {
+        TvKidsPinDialog(setup = false, onDismiss = { askChange = false }, onOk = { pin ->
+            if (KidsMode.verify(context, pin)) {
+                askChange = false
+                askSetup = true
+            } else {
+                Toast.makeText(context, "PIN incorrecto", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+    if (!hasPin) {
+        TvActionOption("Crear PIN de niños") { askSetup = true }
+        Note("De 4 a 8 dígitos. Solo muestra contenido infantil al bloquear.")
+    } else {
+        TvActionOption("Bloqueo infantil: ${if (KidsMode.locked) "Activo" else "Apagado"}") {
+            if (KidsMode.locked) askUnlock = true
+            else {
+                KidsMode.lock(context)
+                lockedTick++
+            }
+        }
+        Note("En vivo, deportes, lista y descargas piden el PIN.")
+        TvActionOption("Cambiar PIN") { askChange = true }
+    }
+}
+
+/** «Mi actividad» para Ajustes TV: resumen local, nada se sube. */
+@Composable
+private fun ColumnScope.TvActivityRows() {
+    val context = LocalContext.current
+    var lines by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var loaded by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val result = withContext(Dispatchers.IO) {
+            val entries = PlaybackHistory.list(context)
+            val films = UserLibrary.played(context).associateBy { it.id }
+            val stats = summarize(entries, films)
+            val following = FollowStore.followed(context).size
+            buildList {
+                if (stats.isEmpty && following == 0) return@buildList
+                if (stats.minutesWatched > 0) add("Tiempo visto" to formatMinutes(stats.minutesWatched))
+                if (stats.episodesFinished > 0) add("Capítulos terminados" to "${stats.episodesFinished}")
+                if (stats.filmsFinished > 0) add("Películas terminadas" to "${stats.filmsFinished}")
+                if (stats.topKind.isNotBlank()) add("Lo que más ves" to kindLabel(stats.topKind))
+                if (following > 0) add("Series que sigues" to "$following")
+            }
+        }
+        lines = result
+        loaded = true
+    }
+    if (!loaded) {
+        Note("Calculando…")
+    } else if (lines.isEmpty()) {
+        Note("Aún no hay actividad: reproduce algo y aquí verás tu resumen.")
+    } else {
+        lines.forEach { (k, v) -> Note("$k: $v") }
+    }
 }

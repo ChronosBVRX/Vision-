@@ -81,6 +81,13 @@ fun isLandscapeTablet(): Boolean {
     return config.smallestScreenWidthDp >= 600 && config.orientation == Configuration.ORIENTATION_LANDSCAPE
 }
 
+/** Phone lying flat: compact heroes and centered columns (not stretched layouts). */
+@Composable
+fun isLandscapePhone(): Boolean {
+    val config = LocalConfiguration.current
+    return config.smallestScreenWidthDp < 600 && config.orientation == Configuration.ORIENTATION_LANDSCAPE
+}
+
 /**
  * El tamaño real de la pantalla en píxeles. Los fondos a pantalla completa (hero/fichas) lo usan
  * para pedirle a Coil la imagen al tamaño de despliegue y no a la resolución fuente (en TV eso

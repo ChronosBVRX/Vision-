@@ -141,15 +141,22 @@ class X4KPlayerAty : ComponentActivity() {
     private var nextAutoAdvance = true
     private var nextCreditsMode = false
 
-    // Marcadores de salto (intro / créditos): el intro se repite en toda la temporada,
-    // así que la misma ventana sirve para los capítulos siguientes de la misma fila.
+    // Marcadores de salto (intro / resumen / créditos / post-créditos): el intro se
+    // repite en toda la temporada, así que la misma ventana sirve para los capítulos
+    // siguientes de la misma fila.
     private var markIntroStartMs = -1L
     private var markIntroEndMs = -1L
+    private var markRecapStartMs = -1L
+    private var markRecapEndMs = -1L
     private var markCreditsStartMs = -1L
+    private var markPostCreditsStartMs = -1L
     private var markSeasonRef = ""
     private var introSkipped = false
+    private var recapSkipped = false
     private var creditsCardShown = false
+    private var postCreditsShown = false
     private var introPill: TextView? = null
+    private var postCreditsNotice: TextView? = null
     private var skipIntroMode = "button"
 
     private data class NextEp(
@@ -1575,6 +1582,9 @@ class X4KPlayerAty : ComponentActivity() {
                     ?.let { languageLabel(it, labels[index]) } ?: labels[index]
                 options += labels[index] to {
                     X4KTitan.selectTrack("audio", id)
+                    com.chronosbvrx.visionplus.ui.settings.VisionSettings.setAudioLang(
+                        this, curSeries.ifBlank { curCode }, resolved[index].ifBlank { labels[index] },
+                    )
                     audioBtn?.text = "\u25C9 $pillText"
                 }
             }
@@ -1582,6 +1592,9 @@ class X4KPlayerAty : ComponentActivity() {
             declaredLanguages.forEachIndexed { index, lang ->
                 options += languageLabel(lang, "Pista ${index + 1}") to {
                     X4KTitan.selectAudio(v, lang, index)
+                    com.chronosbvrx.visionplus.ui.settings.VisionSettings.setAudioLang(
+                        this, curSeries.ifBlank { curCode }, lang,
+                    )
                     audioBtn?.text = "\u25C9 " + languageLabel(lang, "Idioma")
                 }
             }
@@ -1590,6 +1603,7 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** Subtítulos: la lista del servicio del proveedor para ESTE programa, con «Desactivados». */
     private fun subtitleOptions(options: MutableList<Pair<String, () -> Unit>>) {
+        val settings = com.chronosbvrx.visionplus.ui.settings.VisionSettings
         val langs = orderSubsForPicker(distinctLanguages(subsEntries), subsCurrent?.langKey.orEmpty())
         options += (if (subsCurrent == null) "\u2713 Desactivados" else "Desactivados") to { disableSubs() }
         when {
@@ -1605,6 +1619,42 @@ class X4KPlayerAty : ComponentActivity() {
                 subsPickerWaiting = true
                 options += "Buscando subtítulos\u2026" to { }
                 if (curCode.isNotBlank()) loadSubs(curCode, force = true)
+            }
+        }
+        // Ajustes reales del overlay (lo pinta la app): tamaño, posición y sincronía.
+        options += "🔠 Tamaño: ${settings.subSizeLabel(settings.subSizeOf(this))}" to {
+            settings.setSubSize(this, settings.nextSubSize(settings.subSizeOf(this)))
+            applySubsMargins()
+            reopenPicker()
+        }
+        val atTop = settings.subPositionOf(this) == settings.SUB_POS_TOP
+        options += (if (atTop) "⬆ Posición: arriba" else "⬇ Posición: abajo") to {
+            settings.setSubPosition(this, if (atTop) settings.SUB_POS_BOTTOM else settings.SUB_POS_TOP)
+            applySubsMargins()
+            reopenPicker()
+        }
+        val offset = settings.subOffsetMsOf(this)
+        options += "⏱ Sincronía: ${formatOffset(offset)} (−0.5 s)" to {
+            settings.setSubOffsetMs(this, offset - 500)
+            reopenPicker()
+        }
+        options += "⏱ Sincronía: ${formatOffset(offset)} (+0.5 s)" to {
+            settings.setSubOffsetMs(this, offset + 500)
+            reopenPicker()
+        }
+    }
+
+    private fun formatOffset(ms: Int): String =
+        com.chronosbvrx.visionplus.data.subs.formatSubsOffset(ms)
+
+    private fun reopenPicker() {
+        val wasSubs = lastPickerSourceBtn == subsBtn
+        dismissPicker()
+        // El click que llamó a la acción descarta el selector al terminar: reabrir en el
+        // siguiente ciclo para no pelear con ese descarte.
+        handler.post {
+            runCatching {
+                if (!isFinishing && !isDestroyed) showLanguagePicker(forSubtitle = wasSubs)
             }
         }
     }
@@ -1716,9 +1766,10 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** Overlay del subtítulo: sobre el video y bajo los controles, sin foco (el mando no lo pisa). */
     private fun buildSubtitleOverlay(root: FrameLayout) {
+        val settings = com.chronosbvrx.visionplus.ui.settings.VisionSettings
         val tv = TextView(this).apply {
             setTextColor(Color.WHITE)
-            textSize = if (isTv) 26f else 16f
+            textSize = settings.subSizeSp(settings.subSizeOf(this@X4KPlayerAty), isTv)
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             setShadowLayer(if (isTv) 6f else 4f, 0f, if (isTv) 2f else 1f, 0xE6000000.toInt())
@@ -1734,13 +1785,19 @@ class X4KPlayerAty : ComponentActivity() {
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM,
-            ).apply { bottomMargin = subsBottomMargin() },
+                if (settings.subPositionOf(this) == com.chronosbvrx.visionplus.ui.settings.VisionSettings.SUB_POS_TOP) Gravity.TOP else Gravity.BOTTOM,
+            ).apply {
+                if (settings.subPositionOf(this@X4KPlayerAty) == com.chronosbvrx.visionplus.ui.settings.VisionSettings.SUB_POS_TOP) {
+                    topMargin = subsTopMargin()
+                } else {
+                    bottomMargin = subsBottomMargin()
+                }
+            },
         )
         subsView = tv
     }
 
-    /** Los subtítulos suben cuando la barra de controles está visible. */
+    /** Los subtítulos suben cuando la barra de controles está visible (solo abajo). */
     private fun subsBottomMargin(): Int =
         if (controlsVisible) {
             if (isTv) dp(150) else dp(120)
@@ -1748,12 +1805,44 @@ class X4KPlayerAty : ComponentActivity() {
             if (isTv) dp(64) else dp(56)
         }
 
+    private fun subsTopMargin(): Int = if (isTv) dp(64) else dp(56)
+
     private fun applySubsMargins() {
         val view = subsView ?: return
         val params = view.layoutParams as? FrameLayout.LayoutParams ?: return
-        if (params.bottomMargin != subsBottomMargin()) {
-            params.bottomMargin = subsBottomMargin()
-            view.layoutParams = params
+        val settings = com.chronosbvrx.visionplus.ui.settings.VisionSettings
+        if (settings.subPositionOf(this) == com.chronosbvrx.visionplus.ui.settings.VisionSettings.SUB_POS_TOP) {
+            params.gravity = Gravity.TOP
+            if (params.topMargin != subsTopMargin()) {
+                params.topMargin = subsTopMargin()
+                view.layoutParams = params
+            }
+        } else {
+            params.gravity = Gravity.BOTTOM
+            if (params.bottomMargin != subsBottomMargin()) {
+                params.bottomMargin = subsBottomMargin()
+                view.layoutParams = params
+            }
+        }
+        val wantSize = settings.subSizeSp(settings.subSizeOf(this), isTv)
+        if (view.textSize != wantSize * resources.displayMetrics.scaledDensity) {
+            view.textSize = wantSize
+        }
+    }
+
+    /** El idioma de audio elegido en la serie se reaplica solo (sin re-elegir). */
+    private fun maybeRestoreAudioLang() {
+        val seriesKey = curSeries.ifBlank { curCode }
+        if (seriesKey.isBlank() || declaredLanguages.isEmpty()) return
+        val saved = com.chronosbvrx.visionplus.ui.settings.VisionSettings.audioLangOf(this, seriesKey)
+        if (saved.isBlank()) return
+        val v = playerView ?: return
+        val idx = declaredLanguages.indexOfFirst {
+            it.equals(saved, ignoreCase = true) || trackDisplayLang(it, null).equals(saved, ignoreCase = true)
+        }
+        if (idx < 0) return
+        if (X4KTitan.selectAudio(v, declaredLanguages[idx], idx)) {
+            audioBtn?.text = "\u25C9 " + languageLabel(declaredLanguages[idx], "Idioma")
         }
     }
 
@@ -1853,7 +1942,10 @@ class X4KPlayerAty : ComponentActivity() {
             return null
         }
         if (subsCues.isEmpty()) return null
-        val pos = X4KTitan.positionMs().coerceAtLeast(0L)
+        val offset = com.chronosbvrx.visionplus.ui.settings.VisionSettings.subOffsetMsOf(this)
+        val pos = com.chronosbvrx.visionplus.data.subs.lookupWithOffset(
+            X4KTitan.positionMs().coerceAtLeast(0L), offset,
+        )
         val cue = cueAt(subsCues, pos)
         if (cue == null) {
             if (view.visibility != View.GONE) {
@@ -2026,16 +2118,21 @@ class X4KPlayerAty : ComponentActivity() {
     // ---------------------------------------------------------------- marcadores de salto
 
     /**
-     * Marcadores del capítulo (intro / créditos) tal como llegaron en el intent. El intro
-     * se repite en toda la temporada: la misma ventana sirve para los capítulos siguientes
-     * de la misma fila; al cambiar de temporada se limpia (los intros cambian).
+     * Marcadores del capítulo (intro / resumen / créditos / post-créditos) tal como llegaron
+     * en el intent. El intro se repite en toda la temporada: la misma ventana sirve para los
+     * capítulos siguientes de la misma fila; al cambiar de temporada se limpia (cambian).
      */
     private fun applyMarkers(json: String) {
         markIntroStartMs = -1L
         markIntroEndMs = -1L
+        markRecapStartMs = -1L
+        markRecapEndMs = -1L
         markCreditsStartMs = -1L
+        markPostCreditsStartMs = -1L
         introSkipped = false
+        recapSkipped = false
         creditsCardShown = false
+        postCreditsShown = false
         if (json.isNotBlank()) {
             runCatching {
                 val root = JSONObject(json)
@@ -2043,27 +2140,38 @@ class X4KPlayerAty : ComponentActivity() {
                     if (!seg.isNull("s")) markIntroStartMs = seg.optLong("s", -1L)
                     markIntroEndMs = seg.optLong("e", -1L)
                 }
+                root.optJSONObject("recap")?.let { seg ->
+                    if (!seg.isNull("s")) markRecapStartMs = seg.optLong("s", -1L)
+                    markRecapEndMs = seg.optLong("e", -1L)
+                }
                 root.optJSONObject("credits")?.let { seg ->
                     markCreditsStartMs = seg.optLong("s", -1L)
+                }
+                root.optJSONObject("postCredits")?.let { seg ->
+                    markPostCreditsStartMs = seg.optLong("s", -1L)
                 }
             }
         }
         if (markIntroEndMs <= 0L) markIntroStartMs = -1L
+        if (markRecapEndMs <= 0L) markRecapStartMs = -1L
         if (markCreditsStartMs <= 0L) markCreditsStartMs = -1L
+        if (markPostCreditsStartMs <= 0L) markPostCreditsStartMs = -1L
     }
 
     /** Al pasar de capítulo: el mismo lote reusa la ventana; otra temporada la limpia. */
     private fun keepMarkersForSeason(series: String) {
         if (series.isNotBlank() && "xtv:$series" == markSeasonRef) {
             introSkipped = false
+            recapSkipped = false
             creditsCardShown = false
+            postCreditsShown = false
         } else {
             markSeasonRef = if (series.isNotBlank()) "xtv:$series" else ""
             applyMarkers("")
         }
     }
 
-    /** El botón «⏭ Omitir intro» vive sobre los controles, sin taparlos (estilo Netflix). */
+    /** El botón «⏭ Omitir intro / resumen» vive sobre los controles, sin taparlos (estilo Netflix). */
     private fun buildIntroPill(root: FrameLayout) {
         val pill = TextView(this).apply {
             text = "⏭ Omitir intro"
@@ -2090,23 +2198,59 @@ class X4KPlayerAty : ComponentActivity() {
                 bottomMargin = dp(if (isTv) 138 else 118)
             },
         )
+        // Aviso discreto de escena post-créditos: no es botón (no roba foco), se muestra
+        // solo unos segundos al entrar a los créditos y se esconde solo.
+        val notice = TextView(this).apply {
+            text = "🎬 Hay escena después de los créditos"
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+            background = roundBackground(0xCC0A0F18.toInt(), 10)
+            visibility = View.GONE
+            isFocusable = false
+            isClickable = false
+        }
+        postCreditsNotice = notice
+        root.addView(
+            notice,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL,
+            ).apply {
+                bottomMargin = dp(if (isTv) 150 else 128)
+            },
+        )
+    }
+
+    /** Qué salto ofrece la píldora ahora: el resumen primero (suele ir antes que el intro). */
+    private fun skipTargetNow(pos: Long): Pair<String, Long>? {
+        if (markRecapEndMs > 0L && !recapSkipped && pos in recapWindowRange()) {
+            return "⏭ Omitir resumen" to markRecapEndMs
+        }
+        if (markIntroEndMs > 0L && !introSkipped && pos in introWindowRange()) {
+            return "⏭ Omitir intro" to markIntroEndMs
+        }
+        return null
     }
 
     private fun skipIntroNow() {
-        if (markIntroEndMs <= 0L) return
         val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
-        introSkipped = true
-        performSeekBy(markIntroEndMs - pos)
-        updateIntroPill(markIntroEndMs)
+        val target = skipTargetNow(pos) ?: return
+        if (target.first.contains("resumen")) recapSkipped = true else introSkipped = true
+        performSeekBy(target.second - pos)
+        updateIntroPill(target.second)
     }
 
-    /** Visible durante la ventana del intro; con controles visibles es un blanco del D-pad. */
+    /** Visible durante la ventana del intro o del resumen; con controles visibles es un blanco del D-pad. */
     private fun updateIntroPill(pos: Long) {
         val pill = introPill ?: return
-        val inWindow = markIntroEndMs > 0L && pos in introWindowRange()
-        val show = inWindow && !introSkipped &&
+        val target = skipTargetNow(pos)
+        val show = target != null &&
             skipIntroMode == com.chronosbvrx.visionplus.ui.settings.VisionSettings.SKIP_INTRO_BUTTON &&
             !errorShown && !picking && nextOverlay == null && introView == null && resumeOverlay == null
+        if (target != null) pill.text = target.first
         pill.visibility = if (show) View.VISIBLE else View.GONE
         pill.isFocusable = show && isTv && controlsVisible
         pill.isFocusableInTouchMode = false
@@ -2121,16 +2265,39 @@ class X4KPlayerAty : ComponentActivity() {
         return start..(markIntroEndMs - 2000L)
     }
 
-    /** Modo «Automático»: salta en cuanto la posición entra a la ventana del intro (una vez). */
+    private fun recapWindowRange(): LongRange {
+        if (markRecapEndMs <= 0L) return LongRange.EMPTY
+        val start = if (markRecapStartMs >= 0L) markRecapStartMs else 0L
+        return start..(markRecapEndMs - 2000L)
+    }
+
+    /** Modo «Automático»: salta en cuanto la posición entra a la ventana (intro o resumen). */
     private fun maybeAutoSkipIntro(pos: Long) {
         if (skipIntroMode != com.chronosbvrx.visionplus.ui.settings.VisionSettings.SKIP_INTRO_AUTO) return
-        if (introSkipped || markIntroEndMs <= 0L || !firstFrame || scrubbing) return
+        if (!firstFrame || scrubbing) return
         if (errorShown || picking || nextOverlay != null || introView != null || resumeOverlay != null) return
-        val start = if (markIntroStartMs >= 0L) markIntroStartMs else 0L
-        if (pos in start until markIntroEndMs) {
+        val start = if (markRecapStartMs >= 0L) markRecapStartMs else 0L
+        if (!recapSkipped && markRecapEndMs > 0L && pos in start until markRecapEndMs) {
+            recapSkipped = true
+            performSeekBy(markRecapEndMs - pos)
+            return
+        }
+        if (introSkipped || markIntroEndMs <= 0L) return
+        val introStart = if (markIntroStartMs >= 0L) markIntroStartMs else 0L
+        if (pos in introStart until markIntroEndMs) {
             introSkipped = true
             performSeekBy(markIntroEndMs - pos)
         }
+    }
+
+    /** Aviso de post-créditos: unos segundos al entrar a los créditos (películas y series). */
+    private fun maybeShowPostCredits(pos: Long) {
+        val notice = postCreditsNotice ?: return
+        if (markPostCreditsStartMs <= 0L || postCreditsShown || !firstFrame) return
+        if (pos < markPostCreditsStartMs) return
+        postCreditsShown = true
+        notice.visibility = View.VISIBLE
+        handler.postDelayed({ notice.visibility = View.GONE }, 9_000L)
     }
 
     /** Con marcador de créditos, la tarjeta de «siguiente capítulo» sale al empezar el cierre. */
@@ -2211,6 +2378,38 @@ class X4KPlayerAty : ComponentActivity() {
             })
         }
         card.addView(badgeRow)
+        // Arte del siguiente capítulo (póster de la serie): la tarjeta ya no es solo texto.
+        if (intentPoster.isNotBlank()) {
+            val art = android.widget.ImageView(this).apply {
+                adjustViewBounds = true
+                setPadding(0, 0, 0, dp(10))
+            }
+            card.addView(
+                art,
+                LinearLayout.LayoutParams(dp(120), ViewGroup.LayoutParams.WRAP_CONTENT),
+            )
+            runCatching {
+                val loader = coil.Coil.imageLoader(this)
+                val req = coil.request.ImageRequest.Builder(this)
+                    .data(intentPoster)
+                    .size(240)
+                    .target(
+                        onSuccess = { art.setImageDrawable(it) },
+                        onError = { art.visibility = View.GONE },
+                    )
+                    .build()
+                loader.enqueue(req)
+            }
+        }
+        if (markPostCreditsStartMs > 0L) {
+            card.addView(TextView(this).apply {
+                text = "🎬 Hay escena después de los créditos"
+                setTextColor(blueBright)
+                textSize = 13f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(0, 0, 0, dp(10))
+            })
+        }
         val epTitle = TextView(this).apply {
             setTextColor(Color.WHITE)
             textSize = 20f
@@ -2572,6 +2771,7 @@ class X4KPlayerAty : ComponentActivity() {
                 qualityBtn?.text = "⚙ " + formatQualityShort(curQuality)
                 declaredLanguages = medias.first().audio
                     .split(',').map { it.trim() }.filter { it.isNotBlank() }
+                maybeRestoreAudioLang()
                 // Subtítulos del capítulo nuevo: lista propia del servicio para este programa.
                 loadSubs(code)
                 if (prep.durationMs > 0 && declaredDurationMs <= 0L) {
@@ -2583,6 +2783,9 @@ class X4KPlayerAty : ComponentActivity() {
                 timeNow?.text = "00:00"
                 UserLibrary.markEpisodeWatched(this@X4KPlayerAty, series, epIdx + 1)
                 updateNextButtonState()
+                // El motor tarda un instante en exponer pistas: reintentar la restauración
+                // del idioma una vez que ya hay audio elegible.
+                handler.postDelayed({ maybeRestoreAudioLang() }, 1500L)
 
                 v.alpha = 0f
                 v.animate().alpha(1f).setStartDelay(250).setDuration(650).start()
@@ -3566,6 +3769,18 @@ class X4KPlayerAty : ComponentActivity() {
                         curSeasonIndex,
                     )
                 }
+                // Mantener presionado alterna visto/no-visto sin reproducir (maratón y control).
+                setOnItemLongClickListener { _, _, position, _ ->
+                    val watched = UserLibrary.isEpisodeWatched(this@X4KPlayerAty, curSeries, position + 1)
+                    UserLibrary.markEpisodeWatched(this@X4KPlayerAty, curSeries, position + 1, !watched)
+                    Toast.makeText(
+                        this@X4KPlayerAty,
+                        if (watched) "Capítulo ${position + 1}: marcado como no visto" else "Capítulo ${position + 1}: marcado como visto",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                    openEpisodePicker()
+                    true
+                }
                 setSelection(curEpIndex.coerceIn(0, epIds.size - 1))
             }
             listView.id = View.generateViewId()
@@ -3630,8 +3845,36 @@ class X4KPlayerAty : ComponentActivity() {
 
     private fun wireGestures(root: FrameLayout) {
         val catcher = View(this).apply {
-            setOnClickListener { if (!errorShown && !picking && introView == null) toggleControls() }
             isFocusable = false
+        }
+        if (!isTv && !liveMode) {
+            // Móvil: un toque muestra/oculta controles; doble toque a los lados salta ∓10 s.
+            val detector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
+                override fun onSingleTapConfirmed(e: android.view.MotionEvent): Boolean {
+                    if (!errorShown && !picking && introView == null) toggleControls()
+                    return true
+                }
+
+                override fun onDoubleTap(e: android.view.MotionEvent): Boolean {
+                    if (errorShown || picking || introView != null) return true
+                    val third = (catcher.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels) / 3f
+                    when {
+                        e.x < third -> {
+                            performSeekBy(-10_000L)
+                            Toast.makeText(this@X4KPlayerAty, "−10 s", Toast.LENGTH_SHORT).show()
+                        }
+                        e.x > third * 2 -> {
+                            performSeekBy(10_000L)
+                            Toast.makeText(this@X4KPlayerAty, "+10 s", Toast.LENGTH_SHORT).show()
+                        }
+                        else -> if (introView == null) toggleControls()
+                    }
+                    return true
+                }
+            })
+            catcher.setOnTouchListener { _, event -> detector.onTouchEvent(event) }
+        } else {
+            catcher.setOnClickListener { if (!errorShown && !picking && introView == null) toggleControls() }
         }
         root.addView(
             catcher,
@@ -3672,8 +3915,48 @@ class X4KPlayerAty : ComponentActivity() {
         stopSubsTicker()
         saveHistory(immediate = true)
         playerView?.let { X4KTitan.stop(it) }
+        // Maratón sin internet: al salir, con WiFi se deja bajando solo el siguiente capítulo
+        // (el motor es uno solo: descargar mientras se ve pelearía con la reproducción).
+        maybeAutoDownloadNext()
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         finish()
+    }
+
+    /** Baja el siguiente capítulo pendiente (solo WiFi, solo si falta y solo uno por salida). */
+    private fun maybeAutoDownloadNext() {
+        if (liveMode || curSeries.isBlank()) return
+        val settings = com.chronosbvrx.visionplus.ui.settings.VisionSettings
+        if (!settings.autoDownloadNextOf(this)) return
+        if (!isWifiConnected()) return
+        val nextIdx = curEpIndex + 1
+        if (nextIdx >= epIds.size) return
+        if (com.chronosbvrx.visionplus.data.UserLibrary.isEpisodeWatched(this, curSeries, nextIdx + 1)) return
+        runCatching {
+            val code = epIds[nextIdx]
+            val film = com.chronosbvrx.visionplus.data.Film(
+                id = "xtv:$code", title = curBaseTitle.ifBlank { curTitle }, year = 0,
+                durationMin = 0, synopsis = "", posterUrl = intentPoster,
+                videoUrl = "xtv:$code", sourceUrl = "xtv",
+            )
+            val ep = com.chronosbvrx.visionplus.ui.EpisodePlay(
+                code = code, titleSuffix = " · C${nextIdx + 1}", seriesId = curSeries,
+                episodeIds = ArrayList(epIds), episodeIndex = nextIdx,
+                seasonIds = ArrayList(seasonIds), seasonIndex = curSeasonIndex,
+                durationMs = declaredDurationMs,
+            )
+            if (com.chronosbvrx.visionplus.data.offline.OfflineDownloadManager.enqueueDownload(this, film, ep)) {
+                android.widget.Toast.makeText(this, "Bajando el siguiente capítulo con WiFi", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun isWifiConnected(): Boolean {
+        return runCatching {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val net = cm.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(net) ?: return false
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+        }.getOrDefault(false)
     }
 
     private val hideRunnable = Runnable {
@@ -3770,11 +4053,13 @@ class X4KPlayerAty : ComponentActivity() {
                 timeTotal?.text = if (total > 0) fmt(total) else "--:--"
                 refreshPlayIcon()
                 if (!liveMode) {
-                    // Marcadores de salto: auto-omitir (si está activado), botón del intro
-                    // y tarjeta de créditos — todo nace de la misma posición del tic.
+                    // Marcadores de salto: auto-omitir (si está activado), botón del intro o
+                    // resumen, tarjeta de créditos y aviso de post-créditos — todo nace de la
+                    // misma posición del tic.
                     maybeAutoSkipIntro(pos)
                     updateIntroPill(pos)
                     maybeShowCreditsCard(pos)
+                    maybeShowPostCredits(pos)
                     val nowMs = System.currentTimeMillis()
                     if (nowMs - lastHistorySave > 10_000) {
                         lastHistorySave = nowMs

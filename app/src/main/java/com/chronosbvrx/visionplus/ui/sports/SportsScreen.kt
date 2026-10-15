@@ -281,6 +281,13 @@ private fun MatchCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (match.status == "pre" && match.kickoffMs > System.currentTimeMillis()) {
+                    com.chronosbvrx.visionplus.ui.notify.MobileRemindBell(
+                        matchId = match.id,
+                        kickoffMs = match.kickoffMs,
+                        title = "${match.home.name} vs ${match.away.name}",
+                    )
+                }
                 StatusBadge(match)
             }
             Spacer(Modifier.height(8.dp))
@@ -572,6 +579,13 @@ private fun MobileMatchChannelsDialog(
 
                 Spacer(Modifier.height(16.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    if (match.status == "pre" && match.kickoffMs > System.currentTimeMillis()) {
+                        com.chronosbvrx.visionplus.ui.notify.MobileRemindBell(
+                            matchId = match.id,
+                            kickoffMs = match.kickoffMs,
+                            title = "${match.home.name} vs ${match.away.name}",
+                        )
+                    }
                     Button(onClick = onDismiss) { Text("Cerrar") }
                 }
             }

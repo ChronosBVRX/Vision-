@@ -123,7 +123,15 @@ fun HomeScreen(
     onResume: (ResumeCard) -> Unit,
 ) {
     val sizes = homeSizes()
-    val rows = catalog.personalRows + catalog.rows
+    val locked = com.chronosbvrx.visionplus.data.kids.KidsMode.locked
+    val rows = remember(catalog.personalRows, catalog.rows, locked) {
+        val all = catalog.personalRows + catalog.rows
+        if (locked) com.chronosbvrx.visionplus.data.kids.KidsMode.kidsRows(all) else all
+    }
+    val indexForHome = remember(catalog.indexRows, locked) {
+        if (locked) com.chronosbvrx.visionplus.data.kids.KidsMode.kidsRows(catalog.indexRows)
+        else catalog.indexRows
+    }
     // El curado del Inicio (pool propio + Top 10 + Novedades + filas por tipo + héroe)
     // se calcula en segundo plano: con miles de films del índice, hacerlo en el hilo
     // de composición causaba jank en gama baja. El valor anterior se conserva hasta
@@ -131,10 +139,10 @@ fun HomeScreen(
     val curated by androidx.compose.runtime.produceState(
         HomeCurated(),
         rows,
-        catalog.indexRows,
+        indexForHome,
     ) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            Popularity.homeCurated(rows, catalog.indexRows)
+            Popularity.homeCurated(rows, indexForHome)
         }
     }
     val allAvailableFilms = curated.pool
@@ -150,12 +158,30 @@ fun HomeScreen(
     val homeScope = rememberCoroutineScope()
     fun reloadContinue() {
         homeScope.launch(kotlinx.coroutines.Dispatchers.Default) {
-            val films = allFilms(catalog.personalRows + catalog.rows + catalog.indexRows)
+            val films = allFilms(catalog.personalRows + catalog.rows + indexForHome)
             val cards = PlaybackHistory.continueCards(context, films)
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { continueCards = cards }
+            val visible = if (locked) cards.filter { it.film != null && it.film.kind == "kids" } else cards
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { continueCards = visible }
         }
     }
     LaunchedEffect(Unit) { reloadContinue() }
+    // Avisos de capítulos nuevos de series seguidas (una vez al día como máximo).
+    LaunchedEffect(Unit) {
+        homeScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { com.chronosbvrx.visionplus.data.follow.FollowStore.checkNewEpisodes(context) }
+        }
+    }
+    // «Populares de la semana» (TMDB): una fila, caché de 12 h en el cliente.
+    var trendingFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        homeScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val films = runCatching {
+                com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.trending(20)
+            }.getOrDefault(emptyList())
+            val visible = if (locked) films.filter { it.kind == "kids" } else films
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { trendingFilms = visible }
+        }
+    }
     val homeLifecycle = LocalLifecycleOwner.current
     DisposableEffect(homeLifecycle) {
         val observer = LifecycleEventObserver { _, event ->
@@ -218,6 +244,16 @@ fun HomeScreen(
         }
         if (continueCards.isNotEmpty()) {
             item(key = "continue") { ContinueRow(cards = continueCards, onResume = onResume) }
+        }
+        if (trendingFilms.isNotEmpty()) {
+            item(key = "home_trending_week") {
+                FilmRow(
+                    row = CatalogRow("home-trending", "📈 Populares de la semana", trendingFilms),
+                    posterWidth = sizes.posterWidth,
+                    onOpen = onOpenFilm,
+                    onSeeAll = { onGoSection(Route.Section("movies", "Películas")) },
+                )
+            }
         }
         items(ownKindRows, key = { it.id }) { row ->
             FilmRow(
@@ -287,12 +323,20 @@ private fun Hero(
     val context = LocalContext.current
     val screenPx = rememberScreenPx()
     val heroPx = with(androidx.compose.ui.platform.LocalDensity.current) { sizes.heroHeight.roundToPx() }
+    val ambientScope = androidx.compose.runtime.rememberCoroutineScope()
+    // Tinte ambiental: el degradado toma los tonos del póster (se calcula una vez por héroe).
+    var ambientHex by androidx.compose.runtime.remember(backdropUrl) {
+        androidx.compose.runtime.mutableStateOf(android.graphics.Color.BLACK)
+    }
+    var ambientReady by androidx.compose.runtime.remember(backdropUrl) {
+        androidx.compose.runtime.mutableStateOf(false)
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(sizes.heroHeight),
     ) {
-        AsyncImage(
+        coil.compose.SubcomposeAsyncImage(
             model = ImageRequest.Builder(context)
                 .data(backdropUrl)
                 .crossfade(0)
@@ -301,14 +345,27 @@ private fun Hero(
             contentDescription = title,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
+            onSuccess = { state ->
+                val bmp = (state.result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                if (bmp != null) {
+                    ambientScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                        ambientHex = com.chronosbvrx.visionplus.ui.theme.AmbientColor.sample(bmp)
+                        ambientReady = true
+                    }
+                }
+            },
         )
+        val ambient = remember(ambientHex, ambientReady) {
+            if (ambientReady) Color(com.chronosbvrx.visionplus.ui.theme.AmbientColor.backgroundFor(ambientHex))
+            else Color.Black
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         0f to Color.Transparent,
-                        0.45f to Color.Black.copy(alpha = 0.35f),
+                        0.45f to ambient.copy(alpha = if (ambientReady) 0.55f else 0.35f),
                         0.75f to Color.Black.copy(alpha = 0.82f),
                         1f to VisionBlack,
                     ),

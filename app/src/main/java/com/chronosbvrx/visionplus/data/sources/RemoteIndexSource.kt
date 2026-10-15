@@ -320,37 +320,9 @@ object RemoteIndexSource {
             val seenFilms = HashSet<String>()
             for (i in 0 until filmsJson.length()) {
                 val f = filmsJson.optJSONObject(i) ?: continue
-                val rawFilmId = f.optString("id")
-                if (rawFilmId.isBlank()) continue
-                val rawVideoUrl = f.optString("videoUrl")
-                val (filmId, videoUrl) = when {
-                    rawVideoUrl.startsWith("magisvod:") -> {
-                        val cid = rawVideoUrl.removePrefix("magisvod:")
-                        "xtv:$cid" to "xtv:$cid"
-                    }
-                    rawFilmId.startsWith("magis:") && !rawVideoUrl.startsWith("http") -> {
-                        val cid = rawFilmId.removePrefix("magis:")
-                        "xtv:$cid" to "xtv:$cid"
-                    }
-                    else -> rawFilmId to rawVideoUrl
-                }
-                if (!seenFilms.add(filmId)) continue
-                films += Film(
-                    id = filmId,
-                    title = f.optString("title"),
-                    year = f.optInt("year"),
-                    durationMin = f.optInt("durationMin"),
-                    synopsis = f.optString("synopsis"),
-                    posterUrl = f.optString("posterUrl"),
-                    videoUrl = videoUrl,
-                    sourceUrl = f.optString("sourceUrl"),
-                    score = f.optDouble("score", 0.0),
-                    popularity = f.optDouble("popularity", 0.0),
-                    voteCount = f.optInt("voteCount", 0),
-                    groupId = f.optString("groupId"),
-                    seasons = parseSeasons(f.optJSONArray("seasons")),
-                    kind = f.optString("kind"),
-                )
+                val parsed = parseFilmObject(f) ?: continue
+                if (!seenFilms.add(parsed.id)) continue
+                films += parsed
             }
             if (memorySearchCache.size > 100) {
                 memorySearchCache.clear()
@@ -366,8 +338,7 @@ object RemoteIndexSource {
         }
     }
 
-    internal fun parseSeasons(arr: JSONArray?): List<com.chronosbvrx.visionplus.data.SeasonRef> {
-        if (arr == null) return emptyList()
+    internal fun parseSeasons(arr: JSONArray?): List<com.chronosbvrx.visionplus.data.SeasonRef> {        if (arr == null) return emptyList()
         val byNumber = LinkedHashMap<Int, com.chronosbvrx.visionplus.data.SeasonRef>()
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
@@ -388,6 +359,133 @@ object RemoteIndexSource {
     }
 
     internal fun isXtvRef(id: String): Boolean = id.startsWith("xtv:")
+
+    /** Un objeto `film` del servidor → [Film] (normaliza refs magis→xtv). Puro, testeable. */
+    internal fun parseFilmObject(f: JSONObject): Film? {
+        val rawFilmId = f.optString("id")
+        if (rawFilmId.isBlank()) return null
+        val rawVideoUrl = f.optString("videoUrl")
+        val (filmId, videoUrl) = when {
+            rawVideoUrl.startsWith("magisvod:") -> {
+                val cid = rawVideoUrl.removePrefix("magisvod:")
+                "xtv:$cid" to "xtv:$cid"
+            }
+            rawFilmId.startsWith("magis:") && !rawVideoUrl.startsWith("http") -> {
+                val cid = rawFilmId.removePrefix("magis:")
+                "xtv:$cid" to "xtv:$cid"
+            }
+            else -> rawFilmId to rawVideoUrl
+        }
+        return Film(
+            id = filmId,
+            title = f.optString("title"),
+            year = f.optInt("year"),
+            durationMin = f.optInt("durationMin"),
+            synopsis = f.optString("synopsis"),
+            posterUrl = f.optString("posterUrl"),
+            videoUrl = videoUrl,
+            sourceUrl = f.optString("sourceUrl"),
+            score = f.optDouble("score", 0.0),
+            popularity = f.optDouble("popularity", 0.0),
+            voteCount = f.optInt("voteCount", 0),
+            groupId = f.optString("groupId"),
+            seasons = parseSeasons(f.optJSONArray("seasons")),
+            kind = f.optString("kind"),
+        )
+    }
+
+    private var memoryTrending: List<Film>? = null
+    private var memoryTrendingAt = 0L
+    private const val TRENDING_TTL_MS = 12L * 60 * 60 * 1000
+
+    /** «Populares de la semana» (TMDB /trending casado con el catálogo): caché de 12 h. */
+    suspend fun trending(limit: Int = 20): List<Film> = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        if (memoryTrending != null && now - memoryTrendingAt < TRENDING_TTL_MS) {
+            return@withContext memoryTrending ?: emptyList()
+        }
+        val connection = (URL("$BASE_URL/v1/trending?limit=$limit")
+            .openConnection() as HttpURLConnection).apply {
+            connectTimeout = 5_000
+            readTimeout = 8_000
+            setRequestProperty("X-Api-Key", API_KEY)
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            if (connection.responseCode !in 200..299) return@withContext memoryTrending ?: emptyList()
+            val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val arr = JSONObject(text).optJSONArray("films") ?: JSONArray()
+            val out = ArrayList<Film>(arr.length())
+            for (i in 0 until arr.length()) {
+                parseFilmObject(arr.optJSONObject(i) ?: continue)?.let { out += it }
+            }
+            if (out.isNotEmpty()) {
+                memoryTrending = out
+                memoryTrendingAt = now
+            }
+            out
+        } catch (_: Exception) {
+            memoryTrending ?: emptyList()
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /** Un estreno al aire: serie, temporada, capítulo, hora y la ficha propia. */
+    data class Airing(
+        val show: String,
+        val season: Int,
+        val episode: Int,
+        val title: String,
+        val airtimeMs: Long,
+        val imdb: String,
+        val titleId: String = "",
+    )
+
+    /** `airings` del servidor → lista (tolera fechas rotas). Puro, testeable. */
+    internal fun parseAirings(arr: JSONArray?): List<Airing> {
+        if (arr == null) return emptyList()
+        val out = ArrayList<Airing>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val show = o.optString("show")
+            if (show.isBlank()) continue
+            val airtime = runCatching {
+                java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", java.util.Locale.US)
+                    .parse(o.optString("airtime"))?.time
+            }.getOrNull() ?: 0L
+            out += Airing(
+                show = show,
+                season = o.optInt("season"),
+                episode = o.optInt("episode"),
+                title = o.optString("title"),
+                airtimeMs = airtime,
+                imdb = o.optString("imdb"),
+                titleId = o.optString("titleId"),
+            )
+        }
+        return out
+    }
+
+    /** Agenda de estrenos (TVMaze): sin caché larga, la agenda cambia cada día. */
+    suspend fun schedule(days: Int = 7): List<Airing> = withContext(Dispatchers.IO) {
+        val connection = (URL("$BASE_URL/v1/schedule?days=${days.coerceIn(1, 14)}")
+            .openConnection() as HttpURLConnection).apply {
+            connectTimeout = 5_000
+            readTimeout = 8_000
+            setRequestProperty("X-Api-Key", API_KEY)
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            if (connection.responseCode !in 200..299) return@withContext emptyList()
+            val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            parseAirings(JSONObject(text).optJSONArray("airings"))
+        } catch (_: Exception) {
+            emptyList()
+        } finally {
+            connection.disconnect()
+        }
+    }
 
     private fun rowToJson(row: CatalogRow): JSONObject {
         val films = JSONArray()

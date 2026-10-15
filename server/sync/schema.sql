@@ -225,6 +225,37 @@ create table if not exists anime_mal_map (
     primary key (tmdb_id, season)
 );
 
+-- Lo más visto de la semana (TMDB /trending): una foto semanal para la fila
+-- «Populares de la semana». Se reescribe cada semana (`sync/tmdb.sync_trending`).
+create table if not exists weekly_trending (
+    week text not null,
+    tmdb_id integer not null,
+    media text not null default '',          -- movie | tv
+    rank integer not null default 0,
+    updated_at timestamptz not null default now(),
+    primary key (week, tmdb_id)
+);
+
+-- Agenda de estrenos (TVMaze, gratis y sin llave): capítulos que salen al aire por
+-- día en México, con el imdb para casarlos con las series que sigue el usuario.
+-- `sync/schedule.py` la baja a diario (hoy + 6 días) y poda lo viejo.
+create table if not exists schedule_airings (
+    tvmaze_id integer not null,
+    airdate date not null,
+    show_name text not null default '',
+    season integer not null default 0,
+    episode integer not null default 0,
+    ep_name text not null default '',
+    airtime timestamptz,
+    imdb text not null default '',
+    updated_at timestamptz not null default now(),
+    primary key (tvmaze_id, airdate)
+);
+create index if not exists idx_schedule_airdate on schedule_airings (airdate);
+-- La ficha propia que corresponde al estreno (casada por imdb al sincronizar):
+-- la app sigue por `title_id` sin adivinar nombres.
+alter table schedule_airings add column if not exists title_id text not null default '';
+
 -- Pool de identidades del portal (réplica del modelo Hydra): el tenant no incorpora
 -- dispositivos nuevos, así que el operador carga los SN aprovisionados por el upstream
 -- y cada dispositivo canjea UN código por SU slot (sn + user_id). Un slot = una sesión.

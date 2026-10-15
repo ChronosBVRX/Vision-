@@ -131,6 +131,20 @@ internal fun languageName(code: String): String = when (code.trim().lowercase())
 internal fun fileNameSafe(raw: String): String =
     raw.trim().replace(Regex("[^A-Za-z0-9._-]"), "_").take(64)
 
+/** «+1.5 s» / «−0.5 s» / «0 s» para el ajuste de sincronía. Puro, testeable. */
+internal fun formatSubsOffset(ms: Int): String {
+    if (ms == 0) return "0 s"
+    val sign = if (ms > 0) "+" else "−"
+    val abs = kotlin.math.abs(ms)
+    val whole = abs / 1000
+    val half = if (abs % 1000 >= 500) ".5" else ""
+    return "$sign$whole$half s"
+}
+
+/** Posición de búsqueda con desfase: + retrasa el subtítulo. Puro, testeable. */
+internal fun lookupWithOffset(positionMs: Long, offsetMs: Int): Long =
+    (positionMs - offsetMs).coerceAtLeast(0L)
+
 private val TIMELINE_RX = Regex(
     """(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})""",
 )

@@ -5,6 +5,31 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Lote 2.5.77: resumen, post-créditos, tendencias, avisos, niños, actividad y pulido visual — OTA publicada** (2026-10-15; 349 tests Android + 122 backend):
+  - *Intro/créditos*: píldora «Omitir resumen» (misma píldora del intro, el resumen manda primero;
+    el servidor ya lo servía, la app lo ignoraba) + auto-salto en modo automático; aviso discreto
+    «🎬 Hay escena después de los créditos» (nueva fuente `postCredits` en TheIntroDB/IntroDB.app,
+    con saneo y fusión; nota en la tarjeta de siguiente + aviso auto-oculto en películas);
+    precarga en cascada (`GET /v1/markers` calienta ep+1/ep+2 en BackgroundTasks).
+  - *Servidor (desplegado y verificado en VPS)*: `/v1/trending` (TMDB /trending/week, tabla
+    `weekly_trending`, 40 títulos) + fila «📈 Populares de la semana» en Inicio móvil y TV;
+    `/v1/schedule` (TVMaze 7 días, tabla `schedule_airings` + `title_id` casado por imdb, 10/10
+    casados) + botón «🔔 Seguir serie» en fichas y chequeo diario con aviso 60 min antes.
+  - *Reproductor*: doble toque ±10 s (móvil, X4K), visto/no-visto (long-press en selector X4K,
+    ✓/○ en ficha móvil, OK-largo en ficha TV), tamaño/posición/sincronía de subtítulos reales
+    (selector + Ajustes), idioma de audio por serie (se recuerda y reaplica), siguiente capítulo
+    con arte, auto-descarga del siguiente con WiFi al salir (respeta el motor único: v2.5.62).
+  - *Catálogo*: recomendaciones con peso a lo reciente + «Populares de la semana».
+  - *Familia y actividad*: modo niños con PIN (hash, pase 15 min, Inicio/Buscar filtrados, resto
+    con PIN), «Mi actividad» local en Ajustes, avisos de fútbol 30 min antes (con permiso).
+  - *Visual*: tinte ambiental del héroe (móvil + TV, muestra 8×8 sin dependencias), transiciones
+    entre secciones (solo móvil, TV intacta por foco), vacíos de búsqueda con guía, ficha compacta
+    en apaisado.
+  - *Descartado por el usuario*: aportar a bases globales, memoria por serie, novelas por audio,
+    velocidad, PiP, miniaturas de scrub, temporada completa de un jalón, perfiles.
+  - *Verificado*: 349 Android + 122 backend en verde; release R8 (vc313) con firma histórica
+    `9593cb0d…` (dex con el lote verificado en mapping.txt). **OTA v2.5.77 publicada.**
+  - *Pendiente*: prueba física (TV/teléfono) tras la OTA.
 - **Fix D-pad al volver al Inicio: misma tarjeta + teclas que no se tragan + telemetría blindada — OTA v2.5.76** (2026-10-15; 330 tests Android + 114 backend):
   - *Diagnóstico (sesión paralela, verificado)*: el Inicio se recompone desde vacío (`produceState(HomeCurated())`)
     y el scroll restaurado cae en otra fila; no había revelado vertical (la tarjeta ni se compone);
@@ -556,8 +581,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.76**
-  (versionCode **312**, release OTA v2.5.76). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.77**
+  (versionCode **313**, release OTA v2.5.77). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

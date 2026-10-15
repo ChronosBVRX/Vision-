@@ -168,8 +168,16 @@ fun TvHomeScreen(
 ) {
     val context = LocalContext.current
     val reduced = LocalReducedEffects.current
+    val locked = com.chronosbvrx.visionplus.data.kids.KidsMode.locked
 
-    val rows = catalog.personalRows + catalog.rows
+    val rows = remember(catalog.personalRows, catalog.rows, locked) {
+        val all = catalog.personalRows + catalog.rows
+        if (locked) com.chronosbvrx.visionplus.data.kids.KidsMode.kidsRows(all) else all
+    }
+    val indexForHome = remember(catalog.indexRows, locked) {
+        if (locked) com.chronosbvrx.visionplus.data.kids.KidsMode.kidsRows(catalog.indexRows)
+        else catalog.indexRows
+    }
     LaunchedEffect(Unit) { catalog.refreshPersonal() }
 
     val noCatalogMessage = when {
@@ -185,13 +193,13 @@ fun TvHomeScreen(
     // recompone desde cero: se siembra con el último curado del proceso para que el
     // primer frame tenga la MISMA estructura y el scroll restaurado no caiga en otra fila.
     val curated by androidx.compose.runtime.produceState(
-        XuperCatalog.lastHomeCurated ?: HomeCurated(),
+        if (locked) HomeCurated() else (XuperCatalog.lastHomeCurated ?: HomeCurated()),
         rows,
-        catalog.indexRows,
+        indexForHome,
     ) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            Popularity.homeCurated(rows, catalog.indexRows).also {
-                XuperCatalog.lastHomeCurated = it
+            Popularity.homeCurated(rows, indexForHome).also {
+                if (!locked) XuperCatalog.lastHomeCurated = it
             }
         }
     }
@@ -260,18 +268,40 @@ fun TvHomeScreen(
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { continueCards = emptyList() }
                 return@launch
             }
-            val localFilms = (catalog.personalRows + catalog.rows).flatMap { it.films }
+            val localFilms = (rows).flatMap { it.films }
             val matched = PlaybackHistory.continueCards(context, localFilms)
-            val finalCards = if (matched.all { it.film != null } || catalog.indexRows.isEmpty()) {
+            val finalCards = if (matched.all { it.film != null } || indexForHome.isEmpty()) {
                 matched
             } else {
-                val all = (catalog.personalRows + catalog.rows + catalog.indexRows).flatMap { it.films }
+                val all = (rows + indexForHome).flatMap { it.films }
                 PlaybackHistory.continueCards(context, all)
             }
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { continueCards = finalCards }
+            val visible = if (locked) {
+                finalCards.filter { it.film != null && it.film.kind == "kids" }
+            } else {
+                finalCards
+            }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { continueCards = visible }
         }
     }
     LaunchedEffect(Unit) { reloadContinue() }
+    // Avisos de capítulos nuevos de series seguidas (una vez al día como máximo).
+    LaunchedEffect(Unit) {
+        homeScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { com.chronosbvrx.visionplus.data.follow.FollowStore.checkNewEpisodes(context) }
+        }
+    }
+    // «Populares de la semana» (TMDB): una fila, caché de 12 h en el cliente.
+    var trendingFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        homeScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val films = runCatching {
+                com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.trending(20)
+            }.getOrDefault(emptyList())
+            val visible = if (locked) films.filter { it.kind == "kids" } else films
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { trendingFilms = visible }
+        }
+    }
     // Regreso a la tarjeta exacta con revelado vertical de su fila: el curado llega tarde
     // y con otra estructura, así que primero se desplaza la columna hasta la fila (sin eso
     // la tarjeta ni se compone) y luego se pide el foco; al terminar se limpia el regreso.
@@ -350,6 +380,35 @@ fun TvHomeScreen(
                 Brush.verticalGradient(listOf(Color.Transparent, VisionBlack.copy(alpha = 0.6f), VisionBlack)),
             ),
         )
+        // Tinte ambiental: el fondo toma los tonos del póster destacado (muestra 8×8).
+        var ambientHex by remember(featured?.imageUrl) { mutableStateOf(android.graphics.Color.BLACK) }
+        var ambientReady by remember(featured?.imageUrl) { mutableStateOf(false) }
+        LaunchedEffect(featured?.imageUrl) {
+            ambientReady = false
+            val url = featured?.imageUrl
+            if (url.isNullOrBlank()) return@LaunchedEffect
+            val req = ImageRequest.Builder(context)
+                .data(url)
+                .size(16)
+                .allowHardware(false)
+                .target(onSuccess = { drawable ->
+                    val bmp = (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                    if (bmp != null) {
+                        ambientHex = com.chronosbvrx.visionplus.ui.theme.AmbientColor.sample(bmp)
+                        ambientReady = true
+                    }
+                })
+                .build()
+            runCatching { coil.Coil.imageLoader(context).enqueue(req) }
+        }
+        if (ambientReady) {
+            val ambient = Color(com.chronosbvrx.visionplus.ui.theme.AmbientColor.backgroundFor(ambientHex))
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(0f to Color.Transparent, 1f to ambient.copy(alpha = 0.5f)),
+                ),
+            )
+        }
 
         // Contenido con riel a la izquierda y desplazamiento vertical fluido
         Column(Modifier.fillMaxSize().padding(start = TV_RAIL_CONTENT_START)) {
@@ -380,8 +439,7 @@ fun TvHomeScreen(
 
                     // 2. ACCESOS RÁPIDOS A COLECCIONES Y ESPECIALES (Brand Hubs: Fútbol, Anime, Novelas, Categorías)
                     item(key = "home_quick_hubs") {
-                        // Los hubs no registran regreso: salir por aquí invalida el de la ficha.
-                        TvQuickHubsRow(onGoRoute = { onClearReturn(); onGoRoute(it) })
+                        TvQuickHubsRow(onGoRoute = onGoRoute)
                     }
 
                     // Estados de carga o reintento si el catálogo aún no responde
@@ -432,6 +490,21 @@ fun TvHomeScreen(
                                 title = "✨ Novedades y Estrenos",
                                 films = estrenosFilms,
                                 isNew = true,
+                                returnRequester = returnRequester,
+                                returnFilmId = returnFilmId,
+                                entryRequester = rowEntry,
+                                onFocusFilm = { focusFilm = it },
+                                onOpenFilm = onOpenFilm,
+                            )
+                        }
+                    }
+
+                    // FILA: 📈 POPULARES DE LA SEMANA (TMDB, casada con el catálogo)
+                    if (trendingFilms.isNotEmpty()) {
+                        item(key = "home_trending_week") {
+                            HomePosterRow(
+                                title = "📈 Populares de la semana",
+                                films = trendingFilms,
                                 returnRequester = returnRequester,
                                 returnFilmId = returnFilmId,
                                 entryRequester = rowEntry,

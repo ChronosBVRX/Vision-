@@ -345,6 +345,17 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                     UserLibrary.toggleFavorite(context, film)
                     inFavorites.value = !inFavorites.value
                 }
+                if (isSeriesTitle) {
+                    val following = remember(film.id) {
+                        mutableStateOf(
+                            com.chronosbvrx.visionplus.data.follow.FollowStore.isFollowing(context, film.id),
+                        )
+                    }
+                    TvCompactAction(label = if (following.value) "✓ Siguiendo" else "🔔 Seguir serie") {
+                        following.value =
+                            com.chronosbvrx.visionplus.data.follow.FollowStore.toggle(context, film.id, film.title)
+                    }
+                }
 
                 val downloadsOn = remember(film.id) {
                     com.chronosbvrx.visionplus.data.config.RemoteConfig.flag(context, "downloads_enabled", true)
@@ -406,6 +417,11 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                     watchedCount = watchedCount,
                     nextEpisodeIndex = nextEpisodeIndex,
                     watchedTick = watchedTick,
+                    onToggleWatched = { index ->
+                        val was = UserLibrary.isEpisodeWatched(context, activeId, index + 1)
+                        UserLibrary.markEpisodeWatched(context, activeId, index + 1, !was)
+                        watchedTick++
+                    },
                     onSelectEpisode = { index, ep ->
                         UserLibrary.markEpisodeWatched(context, activeId, index + 1)
                         watchedTick++
@@ -456,6 +472,7 @@ private fun TvSeriesSelectorPanel(
     watchedCount: Int,
     nextEpisodeIndex: Int,
     watchedTick: Int,
+    onToggleWatched: (Int) -> Unit,
     onSelectEpisode: (Int, X4KApi.EpisodeProgram) -> Unit,
 ) {
     val context = LocalContext.current
@@ -564,6 +581,8 @@ private fun TvSeriesSelectorPanel(
                     val epTitle = cleanTvEpisodeTitle(ep.name, index + 1)
                     Surface(
                         onClick = { onSelectEpisode(index, ep) },
+                        // Mantener OK alterna visto/no-visto sin reproducir (mando de TV).
+                        onLongClick = { onToggleWatched(index) },
                         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
                         colors = ClickableSurfaceDefaults.colors(
                             containerColor = when {

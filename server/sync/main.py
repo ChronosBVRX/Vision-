@@ -21,6 +21,7 @@ import epg
 import grouping
 import index_build
 import magis
+import schedule
 import sports
 import tmdb
 import xtv
@@ -199,6 +200,17 @@ async def main() -> None:
                     await aniskip.sync(pool)
                 except Exception:  # noqa: BLE001
                     log.exception("el mapeo TMDB→MAL falló")
+                try:
+                    # Tendencia semanal TMDB (2 llamadas/semana): alimenta la fila
+                    # «Populares de la semana».
+                    await tmdb.sync_trending(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el trending semanal falló")
+                try:
+                    # Agenda de estrenos TVMaze (7 días, gratis): avisos de capítulos nuevos.
+                    await schedule.sync(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("la agenda de estrenos falló")
                 try:
                     # El medidor del ciclo: sin verlo, «el índice mejora» es una promesa.
                     rows = await tmdb.coverage(pool)

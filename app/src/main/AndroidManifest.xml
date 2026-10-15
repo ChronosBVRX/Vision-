@@ -4,6 +4,7 @@
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 <!-- Canal Watch Next («Continuar viendo») del launcher de Android TV / Google TV. -->
@@ -71,6 +72,11 @@
             android:name=".data.xuper.X4KWarmupReceiver"
             android:exported="false"
             android:process=":x4k" />
+
+        <!-- Avisos locales (capítulos nuevos + partidos): alarma del sistema. -->
+        <receiver
+            android:name=".data.notify.ReminderReceiver"
+            android:exported="false" />
 
         <!-- El usuario descartó una tarjeta de Vision+ en el launcher: se quita del canal. -->
         <receiver

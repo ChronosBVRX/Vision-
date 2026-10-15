@@ -195,6 +195,10 @@ fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFil
                 searchFilms(rows, q).take(60)
             }
         }
+        // Modo niños: la búsqueda del servidor no sabe del bloqueo; se filtra aquí.
+        if (com.chronosbvrx.visionplus.data.kids.KidsMode.locked) {
+            results = results.filter { it.kind == "kids" }
+        }
         isSearching = false
     }
 
@@ -308,7 +312,18 @@ fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFil
                     modifier = Modifier.padding(bottom = 12.dp),
                 )
                 if (results.isEmpty() && !isSearching && text.isNotBlank()) {
-                    Text("Sin resultados para \"$text\"", style = MaterialTheme.typography.bodyMedium, color = VisionTextSecondary)
+                    Text(
+                        "Sin resultados para \"$text\"",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        modifier = Modifier.padding(top = 24.dp),
+                    )
+                    Text(
+                        "Prueba sin acentos, con menos palabras o por actor/director.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = VisionTextSecondary,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
                 }
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),

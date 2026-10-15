@@ -22,6 +22,10 @@ class VisionApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         com.chronosbvrx.visionplus.data.offline.OfflineRegistry.init(this)
+        // Avisos locales (capítulos nuevos + partidos): canal de notificación.
+        com.chronosbvrx.visionplus.data.notify.ReminderKit.ensureChannel(this)
+        // Modo niños: restaura el bloqueo si quedó activo (el PIN vive hasheado).
+        com.chronosbvrx.visionplus.data.kids.KidsMode.init(this)
         // Identidad propia del portal (pool del servidor): cada proceso la carga en
         // memoria una vez; sin slot se sigue con la identidad compartida (legado).
         com.chronosbvrx.visionplus.data.xuper.X4KApi.initSlots(this)

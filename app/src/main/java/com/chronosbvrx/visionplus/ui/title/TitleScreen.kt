@@ -54,6 +54,7 @@ import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.ui.EpisodePlay
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import com.chronosbvrx.visionplus.ui.isLandscapeTablet
+import com.chronosbvrx.visionplus.ui.isLandscapePhone
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import coil.compose.AsyncImage
@@ -68,6 +69,7 @@ import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
@@ -157,9 +159,14 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
 
     Box(Modifier.fillMaxSize().background(VisionBlack)) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            val maxWidth = if (isLandscapeTablet()) 720.dp else Dp.Unspecified
+            val landscapePhone = isLandscapePhone()
+            val maxWidth = when {
+                isLandscapeTablet() -> 720.dp
+                landscapePhone -> 600.dp
+                else -> Dp.Unspecified
+            }
             LazyColumn(Modifier.widthIn(max = maxWidth).fillMaxSize()) {
-                item(key = "hero") { Hero(film) }
+                item(key = "hero") { Hero(film, compact = landscapePhone) }
                 item(key = "actions") {
                     Column(Modifier.padding(horizontal = 16.dp)) {
                         if (isXtv) {
@@ -242,6 +249,24 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                 inFavorites.value = !inFavorites.value
                             }) { Text(if (inFavorites.value) "★ Favorito" else "☆ Favorito", color = Color.White) }
 
+                            // Seguir serie: avisa cuando hay capítulo nuevo (agenda del servidor).
+                            if (isSeriesTitle) {
+                                val following = remember(film.id) {
+                                    mutableStateOf(
+                                        com.chronosbvrx.visionplus.data.follow.FollowStore.isFollowing(context, film.id),
+                                    )
+                                }
+                                TextButton(onClick = {
+                                    following.value =
+                                        com.chronosbvrx.visionplus.data.follow.FollowStore.toggle(context, film.id, film.title)
+                                }) {
+                                    Text(
+                                        if (following.value) "✓ Siguiendo" else "🔔 Seguir serie",
+                                        color = if (following.value) VisionBlue else Color.White,
+                                    )
+                                }
+                            }
+
                             // Botón de Descarga Offline
                             when (downloadItem?.state) {
                                 DownloadState.COMPLETED -> {
@@ -321,6 +346,11 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                 watchedCount = watchedCount,
                                 nextEpisodeIndex = nextEpisodeIndex,
                                 watchedTick = watchedTick,
+                                onToggleWatched = { index ->
+                                    val was = UserLibrary.isEpisodeWatched(context, activeId, index + 1)
+                                    UserLibrary.markEpisodeWatched(context, activeId, index + 1, !was)
+                                    watchedTick++
+                                },
                                 onSelectEpisode = { index, ep ->
                                     UserLibrary.markEpisodeWatched(context, activeId, index + 1)
                                     watchedTick++
@@ -375,6 +405,7 @@ private fun MobileSeriesSelectorSection(
     watchedCount: Int,
     nextEpisodeIndex: Int,
     watchedTick: Int,
+    onToggleWatched: (Int) -> Unit,
     onSelectEpisode: (Int, X4KApi.EpisodeProgram) -> Unit,
 ) {
     val context = LocalContext.current
@@ -541,11 +572,29 @@ private fun MobileSeriesSelectorSection(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = if (watched) "Volver a reproducir" else "▶ Reproducir capítulo",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = VisionBlueBright,
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = if (watched) "Volver a reproducir" else "▶ Reproducir capítulo",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = VisionBlueBright,
+                            )
+                            Text(
+                                text = if (watched) "✓" else "○",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (watched) Color(0xFF7AD9A8) else VisionTextSecondary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() },
+                                    ) { onToggleWatched(index) }
+                                    .padding(6.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -713,10 +762,11 @@ private fun audioLabel(code: String): String = when (code.lowercase().trim()) {
 }
 
 @Composable
-private fun Hero(film: Film) {
+private fun Hero(film: Film, compact: Boolean = false) {
     val context = LocalContext.current
     val screenPx = com.chronosbvrx.visionplus.ui.rememberScreenPx()
-    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+    // En apaisado el 16:9 se come la pantalla: pancarta compacta con el mismo arte.
+    Box(Modifier.fillMaxWidth().then(if (compact) Modifier.height(190.dp) else Modifier.aspectRatio(16f / 9f))) {
         AsyncImage(
             model = coil.request.ImageRequest.Builder(context)
                 .data(film.posterUrl)

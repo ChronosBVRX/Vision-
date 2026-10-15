@@ -49,6 +49,7 @@ import com.chronosbvrx.visionplus.ui.tv.TvLibraryScreen
 import com.chronosbvrx.visionplus.ui.tv.TvDownloadsScreen
 import com.chronosbvrx.visionplus.ui.tv.TvTitleScreen
 import com.chronosbvrx.visionplus.ui.tv.landingFocus
+import com.chronosbvrx.visionplus.ui.kids.rememberLockedIndexRows
 import com.chronosbvrx.visionplus.ui.tv.rememberLandingFocus
 
 /** The TV's shell: Home with its rail, and every other place full screen with Back to return. */
@@ -105,19 +106,50 @@ private fun TvRoute(
     val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
     val rows = catalog.rows
     // El índice remoto manda en Categorías y Búsqueda; Home conserva las filas curadas.
-    val indexRows = catalog.indexRows.ifEmpty { rows }
+    // Modo niños: Inicio y Buscar solo muestran infantil (el resto pide el PIN).
+    val indexRows = rememberLockedIndexRows(catalog.indexRows.ifEmpty { rows })
     // El foco del riel se re-pide al volver (la clave cambia con la ruta).
     val railLanding = rememberLandingFocus("$railReturn|$route")
+    var pinTarget by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Route?>(null) }
+    fun guardedGo(target: Route, viaTab: Boolean) {
+        val gated = target == Route.Live || target == Route.Library || target == Route.Downloads ||
+            target is Route.Section || target is Route.Category || target == Route.Categories ||
+            target == Route.Sports
+        if (gated && com.chronosbvrx.visionplus.data.kids.KidsMode.gateClosed(
+                com.chronosbvrx.visionplus.data.kids.KidsMode.locked,
+                com.chronosbvrx.visionplus.data.kids.KidsMode.hasPass(context),
+            )
+        ) {
+            pinTarget = target
+            return
+        }
+        // Salir por un hub invalida el regreso pendiente (si no, cada vuelta lo re-dispara).
+        onClearFilmReturn()
+        if (viaTab && target == Route.Home) nav.goTab(Route.Home)
+        else nav.push(target)
+    }
+    if (pinTarget != null) {
+        com.chronosbvrx.visionplus.ui.kids.TvKidsPinDialog(
+            setup = false,
+            onDismiss = { pinTarget = null },
+            onOk = { pin ->
+                if (com.chronosbvrx.visionplus.data.kids.KidsMode.verify(context, pin)) {
+                    com.chronosbvrx.visionplus.data.kids.KidsMode.pass(context)
+                    val dest = pinTarget
+                    pinTarget = null
+                    if (dest != null) nav.push(dest)
+                } else {
+                    android.widget.Toast.makeText(context, "PIN incorrecto", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            },
+        )
+    }
     fun rail(icon: ImageVector, label: String, target: Route): TvRailItem = TvRailItem(
         icon,
         label,
         onClick = {
             onRailPick(label)
-            if (target == Route.Home) {
-                nav.goTab(Route.Home)
-            } else {
-                nav.push(target)
-            }
+            guardedGo(target, viaTab = true)
         },
         modifier = if (label == railReturn) Modifier.landingFocus(railLanding) else Modifier,
     )
@@ -160,7 +192,7 @@ private fun TvRoute(
             onOpenLive = { nav.push(Route.Live) },
             onOpenCategories = { nav.push(Route.Categories) },
             onResume = { nav.push(resumeRoute(it)) },
-            onGoRoute = { nav.push(it) },
+            onGoRoute = { guardedGo(it, viaTab = false) },
             // El regreso vale una sola vez: al restaurarse se limpia y los hubs lo
             // invalidan al salir (si no, cada vuelta re-dispara el regreso viejo).
             onClearReturn = onClearFilmReturn,

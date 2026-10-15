@@ -49,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -138,6 +139,37 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
     }
 
     val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
+    // Modo niños: las secciones sensibles piden el PIN (pase de 15 min, sin desbloquear).
+    var pinRoute by remember { mutableStateOf<Route?>(null) }
+    fun goTabGuarded(route: Route) {
+        val gated = route == Route.Live || route == Route.Library || route == Route.Downloads ||
+            route is Route.Section || route == Route.Categories || route == Route.Sports
+        if (gated && com.chronosbvrx.visionplus.data.kids.KidsMode.gateClosed(
+                com.chronosbvrx.visionplus.data.kids.KidsMode.locked,
+                com.chronosbvrx.visionplus.data.kids.KidsMode.hasPass(context),
+            )
+        ) {
+            pinRoute = route
+            return
+        }
+        nav.goTab(route)
+    }
+    if (pinRoute != null) {
+        com.chronosbvrx.visionplus.ui.kids.MobileKidsPinDialog(
+            setup = false,
+            onDismiss = { pinRoute = null },
+            onOk = { pin ->
+                if (com.chronosbvrx.visionplus.data.kids.KidsMode.verify(context, pin)) {
+                    com.chronosbvrx.visionplus.data.kids.KidsMode.pass(context)
+                    val dest = pinRoute
+                    pinRoute = null
+                    if (dest != null) nav.goTab(dest)
+                } else {
+                    android.widget.Toast.makeText(context, "PIN incorrecto", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            },
+        )
+    }
 
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
     BackHandler(enabled = !drawerState.isOpen && nav.stack.size > 1 && route !is Route.Player && route !is Route.LivePlayer) { nav.pop() }
@@ -175,15 +207,23 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
             TitleScreen(route.film, onBack = { nav.pop() }, onPlay = { ep -> nav.push(Route.Player(route.film, ep)) })
             return
         }
-        Route.Search -> { SearchScreen(catalog.indexRows.ifEmpty { rows }, onBack = { nav.pop() }, onOpenFilm = { nav.push(Route.Title(it)) }); return }
+        Route.Search -> {
+            val searchRows = catalog.indexRows.ifEmpty { rows }
+            val kidSafe = if (com.chronosbvrx.visionplus.data.kids.KidsMode.locked) {
+                com.chronosbvrx.visionplus.data.kids.KidsMode.kidsRows(searchRows)
+            } else {
+                searchRows
+            }
+            SearchScreen(kidSafe, onBack = { nav.pop() }, onOpenFilm = { nav.push(Route.Title(it)) })
+            return
+        }
         else -> Unit
     }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         gesturesEnabled = isTab && !isWide,
-        drawerContent = {
-            ModalDrawerSheet(drawerContainerColor = VisionBlack) {
+        drawerContent = {            ModalDrawerSheet(drawerContainerColor = VisionBlack) {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     Spacer(Modifier.height(24.dp))
                     VisionWordmark(height = 30.dp, modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp))
@@ -202,7 +242,7 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
                             ),
                             onClick = {
                                 scope.launch { drawerState.close() }
-                                nav.goTab(tab.route)
+                                goTabGuarded(tab.route)
                             },
                             modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
                         )
@@ -217,7 +257,7 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
                     TABS.forEach { tab ->
                         NavigationRailItem(
                             selected = tab.route == route,
-                            onClick = { nav.goTab(tab.route) },
+                            onClick = { goTabGuarded(tab.route) },
                             icon = { Icon(tab.icon, contentDescription = tab.label) },
                             label = { Text(tab.label) },
                         )
@@ -263,40 +303,47 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
                 // The linked TV's remote, floating over the section screens while it plays something.
                 bottomBar = { RemoteMiniPlayer(rows) },
             ) { padding ->
-                when (route) {
-                    Route.Home -> HomeScreen(
-                        catalog = catalog,
-                        contentPadding = padding,
-                        onOpenFilm = { nav.push(Route.Title(it)) },
-                        onPlayFilm = { nav.push(Route.Player(it)) },
-                        onGoSection = { nav.goTab(it) },
-                        onResume = { nav.push(resumeRoute(it)) },
-                    )
-                    Route.Categories -> CategoriesScreen(
-                        catalog, padding,
-                        onOpenFilm = { nav.push(Route.Title(it)) },
-                        onOpenSection = { nav.push(it) },
-                    )
-                    is Route.Section -> SectionScreen(
-                        name = route.name,
-                        title = route.title,
-                        contentPadding = padding,
-                        onBack = { nav.pop() },
-                        onOpenFilm = { nav.push(Route.Title(it)) },
-                    )
-                    Route.Sports -> SportsScreen(padding, onPlay = { nav.push(Route.LivePlayer(it)) })
-                    Route.Library -> LibraryScreen(catalog, padding, onOpenFilm = { nav.push(Route.Title(it)) })
-                    Route.Downloads -> DownloadsScreen(
-                        contentPadding = padding,
-                        onOpenFilm = { nav.push(Route.Player(it)) },
-                        onBack = { nav.pop() },
-                    )
-                    Route.Live -> LiveScreen(padding, onPlay = { ch, codes, scope ->
-                        nav.push(Route.LivePlayer(ch, channelCodes = codes, groupTitle = scope))
-                    })
-                    Route.Settings -> SettingsScreen(padding)
-                    Route.About -> AboutScreen(padding)
-                    else -> Unit
+                // Transición suave entre secciones (solo móvil: en TV el foco manda al instante).
+                androidx.compose.animation.Crossfade(
+                    targetState = route,
+                    animationSpec = androidx.compose.animation.core.tween(140),
+                    label = "ruta",
+                ) { current ->
+                    when (current) {
+                        Route.Home -> HomeScreen(
+                            catalog = catalog,
+                            contentPadding = padding,
+                            onOpenFilm = { nav.push(Route.Title(it)) },
+                            onPlayFilm = { nav.push(Route.Player(it)) },
+                            onGoSection = { goTabGuarded(it) },
+                            onResume = { nav.push(resumeRoute(it)) },
+                        )
+                        Route.Categories -> CategoriesScreen(
+                            catalog, padding,
+                            onOpenFilm = { nav.push(Route.Title(it)) },
+                            onOpenSection = { nav.push(it) },
+                        )
+                        is Route.Section -> SectionScreen(
+                            name = current.name,
+                            title = current.title,
+                            contentPadding = padding,
+                            onBack = { nav.pop() },
+                            onOpenFilm = { nav.push(Route.Title(it)) },
+                        )
+                        Route.Sports -> SportsScreen(padding, onPlay = { nav.push(Route.LivePlayer(it)) })
+                        Route.Library -> LibraryScreen(catalog, padding, onOpenFilm = { nav.push(Route.Title(it)) })
+                        Route.Downloads -> DownloadsScreen(
+                            contentPadding = padding,
+                            onOpenFilm = { nav.push(Route.Player(it)) },
+                            onBack = { nav.pop() },
+                        )
+                        Route.Live -> LiveScreen(padding, onPlay = { ch, codes, scope ->
+                            nav.push(Route.LivePlayer(ch, channelCodes = codes, groupTitle = scope))
+                        })
+                        Route.Settings -> SettingsScreen(padding)
+                        Route.About -> AboutScreen(padding)
+                        else -> Unit
+                    }
                 }
             }
         }

@@ -61,6 +61,8 @@ import com.chronosbvrx.visionplus.ui.settings.SettingsSwitchRow
 import com.chronosbvrx.visionplus.ui.settings.SettingsValueRow
 import com.chronosbvrx.visionplus.ui.settings.VisionSettings
 import com.chronosbvrx.visionplus.ui.settings.rememberUpdateCheck
+import com.chronosbvrx.visionplus.ui.kids.ActivitySettingsBlock
+import com.chronosbvrx.visionplus.ui.kids.KidsSettingsBlock
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.launch
@@ -232,6 +234,43 @@ private fun PlaybackTab() {
             onCheckedChange = { s.setAutoResume(context, it) },
             supporting = "Continúa directo desde el minuto guardado sin preguntar «¿Reanudar o desde el inicio?».",
         )
+        SettingsBlock {
+            Text("Subtítulos: tamaño", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Ahora los pinta la app: el tamaño sí se aplica.",
+                style = MaterialTheme.typography.bodySmall,
+                color = VisionTextSecondary,
+                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    VisionSettings.SUB_SIZE_SMALL to "Chico",
+                    VisionSettings.SUB_SIZE_NORMAL to "Normal",
+                    VisionSettings.SUB_SIZE_LARGE to "Grande",
+                ).forEach { (mode, label) ->
+                    VisionChip(label, selected = s.subSize == mode) {
+                        s.setSubSize(context, mode)
+                    }
+                }
+            }
+        }
+        SettingsBlock {
+            Text("Subtítulos: posición", style = MaterialTheme.typography.bodyLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                VisionChip("Abajo", selected = s.subPosition == VisionSettings.SUB_POS_BOTTOM) {
+                    s.setSubPosition(context, VisionSettings.SUB_POS_BOTTOM)
+                }
+                VisionChip("Arriba", selected = s.subPosition == VisionSettings.SUB_POS_TOP) {
+                    s.setSubPosition(context, VisionSettings.SUB_POS_TOP)
+                }
+            }
+        }
+        SettingsSwitchRow(
+            title = "Bajar el siguiente capítulo con WiFi",
+            checked = s.autoDownloadNext,
+            onCheckedChange = { s.setAutoDownloadNext(context, it) },
+            supporting = "Al salir del reproductor deja bajando solo el siguiente capítulo pendiente (maratón sin internet).",
+        )
     }
 }
 
@@ -318,6 +357,14 @@ private fun SystemTab() {
                 Toast.makeText(context, "Historial de reproducción vaciado", Toast.LENGTH_SHORT).show()
             },
         )
+    }
+
+    SettingsSection("Modo niños") {
+        KidsSettingsBlock()
+    }
+
+    SettingsSection("Mi actividad") {
+        ActivitySettingsBlock()
     }
 
     SettingsSection("Diagnóstico de Red") {

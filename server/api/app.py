@@ -16,7 +16,7 @@ import unicodedata
 from contextlib import asynccontextmanager
 
 import asyncpg
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query, Request
 from starlette.middleware.gzip import GZipMiddleware
 
 import markers as skip_markers
@@ -407,6 +407,68 @@ async def section(
     result = {"name": name, "title": SECTIONS[name], "version": ver, "rows": rows_out}
     _SECTION_CACHE[cache_key] = result
     return result
+
+
+@app.get("/v1/trending")
+async def trending(
+    limit: int = Query(default=20, ge=1, le=40),
+    x_api_key: str | None = Header(default=None),
+):
+    """«Populares de la semana» (TMDB /trending): la foto semanal casada con el catálogo.
+
+    Solo entran títulos que tenemos con ficha (póster) y reproducción; orden de la semana.
+    """
+    require_key(x_api_key)
+    week = await db().fetchval("select max(week) from weekly_trending")
+    if not week:
+        return {"week": None, "films": []}
+    rows = await db().fetch(
+        f"""select {FILM_COLUMNS} from weekly_trending w
+            join enrichment e on e.tmdb_id = w.tmdb_id and coalesce(e.match_confidence, 0) >= 0.5
+            join titles t on t.id = e.title_id
+            where w.week = $1 and coalesce(t.poster_url, '') <> ''
+              and coalesce(t.play_ref, '') <> ''
+            order by w.rank limit $2""",
+        week,
+        limit,
+    )
+    enr = await _enrichment_map([r["id"] for r in rows])
+    return {
+        "week": week,
+        "films": [film(r, enr.get(r["id"])) for r in rows],
+    }
+
+
+@app.get("/v1/schedule")
+async def schedule(
+    days: int = Query(default=7, ge=1, le=14),
+    x_api_key: str | None = Header(default=None),
+):
+    """Agenda de estrenos (TVMaze): capítulos al aire hoy + próximos días, con el imdb
+    para que la app los case con las series que sigue el usuario."""
+    require_key(x_api_key)
+    rows = await db().fetch(
+        """select show_name, season, episode, ep_name, airtime, imdb, title_id
+           from schedule_airings
+           where airdate between current_date and current_date + make_interval(days => $1)
+           order by airtime nulls last, show_name, season, episode
+           limit 500""",
+        days,
+    )
+    return {
+        "airings": [
+            {
+                "show": r["show_name"],
+                "season": int(r["season"] or 0),
+                "episode": int(r["episode"] or 0),
+                "title": r["ep_name"] or "",
+                "airtime": r["airtime"].isoformat() if r["airtime"] else None,
+                "imdb": r["imdb"] or "",
+                "titleId": r["title_id"] or "",
+            }
+            for r in rows
+        ]
+    }
 
 
 @app.get("/v1/category/{category_id}")
@@ -1273,6 +1335,7 @@ async def _markers_season(key: str) -> int:
 
 @app.get("/v1/markers")
 async def markers_get(
+    background: BackgroundTasks,
     ref: str = Query(min_length=1, max_length=80),
     ep: int = Query(ge=1, le=MARKERS_EPISODE_MAX),
     x_api_key: str | None = Header(default=None),
@@ -1282,6 +1345,9 @@ async def markers_get(
     `ref` es la fila de temporada tal como la app la conoce (`xtv:…`); `ep` el índice
     1-based del capítulo dentro de la temporada (el próximo capítulo repite el mismo
     intro: un desfase de numeración de ±1 es inofensivo).
+
+    Al servir, deja en segundo plano los dos capítulos siguientes (cascada): el
+    siguiente «Omitir intro» ya está en caché cuando el usuario llega ahí.
     """
     require_key(x_api_key)
     key = skip_markers.normalize_ref(ref)
@@ -1296,9 +1362,24 @@ async def markers_get(
         age = time.time() - (row["fetched_at"].timestamp() if row["fetched_at"] else 0.0)
         ttl = MARKERS_POS_TTL if cached else MARKERS_NEG_TTL
         if age < ttl:
+            background.add_task(_warm_next_markers, key, int(row["season"]), ep)
             return skip_markers.payload(key, ep, row["season"], cached)
 
     season = int(row["season"]) if row is not None else 1
+    found = await _resolve_markers(key, ep, season, row)
+    background.add_task(_warm_next_markers, key, season, ep)
+    return skip_markers.payload(key, ep, season, found)
+
+
+async def _resolve_markers(key: str, ep: int, season: int, row=None) -> dict:
+    """Resuelve y cachea los marcadores de (ref, episodio); devuelve los segmentos."""
+    if row is None:
+        row = await db().fetchrow(
+            "select season, segments, fetched_at from skip_markers where ref = $1 and episode = $2",
+            key, ep,
+        )
+    if row is not None:
+        season = int(row["season"]) or season
     found = {}
     title = await db().fetchrow(_MARKERS_TITLE_SQL, skip_markers.ref_variants(key))
     if title is not None:
@@ -1346,7 +1427,22 @@ async def markers_get(
         """,
         key, ep, season, json.dumps(found, ensure_ascii=False),
     )
-    return skip_markers.payload(key, ep, season, found)
+    return found
+
+
+async def _warm_next_markers(key: str, season: int, ep: int) -> None:
+    """Cascada: deja listos los 2 capítulos siguientes (solo si no están en caché)."""
+    try:
+        for nxt in (ep + 1, ep + 2):
+            if nxt > MARKERS_EPISODE_MAX:
+                break
+            exists = await db().fetchval(
+                "select 1 from skip_markers where ref = $1 and episode = $2", key, nxt
+            )
+            if exists is None:
+                await _resolve_markers(key, nxt, season)
+    except Exception:  # noqa: BLE001 — calentar nunca rompe la respuesta servida
+        pass
 
 
 @app.post("/v1/markers")

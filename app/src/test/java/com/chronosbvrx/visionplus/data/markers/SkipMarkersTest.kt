@@ -93,8 +93,30 @@ class SkipMarkersTest {
 
     @Test
     fun jsonRoundTripKeepsTheSameWindow() {
-        val original = EpisodeMarkers(90_000L, 150_000L, 2_527_000L)
+        val original = EpisodeMarkers(
+            introStartMs = 90_000L, introEndMs = 150_000L,
+            recapStartMs = 5_000L, recapEndMs = 60_000L,
+            creditsStartMs = 2_527_000L, postCreditsStartMs = 2_640_000L,
+        )
         assertEquals(original, parseMarkers(toPlayerJson(original)))
+    }
+
+    @Test
+    fun recapWindowMirrorsTheIntroRules() {
+        val markers = EpisodeMarkers(recapStartMs = 1_000L, recapEndMs = 64_000L)
+        assertTrue(inRecapWindow(30_000L, markers))
+        assertFalse(inRecapWindow(63_000L, markers))
+        assertFalse(inRecapWindow(5_000L, EpisodeMarkers()))
+        assertTrue(parseMarkers("""{"recap":{"s":1000,"e":64000}}""").hasRecap)
+        assertTrue(parseMarkers("""{"recap":{"e":64000}}""").hasRecap)
+    }
+
+    @Test
+    fun postCreditsSurvivesThePlayerJson() {
+        val markers = parseMarkers("""{"postCredits":{"s":2600000}}""")
+        assertTrue(markers.hasPostCredits)
+        assertEquals(2_600_000L, markers.postCreditsStartMs)
+        assertFalse(parseMarkers("""{"postCredits":{"s":0}}""").hasPostCredits)
     }
 
     @Test

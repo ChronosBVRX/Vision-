@@ -35,6 +35,11 @@ ANIME_LIST_URL = "https://raw.githubusercontent.com/Fribb/anime-lists/master/ani
 
 KINDS = ("intro", "recap", "credits")
 
+# La escena post-créditos no es un salto (es un aviso): viaja aparte para no mezclarse
+# con la tarjeta de «siguiente capítulo». La traen IntroDB.app (`post-credits`) y
+# TheIntroDB (`post_credits`).
+POST_KIND = "postCredits"
+
 # Cotas de cordura: un intro legítimo vive en los primeros minutos (hasta las novelas
 # con cold open largo); un recap jamás pasa de 5 min; los créditos nunca empiezan en
 # la primera mitad del capítulo.
@@ -137,6 +142,20 @@ def parse_tidb(payload) -> dict:
                 best = seg
         if best is not None:
             out[kind] = best
+    best_pc = None
+    for item in payload.get("post_credits") or []:
+        if not isinstance(item, dict):
+            continue
+        seg = _segment(
+            item.get("start_ms"), item.get("end_ms"), SOURCE_TIDB,
+            item.get("submission_count"), item.get("confidence"),
+        )
+        if seg is None:
+            continue
+        if best_pc is None or seg["votes"] > best_pc["votes"]:
+            best_pc = seg
+    if best_pc is not None:
+        out[POST_KIND] = best_pc
     return out
 
 
@@ -158,6 +177,16 @@ def parse_idb(payload) -> dict:
         )
         if seg is not None:
             out[kind] = seg
+    for key in ("post-credits", "post_credits"):
+        item = payload.get(key)
+        if isinstance(item, dict):
+            seg = _segment(
+                item.get("start_ms"), item.get("end_ms"), SOURCE_IDB,
+                item.get("submission_count"), item.get("confidence"),
+            )
+            if seg is not None:
+                out[POST_KIND] = seg
+                break
     return out
 
 
@@ -269,6 +298,16 @@ def sanitize(markers, duration_min: int = 0) -> dict:
                 if end is None or end > start:
                     out["credits"] = credits
 
+    post = markers.get(POST_KIND)
+    if post:
+        start, end = post.get("s"), post.get("e")
+        if start is not None and start > 0:
+            low = CREDITS_FALLBACK_MIN_MS
+            if duration_ms > 0:
+                low = max(low, int(duration_ms * CREDITS_FRACTION))
+            if start >= low and (end is None or end > start):
+                out[POST_KIND] = post
+
     return out
 
 
@@ -284,7 +323,7 @@ def merge(tidb: dict, idb: dict, aniskip: dict | None = None) -> dict:
     # Prioridad de desempate por fuente (mayor = gana el empate).
     priority = {SOURCE_TIDB: 0, SOURCE_IDB: 1, SOURCE_ANISKIP: 2}
     out = {}
-    for kind in KINDS:
+    for kind in list(KINDS) + [POST_KIND]:
         best = None
         best_key = (-1, -1)
         for src in sources:
@@ -303,7 +342,7 @@ def overlay(base, extra) -> dict:
     """`extra` (marcas del usuario) pisa a `base` (global) por tipo; None borra."""
     out = dict(base or {})
     for kind, seg in (extra or {}).items():
-        if kind not in KINDS:
+        if kind not in KINDS and kind != POST_KIND:
             continue
         if seg is None:
             out.pop(kind, None)
@@ -315,7 +354,7 @@ def overlay(base, extra) -> dict:
 def payload(ref: str, episode: int, season: int, segments: dict) -> dict:
     """Forma que consume la app: segmentos con `s`/`e` y la fuente que los dio."""
     out = {"ref": ref, "episode": episode, "season": season, "found": bool(segments)}
-    for kind in KINDS:
+    for kind in list(KINDS) + [POST_KIND]:
         seg = (segments or {}).get(kind)
         if seg:
             out[kind] = {"s": seg.get("s"), "e": seg.get("e"), "src": seg.get("src", "")}
