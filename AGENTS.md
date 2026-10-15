@@ -233,34 +233,40 @@
     · anime 66% · kids 58%.
 - **Omitir intro y créditos con bases globales comunitarias («skip markers»)** (2026-10-13; 280 tests Android + 81 backend):
   - *Qué*: series/novelas/anime usan los tiempos comunitarios de **TheIntroDB** (theintrodb.org, por
-    tmdb_id) e **IntroDB.app** (por imdb_id) —las mismas bases que alimentan los plugins de
-    Jellyfin/Emby/Kodi/Infuse— para pintar «⏭ Omitir intro» durante la entrada y adelantar la tarjeta
-    de «siguiente capítulo» al **inicio de los créditos** (con botón «Ver créditos» para dejarlos
-    correr). Ajuste nuevo (móvil y TV): **Botón** (recomendado, como Netflix) / **Automático** /
-    **Nunca**. El switch «siguiente episodio automático» **ahora sí** lo honra el reproductor nativo
-    (sin cuenta regresiva si está apagado).
+    tmdb_id), **IntroDB.app** (por imdb_id) y **AniSkip** (por MyAnimeList, solo anime) —las mismas
+    bases que alimentan los plugins de Jellyfin/Emby/Kodi/Infuse— para pintar «⏭ Omitir intro»
+    durante la entrada y adelantar la tarjeta de «siguiente capítulo» al **inicio de los créditos**
+    (con botón «Ver créditos» para dejarlos correr). Ajuste nuevo (móvil y TV): **Botón**
+    (recomendado, como Netflix) / **Automático** / **Nunca**. El switch «siguiente episodio
+    automático» **ahora sí** lo honra el reproductor nativo (sin cuenta regresiva si está apagado).
+    Decisión del usuario: **cero trabajo manual** — sin datos no hay botón ni correcciones; el botón
+    «✎ Marcas» se retiró del reproductor (la capa aprendida local y su subida quedaron fuera de la
+    app; el endpoint POST sigue por compatibilidad con APKs viejos).
   - *Servidor*: `GET /v1/markers?ref=<fila de temporada xtv:…>&ep=<n>` — caché en Postgres
-    (`skip_markers`, 30 días positivo / 2 días negativo) y consulta al vuelo a las dos bases en un
-    thread aparte; `POST /v1/markers` sube las **marcas aprendidas** (`src:"user"` pisa a la global;
-    `clear` borra). `server/api/markers.py` puro: referencias, parseo, **saneo** (un «intro» a las
-    19:51 en un capítulo de 24 min se descarta; créditos jamás antes de la mitad) y fusión (más votos
-    gana; empate → IntroDB.app, la de mejor cobertura medida).
+    (`skip_markers`, 30 días positivo / 2 días negativo) y consulta al vuelo a las tres bases en un
+    thread aparte; `POST /v1/markers` queda como legado. `server/api/markers.py` puro: referencias,
+    parseo (incl. AniSkip en segundos→ms y dataset Fribb `parse_anime_list`), **saneo** (un «intro» a
+    las 19:51 en un capítulo de 24 min se descarta; créditos jamás antes de la mitad) y fusión (más
+    votos gana; empate → AniSkip, luego IntroDB.app). `sync/aniskip.py` refresca semanal la tabla
+    `anime_mal_map` (tmdb,temporada→mal, 5,232 filas) desde el dataset Fribb. Trampa cazada: AniSkip
+    v2 **exige `episodeLength`** (sin él, 400 siempre) — se manda la duración de la ficha (24 min
+    por defecto).
   - *Cobertura medida contra el catálogo real* (VPS, 2026-10-13): top-100 **anime 69%**, top-100
     **series 48%**, series de cola larga ~2%, **novelas 0%** (ninguna base las cubre). Cuello real:
     el rematch TMDB de series (~560 de 16.9k con ficha hoy); al avanzar, la cobertura sube sola.
-  - *App*: `data/markers/SkipMarkers.kt` (puro + `MarkersStore`: **archivo JSON —no prefs: cruza
-    `:x4k`—**, caché de red 6 h, subida fire-and-forget); `X4KApi.playVod` pide los marcadores **en
-    paralelo** al handshake del portal (tope 2.5 s) y los pasa por el intent (`markersJson`);
-    `X4KPlayerAty`: píldora visible en la ventana del intro (enfocable solo con controles visibles —
-    política D-pad intacta), salto automático una vez por capítulo, tarjeta de créditos al llegar al
-    marcador y **conteo de visto aunque los créditos duren más de 2 min** (`flushOutgoingEpisode` con
-    `atCredits`); el intro se reusa en el mismo lote de temporada y se limpia al cruzar de temporada.
-    Botón «✎ Marcas» en los controles: fin del intro / inicio de créditos / borrar (aplica a toda la
-    temporada y se sube al servidor).
-  - *Verificado*: 280 tests Android (`SkipMarkersTest`: ventanas, créditos, parseo, fusión, archivo
-    local) + 81 backend (`test_markers.py`: parseo, saneo, fusión, red simulada); **desplegado y
-    verificado en vivo en el VPS** (caché 5 ms, marca de usuario, borrado, caché negativa, 400/401,
-    `docker compose up -d --build api`).
+    AniSkip verificado en vivo: JoJo T5 pasó de sin-datos a completo; fusiones mixtas por tipo
+    (intro AniSkip + recap IntroDB.app en FMA/Spy x Family).
+  - *App*: `data/markers/SkipMarkers.kt` (puro + `MarkersStore` solo-lectura del servidor, caché de
+    red 6 h); `X4KApi.playVod` pide los marcadores **en paralelo** al handshake del portal (tope
+    2.5 s) y los pasa por el intent (`markersJson`); `X4KPlayerAty`: píldora visible en la ventana
+    del intro (enfocable solo con controles visibles — política D-pad intacta), salto automático una
+    vez por capítulo, tarjeta de créditos al llegar al marcador y **conteo de visto aunque los
+    créditos duren más de 2 min** (`flushOutgoingEpisode` con `atCredits`); el intro se reusa en el
+    mismo lote de temporada y se limpia al cruzar de temporada.
+  - *Verificado*: 324 tests Android (`SkipMarkersTest`: ventanas, créditos, parseo, contrato) + 114
+    backend (`test_markers.py` + `test_aniskip.py`: parseo 3 fuentes, saneo, fusión con prioridad,
+    episodeLength, mapeo y sync); **desplegado y verificado en vivo en el VPS** (caché, 3 fuentes,
+    `docker compose up -d --build api sync`, 5,232 mapeos).
   - *Pendiente*: **prueba física en A32/POCO/TV antes de publicar OTA** (regla del proyecto para
     cambios de runtime del reproductor); el diálogo placebo «Corregir intro y outro» del camino
     ExoPlayer sigue sin cablear (las series no pasan por ahí).
@@ -1413,10 +1419,11 @@
 - POCO a veces sin internet (DNS) — no es bug de la app.
 
 ## Pendientes / ideas
-- **Intro/créditos (skip markers)**: falta la prueba física (A32/POCO/TV) y publicar OTA. Fase 2 para
-  novelas y cola larga (donde no hay dato global): detección por audio tipo Plex sobre capítulos
-  descargados (bóveda/ExoPlayer). Cablear o retirar el diálogo placebo «Corregir intro y outro» del
-  camino ExoPlayer (las series no pasan por ahí; el botón «✎ Marcas» del reproductor nativo ya es real).
+- **Intro/créditos (skip markers)**: falta la prueba física (A32/POCO/TV) y publicar OTA. Sin datos
+  no hay botón (decisión del usuario: cero trabajo manual — el botón «✎ Marcas» ya se retiró).
+  Para novelas y cola larga solo queda la detección por audio tipo Plex (fase futura). Cablear o
+  retirar el diálogo placebo «Corregir intro y outro» del camino ExoPlayer (las series no pasan
+  por ahí).
 - Fase 2 (diagnóstico): remote config / kill-switch (apagar una función problemática sin OTA) + botón de
   reporte con texto libre del usuario; configurar el canal de alertas (Telegram/webhook) en el `.env` del VPS.
 - Catálogo: metadatos del portal que aún mienten — «LIMPIAR» (2020, 109 min, es película) viene como `teleplay`

@@ -1,10 +1,8 @@
 package com.chronosbvrx.visionplus.data.markers
 
-import android.content.Context
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -14,9 +12,10 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Marcadores de salto por episodio: dónde acaba el intro y dónde empiezan los créditos.
  *
- * Dos capas, y la local manda: lo **aprendido** por el usuario (archivo JSON, plantilla
- * por fila de temporada — el intro se repite en toda la temporada) pisa a lo **global**,
- * que es la caché del VPS de las bases comunitarias TheIntroDB / IntroDB.app (`/v1/markers`).
+ * Todo sale del servidor de Vision+ (`/v1/markers`), que a su vez cachea las bases
+ * comunitarias: TheIntroDB (por tmdb), IntroDB.app (por imdb) y AniSkip (por MyAnimeList,
+ * para anime). Lo que no está en esas bases simplemente no muestra nada: sin botones ni
+ * correcciones manuales; la experiencia solo aparece donde hay datos de verdad.
  *
  * El reproductor nativo (`:x4k`) recibe el resultado como JSON en el intent: las
  * SharedPreferences no cruzan procesos y este dato se necesita al abrir el capítulo.
@@ -71,14 +70,6 @@ internal fun parseMarkers(json: String?): EpisodeMarkers {
     }.getOrDefault(EpisodeMarkers())
 }
 
-/** Lo aprendido pisa a lo global por tipo (la corrección del usuario manda). */
-internal fun mergeMarkers(global: EpisodeMarkers, local: EpisodeMarkers): EpisodeMarkers =
-    EpisodeMarkers(
-        introStartMs = if (local.hasIntro) local.introStartMs else global.introStartMs,
-        introEndMs = if (local.hasIntro) local.introEndMs else global.introEndMs,
-        creditsStartMs = if (local.hasCredits) local.creditsStartMs else global.creditsStartMs,
-    )
-
 /** JSON compacto para los extras del reproductor (omite lo que no exista). */
 internal fun toPlayerJson(markers: EpisodeMarkers): String {
     val root = JSONObject()
@@ -94,7 +85,7 @@ internal fun toPlayerJson(markers: EpisodeMarkers): String {
     return root.toString()
 }
 
-/** Fila de temporada canónica para la clave local (`xtv:…` como la conoce el servidor). */
+/** Fila de temporada canónica para la consulta (`xtv:…` como la conoce el servidor). */
 internal fun normalizeMarkersRef(ref: String): String {
     val clean = ref.trim()
     if (clean.isEmpty()) return ""
@@ -103,29 +94,26 @@ internal fun normalizeMarkersRef(ref: String): String {
 }
 
 object MarkersStore {
-    private const val LOCAL_FILE = "skip_markers.json"
     private const val REMOTE_TTL_MS = 6 * 60 * 60 * 1000L
-    private const val LOCAL_MAX_REFS = 400
 
     private val memory = ConcurrentHashMap<String, EpisodeMarkers>()
     private val memoryAt = ConcurrentHashMap<String, Long>()
 
-    /** Para el reproductor: global del servidor + lo aprendido (manda), en JSON de extras. */
-    suspend fun fetchForPlayer(context: Context, ref: String, ep: Int): String {
+    /** Para el reproductor: el JSON de marcadores del episodio ("" cuando no hay datos). */
+    suspend fun fetchForPlayer(ref: String, ep: Int): String {
         val key = normalizeMarkersRef(ref)
         if (key.isEmpty() || ep < 1 || ep > 400) return ""
-        val remote = runCatching { remoteMarkers(context, key, ep) }.getOrDefault(EpisodeMarkers())
-        val merged = mergeMarkers(remote, localMarkers(context, key))
-        return if (merged.isEmpty) "" else toPlayerJson(merged)
+        val markers = runCatching { remoteMarkers(key, ep) }.getOrDefault(EpisodeMarkers())
+        return if (markers.isEmpty) "" else toPlayerJson(markers)
     }
 
-    private suspend fun remoteMarkers(context: Context, ref: String, ep: Int): EpisodeMarkers {
+    private suspend fun remoteMarkers(ref: String, ep: Int): EpisodeMarkers {
         val cacheKey = "$ref:$ep"
         val at = memoryAt[cacheKey] ?: 0L
         if (System.currentTimeMillis() - at < REMOTE_TTL_MS) {
             return memory[cacheKey] ?: EpisodeMarkers()
         }
-        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+        return withContext(Dispatchers.IO) {
             val url = URL(
                 "${RemoteIndexSource.BASE_URL}/v1/markers?ref=${URLEncoder.encode(ref, "UTF-8")}&ep=$ep"
             )
@@ -144,122 +132,6 @@ object MarkersStore {
                 markers
             } finally {
                 connection.disconnect()
-            }
-        }
-    }
-
-    // ------------------------------------------------------------ capa aprendida (local)
-    // Archivo JSON, no SharedPreferences: las prefs no cruzan procesos y esto lo escribe el
-    // reproductor (`:x4k`) mientras el proceso principal lo lee al preparar el capítulo.
-
-    fun localMarkers(context: Context, ref: String): EpisodeMarkers {
-        val key = normalizeMarkersRef(ref)
-        if (key.isEmpty()) return EpisodeMarkers()
-        val entry = localRoot(context).optJSONObject(key) ?: return EpisodeMarkers()
-        return parseMarkers(entry.toString())
-    }
-
-    /** «Aquí acabó el intro» / «aquí empiezan los créditos»: plantilla de toda la temporada. */
-    fun saveLocal(context: Context, ref: String, kind: String, startMs: Long, endMs: Long) {
-        val key = normalizeMarkersRef(ref)
-        if (key.isEmpty()) return
-        val root = localRoot(context)
-        val entry = root.optJSONObject(key) ?: JSONObject()
-        when (kind) {
-            "intro" -> entry.put("intro", JSONObject().apply {
-                if (startMs >= 0L) put("s", startMs)
-                put("e", endMs)
-            })
-            "credits" -> entry.put("credits", JSONObject().put("s", startMs))
-        }
-        root.put(key, entry)
-        while (root.length() > LOCAL_MAX_REFS) {
-            val first = root.keys().asSequence().firstOrNull() ?: break
-            root.remove(first)
-        }
-        writeLocalRoot(context, root)
-    }
-
-    fun clearLocal(context: Context, ref: String, kind: String?) {
-        val key = normalizeMarkersRef(ref)
-        if (key.isEmpty()) return
-        val root = localRoot(context)
-        if (kind == null) {
-            root.remove(key)
-        } else {
-            root.optJSONObject(key)?.let { entry ->
-                entry.remove(kind)
-                if (entry.length() == 0) root.remove(key) else root.put(key, entry)
-            }
-        }
-        writeLocalRoot(context, root)
-    }
-
-    // ------------------------------------------------------------ aprendizaje al servidor
-
-    /** Sube la marca para los demás equipos; si falla, la marca local ya quedó aplicada. */
-    fun submit(context: Context, ref: String, ep: Int, kind: String, startMs: Long, endMs: Long) {
-        val key = normalizeMarkersRef(ref)
-        if (key.isEmpty()) return
-        val body = JSONObject().apply {
-            put("ref", key)
-            put("ep", ep)
-            put("kind", kind)
-            if (startMs >= 0L) put("startMs", startMs)
-            if (endMs >= 0L) put("endMs", endMs)
-        }
-        post(context, body)
-    }
-
-    fun submitClear(context: Context, ref: String, ep: Int, kind: String) {
-        val key = normalizeMarkersRef(ref)
-        if (key.isEmpty()) return
-        post(context, JSONObject().apply {
-            put("ref", key)
-            put("ep", ep)
-            put("kind", kind)
-            put("clear", true)
-        })
-    }
-
-    private fun post(context: Context, body: JSONObject) {
-        val applicationContext = context.applicationContext
-        CoroutineScope(Dispatchers.IO).launch {
-            runCatching {
-                val url = URL("${RemoteIndexSource.BASE_URL}/v1/markers")
-                val connection = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    connectTimeout = 3_500
-                    readTimeout = 4_500
-                    doOutput = true
-                    setRequestProperty("X-Api-Key", RemoteIndexSource.API_KEY)
-                    setRequestProperty("Content-Type", "application/json")
-                }
-                try {
-                    connection.outputStream.use { it.write(body.toString().toByteArray()) }
-                    connection.responseCode // fuerza la petición
-                } finally {
-                    connection.disconnect()
-                }
-            }
-        }
-    }
-
-    private fun localRoot(context: Context): JSONObject {
-        val file = java.io.File(context.filesDir, LOCAL_FILE)
-        if (!file.exists()) return JSONObject()
-        return runCatching { JSONObject(file.readText()) }.getOrDefault(JSONObject())
-    }
-
-    /** Escritura atómica (temp + rename): el proceso del reproductor y el principal comparten archivo. */
-    private fun writeLocalRoot(context: Context, root: JSONObject) {
-        runCatching {
-            val file = java.io.File(context.filesDir, LOCAL_FILE)
-            val tmp = java.io.File(file.parentFile, "$LOCAL_FILE.tmp")
-            tmp.writeText(root.toString())
-            if (!tmp.renameTo(file)) {
-                file.writeText(root.toString())
-                tmp.delete()
             }
         }
     }

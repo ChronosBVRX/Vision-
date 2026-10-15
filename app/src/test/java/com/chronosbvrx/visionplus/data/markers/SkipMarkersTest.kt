@@ -1,24 +1,17 @@
 package com.chronosbvrx.visionplus.data.markers
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 /**
  * Guardianes de los marcadores de salto: la ventana del botón «Omitir intro», el disparo
- * de la tarjeta de créditos, la fusión de capas (lo aprendido manda) y el contrato JSON
- * con el servidor y con los extras del reproductor.
+ * de la tarjeta de créditos y el contrato JSON con el servidor y con los extras del
+ * reproductor. Sin capa manual: donde no hay datos, no se muestra nada.
  */
-@RunWith(AndroidJUnit4::class)
-@Config(sdk = [34])
 class SkipMarkersTest {
 
     // ------------------------------------------------------------ ventanas del intro
@@ -104,69 +97,11 @@ class SkipMarkersTest {
         assertEquals(original, parseMarkers(toPlayerJson(original)))
     }
 
-    // ------------------------------------------------------------ fusión de capas
-
-    @Test
-    fun learnedMarkersOverrideGlobalOnes() {
-        val global = EpisodeMarkers(90_000L, 150_000L, 2_527_000L)
-        val learned = EpisodeMarkers(-1L, 120_000L, -1L)
-        val merged = mergeMarkers(global, learned)
-        assertEquals(120_000L, merged.introEndMs)
-        assertEquals(-1L, merged.introStartMs)              // la corrección manda completa
-        assertEquals(2_527_000L, merged.creditsStartMs)     // lo no tocado se conserva
-    }
-
     @Test
     fun refsNormalizeToTheServerKey() {
         assertEquals("xtv:ABC", normalizeMarkersRef("ABC"))
         assertEquals("xtv:ABC", normalizeMarkersRef(" xtv:ABC "))
         assertEquals("magis:ABC", normalizeMarkersRef("magis:ABC"))
         assertEquals("", normalizeMarkersRef("   "))
-    }
-
-    // ------------------------------------------------------------ almacén aprendido
-
-    @Test
-    fun learnedMarksPersistAndClearPerSeason() {
-        val context: Context = ApplicationProvider.getApplicationContext()
-        val ref = "xtv:T1ABC"
-        MarkersStore.clearLocal(context, ref, null)
-        assertTrue(MarkersStore.localMarkers(context, ref).isEmpty)
-
-        MarkersStore.saveLocal(context, ref, "intro", -1L, 82_000L)
-        MarkersStore.saveLocal(context, ref, "credits", 2_527_000L, -1L)
-        val saved = MarkersStore.localMarkers(context, ref)
-        assertEquals(82_000L, saved.introEndMs)
-        assertEquals(2_527_000L, saved.creditsStartMs)
-
-        MarkersStore.clearLocal(context, ref, "credits")
-        val afterClear = MarkersStore.localMarkers(context, ref)
-        assertEquals(82_000L, afterClear.introEndMs)
-        assertFalse(afterClear.hasCredits)
-
-        MarkersStore.clearLocal(context, ref, null)
-        assertTrue(MarkersStore.localMarkers(context, ref).isEmpty)
-    }
-
-    @Test
-    fun bareIdsLandOnTheSameSeasonRowKey() {
-        val context: Context = ApplicationProvider.getApplicationContext()
-        MarkersStore.clearLocal(context, "ABC", null)
-        MarkersStore.saveLocal(context, "ABC", "intro", -1L, 60_000L)
-        assertEquals(60_000L, MarkersStore.localMarkers(context, "xtv:ABC").introEndMs)
-        MarkersStore.clearLocal(context, "xtv:ABC", null)
-    }
-
-    @Test
-    fun learnedMarksLiveInAFileNotSharedPreferences() {
-        // El reproductor (:x4k) escribe y el proceso principal lee: archivo compartido,
-        // jamás prefs cacheadas por proceso (la lección del historial).
-        val context: Context = ApplicationProvider.getApplicationContext()
-        MarkersStore.clearLocal(context, "xtv:FILE", null)
-        MarkersStore.saveLocal(context, "xtv:FILE", "intro", -1L, 30_000L)
-        val file = java.io.File(context.filesDir, "skip_markers.json")
-        assertTrue(file.exists())
-        assertTrue(file.readText().contains("xtv:FILE"))
-        MarkersStore.clearLocal(context, "xtv:FILE", null)
     }
 }

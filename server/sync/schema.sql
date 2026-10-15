@@ -214,6 +214,17 @@ create table if not exists skip_markers (
 
 create index if not exists idx_skip_markers_fetched on skip_markers (fetched_at);
 
+-- Mapeo TMDB → MyAnimeList para AniSkip (openings/endings de anime).
+-- El dataset Fribb anime-lists da (themoviedb_id.tv, season.tmdb) → mal_id;
+-- el worker lo refresca semanal en `sync/aniskip.py` (idempotente).
+create table if not exists anime_mal_map (
+    tmdb_id integer not null,
+    season integer not null,
+    mal_id integer not null,
+    updated_at timestamptz not null default now(),
+    primary key (tmdb_id, season)
+);
+
 -- Pool de identidades del portal (réplica del modelo Hydra): el tenant no incorpora
 -- dispositivos nuevos, así que el operador carga los SN aprovisionados por el upstream
 -- y cada dispositivo canjea UN código por SU slot (sn + user_id). Un slot = una sesión.

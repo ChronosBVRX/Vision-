@@ -230,3 +230,117 @@ def test_fetch_global_without_ids_never_calls_network(monkeypatch):
 
     monkeypatch.setattr(markers, "_get_json", fake_get)
     assert markers.fetch_global(None, "", season=1, episode=1) == {}
+
+
+# ---------------------------------------------------------------- AniSkip
+
+def test_parse_aniskip_maps_op_ed_recap_to_ms():
+    payload = {
+        "found": True,
+        "results": [
+            {"skipType": "op", "interval": {"startTime": 128.406, "endTime": 218.406}},
+            {"skipType": "ed", "interval": {"startTime": 1342.795, "endTime": 1430.616}},
+            {"skipType": "recap", "interval": {"startTime": 1.0, "endTime": 64.0}},
+        ],
+    }
+    out = markers.parse_aniskip(payload)
+    assert out["intro"]["s"] == 128406 and out["intro"]["e"] == 218406
+    assert out["intro"]["src"] == "aniskip"
+    assert out["credits"]["s"] == 1342795 and out["credits"]["e"] == 1430616
+    assert out["recap"]["e"] == 64000
+    # Votos fijos: los tiempos de AniSkip ya vienen votados por su comunidad.
+    assert out["intro"]["votes"] == markers.ANISKIP_VOTES
+
+
+def test_parse_aniskip_tolerates_garbage():
+    assert markers.parse_aniskip(None) == {}
+    assert markers.parse_aniskip("nope") == {}
+    assert markers.parse_aniskip({"found": False}) == {}
+    assert markers.parse_aniskip({"results": [{"skipType": "xx", "interval": {}}]}) == {}
+    assert markers.parse_aniskip({"results": [{"skipType": "op"}]}) == {}
+    assert markers.parse_aniskip({"results": "no-lista"}) == {}
+
+
+def test_parse_anime_list_maps_tmdb_season_to_mal():
+    entries = [
+        {"mal_id": 290, "themoviedb_id": {"tv": 26209}, "season": {"tmdb": 1}},
+        {"mal_id": 300, "themoviedb_id": {"tv": 62913}, "season": {"tmdb": 1}},
+        {"mal_id": 1225, "themoviedb_id": {"tv": 62913}, "season": {"tmdb": 2}},
+        {"mal_id": 0, "themoviedb_id": {"tv": 1}, "season": {"tmdb": 1}},       # sin mal: fuera
+        {"mal_id": 5, "themoviedb_id": {}, "season": {"tmdb": 1}},              # sin tmdb: fuera
+        {"mal_id": 6, "themoviedb_id": {"tv": 9}, "season": {}},                # sin temporada: fuera
+        "basura",
+    ]
+    out = markers.parse_anime_list(entries)
+    assert out[(26209, 1)] == 290
+    assert out[(62913, 1)] == 300
+    assert out[(62913, 2)] == 1225
+    assert len(out) == 3
+
+
+def test_merge_aniskip_wins_ties_but_loses_to_heavily_voted():
+    weak_tidb = {"intro": {"s": 1, "e": 2, "src": "theintrodb", "votes": 1}}
+    weak_idb = {"intro": {"s": 1, "e": 2, "src": "introdb", "votes": 1}}
+    askip = {"intro": {"s": 3, "e": 4, "src": "aniskip", "votes": markers.ANISKIP_VOTES}}
+    # Empate/ventaja leve de las generalistas: el opening de anime manda.
+    assert markers.merge(weak_tidb, weak_idb, askip)["intro"]["src"] == "aniskip"
+    # Un dato muy votado de la base generalista sigue mandando (no es anime o es mejor).
+    strong = {"intro": {"s": 1, "e": 2, "src": "introdb", "votes": 99}}
+    assert markers.merge(weak_tidb, strong, askip)["intro"]["src"] == "introdb"
+
+
+def test_merge_without_aniskip_keeps_old_behavior():
+    tidb = {"intro": {"s": 1, "e": 2, "src": "theintrodb", "votes": 2}}
+    idb = {"intro": {"s": 3, "e": 4, "src": "introdb", "votes": 2}}
+    assert markers.merge(tidb, idb)["intro"]["src"] == "introdb"
+
+
+def test_fetch_global_with_mal_queries_aniskip(monkeypatch):
+    calls = []
+
+    def fake_get(url, timeout):
+        calls.append(url)
+        if "aniskip" in url:
+            return {
+                "found": True,
+                "results": [
+                    {"skipType": "op", "interval": {"startTime": 10.0, "endTime": 100.0}},
+                ],
+            }
+        return {}
+
+    monkeypatch.setattr(markers, "_get_json", fake_get)
+    out = markers.fetch_global(None, "", season=1, episode=3, mal_id=290)
+    assert len(calls) == 1
+    assert "/290/3" in calls[0]
+    assert "episodeLength=" in calls[0]  # la v2 lo exige: sin él responde 400
+    assert out["intro"]["src"] == "aniskip"
+    assert out["intro"]["e"] == 100000
+
+
+def test_fetch_global_sends_episode_length_from_the_card(monkeypatch):
+    calls = []
+
+    def fake_get(url, timeout):
+        calls.append(url)
+        return {"found": False, "results": []}
+
+    monkeypatch.setattr(markers, "_get_json", fake_get)
+    markers.fetch_global(None, "", season=1, episode=1, mal_id=290, episode_length=24 * 60)
+    assert "episodeLength=1440" in calls[0]
+    # Sin duración conocida: el estándar de anime (24 min) para que no falle.
+    calls.clear()
+    markers.fetch_global(None, "", season=1, episode=1, mal_id=290, episode_length=0)
+    assert "episodeLength=1440" in calls[0]
+
+
+def test_fetch_global_without_mal_never_calls_aniskip(monkeypatch):
+    calls = []
+
+    def fake_get(url, timeout):
+        calls.append(url)
+        return {}
+
+    monkeypatch.setattr(markers, "_get_json", fake_get)
+    markers.fetch_global(1396, "tt0903747", season=1, episode=1)
+    assert calls and all("aniskip" not in url for url in calls)

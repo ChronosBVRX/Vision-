@@ -4,7 +4,7 @@ La app no adivina los minutos: pregunta por (fila de temporada, episodio) y esta
 bases —las mismas que alimentan los plugins de Jellyfin / Emby / Kodi / Infuse—
 devuelven los milisegundos donde empieza y termina cada segmento.
 
-Aquí vive lo puro y testeable: normalización de referencias, parseo de las dos
+Aquí vive lo puro y testeable: normalización de referencias, parseo de las tres
 fuentes, saneo (los datos comunitarios traen entradas rotas: se vieron «intros» a
 las 19:51 en capítulos de 24 min) y fusión. El acceso a red es `fetch_global()`;
 el API lo corre en un thread aparte y cachea el resultado en Postgres.
@@ -12,6 +12,9 @@ el API lo corre en un thread aparte y cachea el resultado en Postgres.
 Fuentes:
 - TheIntroDB (theintrodb.org): por `tmdb_id`; listas de segmentos por tipo.
 - IntroDB.app: por `imdb_id`; un objeto por segmento (`outro` = créditos).
+- AniSkip: por `mal_id` (MyAnimeList); openings/endings/recaps de anime.
+  El `mal_id` se resuelve con la tabla `anime_mal_map` (dataset Fribb anime-lists:
+  `themoviedb_id.tv` + `season.tmdb` → `mal_id`), que el worker refresca semanal.
 """
 
 import json
@@ -21,6 +24,14 @@ import urllib.request
 
 TIDB_URL = "https://api.theintrodb.org/v2/media?tmdb_id={tmdb}&season={season}&episode={episode}"
 IDB_URL = "https://api.introdb.app/segments?imdb_id={imdb}&season={season}&episode={episode}"
+# AniSkip: tiempos de opening/ending/recap por anime, con el MyAnimeList id y el número de
+# capítulo dentro de ESA entrada de MAL (cada temporada es su propia entrada).
+# OJO: la v2 exige `episodeLength` (segundos, aproximado basta): sin él responde 400.
+ANISKIP_URL = "https://api.aniskip.com/v2/skip-times/{mal}/{episode}?types=op&types=ed&types=recap&episodeLength={length}"
+# Duración supuesta cuando la ficha no trae (anime estándar de 24 min).
+ANISKIP_DEFAULT_LENGTH_S = 1440
+# Dataset Fribb anime-lists (mini basta: mal_id + themoviedb_id.tv + season.tmdb).
+ANIME_LIST_URL = "https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-mini.json"
 
 KINDS = ("intro", "recap", "credits")
 
@@ -36,6 +47,11 @@ SEGMENT_MAX_MS = 6 * 3600_000
 
 SOURCE_TIDB = "theintrodb"
 SOURCE_IDB = "introdb"
+SOURCE_ANISKIP = "aniskip"
+
+# AniSkip no expone votos: sus tiempos viven votados en el sitio, así que entran con la
+# prioridad más alta para anime (por encima de las bases generalistas en cualquier empate).
+ANISKIP_VOTES = 5
 
 _USER_AGENT = "VisionPlusIndex/1.0"
 
@@ -145,6 +161,78 @@ def parse_idb(payload) -> dict:
     return out
 
 
+_ANISKIP_KIND = {"op": "intro", "ed": "credits", "recap": "recap"}
+
+
+def _sec_to_ms(value):
+    """Segundos (float, como los da AniSkip) a ms enteros; None si no es número."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number < 0 or number * 1000 > SEGMENT_MAX_MS:
+        return None
+    return int(number * 1000)
+
+
+def parse_aniskip(payload) -> dict:
+    """AniSkip: `results` con `skipType` (op/ed/recap) e intervalo en segundos float."""
+    out = {}
+    if not isinstance(payload, dict):
+        return out
+    results = payload.get("results")
+    if not isinstance(results, list):
+        return out
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        kind = _ANISKIP_KIND.get(str(item.get("skipType") or "").strip().lower())
+        if kind is None or kind in out:
+            continue
+        interval = item.get("interval") or {}
+        seg = _segment(
+            _sec_to_ms(interval.get("startTime")),
+            _sec_to_ms(interval.get("endTime")),
+            SOURCE_ANISKIP,
+            ANISKIP_VOTES,
+            1.0,
+        )
+        if seg is not None:
+            out[kind] = seg
+    return out
+
+
+def parse_anime_list(entries) -> dict:
+    """Dataset Fribb anime-lists → {(tmdb_id, tmdb_season): mal_id}.
+
+    Cada entrada trae `mal_id`, `themoviedb_id: {tv: …}` y `season: {tmdb: N}`.
+    Solo sirven las que tienen los tres datos; el resto se ignora.
+    """
+    out = {}
+    if not isinstance(entries, list):
+        return out
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            mal_id = int(entry.get("mal_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if mal_id <= 0:
+            continue
+        tmdb_block = entry.get("themoviedb_id") or {}
+        season_block = entry.get("season") or {}
+        try:
+            tmdb_id = int(tmdb_block.get("tv") or 0)
+            season = int(season_block.get("tmdb") or 0)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if tmdb_id <= 0 or season <= 0:
+            continue
+        out.setdefault((tmdb_id, season), mal_id)
+    return out
+
+
 # ---------------------------------------------------------------- saneo y fusión
 
 def sanitize(markers, duration_min: int = 0) -> dict:
@@ -184,20 +272,30 @@ def sanitize(markers, duration_min: int = 0) -> dict:
     return out
 
 
-def merge(tidb: dict, idb: dict) -> dict:
-    """Fusión por tipo: gana la fuente más votada; empate → IntroDB.app (mejor cobertura)."""
+def merge(tidb: dict, idb: dict, aniskip: dict | None = None) -> dict:
+    """Fusión por tipo: gana la fuente más votada; en empate manda AniSkip,
+    luego IntroDB.app (la de mejor cobertura general) y al final TheIntroDB.
+
+    AniSkip entra con votos fijos (tiempos ya votados en su comunidad): así un
+    opening de anime le gana a un dato flojo generalista, pero un dato muy votado
+    de IntroDB.app (p. ej. 5+ votos) sigue mandando.
+    """
+    sources = [tidb or {}, idb or {}, aniskip or {}]
+    # Prioridad de desempate por fuente (mayor = gana el empate).
+    priority = {SOURCE_TIDB: 0, SOURCE_IDB: 1, SOURCE_ANISKIP: 2}
     out = {}
     for kind in KINDS:
-        a = (tidb or {}).get(kind)
-        b = (idb or {}).get(kind)
-        if a is None and b is None:
-            continue
-        if a is None:
-            out[kind] = b
-        elif b is None:
-            out[kind] = a
-        else:
-            out[kind] = b if int(b.get("votes") or 0) >= int(a.get("votes") or 0) else a
+        best = None
+        best_key = (-1, -1)
+        for src in sources:
+            seg = src.get(kind)
+            if seg is None:
+                continue
+            key = (int(seg.get("votes") or 0), priority.get(seg.get("src"), 0))
+            if best is None or key > best_key:
+                best, best_key = seg, key
+        if best is not None:
+            out[kind] = best
     return out
 
 
@@ -248,19 +346,28 @@ def _get_json(url: str, timeout: float):
         return json.loads(response.read().decode("utf-8", "replace"))
 
 
-def fetch_global(tmdb_id=None, imdb_id: str = "", season: int = 1, episode: int = 1, timeout: float = 8.0) -> dict:
-    """Consulta las dos bases y devuelve los marcadores fusionados ({} si no hay nada).
+def fetch_global(tmdb_id=None, imdb_id: str = "", season: int = 1, episode: int = 1, mal_id=None, episode_length: int = 0, timeout: float = 8.0) -> dict:
+    """Consulta las tres bases y devuelve los marcadores fusionados ({} si no hay nada).
 
-    Cada base es independiente: si una falla o no conoce el episodio, la otra manda.
+    Cada base es independiente: si una falla o no conoce el episodio, las demás mandan.
+    `mal_id` solo se usa para anime (AniSkip); sin él no se toca esa red.
+    `episode_length` son segundos aproximados (de la ficha; 1440 si no se sabe):
+    AniSkip lo exige y lo usa para validar el capítulo.
     """
     season = max(1, int(season or 1))
     episode = max(1, int(episode or 1))
-    tidb, idb = {}, {}
+    try:
+        length = int(episode_length or 0)
+    except (TypeError, ValueError):
+        length = 0
+    if length <= 0:
+        length = ANISKIP_DEFAULT_LENGTH_S
+    tidb, idb, askip = {}, {}, {}
     if tmdb_id:
         try:
             url = TIDB_URL.format(tmdb=int(tmdb_id), season=season, episode=episode)
             tidb = parse_tidb(_get_json(url, timeout))
-        except Exception:  # noqa: BLE001 — una fuente caída no tumba a la otra
+        except Exception:  # noqa: BLE001 — una fuente caída no tumba a las demás
             tidb = {}
     if imdb_id:
         try:
@@ -269,4 +376,14 @@ def fetch_global(tmdb_id=None, imdb_id: str = "", season: int = 1, episode: int 
             idb = parse_idb(_get_json(url, timeout))
         except Exception:  # noqa: BLE001
             idb = {}
-    return merge(tidb, idb)
+    try:
+        mal = int(mal_id or 0)
+    except (TypeError, ValueError):
+        mal = 0
+    if mal > 0:
+        try:
+            url = ANISKIP_URL.format(mal=mal, episode=episode, length=length)
+            askip = parse_aniskip(_get_json(url, timeout))
+        except Exception:  # noqa: BLE001
+            askip = {}
+    return merge(tidb, idb, askip)

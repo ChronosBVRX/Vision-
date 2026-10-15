@@ -1366,7 +1366,6 @@ object X4KApi {
                 runCatching {
                     withTimeoutOrNull(2_500L) {
                         com.chronosbvrx.visionplus.data.markers.MarkersStore.fetchForPlayer(
-                            context,
                             ref = if (seriesId.isNotBlank()) seriesId else cleanSeriesId,
                             ep = resolvedEpIndex + 1,
                         )

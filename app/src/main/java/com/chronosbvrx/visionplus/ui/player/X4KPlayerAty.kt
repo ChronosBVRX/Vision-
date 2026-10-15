@@ -47,7 +47,6 @@ import com.chronosbvrx.visionplus.data.LiveTaxonomy
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.isFinished
-import com.chronosbvrx.visionplus.data.markers.MarkersStore
 import com.chronosbvrx.visionplus.data.shouldCountWatchedOnSkip
 import com.chronosbvrx.visionplus.data.shouldKeep
 import com.chronosbvrx.visionplus.data.subs.SrtCue
@@ -151,7 +150,6 @@ class X4KPlayerAty : ComponentActivity() {
     private var introSkipped = false
     private var creditsCardShown = false
     private var introPill: TextView? = null
-    private var markersBtn: TextView? = null
     private var skipIntroMode = "button"
 
     private data class NextEp(
@@ -1289,13 +1287,6 @@ class X4KPlayerAty : ComponentActivity() {
             buttons.addView(subs)
             buttons.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
             buttons.addView(quality)
-            if (isSeriesContent(epIds.size, seasonIds.size)) {
-                val marks = pill("✎ Marcas") { if (canExecuteControlAction()) showMarkersDialog() }
-                marks.tvControl()
-                markersBtn = marks
-                buttons.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
-                buttons.addView(marks)
-            }
             playPauseBtn = playPause
             audioBtn = audio
             subsBtn = subs
@@ -1485,26 +1476,18 @@ class X4KPlayerAty : ComponentActivity() {
                     subs.nextFocusUpId = upId
                     subs.nextFocusDownId = subsId
 
-                    val marksView = markersBtn
-                    val marksId = if (marksView != null) View.generateViewId().also { marksView.id = it } else -1
                     val skipPillView = introPill
                     val skipPillId = if (skipPillView != null) View.generateViewId().also { skipPillView.id = it } else -1
                     if (qualityId != -1) {
                         quality?.nextFocusLeftId = subsId
-                        quality?.nextFocusRightId = if (marksId != -1) marksId else qualityId
+                        quality?.nextFocusRightId = qualityId
                         quality?.nextFocusUpId = upId
                         quality?.nextFocusDownId = qualityId
-                    }
-                    if (marksId != -1) {
-                        marksView?.nextFocusLeftId = if (qualityId != -1) qualityId else subsId
-                        marksView?.nextFocusRightId = if (skipPillId != -1) skipPillId else marksId
-                        marksView?.nextFocusUpId = upId
-                        marksView?.nextFocusDownId = playId
                     }
                     if (skipPillId != -1) {
                         // La píldora del intro vive arriba de la barra: al enfocarla el D-pad
                         // no se escapa (izquierda/derecha/arriba en bucle; abajo vuelve al play).
-                        skipPillView?.nextFocusLeftId = if (marksId != -1) marksId else skipPillId
+                        skipPillView?.nextFocusLeftId = skipPillId
                         skipPillView?.nextFocusRightId = skipPillId
                         skipPillView?.nextFocusUpId = skipPillId
                         skipPillView?.nextFocusDownId = playId
@@ -2017,88 +2000,6 @@ class X4KPlayerAty : ComponentActivity() {
         if (isTv) optionViews.firstOrNull()?.let { first -> first.post { first.requestFocus() } }
     }
 
-    // ---------------------------------------------------------------- corregir marcas
-
-    /** «✎ Marcas»: el usuario marca fin del intro / inicio de créditos en el minuto actual. */
-    private fun showMarkersDialog() {
-        if (liveMode || curSeries.isBlank()) return
-        lastPickerSourceBtn = markersBtn
-        val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
-        val dim = ModalDimLayout(this).apply {
-            setBackgroundColor(0xCC000000.toInt())
-            setOnClickListener { dismissPicker() }
-            isFocusable = false
-        }
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply {
-                cornerRadius = dp(18).toFloat()
-                setColor(0xFF121A2A.toInt())
-                setStroke(dp(1), 0x332D7DF6.toInt())
-            }
-            setPadding(dp(16), dp(16), dp(16), dp(14))
-            setOnClickListener { }
-            isFocusable = false
-        }
-        card.addView(TextView(this).apply {
-            text = "Corregir intro y créditos"
-            setTextColor(Color.WHITE)
-            textSize = 16f
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(dp(12), 0, dp(12), dp(4))
-        })
-        card.addView(TextView(this).apply {
-            text = "Marca con el minuto actual (${fmt(pos)}). Sirve para toda la temporada y ayuda a los demás equipos."
-            setTextColor(0x99FFFFFF.toInt())
-            textSize = 12f
-            setPadding(dp(12), 0, dp(12), dp(10))
-        })
-        val options = ArrayList<Pair<String, () -> Unit>>()
-        options += "✂  Fin del intro (aquí termina)" to { learnMarker("intro", pos) }
-        options += "🎬  Inicio de los créditos (aquí empiezan)" to { learnMarker("credits", pos) }
-        options += "🧹  Borrar marcas de esta temporada" to { clearLearnedMarkers() }
-        options += "✕  Cancelar" to { dismissPicker() }
-        val optionViews = ArrayList<View>()
-        options.forEachIndexed { index, (label, action) ->
-            val option = TextView(this).apply {
-                text = label
-                setTextColor(Color.WHITE)
-                textSize = 14f
-                background = roundBackground(surface, 10)
-                setPadding(dp(16), dp(12), dp(16), dp(12))
-                setOnClickListener { action() }
-            }
-            option.tvControl(surface, 10)
-            option.id = View.generateViewId()
-            if (index > 0) {
-                val prev = optionViews[index - 1]
-                prev.nextFocusDownId = option.id
-                option.nextFocusUpId = prev.id
-            }
-            optionViews += option
-            card.addView(option)
-            if (index != options.lastIndex) {
-                card.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(6)))
-            }
-        }
-        optionViews.first().nextFocusUpId = optionViews.first().id
-        optionViews.last().nextFocusDownId = optionViews.last().id
-        dim.addView(card, FrameLayout.LayoutParams(
-            (resources.displayMetrics.widthPixels * 0.72f).toInt(),
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            Gravity.CENTER,
-        ))
-        root().addView(dim, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT,
-        ))
-        picker = dim
-        picking = true
-        setBackgroundFocusBlocked(true)
-        handler.removeCallbacks(hideRunnable)
-        if (isTv) optionViews.firstOrNull()?.let { first -> first.post { first.requestFocus() } }
-    }
-
     private fun switchQuality(target: X4KTitan.MediaSpec) {
         val v = playerView ?: return
         val curPos = X4KTitan.positionMs().coerceAtLeast(0L)
@@ -2239,46 +2140,6 @@ class X4KPlayerAty : ComponentActivity() {
         if (pos < markCreditsStartMs || !hasNextEpisode()) return
         creditsCardShown = true
         showNextCard(creditsMode = true)
-    }
-
-    private fun markersRef(): String =
-        markSeasonRef.ifBlank { if (curSeries.isNotBlank()) "xtv:$curSeries" else "" }
-
-    /** «Aquí acabó el intro» / «aquí empiezan los créditos»: plantilla de toda la temporada. */
-    private fun learnMarker(kind: String, pos: Long) {
-        val ref = markersRef()
-        if (ref.isBlank()) return
-        when (kind) {
-            "intro" -> {
-                markIntroEndMs = pos
-                introSkipped = false
-                MarkersStore.saveLocal(this, ref, "intro", markIntroStartMs, pos)
-                MarkersStore.submit(this, ref, curEpIndex + 1, "intro", markIntroStartMs, pos)
-            }
-            "credits" -> {
-                markCreditsStartMs = pos
-                creditsCardShown = false
-                MarkersStore.saveLocal(this, ref, "credits", pos, -1L)
-                MarkersStore.submit(this, ref, curEpIndex + 1, "credits", pos, -1L)
-            }
-        }
-        dismissPicker()
-        updateIntroPill(pos)
-        if (kind == "credits" && markCreditsStartMs > 0L && pos >= markCreditsStartMs) {
-            maybeShowCreditsCard(pos)
-        }
-        Toast.makeText(this, "Marca guardada: aplica a toda la temporada", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun clearLearnedMarkers() {
-        val ref = markersRef()
-        if (ref.isBlank()) return
-        MarkersStore.clearLocal(this, ref, null)
-        MarkersStore.submitClear(this, ref, curEpIndex + 1, "intro")
-        MarkersStore.submitClear(this, ref, curEpIndex + 1, "credits")
-        applyMarkers("")
-        dismissPicker()
-        Toast.makeText(this, "Marcas borradas", Toast.LENGTH_SHORT).show()
     }
 
     // ---------------------------------------------------------------- siguiente capítulo

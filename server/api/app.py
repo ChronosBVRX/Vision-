@@ -1239,9 +1239,10 @@ async def slots_worker(request: Request, x_admin_key: str | None = Header(defaul
 
 # ----- marcadores de salto (intro / recap / créditos) -----
 # La app pregunta por (fila de temporada, episodio) antes de abrir un capítulo: aquí se
-# resuelve la ficha → (tmdb / imdb, temporada), se consultan las bases globales comunitarias
-# (TheIntroDB / IntroDB.app) en un thread aparte y se cachea el resultado en Postgres.
-# Las marcas del usuario (POST) pisan a las globales por tipo y viajan a todos los equipos.
+# resuelve la ficha → (tmdb / imdb / mal, temporada), se consultan las bases globales
+# comunitarias (TheIntroDB / IntroDB.app / AniSkip) en un thread aparte y se cachea el
+# resultado en Postgres. Las marcas del usuario (POST) pisan a las globales por tipo
+# y viajan a todos los equipos.
 
 MARKERS_POS_TTL = 30 * 24 * 3600   # dato encontrado: se revalida cada 30 días
 MARKERS_NEG_TTL = 2 * 24 * 3600    # «aquí no hay dato»: se reintenta a los 2 días
@@ -1308,14 +1309,24 @@ async def markers_get(
         confidence = float(title["match_confidence"] or 0.0)
         tmdb_id = int(title["tmdb_id"]) if (title["tmdb_id"] and confidence >= 0.5) else None
         imdb_id = (title["imdb_id"] or "").strip() if confidence >= 0.5 else ""
-        if tmdb_id or imdb_id:
+        mal_id = None
+        # AniSkip solo para anime (su catálogo es 100% anime): el mal_id sale del
+        # mapeo TMDB→MAL que el worker refresca semanal; sin mapeo no se toca esa red.
+        if tmdb_id and (title["kind"] or "") == "anime":
+            mal_id = await db().fetchval(
+                "select mal_id from anime_mal_map where tmdb_id = $1 and season = $2",
+                tmdb_id, season,
+            )
+        duration_min = int(title["duration_min"] or 0)
+        if tmdb_id or imdb_id or mal_id:
             try:
                 raw = await asyncio.to_thread(
-                    skip_markers.fetch_global, tmdb_id, imdb_id, season, ep
+                    skip_markers.fetch_global, tmdb_id, imdb_id, season, ep,
+                    mal_id, duration_min * 60,
                 )
             except Exception:  # noqa: BLE001 — fuente caída: se sirve lo que haya
                 raw = {}
-            found = skip_markers.sanitize(raw, int(title["duration_min"] or 0))
+            found = skip_markers.sanitize(raw, duration_min)
 
     # Las marcas del usuario jamás se pierden: mandan sobre lo recién llegado.
     if row is not None:

@@ -15,6 +15,7 @@ from pathlib import Path
 import asyncpg
 
 import archive_ia
+import aniskip
 import diag
 import epg
 import grouping
@@ -193,6 +194,11 @@ async def main() -> None:
                     changed += await tmdb.backfill_popularity(pool)
                 except Exception:  # noqa: BLE001
                     log.exception("el backfill de popularidad TMDB falló")
+                try:
+                    # Mapeo TMDB→MAL para AniSkip: semanal o si está vacío (no toca versión).
+                    await aniskip.sync(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el mapeo TMDB→MAL falló")
                 try:
                     # El medidor del ciclo: sin verlo, «el índice mejora» es una promesa.
                     rows = await tmdb.coverage(pool)
