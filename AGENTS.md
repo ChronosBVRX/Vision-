@@ -35,6 +35,14 @@
   - *Verificado en el A32 (release R8, firma histórica)*: lista n=2 (es/en), `es_0.srt` de 56 KB,
     901 cues, `subs activo 'es' … overlay=true`, captura con subtítulo en pantalla («Mientras más furia
     sientes…»), elección persistida y auto-restaurada al reabrir; cero crashes.
+  - *Acople con la espera del reproductor (sesión paralela), verificado en el A32 sobre la OTA v2.5.74*:
+    serie «Ley y orden: UVE» → C2 por `KEYCODE_MEDIA_NEXT` → espera «…· T1 · Capítulo 2» + barra por
+    capítulo; y con la elección «es» de la serie sembrada, al pasar a C3 el capítulo siguiente la heredó
+    solo (`subs list cid=9A2D… n=2` → `subs activo 'es' cues=739 overlay=true`, captura `vp_x4.png`).
+    OJO: en MÓVIL las píldoras del reproductor no son enfocables con D-pad (solo TV) y la fila queda
+    parcialmente bajo la barra de navegación — para pruebas táctiles usar TV o cambiar de navegación.
+  - *Pendiente*: verlo en la TV del usuario (el overlay ya usa tamaño/márgenes de TV y está en la OTA);
+    y el picker de subtítulos no existe en vivo (el servicio es por programa VOD — correcto).
   - *Ojo (lecciones)*: los SRT del proveedor traen cues CORTOS y con huecos largos — una captura puede
     caer entre cues y parecer «no funciona» (verificar con ráfaga + logs `subs list/activo`, no con una
     sola foto). Y la lista de idiomas sale del servicio, no de `subsInfo` (que solo es texto).
@@ -54,6 +62,11 @@
   - *Verificado en A32*: APK debug (vc310) instalado; reproducción con video OK, sin crash. La captura
     de la espera en serie quedó pendiente: el teléfono estaba en uso concurrente (otra sesión probando
     subtítulos). **Falta prueba física/OTA.**
+    → *CERRADO (misma fecha, sesión de subtítulos)*: verificado sobre la OTA **v2.5.74** en el A32 —
+    serie «Ley y orden: UVE» → C1 → C2 con `KEYCODE_MEDIA_NEXT`: la espera mostró título + **«T1 ·
+    Capítulo 2»** en azul + nombre real del capítulo, la barra superior se actualizó a «· T1 · C2» y el
+    zap por capítulo siguió disparando la recarga de subtítulos del nuevo `programId`. Capturas en
+    `Temp/opencode/vp_w4.png` (espera C2) y `vp_u1.png` (barra C1).
   - *CRÍTICO (subtítulos en curso, hallado de paso)*: un build 2.5.74 (R8) se caía al abrir CUALQUIER
     título en `:x4k` (`ExceptionInInitializerError` en el `<clinit>` por `Pattern.compile`): **Android
     (ICU) rechaza el patrón `\{\\[^}]*}`** (el `}` final sin escapar) mientras que en
