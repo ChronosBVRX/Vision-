@@ -63,6 +63,8 @@ fun TvApp(catalog: XuperCatalog, nav: Navigator) {
     // Al volver: el riel recuerda su último botón y las secciones, la última tarjeta abierta.
     var railReturn by rememberSaveable { mutableStateOf("") }
     var filmReturn by rememberSaveable { mutableStateOf<String?>(null) }
+    // El regreso a la TV en vivo recuerda el último canal abierto (igual que las fichas).
+    var liveReturn by rememberSaveable { mutableStateOf<String?>(null) }
     // Red definitiva contra el foco huérfano al volver: la pantalla recompuesta ya re-pide
     // su foco sola, pero si a los 300 ms el mando sigue sin nada enfocado, el destino de
     // la pantalla lo toma. Solo actúa sin foco (nunca pelea con el usuario).
@@ -85,6 +87,8 @@ fun TvApp(catalog: XuperCatalog, nav: Navigator) {
                 onRailPick = { railReturn = it },
                 filmReturn = filmReturn,
                 onFilmPick = { filmReturn = it },
+                liveReturn = liveReturn,
+                onChannelPick = { liveReturn = it },
             )
         }
     }
@@ -100,6 +104,8 @@ private fun TvRoute(
     filmReturn: String?,
     onFilmPick: (String) -> Unit,
     onClearFilmReturn: () -> Unit = {},
+    liveReturn: String? = null,
+    onChannelPick: (String) -> Unit = {},
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -255,9 +261,13 @@ private fun TvRoute(
             onPlayFilm = { nav.push(Route.Player(it)) },
             onBack = { nav.pop() },
         )
-        Route.Live -> TvLiveScreen(onPlay = { ch, codes, scope ->
-            nav.push(Route.LivePlayer(ch, channelCodes = codes, groupTitle = scope))
-        })
+        Route.Live -> TvLiveScreen(
+            onPlay = { ch, codes, scope ->
+                onChannelPick(ch.url.removePrefix("xtvlive:"))
+                nav.push(Route.LivePlayer(ch, channelCodes = codes, groupTitle = scope))
+            },
+            returnChannelCode = liveReturn,
+        )
         Route.Sports -> TvSportsScreen(onPlay = { nav.push(Route.LivePlayer(it)) })
         Route.Settings -> TvSettingsScreen()
         Route.About -> TvAboutScreen()

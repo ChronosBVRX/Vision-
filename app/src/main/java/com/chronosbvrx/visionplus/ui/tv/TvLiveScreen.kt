@@ -35,6 +35,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.Color
@@ -71,7 +73,10 @@ fun TvLiveScreen(onPlay: (LiveChannel) -> Unit) {
 }
 
 @Composable
-fun TvLiveScreen(onPlay: (LiveChannel, List<String>, String?) -> Unit) {
+fun TvLiveScreen(
+    onPlay: (LiveChannel, List<String>, String?) -> Unit,
+    returnChannelCode: String? = null,
+) {
     val state = rememberLiveState()
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var adding by rememberSaveable { mutableStateOf(false) }
@@ -81,6 +86,10 @@ fun TvLiveScreen(onPlay: (LiveChannel, List<String>, String?) -> Unit) {
     var focused by remember { mutableStateOf<LiveChannel?>(null) }
     val landing = rememberLandingFocus()
     BackHandler(enabled = searchOpen) { searchOpen = false; state.query = "" }
+    // Al volver del reproductor: la tarjeta exacta del canal abierto (la lista tarda
+    // en pintar en gama baja); si no aparece, cae a la primera visible o al destino.
+    val returnRequester = remember { FocusRequester() }
+    val entryRequester = remember { FocusRequester() }
 
     val searching = searchOpen && state.query.isNotBlank()
     val allChannels = state.channels
@@ -132,6 +141,14 @@ fun TvLiveScreen(onPlay: (LiveChannel, List<String>, String?) -> Unit) {
     }
 
     val firstChannel = channels.firstOrNull()
+
+    rememberReturnFocus(
+        filmId = returnChannelCode,
+        requester = returnRequester,
+        landing = landing,
+        contentKey = channels.size,
+        entryRequester = entryRequester,
+    )
 
     // El canal a mostrar en la vista previa a la derecha
     val shown = remember(focused, channels) {
@@ -288,7 +305,18 @@ fun TvLiveScreen(onPlay: (LiveChannel, List<String>, String?) -> Unit) {
                         onLongClick = { LiveFavorites.toggle(channel.url) },
                         modifier = Modifier
                             .onFocusChanged { if (it.isFocused) focused = channel }
-                            .then(if (channel == firstChannel) Modifier.landingFocus(landing) else Modifier),
+                            .then(if (channel == firstChannel) Modifier.landingFocus(landing) else Modifier)
+                            .then(
+                                if (returnChannelCode != null && channel.url.removePrefix("xtvlive:") == returnChannelCode) {
+                                    Modifier.focusRequester(returnRequester)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .then(
+                                if (channel == firstChannel) Modifier.focusRequester(entryRequester)
+                                else Modifier
+                            ),
                     )
                 }
             }

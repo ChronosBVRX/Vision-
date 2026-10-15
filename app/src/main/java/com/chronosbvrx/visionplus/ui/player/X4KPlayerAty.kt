@@ -237,6 +237,11 @@ class X4KPlayerAty : ComponentActivity() {
 
     private var firstFrame = false
     private var startedAtMs = 0L
+    /** Re-arranques internos del motor por falta de primer cuadro (sin mostrar error). */
+    private var softRestarts = 0
+
+    /** El motor en vivo dio señal real (posición o decodificador) al menos una vez. */
+    private var liveSignalSeen = false
     private var errorShown = false
     private var picking = false
     private var declaredLanguages: List<String> = emptyList()
@@ -291,7 +296,7 @@ class X4KPlayerAty : ComponentActivity() {
             // Resolver lista completa de canales en segundo plano para no bloquear el arranque del reproductor
             Thread {
                 val allLive = X4KApi.cachedLive(applicationContext)
-                val resolvedArr = if (!codes.isNullOrEmpty()) {
+                var resolvedArr = if (!codes.isNullOrEmpty()) {
                     val codeMap = HashMap<String, JSONObject>(allLive.length())
                     for (i in 0 until allLive.length()) {
                         val obj = allLive.optJSONObject(i) ?: continue
@@ -306,6 +311,11 @@ class X4KPlayerAty : ComponentActivity() {
                     if (filteredArr.length() > 0) filteredArr else allLive
                 } else {
                     allLive
+                }
+                // Sin caché en este proceso (las prefs no cruzan a `:x4k`): respaldo
+                // con los códigos del intent para no dejar el selector en "0 canales".
+                if (resolvedArr.length() == 0 && !codes.isNullOrEmpty()) {
+                    resolvedArr = X4KApi.liveStubsForCodes(codes)
                 }
                 liveChannels = resolvedArr
                 var idx = findChannelIndex(curCode.ifBlank { code })
@@ -912,6 +922,33 @@ class X4KPlayerAty : ComponentActivity() {
             ),
         )
         errorOverlay = box
+    }
+
+    /**
+     * Re-arranque interno silencioso: el motor aceptó el `play` pero no dio señal
+     * (medido en cajas lentas: la primera pasada del P2P se queda corta y el
+     * «Reintentar» manual sí arranca). Para el usuario equivale a esperar un poco
+     * más; no se pinta error ni se pierde el estado del reproductor.
+     */
+    private fun softRestartPlayback() {
+        val v = playerView ?: return
+        if (curMedias.isEmpty()) return
+        softRestarts++
+        Log.w(TAG, "sin primer cuadro: re-arranque interno #$softRestarts (${if (liveMode) "live" else "vod"} $curCode)")
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+            "PLAYER_SOFT_RESTART", "modo=${if (liveMode) "live" else "vod"} intento=$softRestarts",
+        )
+        runCatching { X4KTitan.stop(v) }
+        firstFrame = false
+        loadingFading = false
+        loadingOverlay?.alpha = 1f
+        loadingOverlay?.visibility = View.VISIBLE
+        startedAtMs = System.currentTimeMillis()
+        handler.postDelayed({
+            if (isFinishing || isDestroyed || firstFrame) return@postDelayed
+            val ok = X4KTitan.play(v, if (liveMode) "live" else "vod", curCode, curTitle, curMedias)
+            Log.i(TAG, "re-arranque interno #$softRestarts ok=$ok")
+        }, 700L)
     }
 
     private fun showError(stage: String = "") {
@@ -2730,6 +2767,8 @@ class X4KPlayerAty : ComponentActivity() {
         loadingOverlay?.alpha = 1f
         loadingOverlay?.visibility = View.VISIBLE
         firstFrame = false
+        softRestarts = 0
+        liveSignalSeen = false
         startedAtMs = System.currentTimeMillis()
         hideControls()
 
@@ -3112,6 +3151,8 @@ class X4KPlayerAty : ComponentActivity() {
         loadingOverlay?.alpha = 1f
         loadingOverlay?.visibility = View.VISIBLE
         firstFrame = false
+        softRestarts = 0
+        liveSignalSeen = false
         startedAtMs = System.currentTimeMillis()
         if (X4KTitan.play(v, "live", code, name, medias)) {
             listOf(400L, 1200L, 2500L).forEach { d ->
@@ -4007,7 +4048,14 @@ class X4KPlayerAty : ComponentActivity() {
                     }
                 }
                 val total = resolveStableTotalDuration(declaredDurationMs, durationMs, pos, liveMode)
-                val hasLivePlayback = liveMode && (pos > 0 || X4KTitan.isPlaying(v) || (System.currentTimeMillis() - startedAtMs > 1200))
+                // Señal real del motor: posición avanzando o decodificador encendido.
+                val engineSignal = pos > 0 || X4KTitan.isPlaying(v)
+                if (engineSignal) liveSignalSeen = true
+                // En vivo, el temporizador solo libera la espera (algunos canales no
+                // reportan posición); el ERROR no se guía por él, sino por la señal real.
+                val hasLivePlayback = liveMode && (
+                    engineSignal || System.currentTimeMillis() - startedAtMs > 12_000
+                    )
                 if (pos > 0 || hasLivePlayback) {
                     if (loadingOverlay?.visibility == View.VISIBLE && !loadingFading) {
                         loadingFading = true
@@ -4027,22 +4075,31 @@ class X4KPlayerAty : ComponentActivity() {
                         onFirstFrame()
                     }
                 }
-                if (!firstFrame && !errorShown &&
-                    System.currentTimeMillis() - startedAtMs > 20_000
-                ) {
-                    // Auto-reparado de cajas atascadas: el motor arrancó pero jamás pintó
-                    // cuadro. Tras dos fallos seguidos se rota el motor a una generación
-                    // nueva; el proceso principal aplicará sesión/SLB frescas al siguiente
-                    // intento y el arranque limpio dejará de heredar el estado envenenado.
-                    val racha = com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.noteFailure(this@X4KPlayerAty)
-                    if (com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.shouldHeal(racha)) {
-                        val gen = com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.bumpEngineGen(this@X4KPlayerAty)
-                        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-                            "PLAYER_SELF_HEAL", "gen=$gen racha=$racha modo=${if (liveMode) "live" else "vod"}",
-                        )
-                        Log.w(TAG, "motor atascado: rotado a generación $gen (racha=$racha)")
+                // Estancado: ni cuadro (VOD) ni señal del motor (vivo). Primero un
+                // re-arranque interno silencioso (equivale al "Reintentar" que en las
+                // cajas rápidas sí funciona); si tampoco, error + auto-reparado.
+                val stalled = if (liveMode) !liveSignalSeen else !firstFrame
+                val stalledFor = System.currentTimeMillis() - startedAtMs
+                val stallLimit = if (softRestarts == 0) 25_000L else 35_000L
+                if (stalled && !errorShown && stalledFor > stallLimit) {
+                    if (softRestarts == 0) {
+                        softRestartPlayback()
+                    } else {
+                        // Auto-reparado de cajas atascadas: el motor arrancó pero jamás
+                        // pintó cuadro. Tras dos fallos seguidos se rota el motor a una
+                        // generación nueva; el proceso principal aplicará sesión/SLB
+                        // frescas al siguiente intento y el arranque limpio dejará de
+                        // heredar el estado envenenado.
+                        val racha = com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.noteFailure(this@X4KPlayerAty)
+                        if (com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.shouldHeal(racha)) {
+                            val gen = com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.bumpEngineGen(this@X4KPlayerAty)
+                            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                                "PLAYER_SELF_HEAL", "gen=$gen racha=$racha modo=${if (liveMode) "live" else "vod"}",
+                            )
+                            Log.w(TAG, "motor atascado: rotado a generación $gen (racha=$racha)")
+                        }
+                        showError("sin-primer-cuadro")
                     }
-                    showError("sin-primer-cuadro")
                 }
                 if (!scrubbing) {
                     if (total > 0) {

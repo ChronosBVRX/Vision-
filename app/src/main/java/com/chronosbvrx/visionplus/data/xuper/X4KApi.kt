@@ -1492,6 +1492,25 @@ object X4KApi {
         return null
     }
 
+    /**
+     * Respaldo del selector/zapping en vivo cuando el proceso `:x4k` no tiene el
+     * catálogo en caché (las prefs no cruzan procesos y una renovación las vacía):
+     * reconstruye entradas mínimas desde los códigos que viajan en el intent para
+     * que el selector nunca quede en "0 canales" ni el mando muerto. Puro.
+     */
+    internal fun liveStubsForCodes(codes: List<String>): JSONArray {
+        val out = JSONArray()
+        for (code in codes) {
+            val clean = code.trim()
+            if (clean.isEmpty()) continue
+            out.put(JSONObject().apply {
+                put("channelCode", clean)
+                put("name", displayChannelName(clean, clean))
+            })
+        }
+        return out
+    }
+
     /** Prepares a live play using the channel's current address from the live catalogue. */
     suspend fun playLive(
         context: Context,

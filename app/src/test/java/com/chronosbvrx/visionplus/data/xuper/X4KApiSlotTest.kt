@@ -55,4 +55,20 @@ class X4KApiSlotTest {
             X4KApi.slotUserId = null
         }
     }
+
+    @Test
+    fun liveStubsRebuildEntriesFromCodes() {
+        val arr = X4KApi.liveStubsForCodes(listOf("cyx-AMC", "ST☆R+HD_cyx", "  "))
+        assertEquals(2, arr.length())
+        assertEquals("cyx-AMC", arr.optJSONObject(0)?.optString("channelCode"))
+        assertEquals("cyx-AMC", arr.optJSONObject(0)?.optString("name"))
+        // El nombre camuflado se traduce igual que en el catálogo.
+        assertEquals("ESPN / Star+ HD", arr.optJSONObject(1)?.optString("name"))
+    }
+
+    @Test
+    fun liveStubsEmptyWithoutCodes() {
+        assertEquals(0, X4KApi.liveStubsForCodes(emptyList()).length())
+        assertEquals(0, X4KApi.liveStubsForCodes(listOf("   ")).length())
+    }
 }
