@@ -5,6 +5,37 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Lote 2.5.79: re-arranque interno del motor (fin del «error al primer intento»), vivo con espera honesta y foco de regreso — OTA publicada** (2026-10-15; 355 tests Android + 122 backend):
+  - *Síntoma (usuario)*: en Chromecast las series dan error al primer intento y con
+    «Reintentar» ya reproducen; en la TV box rooteada no abrían nunca; el vivo en la
+    TV quedaba en negro sin salida; y al volver de un canal se perdía el D-pad.
+  - *Fix 1 — re-arranque interno*: el motor aceptaba el `play` pero la primera pasada
+    del P2P se quedaba corta en cajas lentas. `softRestartPlayback()`: a los 25 s sin
+    señal hace stop + play interno (sin error, con la espera visible); el error real
+    solo a los ~60 s (35 s tras el re-arranque). Guarda contra `firstFrame` tardío.
+  - *Fix 2 — espera del vivo*: `hasLivePlayback` ya no se dispara a los 1.2 s; espera
+    señal REAL (`pos>0 || isPlaying`) o 12 s de cortesía, y el error del vivo se mide
+    por señal (`liveSignalSeen`), no por temporizador (antes: negro eterno).
+  - *Fix 3 — «0 canales»*: `X4KApi.liveStubsForCodes()` reconstruye el selector con
+    los códigos del intent cuando `:x4k` no tiene el catálogo cacheado.
+  - *Fix 4 — foco al volver*: `TvLiveScreen(returnChannelCode=…)` + `liveReturn` en
+    TvApp: el regreso enfoca la MISMA tarjeta del canal (fallback: primera visible /
+    destino). El harness de Compose no restaura foco de ventana tras la ruta del
+    reproductor (limitación del entorno): el caso se verificó en la tele real.
+  - *Instalación limpia pedida por el usuario*: paquete desinstalado, `/data/data` y
+    restos en sdcard/tmp borrados, filas huérfanas del launcher (Watch Next) quitadas
+    con cirugía de `tv.db` (respaldo/verificación de integridad), y reinstalación
+    fresca — auto-alta inmediata («auto-alta en el portal: ok»; el reclamo compartido
+    se ignora correctamente). Estaba viendo Attack on Titan con video y «Omitir
+    resumen» al cerrar.
+  - *Extra (lado equipo)*: la TV box ZTE tenía un `sh` de consola del firmware en
+    bucle comiendo un núcleo (`init.svc.console`, 97 % CPU permanente). Detenido con
+    `setprop ctl.stop console`; si reaparece tras reiniciar, repetir el comando. Es
+    gran parte de la lentitud de la caja (joins del P2P tardíos).
+  - *Verificado*: 355 Android + 122 backend; TV ZTE con serie+anime reproduciendo;
+    release R8 vc315, firma histórica. **OTA v2.5.79 publicada.**
+  - *Pendiente*: prueba física del vivo (canal + regreso D-pad) y del segundo intento
+    en Chromecast tras actualizar.
 - **Lote 2.5.78: fin de la tormenta de sesiones + crash R8 `k4/x` del motor — OTA publicada** (2026-10-15; 351 tests Android + 122 backend):
   - *Síntoma*: la TV no reproducía NADA (ni VOD ni vivo, error a los 20 s) y luego el
     móvil también empezó a fallar («me saca al darle play»).
