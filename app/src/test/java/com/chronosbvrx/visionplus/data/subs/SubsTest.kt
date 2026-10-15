@@ -91,6 +91,21 @@ class SubsTest {
         assertEquals(entries, parseSubsList(SubsStore.entriesToJson(entries)))
     }
 
+    /** El selector pone primero el idioma activo y luego Español (audiencia de la casa). */
+    @Test
+    fun pickerOrdersCurrentThenSpanish() {
+        val langs = listOf(
+            SubEntry("en", "http://x/en.srt", "srt", 0),
+            SubEntry("pt", "http://x/pt.srt", "srt", 1),
+            SubEntry("es", "http://x/es.srt", "srt", 2),
+        )
+        assertEquals(listOf("es", "en", "pt"), orderSubsForPicker(langs, "").map { it.language })
+        assertEquals(listOf("en", "es", "pt"), orderSubsForPicker(langs, "en").map { it.language })
+        assertEquals(listOf("es", "en", "pt"), orderSubsForPicker(langs, "ES").map { it.language })
+        // Un solo idioma se deja tal cual (sin reordenar de más).
+        assertEquals(listOf("en"), orderSubsForPicker(listOf(langs[0]), "es").map { it.language })
+    }
+
     // ------------------------------------------------------------------ SRT
 
     private val sampleSrt = "1\r\n00:00:23,391 --> 00:00:26,709\r\n[**]\r\n\r\n" +

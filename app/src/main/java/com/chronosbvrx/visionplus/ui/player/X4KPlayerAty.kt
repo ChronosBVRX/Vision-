@@ -56,6 +56,7 @@ import com.chronosbvrx.visionplus.data.subs.SubsStore
 import com.chronosbvrx.visionplus.data.subs.cueAt
 import com.chronosbvrx.visionplus.data.subs.distinctLanguages
 import com.chronosbvrx.visionplus.data.subs.languageName
+import com.chronosbvrx.visionplus.data.subs.orderSubsForPicker
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import com.chronosbvrx.visionplus.data.xuper.X4KTitan
 import com.chronosbvrx.visionplus.data.xuper.dedupeTrackLabels
@@ -1606,7 +1607,7 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** Subtítulos: la lista del servicio del proveedor para ESTE programa, con «Desactivados». */
     private fun subtitleOptions(options: MutableList<Pair<String, () -> Unit>>) {
-        val langs = distinctLanguages(subsEntries)
+        val langs = orderSubsForPicker(distinctLanguages(subsEntries), subsCurrent?.langKey.orEmpty())
         options += (if (subsCurrent == null) "\u2713 Desactivados" else "Desactivados") to { disableSubs() }
         when {
             langs.isNotEmpty() -> langs.forEach { entry ->
@@ -1846,31 +1847,46 @@ class X4KPlayerAty : ComponentActivity() {
     }
 
     /**
-     * El tic de subtítulos: pinta el cue activo y se re-agenda al próximo cambio de texto
-     * (fin del cue o inicio del siguiente), con tope de 1 s para que un seek se note rápido.
+     * El tic de subtítulos: pinta el cue activo y agenda el próximo cambio (fin del cue o
+     * inicio del siguiente, tope 1 s). Un fallo de pintado no mata el tic ni la app.
      */
     private val subsTick = object : Runnable {
         override fun run() {
-            val view = subsView ?: run {
-                Log.w(TAG, "subs overlay ausente")
-                return
+            var delay: Long? = null
+            try {
+                delay = paintSubsOnce()
+            } catch (e: Exception) {
+                Log.w(TAG, "subs tic falló: ${e.message}")
+                delay = 1000L
             }
-            if (subsCues.isEmpty()) return
-            val pos = X4KTitan.positionMs().coerceAtLeast(0L)
-            val cue = cueAt(subsCues, pos)
-            if (cue == null) {
-                if (view.visibility != View.GONE) {
-                    view.text = ""
-                    view.visibility = View.GONE
-                    view.tag = null
-                }
-            } else if (view.tag !== cue) {
-                view.tag = cue
-                view.text = Html.fromHtml(cue.text.replace("\n", "<br>"), Html.FROM_HTML_MODE_LEGACY)
-                view.visibility = View.VISIBLE
-            }
-            handler.postDelayed(this, SubsStore.tickDelayMs(subsCues, pos))
+            if (delay != null) handler.postDelayed(this, delay)
         }
+    }
+
+    /** Pinta el estado actual; null cuando no hay nada que mantener encendido. */
+    private fun paintSubsOnce(): Long? {
+        val view = subsView ?: run {
+            Log.w(TAG, "subs overlay ausente")
+            return null
+        }
+        if (subsCues.isEmpty()) return null
+        val pos = X4KTitan.positionMs().coerceAtLeast(0L)
+        val cue = cueAt(subsCues, pos)
+        if (cue == null) {
+            if (view.visibility != View.GONE) {
+                view.text = ""
+                view.visibility = View.GONE
+                view.tag = null
+            }
+        } else if (view.tag !== cue) {
+            // Si el HTML del proveedor viniera roto, se pinta el texto plano: nunca en blanco.
+            view.text = runCatching {
+                Html.fromHtml(cue.text.replace("\n", "<br>"), Html.FROM_HTML_MODE_LEGACY)
+            }.getOrDefault(cue.text)
+            view.tag = cue
+            view.visibility = View.VISIBLE
+        }
+        return SubsStore.tickDelayMs(subsCues, pos)
     }
 
     private fun startSubsTicker() {

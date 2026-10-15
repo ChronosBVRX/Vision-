@@ -76,6 +76,24 @@ internal fun distinctLanguages(entries: List<SubEntry>): List<SubEntry> {
     return byLang.values.toList()
 }
 
+/**
+ * Orden del selector: primero el idioma activo, luego Español, después el resto tal como
+ * llega del servicio (para la audiencia de la casa, «Español» de primero se siente nativo).
+ */
+internal fun orderSubsForPicker(langs: List<SubEntry>, currentLang: String): List<SubEntry> {
+    if (langs.size <= 1) return langs
+    val out = ArrayList<SubEntry>(langs.size)
+    val rest = ArrayList(langs)
+    rest.firstOrNull { it.langKey == currentLang.trim().lowercase() }?.let {
+        out += it
+        rest.remove(it)
+    }
+    val spanish = rest.filter { it.langKey == "es" || it.langKey == "spa" || it.langKey == "esp" }
+    out += spanish
+    out += rest.filter { it !in spanish }
+    return out
+}
+
 /** Nombre del idioma para la UI; cadena vacía si el código no se conoce. */
 internal fun languageName(code: String): String = when (code.trim().lowercase()) {
     "spa", "es", "esp" -> "Español"

@@ -43,6 +43,12 @@
     parcialmente bajo la barra de navegación — para pruebas táctiles usar TV o cambiar de navegación.
   - *Pendiente*: verlo en la TV del usuario (el overlay ya usa tamaño/márgenes de TV y está en la OTA);
     y el picker de subtítulos no existe en vivo (el servicio es por programa VOD — correcto).
+  - *Pulido post-2.5.74 (commiteado, SIN publicar)*: el tic de subs ya no puede morir por un cue
+    raro (try + texto plano si el HTML del proveedor viene roto) y el selector pone primero el idioma
+    activo y luego **Español** (`orderSubsForPicker`, con test). **Coordinación para la próxima OTA
+    (cualquiera de las dos sesiones)**: el árbol quedó limpio y commiteado; subir a **v2.5.75
+    (versionCode 311)** a un solo publisher — verificar `gh release list` antes de publicar para no
+    duplicar versión, y re-correr la suite completa (328/328 en el cierre de esta sesión).
   - *Ojo (lecciones)*: los SRT del proveedor traen cues CORTOS y con huecos largos — una captura puede
     caer entre cues y parecer «no funciona» (verificar con ráfaga + logs `subs list/activo`, no con una
     sola foto). Y la lista de idiomas sale del servicio, no de `subsInfo` (que solo es texto).
