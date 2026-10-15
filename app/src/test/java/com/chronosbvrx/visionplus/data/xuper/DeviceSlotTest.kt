@@ -51,4 +51,19 @@ class DeviceSlotTest {
         assertNull(DeviceSlot.parseResponse("no-json"))
         assertNull(DeviceSlot.parseResponse(""))
     }
+
+    @Test
+    fun sharedSnIsDetected() {
+        // El SN compartido de siempre NO es identidad propia (una sola sesión por
+        // SN en el portal: quien lo usa sufre patadas aaa100083).
+        assertTrue(DeviceSlot(sn = "2392fe5186d83d73508a2c8c60a26ef6").isShared())
+        assertTrue(DeviceSlot(sn = " 2392FE5186D83D73508A2C8C60A26EF6 ").isShared())
+    }
+
+    @Test
+    fun derivedSnIsNotShared() {
+        assertFalse(DeviceSlot(sn = "a3df93ab9276c11341e5cb3176a78a94", userId = "969752184").isShared())
+        assertFalse(DeviceSlot(sn = "SN-PROP-1", userId = "U1").isShared())
+        assertFalse(DeviceSlot(sn = "").isShared())
+    }
 }

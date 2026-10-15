@@ -13,6 +13,11 @@ data class DeviceSlot(val sn: String, val userId: String = "") {
 
     fun isValid(): Boolean = normalizeSn(sn).isNotEmpty()
 
+    /** El SN compartido de siempre NO es identidad propia: no aísla de patadas
+     *  (portal aaa100083) y debe migrarse al alta derivada. */
+    fun isShared(): Boolean =
+        normalizeSn(sn).lowercase() == X4KApi.LEGACY_SN.lowercase()
+
     companion object {
         fun normalizeSn(raw: String?): String {
             val sn = raw?.trim()?.take(64).orEmpty()

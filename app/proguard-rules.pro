@@ -25,6 +25,18 @@
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
 
+# --- Tink (AndroidX security-crypto) SIN ofuscacion ---
+# El DEX del motor X4K (assets, fuera de R8) trae su propio okhttp ofuscado por el
+# proveedor (`k4.x` con el `a(AtomicReference,...)` que RxJava usa en onPrepared) y
+# lo resuelve con parent-first contra NUESTRO classloader: si R8 renombra una clase
+# propia a `k4.x` (p. ej. `com.google.crypto.tink.proto.AesGcmKey`), la del motor
+# queda ensombrecida y el onPrepared muere con NoSuchMethodError en `k4/x` (crash
+# del `:x4k` en release; en debug no hay ofuscacion y carga la suya: por eso el
+# debug reproducia y el release no). Verificado con el stack en campo (A32 + TV).
+-keep class com.google.crypto.tink.** { *; }
+-dontwarn com.google.api.client.**
+-dontwarn org.joda.**
+
 # --- kotlinx.serialization (modelos @Serializable del gateway/portal) ---
 -if @kotlinx.serialization.Serializable class **
 -keepclassmembers class <1> {

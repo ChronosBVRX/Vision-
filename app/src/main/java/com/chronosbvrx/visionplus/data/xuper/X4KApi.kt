@@ -67,7 +67,7 @@ object X4KApi {
 
     /** Identidad compartida de siempre (legado): todas las instalaciones sin slot propio
      *  la usan. Con slot, el equipo acuña SU sesión y nadie patea a nadie. */
-    private const val LEGACY_SN = "2392fe5186d83d73508a2c8c60a26ef6"
+    internal const val LEGACY_SN = "2392fe5186d83d73508a2c8c60a26ef6"
     internal const val LEGACY_USER_ID = "967111326"
     private const val PORTAL = "masnew"
     internal const val APP_ID = "com.android.msandroid"

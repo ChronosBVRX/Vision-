@@ -36,9 +36,13 @@ object SlotClient {
         }).mapCatching { applySlot(context, it) }
     }
 
-    /** Reclamo silencioso al arrancar: solo aplica si el servidor ya conoce al equipo. */
+    /** Reclamo silencioso al arrancar: solo aplica si el servidor ya conoce al equipo
+     *  con una identidad PROPIA. Un reclamo del SN compartido se ignora: no aísla y
+     *  bloquearía el alta derivada. */
     suspend fun recoverIfNeeded(context: Context): Boolean = withContext(Dispatchers.IO) {
-        if (com.chronosbvrx.visionplus.data.xuper.SlotStore.load(context) != null) return@withContext false
+        if (com.chronosbvrx.visionplus.data.xuper.SlotStore.load(context)?.isShared() == false) {
+            return@withContext false
+        }
         val deviceKey = try {
             GateClient.deviceKey(context)
         } catch (_: Exception) {
@@ -46,6 +50,10 @@ object SlotClient {
         }
         val got = post("slots/claim", JSONObject().put("device_key", deviceKey)).getOrNull()
             ?: return@withContext false
+        if (got.isShared()) {
+            android.util.Log.i("SlotClient", "reclamo compartido; se ignora")
+            return@withContext false
+        }
         return@withContext try {
             applySlot(context, got)
             true
@@ -59,13 +67,22 @@ object SlotClient {
      reclamo por `deviceKey` (reinstalación: no consume nada) → auto-alta en el
      portal (gratis e ilimitada: el equipo acuña SU sesión de visitante) → pool del
      operador (respaldo para slots especiales). Silencioso: jamás interrumpe el arranque.
+
+     Un slot local del SN compartido se jubila: equivale a no tener identidad propia
+     (el portal admite una sola sesión por SN: patadas aaa100083) y su "ya hay slot"
+     bloqueaba para siempre el alta derivada.
      */
     suspend fun ensureSlot(context: Context): Boolean = withContext(Dispatchers.IO) {
         android.util.Log.i("SlotClient", "ensureSlot: inicio")
         try {
-            if (com.chronosbvrx.visionplus.data.xuper.SlotStore.load(context) != null) {
+            val local = com.chronosbvrx.visionplus.data.xuper.SlotStore.load(context)
+            if (local != null && !local.isShared()) {
                 android.util.Log.i("SlotClient", "ensureSlot: ya hay slot local")
                 return@withContext false
+            }
+            if (local?.isShared() == true) {
+                android.util.Log.i("SlotClient", "ensureSlot: slot compartido; migrando al alta propia")
+                com.chronosbvrx.visionplus.data.xuper.SlotStore.clear(context)
             }
         } catch (e: Exception) {
             android.util.Log.w("SlotClient", "ensureSlot: load falló: ${e.message}")
@@ -86,6 +103,10 @@ object SlotClient {
         }
         val got = post("slots/auto", JSONObject().put("device_key", deviceKey)).getOrNull()
             ?: return@withContext false
+        if (got.isShared()) {
+            android.util.Log.i("SlotClient", "pool con SN compartido; se ignora")
+            return@withContext false
+        }
         return@withContext try {
             applySlot(context, got)
             true

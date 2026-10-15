@@ -5,6 +5,46 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Lote 2.5.78: fin de la tormenta de sesiones + crash R8 `k4/x` del motor — OTA publicada** (2026-10-15; 351 tests Android + 122 backend):
+  - *Síntoma*: la TV no reproducía NADA (ni VOD ni vivo, error a los 20 s) y luego el
+    móvil también empezó a fallar («me saca al darle play»).
+  - *Causa 1 — tormenta de mints (verificada)*: la TV tenía un «slot propio» que en
+    realidad contenía el SN COMPARTIDO (`2392fe…`, cuenta `967111326`): el pool le dio
+    el mismo SN que al resto + worker. El portal admite 1 sesión por SN: cada mint
+    patea (`aaa100083`, probado: un mint muere a los ~2.5 min). El «ya hay slot local»
+    bloqueaba para siempre el alta derivada (v2.5.73). La reproducción necesita la
+    sesión estable 20-60 s; pateada a medio camino, el motor se queda sin segmentos y
+    el auto-reparado rotaba el motor (gen 2→12) + re-acuñaba a la fuerza (tormenta).
+    Fix app: `DeviceSlot.isShared()` + `SlotClient.ensureSlot` jubila el slot
+    compartido y completa el alta derivada (reclamo/pool ignoran SN compartido; sin
+    red sigue en compartido). Verificado: TV con cuenta propia `969757642`, cero
+    renovaciones en 2 h; worker con SN propio `1ec7e0c1…` vía `POST /v1/slots/worker`
+    (migra solo en su próxima revalidación).
+  - *Causa 2 — colisión R8 contra el DEX del motor (verificada con stack)*: en release,
+    el `onPrepared` (`yc.e$h`) arranca `Observable.interval` (RxJava del DEX) cuyo
+    `SchedulerPoolFactory` llama a `k4.x.a(AtomicReference,...)` (okhttp del proveedor).
+    R8 había renombrado `com.google.crypto.tink.proto.AesGcmKey` a `k4.x`: con
+    parent-first el motor resolvía la NUESTRA → `NoSuchMethodError` en `k4/x` → muerte
+    del `:x4k` 1 s después de elegir decodificador (stack en A32 v314 + gemelo en la
+    otra TV). En debug no hay ofuscación y carga la suya. Fix: `-keep
+    com.google.crypto.tink.**` (+ dontwarn google-api-client/joda); mapping verificado
+    sin `k4.x` generado. OJO: R8 NO silencia logs (no hay assumer de Log) — el release
+    sí loguea; no asumir lo contrario.
+  - *Verificado*: 351 Android + 122 backend en verde; TV ZTE (root): Spider-Man con
+    video+audio (4.6M frames), Azteca 7 en vivo real, NBA; A32 (USB): Spider-Man con
+    video en release (el crash desapareció). Release R8 vc314, firma histórica
+    `9593cb0d…`. **OTA v2.5.78 publicada.**
+  - *Lecciones*: (1) un slot del pool con el SN compartido vale cero — detectar y
+    migrar; (2) cualquier clase R8 con nombre de 1-2 letras puede ensombrecer clases
+    del DEX del motor (parent-first) — revisar el mapping ante un NoSuchMethodError
+    con nombre ofuscado; (3) `pm install -r` no mata procesos + el reboot limpia la
+    autorización adb (la TV quedó `unauthorized`: aceptar el diálogo RSA en la TV);
+    (4) mis propias sondas al portal patean sesiones reales — minimizar mints (el
+    detector de duelo sí confirmó duelo, pero a costa de patadas).
+  - *Pendiente*: instalar 2.5.78 final en la TV (quedó con build diag; adb
+    `unauthorized` tras el reboot — aceptar diálogo en la TV) + prueba física
+    VOD/vivo; confirmar migración del worker a su SN (`sesión lista userId=969755826`
+    en su log); prueba física del móvil del usuario con la OTA.
 - **Lote 2.5.77: resumen, post-créditos, tendencias, avisos, niños, actividad y pulido visual — OTA publicada** (2026-10-15; 349 tests Android + 122 backend):
   - *Intro/créditos*: píldora «Omitir resumen» (misma píldora del intro, el resumen manda primero;
     el servidor ya lo servía, la app lo ignoraba) + auto-salto en modo automático; aviso discreto
