@@ -98,6 +98,7 @@ private fun TvRoute(
     onRailPick: (String) -> Unit,
     filmReturn: String?,
     onFilmPick: (String) -> Unit,
+    onClearFilmReturn: () -> Unit = {},
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -160,6 +161,9 @@ private fun TvRoute(
             onOpenCategories = { nav.push(Route.Categories) },
             onResume = { nav.push(resumeRoute(it)) },
             onGoRoute = { nav.push(it) },
+            // El regreso vale una sola vez: al restaurarse se limpia y los hubs lo
+            // invalidan al salir (si no, cada vuelta re-dispara el regreso viejo).
+            onClearReturn = onClearFilmReturn,
         )
         is Route.Title -> TvTitleScreen(route.film, onPlay = { ep -> nav.push(Route.Player(route.film, ep)) })
         is Route.Player -> PlayerScreen(route.film, isTv = true, onBack = { nav.pop() }, episode = route.episode, resumeMs = route.resumeMs)

@@ -5,6 +5,25 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Fix D-pad al volver al Inicio: misma tarjeta + teclas que no se tragan + telemetría blindada — OTA v2.5.76** (2026-10-15; 330 tests Android + 114 backend):
+  - *Diagnóstico (sesión paralela, verificado)*: el Inicio se recompone desde vacío (`produceState(HomeCurated())`)
+    y el scroll restaurado cae en otra fila; no había revelado vertical (la tarjeta ni se compone);
+    `FocusRescue.rescue()` devolvía `true` aunque el `requestFocus()` fallara en silencio (cada tecla
+    comida); el `filmReturn` nunca se limpiaba y los hubs no lo invalidaban. Confirmado con mapa de
+    nodos en Robolectric (los botones del héroe están en y≈248: Right/Right/OK cae en Favorito, no en
+    tarjeta — los tests de navegación deben bajar a la fila).
+  - *Fix (6 puntos)*: (1) caché `XuperCatalog.lastHomeCurated` siembra el primer frame (los tests la
+    limpian en `seed`); (2) `homeReturnRowIndex` (puro, réplica del orden del LazyColumn) + revelado
+    vertical en `rememberReturnFocus` (reusa `revealReturnIndex`); (3) rescate honesto: `LandingFocus.attached`
+    + `RescueAnchor` en el héroe + `shouldConsumeKey` puro (MainActivity sin cambios); (4) fallback de
+    6 s → 1.5 s; (5) `filmReturn` con ciclo de vida (`onClearReturn`/`onDone` al restaurar o salir por hub —
+    OJO: al rendirse NO se limpia, o el contenido tardío ya no restaura; el test lo cazó); (6) guardianes
+    `TvRescueTest` (puros) + `homeBackRestoresSameCardAfterLateContent` (misma tarjeta, no "algún foco").
+  - *Telemetría*: `Diagnostics` ya no sube nada desde tests (guard `org.robolectric` — no existe en el APK,
+    producción intacta): los `FOCUS_LOST` de `robolectric` contaminaban el VPS.
+  - *Verificado*: 330/330 Android (suite fresca) + 114 backend; release R8 vc312 con firma histórica
+    `9593cb0d…` (dex verificado con el fix en mapping.txt). **OTA v2.5.76 publicada.**
+  - *Pendiente*: prueba física en la TV del usuario (secciones → serie → Atrás, foco en la misma tarjeta).
 - **OTA v2.5.75: todo integrado (AniSkip + pulido de subtítulos + espera) — publicada** (2026-10-15; 324 tests Android + 114 backend):
   - *Qué integra*: (1) AniSkip para anime + retiro del botón «✎ Marcas» (cero trabajo manual);
     (2) pulido de subtítulos post-2.5.74 (tic robusto + idioma activo y Español primero);
@@ -537,8 +556,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.75**
-  (versionCode **311**, release OTA v2.5.75). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.76**
+  (versionCode **312**, release OTA v2.5.76). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

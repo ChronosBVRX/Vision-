@@ -364,6 +364,56 @@ class TvFocusTest {
     }
 
     @Test
+    fun homeBackRestoresSameCardAfterLateContent() {
+        // El caso real de la tele: al volver de la ficha, el Inicio rearma sus filas tarde
+        // (curado en segundo plano sobre otra estructura) y la tarjeta puede quedar fuera de
+        // pantalla. El regreso debe revelar su fila verticalmente y enfocar LA MISMA tarjeta,
+        // no "cualquier foco", y el mando debe seguir vivo después.
+        val seriesRows = listOf(
+            CatalogRow("destacadas", "Destacadas", (1..6).map { seriesFilm(it) }),
+            CatalogRow("series", "Series", (7..12).map { seriesFilm(it) }),
+        )
+        val nav = startWith(seriesRows, Route.Home)
+        assertLanded("Inicio")
+        // Bajar hasta la fila «Destacadas» y abrir una tarjeta que NO sea el héroe (f2):
+        // la del héroe cae en su botón por diseño; aquí se prueba la tarjeta de la fila.
+        var labelTop: Float? = null
+        var guard = 0
+        while (guard++ < 14) {
+            val labels = compose.onAllNodesWithText("Destacadas").fetchSemanticsNodes()
+            val c = focusedCenter()
+            if (labels.isNotEmpty()) {
+                labelTop = labels.first().boundsInRoot.top
+                if (c != null && c.y > labelTop) break
+            }
+            press(Key.DirectionDown)
+        }
+        assertTrue("Debe verse la fila «Destacadas»", labelTop != null)
+        press(Key.DirectionRight)
+        val before = focusedCenter()
+        assertTrue("Debe haber una tarjeta enfocada antes de abrir", before != null)
+        press(Key.DirectionCenter)
+        assertTrue("Debe abrir la ficha de la serie", nav.current is Route.Title)
+
+        // Al volver, el Inicio todavía no tiene sus filas (curado en curso en gama baja).
+        compose.runOnIdle { catalog.seed(emptyList()) }
+        back()
+        assertEquals("Al volver debe regresar a Home", Route.Home, nav.current)
+        // Llegan las filas tarde: el foco debe caer solo en LA MISMA tarjeta.
+        compose.runOnIdle { catalog.seed(seriesRows) }
+        compose.waitUntil(timeoutMillis = 5_000) { focusedCount() >= 1 }
+        val after = focusedCenter()
+        assertTrue(
+            "El foco debe volver a la MISMA tarjeta (antes=$before, después=$after)",
+            after != null && before != null && (after - before).getDistance() < 8f,
+        )
+        press(Key.DirectionDown)
+        assertTrue("Inicio: el foco se perdió al bajar", focusedCount() >= 1)
+        press(Key.DirectionUp)
+        assertTrue("Inicio: el foco se perdió al subir", focusedCount() >= 1)
+    }
+
+    @Test
     fun homeToSeriesFichaAndBackKeepsFocus() {
         // El caso reportado: abrir la ficha de una SERIE desde el Inicio y volver con Atrás
         // dejaba el mando sin foco. Se recorre el flujo real (el OK de la tarjeta es el que

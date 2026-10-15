@@ -53,7 +53,18 @@ object Diagnostics {
     private val started = AtomicLong(0L)
     private val flushing = AtomicBoolean(false)
 
+    /**
+     * La suite de unit tests corre en este mismo proceso y llegaba a subir reportes
+     * (`FOCUS_LOST` de `robolectric`) al VPS de producción, contaminando la telemetría
+     * de campo. Robolectric solo existe como dependencia de tests: en el APK real esta
+     * clase no existe y los reportes fluyen normal.
+     */
+    private val isTestRuntime by lazy {
+        runCatching { Class.forName("org.robolectric.RobolectricTestRunner"); true }.getOrDefault(false)
+    }
+
     fun init(application: Application) {
+        if (isTestRuntime) return
         if (started.getAndSet(1L) != 0L) return
         app = application
         enabled = com.chronosbvrx.visionplus.ui.settings.VisionSettings.isDiagnosticsEnabled(application)
@@ -87,6 +98,7 @@ object Diagnostics {
 
     /** Anomalía no-fatal: código corto y estable + detalle técnico. */
     fun anomaly(code: String, detail: String = "") {
+        if (isTestRuntime) return
         enqueue(build(kind = "anomaly", code = code, detail = detail))
     }
 
@@ -179,6 +191,7 @@ object Diagnostics {
     }
 
     fun flush() {
+        if (isTestRuntime) return
         val ctx = app ?: return
         if (!enabled || !isMainProcess(ctx)) return
         if (!flushing.compareAndSet(false, true)) return

@@ -73,6 +73,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.HomeCurated
 import com.chronosbvrx.visionplus.data.PlaybackHistory
@@ -162,6 +163,8 @@ fun TvHomeScreen(
     onOpenCategories: () -> Unit,
     onResume: (ResumeCard) -> Unit,
     onGoRoute: (Route) -> Unit = {},
+    /** El regreso a una ficha vale una sola vez: se limpia al restaurar o al salir por un hub. */
+    onClearReturn: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val reduced = LocalReducedEffects.current
@@ -178,14 +181,18 @@ fun TvHomeScreen(
     // El curado del Inicio (pool propio + Top 10 + Novedades + filas por tipo + héroe)
     // se calcula en segundo plano: con miles de films del índice, hacerlo en el hilo
     // de composición congelaba el D-pad en gama baja. Se conserva el valor anterior
-    // hasta que llega el nuevo (sin parpadeos).
+    // hasta que llega el nuevo (sin parpadeos). Al volver de una ficha la pantalla se
+    // recompone desde cero: se siembra con el último curado del proceso para que el
+    // primer frame tenga la MISMA estructura y el scroll restaurado no caiga en otra fila.
     val curated by androidx.compose.runtime.produceState(
-        HomeCurated(),
+        XuperCatalog.lastHomeCurated ?: HomeCurated(),
         rows,
         catalog.indexRows,
     ) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            Popularity.homeCurated(rows, catalog.indexRows)
+            Popularity.homeCurated(rows, catalog.indexRows).also {
+                XuperCatalog.lastHomeCurated = it
+            }
         }
     }
     val allAvailableFilms = curated.pool
@@ -226,18 +233,10 @@ fun TvHomeScreen(
     val rowsListState = rememberLazyListState()
 
     // Al regresar de la ficha, restaurar foco en la tarjeta exacta (o el héroe, si era su
-    // título). El curado del Inicio se pinta en segundo plano —en gama baja tardaba más que
-    // los reintentos de antes—, así que el intento se re-arma cuando llega el contenido y, de
-    // plano, cae al destino de la pantalla: el mando nunca se queda muerto. El regreso solo
-    // vale cuando se llegó aquí abriendo una ficha (el riel tiene su propio destino).
+    // título). El regreso solo vale cuando se llegó aquí abriendo una ficha (el riel tiene
+    // su propio destino); la posición de la fila se calcula más abajo, cuando ya están
+    // todas las filas (incluido «Seguir viendo», que carga al volver del reproductor).
     val returnPending = returnFilmId != null && railReturn.isEmpty()
-    rememberReturnFocus(
-        filmId = if (returnPending) returnFilmId else null,
-        requester = returnRequester,
-        landing = landing,
-        contentKey = curated.pool.size,
-        entryRequester = rowEntry,
-    )
 
     // El primer elemento al cargar obtiene el protagonismo en el billboard
     LaunchedEffect(top10Films, allAvailableFilms) {
@@ -273,6 +272,30 @@ fun TvHomeScreen(
         }
     }
     LaunchedEffect(Unit) { reloadContinue() }
+    // Regreso a la tarjeta exacta con revelado vertical de su fila: el curado llega tarde
+    // y con otra estructura, así que primero se desplaza la columna hasta la fila (sin eso
+    // la tarjeta ni se compone) y luego se pide el foco; al terminar se limpia el regreso.
+    val returnRowIndex = rememberReturnRowIndex(
+        returnFilmId = if (returnPending) returnFilmId else null,
+        heroFilmId = featured?.film?.id,
+        top10 = top10Films,
+        premieres = estrenosFilms,
+        continueCards = continueCards,
+        ownKindRows = ownKindRows,
+        otherRows = otherRows,
+        showPlaceholders = rows.isEmpty() && catalog.loading,
+        showNoRows = noCatalogMessage != null,
+    )
+    rememberReturnFocus(
+        filmId = if (returnPending) returnFilmId else null,
+        requester = returnRequester,
+        landing = landing,
+        contentKey = curated.pool.size,
+        entryRequester = rowEntry,
+        columnState = rowsListState,
+        columnIndex = returnRowIndex,
+        onDone = onClearReturn,
+    )
     val homeLifecycle = LocalLifecycleOwner.current
     DisposableEffect(homeLifecycle) {
         val observer = LifecycleEventObserver { _, event ->
@@ -357,7 +380,8 @@ fun TvHomeScreen(
 
                     // 2. ACCESOS RÁPIDOS A COLECCIONES Y ESPECIALES (Brand Hubs: Fútbol, Anime, Novelas, Categorías)
                     item(key = "home_quick_hubs") {
-                        TvQuickHubsRow(onGoRoute = onGoRoute)
+                        // Los hubs no registran regreso: salir por aquí invalida el de la ficha.
+                        TvQuickHubsRow(onGoRoute = { onClearReturn(); onGoRoute(it) })
                     }
 
                     // Estados de carga o reintento si el catálogo aún no responde
@@ -642,6 +666,65 @@ private fun TvQuickHubCard(
 }
 
 /**
+ * Índice del `LazyColumn` del Inicio donde vive la tarjeta del regreso (-1 si no hay
+ * regreso). Réplica exacta del orden de los `item`/`items` de la lista: billboard,
+ * hubs, placeholders, Top 10, Estrenos, Seguir viendo, filas propias y resto.
+ * Puro y testeable: con él, el regreso revela la fila verticalmente antes de pedir foco.
+ */
+internal fun homeReturnRowIndex(
+    returnFilmId: String?,
+    heroFilmId: String?,
+    top10: List<Film>,
+    premieres: List<Film>,
+    continueCards: List<ResumeCard>,
+    ownKindRows: List<CatalogRow>,
+    otherRows: List<CatalogRow>,
+    showPlaceholders: Boolean,
+    showNoRows: Boolean,
+): Int {
+    if (returnFilmId == null) return -1
+    if (heroFilmId == returnFilmId) return 0
+    var index = 2 // billboard (0) + hubs (1)
+    if (showPlaceholders || showNoRows) index += 1
+    if (top10.any { it.id == returnFilmId }) return index
+    if (top10.isNotEmpty()) index += 1
+    if (premieres.any { it.id == returnFilmId }) return index
+    if (premieres.isNotEmpty()) index += 1
+    if (continueCards.any { it.film?.id == returnFilmId || it.entry.key == returnFilmId || it.entry.xtvCode == returnFilmId }) return index
+    if (continueCards.isNotEmpty()) index += 1
+    for (row in ownKindRows) {
+        if (row.films.any { it.id == returnFilmId }) return index
+        index += 1
+    }
+    for (row in otherRows) {
+        if (row.films.any { it.id == returnFilmId }) return index
+        index += 1
+    }
+    return -1
+}
+
+@Composable
+private fun rememberReturnRowIndex(
+    returnFilmId: String?,
+    heroFilmId: String?,
+    top10: List<Film>,
+    premieres: List<Film>,
+    continueCards: List<ResumeCard>,
+    ownKindRows: List<CatalogRow>,
+    otherRows: List<CatalogRow>,
+    showPlaceholders: Boolean,
+    showNoRows: Boolean,
+): Int = remember(
+    returnFilmId, heroFilmId, top10, premieres, continueCards, ownKindRows, otherRows,
+    showPlaceholders, showNoRows,
+) {
+    homeReturnRowIndex(
+        returnFilmId, heroFilmId, top10, premieres, continueCards,
+        ownKindRows, otherRows, showPlaceholders, showNoRows,
+    )
+}
+
+/**
  * Billboard Cinemático del Hero con badge, metadatos y botones directos interactivos.
  */
 @Composable
@@ -656,6 +739,7 @@ private fun HeroBillboard(
     onToggleFavorite: () -> Unit,
 ) {
     if (featured == null) return
+    if (landing != null) RescueAnchor(landing)
     Column(
         modifier = Modifier
             .fillMaxWidth()

@@ -33,11 +33,35 @@ class LandingFocus internal constructor() {
     val requester = FocusRequester()
     var focused by mutableStateOf(false)
         internal set
+    /**
+     * Si el destino está compuesto (y puede tomar el foco). Por defecto se asume que
+     * sí —los destinos fijos siempre lo están—; el héroe del Inicio lo apaga al salir
+     * de composición ([RescueAnchor]), porque pedirle foco entonces solo come teclas.
+     */
+    var attached by mutableStateOf(true)
+        internal set
 
     fun request() {
         runCatching { requester.requestFocus() }
     }
 }
+
+/**
+ * Marca que el destino de rescate está compuesto: mientras este efecto viva, el
+ * rescate puede intentar ese foco; al salir de composición (p. ej. el héroe con
+ * scroll), el rescate deja pasar las teclas en vez de comérselas.
+ */
+@Composable
+fun RescueAnchor(landing: LandingFocus) {
+    DisposableEffect(landing) {
+        landing.attached = true
+        onDispose { landing.attached = false }
+    }
+}
+
+/** Decisión pura del rescate: solo consume la tecla si puede caer en algo compuesto. */
+internal fun shouldConsumeKey(dialogsOpen: Int, screenHasFocus: Boolean, targetAttached: Boolean): Boolean =
+    dialogsOpen <= 0 && !screenHasFocus && targetAttached
 
 /**
  * The screen's landing focus, requested on entry (and again whenever [key] changes). The target is
@@ -68,7 +92,7 @@ fun Modifier.landingFocus(landing: LandingFocus): Modifier =
     focusRequester(landing.requester).onFocusChanged { landing.focused = it.isFocused }
 
 /** Intentos del regreso a una ficha (y su espera): cubren el rato en que el contenido tarda en pintar. */
-private const val RETURN_ATTEMPTS = 60
+private const val RETURN_ATTEMPTS = 15
 private const val RETURN_RETRY_MS = 100L
 
 /**
@@ -80,6 +104,11 @@ private const val RETURN_RETRY_MS = 100L
  * cambió— el foco cae a la primera tarjeta visible ([entryRequester]) o al destino de la
  * pantalla: el mando nunca se queda muerto, y si de plano nada tomó el foco se reporta
  * `FOCUS_LOST` con el contexto (diagnóstico en la tele real).
+ *
+ * Con [columnState]/[columnIndex] primero revela verticalmente la fila de la tarjeta (el
+ * Inicio rearma sus filas tarde y la tarjeta puede no estar compuesta) y [onDone] avisa
+ * cuando restaura o el usuario toma el mando (vale una sola vez) — pero no cuando se
+ * rinde: si el contenido sigue llegando, el efecto se re-arma y lo reintenta.
  */
 @Composable
 fun rememberReturnFocus(
@@ -88,24 +117,42 @@ fun rememberReturnFocus(
     landing: LandingFocus,
     contentKey: Any? = null,
     entryRequester: FocusRequester? = null,
+    columnState: LazyListState? = null,
+    columnIndex: Int = -1,
+    onDone: () -> Unit = {},
 ) {
     LaunchedEffect(filmId, contentKey) {
         if (filmId == null) return@LaunchedEffect
+        if (columnIndex >= 0) {
+            runCatching { columnState?.revealReturnIndex(columnIndex) }
+        }
         var attempts = 0
         var attached = false
         // Si el foco ya lo eligió alguien (el usuario moviéndose), se respeta. El único foco que
         // se puede corregir es el automático de la pantalla ([landing], el héroe): ese no lo
         // eligió nadie, así que seguimos intentando la tarjeta exacta en cuanto componga.
         repeat(RETURN_ATTEMPTS) {
-            if (FocusRescue.screenHasFocus && !landing.focused) return@LaunchedEffect
+            if (FocusRescue.screenHasFocus && !landing.focused) {
+                onDone()
+                return@LaunchedEffect
+            }
             attempts++
             val ok = runCatching { requester.requestFocus() }.isSuccess
             if (ok) attached = true
-            if (FocusRescue.screenHasFocus && !landing.focused) return@LaunchedEffect
+            if (FocusRescue.screenHasFocus && !landing.focused) {
+                onDone()
+                return@LaunchedEffect
+            }
             delay(RETURN_RETRY_MS)
         }
-        if (FocusRescue.screenHasFocus && !landing.focused) return@LaunchedEffect
+        if (FocusRescue.screenHasFocus && !landing.focused) {
+            onDone()
+            return@LaunchedEffect
+        }
         // Último recurso: cualquier tarjeta visible y, si no, el destino de la pantalla.
+        // OJO: aquí NO se avisa [onDone]: si el contenido sigue llegando, el efecto se
+        // re-arma con la nueva [contentKey] y reintenta la tarjeta exacta; limpiar ahora
+        // es lo que dejaba el foco en el héroe aunque la tarjeta llegara un segundo después.
         val rescued = entryRequester != null && runCatching { entryRequester.requestFocus() }.isSuccess
         if (!FocusRescue.screenHasFocus) landing.request()
         if (!FocusRescue.screenHasFocus) {
@@ -192,10 +239,8 @@ object FocusRescue {
 
     /** Returns true when it moved the focus. */
     fun rescue(): Boolean {
-        if (dialogsOpen > 0) return false
-        if (screenHasFocus) return false
-        val t = target ?: return false
-        t.request()
+        if (!shouldConsumeKey(dialogsOpen, screenHasFocus, target?.attached ?: false)) return false
+        target?.request()
         return true
     }
 }

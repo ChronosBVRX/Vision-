@@ -41,6 +41,17 @@ enum class XuperStatus { LOADING, NO_SOURCE, EMPTY, READY }
  * beyond the embedded session and the person's own lists.
  */
 class XuperCatalog(context: Context) {
+    companion object {
+        /**
+         * Último curado del Inicio a nivel proceso: al volver de una ficha la pantalla se
+         * recompone desde cero y el curado tarda (segundo plano); sembrar el primer frame
+         * con la estructura anterior evita que el scroll restaurado caiga en otra fila.
+         * Se refresca en cada cálculo real; los tests la limpian con [seed].
+         */
+        @Volatile
+        internal var lastHomeCurated: HomeCurated? = null
+    }
+
     private val app = context.applicationContext
     private val store = LiveStore(app)
 
@@ -82,6 +93,7 @@ class XuperCatalog(context: Context) {
         rows = seed
         status = XuperStatus.READY
         message = null
+        lastHomeCurated = null
     }
 
     /** Recalcula «Mi lista» y las recomendaciones (barato: prefs + hileras ya en memoria). */
