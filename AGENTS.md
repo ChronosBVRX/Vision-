@@ -5,6 +5,15 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **OTA v2.5.75: todo integrado (AniSkip + pulido de subtítulos + espera) — publicada** (2026-10-15; 324 tests Android + 114 backend):
+  - *Qué integra*: (1) AniSkip para anime + retiro del botón «✎ Marcas» (cero trabajo manual);
+    (2) pulido de subtítulos post-2.5.74 (tic robusto + idioma activo y Español primero);
+    (3) espera del reproductor con contenido real (ya estaba commiteada desde la sesión paralela).
+    Servidor y repo idénticos (hashes VPS = repo en los 6 archivos del servidor).
+  - *Verificado*: suite Android fresca 324/324 + backend 114/114; release R8 (`:app:assembleNormalRelease`,
+    106.7 MB) con firma histórica `9593cb0d…` (apksigner), versionCode 311. Release
+    `v2.5.75` en GitHub con asset `VisionPlus.apk` (enlace estable `.../releases/latest/download/VisionPlus.apk`).
+  - *Pendiente*: prueba física en TV del usuario (foco D-pad v2.5.69, subtítulos v2.5.74/75, Omitir intro).
 - **Subtítulos del proveedor dentro del reproductor (por fin de verdad) — OTA v2.5.74** (2026-10-14; 327 tests Android):
   - *Diagnóstico (el usuario tenía razón: «idioma sí, subtítulos no»)*: en el SDK embarcado la llave
     `"subtitle"` de la fachada es **un no-op** (`yc/h$l`: solo llama al motor para volume/audio/speed/
@@ -43,17 +52,14 @@
     parcialmente bajo la barra de navegación — para pruebas táctiles usar TV o cambiar de navegación.
   - *Pendiente*: verlo en la TV del usuario (el overlay ya usa tamaño/márgenes de TV y está en la OTA);
     y el picker de subtítulos no existe en vivo (el servicio es por programa VOD — correcto).
-  - *Pulido post-2.5.74 (commiteado, SIN publicar)*: el tic de subs ya no puede morir por un cue
+  - *Pulido post-2.5.74 (publicado en la OTA v2.5.75)*: el tic de subs ya no puede morir por un cue
     raro (try + texto plano si el HTML del proveedor viene roto) y el selector pone primero el idioma
-    activo y luego **Español** (`orderSubsForPicker`, con test). **Coordinación para la próxima OTA
-    (cualquiera de las dos sesiones)**: el árbol quedó limpio y commiteado; subir a **v2.5.75
-    (versionCode 311)** a un solo publisher — verificar `gh release list` antes de publicar para no
-    duplicar versión, y re-correr la suite completa (328/328 en el cierre de esta sesión).
+    activo y luego **Español** (`orderSubsForPicker`, con test).
   - *Ojo (lecciones)*: los SRT del proveedor traen cues CORTOS y con huecos largos — una captura puede
     caer entre cues y parecer «no funciona» (verificar con ráfaga + logs `subs list/activo`, no con una
     sola foto). Y la lista de idiomas sale del servicio, no de `subsInfo` (que solo es texto).
 
-- **Espera del reproductor con contenido real (sin decir «película» en series) y refrescada por capítulo — pendiente OTA** (2026-10-14; 325 tests Android):
+- **Espera del reproductor con contenido real (sin decir «película» en series) y refrescada por capítulo — publicada en OTA v2.5.75** (2026-10-14; 325 tests Android):
   - *Pedido*: la espera decía «Preparando tu película…» incluso al abrir series, y al cambiar de capítulo
     seguía mostrando el PRIMER capítulo de la sesión (4x3 aunque se viera el 4x8): el overlay se
     construía UNA vez (título cocido) y en `playEpisode` solo se volvía a mostrar tal cual.
@@ -531,8 +537,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.74**
-  (versionCode **310**, release OTA v2.5.74). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.75**
+  (versionCode **311**, release OTA v2.5.75). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
@@ -1419,11 +1425,10 @@
 - POCO a veces sin internet (DNS) — no es bug de la app.
 
 ## Pendientes / ideas
-- **Intro/créditos (skip markers)**: falta la prueba física (A32/POCO/TV) y publicar OTA. Sin datos
-  no hay botón (decisión del usuario: cero trabajo manual — el botón «✎ Marcas» ya se retiró).
-  Para novelas y cola larga solo queda la detección por audio tipo Plex (fase futura). Cablear o
-  retirar el diálogo placebo «Corregir intro y outro» del camino ExoPlayer (las series no pasan
-  por ahí).
+- **Intro/créditos (skip markers)**: publicado en OTA v2.5.75 (AniSkip + sin botón Marcas). Sin datos
+  no hay botón (decisión del usuario: cero trabajo manual). Para novelas y cola larga solo queda la
+  detección por audio tipo Plex (fase futura). Cablear o retirar el diálogo placebo «Corregir intro y
+  outro» del camino ExoPlayer (las series no pasan por ahí). Falta la prueba física (A32/POCO/TV).
 - Fase 2 (diagnóstico): remote config / kill-switch (apagar una función problemática sin OTA) + botón de
   reporte con texto libre del usuario; configurar el canal de alertas (Telegram/webhook) en el `.env` del VPS.
 - Catálogo: metadatos del portal que aún mienten — «LIMPIAR» (2020, 109 min, es película) viene como `teleplay`
