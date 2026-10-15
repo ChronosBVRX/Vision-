@@ -126,14 +126,17 @@ fun VisionSplash(isTv: Boolean, canExit: Boolean, onFinished: () -> Unit) {
                 },
             )
         }
-        // La firma del estudio, discreta, también sobre el arranque con video.
-        Text(
-            text = "por ChronosBVRX",
-            color = Color.White.copy(alpha = 0.7f),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 2.sp,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp),
-        )
+        // La firma del estudio va abajo solo con el video de marca: en el splash Compose
+        // ya vive bajo el logo y no debe repetirse.
+        if (!useComposeSplash && !videoError) {
+            Text(
+                text = "por ChronosBVRX",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 2.sp,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp),
+            )
+        }
     }
 }

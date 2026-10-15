@@ -47,7 +47,12 @@
     aparece un emoji** (permite el `☆` de datos del proveedor y las flechas tipográficas; verifica
     que escanea ≥50 archivos). Suite completa 356/356.
   - *Verificado*: 356 Android en verde; release R8 vc317 (102.2 MB) con firma histórica
-    `9593cb0d…` (apksigner). A32 no estaba en red al publicar (prueba física pendiente).
+    `9593cb0d…` (apksigner). Smoke visual en emulador: home móvil con sello TOP 10, estrellas
+    doradas, encabezados con icono y chevrons; splash con «por ChronosBVRX · EST. 2026». A32 no
+    estaba en red al publicar (prueba física pendiente).
+  - *Ajuste post-publicación*: en el splash Compose (TV/bajo consumo) la firma salía duplicada
+    (bajo el logo y abajo): ahora la de abajo solo aparece con el video de marca. Asset de la OTA
+    re-subido con el fix (mismo vc317).
   - *OTA v2.5.81 publicada* (`VisionPlus.apk`, release en GitHub). Plan de trabajo en
     `docs/PLAN_UI_PREMIUM.md`.
 - **Lote 2.5.80: arranque más rápido en Smart TV (handshake adelantado desde la ficha) — OTA publicada** (2026-10-15; 355 tests Android + 122 backend):
