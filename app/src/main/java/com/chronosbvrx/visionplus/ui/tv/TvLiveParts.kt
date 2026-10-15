@@ -40,6 +40,7 @@ import coil.compose.AsyncImage
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.ui.live.channelInitials
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionLiveRed
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
@@ -243,8 +244,8 @@ internal fun TvLivePreview(channel: LiveChannel?, modifier: Modifier = Modifier)
         }
         if (channel == null) return@Column
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(VisionBlue))
-            Text("EN VIVO", style = MaterialTheme.typography.labelSmall, color = VisionBlue, fontWeight = FontWeight.Bold)
+            Box(Modifier.size(8.dp).clip(CircleShape).background(VisionLiveRed))
+            Text("EN VIVO", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
         }
         Text(channel.name, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(channel.effectiveGroup(), style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -34,6 +35,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.chronosbvrx.visionplus.BuildConfig
@@ -48,6 +50,7 @@ import com.chronosbvrx.visionplus.data.stats.formatMinutes
 import com.chronosbvrx.visionplus.data.stats.kindLabel
 import com.chronosbvrx.visionplus.data.stats.summarize
 import com.chronosbvrx.visionplus.ui.kids.TvKidsPinDialog
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.settings.VisionSettings
 import com.chronosbvrx.visionplus.ui.settings.rememberUpdateCheck
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
@@ -111,7 +114,11 @@ private fun Note(text: String) {
 @Composable
 private fun TvStepOption(label: String, onStep: (delta: Int) -> Unit) {
     TvActionOption(
-        "$label   ◀ ▶",
+        label,
+        trailing = {
+            Icon(VisionIcons.ChevronLeft, contentDescription = null, tint = VisionTextSecondary, modifier = Modifier.size(18.dp))
+            Icon(VisionIcons.SeeAll, contentDescription = null, tint = VisionTextSecondary, modifier = Modifier.size(18.dp))
+        },
         modifier = Modifier.onPreviewKeyEvent { e ->
             val delta = when (e.key) {
                 Key.DirectionLeft -> -1

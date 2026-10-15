@@ -5,6 +5,51 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Lote 2.5.81: «UI Premium» — cero emojis, iconografía de marca y selector de episodios premium + firma del autor — OTA publicada** (2026-10-15; 356 tests Android):
+  - *Petición*: los emojis hacían ver la app «barata»; sustituirlos por iconos premium acordes a la
+    paleta; el selector de episodios debía verse profesional; y que la app «se sienta suya» (que
+    amigos y familia sepan quién la hizo) **sin decir el nombre**.
+  - *Decisiones del usuario*: rating con estrella **dorada** (#F5C518, único acento fuera del azul);
+    episodios de la ficha móvil como **lista vertical** con miniatura; países del fútbol como
+    **chips ISO** (MX/AR/US/INT) en vez de banderitas; **sin** codename de versión; historia del
+    autor con **pista elegante del oficio** (sin nombre ni hospital); **sin** easter egg ni fila
+    «Selección del autor»; **sí** botón «Compartir Vision+» firmado.
+  - *Sistema*: `ui/icons/VisionIcons.kt` (vocabulario único Material Symbols Rounded + `homeRowIcon`)
+    + tokens en `Theme.kt` (RatingGold, Success, LiveRed) + ~21 vectores `ic_vp_*` en `res/drawable`
+    para el reproductor nativo (con `TextView.withIcon` y píldoras con `iconRes`). El `IconView` de
+    Canvas del reproductor se retiró (play/pausa/±10 ahora son vectores del mismo set).
+  - *Inicio*: sello `TopTenBadge` azul (fuera 🔥), filas con icono (AutoAwesome/TrendingUp/
+    PlayCircleOutline/Collections/Movie/Theaters/Animation/ChildCare), rating dorado con estrella,
+    «Ver todo» con chevron. `isTopRow` ahora por id (`home-top10`) además del título.
+  - *Fichas*: botones con iconos (Star/StarBorder, Bookmark, Notifications, Download/Usb/
+    DownloadDone), estados con CheckCircle, temporadas sin «●», chip de score dorado con icono.
+    **Ficha móvil**: `MobileSeriesSelectorSection` es lista vertical (miniatura póster 2:3 con
+    «C#», estado real, toggle visto con icono, barra de progreso de temporada).
+    **Ficha TV**: tarjetas 240dp con miniatura 16:9 + «C#» sobre el arte + estado con icono.
+  - *Reproductor*: píldoras con icono (LiveTv, PlaylistPlay, SkipNext, VolumeUp, Subtitles, Tune,
+    Star, FastForward, Close, Replay, Play), punto EN VIVO **dibujado** (LinearLayout oval + texto),
+    aviso post-créditos con Movie, tarjeta «A continuación» con icono, listas de canales con estrella
+    como compound drawable, picker de calidad con «· Actual». **Selector de episodios**: barra de
+    vistos, segmented de temporadas sin «●», filas con acento izquierdo azul en la actual, título real
+    (sin «Capítulo N ·» duplicado), estado con icono, píldoras con icono, spinner «Preparando
+    capítulos…», hint «Mantén OK para marcar como visto». IDs y cadenas de foco D-pad intactos.
+  - *Barrido*: PlayerDialogs/MiniPlayer con `Check` como icono guía y `ExpandMore` (fuera «▾»),
+    Ajustes TV con chevrons reales, Mi lista (móvil/TV) con chips con icono, búsqueda con `SearchOff`,
+    ReminderUi con campana, fútbol con `CountryIsoChip` + `CheckCircle` + `PlayArrow`, `SportsLinker`
+    «EN VIVO · programa», LiveTaxonomy `countryCode()` (fuera `countryFlag()`).
+  - *La firma (sin nombre)*: splash con «por ChronosBVRX · EST. 2026»; micro-línea
+    «VISION+ · POR CHRONOSBVRX» en la tarjeta de carga del reproductor; «Acerca de» (móvil y TV)
+    reescrito con la historia del autor («Un estudio de una sola persona… las mejores historias no se
+    compran, se revelan»), firma dibujada (trazo Canvas), sello EST. 2026, créditos estilo cine y
+    botón **Compartir Vision+** con mensaje firmado + enlace estable del APK; el diálogo de
+    actualización dice «Creada por ChronosBVRX». Notas de OTA firmadas «— ChronosBVRX» (proceso).
+  - *Guardián*: `UiNoEmojiTest` recorre `ui/` + Popularity/LiveTaxonomy/SportsLinker y **falla si
+    aparece un emoji** (permite el `☆` de datos del proveedor y las flechas tipográficas; verifica
+    que escanea ≥50 archivos). Suite completa 356/356.
+  - *Verificado*: 356 Android en verde; release R8 vc317 (102.2 MB) con firma histórica
+    `9593cb0d…` (apksigner). A32 no estaba en red al publicar (prueba física pendiente).
+  - *OTA v2.5.81 publicada* (`VisionPlus.apk`, release en GitHub). Plan de trabajo en
+    `docs/PLAN_UI_PREMIUM.md`.
 - **Lote 2.5.80: arranque más rápido en Smart TV (handshake adelantado desde la ficha) — OTA publicada** (2026-10-15; 355 tests Android + 122 backend):
   - *Pregunta del usuario*: ¿por qué en el celular la reproducción es casi instantánea
     y en la app original del proveedor en TV también, pero en Vision+ en la TV tarda
@@ -674,8 +719,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.77**
-  (versionCode **313**, release OTA v2.5.77). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.81**
+  (versionCode **317**, release OTA v2.5.81). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

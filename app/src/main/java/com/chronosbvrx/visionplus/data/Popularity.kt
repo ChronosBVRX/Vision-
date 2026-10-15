@@ -173,10 +173,10 @@ object Popularity {
 
     /** Las filas propias por tipo del Inicio, en el orden en que se pintan. */
     internal val HOME_KIND_ROWS = listOf(
-        "movie" to "🎬 Películas populares",
-        "series" to "📺 Series populares",
-        "anime" to "🌸 Anime",
-        "kids" to "🧸 Para chicos",
+        "movie" to "Películas populares",
+        "series" to "Series populares",
+        "anime" to "Anime",
+        "kids" to "Para chicos",
     )
 
     /**

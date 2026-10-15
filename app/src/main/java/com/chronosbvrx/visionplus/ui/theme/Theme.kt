@@ -17,6 +17,12 @@ val VisionSurface = Color(0xFF0F1626)
 val VisionSurfaceHigh = Color(0xFF1B2538)
 val VisionTextPrimary = Color(0xFFF4F7FC)
 val VisionTextSecondary = Color(0xFF9BA8BD)
+/** Rating gold: the only accent outside the blue palette (IMDb-style recognition). */
+val VisionRatingGold = Color(0xFFF5C518)
+/** Seen / downloaded / confirmed. */
+val VisionSuccess = Color(0xFF7AD9A8)
+/** The live dot on air. */
+val VisionLiveRed = Color(0xFFFF4B4B)
 
 private val VisionColorScheme = darkColorScheme(
     primary = VisionBlue,

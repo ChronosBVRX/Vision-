@@ -57,6 +57,8 @@ import com.chronosbvrx.visionplus.data.sports.SportTeam
 import com.chronosbvrx.visionplus.data.sports.SportsLinker
 import com.chronosbvrx.visionplus.data.sports.SportsSource
 import com.chronosbvrx.visionplus.ui.components.EmptyState
+import com.chronosbvrx.visionplus.ui.components.CountryIsoChip
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
@@ -500,7 +502,7 @@ private fun MobileMatchChannelsDialog(
                         items(candidates, key = { it.url }) { channel ->
                             val isConf = confirmed?.url == channel.url
                             val country = LiveTaxonomy.countryFor(channel.name)
-                            val flag = LiveTaxonomy.countryFlag(country)
+                            val code = LiveTaxonomy.countryCode(country)
                             val programSubtitle = effectiveLink.epgPrograms[channel.url]
                             Surface(
                                 onClick = { onPlay(channel); onDismiss() },
@@ -537,17 +539,14 @@ private fun MobileMatchChannelsDialog(
                                                 modifier = Modifier.weight(1f, fill = false),
                                             )
                                             Spacer(Modifier.width(6.dp))
-                                            Surface(
-                                                shape = RoundedCornerShape(4.dp),
-                                                color = VisionSurface,
-                                            ) {
-                                                Text(
-                                                    "$flag $country",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = Color.White.copy(alpha = 0.85f),
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                )
-                                            }
+                                            CountryIsoChip(code)
+                                            Spacer(Modifier.width(5.dp))
+                                            Text(
+                                                country,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color.White.copy(alpha = 0.85f),
+                                                maxLines = 1,
+                                            )
                                         }
                                         if (!programSubtitle.isNullOrBlank()) {
                                             Text(
@@ -559,10 +558,32 @@ private fun MobileMatchChannelsDialog(
                                                 modifier = Modifier.padding(top = 2.dp),
                                             )
                                         } else if (isConf) {
-                                            Text("★ Confirmado en vivo", style = MaterialTheme.typography.labelSmall, color = VisionBlueBright)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            ) {
+                                                Icon(
+                                                    VisionIcons.CheckCircle,
+                                                    contentDescription = null,
+                                                    tint = VisionBlueBright,
+                                                    modifier = Modifier.size(13.dp),
+                                                )
+                                                Text("Confirmado en vivo", style = MaterialTheme.typography.labelSmall, color = VisionBlueBright)
+                                            }
                                         }
                                     }
-                                    Text("Ver ▶", style = MaterialTheme.typography.labelLarge, color = VisionBlueBright)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Text("Ver", style = MaterialTheme.typography.labelLarge, color = VisionBlueBright)
+                                        Icon(
+                                            VisionIcons.Play,
+                                            contentDescription = null,
+                                            tint = VisionBlueBright,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
                                 }
                             }
                         }

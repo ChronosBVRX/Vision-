@@ -76,10 +76,14 @@ import com.chronosbvrx.visionplus.ui.components.GhostRow
 import com.chronosbvrx.visionplus.ui.Route
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.components.PosterCard
+import com.chronosbvrx.visionplus.ui.components.TopTenBadge
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
+import com.chronosbvrx.visionplus.ui.icons.homeRowIcon
 import com.chronosbvrx.visionplus.ui.isLandscapeTablet
 import com.chronosbvrx.visionplus.ui.rememberScreenPx
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import coil.compose.AsyncImage
@@ -225,7 +229,7 @@ fun HomeScreen(
         if (top10Films.isNotEmpty()) {
             item(key = "home_top10") {
                 FilmRow(
-                    row = CatalogRow("home-top10", "🔥 Top 10 en Vision+ Hoy", top10Films),
+                    row = CatalogRow("home-top10", "Top 10 en Vision+ Hoy", top10Films),
                     posterWidth = sizes.posterWidth,
                     onOpen = onOpenFilm,
                     onSeeAll = { onGoSection(Route.Section("movies", "Películas")) },
@@ -235,7 +239,7 @@ fun HomeScreen(
         if (estrenosFilms.isNotEmpty()) {
             item(key = "home_estrenos") {
                 FilmRow(
-                    row = CatalogRow("home-estrenos", "✨ Novedades y Estrenos", estrenosFilms),
+                    row = CatalogRow("home-estrenos", "Novedades y Estrenos", estrenosFilms),
                     posterWidth = sizes.posterWidth,
                     onOpen = onOpenFilm,
                     onSeeAll = { onGoSection(Route.Section("movies", "Películas")) },
@@ -248,7 +252,7 @@ fun HomeScreen(
         if (trendingFilms.isNotEmpty()) {
             item(key = "home_trending_week") {
                 FilmRow(
-                    row = CatalogRow("home-trending", "📈 Populares de la semana", trendingFilms),
+                    row = CatalogRow("home-trending", "Populares de la semana", trendingFilms),
                     posterWidth = sizes.posterWidth,
                     onOpen = onOpenFilm,
                     onSeeAll = { onGoSection(Route.Section("movies", "Películas")) },
@@ -444,9 +448,11 @@ private fun FilmRow(
     onSeeAll: (() -> Unit)? = null,
 ) {
     if (row.films.isEmpty()) return
-    val isTopRow = row.title.contains("top 10", ignoreCase = true) ||
+    val isTopRow = row.id == "home-top10" ||
+        row.title.contains("top 10", ignoreCase = true) ||
         row.title.contains("más vistas", ignoreCase = true) ||
         row.title.contains("tendencia", ignoreCase = true)
+    val headerIcon = homeRowIcon(row.id)
 
     Column(Modifier.padding(top = 22.dp)) {
         Row(
@@ -455,6 +461,17 @@ private fun FilmRow(
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
         ) {
+            if (row.id == "home-top10") {
+                TopTenBadge(modifier = Modifier.padding(end = 9.dp))
+            } else if (headerIcon != null) {
+                Icon(
+                    headerIcon,
+                    contentDescription = null,
+                    tint = VisionBlueBright,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(9.dp))
+            }
             Text(
                 row.title,
                 style = MaterialTheme.typography.titleLarge,
@@ -465,15 +482,26 @@ private fun FilmRow(
                 modifier = Modifier.weight(1f),
             )
             if (onSeeAll != null) {
-                Text(
-                    text = "Ver todo →",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = VisionBlue,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier
                         .clickable(onClick = onSeeAll)
                         .padding(start = 8.dp, top = 2.dp, bottom = 2.dp),
-                )
+                ) {
+                    Text(
+                        text = "Ver todo",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = VisionBlue,
+                    )
+                    Icon(
+                        VisionIcons.SeeAll,
+                        contentDescription = null,
+                        tint = VisionBlueBright,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
         LazyRow(
@@ -566,15 +594,26 @@ internal const val SOURCE_NOTE_FALLBACK =
 @Composable
 private fun ContinueRow(cards: List<ResumeCard>, onResume: (ResumeCard) -> Unit) {
     Column(Modifier.padding(top = 22.dp)) {
-        Text(
-            "Seguir viendo",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
-        )
+        ) {
+            Icon(
+                VisionIcons.ContinueWatching,
+                contentDescription = null,
+                tint = VisionBlueBright,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(9.dp))
+            Text(
+                "Seguir viendo",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),

@@ -28,9 +28,11 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
+import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 
 /** The height of a tab, and of the compact buttons that sit in a row with tabs. */
 internal val TAB_HEIGHT = 52.dp
@@ -68,7 +70,12 @@ internal fun TvTab(label: String, selected: Boolean, onClick: () -> Unit, modifi
 
 /** A settings row button: dark surface, red on focus, 60% of the width. */
 @Composable
-internal fun TvActionOption(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun TvActionOption(
+    label: String,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     Surface(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(0.6f),
@@ -83,7 +90,18 @@ internal fun TvActionOption(label: String, modifier: Modifier = Modifier, onClic
         ),
         border = ClickableSurfaceDefaults.border(border = Border.None, focusedBorder = Border.None, pressedBorder = Border.None),
     ) {
-        Text(label, color = Color.White, modifier = Modifier.padding(16.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+        ) {
+            Text(label, color = Color.White, modifier = Modifier.weight(1f))
+            if (trailing != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) { trailing() }
+            }
+        }
     }
 }
 
@@ -121,9 +139,15 @@ internal fun TvCompactAction(
     }
 }
 
-/** A chip to pick one option of several (categories): red tint when selected, white border on focus. */
+/** A chip to pick one option of several (categories): blue tint when selected, white border on focus. */
 @Composable
-internal fun TvChoiceChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TvChoiceChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+) {
     Surface(
         onClick = onClick,
         modifier = modifier,
@@ -138,7 +162,16 @@ internal fun TvChoiceChip(label: String, selected: Boolean, onClick: () -> Unit,
             focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = RoundedCornerShape(8.dp)),
         ),
     ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = Color.White, maxLines = 1, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+            Text(label, style = MaterialTheme.typography.labelLarge, color = Color.White, maxLines = 1)
+        }
     }
 }
 

@@ -37,6 +37,7 @@ import androidx.tv.material3.Text
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import androidx.compose.ui.text.style.TextOverflow
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 
@@ -79,13 +80,16 @@ fun TvLibraryScreen(catalog: XuperCatalog, returnFilmId: String? = null, onOpenF
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Mi lista", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(Modifier.width(20.dp))
-            TvChoiceChip("★ Favoritos", selected = activeTab == 0, onClick = { activeTab = 0 },
+            TvChoiceChip("Favoritos", selected = activeTab == 0, onClick = { activeTab = 0 },
+                icon = VisionIcons.Favorite,
                 modifier = if (activeTab == 0) emptyLanding else Modifier)
             Spacer(Modifier.width(10.dp))
             TvChoiceChip("Ver más tarde", selected = activeTab == 1, onClick = { activeTab = 1 },
+                icon = VisionIcons.WatchLater,
                 modifier = if (activeTab == 1) emptyLanding else Modifier)
             Spacer(Modifier.width(10.dp))
-            TvChoiceChip("💾 Descargas (USB)", selected = activeTab == 2, onClick = { activeTab = 2 },
+            TvChoiceChip("Descargas (USB)", selected = activeTab == 2, onClick = { activeTab = 2 },
+                icon = VisionIcons.Usb,
                 modifier = if (activeTab == 2) emptyLanding else Modifier)
         }
         Spacer(Modifier.padding(top = 10.dp))
@@ -103,7 +107,7 @@ fun TvLibraryScreen(catalog: XuperCatalog, returnFilmId: String? = null, onOpenF
                     )
                     Text(
                         when (activeTab) {
-                            0 -> "En la ficha de una película elige «☆ Favorito»."
+                            0 -> "En la ficha de una película elige «Favorito»."
                             1 -> "En la ficha de una película elige «Ver más tarde»."
                             else -> "Conecta una memoria USB y elige «Descargar en USB» para ver sin internet."
                         },

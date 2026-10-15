@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -42,6 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
@@ -50,7 +52,9 @@ import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
+import com.chronosbvrx.visionplus.ui.theme.VisionRatingGold
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import java.text.Normalizer
 
@@ -405,7 +409,8 @@ private fun TvCategoryGrid(
                 .padding(start = 48.dp, end = 48.dp, top = 24.dp, bottom = 12.dp),
         ) {
             TvCompactAction(
-                label = "← Volver a Todo",
+                label = "Volver a Todo",
+                icon = VisionIcons.Back,
                 onClick = onBackToAll,
             )
             Spacer(Modifier.width(18.dp))
@@ -522,32 +527,50 @@ private fun Hero(film: Film, landing: LandingFocus?, onOpenFilm: (Film) -> Unit)
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(0.6f),
             )
-            val meta = buildString {
-                if (film.year > 0) append(film.year)
-                if (film.score > 0) {
-                    if (isNotEmpty()) append("  ·  ")
-                    append("★ %.1f".format(film.score))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                if (film.year > 0) {
+                    Text(
+                        film.year.toString(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.85f),
+                    )
                 }
-            }
-            if (meta.isNotBlank()) {
-                Text(
-                    meta,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.padding(top = 4.dp),
-                )
+                if (film.score > 0) {
+                    Icon(
+                        VisionIcons.Rating,
+                        contentDescription = null,
+                        tint = VisionRatingGold,
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Text(
+                        "%.1f".format(film.score),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.85f),
+                    )
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 12.dp)) {
                 TvCompactAction(
-                    label = "▶  Reproducir",
+                    label = "Reproducir",
+                    icon = VisionIcons.Play,
                     modifier = if (landing != null) Modifier.landingFocus(landing) else Modifier,
                     onClick = { onOpenFilm(film) },
                 )
-                TvCompactAction(label = if (inLater) "✓ Ver más tarde" else "Ver más tarde") {
+                TvCompactAction(
+                    label = "Ver más tarde",
+                    icon = if (inLater) VisionIcons.WatchLaterOn else VisionIcons.WatchLater,
+                ) {
                     UserLibrary.toggleWatchLater(context, film)
                     inLater = !inLater
                 }
-                TvCompactAction(label = if (inFavorites) "★ Favorito" else "☆ Favorito") {
+                TvCompactAction(
+                    label = "Favorito",
+                    icon = if (inFavorites) VisionIcons.Favorite else VisionIcons.FavoriteBorder,
+                ) {
                     UserLibrary.toggleFavorite(context, film)
                     inFavorites = !inFavorites
                 }

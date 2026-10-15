@@ -50,6 +50,7 @@ internal object PluginUpdatesCopy {
     const val DOWNLOAD_FAILED = "No se pudo abrir la descarga de la actualización"
     const val DOWNLOADING = "Descargando"
     const val INSTALLING = "Abriendo el instalador…"
+    const val BY = "Creada por ChronosBVRX"
 }
 
 /** "v1.2.0 → v1.3.0". */
@@ -102,6 +103,11 @@ fun AppUpdatesDialog(release: Release?, onDismiss: () -> Unit) {
                         "${PluginUpdatesCopy.CURRENT}: v${AppUpdate.currentVersion(context)}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = VisionTextSecondary,
+                    )
+                    Text(
+                        PluginUpdatesCopy.BY,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = VisionTextSecondary.copy(alpha = 0.8f),
                     )
                     if (release == null || !AppUpdate.pending(context)) {
                         Text(PluginUpdatesCopy.UP_TO_DATE, style = MaterialTheme.typography.bodyLarge, color = Color.White)

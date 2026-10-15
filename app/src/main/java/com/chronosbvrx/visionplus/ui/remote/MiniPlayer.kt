@@ -78,6 +78,7 @@ import com.chronosbvrx.visionplus.ui.formatDuration
 import com.chronosbvrx.visionplus.ui.settings.VisionCompanion
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import coil.compose.AsyncImage
@@ -189,13 +190,26 @@ private fun MiniPlayerBar(film: Film, tvName: String, onOpen: () -> Unit, onPick
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(film.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        "En el TV · ${shortTvName(tvName)}" + if (onPickTv != null) " ▾" else "",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = VisionTextSecondary,
-                        maxLines = 1,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
                         modifier = Modifier.clickable(enabled = onPickTv != null, onClickLabel = "Elegir TV") { onPickTv?.invoke() },
-                    )
+                    ) {
+                        Text(
+                            "En el TV · ${shortTvName(tvName)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = VisionTextSecondary,
+                            maxLines = 1,
+                        )
+                        if (onPickTv != null) {
+                            Icon(
+                                VisionIcons.ExpandMore,
+                                contentDescription = null,
+                                tint = VisionTextSecondary,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
+                    }
                 }
                 IconButton(onClick = { np.playing = !np.playing }) {
                     Icon(
@@ -244,12 +258,25 @@ private fun MiniPlayerScreen(
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onClose) { Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Cerrar", tint = Color.White) }
                         Spacer(Modifier.weight(1f))
-                        Text(
-                            "En el TV · ${shortTvName(tvName)}" + if (onPickTv != null) " ▾" else "",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = VisionTextSecondary,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
                             modifier = Modifier.clickable(enabled = onPickTv != null, onClickLabel = "Elegir TV") { onPickTv?.invoke() },
-                        )
+                        ) {
+                            Text(
+                                "En el TV · ${shortTvName(tvName)}",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = VisionTextSecondary,
+                            )
+                            if (onPickTv != null) {
+                                Icon(
+                                    VisionIcons.ExpandMore,
+                                    contentDescription = null,
+                                    tint = VisionTextSecondary,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
                     }
                     Spacer(Modifier.weight(0.4f))
                     AsyncImage(
@@ -341,10 +368,26 @@ private fun TrackPicker(title: String, tracks: List<String>, current: String?, o
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             if (offLabel != null) {
-                DropdownMenuItem(text = { Text((if (current == null) "✓ " else "") + offLabel) }, onClick = { open = false; onPick(null) })
+                DropdownMenuItem(
+                    text = { Text(offLabel) },
+                    leadingIcon = if (current == null) {
+                        { Icon(VisionIcons.Check, contentDescription = null, tint = VisionBlue) }
+                    } else {
+                        null
+                    },
+                    onClick = { open = false; onPick(null) },
+                )
             }
             tracks.forEach { t ->
-                DropdownMenuItem(text = { Text((if (t == current) "✓ " else "") + t) }, onClick = { open = false; onPick(t) })
+                DropdownMenuItem(
+                    text = { Text(t) },
+                    leadingIcon = if (t == current) {
+                        { Icon(VisionIcons.Check, contentDescription = null, tint = VisionBlue) }
+                    } else {
+                        null
+                    },
+                    onClick = { open = false; onPick(t) },
+                )
             }
         }
     }

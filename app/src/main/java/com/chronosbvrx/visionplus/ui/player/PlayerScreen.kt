@@ -118,6 +118,7 @@ import com.chronosbvrx.visionplus.ui.EpisodePlay
 import com.chronosbvrx.visionplus.ui.brand.VisionWordmark
 import com.chronosbvrx.visionplus.ui.formatDuration
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionLiveRed
 import com.chronosbvrx.visionplus.ui.tv.landingFocus
 import com.chronosbvrx.visionplus.ui.tv.modalFocusTrap
 import com.chronosbvrx.visionplus.ui.tv.rememberLandingFocus
@@ -1284,8 +1285,8 @@ private fun PlayerCore(
                     }
                     if (isLive && !introPlaying) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(Modifier.size(8.dp).background(VisionBlue, CircleShape))
-                            Text("EN VIVO", color = VisionBlue, style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                            Box(Modifier.size(8.dp).background(VisionLiveRed, CircleShape))
+                            Text("EN VIVO", color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                             Text(title, color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.labelMedium, maxLines = 1, modifier = Modifier.weight(1f))
                         }
                         Spacer(Modifier.height(8.dp))

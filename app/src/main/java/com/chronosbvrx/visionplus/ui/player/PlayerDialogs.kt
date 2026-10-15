@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,12 +24,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.delay
@@ -93,8 +98,9 @@ internal fun AudioAndSubtitlesDialog(state: PlayerMenuState, onDismiss: () -> Un
                 MenuSectionTitle("Servidor", first = true)
                 SERVERS.forEachIndexed { i, label ->
                     MenuOption(
-                        (if (i == state.server) "✓ " else "") + label + (if (i == state.trying) " (abriendo)" else ""),
+                        label + (if (i == state.trying) " (abriendo)" else ""),
                         modifier = if (i == 0) first else Modifier,
+                        selected = i == state.server,
                     ) { if (i != state.server && state.trying == null) state.trying = i }
                 }
                 state.trying?.let { MenuNote(tryingServerNote(it)) }
@@ -109,17 +115,17 @@ internal fun AudioAndSubtitlesDialog(state: PlayerMenuState, onDismiss: () -> Un
                         "480p" -> "480p SD"
                         else -> q
                     }
-                    MenuOption((if (isSelected) "✓ " else "  ") + label) {
+                    MenuOption(label, selected = isSelected) {
                         state.quality = q
                     }
                 }
 
                 MenuSectionTitle("Audio")
-                MenuOption("✓ Original") {}
+                MenuOption("Original", selected = true) {}
 
                 MenuSectionTitle("Subtítulos del archivo")
                 MenuNote("Este archivo no trae subtítulos embebidos.")
-                MenuOption("✓ Desactivar") {}
+                MenuOption("Desactivar", selected = true) {}
 
                 MenuSectionTitle("Sincronizar subtítulos: ${subtitleDelayLabel(state.subtitleDelayMs)}")
                 MenuNote("Si el texto sale antes que la voz, súmale tiempo; si sale después, réstale.")
@@ -194,17 +200,32 @@ private fun MenuNote(text: String) {
 
 /** A menu choice: tappable on a phone, and red while it holds the D-pad focus on a TV. */
 @Composable
-private fun MenuOption(label: String, modifier: Modifier = Modifier, fill: Boolean = true, onClick: () -> Unit) {
+private fun MenuOption(
+    label: String,
+    modifier: Modifier = Modifier,
+    fill: Boolean = true,
+    selected: Boolean = false,
+    onClick: () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
-    Text(
-        label,
-        color = Color.White,
-        maxLines = 2,
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier
             .then(if (fill) Modifier.fillMaxWidth() else Modifier)
             .onFocusChanged { focused = it.isFocused }
             .background(if (focused) VisionBlue else Color.Transparent, RoundedCornerShape(6.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 10.dp),
-    )
+    ) {
+        if (selected) {
+            Icon(
+                VisionIcons.Check,
+                contentDescription = null,
+                tint = if (focused) Color.White else VisionBlueBright,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        Text(label, color = Color.White, maxLines = 2)
+    }
 }

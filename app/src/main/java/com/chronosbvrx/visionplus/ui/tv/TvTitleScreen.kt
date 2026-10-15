@@ -50,14 +50,21 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.draw.clip
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Icon
 import androidx.tv.material3.Surface
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
+import com.chronosbvrx.visionplus.ui.theme.VisionRatingGold
+import com.chronosbvrx.visionplus.ui.theme.VisionSuccess
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 
@@ -167,10 +174,10 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
     }
     val playButtonLabel = when {
         isSeriesTitle && watchedCount > 0 ->
-            "▶  Continuar$seasonTitlePrefix · C${nextEpisodeIndex + 1}"
+            "Continuar$seasonTitlePrefix · C${nextEpisodeIndex + 1}"
         isSeriesTitle ->
-            "▶  Reproducir$seasonTitlePrefix · C1"
-        else -> "▶  Reproducir"
+            "Reproducir$seasonTitlePrefix · C1"
+        else -> "Reproducir"
     }
 
     Box(Modifier.fillMaxSize().background(VisionBlack)) {
@@ -216,7 +223,18 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                                 .background(Color(0xFFF5C518), RoundedCornerShape(4.dp))
                                 .padding(horizontal = 8.dp, vertical = 3.dp),
                         ) {
-                            Text("★ $score", color = Color.Black, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            ) {
+                                Icon(
+                                    VisionIcons.Rating,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(13.dp),
+                                )
+                                Text(score, color = Color.Black, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                     if (qualities.isNotEmpty()) {
@@ -341,7 +359,18 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                     border = visionTvButtonBorder(),
                     modifier = Modifier.landingFocus(landing),
                 ) {
-                    Text(playButtonLabel, fontWeight = FontWeight.Bold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            VisionIcons.Play,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(playButtonLabel, fontWeight = FontWeight.Bold)
+                    }
                 }
                 val inLater = remember(film.id) { mutableStateOf(UserLibrary.isWatchLater(context, film.id)) }
                 val inFavorites = remember(film.id) { mutableStateOf(UserLibrary.isFavorite(context, film.id)) }
@@ -355,11 +384,17 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                     TvNoUsbDialog(onDismiss = { showNoUsbDialog = false })
                 }
 
-                TvCompactAction(label = if (inLater.value) "✓ Ver más tarde" else "Ver más tarde") {
+                TvCompactAction(
+                    label = "Ver más tarde",
+                    icon = if (inLater.value) VisionIcons.WatchLaterOn else VisionIcons.WatchLater,
+                ) {
                     UserLibrary.toggleWatchLater(context, film)
                     inLater.value = !inLater.value
                 }
-                TvCompactAction(label = if (inFavorites.value) "★ Favorito" else "☆ Favorito") {
+                TvCompactAction(
+                    label = "Favorito",
+                    icon = if (inFavorites.value) VisionIcons.Favorite else VisionIcons.FavoriteBorder,
+                ) {
                     UserLibrary.toggleFavorite(context, film)
                     inFavorites.value = !inFavorites.value
                 }
@@ -369,7 +404,10 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                             com.chronosbvrx.visionplus.data.follow.FollowStore.isFollowing(context, film.id),
                         )
                     }
-                    TvCompactAction(label = if (following.value) "✓ Siguiendo" else "🔔 Seguir serie") {
+                    TvCompactAction(
+                        label = if (following.value) "Siguiendo" else "Seguir serie",
+                        icon = if (following.value) VisionIcons.Following else VisionIcons.Follow,
+                    ) {
                         following.value =
                             com.chronosbvrx.visionplus.data.follow.FollowStore.toggle(context, film.id, film.title)
                     }
@@ -379,13 +417,19 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                     com.chronosbvrx.visionplus.data.config.RemoteConfig.flag(context, "downloads_enabled", true)
                 }
                 val downloadLabel = when (tvDownload?.state) {
-                    DownloadState.COMPLETED -> "✓ En USB (${tvDownload.formattedSize})"
+                    DownloadState.COMPLETED -> "En USB (${tvDownload.formattedSize})"
                     DownloadState.DOWNLOADING -> "Descargando ${tvDownload.progressPercent}%"
                     DownloadState.QUEUED -> "En cola USB…"
-                    else -> if (downloadsOn) "💾 Descargar en USB" else "Descargas desactivadas"
+                    else -> if (downloadsOn) "Descargar en USB" else "Descargas desactivadas"
+                }
+                val downloadIcon = when (tvDownload?.state) {
+                    DownloadState.COMPLETED -> VisionIcons.Downloaded
+                    DownloadState.DOWNLOADING -> VisionIcons.Download
+                    DownloadState.QUEUED -> VisionIcons.Download
+                    else -> VisionIcons.Usb
                 }
 
-                TvCompactAction(label = downloadLabel) {
+                TvCompactAction(label = downloadLabel, icon = downloadIcon) {
                     if (!downloadsOn && tvDownload?.state != DownloadState.COMPLETED) return@TvCompactAction
                     if (tvDownload?.state == DownloadState.COMPLETED) {
                         onPlay(EpisodePlay(code = tvDownload.playUri))
@@ -430,6 +474,7 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                 TvSeriesSelectorPanel(
                     seasons = film.seasons,
                     activeId = activeId,
+                    posterUrl = film.posterUrl,
                     onSelectSeason = { selectedSeason = it },
                     episodePrograms = episodePrograms,
                     watchedCount = watchedCount,
@@ -485,6 +530,7 @@ private fun cleanTvEpisodeTitle(rawName: String, epNumber: Int): String {
 private fun TvSeriesSelectorPanel(
     seasons: List<com.chronosbvrx.visionplus.data.SeasonRef>,
     activeId: String,
+    posterUrl: String,
     onSelectSeason: (com.chronosbvrx.visionplus.data.SeasonRef) -> Unit,
     episodePrograms: List<X4KApi.EpisodeProgram>,
     watchedCount: Int,
@@ -575,7 +621,7 @@ private fun TvSeriesSelectorPanel(
                         ),
                     ) {
                         Text(
-                            text = if (selected) "●  $label" else label,
+                            text = label,
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
@@ -587,6 +633,24 @@ private fun TvSeriesSelectorPanel(
 
         if (episodePrograms.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
+            if (watchedCount > 0) {
+                Box(
+                    Modifier
+                        .padding(horizontal = 16.dp)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color.White.copy(alpha = 0.12f)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth((watchedCount.toFloat() / episodePrograms.size).coerceIn(0.02f, 1f))
+                            .height(3.dp)
+                            .background(VisionBlueBright),
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+            }
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -603,15 +667,11 @@ private fun TvSeriesSelectorPanel(
                         onLongClick = { onToggleWatched(index) },
                         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
                         colors = ClickableSurfaceDefaults.colors(
-                            containerColor = when {
-                                isNext -> VisionBlue.copy(alpha = 0.24f)
-                                watched -> VisionSurfaceHigh.copy(alpha = 0.72f)
-                                else -> VisionSurfaceHigh
-                            },
+                            containerColor = VisionSurfaceHigh,
                             contentColor = Color.White,
-                            focusedContainerColor = VisionBlue,
+                            focusedContainerColor = VisionSurfaceHigh,
                             focusedContentColor = Color.White,
-                            pressedContainerColor = VisionBlue,
+                            pressedContainerColor = VisionSurfaceHigh,
                             pressedContentColor = Color.White,
                         ),
                         border = ClickableSurfaceDefaults.border(
@@ -627,18 +687,38 @@ private fun TvSeriesSelectorPanel(
                             ),
                             focusedBorder = Border(BorderStroke(2.5.dp, Color.White)),
                         ),
-                        modifier = Modifier.width(210.dp),
+                        modifier = Modifier.width(240.dp),
                     ) {
-                        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                        Column {
+                            // Miniatura con la portada de la serie: el portal no trae stills
+                            // por episodio, así que la cifra del capítulo vive sobre el arte.
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(16f / 9f)
+                                    .clip(RoundedCornerShape(topStart = 13.dp, topEnd = 13.dp)),
                             ) {
+                                if (posterUrl.isNotBlank()) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context).data(posterUrl).size(480, 270).build(),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                                Box(
+                                    Modifier.fillMaxSize().background(
+                                        Brush.verticalGradient(
+                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
+                                        ),
+                                    ),
+                                )
                                 Box(
                                     Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(8.dp)
                                         .background(
-                                            if (isNext) VisionBlue else VisionBlack.copy(alpha = 0.65f),
+                                            if (isNext) VisionBlue else VisionBlack.copy(alpha = 0.82f),
                                             RoundedCornerShape(7.dp),
                                         )
                                         .padding(horizontal = 8.dp, vertical = 3.dp),
@@ -650,29 +730,36 @@ private fun TvSeriesSelectorPanel(
                                         fontWeight = FontWeight.Bold,
                                     )
                                 }
-                                Text(
-                                    text = when {
-                                        watched -> "✓ Visto"
-                                        isNext -> "▶ Siguiente"
-                                        else -> "Cap. ${index + 1}"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = when {
-                                        watched -> Color(0xFF7AD9A8)
-                                        isNext -> VisionBlueBright
-                                        else -> Color.White.copy(alpha = 0.78f)
-                                    },
-                                    fontWeight = FontWeight.SemiBold,
-                                )
                             }
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                text = epTitle,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                Text(
+                                    text = epTitle,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (watched || isNext) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.padding(top = 3.dp),
+                                    ) {
+                                        Icon(
+                                            if (watched) VisionIcons.CheckCircle else VisionIcons.Play,
+                                            contentDescription = null,
+                                            tint = if (watched) VisionSuccess else VisionBlueBright,
+                                            modifier = Modifier.size(14.dp),
+                                        )
+                                        Text(
+                                            if (watched) "Visto" else "Siguiente",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (watched) VisionSuccess else VisionBlueBright,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

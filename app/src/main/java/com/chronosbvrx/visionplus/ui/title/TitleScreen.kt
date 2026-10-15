@@ -40,12 +40,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.metaLine
@@ -74,8 +76,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
+import com.chronosbvrx.visionplus.ui.theme.VisionRatingGold
+import com.chronosbvrx.visionplus.ui.theme.VisionSuccess
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 
 /**
  * A film's information page: backdrop and title, the main button, the professional metadata
@@ -260,12 +265,32 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                             TextButton(onClick = {
                                 UserLibrary.toggleWatchLater(context, film)
                                 inLater.value = !inLater.value
-                            }) { Text(if (inLater.value) "✓ Ver más tarde" else "+ Ver más tarde", color = Color.White) }
+                            }) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Icon(
+                                        if (inLater.value) VisionIcons.WatchLaterOn else VisionIcons.WatchLater,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Text("Ver más tarde", color = Color.White)
+                                }
+                            }
 
                             TextButton(onClick = {
                                 UserLibrary.toggleFavorite(context, film)
                                 inFavorites.value = !inFavorites.value
-                            }) { Text(if (inFavorites.value) "★ Favorito" else "☆ Favorito", color = Color.White) }
+                            }) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Icon(
+                                        if (inFavorites.value) VisionIcons.Favorite else VisionIcons.FavoriteBorder,
+                                        contentDescription = null,
+                                        tint = if (inFavorites.value) VisionRatingGold else Color.White,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Text("Favorito", color = Color.White)
+                                }
+                            }
 
                             // Seguir serie: avisa cuando hay capítulo nuevo (agenda del servidor).
                             if (isSeriesTitle) {
@@ -278,10 +303,18 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                     following.value =
                                         com.chronosbvrx.visionplus.data.follow.FollowStore.toggle(context, film.id, film.title)
                                 }) {
-                                    Text(
-                                        if (following.value) "✓ Siguiendo" else "🔔 Seguir serie",
-                                        color = if (following.value) VisionBlue else Color.White,
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Icon(
+                                            if (following.value) VisionIcons.Following else VisionIcons.Follow,
+                                            contentDescription = null,
+                                            tint = if (following.value) VisionBlue else Color.White,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Text(
+                                            if (following.value) "Siguiendo" else "Seguir serie",
+                                            color = if (following.value) VisionBlue else Color.White,
+                                        )
+                                    }
                                 }
                             }
 
@@ -289,7 +322,15 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                             when (downloadItem?.state) {
                                 DownloadState.COMPLETED -> {
                                     TextButton(onClick = { onPlay(EpisodePlay(code = downloadItem.playUri)) }) {
-                                        Text("✓ Descargado", color = VisionBlue, fontWeight = FontWeight.Bold)
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Icon(
+                                                VisionIcons.Downloaded,
+                                                contentDescription = null,
+                                                tint = VisionBlue,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                            Text("Descargado", color = VisionBlue, fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                                 DownloadState.DOWNLOADING -> {
@@ -347,10 +388,20 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                         OfflineDownloadManager.enqueueDownload(context, film, ep)
                                     },
                                     ) {
-                                        Text(
-                                            if (downloadsOn) "⬇ Descargar" else "Descargas desactivadas",
-                                            color = if (downloadsOn) VisionBlue else VisionTextSecondary,
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            if (downloadsOn) {
+                                                Icon(
+                                                    VisionIcons.Download,
+                                                    contentDescription = null,
+                                                    tint = VisionBlue,
+                                                    modifier = Modifier.size(16.dp),
+                                                )
+                                            }
+                                            Text(
+                                                if (downloadsOn) "Descargar" else "Descargas desactivadas",
+                                                color = if (downloadsOn) VisionBlue else VisionTextSecondary,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -359,6 +410,7 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                             MobileSeriesSelectorSection(
                                 seasons = film.seasons,
                                 activeId = activeId,
+                                posterUrl = film.posterUrl,
                                 onSelectSeason = { selectedSeason = it },
                                 episodePrograms = episodePrograms,
                                 watchedCount = watchedCount,
@@ -418,6 +470,7 @@ private fun cleanEpisodeTitle(rawName: String, epNumber: Int): String {
 private fun MobileSeriesSelectorSection(
     seasons: List<com.chronosbvrx.visionplus.data.SeasonRef>,
     activeId: String,
+    posterUrl: String,
     onSelectSeason: (com.chronosbvrx.visionplus.data.SeasonRef) -> Unit,
     episodePrograms: List<X4KApi.EpisodeProgram>,
     watchedCount: Int,
@@ -500,7 +553,7 @@ private fun MobileSeriesSelectorSection(
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                     ) {
                         Text(
-                            text = if (selected) "●  $label" else label,
+                            text = label,
                             style = MaterialTheme.typography.labelLarge,
                             color = if (selected) Color.White else Color.White.copy(alpha = 0.78f),
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
@@ -512,105 +565,150 @@ private fun MobileSeriesSelectorSection(
 
         if (episodePrograms.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                itemsIndexed(episodePrograms, key = { idx, ep -> "ep_${idx}_${ep.contentId}" }) { index, ep ->
+            // Barra de avance de la temporada: cuánto llevas visto, de un vistazo.
+            if (watchedCount > 0) {
+                Box(
+                    Modifier
+                        .padding(horizontal = 14.dp)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color.White.copy(alpha = 0.12f)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth((watchedCount.toFloat() / episodePrograms.size).coerceIn(0.02f, 1f))
+                            .height(3.dp)
+                            .background(VisionBlueBright),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+            Column(Modifier.padding(horizontal = 8.dp)) {
+                episodePrograms.forEachIndexed { index, ep ->
                     val watched = remember(watchedTick, activeId, index) {
                         UserLibrary.isEpisodeWatched(context, activeId, index + 1)
                     }
                     val isNext = index == nextEpisodeIndex
                     val epTitle = cleanEpisodeTitle(ep.name, index + 1)
-                    Column(
+                    Row(
                         modifier = Modifier
-                            .width(178.dp)
-                            .background(
-                                when {
-                                    isNext -> VisionBlue.copy(alpha = 0.22f)
-                                    watched -> VisionSurfaceHigh.copy(alpha = 0.75f)
-                                    else -> VisionSurfaceHigh
-                                },
-                                RoundedCornerShape(14.dp),
-                            )
-                            .border(
-                                width = if (isNext) 1.5.dp else 1.dp,
-                                color = when {
-                                    isNext -> VisionBlueBright
-                                    watched -> VisionBlue.copy(alpha = 0.4f)
-                                    else -> Color.White.copy(alpha = 0.1f)
-                                },
-                                shape = RoundedCornerShape(14.dp),
-                            )
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isNext) VisionBlue.copy(alpha = 0.14f) else Color.Transparent)
                             .clickable { onSelectEpisode(index, ep) }
-                            .padding(12.dp),
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
+                        if (isNext) {
                             Box(
                                 Modifier
-                                    .background(
-                                        if (isNext) VisionBlue else VisionBlack.copy(alpha = 0.65f),
-                                        RoundedCornerShape(8.dp),
-                                    )
-                                    .padding(horizontal = 9.dp, vertical = 4.dp),
+                                    .width(3.dp)
+                                    .height(44.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(VisionBlueBright),
+                            )
+                            Spacer(Modifier.width(7.dp))
+                        }
+                        // Miniatura con la portada de la serie (el portal no trae stills por
+                        // episodio): la cifra del capítulo vive sobre el arte, como en los
+                        // productos grandes.
+                        Box(
+                            Modifier
+                                .width(46.dp)
+                                .height(66.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(VisionSurfaceHigh),
+                        ) {
+                            if (posterUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context).data(posterUrl).size(92, 132).build(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomStart)
+                                    .background(VisionBlack.copy(alpha = 0.82f), RoundedCornerShape(topEnd = 6.dp))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp),
                             ) {
                                 Text(
                                     "C${index + 1}",
-                                    style = MaterialTheme.typography.labelMedium,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
                                 )
                             }
-                            Text(
-                                text = when {
-                                    watched -> "✓ Visto"
-                                    isNext -> "▶ Siguiente"
-                                    else -> "Orden #${index + 1}"
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = when {
-                                    watched -> Color(0xFF7AD9A8)
-                                    isNext -> VisionBlueBright
-                                    else -> VisionTextSecondary
-                                },
-                                fontWeight = FontWeight.SemiBold,
-                            )
                         }
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            text = epTitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
                             Text(
-                                text = if (watched) "Volver a reproducir" else "▶ Reproducir capítulo",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = VisionBlueBright,
+                                text = epTitle,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
-                            Text(
-                                text = if (watched) "✓" else "○",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (watched) Color(0xFF7AD9A8) else VisionTextSecondary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier
-                                    .clickable(
-                                        indication = null,
-                                        interactionSource = remember { MutableInteractionSource() },
-                                    ) { onToggleWatched(index) }
-                                    .padding(6.dp),
+                            if (watched) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.padding(top = 3.dp),
+                                ) {
+                                    Icon(
+                                        VisionIcons.CheckCircle,
+                                        contentDescription = null,
+                                        tint = VisionSuccess,
+                                        modifier = Modifier.size(13.dp),
+                                    )
+                                    Text(
+                                        "Visto",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = VisionSuccess,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                            } else if (isNext) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.padding(top = 3.dp),
+                                ) {
+                                    Icon(
+                                        VisionIcons.Play,
+                                        contentDescription = null,
+                                        tint = VisionBlueBright,
+                                        modifier = Modifier.size(13.dp),
+                                    )
+                                    Text(
+                                        "Siguiente",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = VisionBlueBright,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                            }
+                        }
+                        // Alternar visto / no visto sin reproducir.
+                        Box(
+                            Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable(
+                                    indication = null,
+                                    interactionSource = remember { MutableInteractionSource() },
+                                ) { onToggleWatched(index) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                if (watched) VisionIcons.CheckCircle else VisionIcons.Unwatched,
+                                contentDescription = if (watched) "Marcar como no visto" else "Marcar como visto",
+                                tint = if (watched) VisionSuccess else VisionTextSecondary,
+                                modifier = Modifier.size(22.dp),
                             )
                         }
                     }
@@ -663,7 +761,18 @@ private fun XtvMetadata(
                     .background(Color(0xFFF5C518), RoundedCornerShape(4.dp))
                     .padding(horizontal = 7.dp, vertical = 3.dp),
             ) {
-                Text("★ $score", color = Color.Black, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Icon(
+                        VisionIcons.Rating,
+                        contentDescription = null,
+                        tint = Color.Black,
+                        modifier = Modifier.size(12.dp),
+                    )
+                    Text(score, color = Color.Black, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                }
             }
         }
         if (qualities.isNotEmpty()) {

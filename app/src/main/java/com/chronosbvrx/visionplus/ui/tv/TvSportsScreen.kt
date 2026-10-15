@@ -47,6 +47,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
@@ -55,6 +56,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.LiveTaxonomy
+import com.chronosbvrx.visionplus.ui.components.CountryIsoChip
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.data.sports.SportMatch
 import com.chronosbvrx.visionplus.data.sports.SportTeam
 import com.chronosbvrx.visionplus.data.sports.SportsLinker
@@ -544,7 +547,7 @@ private fun TvChannelPickItem(
 ) {
     val shape = RoundedCornerShape(10.dp)
     val country = LiveTaxonomy.countryFor(channel.name)
-    val flag = LiveTaxonomy.countryFlag(country)
+    val code = LiveTaxonomy.countryCode(country)
 
     Surface(
         onClick = onClick,
@@ -588,17 +591,14 @@ private fun TvChannelPickItem(
                         modifier = Modifier.weight(1f, fill = false),
                     )
                     Spacer(Modifier.width(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        colors = SurfaceDefaults.colors(containerColor = VisionSurface),
-                    ) {
-                        Text(
-                            "$flag $country",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        )
-                    }
+                    CountryIsoChip(code)
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        country,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.85f),
+                        maxLines = 1,
+                    )
                 }
                 if (!programSubtitle.isNullOrBlank()) {
                     Text(
@@ -617,20 +617,42 @@ private fun TvChannelPickItem(
                     shape = RoundedCornerShape(50),
                     colors = SurfaceDefaults.colors(containerColor = VisionBlueBright.copy(alpha = 0.25f)),
                 ) {
-                    Text(
-                        "★ Confirmado EPG",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                    )
+                    ) {
+                        Icon(
+                            VisionIcons.CheckCircle,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(13.dp),
+                        )
+                        Text(
+                            "Confirmado EPG",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(10.dp))
-            Text(
-                "Sintonizar ▶",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (confirmed) VisionBlueBright else VisionTextSecondary,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    "Sintonizar",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (confirmed) VisionBlueBright else VisionTextSecondary,
+                )
+                Icon(
+                    VisionIcons.Play,
+                    contentDescription = null,
+                    tint = if (confirmed) VisionBlueBright else VisionTextSecondary,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
         }
     }
 }

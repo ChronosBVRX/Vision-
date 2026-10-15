@@ -2,7 +2,11 @@ package com.chronosbvrx.visionplus.ui.tv
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -52,6 +57,8 @@ import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueDark
+import com.chronosbvrx.visionplus.ui.theme.VisionRatingGold
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import java.util.Locale
 
 /**
@@ -187,14 +194,25 @@ fun TvPosterCard(
                         .border(BorderStroke(1.dp, VisionBlue.copy(alpha = 0.85f)), shape = RoundedCornerShape(8.dp))
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
-                    Text(
-                        text = "★ $formatted",
-                        style = TextStyle(
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                        ),
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        Icon(
+                            VisionIcons.Rating,
+                            contentDescription = null,
+                            tint = VisionRatingGold,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            text = formatted,
+                            style = TextStyle(
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                        )
+                    }
                 }
             }
 
@@ -320,18 +338,61 @@ fun TvLandscapeCard(
 
 /** Fixed-height row label, so two rows fit exactly in the scrollable zone. */
 @Composable
-fun TvRowLabel(text: String, height: Dp) {
+fun TvRowLabel(text: String, height: Dp, icon: ImageVector? = null, topTen: Boolean = false) {
     Box(
         modifier = Modifier.fillMaxWidth().height(height).padding(start = 48.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.titleSmall,
-            color = VisionTextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (topTen) {
+                TvTopTenBadge(modifier = Modifier.padding(end = 10.dp))
+            } else if (icon != null) {
+                Icon(icon, contentDescription = null, tint = VisionBlueBright, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+            }
+            Text(
+                text,
+                style = MaterialTheme.typography.titleSmall,
+                color = VisionTextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** El sello «TOP 10» de los encabezados de TV: cuadrado azul de marca con la cifra. */
+@Composable
+fun TvTopTenBadge(modifier: Modifier = Modifier, size: Dp = 34.dp) {
+    val shape = RoundedCornerShape(size * 0.24f)
+    Box(
+        modifier = modifier
+            .size(size)
+            .background(Brush.verticalGradient(listOf(VisionBlue, VisionBlueDark)), shape)
+            .border(BorderStroke(1.dp, VisionBlueBright.copy(alpha = 0.55f)), shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "TOP",
+                style = TextStyle(
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 7.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    lineHeight = 8.sp,
+                ),
+            )
+            Text(
+                "10",
+                style = TextStyle(
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
+                    lineHeight = 15.sp,
+                ),
+            )
+        }
     }
 }
 
@@ -359,12 +420,23 @@ fun TvSeeAllButton(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = "Ver todo →",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (hasFocus) Color.White else VisionBlue,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    text = "Ver todo",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (hasFocus) Color.White else VisionBlue,
+                )
+                Icon(
+                    VisionIcons.SeeAll,
+                    contentDescription = null,
+                    tint = if (hasFocus) Color.White else VisionBlueBright,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
         }
     }
 }

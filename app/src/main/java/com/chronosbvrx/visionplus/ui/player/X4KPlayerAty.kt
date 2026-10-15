@@ -723,49 +723,22 @@ class X4KPlayerAty : ComponentActivity() {
     private val surface = 0xFF1B2538.toInt()
 
     /** A monochrome transport icon drawn in code: play, pause, or the ±10 s double arrow. */
-    private inner class IconView(context: Context, private val mode: Int) : View(context) {
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            style = Paint.Style.FILL
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            val w = width.toFloat()
-            val h = height.toFloat()
+    /**
+     * Los iconos de transporte del reproductor usan los mismos vectores `ic_vp_*` de toda
+     * la app (gemelos Material Symbols): una sola familia visual, cero emojis.
+     */
+    private fun icon(mode: Int): View = android.widget.ImageView(this).apply {
+        setImageResource(
             when (mode) {
-                MODE_PLAY -> {
-                    val p = Path().apply {
-                        moveTo(w * 0.30f, h * 0.22f)
-                        lineTo(w * 0.80f, h * 0.50f)
-                        lineTo(w * 0.30f, h * 0.78f)
-                        close()
-                    }
-                    canvas.drawPath(p, paint)
-                }
-                MODE_PAUSE -> {
-                    val barW = w * 0.16f
-                    canvas.drawRoundRect(w * 0.28f, h * 0.22f, w * 0.28f + barW, h * 0.78f, 4f, 4f, paint)
-                    canvas.drawRoundRect(w * 0.56f, h * 0.22f, w * 0.56f + barW, h * 0.78f, 4f, 4f, paint)
-                }
-                MODE_REW, MODE_FWD -> {
-                    val forward = mode == MODE_FWD
-                    for (k in 0..1) {
-                        val x0 = if (forward) 0.16f + 0.30f * k else 0.84f - 0.30f * k
-                        val dx = if (forward) 0.26f else -0.26f
-                        val p = Path().apply {
-                            moveTo(w * x0, h * 0.30f)
-                            lineTo(w * (x0 + dx), h * 0.50f)
-                            lineTo(w * x0, h * 0.70f)
-                            close()
-                        }
-                        canvas.drawPath(p, paint)
-                    }
-                }
-            }
-        }
+                MODE_PLAY -> R.drawable.ic_vp_play
+                MODE_PAUSE -> R.drawable.ic_vp_pause
+                MODE_REW -> R.drawable.ic_vp_rewind
+                else -> R.drawable.ic_vp_forward
+            },
+        )
+        setColorFilter(Color.WHITE)
+        scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
     }
-
-    private fun icon(mode: Int): View = IconView(this, mode)
 
     private fun roundBackground(color: Int, radius: Int = 22): GradientDrawable = GradientDrawable().apply {
         cornerRadius = dp(radius).toFloat()
@@ -827,6 +800,15 @@ class X4KPlayerAty : ComponentActivity() {
         }
         loadingEpNameView = epNameView
         box.addView(epNameView)
+        // La firma del autor, como los estudios en el cine: presente en cada reproducción.
+        box.addView(TextView(this).apply {
+            text = "VISION+  ·  POR CHRONOSBVRX"
+            textSize = 10f
+            setTextColor(0x8CFFFFFF.toInt())
+            letterSpacing = 0.12f
+            gravity = Gravity.CENTER
+            setPadding(0, dp(44), 0, 0)
+        })
         applyLoadingContent(title)
         root.addView(
             box,
@@ -1155,14 +1137,29 @@ class X4KPlayerAty : ComponentActivity() {
                 background = roundBackground(0x332D7DF6.toInt(), 5)
                 setPadding(dp(7), dp(2), dp(7), dp(2))
             }
-            val liveDot = TextView(this).apply {
-                text = "\u25CF EN VIVO"
+            val liveDot = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                background = roundBackground(0x33FF5A5A.toInt(), 5)
+                setPadding(dp(7), dp(3), dp(7), dp(3))
+            }
+            liveDot.addView(
+                View(this).apply {
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(0xFFFF5A5A.toInt())
+                    }
+                },
+                LinearLayout.LayoutParams(dp(7), dp(7)),
+            )
+            liveDot.addView(TextView(this).apply {
+                text = "EN VIVO"
                 textSize = 10f
                 typeface = Typeface.DEFAULT_BOLD
                 setTextColor(0xFFFF5A5A.toInt())
-                background = roundBackground(0x33FF5A5A.toInt(), 5)
-                setPadding(dp(7), dp(2), dp(7), dp(2))
-            }
+                letterSpacing = 0.08f
+                setPadding(dp(6), 0, 0, 0)
+            })
             liveChannelNumView = chNumBadge
             liveChannelTitleView = chTitle
             liveChannelGroupView = grpTag
@@ -1251,20 +1248,23 @@ class X4KPlayerAty : ComponentActivity() {
         var fwdBtn: View? = null
 
         if (liveMode) {
-            val channels = pill("▤ Canales") { showChannelPicker() }
+            val channels = pill("Canales", R.drawable.ic_vp_live_tv) { showChannelPicker() }
             channels.tvControl()
             channelsBtn = channels
             buttons.addView(channels)
             buttons.addView(View(this), LinearLayout.LayoutParams(dp(12), 1))
 
-            val fav = pill(if (isCurrentFav()) "★ Favorito" else "☆ Añadir a favoritos") { toggleCurrentFav() }
+            val fav = pill(
+                if (isCurrentFav()) "Favorito" else "Añadir a favoritos",
+                if (isCurrentFav()) R.drawable.ic_vp_star else R.drawable.ic_vp_star_border,
+            ) { toggleCurrentFav() }
             fav.tvControl()
             favBtn = fav
             updateFavButtonState()
             buttons.addView(fav)
             buttons.addView(View(this), LinearLayout.LayoutParams(dp(12), 1))
 
-            val info = pill("ℹ Información") { showChannelInfo() }
+            val info = pill("Información", R.drawable.ic_vp_info) { showChannelInfo() }
             info.tvControl()
             infoBtn = info
             buttons.addView(info)
@@ -1299,7 +1299,7 @@ class X4KPlayerAty : ComponentActivity() {
             buttons.addView(forward)
             buttons.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
             if (isSeriesContent(epIds.size, seasonIds.size)) {
-                val nextEp = pill("⏭ Sig. episodio") {
+                val nextEp = pill("Sig. episodio", R.drawable.ic_vp_skip_next) {
                     if (canExecuteControlAction()) playNextEpisodeFromControls()
                 }
                 nextEp.tvControl()
@@ -1307,7 +1307,7 @@ class X4KPlayerAty : ComponentActivity() {
                 buttons.addView(nextEp)
                 buttons.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
 
-                val episodes = pill("☰ Capítulos") { showEpisodePicker() }
+                val episodes = pill("Capítulos", R.drawable.ic_vp_playlist) { showEpisodePicker() }
                 episodes.tvControl()
                 episodesBtn = episodes
                 buttons.addView(episodes)
@@ -1317,14 +1317,14 @@ class X4KPlayerAty : ComponentActivity() {
             val firstAudio = declaredLanguages.firstOrNull().orEmpty()
             val audioName = trackDisplayLang(firstAudio, null).takeIf { it.isNotBlank() }
                 ?.let { languageLabel(it, "Idioma") } ?: "Idioma"
-            val audio = pill("◉ $audioName") {
+            val audio = pill(audioName, R.drawable.ic_vp_volume_up) {
                 showLanguagePicker(forSubtitle = false)
             }
             audio.tvControl()
-            val subs = pill("□ Subtítulos") { showLanguagePicker(forSubtitle = true) }
+            val subs = pill("Subtítulos", R.drawable.ic_vp_subtitles) { showLanguagePicker(forSubtitle = true) }
             subs.tvControl()
             val qDisplay = formatQualityShort(curQuality)
-            val quality = pill("⚙ $qDisplay") { showQualityPicker() }
+            val quality = pill(qDisplay, R.drawable.ic_vp_tune) { showQualityPicker() }
             quality.tvControl()
             buttons.addView(audio)
             buttons.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
@@ -1564,15 +1564,27 @@ class X4KPlayerAty : ComponentActivity() {
         }
     }
 
-    private fun pill(label: String, onClick: () -> Unit): TextView = TextView(this).apply {
+    private fun pill(label: String, iconRes: Int = 0, onClick: () -> Unit): TextView = TextView(this).apply {
         text = label
         textSize = 12f
         setTextColor(Color.WHITE)
         setPadding(dp(12), dp(8), dp(12), dp(8))
         background = roundBackground(surface)
+        if (iconRes != 0) withIcon(iconRes)
         setOnClickListener {
             if (isModalActive || canExecuteControlAction()) onClick()
         }
+    }
+
+    /**
+     * Un icono del set vectorial `ic_vp_*` dentro de una etiqueta del reproductor, con el
+     * tinte de la casa. Es lo que sustituye a los emojis en píldoras y avisos.
+     */
+    private fun TextView.withIcon(iconRes: Int, tint: Int = Color.WHITE): TextView {
+        setCompoundDrawablesRelativeWithIntrinsicBounds(iconRes, 0, 0, 0)
+        compoundDrawableTintList = android.content.res.ColorStateList.valueOf(tint)
+        compoundDrawablePadding = dp(6)
+        return this
     }
 
     private fun skipButton(mode: Int, label: String, onClick: () -> Unit): View {
@@ -1659,23 +1671,23 @@ class X4KPlayerAty : ComponentActivity() {
             }
         }
         // Ajustes reales del overlay (lo pinta la app): tamaño, posición y sincronía.
-        options += "🔠 Tamaño: ${settings.subSizeLabel(settings.subSizeOf(this))}" to {
+        options += "Tamaño: ${settings.subSizeLabel(settings.subSizeOf(this))}" to {
             settings.setSubSize(this, settings.nextSubSize(settings.subSizeOf(this)))
             applySubsMargins()
             reopenPicker()
         }
         val atTop = settings.subPositionOf(this) == settings.SUB_POS_TOP
-        options += (if (atTop) "⬆ Posición: arriba" else "⬇ Posición: abajo") to {
+        options += (if (atTop) "Posición: arriba" else "Posición: abajo") to {
             settings.setSubPosition(this, if (atTop) settings.SUB_POS_BOTTOM else settings.SUB_POS_TOP)
             applySubsMargins()
             reopenPicker()
         }
         val offset = settings.subOffsetMsOf(this)
-        options += "⏱ Sincronía: ${formatOffset(offset)} (−0.5 s)" to {
+        options += "Sincronía: ${formatOffset(offset)} (−0.5 s)" to {
             settings.setSubOffsetMs(this, offset - 500)
             reopenPicker()
         }
-        options += "⏱ Sincronía: ${formatOffset(offset)} (+0.5 s)" to {
+        options += "Sincronía: ${formatOffset(offset)} (+0.5 s)" to {
             settings.setSubOffsetMs(this, offset + 500)
             reopenPicker()
         }
@@ -2052,7 +2064,7 @@ class X4KPlayerAty : ComponentActivity() {
         if (distinctQualities.size > 1) {
             distinctQualities.forEachIndexed { index, spec ->
                 val isCurrent = (spec.name == currentMediaName) || (spec.quality == curQuality && currentMediaName.isBlank())
-                val label = (if (isCurrent) "✓ " else "  ") + formatQualityLabel(spec.quality) + (if (isCurrent) " (Actual)" else "")
+                val label = formatQualityLabel(spec.quality) + if (isCurrent) "  ·  Actual" else ""
                 val option = TextView(this).apply {
                     text = label
                     setTextColor(if (isCurrent) blueBright else Color.WHITE)
@@ -2084,7 +2096,7 @@ class X4KPlayerAty : ComponentActivity() {
             val singleSpec = curMedias.firstOrNull()
             val qName = formatQualityLabel(singleSpec?.quality.orEmpty())
             val singleView = TextView(this).apply {
-                text = "● $qName (Máxima calidad disponible)"
+                text = "$qName  ·  Máxima calidad disponible"
                 setTextColor(blueBright)
                 textSize = 14f
                 typeface = Typeface.DEFAULT_BOLD
@@ -2134,7 +2146,7 @@ class X4KPlayerAty : ComponentActivity() {
         val curPos = X4KTitan.positionMs().coerceAtLeast(0L)
         currentMediaName = target.name
         curQuality = target.quality
-        qualityBtn?.text = "⚙ " + formatQualityShort(target.quality)
+        qualityBtn?.text = formatQualityShort(target.quality)
         Toast.makeText(this, "Cambiando a ${formatQualityShort(target.quality)}…", Toast.LENGTH_SHORT).show()
 
         // 1. Intento directo con el método nativo ed.e.setMedia(mediaCode)
@@ -2208,10 +2220,10 @@ class X4KPlayerAty : ComponentActivity() {
         }
     }
 
-    /** El botón «⏭ Omitir intro / resumen» vive sobre los controles, sin taparlos (estilo Netflix). */
+    /** El botón «Omitir intro / resumen» vive sobre los controles, sin taparlos (estilo Netflix). */
     private fun buildIntroPill(root: FrameLayout) {
         val pill = TextView(this).apply {
-            text = "⏭ Omitir intro"
+            text = "Omitir intro"
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
@@ -2221,6 +2233,7 @@ class X4KPlayerAty : ComponentActivity() {
             isFocusable = false
             setOnClickListener { if (canExecuteControlAction()) skipIntroNow() }
         }
+        pill.withIcon(R.drawable.ic_vp_forward)
         pill.tvControl(0xCC0A0F18.toInt(), 12)
         pill.isFocusable = false
         introPill = pill
@@ -2238,7 +2251,7 @@ class X4KPlayerAty : ComponentActivity() {
         // Aviso discreto de escena post-créditos: no es botón (no roba foco), se muestra
         // solo unos segundos al entrar a los créditos y se esconde solo.
         val notice = TextView(this).apply {
-            text = "🎬 Hay escena después de los créditos"
+            text = "Hay escena después de los créditos"
             textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
@@ -2248,6 +2261,7 @@ class X4KPlayerAty : ComponentActivity() {
             isFocusable = false
             isClickable = false
         }
+        notice.withIcon(R.drawable.ic_vp_movie)
         postCreditsNotice = notice
         root.addView(
             notice,
@@ -2264,10 +2278,10 @@ class X4KPlayerAty : ComponentActivity() {
     /** Qué salto ofrece la píldora ahora: el resumen primero (suele ir antes que el intro). */
     private fun skipTargetNow(pos: Long): Pair<String, Long>? {
         if (markRecapEndMs > 0L && !recapSkipped && pos in recapWindowRange()) {
-            return "⏭ Omitir resumen" to markRecapEndMs
+            return "Omitir resumen" to markRecapEndMs
         }
         if (markIntroEndMs > 0L && !introSkipped && pos in introWindowRange()) {
-            return "⏭ Omitir intro" to markIntroEndMs
+            return "Omitir intro" to markIntroEndMs
         }
         return null
     }
@@ -2440,11 +2454,12 @@ class X4KPlayerAty : ComponentActivity() {
         }
         if (markPostCreditsStartMs > 0L) {
             card.addView(TextView(this).apply {
-                text = "🎬 Hay escena después de los créditos"
+                text = "Hay escena después de los créditos"
                 setTextColor(blueBright)
                 textSize = 13f
                 typeface = Typeface.DEFAULT_BOLD
                 setPadding(0, 0, 0, dp(10))
+                withIcon(R.drawable.ic_vp_movie, blueBright)
             })
         }
         val epTitle = TextView(this).apply {
@@ -2466,19 +2481,20 @@ class X4KPlayerAty : ComponentActivity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         val playBtn = TextView(this).apply {
-            text = "  ▶ Reproducir ahora  "
+            text = "Reproducir ahora"
             setTextColor(Color.WHITE)
             textSize = 15f
             typeface = Typeface.DEFAULT_BOLD
             background = roundBackground(blue, 14)
             setPadding(dp(20), dp(12), dp(20), dp(12))
             setOnClickListener { playNext(auto = false) }
+            withIcon(R.drawable.ic_vp_play)
         }
         playBtn.tvControl(blue, 14)
         row.addView(playBtn)
         row.addView(View(this), LinearLayout.LayoutParams(dp(12), 1))
         val cancelBtn = TextView(this).apply {
-            text = if (creditsMode) "  Ver créditos  " else "  Quedarse aquí  "
+            text = if (creditsMode) "Ver créditos" else "Quedarse aquí"
             setTextColor(0xFFF4F7FC.toInt())
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
@@ -2656,11 +2672,11 @@ class X4KPlayerAty : ComponentActivity() {
         val hasNext = hasNextEpisode()
         btn.alpha = if (hasNext) 1f else 0.45f
         btn.text = if (hasNext && curEpIndex + 1 < epIds.size) {
-            "⏭ Sig. C${curEpIndex + 2}"
+            "Sig. C${curEpIndex + 2}"
         } else if (hasNext && curSeasonIndex + 1 < seasonIds.size) {
-            "⏭ Sig. ${seasonLabel(curSeasonIndex + 1)}"
+            "Sig. ${seasonLabel(curSeasonIndex + 1)}"
         } else {
-            "⏭ Sig. episodio"
+            "Sig. episodio"
         }
     }
 
@@ -2807,7 +2823,7 @@ class X4KPlayerAty : ComponentActivity() {
                 }
                 currentMediaName = chosenMedia?.name.orEmpty()
                 curQuality = chosenMedia?.quality.orEmpty()
-                qualityBtn?.text = "⚙ " + formatQualityShort(curQuality)
+                qualityBtn?.text = formatQualityShort(curQuality)
                 declaredLanguages = medias.first().audio
                     .split(',').map { it.trim() }.filter { it.isNotBlank() }
                 maybeRestoreAudioLang()
@@ -3005,19 +3021,20 @@ class X4KPlayerAty : ComponentActivity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         val goBtn = TextView(this).apply {
-            text = "  ▶ Continuar  "
+            text = "Continuar"
             setTextColor(Color.WHITE)
             textSize = 15f
             typeface = Typeface.DEFAULT_BOLD
             background = roundBackground(blue)
             setPadding(dp(18), dp(10), dp(18), dp(10))
             setOnClickListener { acceptResume() }
+            withIcon(R.drawable.ic_vp_play)
         }
         goBtn.tvControl()
         row.addView(goBtn)
         row.addView(View(this), LinearLayout.LayoutParams(dp(12), 1))
         val startBtn = TextView(this).apply {
-            text = "  Desde el inicio  "
+            text = "Desde el inicio"
             setTextColor(Color.WHITE)
             textSize = 15f
             setPadding(dp(18), dp(10), dp(18), dp(10))
@@ -3213,7 +3230,11 @@ class X4KPlayerAty : ComponentActivity() {
     private fun updateFavButtonState() {
         val fav = favBtn ?: return
         val isFav = isCurrentFav()
-        fav.text = if (isFav) "★ Favorito" else "☆ Añadir a favoritos"
+        fav.text = if (isFav) "Favorito" else "Añadir a favoritos"
+        fav.withIcon(
+            if (isFav) R.drawable.ic_vp_star else R.drawable.ic_vp_star_border,
+            if (isFav) 0xFFFFD700.toInt() else Color.WHITE,
+        )
         fav.setTextColor(if (isFav) 0xFFFFD700.toInt() else Color.WHITE)
     }
 
@@ -3317,6 +3338,7 @@ class X4KPlayerAty : ComponentActivity() {
         })
         // A recycling list: a thousand channels scroll with no allocation storm, remote-ready.
         val labels = ArrayList<String>()
+        val favFlags = ArrayList<Boolean>()
         val targets = ArrayList<Int>()
         for (i in 0 until arr.length()) {
             val ch = arr.optJSONObject(i) ?: continue
@@ -3324,8 +3346,8 @@ class X4KPlayerAty : ComponentActivity() {
             val cCode = ch.optString("channelCode")
             val name = X4KApi.displayChannelName(cCode, ch.optString("name"))
             val isFav = LiveFavorites.has(this, "xtvlive:$cCode")
-            val star = if (isFav) "★ " else ""
-            labels += if (num.isBlank()) "$star$name" else "$star$num  ·  $name"
+            labels += if (num.isBlank()) name else "$num  ·  $name"
+            favFlags += isFav
             targets += i
         }
         val listView = android.widget.ListView(this).apply {
@@ -3347,6 +3369,15 @@ class X4KPlayerAty : ComponentActivity() {
                     view.setTextColor(if (targets[position] == liveIndex) blueBright else Color.WHITE)
                     view.textSize = 14f
                     view.setPadding(dp(16), dp(12), dp(16), dp(12))
+                    // El favorito lleva estrella dibujada, no un glifo en el texto.
+                    if (favFlags.getOrElse(position) { false }) {
+                        view.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_vp_star, 0, 0, 0)
+                        view.compoundDrawableTintList =
+                            android.content.res.ColorStateList.valueOf(0xFFFFD700.toInt())
+                        view.compoundDrawablePadding = dp(6)
+                    } else {
+                        view.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
+                    }
                     return view
                 }
             }
@@ -3593,18 +3624,47 @@ class X4KPlayerAty : ComponentActivity() {
         headerRow.addView(titleCol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         val closeBtn = TextView(this).apply {
-            text = "✕  Cerrar"
+            text = "Cerrar"
             setTextColor(0xFFF4F7FC.toInt())
             textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
             background = roundBackground(surface, 14)
             setPadding(dp(14), dp(8), dp(14), dp(8))
             setOnClickListener { dismissPicker() }
+            withIcon(R.drawable.ic_vp_close)
         }
         closeBtn.tvControl(surface, 14)
         val closeId = View.generateViewId().also { closeBtn.id = it }
         headerRow.addView(closeBtn)
         card.addView(headerRow)
+
+        // Barra de avance de la temporada: cuánto llevas visto, de un vistazo.
+        if (epIds.isNotEmpty() && watchedCount > 0) {
+            val frac = (watchedCount.toFloat() / epIds.size).coerceIn(0.02f, 1f)
+            val bar = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(dp(6), 0, dp(6), dp(12))
+            }
+            bar.addView(
+                View(this).apply {
+                    background = GradientDrawable().apply {
+                        cornerRadius = dp(2).toFloat()
+                        setColor(blueBright)
+                    }
+                },
+                LinearLayout.LayoutParams(0, dp(3), frac),
+            )
+            bar.addView(
+                View(this).apply {
+                    background = GradientDrawable().apply {
+                        cornerRadius = dp(2).toFloat()
+                        setColor(0x22FFFFFF)
+                    }
+                },
+                LinearLayout.LayoutParams(0, dp(3), 1f - frac),
+            )
+            card.addView(bar)
+        }
 
         // Barra selectora de temporadas con acabado Pro
         val seasonViews = ArrayList<View>()
@@ -3617,7 +3677,7 @@ class X4KPlayerAty : ComponentActivity() {
             for (idx in seasonIds.indices) {
                 val current = idx == curSeasonIndex
                 val btn = TextView(this).apply {
-                    text = if (current) "●  ${seasonLabel(idx)}" else seasonLabel(idx)
+                    text = seasonLabel(idx)
                     setTextColor(if (current) Color.WHITE else 0xFFD5E1F2.toInt())
                     textSize = 13f
                     typeface = Typeface.DEFAULT_BOLD
@@ -3664,12 +3724,24 @@ class X4KPlayerAty : ComponentActivity() {
         )
 
         if (epIds.isEmpty()) {
-            card.addView(TextView(this).apply {
-                text = "Cargando capítulos de la temporada…"
+            val loadingRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(16), dp(18), dp(16), dp(18))
+            }
+            loadingRow.addView(
+                ProgressBar(this, null, android.R.attr.progressBarStyleSmall).apply {
+                    indeterminateTintList = android.content.res.ColorStateList.valueOf(blueBright)
+                },
+                LinearLayout.LayoutParams(dp(20), dp(20)),
+            )
+            loadingRow.addView(TextView(this).apply {
+                text = "Preparando capítulos…"
                 setTextColor(0xFF9BA8BD.toInt())
                 textSize = 14f
-                setPadding(dp(16), dp(18), dp(16), dp(18))
+                setPadding(dp(10), 0, 0, 0)
             })
+            card.addView(loadingRow)
         } else {
             val listView = android.widget.ListView(this).apply {
                 divider = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
@@ -3680,7 +3752,7 @@ class X4KPlayerAty : ComponentActivity() {
                 selector = GradientDrawable().apply {
                     cornerRadius = dp(16).toFloat()
                     setColor(0x1F2D7DF6)
-                    setStroke(dp(3), Color.WHITE)
+                    setStroke(dp(2), Color.WHITE)
                 }
                 adapter = object : android.widget.BaseAdapter() {
                     override fun getCount(): Int = epIds.size
@@ -3720,7 +3792,20 @@ class X4KPlayerAty : ComponentActivity() {
                                     },
                                 )
                             }
-                            setPadding(dp(14), dp(12), dp(14), dp(12))
+                            setPadding(dp(11), dp(12), dp(14), dp(12))
+                        }
+
+                        // Acento izquierdo de la fila en curso (lenguaje de broadcast).
+                        if (isCurrent) {
+                            rowLayout.addView(
+                                View(this@X4KPlayerAty).apply {
+                                    background = GradientDrawable().apply {
+                                        cornerRadius = dp(2).toFloat()
+                                        setColor(blueBright)
+                                    }
+                                },
+                                LinearLayout.LayoutParams(dp(3), dp(40)).apply { rightMargin = dp(9) },
+                            )
                         }
 
                         // Insignia numérica del capítulo ("C1", "C2", ...)
@@ -3745,43 +3830,39 @@ class X4KPlayerAty : ComponentActivity() {
                         }
                         rowLayout.addView(numBadge)
 
-                        // Columna central: título y estado
+                        // Columna central: título real y estado (sin textos de relleno).
                         val textCol = LinearLayout(this@X4KPlayerAty).apply {
                             orientation = LinearLayout.VERTICAL
                             setPadding(dp(14), 0, dp(12), 0)
                         }
                         textCol.addView(TextView(this@X4KPlayerAty).apply {
-                            text = "Capítulo ${position + 1}" + (if (cleanName.isNotBlank()) " · $cleanName" else "")
+                            text = cleanName.ifBlank { "Capítulo ${position + 1}" }
                             setTextColor(if (isCurrent) Color.WHITE else 0xFFF4F7FC.toInt())
                             textSize = 15f
                             typeface = Typeface.DEFAULT_BOLD
                             maxLines = 1
                             ellipsize = android.text.TextUtils.TruncateAt.END
                         })
-                        textCol.addView(TextView(this@X4KPlayerAty).apply {
-                            text = when {
-                                isCurrent -> "● Reproduciendo ahora"
-                                isWatched -> "✓ Capítulo visto"
-                                else -> "Disponible en orden secuencial"
-                            }
-                            setTextColor(
-                                when {
-                                    isCurrent -> blueBright
-                                    isWatched -> 0xFF7AD9A8.toInt()
-                                    else -> 0xFF9BA8BD.toInt()
-                                },
-                            )
-                            textSize = 12f
-                            setPadding(0, dp(2), 0, 0)
-                        })
+                        if (isCurrent || isWatched) {
+                            textCol.addView(TextView(this@X4KPlayerAty).apply {
+                                text = if (isCurrent) "En reproducción" else "Visto"
+                                setTextColor(if (isCurrent) blueBright else 0xFF7AD9A8.toInt())
+                                textSize = 12f
+                                setPadding(0, dp(2), 0, 0)
+                                withIcon(
+                                    if (isCurrent) R.drawable.ic_vp_play else R.drawable.ic_vp_check_circle,
+                                    if (isCurrent) blueBright else 0xFF7AD9A8.toInt(),
+                                )
+                            })
+                        }
                         rowLayout.addView(textCol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
-                        // Píldora derecha de acción
+                        // Píldora derecha de acción, con su icono.
                         val actionPill = TextView(this@X4KPlayerAty).apply {
                             text = when {
-                                isCurrent -> "▶ Viendo"
-                                isWatched -> "↺ Repetir"
-                                else -> "▶ Reproducir"
+                                isCurrent -> "Viendo"
+                                isWatched -> "Repetir"
+                                else -> "Reproducir"
                             }
                             setTextColor(if (isCurrent) Color.WHITE else blueBright)
                             textSize = 12f
@@ -3792,6 +3873,10 @@ class X4KPlayerAty : ComponentActivity() {
                                 setStroke(dp(1), if (isCurrent) blueBright else 0x552D7DF6)
                             }
                             setPadding(dp(12), dp(6), dp(12), dp(6))
+                            withIcon(
+                                if (isWatched) R.drawable.ic_vp_replay else R.drawable.ic_vp_play,
+                                if (isCurrent) Color.WHITE else blueBright,
+                            )
                         }
                         rowLayout.addView(actionPill)
 
@@ -3836,6 +3921,13 @@ class X4KPlayerAty : ComponentActivity() {
             card.addView(listView, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f,
             ))
+            card.addView(TextView(this).apply {
+                text = "Mantén OK para marcar como visto"
+                setTextColor(0x80FFFFFF.toInt())
+                textSize = 11f
+                gravity = Gravity.CENTER
+                setPadding(0, dp(8), 0, dp(2))
+            })
             listView.post {
                 listView.setSelection(curEpIndex.coerceIn(0, epIds.size - 1))
                 listView.requestFocus()

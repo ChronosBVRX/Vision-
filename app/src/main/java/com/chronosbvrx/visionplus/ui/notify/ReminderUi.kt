@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.chronosbvrx.visionplus.data.notify.ReminderKit
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.tv.TvCompactAction
 
 /** Pide el permiso de avisos solo cuando hace falta (en Android <13 siempre hay). */
@@ -106,7 +107,8 @@ fun TvRemindAction(
     val key = "match:$matchId"
     val active = ReminderKit.scheduled(context).containsKey(key)
     TvCompactAction(
-        label = if (active) "✓ Avisaré" else "🔔 Avisarme",
+        label = if (active) "Aviso activo" else "Avisarme",
+        icon = if (active) VisionIcons.Following else VisionIcons.Follow,
         modifier = modifier,
         onClick = {
             gate {

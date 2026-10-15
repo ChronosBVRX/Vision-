@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -57,6 +58,8 @@ import com.chronosbvrx.visionplus.ui.components.PosterCard
 import com.chronosbvrx.visionplus.ui.isLandscapeTablet
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 
 private const val CHIP_ALL = "Todo / Destacados"
@@ -265,15 +268,26 @@ private fun CuratedSectionModule(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            Text(
-                text = "Ver todo →",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = VisionBlue,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier
                     .clickable(onClick = onSeeAll)
                     .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
-            )
+            ) {
+                Text(
+                    text = "Ver todo",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = VisionBlue,
+                )
+                Icon(
+                    VisionIcons.SeeAll,
+                    contentDescription = null,
+                    tint = VisionBlueBright,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
 
         // Carrusel Horizontal acotado a máximo 15 elementos (LIMIT 15), ya rankeado por impacto.
@@ -371,13 +385,24 @@ private fun CategoryGridFeed(
                 color = VisionTextSecondary,
             )
             Spacer(Modifier.weight(1f))
-            Text(
-                text = "← Volver a Todo",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = VisionBlue,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
                 modifier = Modifier.clickable(onClick = onClearFilter),
-            )
+            ) {
+                Icon(
+                    VisionIcons.Back,
+                    contentDescription = null,
+                    tint = VisionBlue,
+                    modifier = Modifier.size(15.dp),
+                )
+                Text(
+                    text = "Volver a Todo",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = VisionBlue,
+                )
+            }
         }
 
         // Cuadrícula paginada

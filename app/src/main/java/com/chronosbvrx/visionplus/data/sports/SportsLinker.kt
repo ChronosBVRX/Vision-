@@ -564,7 +564,7 @@ object SportsLinker {
                     val fullText = "${currentItem.name} ${currentItem.description}".trim()
                     val isMatch = mentionsBoth(fullText, match)
                     val programLabel = if (isMatch) {
-                        "⚽ En vivo: ${currentItem.name}"
+                        "EN VIVO · ${currentItem.name}"
                     } else {
                         "Ahora: ${currentItem.name}"
                     }

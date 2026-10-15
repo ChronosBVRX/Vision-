@@ -127,31 +127,31 @@ internal object LiveTaxonomy {
         )
     }
 
-    /** Bandera emoji correspondiente a cada país para chips informativos. */
-    fun countryFlag(country: String): String = when (country) {
-        "México" -> "🇲🇽"
-        "Argentina" -> "🇦🇷"
-        "EE. UU." -> "🇺🇸"
-        "España" -> "🇪🇸"
-        "Colombia" -> "🇨🇴"
-        "Chile" -> "🇨🇱"
-        "Perú" -> "🇵🇪"
-        "Ecuador" -> "🇪🇨"
-        "Bolivia" -> "🇧🇴"
-        "Paraguay" -> "🇵🇾"
-        "Uruguay" -> "🇺🇾"
-        "Venezuela" -> "🇻🇪"
-        "Costa Rica" -> "🇨🇷"
-        "Panamá" -> "🇵🇦"
-        "Honduras" -> "🇭🇳"
-        "El Salvador" -> "🇸🇻"
-        "Nicaragua" -> "🇳🇮"
-        "Guatemala" -> "🇬🇹"
-        "R. Dominicana" -> "🇩🇴"
-        "Puerto Rico" -> "🇵🇷"
-        "Brasil" -> "🇧🇷"
-        "Canadá" -> "🇨🇦"
-        else -> "🌐"
+    /** Código ISO del país para chips uniformes («MX», «AR»…): sin banderitas emoji, que en TV baratas no renderizan. */
+    fun countryCode(country: String): String = when (country) {
+        "México" -> "MX"
+        "Argentina" -> "AR"
+        "EE. UU." -> "US"
+        "España" -> "ES"
+        "Colombia" -> "CO"
+        "Chile" -> "CL"
+        "Perú" -> "PE"
+        "Ecuador" -> "EC"
+        "Bolivia" -> "BO"
+        "Paraguay" -> "PY"
+        "Uruguay" -> "UY"
+        "Venezuela" -> "VE"
+        "Costa Rica" -> "CR"
+        "Panamá" -> "PA"
+        "Honduras" -> "HN"
+        "El Salvador" -> "SV"
+        "Nicaragua" -> "NI"
+        "Guatemala" -> "GT"
+        "R. Dominicana" -> "DO"
+        "Puerto Rico" -> "PR"
+        "Brasil" -> "BR"
+        "Canadá" -> "CA"
+        else -> "INT"
     }
 
     private fun containsAny(haystack: String, needles: List<String>): Boolean =

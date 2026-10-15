@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -38,9 +39,12 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.ui.LocalReducedEffects
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueDark
+import com.chronosbvrx.visionplus.ui.theme.VisionRatingGold
+import androidx.compose.ui.unit.Dp
 import java.util.Locale
 
 /**
@@ -121,14 +125,25 @@ fun PosterCard(
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
-                        Text(
-                            text = "★ $formattedScore",
-                            style = TextStyle(
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                            ),
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Icon(
+                                VisionIcons.Rating,
+                                contentDescription = null,
+                                tint = VisionRatingGold,
+                                modifier = Modifier.size(11.dp),
+                            )
+                            Text(
+                                text = formattedScore,
+                                style = TextStyle(
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                            )
+                        }
                     }
                 }
 
@@ -251,16 +266,91 @@ fun SectionHeader(
             modifier = Modifier.weight(1f),
         )
         if (onSeeAll != null) {
-            Text(
-                text = "Ver todo →",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = VisionBlue,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
                     .clickable(onClick = onSeeAll)
                     .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
+            ) {
+                Text(
+                    text = "Ver todo",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = VisionBlue,
+                )
+                Icon(
+                    VisionIcons.SeeAll,
+                    contentDescription = null,
+                    tint = VisionBlueBright,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * El sello «TOP 10» del Inicio: cuadrado azul de marca con la cifra, en vez del emoji de fuego.
+ */
+@Composable
+fun TopTenBadge(modifier: Modifier = Modifier, size: Dp = 30.dp) {
+    val shape = RoundedCornerShape(size * 0.24f)
+    Box(
+        modifier = modifier
+            .size(size)
+            .background(Brush.verticalGradient(listOf(VisionBlue, VisionBlueDark)), shape)
+            .border(BorderStroke(1.dp, VisionBlueBright.copy(alpha = 0.55f)), shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "TOP",
+                style = TextStyle(
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 6.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    lineHeight = 7.sp,
+                ),
+            )
+            Text(
+                "10",
+                style = TextStyle(
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Black,
+                    lineHeight = 13.sp,
+                ),
             )
         }
+    }
+}
+
+/**
+ * El país de un canal o feed de fútbol como chip ISO uniforme («MX», «AR», «US», «INT»):
+ * reemplaza las banderitas emoji, que en TV baratas ni siquiera renderizan.
+ */
+@Composable
+fun CountryIsoChip(code: String, modifier: Modifier = Modifier) {
+    if (code.isBlank()) return
+    val shape = RoundedCornerShape(4.dp)
+    Box(
+        modifier = modifier
+            .background(Color(0x2E1B2538), shape)
+            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)), shape)
+            .padding(horizontal = 5.dp, vertical = 1.dp),
+    ) {
+        Text(
+            text = code.uppercase(),
+            style = TextStyle(
+                color = Color(0xFFD5E1F2),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.6.sp,
+            ),
+        )
     }
 }
 

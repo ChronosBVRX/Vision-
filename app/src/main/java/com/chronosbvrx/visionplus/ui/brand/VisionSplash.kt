@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -83,6 +84,14 @@ fun VisionSplash(isTv: Boolean, canExit: Boolean, onFinished: () -> Unit) {
                 VisionFullLogo(
                     height = if (isTv) 130.dp else 105.dp,
                 )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = "por ChronosBVRX  ·  EST. 2026",
+                    color = VisionTextSecondary.copy(alpha = 0.85f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 2.sp,
+                )
                 Spacer(Modifier.height(28.dp))
                 CircularProgressIndicator(
                     modifier = Modifier.size(30.dp),
@@ -117,5 +126,14 @@ fun VisionSplash(isTv: Boolean, canExit: Boolean, onFinished: () -> Unit) {
                 },
             )
         }
+        // La firma del estudio, discreta, también sobre el arranque con video.
+        Text(
+            text = "por ChronosBVRX",
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 2.sp,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp),
+        )
     }
 }

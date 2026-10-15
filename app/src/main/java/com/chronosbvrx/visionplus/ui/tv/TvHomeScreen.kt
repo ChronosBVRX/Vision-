@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Usb
@@ -54,8 +55,11 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.tv.material3.Border
 import com.chronosbvrx.visionplus.ui.Route
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
+import com.chronosbvrx.visionplus.ui.icons.homeRowIcon
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -143,10 +147,11 @@ private val MinimalScrollBringIntoView = object : BringIntoViewSpec {
 /**
  * Pantalla principal de Smart TV (Estilo Netflix / Max):
  * 1. Billboard inmersivo en la parte superior con botones interactivos de mando:
- *    [ ▶ Reproducir ], [ ℹ Detalles ], [ ★ Favorito ].
- * 2. Fila 1: "🔥 Top 10 en Vision+ Hoy" (Tendencias) con pósteres 2:3 y números gigantes estilizados 1..10.
- * 3. Fila 2: "✨ Novedades y Estrenos" con badges de estado NUEVO y calificación.
- * 4. Fila 3: "⏱️ Seguir viendo" con avance real y captura.
+ * 1. Hero billboard inmersivo con drift, badge «TENDENCIA DE HOY», título, metadatos,
+ *    sinopsis y acciones directas con foco D-pad: [Reproducir], [Detalles], [Favorito].
+ * 2. Fila 1: "Top 10 en Vision+ Hoy" (Tendencias) con pósteres 2:3 y sello TOP 10.
+ * 3. Fila 2: "Novedades y Estrenos" con badges de estado NUEVO y calificación.
+ * 4. Fila 3: "Seguir viendo" con avance real y captura.
  * 5. Filas de catálogo y recomendaciones posteriores.
  * 6. Optimizada para dispositivos limitados (take 15 por carrusel, Coil 320x480).
  */
@@ -467,11 +472,11 @@ fun TvHomeScreen(
                         }
                     }
 
-                    // 3. FILA 1: 🔥 TOP 10 EN VISION+ HOY (TENDENCIAS CON NÚMEROS GIGANTES)
+                    // 3. FILA 1: TOP 10 EN VISION+ HOY (TENDENCIAS CON NÚMEROS GIGANTES)
                     if (top10Films.isNotEmpty()) {
                         item(key = "home_top10") {
                             HomePosterRow(
-                                title = "🔥 Top 10 en Vision+ Hoy",
+                                title = "Top 10 en Vision+ Hoy",
                                 films = top10Films,
                                 isTop10 = true,
                                 returnRequester = returnRequester,
@@ -483,13 +488,14 @@ fun TvHomeScreen(
                         }
                     }
 
-                    // 4. FILA 2: ✨ NOVEDADES Y ESTRENOS
+                    // 4. FILA 2: NOVEDADES Y ESTRENOS
                     if (estrenosFilms.isNotEmpty()) {
                         item(key = "home_estrenos") {
                             HomePosterRow(
-                                title = "✨ Novedades y Estrenos",
+                                title = "Novedades y Estrenos",
                                 films = estrenosFilms,
                                 isNew = true,
+                                icon = VisionIcons.Novelties,
                                 returnRequester = returnRequester,
                                 returnFilmId = returnFilmId,
                                 entryRequester = rowEntry,
@@ -499,12 +505,13 @@ fun TvHomeScreen(
                         }
                     }
 
-                    // FILA: 📈 POPULARES DE LA SEMANA (TMDB, casada con el catálogo)
+                    // FILA: POPULARES DE LA SEMANA (TMDB, casada con el catálogo)
                     if (trendingFilms.isNotEmpty()) {
                         item(key = "home_trending_week") {
                             HomePosterRow(
-                                title = "📈 Populares de la semana",
+                                title = "Populares de la semana",
                                 films = trendingFilms,
+                                icon = VisionIcons.WeeklyTrending,
                                 returnRequester = returnRequester,
                                 returnFilmId = returnFilmId,
                                 entryRequester = rowEntry,
@@ -514,7 +521,7 @@ fun TvHomeScreen(
                         }
                     }
 
-                    // 5. FILA 3: ⏱️ SEGUIR VIENDO (REDiseñado con barra de avance neón)
+                    // 5. FILA 3: SEGUIR VIENDO (con barra de avance neón)
                     if (continueCards.isNotEmpty()) {
                         item(key = "continue") {
                             ContinueRow(
@@ -534,6 +541,7 @@ fun TvHomeScreen(
                         HomePosterRow(
                             title = row.title,
                             films = limitedFilms,
+                            icon = homeRowIcon(row.id),
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
@@ -648,7 +656,7 @@ private fun TvQuickHubsRow(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.padding(top = 10.dp, bottom = 4.dp)) {
-        TvRowLabel("✨ Colecciones y Especiales", 22.dp)
+        TvRowLabel("Colecciones y Especiales", 22.dp, icon = VisionIcons.Collections)
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 48.dp),
@@ -827,15 +835,26 @@ private fun HeroBillboard(
                 )
                 .padding(horizontal = 9.dp, vertical = 4.dp),
         ) {
-            Text(
-                text = "🔥 TENDENCIA DE HOY",
-                style = TextStyle(
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.6.sp,
-                ),
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Icon(
+                    VisionIcons.WeeklyTrending,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(13.dp),
+                )
+                Text(
+                    text = "TENDENCIA DE HOY",
+                    style = TextStyle(
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.4.sp,
+                    ),
+                )
+            }
         }
 
         Spacer(Modifier.height(10.dp))
@@ -882,7 +901,8 @@ private fun HeroBillboard(
             modifier = Modifier.padding(top = 16.dp),
         ) {
             TvCompactAction(
-                label = "▶  Reproducir",
+                label = "Reproducir",
+                icon = VisionIcons.Play,
                 modifier = when {
                     isHeroTarget && returnRequester != null -> Modifier.focusRequester(returnRequester)
                     landing != null -> Modifier.landingFocus(landing)
@@ -891,11 +911,13 @@ private fun HeroBillboard(
                 onClick = { currentFilm?.let(onOpenFilm) },
             )
             TvCompactAction(
-                label = "ℹ  Detalles",
+                label = "Detalles",
+                icon = Icons.Default.Info,
                 onClick = { currentFilm?.let(onOpenFilm) },
             )
             TvCompactAction(
-                label = if (inFavorites) "★ En Favoritos" else "☆ Favorito",
+                label = if (inFavorites) "En Favoritos" else "Favorito",
+                icon = if (inFavorites) VisionIcons.Favorite else VisionIcons.FavoriteBorder,
                 onClick = onToggleFavorite,
             )
         }
@@ -912,6 +934,7 @@ private fun HomePosterRow(
     films: List<Film>,
     isTop10: Boolean = false,
     isNew: Boolean = false,
+    icon: ImageVector? = null,
     returnRequester: FocusRequester? = null,
     returnFilmId: String? = null,
     entryRequester: FocusRequester? = null,
@@ -930,7 +953,7 @@ private fun HomePosterRow(
     LaunchedEffect(returnIndex, safeFilms) { rowState.revealReturnIndex(returnIndex) }
 
     Column(modifier = Modifier.padding(top = 18.dp)) {
-        TvRowLabel(title, 26.dp)
+        TvRowLabel(title, 26.dp, icon = icon, topTen = isTop10)
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
                 state = rowState,
@@ -1003,7 +1026,7 @@ private fun ContinueRow(
     }
     LaunchedEffect(returnIndex, cards) { rowState.revealReturnIndex(returnIndex) }
     Column(modifier = Modifier.padding(top = 18.dp)) {
-        TvRowLabel("⏱️ Seguir viendo", 26.dp)
+        TvRowLabel("Seguir viendo", 26.dp, icon = VisionIcons.ContinueWatching)
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
                 state = rowState,

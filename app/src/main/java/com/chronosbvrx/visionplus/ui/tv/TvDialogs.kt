@@ -114,6 +114,11 @@ internal fun TvAppUpdatesDialog(onDismiss: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = VisionTextSecondary,
         )
+        Text(
+            PluginUpdatesCopy.BY,
+            style = MaterialTheme.typography.bodySmall,
+            color = VisionTextSecondary.copy(alpha = 0.8f),
+        )
         if (release == null || !pending) {
             Text(PluginUpdatesCopy.UP_TO_DATE, style = MaterialTheme.typography.bodyLarge, color = Color.White)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {

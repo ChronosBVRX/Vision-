@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +30,7 @@ import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.components.PosterCard
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.isLandscapeTablet
 
 import androidx.compose.runtime.collectAsState
@@ -55,9 +58,30 @@ fun LibraryScreen(catalog: XuperCatalog, contentPadding: PaddingValues, onOpenFi
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FilterChip(selected = selectedTab == LibraryTab.FAVORITES, onClick = { selectedTab = LibraryTab.FAVORITES }, label = { Text("★ Favoritos") })
-            FilterChip(selected = selectedTab == LibraryTab.WATCH_LATER, onClick = { selectedTab = LibraryTab.WATCH_LATER }, label = { Text("Ver más tarde") })
-            FilterChip(selected = selectedTab == LibraryTab.DOWNLOADS, onClick = { selectedTab = LibraryTab.DOWNLOADS }, label = { Text("⬇ Descargas") })
+            FilterChip(
+                selected = selectedTab == LibraryTab.FAVORITES,
+                onClick = { selectedTab = LibraryTab.FAVORITES },
+                label = { Text("Favoritos") },
+                leadingIcon = {
+                    Icon(VisionIcons.Favorite, contentDescription = null, modifier = Modifier.size(16.dp))
+                },
+            )
+            FilterChip(
+                selected = selectedTab == LibraryTab.WATCH_LATER,
+                onClick = { selectedTab = LibraryTab.WATCH_LATER },
+                label = { Text("Ver más tarde") },
+                leadingIcon = {
+                    Icon(VisionIcons.WatchLater, contentDescription = null, modifier = Modifier.size(16.dp))
+                },
+            )
+            FilterChip(
+                selected = selectedTab == LibraryTab.DOWNLOADS,
+                onClick = { selectedTab = LibraryTab.DOWNLOADS },
+                label = { Text("Descargas") },
+                leadingIcon = {
+                    Icon(VisionIcons.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                },
+            )
         }
         if (films.isEmpty()) {
             EmptyState(
@@ -67,7 +91,7 @@ fun LibraryScreen(catalog: XuperCatalog, contentPadding: PaddingValues, onOpenFi
                     LibraryTab.DOWNLOADS -> "No tienes descargas aún"
                 },
                 subtitle = when (selectedTab) {
-                    LibraryTab.FAVORITES -> "En la ficha de una película toca «☆ Favorito» y aparece aquí."
+                    LibraryTab.FAVORITES -> "En la ficha de una película toca «Favorito» y aparece aquí."
                     LibraryTab.WATCH_LATER -> "En la ficha de una película toca «+ Ver más tarde» y aparece aquí."
                     LibraryTab.DOWNLOADS -> "Toca «Descargar» en la ficha de una película para verla sin internet."
                 },
