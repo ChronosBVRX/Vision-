@@ -5,6 +5,24 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Lote 2.5.82: fix de regresión móvil — los controles del reproductor vuelven con UN toque — OTA publicada** (2026-10-15; 359 tests Android):
+  - *Síntoma (usuario)*: en el móvil los controles de reproducción se ocultaban solos (auto-hide
+    normal) y al tocar la pantalla **ya no volvían a aparecer**.
+  - *Causa (cazada en el diff)*: el lote v2.5.77 cambió el click simple del `catcher` por un
+    `GestureDetector` con `onSingleTapConfirmed` (para el doble toque ∓10 s). Ese callback espera
+    el timeout del doble toque (~300 ms) y, si llega un segundo toque, el primero **se cancela**:
+    en los lados (2/3 de la pantalla) el segundo toque hace seek, así que el usuario que toca dos
+    veces por impaciencia nunca veía los controles. La v2.5.81 no lo tocó; se notó al actualizar
+    el teléfono.
+  - *Fix*: `resolveMobileTapAction` (puro, `ControlsState.kt`): ocultos → **mostrar AL INSTANTE**
+    (`onSingleTapUp`, sin espera ni cancelación); visibles → ocultar tras el timeout (el doble
+    toque lo cancela vía `pendingControlHide`); modal/pre-roll/error → ignorar. El doble toque en
+    los lados sigue haciendo ∓10 s y ya no quita la barra; el centro ya no alterna (el primer
+    toque ya mostró).
+  - *Guardián*: `MobileTapActionTest` (3 pruebas). Suite 359/359.
+  - *Verificado*: 359 Android en verde; release R8 vc318 con firma histórica `9593cb0d…`.
+    **OTA v2.5.82 publicada** (`VisionPlus.apk`). Prueba física en el teléfono del usuario
+    pendiente (el A32 no estaba en red).
 - **Lote 2.5.81: «UI Premium» — cero emojis, iconografía de marca y selector de episodios premium + firma del autor — OTA publicada** (2026-10-15; 356 tests Android):
   - *Petición*: los emojis hacían ver la app «barata»; sustituirlos por iconos premium acordes a la
     paleta; el selector de episodios debía verse profesional; y que la app «se sienta suya» (que
@@ -724,8 +742,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.81**
-  (versionCode **317**, release OTA v2.5.81). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.82**
+  (versionCode **318**, release OTA v2.5.82). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

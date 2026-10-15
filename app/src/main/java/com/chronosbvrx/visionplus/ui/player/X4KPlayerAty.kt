@@ -3981,14 +3981,30 @@ class X4KPlayerAty : ComponentActivity() {
             isFocusable = false
         }
         if (!isTv && !liveMode) {
-            // Móvil: un toque muestra/oculta controles; doble toque a los lados salta ∓10 s.
+            // Móvil: un toque muestra los controles AL INSTANTE. Antes (v2.5.77) se usaba
+            // onSingleTapConfirmed: el aviso esperaba el timeout del doble toque y un segundo
+            // toque lo cancelaba, así que el toque se sentía muerto («los controles ya no
+            // aparecen»). Ocultar sí espera el timeout, para que el doble toque de ∓10 s no
+            // quite la barra que se está mirando. Doble toque en los lados: ∓10 s.
             val detector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
-                override fun onSingleTapConfirmed(e: android.view.MotionEvent): Boolean {
-                    if (!errorShown && !picking && introView == null) toggleControls()
+                override fun onSingleTapUp(e: android.view.MotionEvent): Boolean {
+                    when (resolveMobileTapAction(controlsVisible, errorShown, picking, introView != null)) {
+                        MobileTapAction.SHOW_NOW -> toggleControls()
+                        MobileTapAction.HIDE_DELAYED -> {
+                            handler.removeCallbacks(pendingControlHide)
+                            handler.postDelayed(
+                                pendingControlHide,
+                                android.view.ViewConfiguration.getDoubleTapTimeout().toLong(),
+                            )
+                        }
+                        MobileTapAction.IGNORE -> Unit
+                    }
                     return true
                 }
 
                 override fun onDoubleTap(e: android.view.MotionEvent): Boolean {
+                    // Un doble toque nunca oculta la barra: el primer toque deja de contar.
+                    handler.removeCallbacks(pendingControlHide)
                     if (errorShown || picking || introView != null) return true
                     val third = (catcher.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels) / 3f
                     when {
@@ -4000,7 +4016,8 @@ class X4KPlayerAty : ComponentActivity() {
                             performSeekBy(10_000L)
                             Toast.makeText(this@X4KPlayerAty, "+10 s", Toast.LENGTH_SHORT).show()
                         }
-                        else -> if (introView == null) toggleControls()
+                        // Centro: el primer toque ya mostró los controles; no repetir.
+                        else -> Unit
                     }
                     return true
                 }
@@ -4095,6 +4112,16 @@ class X4KPlayerAty : ComponentActivity() {
     private val hideRunnable = Runnable {
         if (!scrubbing && firstFrame && !errorShown && !picking && resumeOverlay == null && !nextVisible) {
             // Que no quede el foco en una vista oculta: el mando no debe perderse.
+            hideControls()
+        }
+    }
+
+    /**
+     * Oculta los controles tras el timeout del doble toque en móvil: el segundo toque
+     * (∓10 s) lo cancela y la barra no parpadea.
+     */
+    private val pendingControlHide = Runnable {
+        if (!errorShown && !picking && introView == null && resumeOverlay == null && !nextVisible) {
             hideControls()
         }
     }

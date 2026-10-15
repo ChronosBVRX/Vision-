@@ -116,6 +116,33 @@ internal fun resolveDismissFocusTarget(lastPickerSource: String?, isLive: Boolea
     return lastPickerSource ?: if (isLive) "channels" else "playPause"
 }
 
+/** Qué hace un toque en la pantalla del reproductor móvil (decisión pura, testeable). */
+internal enum class MobileTapAction {
+    /** Mostrar los controles YA: un toque nunca debe sentirse muerto. */
+    SHOW_NOW,
+    /** Ocultar tras el timeout del doble toque: si llega el segundo (∓10 s), la barra no parpadea. */
+    HIDE_DELAYED,
+    /** Hay modal, pre-roll o error: el toque no toca los controles. */
+    IGNORE,
+}
+
+/**
+ * Política del toque móvil en el reproductor XTV (regresión v2.5.77→2.5.81: con
+ * `onSingleTapConfirmed` se esperaba el timeout del doble toque y un segundo toque cancelaba
+ * el aviso — el usuario sentía que «los controles ya no aparecen»). Mostrar SIEMPRE es
+ * inmediato; ocultar sí espera, para que el doble toque de ∓10 s no quite la barra.
+ */
+internal fun resolveMobileTapAction(
+    controlsVisible: Boolean,
+    errorShown: Boolean,
+    picking: Boolean,
+    introVisible: Boolean,
+): MobileTapAction = when {
+    errorShown || picking || introVisible -> MobileTapAction.IGNORE
+    !controlsVisible -> MobileTapAction.SHOW_NOW
+    else -> MobileTapAction.HIDE_DELAYED
+}
+
 internal enum class PlayerKeyDownAction {
     /** El primer clic con menú oculto (o sin foco en controles) SOLO abre el menú y enfoca sin ejecutar acción. */
     WAKE_CONTROLS_ONLY,
