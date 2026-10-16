@@ -5,6 +5,26 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Lote 2.5.83: fix DEFINITIVO del toque móvil — el gesto nunca llegaba al reproductor (onDown) — OTA publicada** (2026-10-15; 364 tests Android):
+  - *Síntoma*: tras 2.5.82 el usuario reportó que seguía igual: «doy clic en el video y no se abre
+    el menú de reproducción».
+  - *Causa raíz (verificada contra el código AOSP de `GestureDetector`)*: `onTouchEvent` solo
+    consume el `ACTION_DOWN` si `onDown` devuelve true; `SimpleOnGestureListener` devuelve false
+    por defecto. Con la vista del toque no clickable y sin consumir el DOWN, el padre **nunca le
+    entrega el `ACTION_UP`** → `onSingleTapUp`/`onSingleTapConfirmed` jamás corrían: el tap moría
+    en silencio desde v2.5.77 (el click simple anterior sí consumía, porque hacía clickable la
+    vista). Por eso 2.5.82 —que solo cambió el callback— no lo arregló.
+  - *Fix*: `MobileTapGestures` (clase extraída, `ui/player/MobileTapGestures.kt`) con
+    **`onDown = true` SIEMPRE** (el eslabón que faltaba) + `attachMobileTapGestures` marca la
+    vista clickable como red de seguridad. Se conserva el aviso inmediato de 2.5.82 y el doble
+    toque ∓10 s con cancelación del ocultado (`pendingControlHide`).
+  - *Guardián*: `MobileTapDispatchTest` (Robolectric, **dispatch táctil REAL** por la jerarquía
+    con `measure`/`layout`): 4 pruebas del comportamiento + 1 que documenta la trampa (sin
+    `onDown` el tap no llega, si la plataforma cambia el test lo avisa). `MobileTapActionTest`
+    (3) cubre la política pura. Suite 364/364.
+  - *Verificado*: 364 Android en verde; release R8 vc319 con firma histórica `9593cb0d…`.
+    **OTA v2.5.83 publicada** (`VisionPlus.apk`). Prueba física en el teléfono del usuario
+    pendiente (el A32 no estaba en red).
 - **Lote 2.5.82: fix de regresión móvil — los controles del reproductor vuelven con UN toque — OTA publicada** (2026-10-15; 359 tests Android):
   - *Síntoma (usuario)*: en el móvil los controles de reproducción se ocultaban solos (auto-hide
     normal) y al tocar la pantalla **ya no volvían a aparecer**.
@@ -20,6 +40,8 @@
     los lados sigue haciendo ∓10 s y ya no quita la barra; el centro ya no alterna (el primer
     toque ya mostró).
   - *Guardián*: `MobileTapActionTest` (3 pruebas). Suite 359/359.
+  - *(Insuficiente — el aviso se hizo inmediato, pero el gesto seguía sin llegar al detector por
+    el `onDown`; ver 2.5.83.)*
   - *Verificado*: 359 Android en verde; release R8 vc318 con firma histórica `9593cb0d…`.
     **OTA v2.5.82 publicada** (`VisionPlus.apk`). Prueba física en el teléfono del usuario
     pendiente (el A32 no estaba en red).
@@ -742,8 +764,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.82**
-  (versionCode **318**, release OTA v2.5.82). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.83**
+  (versionCode **319**, release OTA v2.5.83). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

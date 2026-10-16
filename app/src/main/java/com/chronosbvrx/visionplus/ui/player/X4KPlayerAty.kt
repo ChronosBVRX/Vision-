@@ -3981,48 +3981,29 @@ class X4KPlayerAty : ComponentActivity() {
             isFocusable = false
         }
         if (!isTv && !liveMode) {
-            // Móvil: un toque muestra los controles AL INSTANTE. Antes (v2.5.77) se usaba
-            // onSingleTapConfirmed: el aviso esperaba el timeout del doble toque y un segundo
-            // toque lo cancelaba, así que el toque se sentía muerto («los controles ya no
-            // aparecen»). Ocultar sí espera el timeout, para que el doble toque de ∓10 s no
-            // quite la barra que se está mirando. Doble toque en los lados: ∓10 s.
-            val detector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
-                override fun onSingleTapUp(e: android.view.MotionEvent): Boolean {
-                    when (resolveMobileTapAction(controlsVisible, errorShown, picking, introView != null)) {
-                        MobileTapAction.SHOW_NOW -> toggleControls()
-                        MobileTapAction.HIDE_DELAYED -> {
-                            handler.removeCallbacks(pendingControlHide)
-                            handler.postDelayed(
-                                pendingControlHide,
-                                android.view.ViewConfiguration.getDoubleTapTimeout().toLong(),
-                            )
-                        }
-                        MobileTapAction.IGNORE -> Unit
-                    }
-                    return true
-                }
-
-                override fun onDoubleTap(e: android.view.MotionEvent): Boolean {
-                    // Un doble toque nunca oculta la barra: el primer toque deja de contar.
+            // Móvil: un toque muestra los controles AL INSTANTE (ver MobileTapGestures: el
+            // onDown que reclama el gesto era el eslabón perdido desde v2.5.77 — sin él el
+            // UP nunca llegaba y el toque se sentía muerto). Ocultar espera el timeout del
+            // doble toque, que a su vez hace ∓10 s en los lados.
+            val gestures = MobileTapGestures(
+                isBlocked = { errorShown || picking || introView != null },
+                controlsVisible = { controlsVisible },
+                screenWidth = {
+                    catcher.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                },
+                onShowControls = { toggleControls() },
+                onHideControlsDelayed = {
                     handler.removeCallbacks(pendingControlHide)
-                    if (errorShown || picking || introView != null) return true
-                    val third = (catcher.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels) / 3f
-                    when {
-                        e.x < third -> {
-                            performSeekBy(-10_000L)
-                            Toast.makeText(this@X4KPlayerAty, "−10 s", Toast.LENGTH_SHORT).show()
-                        }
-                        e.x > third * 2 -> {
-                            performSeekBy(10_000L)
-                            Toast.makeText(this@X4KPlayerAty, "+10 s", Toast.LENGTH_SHORT).show()
-                        }
-                        // Centro: el primer toque ya mostró los controles; no repetir.
-                        else -> Unit
-                    }
-                    return true
-                }
-            })
-            catcher.setOnTouchListener { _, event -> detector.onTouchEvent(event) }
+                    handler.postDelayed(
+                        pendingControlHide,
+                        android.view.ViewConfiguration.getDoubleTapTimeout().toLong(),
+                    )
+                },
+                onCancelPendingHide = { handler.removeCallbacks(pendingControlHide) },
+                onSeekBy = { delta -> performSeekBy(delta) },
+                onSeekToast = { label -> Toast.makeText(this@X4KPlayerAty, label, Toast.LENGTH_SHORT).show() },
+            )
+            attachMobileTapGestures(catcher, gestures)
         } else {
             catcher.setOnClickListener { if (!errorShown && !picking && introView == null) toggleControls() }
         }

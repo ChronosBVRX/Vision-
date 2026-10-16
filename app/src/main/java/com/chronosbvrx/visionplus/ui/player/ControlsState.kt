@@ -127,18 +127,13 @@ internal enum class MobileTapAction {
 }
 
 /**
- * Política del toque móvil en el reproductor XTV (regresión v2.5.77→2.5.81: con
+ * Política del toque móvil en el reproductor XTV (regresión v2.5.77→2.5.82: con
  * `onSingleTapConfirmed` se esperaba el timeout del doble toque y un segundo toque cancelaba
  * el aviso — el usuario sentía que «los controles ya no aparecen»). Mostrar SIEMPRE es
  * inmediato; ocultar sí espera, para que el doble toque de ∓10 s no quite la barra.
  */
-internal fun resolveMobileTapAction(
-    controlsVisible: Boolean,
-    errorShown: Boolean,
-    picking: Boolean,
-    introVisible: Boolean,
-): MobileTapAction = when {
-    errorShown || picking || introVisible -> MobileTapAction.IGNORE
+internal fun resolveMobileTapAction(controlsVisible: Boolean, blocked: Boolean): MobileTapAction = when {
+    blocked -> MobileTapAction.IGNORE
     !controlsVisible -> MobileTapAction.SHOW_NOW
     else -> MobileTapAction.HIDE_DELAYED
 }

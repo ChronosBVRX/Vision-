@@ -4,13 +4,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * El toque móvil del reproductor (regresión reportada en v2.5.81: «los controles ya no
- * aparecen» al tocar la pantalla):
+ * La política del toque móvil del reproductor (regresión reportada en v2.5.81/82: «los
+ * controles ya no aparecen» al tocar la pantalla):
  *
  *  - Mostrar SIEMPRE es inmediato (`SHOW_NOW`): el aviso no puede esperar al timeout del
  *    doble toque ni cancelarse cuando llega un segundo toque.
  *  - Ocultar espera el timeout (`HIDE_DELAYED`): el doble toque de ∓10 s no quita la barra.
- *  - Con modal, pre-roll o error el toque no toca los controles (`IGNORE`).
+ *  - Con modal, pre-roll o error (`blocked`) el toque no toca los controles (`IGNORE`).
  */
 class MobileTapActionTest {
 
@@ -18,7 +18,7 @@ class MobileTapActionTest {
     fun tapWithControlsHiddenShowsThemImmediately() {
         assertEquals(
             MobileTapAction.SHOW_NOW,
-            resolveMobileTapAction(controlsVisible = false, errorShown = false, picking = false, introVisible = false),
+            resolveMobileTapAction(controlsVisible = false, blocked = false),
         )
     }
 
@@ -26,23 +26,19 @@ class MobileTapActionTest {
     fun tapWithControlsVisibleHidesThemDelayed() {
         assertEquals(
             MobileTapAction.HIDE_DELAYED,
-            resolveMobileTapAction(controlsVisible = true, errorShown = false, picking = false, introVisible = false),
+            resolveMobileTapAction(controlsVisible = true, blocked = false),
         )
     }
 
     @Test
-    fun errorModalAndIntroIgnoreTheTap() {
+    fun blockedTapIsIgnored() {
         assertEquals(
             MobileTapAction.IGNORE,
-            resolveMobileTapAction(controlsVisible = false, errorShown = true, picking = false, introVisible = false),
+            resolveMobileTapAction(controlsVisible = false, blocked = true),
         )
         assertEquals(
             MobileTapAction.IGNORE,
-            resolveMobileTapAction(controlsVisible = true, errorShown = false, picking = true, introVisible = false),
-        )
-        assertEquals(
-            MobileTapAction.IGNORE,
-            resolveMobileTapAction(controlsVisible = false, errorShown = false, picking = false, introVisible = true),
+            resolveMobileTapAction(controlsVisible = true, blocked = true),
         )
     }
 }
