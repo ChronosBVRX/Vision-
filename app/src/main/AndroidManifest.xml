@@ -62,10 +62,16 @@
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:exported="true" />
 
+        <!-- Reproductor residente («Camino B»): tarea propia fuera de recientes, una sola
+             instancia con su vista del motor reutilizada entre reproducciones; el proceso
+             `:x4k` sobrevive a la salida para que el próximo play no arranque en frío. -->
         <activity
             android:name=".ui.player.X4KPlayerAty"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:exported="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.chronosbvrx.visionplus.player"
+            android:excludeFromRecents="true"
             android:process=":x4k" />
 
         <receiver

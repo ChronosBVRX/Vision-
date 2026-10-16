@@ -38,7 +38,7 @@ class OfflinePlaybackCoordinationTest {
     )
 
     @Test
-    fun `solo las descargas XTV activas bloquean el motor`() {
+    fun `solo las descargas XTV activas o en cola bloquean el motor`() {
         val items = listOf(
             item("http1", DownloadState.DOWNLOADING, "https://cdn.example.com/a.mp4"),
             item("xtv1", DownloadState.DOWNLOADING, "xtv:abc"),
@@ -46,11 +46,21 @@ class OfflinePlaybackCoordinationTest {
             item("xtv2", DownloadState.PAUSED, "xtv:pausada"),
             item("xtv3", DownloadState.COMPLETED, "xtv:completa"),
             item("xtv4", DownloadState.ERROR, "xtv:error"),
+            // Temporada encolada: aún no toca el motor, pero arrancaría si nadie la pausa.
+            item("xtv5", DownloadState.QUEUED, "xtv:encolada"),
         )
         assertEquals(
-            listOf("xtv1", "mv1"),
+            listOf("xtv1", "mv1", "xtv5"),
             OfflineDownloadManager.engineDownloadsToPause(items).map { it.id },
         )
+    }
+
+    @Test
+    fun `la cola de temporada se suelta al pausar para reproducir`() {
+        val text = requireSource("src/main/java/com/chronosbvrx/visionplus/data/offline/OfflineDownloadManager.kt")
+        assertTrue("las pendientes de la cola se sueltan sin tocar el servicio", text.contains("dropQueuedRemote("))
+        assertTrue("pausar la activa detiene la temporada entera", text.contains("remoteQueue.clear()"))
+        assertTrue("borrar un capítulo no tumba la temporada", text.contains("pumpRemote(app)"))
     }
 
     @Test

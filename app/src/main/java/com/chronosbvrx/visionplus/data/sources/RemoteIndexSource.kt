@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.Popularity
+import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -200,7 +202,7 @@ object RemoteIndexSource {
                 if (!seenFilms.add(filmId)) continue
                 films += Film(
                     id = filmId,
-                    title = f.optString("title"),
+                    title = normalizeDisplayName(f.optString("title")),
                     year = f.optInt("year"),
                     durationMin = f.optInt("durationMin"),
                     synopsis = f.optString("synopsis"),
@@ -378,7 +380,7 @@ object RemoteIndexSource {
         }
         return Film(
             id = filmId,
-            title = f.optString("title"),
+            title = normalizeDisplayName(f.optString("title")),
             year = f.optInt("year"),
             durationMin = f.optInt("durationMin"),
             synopsis = f.optString("synopsis"),
@@ -415,10 +417,13 @@ object RemoteIndexSource {
             if (connection.responseCode !in 200..299) return@withContext memoryTrending ?: emptyList()
             val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             val arr = JSONObject(text).optJSONArray("films") ?: JSONArray()
-            val out = ArrayList<Film>(arr.length())
+            val parsed = ArrayList<Film>(arr.length())
             for (i in 0 until arr.length()) {
-                parseFilmObject(arr.optJSONObject(i) ?: continue)?.let { out += it }
+                parseFilmObject(arr.optJSONObject(i) ?: continue)?.let { parsed += it }
             }
+            // Sin repetidos: esta hilera alimenta una LazyRow con clave por film.id y un
+            // duplicado del servidor tumbaba el Inicio (key ya usada). Cubre móvil y TV.
+            val out = Popularity.dedupe(parsed)
             if (out.isNotEmpty()) {
                 memoryTrending = out
                 memoryTrendingAt = now

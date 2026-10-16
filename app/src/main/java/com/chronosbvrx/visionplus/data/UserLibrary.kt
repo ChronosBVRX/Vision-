@@ -66,7 +66,7 @@ object UserLibrary {
             val o = arr.optJSONObject(i) ?: return@mapNotNull null
             Film(
                 id = o.optString("id"),
-                title = o.optString("t"),
+                title = normalizeDisplayName(o.optString("t")),
                 year = o.optInt("y"),
                 durationMin = o.optInt("d"),
                 synopsis = o.optString("s"),

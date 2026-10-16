@@ -3,6 +3,7 @@ package com.chronosbvrx.visionplus.data.sources
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.LivePlaylist
+import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -108,7 +109,7 @@ class ArchiveSource : Source {
             val doc = element.jsonObject
             val identifier = doc["identifier"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
             val raw = doc["title"]?.jsonPrimitive?.contentOrNull.orEmpty()
-            val title = raw.substringBefore('(').trim().ifBlank { identifier }
+            val title = normalizeDisplayName(raw.substringBefore('(').trim().ifBlank { identifier })
             Film(
                 id = "ia-$identifier",
                 title = title,

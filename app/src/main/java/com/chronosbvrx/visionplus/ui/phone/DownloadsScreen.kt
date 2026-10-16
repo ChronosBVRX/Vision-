@@ -573,7 +573,7 @@ private fun DownloadItemCard(
                     }
                     DownloadState.QUEUED -> {
                         Text(
-                            "Preparando descarga segura...",
+                            "En cola de descarga…",
                             style = MaterialTheme.typography.labelSmall,
                             color = VisionBlue,
                         )

@@ -48,10 +48,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.data.scoreLabel
+import com.chronosbvrx.visionplus.ui.player.episodeRowLabel
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.ui.EpisodePlay
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
@@ -64,8 +66,13 @@ import org.json.JSONObject
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.collectAsState
 import com.chronosbvrx.visionplus.data.offline.DownloadState
+import com.chronosbvrx.visionplus.data.offline.OfflineDownload
 import com.chronosbvrx.visionplus.data.offline.OfflineDownloadManager
 import com.chronosbvrx.visionplus.data.offline.OfflineRegistry
+import com.chronosbvrx.visionplus.data.offline.TvStorageRequiredException
+import com.chronosbvrx.visionplus.data.offline.seasonDownloadActionable
+import com.chronosbvrx.visionplus.data.offline.seasonDownloadLabel
+import com.chronosbvrx.visionplus.data.offline.seasonDownloadSummary
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 
 import androidx.compose.foundation.BorderStroke
@@ -154,6 +161,61 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
     val seasonTitlePrefix = if (film.seasons.size > 1) " · $activeSeasonLabel" else ""
     // Solo es serie con 2+ capítulos o 2+ temporadas: 1 capítulo suelto del portal es película.
     val isSeriesTitle = episodes.size > 1 || film.seasons.size > 1
+
+    // Descargas del dispositivo (reactivas): alimentan los botones por capítulo y de temporada.
+    val downloads by OfflineRegistry.downloadsFlow.collectAsState()
+    val downloadsOn = remember(film.id) {
+        com.chronosbvrx.visionplus.data.config.RemoteConfig.flag(context, "downloads_enabled", true)
+    }
+    val seasonDownloadItems = remember(downloads, film.id, episodes) {
+        episodes.map { code -> OfflineRegistry.findDownloadFor(film.id, code, context = context) }
+    }
+    val seasonSummary = remember(seasonDownloadItems) { seasonDownloadSummary(seasonDownloadItems) }
+
+    fun episodePlayFor(index: Int): EpisodePlay? {
+        val code = episodes.getOrNull(index) ?: return null
+        return EpisodePlay(
+            code = code,
+            titleSuffix = "$seasonTitlePrefix · C${index + 1}",
+            seriesId = activeId,
+            episodeIds = episodes,
+            episodeNames = episodeNames,
+            episodeIndex = index,
+            seasonIds = seasonIdList,
+            seasonNames = seasonNameList,
+            seasonIndex = seasonIdx,
+            durationMs = itemDurationMs,
+        )
+    }
+
+    // Descarga un capítulo (o el que la temporada tenga pendiente): el mismo camino que el botón
+    // de la ficha; reanudar un pausado/con error lo vuelve a encolar en la cola del motor.
+    val onDownloadEpisode: (Int) -> Unit = { index ->
+        episodePlayFor(index)?.let { ep ->
+            try {
+                OfflineDownloadManager.enqueueDownload(context, film, ep)
+            } catch (_: TvStorageRequiredException) {
+                Toast.makeText(context, "Conecta una memoria USB para descargar", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    val onSeasonDownload: () -> Unit = {
+        try {
+            val n = OfflineDownloadManager.enqueueSeason(
+                context = context,
+                film = film,
+                seasonId = activeId,
+                seasonIndex = seasonIdx,
+                episodeCodes = episodes,
+                durationMs = itemDurationMs,
+            )
+            if (n > 0) {
+                Toast.makeText(context, "Temporada en descarga · $n capítulos", Toast.LENGTH_SHORT).show()
+            }
+        } catch (_: TvStorageRequiredException) {
+            Toast.makeText(context, "Conecta una memoria USB para descargar", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // Adelanta el handshake del portal mientras se mira la ficha: pulsar Reproducir
     // no debe esperar el portal (lo mismo que hace la app del proveedor).
@@ -257,9 +319,13 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                         ) {
                             val inLater = remember(film.id) { mutableStateOf(UserLibrary.isWatchLater(context, film.id)) }
                             val inFavorites = remember(film.id) { mutableStateOf(UserLibrary.isFavorite(context, film.id)) }
-                            val downloads by OfflineRegistry.downloadsFlow.collectAsState()
-                            val downloadItem = remember(film.id, downloads) {
-                                OfflineRegistry.findDownloadFor(film.id, context = context)
+                            // El botón refleja el capítulo objetivo (el mismo que reproduce), no cualquier
+                            // descarga de la serie.
+                            val targetEpisodeCode = episodes.getOrNull(
+                                nextEpisodeIndex.coerceIn(0, (episodes.size - 1).coerceAtLeast(0)),
+                            )
+                            val downloadItem = remember(film.id, downloads, targetEpisodeCode) {
+                                OfflineRegistry.findDownloadFor(film.id, targetEpisodeCode, context = context)
                             }
 
                             TextButton(onClick = {
@@ -351,42 +417,21 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                     }
                                 }
                                 else -> {
-                                    val downloadsOn = remember(film.id) {
-                                        com.chronosbvrx.visionplus.data.config.RemoteConfig.flag(context, "downloads_enabled", true)
-                                    }
                                     TextButton(
                                         enabled = downloadsOn,
                                         onClick = {
-                                        // Las series descargan el capítulo objetivo (mismo que Reproducir),
-                                        // no la ficha: sin esto siempre intentaba el seriesId y fallaba.
-                                        val targetIdx = nextEpisodeIndex.coerceIn(0, (episodes.size - 1).coerceAtLeast(0))
-                                        val targetEp = episodes.getOrNull(targetIdx)
-                                        val ep = when {
-                                            isSeriesTitle && targetEp != null -> EpisodePlay(
-                                                code = targetEp,
-                                                titleSuffix = "$seasonTitlePrefix · C${targetIdx + 1}",
-                                                seriesId = activeId,
-                                                episodeIds = episodes,
-                                                episodeNames = episodeNames,
-                                                episodeIndex = targetIdx,
-                                                seasonIds = seasonIdList,
-                                                seasonNames = seasonNameList,
-                                                seasonIndex = seasonIdx,
-                                                durationMs = itemDurationMs,
-                                            )
-                                            film.seasons.size > 1 && isSeriesTitle -> EpisodePlay(
-                                                code = activeId,
-                                                titleSuffix = "$seasonTitlePrefix · C1",
-                                                seriesId = activeId,
-                                                seasonIds = seasonIdList,
-                                                seasonNames = seasonNameList,
-                                                seasonIndex = seasonIdx,
-                                                durationMs = itemDurationMs,
-                                            )
-                                            else -> null
-                                        }
-                                        OfflineDownloadManager.enqueueDownload(context, film, ep)
-                                    },
+                                            // Las series descargan el capítulo objetivo (mismo que Reproducir),
+                                            // no la ficha: sin esto siempre intentaba el seriesId y fallaba.
+                                            if (isSeriesTitle && episodes.isNotEmpty()) {
+                                                onDownloadEpisode(nextEpisodeIndex.coerceIn(0, episodes.lastIndex))
+                                            } else {
+                                                try {
+                                                    OfflineDownloadManager.enqueueDownload(context, film, null)
+                                                } catch (_: TvStorageRequiredException) {
+                                                    Toast.makeText(context, "Conecta una memoria USB para descargar", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        },
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             if (downloadsOn) {
@@ -411,6 +456,7 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                 seasons = film.seasons,
                                 activeId = activeId,
                                 posterUrl = film.posterUrl,
+                                seriesTitle = film.title,
                                 onSelectSeason = { selectedSeason = it },
                                 episodePrograms = episodePrograms,
                                 watchedCount = watchedCount,
@@ -439,6 +485,13 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                         ),
                                     )
                                 },
+                                downloads = downloads,
+                                downloadsOn = downloadsOn,
+                                seasonSummary = seasonSummary,
+                                onSeasonDownload = onSeasonDownload,
+                                onDownloadEpisode = onDownloadEpisode,
+                                onPlayDownloaded = { playUri -> onPlay(EpisodePlay(code = playUri)) },
+                                filmId = film.id,
                             )
                         }
                         Synopsis(description)
@@ -451,26 +504,12 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
     }
 }
 
-private fun cleanEpisodeTitle(rawName: String, epNumber: Int): String {
-    val trimmed = rawName.trim()
-    if (trimmed.isBlank()) return "Capítulo $epNumber"
-    if (
-        trimmed.equals("Capítulo $epNumber", ignoreCase = true) ||
-        trimmed.equals("Capitulo $epNumber", ignoreCase = true) ||
-        trimmed.equals("Episodio $epNumber", ignoreCase = true) ||
-        trimmed.equals("Episode $epNumber", ignoreCase = true) ||
-        trimmed == epNumber.toString()
-    ) {
-        return "Capítulo $epNumber"
-    }
-    return trimmed
-}
-
 @Composable
 private fun MobileSeriesSelectorSection(
     seasons: List<com.chronosbvrx.visionplus.data.SeasonRef>,
     activeId: String,
     posterUrl: String,
+    seriesTitle: String,
     onSelectSeason: (com.chronosbvrx.visionplus.data.SeasonRef) -> Unit,
     episodePrograms: List<X4KApi.EpisodeProgram>,
     watchedCount: Int,
@@ -478,6 +517,13 @@ private fun MobileSeriesSelectorSection(
     watchedTick: Int,
     onToggleWatched: (Int) -> Unit,
     onSelectEpisode: (Int, X4KApi.EpisodeProgram) -> Unit,
+    filmId: String,
+    downloads: List<OfflineDownload>,
+    downloadsOn: Boolean,
+    seasonSummary: com.chronosbvrx.visionplus.data.offline.SeasonDownloadSummary,
+    onSeasonDownload: () -> Unit,
+    onDownloadEpisode: (Int) -> Unit,
+    onPlayDownloaded: (String) -> Unit,
 ) {
     val context = LocalContext.current
     Column(
@@ -526,6 +572,58 @@ private fun MobileSeriesSelectorSection(
                     color = VisionBlueBright,
                     fontWeight = FontWeight.SemiBold,
                 )
+            }
+        }
+
+        // Descargar la temporada completa: la cola del motor va bajando un capítulo por uno.
+        if (downloadsOn && episodePrograms.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            val actionable = seasonDownloadActionable(seasonSummary)
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 14.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (actionable) VisionBlue.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.05f))
+                    .border(
+                        1.dp,
+                        if (actionable) VisionBlue.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.1f),
+                        RoundedCornerShape(12.dp),
+                    )
+                    .clickable(enabled = actionable) { onSeasonDownload() }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (seasonSummary.active > 0) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = VisionBlue,
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        if (seasonSummary.allDone) VisionIcons.Downloaded else VisionIcons.Download,
+                        contentDescription = null,
+                        tint = if (actionable || seasonSummary.allDone) VisionBlue else VisionTextSecondary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Text(
+                    seasonDownloadLabel(seasonSummary),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (actionable || seasonSummary.active > 0 || seasonSummary.allDone) Color.White else VisionTextSecondary,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                if (actionable) {
+                    Icon(
+                        VisionIcons.Download,
+                        contentDescription = null,
+                        tint = VisionBlue,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
 
@@ -590,7 +688,7 @@ private fun MobileSeriesSelectorSection(
                         UserLibrary.isEpisodeWatched(context, activeId, index + 1)
                     }
                     val isNext = index == nextEpisodeIndex
-                    val epTitle = cleanEpisodeTitle(ep.name, index + 1)
+                    val epTitle = episodeRowLabel(ep.name, index + 1, seriesTitle)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -689,6 +787,69 @@ private fun MobileSeriesSelectorSection(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = VisionBlueBright,
                                         fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                            }
+                        }
+                        // Descarga offline del capítulo: descargar / en cola / % / reproducir.
+                        if (downloadsOn) {
+                            val dl = remember(downloads, filmId, index) {
+                                downloads.firstOrNull { it.id == "$filmId:ep:${ep.contentId}" }
+                                    ?: downloads.firstOrNull { it.id.endsWith(":ep:${ep.contentId}") }
+                            }
+                            Box(
+                                Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() },
+                                    ) {
+                                        when {
+                                            dl == null -> onDownloadEpisode(index)
+                                            dl.state == DownloadState.COMPLETED -> onPlayDownloaded(dl.playUri)
+                                            dl.state == DownloadState.DOWNLOADING || dl.state == DownloadState.QUEUED -> Unit
+                                            else -> onDownloadEpisode(index)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                when {
+                                    dl == null -> Icon(
+                                        VisionIcons.Download,
+                                        contentDescription = "Descargar capítulo",
+                                        tint = VisionBlue.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    dl.state == DownloadState.DOWNLOADING -> CircularProgressIndicator(
+                                        progress = { dl.progressFraction },
+                                        modifier = Modifier.size(18.dp),
+                                        color = VisionBlue,
+                                        strokeWidth = 2.dp,
+                                    )
+                                    dl.state == DownloadState.COMPLETED -> Icon(
+                                        VisionIcons.Downloaded,
+                                        contentDescription = "Reproducir descarga",
+                                        tint = VisionBlue,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    dl.state == DownloadState.QUEUED -> Icon(
+                                        VisionIcons.Download,
+                                        contentDescription = "En cola de descarga",
+                                        tint = VisionTextSecondary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    dl.state == DownloadState.PAUSED || dl.state == DownloadState.ERROR -> Icon(
+                                        VisionIcons.Replay,
+                                        contentDescription = "Reanudar descarga",
+                                        tint = VisionBlue,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    else -> Icon(
+                                        VisionIcons.Download,
+                                        contentDescription = "Descargar capítulo",
+                                        tint = VisionBlue.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(20.dp),
                                     )
                                 }
                             }

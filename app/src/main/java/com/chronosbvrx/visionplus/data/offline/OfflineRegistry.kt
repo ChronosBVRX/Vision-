@@ -205,10 +205,13 @@ object OfflineRegistry {
     fun findDownloadFor(filmId: String, episodeCode: String? = null, context: Context? = null): OfflineDownload? {
         context?.let { ensureInit(it) }
         synchronized(lock) {
-            val targetId = if (!episodeCode.isNullOrBlank()) "$filmId:ep:$episodeCode" else filmId
-            return memoryMap[targetId] ?: memoryMap.values.firstOrNull {
-                it.contentId == filmId || (episodeCode != null && it.id.endsWith(episodeCode))
+            if (!episodeCode.isNullOrBlank()) {
+                // Con capítulo objetivo: SOLO su descarga exacta (nada de mostrar el estado
+                // de otro capítulo de la serie en un botón que encarga este).
+                return memoryMap["$filmId:ep:$episodeCode"]
+                    ?: memoryMap.values.firstOrNull { it.id.endsWith(":ep:$episodeCode") }
             }
+            return memoryMap[filmId] ?: memoryMap.values.firstOrNull { it.contentId == filmId }
         }
     }
 

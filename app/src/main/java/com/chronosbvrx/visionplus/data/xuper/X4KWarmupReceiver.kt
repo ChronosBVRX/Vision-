@@ -14,6 +14,17 @@ import com.chronosbvrx.visionplus.ui.player.X4KPlayerAty
  */
 class X4KWarmupReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
+        // Reinicio ordenado del proceso pedido por el principal (descargas): el motor
+        // headless exige un proceso en el que la vista del reproductor no haya reproducido.
+        // Sin reproducción activa, el proceso entero se reinicia; el principal espera a que
+        // muera y recién entonces encarga la descarga (que nacerá en un proceso limpio).
+        if (intent?.action == ACTION_DIE_FOR_DOWNLOADS) {
+            if (!X4KPlayerAty.isPlayerActive) {
+                Log.i("X4KWarmupReceiver", "proceso :x4k reiniciado para descargas (residencia)")
+                android.os.Process.killProcess(android.os.Process.myPid())
+            }
+            return
+        }
         if (X4KPlayerAty.isPlayerActive) return
         val appCtx = context.applicationContext
         val entriesJson = intent?.getStringExtra("entriesJson")
@@ -54,5 +65,10 @@ class X4KWarmupReceiver : BroadcastReceiver() {
                 runCatching { pending.finish() }
             }
         }.start()
+    }
+
+    companion object {
+        /** Orden del principal: el proceso `:x4k` se reinicia antes de una descarga. */
+        const val ACTION_DIE_FOR_DOWNLOADS = "com.chronosbvrx.visionplus.action.X4K_DIE_FOR_DOWNLOADS"
     }
 }

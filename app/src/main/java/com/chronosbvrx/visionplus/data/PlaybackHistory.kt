@@ -150,7 +150,7 @@ object PlaybackHistory {
 
     internal fun entryFromJson(o: JSONObject): ResumeEntry = ResumeEntry(
         key = o.optString("key"),
-        title = o.optString("title"),
+        title = normalizeDisplayName(o.optString("title")),
         posterUrl = o.optString("posterUrl"),
         videoUrl = o.optString("videoUrl"),
         xtvCode = o.optString("xtvCode"),

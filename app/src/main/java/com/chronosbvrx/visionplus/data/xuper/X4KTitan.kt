@@ -204,9 +204,23 @@ object X4KTitan {
         }
     }
 
+    /**
+     * ABI cuyas libs se extraen: la primera de [android.os.Build.SUPPORTED_ABIS] que exista en
+     * assets. En un emulador x86_64 con traducción ARM la lista es ["x86_64", "arm64-v8a"] y no
+     * hay carpeta x86_64 (el SDK es ARM): sin el filtro la extracción no copiaba nada y el motor
+     * moría con UnsatisfiedLinkError. En teléfonos no cambia nada (arm64-v8a/armeabi-v7a existen).
+     */
+    private fun pickNativeAbi(app: Context): String {
+        val candidates = android.os.Build.SUPPORTED_ABIS.toList() + listOf("arm64-v8a", "armeabi-v7a")
+        return candidates.distinct().firstOrNull { candidate ->
+            runCatching { !app.assets.list("x4k/lib/$candidate").isNullOrEmpty() }
+                .getOrDefault(false)
+        } ?: "arm64-v8a"
+    }
+
     /** Copies the X4K .so set from assets into a private directory the loader can search. */
     private fun extractNativeLibs(app: Context): File {
-        val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
+        val abi = pickNativeAbi(app)
         val libDir = File(app.filesDir, "x4k-libs").apply { mkdirs() }
         LIB_NAMES.forEach { name ->
             val out = File(libDir, name)

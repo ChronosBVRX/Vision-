@@ -34,6 +34,7 @@ import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.data.scoreLabel
 import com.chronosbvrx.visionplus.ui.EpisodePlay
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
+import com.chronosbvrx.visionplus.ui.player.episodeRowLabel
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
@@ -41,10 +42,16 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import org.json.JSONObject
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import com.chronosbvrx.visionplus.data.offline.DownloadState
+import com.chronosbvrx.visionplus.data.offline.OfflineDownload
 import com.chronosbvrx.visionplus.data.offline.OfflineDownloadManager
 import com.chronosbvrx.visionplus.data.offline.OfflineRegistry
 import com.chronosbvrx.visionplus.data.offline.TvStorageRequiredException
+import com.chronosbvrx.visionplus.data.offline.seasonDownloadActionable
+import com.chronosbvrx.visionplus.data.offline.seasonDownloadLabel
+import com.chronosbvrx.visionplus.data.offline.seasonDownloadSummary
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -154,6 +161,56 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
     val seasonTitlePrefix = if (film.seasons.size > 1) " · $activeSeasonLabel" else ""
     // Solo es serie con 2+ capítulos o 2+ temporadas: 1 capítulo suelto del portal es película.
     val isSeriesTitle = episodes.size > 1 || film.seasons.size > 1
+
+    // Descargas (reactivas): botones por capítulo, temporada completa y aviso sin USB.
+    val downloads by OfflineRegistry.downloadsFlow.collectAsState()
+    var showNoUsbDialog by remember { mutableStateOf(false) }
+    val downloadsOn = remember(film.id) {
+        com.chronosbvrx.visionplus.data.config.RemoteConfig.flag(context, "downloads_enabled", true)
+    }
+    val seasonDownloadItems = remember(downloads, film.id, episodes) {
+        episodes.map { code -> OfflineRegistry.findDownloadFor(film.id, code, context = context) }
+    }
+    val seasonSummary = remember(seasonDownloadItems) { seasonDownloadSummary(seasonDownloadItems) }
+
+    fun episodePlayFor(index: Int): EpisodePlay? {
+        val code = episodes.getOrNull(index) ?: return null
+        return EpisodePlay(
+            code = code,
+            titleSuffix = "$seasonTitlePrefix · C${index + 1}",
+            seriesId = activeId,
+            episodeIds = episodes,
+            episodeNames = episodeNames,
+            episodeIndex = index,
+            seasonIds = seasonIdList,
+            seasonNames = seasonNameList,
+            seasonIndex = seasonIdx,
+            durationMs = itemDurationMs,
+        )
+    }
+    val onDownloadEpisode: (Int) -> Unit = { index ->
+        episodePlayFor(index)?.let { ep ->
+            try {
+                OfflineDownloadManager.enqueueDownload(context, film, ep)
+            } catch (_: TvStorageRequiredException) {
+                showNoUsbDialog = true
+            }
+        }
+    }
+    val onSeasonDownload: () -> Unit = {
+        try {
+            OfflineDownloadManager.enqueueSeason(
+                context = context,
+                film = film,
+                seasonId = activeId,
+                seasonIndex = seasonIdx,
+                episodeCodes = episodes,
+                durationMs = itemDurationMs,
+            )
+        } catch (_: TvStorageRequiredException) {
+            showNoUsbDialog = true
+        }
+    }
 
     // Adelanta el handshake del portal mientras se mira la ficha: pulsar Reproducir
     // no debe esperar (en cajas lentas son 1-4 s). Silencioso y de una sola vez.
@@ -374,11 +431,6 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                 }
                 val inLater = remember(film.id) { mutableStateOf(UserLibrary.isWatchLater(context, film.id)) }
                 val inFavorites = remember(film.id) { mutableStateOf(UserLibrary.isFavorite(context, film.id)) }
-                val downloads by OfflineRegistry.downloadsFlow.collectAsState()
-                val tvDownload = remember(film.id, downloads) {
-                    OfflineRegistry.findDownloadFor(film.id, context = context)
-                }
-                var showNoUsbDialog by remember { mutableStateOf(false) }
 
                 if (showNoUsbDialog) {
                     TvNoUsbDialog(onDismiss = { showNoUsbDialog = false })
@@ -416,6 +468,12 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                 val downloadsOn = remember(film.id) {
                     com.chronosbvrx.visionplus.data.config.RemoteConfig.flag(context, "downloads_enabled", true)
                 }
+                val targetEpisodeCode = episodes.getOrNull(
+                    nextEpisodeIndex.coerceIn(0, (episodes.size - 1).coerceAtLeast(0)),
+                )
+                val tvDownload = remember(film.id, downloads, targetEpisodeCode) {
+                    OfflineRegistry.findDownloadFor(film.id, targetEpisodeCode, context = context)
+                }
                 val downloadLabel = when (tvDownload?.state) {
                     DownloadState.COMPLETED -> "En USB (${tvDownload.formattedSize})"
                     DownloadState.DOWNLOADING -> "Descargando ${tvDownload.progressPercent}%"
@@ -434,37 +492,15 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                     if (tvDownload?.state == DownloadState.COMPLETED) {
                         onPlay(EpisodePlay(code = tvDownload.playUri))
                     } else {
-                        try {
-                            // Las series descargan el capítulo objetivo (mismo que Reproducir).
-                            val targetIdx = nextEpisodeIndex.coerceIn(0, (episodes.size - 1).coerceAtLeast(0))
-                            val targetEp = episodes.getOrNull(targetIdx)
-                            val ep = when {
-                                isSeriesTitle && targetEp != null -> EpisodePlay(
-                                    code = targetEp,
-                                    titleSuffix = "$seasonTitlePrefix · C${targetIdx + 1}",
-                                    seriesId = activeId,
-                                    episodeIds = episodes,
-                                    episodeNames = episodeNames,
-                                    episodeIndex = targetIdx,
-                                    seasonIds = seasonIdList,
-                                    seasonNames = seasonNameList,
-                                    seasonIndex = seasonIdx,
-                                    durationMs = itemDurationMs,
-                                )
-                                film.seasons.size > 1 && isSeriesTitle -> EpisodePlay(
-                                    code = activeId,
-                                    titleSuffix = "$seasonTitlePrefix · C1",
-                                    seriesId = activeId,
-                                    seasonIds = seasonIdList,
-                                    seasonNames = seasonNameList,
-                                    seasonIndex = seasonIdx,
-                                    durationMs = itemDurationMs,
-                                )
-                                else -> null
+                        // Las series descargan el capítulo objetivo (mismo que Reproducir).
+                        if (isSeriesTitle && episodes.isNotEmpty()) {
+                            onDownloadEpisode(nextEpisodeIndex.coerceIn(0, episodes.lastIndex))
+                        } else {
+                            try {
+                                OfflineDownloadManager.enqueueDownload(context, film, null)
+                            } catch (_: TvStorageRequiredException) {
+                                showNoUsbDialog = true
                             }
-                            OfflineDownloadManager.enqueueDownload(context, film, ep)
-                        } catch (_: TvStorageRequiredException) {
-                            showNoUsbDialog = true
                         }
                     }
                 }
@@ -475,6 +511,7 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                     seasons = film.seasons,
                     activeId = activeId,
                     posterUrl = film.posterUrl,
+                    seriesTitle = film.title,
                     onSelectSeason = { selectedSeason = it },
                     episodePrograms = episodePrograms,
                     watchedCount = watchedCount,
@@ -503,6 +540,13 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                             ),
                         )
                     },
+                    filmId = film.id,
+                    downloads = downloads,
+                    downloadsOn = downloadsOn,
+                    seasonSummary = seasonSummary,
+                    onSeasonDownload = onSeasonDownload,
+                    onDownloadEpisode = onDownloadEpisode,
+                    onPlayDownloaded = { playUri -> onPlay(EpisodePlay(code = playUri)) },
                 )
             } else {
                 Spacer(Modifier.height(16.dp))
@@ -511,26 +555,12 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
     }
 }
 
-private fun cleanTvEpisodeTitle(rawName: String, epNumber: Int): String {
-    val trimmed = rawName.trim()
-    if (trimmed.isBlank()) return "Capítulo $epNumber"
-    if (
-        trimmed.equals("Capítulo $epNumber", ignoreCase = true) ||
-        trimmed.equals("Capitulo $epNumber", ignoreCase = true) ||
-        trimmed.equals("Episodio $epNumber", ignoreCase = true) ||
-        trimmed.equals("Episode $epNumber", ignoreCase = true) ||
-        trimmed == epNumber.toString()
-    ) {
-        return "Capítulo $epNumber"
-    }
-    return trimmed
-}
-
 @Composable
 private fun TvSeriesSelectorPanel(
     seasons: List<com.chronosbvrx.visionplus.data.SeasonRef>,
     activeId: String,
     posterUrl: String,
+    seriesTitle: String,
     onSelectSeason: (com.chronosbvrx.visionplus.data.SeasonRef) -> Unit,
     episodePrograms: List<X4KApi.EpisodeProgram>,
     watchedCount: Int,
@@ -538,6 +568,13 @@ private fun TvSeriesSelectorPanel(
     watchedTick: Int,
     onToggleWatched: (Int) -> Unit,
     onSelectEpisode: (Int, X4KApi.EpisodeProgram) -> Unit,
+    filmId: String,
+    downloads: List<OfflineDownload>,
+    downloadsOn: Boolean,
+    seasonSummary: com.chronosbvrx.visionplus.data.offline.SeasonDownloadSummary,
+    onSeasonDownload: () -> Unit,
+    onDownloadEpisode: (Int) -> Unit,
+    onPlayDownloaded: (String) -> Unit,
 ) {
     val context = LocalContext.current
     Column(
@@ -588,6 +625,22 @@ private fun TvSeriesSelectorPanel(
                     fontWeight = FontWeight.SemiBold,
                 )
             }
+        }
+
+        // Descargar la temporada completa al USB: la cola baja un capítulo por uno.
+        if (downloadsOn && episodePrograms.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            val actionable = seasonDownloadActionable(seasonSummary)
+            TvCompactAction(
+                label = seasonDownloadLabel(seasonSummary),
+                icon = when {
+                    seasonSummary.allDone -> VisionIcons.Downloaded
+                    seasonSummary.active > 0 -> VisionIcons.Download
+                    else -> VisionIcons.Usb
+                },
+                modifier = Modifier.padding(horizontal = 16.dp),
+                onClick = { if (actionable) onSeasonDownload() },
+            )
         }
 
         if (seasons.size > 1) {
@@ -660,104 +713,177 @@ private fun TvSeriesSelectorPanel(
                         UserLibrary.isEpisodeWatched(context, activeId, index + 1)
                     }
                     val isNext = index == nextEpisodeIndex
-                    val epTitle = cleanTvEpisodeTitle(ep.name, index + 1)
-                    Surface(
-                        onClick = { onSelectEpisode(index, ep) },
-                        // Mantener OK alterna visto/no-visto sin reproducir (mando de TV).
-                        onLongClick = { onToggleWatched(index) },
-                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
-                        colors = ClickableSurfaceDefaults.colors(
-                            containerColor = VisionSurfaceHigh,
-                            contentColor = Color.White,
-                            focusedContainerColor = VisionSurfaceHigh,
-                            focusedContentColor = Color.White,
-                            pressedContainerColor = VisionSurfaceHigh,
-                            pressedContentColor = Color.White,
-                        ),
-                        border = ClickableSurfaceDefaults.border(
-                            border = Border(
-                                BorderStroke(
-                                    if (isNext) 1.5.dp else 1.dp,
-                                    when {
-                                        isNext -> VisionBlueBright
-                                        watched -> VisionBlue.copy(alpha = 0.4f)
-                                        else -> Color.White.copy(alpha = 0.12f)
-                                    },
-                                ),
+                    val epTitle = episodeRowLabel(ep.name, index + 1, seriesTitle)
+                    val dl = remember(downloads, filmId, index) {
+                        downloads.firstOrNull { it.id == "$filmId:ep:${ep.contentId}" }
+                            ?: downloads.firstOrNull { it.id.endsWith(":ep:${ep.contentId}") }
+                    }
+                    val cardFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+                    val chipFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+                    Column(Modifier.width(240.dp)) {
+                        Surface(
+                            onClick = { onSelectEpisode(index, ep) },
+                            // Mantener OK alterna visto/no-visto sin reproducir (mando de TV).
+                            onLongClick = { onToggleWatched(index) },
+                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
+                            colors = ClickableSurfaceDefaults.colors(
+                                containerColor = VisionSurfaceHigh,
+                                contentColor = Color.White,
+                                focusedContainerColor = VisionSurfaceHigh,
+                                focusedContentColor = Color.White,
+                                pressedContainerColor = VisionSurfaceHigh,
+                                pressedContentColor = Color.White,
                             ),
-                            focusedBorder = Border(BorderStroke(2.5.dp, Color.White)),
-                        ),
-                        modifier = Modifier.width(240.dp),
-                    ) {
-                        Column {
-                            // Miniatura con la portada de la serie: el portal no trae stills
-                            // por episodio, así que la cifra del capítulo vive sobre el arte.
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(16f / 9f)
-                                    .clip(RoundedCornerShape(topStart = 13.dp, topEnd = 13.dp)),
-                            ) {
-                                if (posterUrl.isNotBlank()) {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context).data(posterUrl).size(480, 270).build(),
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                }
-                                Box(
-                                    Modifier.fillMaxSize().background(
-                                        Brush.verticalGradient(
-                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
-                                        ),
+                            border = ClickableSurfaceDefaults.border(
+                                border = Border(
+                                    BorderStroke(
+                                        if (isNext) 1.5.dp else 1.dp,
+                                        when {
+                                            isNext -> VisionBlueBright
+                                            watched -> VisionBlue.copy(alpha = 0.4f)
+                                            else -> Color.White.copy(alpha = 0.12f)
+                                        },
                                     ),
-                                )
+                                ),
+                                focusedBorder = Border(BorderStroke(2.5.dp, Color.White)),
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(cardFocus)
+                                .focusProperties { down = chipFocus },
+                        ) {
+                            Column {
+                                // Miniatura con la portada de la serie: el portal no trae stills
+                                // por episodio, así que la cifra del capítulo vive sobre el arte.
                                 Box(
                                     Modifier
-                                        .align(Alignment.BottomStart)
-                                        .padding(8.dp)
-                                        .background(
-                                            if (isNext) VisionBlue else VisionBlack.copy(alpha = 0.82f),
-                                            RoundedCornerShape(7.dp),
-                                        )
-                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                        .fillMaxWidth()
+                                        .aspectRatio(16f / 9f)
+                                        .clip(RoundedCornerShape(topStart = 13.dp, topEnd = 13.dp)),
                                 ) {
-                                    Text(
-                                        "C${index + 1}",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                }
-                            }
-                            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                                Text(
-                                    text = epTitle,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                if (watched || isNext) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        modifier = Modifier.padding(top = 3.dp),
-                                    ) {
-                                        Icon(
-                                            if (watched) VisionIcons.CheckCircle else VisionIcons.Play,
+                                    if (posterUrl.isNotBlank()) {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context).data(posterUrl).size(480, 270).build(),
                                             contentDescription = null,
-                                            tint = if (watched) VisionSuccess else VisionBlueBright,
-                                            modifier = Modifier.size(14.dp),
-                                        )
-                                        Text(
-                                            if (watched) "Visto" else "Siguiente",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (watched) VisionSuccess else VisionBlueBright,
-                                            fontWeight = FontWeight.SemiBold,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize(),
                                         )
                                     }
+                                    Box(
+                                        Modifier.fillMaxSize().background(
+                                            Brush.verticalGradient(
+                                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
+                                            ),
+                                        ),
+                                    )
+                                    Box(
+                                        Modifier
+                                            .align(Alignment.BottomStart)
+                                            .padding(8.dp)
+                                            .background(
+                                                if (isNext) VisionBlue else VisionBlack.copy(alpha = 0.82f),
+                                                RoundedCornerShape(7.dp),
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                                    ) {
+                                        Text(
+                                            "C${index + 1}",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                }
+                                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                    Text(
+                                        text = epTitle,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (watched || isNext) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier.padding(top = 3.dp),
+                                        ) {
+                                            Icon(
+                                                if (watched) VisionIcons.CheckCircle else VisionIcons.Play,
+                                                contentDescription = null,
+                                                tint = if (watched) VisionSuccess else VisionBlueBright,
+                                                modifier = Modifier.size(14.dp),
+                                            )
+                                            Text(
+                                                if (watched) "Visto" else "Siguiente",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (watched) VisionSuccess else VisionBlueBright,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Descarga del capítulo al USB (segundo control de la tarjeta, con D-pad).
+                        if (downloadsOn) {
+                            Surface(
+                                onClick = {
+                                    when {
+                                        dl == null -> onDownloadEpisode(index)
+                                        dl.state == DownloadState.COMPLETED -> onPlayDownloaded(dl.playUri)
+                                        dl.state == DownloadState.DOWNLOADING || dl.state == DownloadState.QUEUED -> Unit
+                                        else -> onDownloadEpisode(index)
+                                    }
+                                },
+                                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
+                                colors = ClickableSurfaceDefaults.colors(
+                                    containerColor = VisionBlack.copy(alpha = 0.35f),
+                                    contentColor = Color.White,
+                                    focusedContainerColor = VisionBlue,
+                                    focusedContentColor = Color.White,
+                                    pressedContainerColor = VisionBlue,
+                                    pressedContentColor = Color.White,
+                                ),
+                                border = ClickableSurfaceDefaults.border(
+                                    border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f))),
+                                    focusedBorder = Border(BorderStroke(2.dp, Color.White)),
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 6.dp)
+                                    .focusRequester(chipFocus)
+                                    .focusProperties { up = cardFocus },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        when {
+                                            dl == null -> VisionIcons.Download
+                                            dl.state == DownloadState.COMPLETED -> VisionIcons.Downloaded
+                                            dl.state == DownloadState.PAUSED || dl.state == DownloadState.ERROR -> VisionIcons.Replay
+                                            else -> VisionIcons.Download
+                                        },
+                                        contentDescription = null,
+                                        modifier = Modifier.size(15.dp),
+                                    )
+                                    Spacer(Modifier.width(7.dp))
+                                    Text(
+                                        when {
+                                            dl == null -> "Descargar"
+                                            dl.state == DownloadState.COMPLETED -> "Descargado · Reproducir"
+                                            dl.state == DownloadState.DOWNLOADING -> "${dl.progressPercent}%"
+                                            dl.state == DownloadState.QUEUED -> "En cola"
+                                            dl.state == DownloadState.PAUSED -> "Reanudar"
+                                            else -> "Reintentar"
+                                        },
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                 }
                             }
                         }

@@ -2,6 +2,7 @@ package com.chronosbvrx.visionplus.ui.player
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Canvas
@@ -156,6 +157,7 @@ class X4KPlayerAty : ComponentActivity() {
     private var creditsCardShown = false
     private var postCreditsShown = false
     private var introPill: TextView? = null
+    private var introPillId = -1
     private var postCreditsNotice: TextView? = null
     private var skipIntroMode = "button"
 
@@ -265,13 +267,24 @@ class X4KPlayerAty : ComponentActivity() {
     /** La espera de marca se está desvaneciendo (evita relanzar el fundido en cada sondeo). */
     private var loadingFading = false
 
+    /** «Camino B»: generación de la reproducción — invalida hilos y retrys de la anterior. */
+    @Volatile
+    private var playGen = 0
+
+    /** El auto-reparado del motor pidió arranque limpio: a la salida se cierra y reinicia el proceso. */
+    private var hardResetNext = false
+
+    /** Salida ya en curso (evita dobles rutas Atrás/Volver). */
+    private var exiting = false
+
+    /** Marca del doble Atrás para salir. */
+    private var lastBackPressTime = 0L
+
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Identidad del portal en este proceso (:x4k tiene su propia memoria).
         com.chronosbvrx.visionplus.data.xuper.X4KApi.initSlots(this)
-        isPlayerActive = true
-        startedAtMs = System.currentTimeMillis()
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         applyImmersiveMode()
@@ -282,6 +295,40 @@ class X4KPlayerAty : ComponentActivity() {
             root,
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
         )
+        installBackCallback()
+        handleLaunchIntent(intent)
+    }
+
+    /**
+     * «Camino B» (estilo app del proveedor): una sola vista del motor para toda la vida del
+     * proceso `:x4k`. Cada reproducción nueva reutiliza esa MISMA vista (stop → play
+     * in-place, el patrón del zapping que el motor sí admite) y solo se reconstruyen las
+     * capas de UI por encima: el proceso, el motor y la vista quedan calientes y abrir un
+     * canal o título deja de pagar el arranque en frío de cada vez.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        Log.i(TAG, "reproductor residente: vista reutilizada para el nuevo play")
+        // Los retrys y sondeos de la reproducción anterior ya no mandan.
+        handler.removeCallbacksAndMessages(null)
+        playerView?.let { runCatching { X4KTitan.stop(it) } }
+        handleLaunchIntent(intent)
+    }
+
+    /**
+     * Monta una reproducción (la primera en `onCreate` o la siguiente en `onNewIntent`) sobre
+     * la vista del motor: estado y overlays se rehacen por completo en cada llamada.
+     */
+    private fun handleLaunchIntent(intent: Intent) {
+        isPlayerActive = true
+        exiting = false
+        startedAtMs = System.currentTimeMillis()
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        applyImmersiveMode()
+        playGen += 1
+        resetForNewPlay()
+        if (playerView != null) teardownPlaySurfaces()
 
         val mode = intent.getStringExtra("mode") ?: "vod"
         val code = intent.getStringExtra("code").orEmpty()
@@ -295,6 +342,7 @@ class X4KPlayerAty : ComponentActivity() {
             val codes = intent.getStringArrayListExtra("channelCodes")
             // Resolver lista completa de canales en segundo plano para no bloquear el arranque del reproductor
             Thread {
+                val gen = playGen
                 val allLive = X4KApi.cachedLive(applicationContext)
                 var resolvedArr = if (!codes.isNullOrEmpty()) {
                     val codeMap = HashMap<String, JSONObject>(allLive.length())
@@ -317,11 +365,13 @@ class X4KPlayerAty : ComponentActivity() {
                 if (resolvedArr.length() == 0 && !codes.isNullOrEmpty()) {
                     resolvedArr = X4KApi.liveStubsForCodes(codes)
                 }
+                if (gen != playGen) return@Thread
                 liveChannels = resolvedArr
                 var idx = findChannelIndex(curCode.ifBlank { code })
                 if (idx < 0 && resolvedArr.length() > 0) idx = 0
                 liveIndex = idx
                 runOnUiThread {
+                    if (gen != playGen) return@runOnUiThread
                     updateLiveBanner()
                     updateFavButtonState()
                 }
@@ -346,6 +396,7 @@ class X4KPlayerAty : ComponentActivity() {
         }.orEmpty()
         curSeries = intent.getStringExtra("seriesId").orEmpty()
         if (declaredDurationMs <= 0L && !liveMode) {
+            val gen = playGen
             Thread {
                 var d = 0L
                 if (code.isNotBlank()) {
@@ -366,6 +417,7 @@ class X4KPlayerAty : ComponentActivity() {
                 }
                 if (d > 0L) {
                     runOnUiThread {
+                        if (gen != playGen) return@runOnUiThread
                         if (declaredDurationMs <= 0L || (d > declaredDurationMs && declaredDurationMs < 60_000L)) {
                             declaredDurationMs = d
                             timeTotal?.text = fmt(d)
@@ -403,12 +455,14 @@ class X4KPlayerAty : ComponentActivity() {
         markSeasonRef = if (curSeries.isNotBlank()) "xtv:$curSeries" else ""
         applyMarkers(intent.getStringExtra("markersJson").orEmpty())
         if (!liveMode && curSeries.isNotBlank() && (epIds.isEmpty() || epNames.isEmpty())) {
+            val gen = playGen
             Thread {
                 val programs = kotlinx.coroutines.runBlocking {
                     X4KApi.episodeProgramsFor(this@X4KPlayerAty, curSeries)
                 }
                 if (programs.isNotEmpty()) {
                     runOnUiThread {
+                        if (gen != playGen) return@runOnUiThread
                         if (epIds.isEmpty()) {
                             epIds = ArrayList(programs.map { it.contentId })
                             val targetCode = curCode.ifBlank { code }
@@ -426,48 +480,6 @@ class X4KPlayerAty : ComponentActivity() {
             }.start()
         }
 
-        var lastBackPressTime = 0L
-
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (resumeOverlay != null) {
-                    // Atrás en el diálogo = continuar donde quedó (no destructivo).
-                    acceptResume()
-                    return
-                }
-                if (picking) {
-                    dismissPicker()
-                    return
-                }
-                if (nextVisible) {
-                    nextDismissed = true
-                    hideNext()
-                    return
-                }
-                if (!errorShown && controlsVisible) {
-                    hideControls()
-                    lastBackPressTime = System.currentTimeMillis()
-                    return
-                }
-                // Leaving during the pre-roll just leaves: the film never starts.
-                if (introView != null) {
-                    pendingPlay = null
-                    introView?.let { root().removeView(it) }
-                    introView = null
-                    exitPlayer()
-                    return
-                }
-
-                val now = System.currentTimeMillis()
-                if (now - lastBackPressTime < 2500L) {
-                    exitPlayer()
-                } else {
-                    lastBackPressTime = now
-                    Toast.makeText(this@X4KPlayerAty, "Presiona atrás de nuevo para salir", Toast.LENGTH_SHORT).show()
-                }
-            }
-        })
-
         if (code.isBlank() || mediasJson.isBlank()) {
             finish()
             return
@@ -477,7 +489,7 @@ class X4KPlayerAty : ComponentActivity() {
         // En Smart TV o dispositivos modestos (Chromecast, Fire TV, Amlogic) se omite el VideoView
         // de la intro para evitar que dos decodificadores de hardware compitan antes de reproducir.
         val skipIntroForPerformance = com.chronosbvrx.visionplus.DevicePerformance.isLowEndDevice(this)
-        if (!liveMode && !skipIntroForPerformance) showIntro(root)
+        if (!liveMode && !skipIntroForPerformance) showIntro(root())
 
         val medias = runCatching { parseMedias(mediasJson) }.getOrDefault(ArrayList())
         if (medias.isNotEmpty()) {
@@ -491,8 +503,9 @@ class X4KPlayerAty : ComponentActivity() {
         // Si el motor :x4k ya fue precalentado por X4KWarmupReceiver, montamos la superficie de video de inmediato en 0 ms.
         if (X4KTitan.isConfigured(resolvedEntries, resolvedParams)) {
             Log.i(TAG, "motor :x4k ya precalentado; montando UI en 0 ms")
-            mountUi(root, mode, code, title, aspect, medias)
+            mountUi(root(), mode, code, title, aspect, medias)
         } else {
+            val gen = playGen
             Thread {
                 try {
                     val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID).orEmpty()
@@ -505,7 +518,10 @@ class X4KPlayerAty : ComponentActivity() {
                         playParams = resolvedParams,
                     )
                     Log.i(TAG, "ensureConfigured=$ok")
-                    runOnUiThread { mountUi(root, mode, code, title, aspect, medias) }
+                    runOnUiThread {
+                        if (gen != playGen) return@runOnUiThread
+                        mountUi(root(), mode, code, title, aspect, medias)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "falló: ${e.message}", e)
                     finish()
@@ -592,6 +608,174 @@ class X4KPlayerAty : ComponentActivity() {
         }
     }
 
+    /**
+     * Deja el reproductor listo para OTRA reproducción sobre la misma vista: apaga la
+     * identidad y los diálogos de la anterior. La vista del motor y sus overlays se
+     * reconstruyen después. Cualquier dato viejo aquí muerde: marcadores de salto,
+     * capítulos o diálogos de la reproducción previa sobre el título nuevo.
+     */
+    private fun resetForNewPlay() {
+        // Diálogos/estados modales de la reproducción previa.
+        picking = false
+        nextVisible = false
+        nextDismissed = false
+        nextOverlay = null
+        nextCountdownView = null
+        nextPlayBtn = null
+        nextTarget = null
+        resumeOverlay = null
+        picker = null
+        pendingPlay = null
+        lastPickerSourceBtn = null
+        controlsVisible = false
+        swallowWakeupKeyCode = KeyEvent.KEYCODE_UNKNOWN
+        // Banderas de reproducción.
+        firstFrame = false
+        errorShown = false
+        loadingFading = false
+        softRestarts = 0
+        liveSignalSeen = false
+        endedShown = false
+        creditsCardShown = false
+        postCreditsShown = false
+        introSkipped = false
+        recapSkipped = false
+        scrubbing = false
+        previewSeekMs = -1L
+        durationMs = -1L
+        declaredDurationMs = 0L
+        declaredLanguages = emptyList()
+        lastHistorySave = 0L
+        // Contexto de la reproducción (cada play lo vuelve a leer del intent).
+        curCode = ""
+        curTitle = ""
+        curBaseTitle = ""
+        curSeries = ""
+        curEpIndex = 0
+        curSeasonIndex = 0
+        epIds = ArrayList()
+        epNames = ArrayList()
+        seasonIds = ArrayList()
+        seasonNames = ArrayList()
+        curMedias = ArrayList()
+        currentMediaName = ""
+        curQuality = ""
+        curAspect = 0
+        intentPoster = ""
+        resumeMs = 0L
+        resumeApplied = false
+        resumeAsked = false
+        pendingAutoResume = false
+        pendingResumeEntry = null
+        // En vivo.
+        liveMode = false
+        liveChannels = null
+        liveIndex = -1
+        liveGroupTitle = ""
+        currentEpgItems = emptyList()
+        // Marcadores de salto (intro/créditos): no cruzan entre reproducciones.
+        markIntroStartMs = -1L
+        markIntroEndMs = -1L
+        markRecapStartMs = -1L
+        markRecapEndMs = -1L
+        markCreditsStartMs = -1L
+        markPostCreditsStartMs = -1L
+        markSeasonRef = ""
+        // Subtítulos del proveedor: el programa siguiente trae su propia lista.
+        stopSubsTicker()
+        subsEntries = emptyList()
+        subsLoaded = false
+        subsCurrent = null
+        subsCues = emptyList()
+        subsLoadToken = ""
+        subsPickerWaiting = false
+    }
+
+    /** Quita TODAS las capas de UI de la reproducción anterior; la vista del motor se queda. */
+    private fun teardownPlaySurfaces() {
+        val root = root()
+        val keep = playerView
+        for (i in root.childCount - 1 downTo 0) {
+            if (root.getChildAt(i) !== keep) root.removeViewAt(i)
+        }
+        controls = null
+        loadingOverlay = null
+        loadingTitleView = null
+        loadingSubView = null
+        loadingEpNameView = null
+        errorOverlay = null
+        errorRetry = null
+        introView = null
+        introSkip = null
+        introPill = null
+        postCreditsNotice = null
+        subsView = null
+        topTitle = null
+        epgLine = null
+        favBtn = null
+        infoBtn = null
+        liveChannelTitleView = null
+        liveChannelNumView = null
+        liveChannelGroupView = null
+        liveEpgNowView = null
+        liveEpgNextView = null
+        liveEpgProgView = null
+        playPauseBtn = null
+        seekBar = null
+        timeNow = null
+        timeTotal = null
+        audioBtn = null
+        subsBtn = null
+        qualityBtn = null
+        channelsBtn = null
+        episodesBtn = null
+        nextEpBtn = null
+        playerControls.clear()
+    }
+
+    /** Atrás: cierra diálogos, esconde controles y al doble toque sale (dejando la vista residente). */
+    private fun installBackCallback() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (resumeOverlay != null) {
+                    // Atrás en el diálogo = continuar donde quedó (no destructivo).
+                    acceptResume()
+                    return
+                }
+                if (picking) {
+                    dismissPicker()
+                    return
+                }
+                if (nextVisible) {
+                    nextDismissed = true
+                    hideNext()
+                    return
+                }
+                if (!errorShown && controlsVisible) {
+                    hideControls()
+                    lastBackPressTime = System.currentTimeMillis()
+                    return
+                }
+                // Leaving during the pre-roll just leaves: the film never starts.
+                if (introView != null) {
+                    pendingPlay = null
+                    introView?.let { root().removeView(it) }
+                    introView = null
+                    exitPlayer()
+                    return
+                }
+
+                val now = System.currentTimeMillis()
+                if (now - lastBackPressTime < 2500L) {
+                    exitPlayer()
+                } else {
+                    lastBackPressTime = now
+                    Toast.makeText(this@X4KPlayerAty, "Presiona atrás de nuevo para salir", Toast.LENGTH_SHORT).show()
+                }
+            }
+        })
+    }
+
     /** Builds the view + the premium overlays and starts playback. */
     private fun mountUi(
         root: FrameLayout,
@@ -601,18 +785,29 @@ class X4KPlayerAty : ComponentActivity() {
         aspect: Int,
         medias: List<X4KTitan.MediaSpec>,
     ) {
-        val v = X4KTitan.newVideoView(this) ?: run {
+        // «Camino B»: la vista del motor es residente — se crea UNA sola vez por proceso y
+        // las reproducciones siguientes reutilizan la MISMA (el motor solo admite un
+        // programa por vista; el patrón del zapping, stop → play in-place, es el que sí
+        // funciona). Todo lo demás (controles, espera, overlays) se rehace por reproducción.
+        val v = playerView ?: X4KTitan.newVideoView(this)?.also { created ->
+            root.addView(
+                created,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    Gravity.CENTER,
+                ),
+            )
+            // Marca para el principal — archivo, no SharedPreferences: la copia cacheada
+            // del otro proceso puede no verla a tiempo (lección de PlaybackHistory). Indica
+            // que este proceso ya usó el motor con vista; una descarga headless aquí
+            // mezclaría historias del motor, así que el gestor devuelve el proceso a limpio
+            // antes de encargar nada.
+            runCatching { java.io.File(filesDir, "x4k_view_played").createNewFile() }
+        } ?: run {
             finish()
             return
         }
-        root.addView(
-            v,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                Gravity.CENTER,
-            ),
-        )
         playerView = v
         if (!liveMode) buildSubtitleOverlay(root)
         curCode = code
@@ -1520,22 +1715,15 @@ class X4KPlayerAty : ComponentActivity() {
                     subs.nextFocusUpId = upId
                     subs.nextFocusDownId = subsId
 
-                    val skipPillView = introPill
-                    val skipPillId = if (skipPillView != null) View.generateViewId().also { skipPillView.id = it } else -1
                     if (qualityId != -1) {
                         quality?.nextFocusLeftId = subsId
                         quality?.nextFocusRightId = qualityId
                         quality?.nextFocusUpId = upId
                         quality?.nextFocusDownId = qualityId
                     }
-                    if (skipPillId != -1) {
-                        // La píldora del intro vive arriba de la barra: al enfocarla el D-pad
-                        // no se escapa (izquierda/derecha/arriba en bucle; abajo vuelve al play).
-                        skipPillView?.nextFocusLeftId = skipPillId
-                        skipPillView?.nextFocusRightId = skipPillId
-                        skipPillView?.nextFocusUpId = skipPillId
-                        skipPillView?.nextFocusDownId = playId
-                    }
+                    // La píldora «Omitir intro» enlaza su foco en buildIntroPill/updateIntroPill:
+                    // aquí todavía no existe (se crea al final de buildControls) y un enlace
+                    // tardío apuntaba a un id muerto: el mando jamás podía llegar a ella.
 
                     seek.nextFocusUpId = seekId
                     seek.nextFocusDownId = playId
@@ -2229,6 +2417,7 @@ class X4KPlayerAty : ComponentActivity() {
             setTextColor(Color.WHITE)
             setPadding(dp(18), dp(10), dp(18), dp(10))
             background = roundBackground(0xCC0A0F18.toInt(), 12)
+            id = View.generateViewId()
             visibility = View.GONE
             isFocusable = false
             setOnClickListener { if (canExecuteControlAction()) skipIntroNow() }
@@ -2236,7 +2425,12 @@ class X4KPlayerAty : ComponentActivity() {
         pill.withIcon(R.drawable.ic_vp_forward)
         pill.tvControl(0xCC0A0F18.toInt(), 12)
         pill.isFocusable = false
+        introPillId = pill.id
         introPill = pill
+        // Enlace de foco: «abajo» regresa a play/pausa (izquierda/derecha/arriba se quedan
+        // en la píldora). El enlace de ENTRADA (barra → píldora) lo refresca updateIntroPill
+        // con cada cambio de visibilidad.
+        wireSkipPillFocus(null, pill, pillFocusable = false, playPauseId = playPauseBtn?.id ?: View.NO_ID)
         root.addView(
             pill,
             FrameLayout.LayoutParams(
@@ -2302,11 +2496,19 @@ class X4KPlayerAty : ComponentActivity() {
             skipIntroMode == com.chronosbvrx.visionplus.ui.settings.VisionSettings.SKIP_INTRO_BUTTON &&
             !errorShown && !picking && nextOverlay == null && introView == null && resumeOverlay == null
         if (target != null) pill.text = target.first
+        val focusable = show && isTv && controlsVisible
+        val hadFocus = pill.hasFocus()
         pill.visibility = if (show) View.VISIBLE else View.GONE
-        pill.isFocusable = show && isTv && controlsVisible
+        pill.isFocusable = focusable
         pill.isFocusableInTouchMode = false
-        if (!pill.isFocusable && pill.hasFocus()) {
+        // D-pad: «arriba» desde la barra entra a la píldora mientras esté visible y enfocable;
+        // oculta, «arriba» se queda en la barra. La píldora sale por «abajo» (play/pausa).
+        wireSkipPillFocus(seekBar, pill, focusable, playPauseBtn?.id ?: View.NO_ID)
+        if (!focusable && hadFocus) {
             pill.clearFocus()
+            if (isTv && controlsVisible && !picking && nextOverlay == null && introView == null && !errorShown) {
+                playPauseBtn?.requestFocus()
+            }
         }
     }
 
@@ -2539,13 +2741,7 @@ class X4KPlayerAty : ComponentActivity() {
         if (hasEp) {
             val nextIdx = curEpIndex + 1
             val rawName = epNames.getOrNull(nextIdx)?.trim().orEmpty()
-            val cleanName = rawName.takeIf {
-                it.isNotBlank() &&
-                    !it.equals("Capítulo ${nextIdx + 1}", ignoreCase = true) &&
-                    !it.equals("Capitulo ${nextIdx + 1}", ignoreCase = true) &&
-                    !it.equals("Episodio ${nextIdx + 1}", ignoreCase = true) &&
-                    !it.equals("${nextIdx + 1}", ignoreCase = true)
-            }.orEmpty()
+            val cleanName = cleanEpisodeName(rawName, nextIdx, curBaseTitle)
             val displayLabel = "Capítulo ${nextIdx + 1}" + (if (cleanName.isNotBlank()) " · $cleanName" else "")
             val seasonPrefix = if (seasonIds.size > 1) " · ${seasonLabel(curSeasonIndex)}" else ""
             val playerTitle = "${curBaseTitle.ifBlank { curTitle }}$seasonPrefix · C${nextIdx + 1}"
@@ -2578,13 +2774,7 @@ class X4KPlayerAty : ComponentActivity() {
                         countdown.text = ""
                         return@runOnUiThread
                     }
-                    val cleanName = first.name.trim().takeIf {
-                        it.isNotBlank() &&
-                            !it.equals("Capítulo 1", ignoreCase = true) &&
-                            !it.equals("Capitulo 1", ignoreCase = true) &&
-                            !it.equals("Episodio 1", ignoreCase = true) &&
-                            !it.equals("1", ignoreCase = true)
-                    }.orEmpty()
+                    val cleanName = cleanEpisodeName(first.name, 0, curBaseTitle)
                     val displayLabel = "$sLabel · Capítulo 1" + (if (cleanName.isNotBlank()) " · $cleanName" else "")
                     val playerTitle = "${curBaseTitle.ifBlank { curTitle }} · $sLabel · C1"
                     nextTarget = NextEp(
@@ -3763,13 +3953,7 @@ class X4KPlayerAty : ComponentActivity() {
                         val isCurrent = position == curEpIndex
                         val isWatched = UserLibrary.isEpisodeWatched(this@X4KPlayerAty, curSeries, position + 1)
                         val rawName = epNames.getOrNull(position)?.trim().orEmpty()
-                        val cleanName = rawName.takeIf {
-                            it.isNotBlank() &&
-                                !it.equals("Capítulo ${position + 1}", ignoreCase = true) &&
-                                !it.equals("Capitulo ${position + 1}", ignoreCase = true) &&
-                                !it.equals("Episodio ${position + 1}", ignoreCase = true) &&
-                                !it.equals("${position + 1}", ignoreCase = true)
-                        }.orEmpty()
+                        val cleanName = episodeRowLabel(rawName, position + 1, curBaseTitle)
 
                         val rowLayout = LinearLayout(this@X4KPlayerAty).apply {
                             orientation = LinearLayout.HORIZONTAL
@@ -3836,7 +4020,7 @@ class X4KPlayerAty : ComponentActivity() {
                             setPadding(dp(14), 0, dp(12), 0)
                         }
                         textCol.addView(TextView(this@X4KPlayerAty).apply {
-                            text = cleanName.ifBlank { "Capítulo ${position + 1}" }
+                            text = cleanName
                             setTextColor(if (isCurrent) Color.WHITE else 0xFFF4F7FC.toInt())
                             textSize = 15f
                             typeface = Typeface.DEFAULT_BOLD
@@ -4041,8 +4225,10 @@ class X4KPlayerAty : ComponentActivity() {
     }
 
     private fun exitPlayer() {
+        if (exiting) return
+        exiting = true
         // Con el motor todavía vivo: al detenerlo la posición se pierde y el cierre guardaba
-        // un minuto viejo (o nada). El commit deja el avance exacto antes de morir el proceso.
+        // un minuto viejo (o nada). El commit deja el avance exacto antes de soltar el motor.
         stopSubsTicker()
         saveHistory(immediate = true)
         playerView?.let { X4KTitan.stop(it) }
@@ -4050,10 +4236,32 @@ class X4KPlayerAty : ComponentActivity() {
         // (el motor es uno solo: descargar mientras se ve pelearía con la reproducción).
         maybeAutoDownloadNext()
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        finish()
+        isPlayerActive = false
+        when (exitActionFor(hardResetNext)) {
+            PlayerExitAction.FINISH_AND_RELAUNCH -> {
+                // Estado envenenado del motor (auto-reparado): arranque limpio como siempre.
+                finish()
+            }
+            PlayerExitAction.HIDE_RESIDENT -> {
+                // Reproductor residente (el truco bueno de la app del proveedor): la actividad
+                // —con su vista del motor ya detenida— se queda viva detrás y la app principal
+                // vuelve al frente; el próximo play reutiliza la misma vista (stop → play
+                // in-place) sin levantar pantalla, vista ni proceso desde cero.
+                val front = Intent().apply {
+                    setClassName(this@X4KPlayerAty, "com.chronosbvrx.visionplus.MainActivity")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                }
+                runCatching { startActivity(front) }.onFailure { finish() }
+            }
+        }
     }
 
-    /** Baja el siguiente capítulo pendiente (solo WiFi, solo si falta y solo uno por salida). */
+    /**
+     * Baja el siguiente capítulo pendiente (solo WiFi, solo si falta y solo uno por salida).
+     * La decisión se toma aquí, pero la descarga la encarga el proceso PRINCIPAL (con el
+     * proceso `:x4k` devuelto a limpio si ya reprodujo con vista): un programa headless en
+     * un proceso que ya usó la vista del motor mezclaría historias del motor.
+     */
     private fun maybeAutoDownloadNext() {
         if (liveMode || curSeries.isBlank()) return
         val settings = com.chronosbvrx.visionplus.ui.settings.VisionSettings
@@ -4064,20 +4272,20 @@ class X4KPlayerAty : ComponentActivity() {
         if (com.chronosbvrx.visionplus.data.UserLibrary.isEpisodeWatched(this, curSeries, nextIdx + 1)) return
         runCatching {
             val code = epIds[nextIdx]
-            val film = com.chronosbvrx.visionplus.data.Film(
-                id = "xtv:$code", title = curBaseTitle.ifBlank { curTitle }, year = 0,
-                durationMin = 0, synopsis = "", posterUrl = intentPoster,
-                videoUrl = "xtv:$code", sourceUrl = "xtv",
-            )
-            val ep = com.chronosbvrx.visionplus.ui.EpisodePlay(
-                code = code, titleSuffix = " · C${nextIdx + 1}", seriesId = curSeries,
-                episodeIds = ArrayList(epIds), episodeIndex = nextIdx,
-                seasonIds = ArrayList(seasonIds), seasonIndex = curSeasonIndex,
-                durationMs = declaredDurationMs,
-            )
-            if (com.chronosbvrx.visionplus.data.offline.OfflineDownloadManager.enqueueDownload(this, film, ep)) {
-                android.widget.Toast.makeText(this, "Bajando el siguiente capítulo con WiFi", android.widget.Toast.LENGTH_SHORT).show()
+            val spec = JSONObject().apply {
+                put("id", "xtv:$code")
+                put("code", code)
+                put("title", curBaseTitle.ifBlank { curTitle })
+                put("poster", intentPoster)
+                put("seriesId", curSeries)
+                put("epIndex", nextIdx)
+                put("seasonIndex", curSeasonIndex)
+                put("durationMs", declaredDurationMs)
             }
+            // Archivo (no SharedPreferences): el principal lo lee fresco al volver del
+            // reproductor; su copia cacheada de prefs podría no ver un valor recién escrito.
+            java.io.File(filesDir, "x4k_pending_download.json").writeText(spec.toString())
+            android.widget.Toast.makeText(this, "Bajando el siguiente capítulo con WiFi", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -4193,6 +4401,9 @@ class X4KPlayerAty : ComponentActivity() {
                         val racha = com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.noteFailure(this@X4KPlayerAty)
                         if (com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.shouldHeal(racha)) {
                             val gen = com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.bumpEngineGen(this@X4KPlayerAty)
+                            // El proceso residente corre con la generación vieja ya booteada: a la
+                            // salida se cierra y se reinicia para estrenar la carpeta nueva.
+                            hardResetNext = true
                             com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
                                 "PLAYER_SELF_HEAL", "gen=$gen racha=$racha modo=${if (liveMode) "live" else "vod"}",
                             )

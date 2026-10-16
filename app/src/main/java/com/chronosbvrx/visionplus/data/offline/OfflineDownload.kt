@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.data.offline
 
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import org.json.JSONObject
 
 enum class DownloadState {
@@ -60,7 +61,7 @@ data class OfflineDownload(
     fun toFilm(): Film {
         return Film(
             id = "vault:$id",
-            title = if (subtitle.isNotBlank()) "$title · $subtitle" else title,
+            title = normalizeDisplayName(if (subtitle.isNotBlank()) "$title · $subtitle" else title),
             year = 2026,
             durationMin = if (durationMs > 0) (durationMs / 60_000L).toInt() else 0,
             synopsis = "Descargado en $storageLabel · Disponible sin conexión",

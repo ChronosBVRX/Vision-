@@ -24,6 +24,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 
@@ -127,6 +129,12 @@ class X4KDownloadService : Service() {
     private val pauseRequestedAtMs = ConcurrentHashMap<String, Long>()
     /** Candado anti-carrera entre "pausar" y "encender el motor": jamás se cruzan. */
     private val pauseLock = Any()
+    /**
+     * Candado del motor: aunque el manager del principal ya despacha UNA descarga por vez,
+     * este candado es la red de seguridad dentro del servicio (dos intents que llegaran
+     * en carrera se ordenan, jamás dos programas headless a la vez en el mismo motor).
+     */
+    private val engineMutex = Mutex()
     private var startedForeground = false
 
     private fun pauseRequestedAt(id: String): Long = pauseRequestedAtMs[id] ?: 0L
@@ -185,7 +193,7 @@ class X4KDownloadService : Service() {
         // Marca de emisión del intent: la pausa gana si llegó después de este momento.
         val myIssuedAt = intent.getLongExtra(EXTRA_ISSUED_AT, 0L).takeIf { it > 0L }
             ?: System.currentTimeMillis()
-        fun pauseWins() = pauseRequestedAt(id) >= myIssuedAt
+        val pauseWins = { pauseRequestedAt(id) >= myIssuedAt }
         // Sin doble corrida: si ya hay una en curso para este id, esta sale en silencio.
         if (!runningIds.add(id)) {
             Log.i(TAG, "Descarga $id ya en curso, se omite duplicada")
@@ -196,90 +204,20 @@ class X4KDownloadService : Service() {
             if (code.isBlank() || vaultPath.isBlank()) {
                 throw IllegalStateException("Datos de descarga incompletos")
             }
-            // El motor no acepta un segundo programa con vista nueva en el mismo
-            // proceso: si el reproductor está activo, no competir (error honesto).
-            if (X4KPlayerAty.isPlayerActive) {
-                throw IllegalStateException("Reproducción en curso: pausa el video e inténtalo de nuevo")
-            }
-            // Pausa pedida antes de encender nada: el ack ya lo escribió requestPause.
-            if (pauseWins()) {
-                Log.i(TAG, "Descarga $id pausada antes de arrancar el motor")
-                return
-            }
-            updateNotif("Resolviendo $title…")
-
-            // Fail-fast acotado: el portal puede tardar minutos con red mala; mejor un
-            // ERROR honesto y reintento que un 0% infinito (congelaba la UI en POCO).
-            var metaMedia = runCatching {
-                withTimeout(60_000L) {
-                    X4KApi.prepareVod(app, code, title, seriesId, durationMs)
-                }
-            }.getOrNull()
-            if (metaMedia == null) {
-                delay(450L)
-                metaMedia = runCatching {
-                    withTimeout(60_000L) {
-                        X4KApi.prepareVod(app, code, title, seriesId, durationMs)
-                    }
-                }.getOrNull()
-            }
-            val mediasJson = metaMedia?.mediasJson.orEmpty()
-            if (mediasJson.isBlank()) {
-                throw IllegalStateException("Sin fuentes de descarga para este título en el catálogo")
-            }
-
-            val mediaSpecs = ArrayList<X4KTitan.MediaSpec>()
-            val arr = JSONArray(mediasJson)
-            for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i) ?: continue
-                val n = o.optString("n")
-                if (n.isBlank()) continue
-                // Si el portal ya da http directo, sin motor de por medio.
-                if (n.startsWith("http://") || n.startsWith("https://")) {
-                    downloadCandidates(app, id, title, quality, dest, fallbackTotal, listOf(n))
-                    return
-                }
-                mediaSpecs.add(
-                    X4KTitan.MediaSpec(
-                        name = n,
-                        license = o.optString("l"),
-                        audio = o.optString("a"),
-                        quality = o.optString("q"),
-                        encodeFormat = o.optString("e"),
-                        videoFormat = o.optString("f"),
-                    ),
+            // UNA descarga por motor: dos intents en carrera se ordenan aquí dentro.
+            engineMutex.withLock {
+                runEngineWork(
+                    app = app,
+                    id = id,
+                    code = code,
+                    title = title,
+                    seriesId = seriesId,
+                    quality = quality,
+                    dest = dest,
+                    fallbackTotal = fallbackTotal,
+                    declaredDurationMs = durationMs,
+                    pauseWins = pauseWins,
                 )
-            }
-            if (mediaSpecs.isEmpty()) {
-                throw IllegalStateException("No se pudo establecer enlace con el servidor de descarga")
-            }
-
-            // Vía del reproductor a nivel facade: x(0, code, program) — la misma llamada
-            // que ed.e.A() hace al abrir. Sin vista, sin Surface, sin audio.
-            // Candado anti-carrera: si la pausa llegó justo ahora, el motor jamás se
-            // enciende (y si ya estaba, requestPause lo suelta detrás de este candado).
-            val started = synchronized(pauseLock) {
-                if (pauseWins()) {
-                    false
-                } else {
-                    resolveWithHeadlessEngine(app, code, title, mediaSpecs).also { ok ->
-                        if (ok) activeCodes[id] = code
-                    }
-                }
-            }
-            if (!started) {
-                if (pauseWins()) throw CancellationException("Descarga pausada: el motor pasa al reproductor")
-                throw IllegalStateException("No se pudo resolver el stream (motor ocupado, inténtalo de nuevo)")
-            }
-            try {
-                updateNotif("Conectando stream de $title…")
-                val candidateUrls = pollPlayUrls(code, RESOLVE_TIMEOUT_MS)
-                if (candidateUrls.isEmpty()) {
-                    throw IllegalStateException("El servidor no entregó dirección de descarga (inténtalo de nuevo)")
-                }
-                downloadCandidates(app, id, title, quality, dest, fallbackTotal, candidateUrls)
-            } finally {
-                runCatching { X4KTitan.stopHeadless(code) }
             }
         } catch (e: Exception) {
             if (e is CancellationException || pauseWins()) {
@@ -291,6 +229,11 @@ class X4KDownloadService : Service() {
                 Log.e(TAG, "Fallo descarga $id: ${e.message}", e)
                 OfflineProgressBus.sendError(app, id, e.message ?: "Error de red al descargar")
                 runCatching { dest.parentFile?.let { OfflineProgressFile.clear(it, id) } }
+                runCatching {
+                    dest.parentFile?.let {
+                        OfflineProgressFile.writeError(it, id, e.message ?: "Error de red al descargar")
+                    }
+                }
                 runCatching { File("$vaultPath.downloading").delete() }
             }
         } finally {
@@ -302,6 +245,110 @@ class X4KDownloadService : Service() {
                 runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
                 stopSelf()
             }
+        }
+    }
+
+    /**
+     * El trabajo que toca el motor de una descarga (se ejecuta bajo [engineMutex]):
+     * resolver el stream headless por la vía del reproductor, sondear la URL real y
+     * bajar/cifrar. Lanza excepción para que el llamador la traduzca a estado.
+     */
+    private suspend fun runEngineWork(
+        app: Context,
+        id: String,
+        code: String,
+        title: String,
+        seriesId: String,
+        quality: String,
+        dest: File,
+        fallbackTotal: Long,
+        declaredDurationMs: Long,
+        pauseWins: () -> Boolean,
+    ) {
+        // El motor no acepta un segundo programa con vista nueva en el mismo
+        // proceso: si el reproductor está activo, no competir (error honesto).
+        if (X4KPlayerAty.isPlayerActive) {
+            throw IllegalStateException("Reproducción en curso: pausa el video e inténtalo de nuevo")
+        }
+        // Pausa pedida antes de encender nada: el ack ya lo escribió requestPause.
+        if (pauseWins()) {
+            Log.i(TAG, "Descarga $id pausada antes de arrancar el motor")
+            return
+        }
+        updateNotif("Resolviendo $title…")
+
+        // Fail-fast acotado: el portal puede tardar minutos con red mala; mejor un
+        // ERROR honesto y reintento que un 0% infinito (congelaba la UI en POCO).
+        var metaMedia = runCatching {
+            withTimeout(60_000L) {
+                X4KApi.prepareVod(app, code, title, seriesId, declaredDurationMs)
+            }
+        }.getOrNull()
+        if (metaMedia == null) {
+            delay(450L)
+            metaMedia = runCatching {
+                withTimeout(60_000L) {
+                    X4KApi.prepareVod(app, code, title, seriesId, declaredDurationMs)
+                }
+            }.getOrNull()
+        }
+        val mediasJson = metaMedia?.mediasJson.orEmpty()
+        if (mediasJson.isBlank()) {
+            throw IllegalStateException("Sin fuentes de descarga para este título en el catálogo")
+        }
+
+        val mediaSpecs = ArrayList<X4KTitan.MediaSpec>()
+        val arr = JSONArray(mediasJson)
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val n = o.optString("n")
+            if (n.isBlank()) continue
+            // Si el portal ya da http directo, sin motor de por medio.
+            if (n.startsWith("http://") || n.startsWith("https://")) {
+                downloadCandidates(app, id, title, quality, dest, fallbackTotal, listOf(n))
+                return
+            }
+            mediaSpecs.add(
+                X4KTitan.MediaSpec(
+                    name = n,
+                    license = o.optString("l"),
+                    audio = o.optString("a"),
+                    quality = o.optString("q"),
+                    encodeFormat = o.optString("e"),
+                    videoFormat = o.optString("f"),
+                ),
+            )
+        }
+        if (mediaSpecs.isEmpty()) {
+            throw IllegalStateException("No se pudo establecer enlace con el servidor de descarga")
+        }
+
+        // Vía del reproductor a nivel facade: x(0, code, program) — la misma llamada
+        // que ed.e.A() hace al abrir. Sin vista, sin Surface, sin audio.
+        // Candado anti-carrera: si la pausa llegó justo ahora, el motor jamás se
+        // enciende (y si ya estaba, requestPause lo suelta detrás de este candado).
+        val started = synchronized(pauseLock) {
+            if (pauseWins()) {
+                false
+            } else {
+                resolveWithHeadlessEngine(app, code, title, mediaSpecs).also { ok ->
+                    if (ok) activeCodes[id] = code
+                }
+            }
+        }
+        if (!started) {
+            if (pauseWins()) throw CancellationException("Descarga pausada: el motor pasa al reproductor")
+            throw IllegalStateException("No se pudo resolver el stream (motor ocupado, inténtalo de nuevo)")
+        }
+        try {
+            updateNotif("Conectando stream de $title…")
+            val candidateUrls = pollPlayUrls(code, RESOLVE_TIMEOUT_MS)
+            if (candidateUrls.isEmpty()) {
+                throw IllegalStateException("El servidor no entregó dirección de descarga (inténtalo de nuevo)")
+            }
+            downloadCandidates(app, id, title, quality, dest, fallbackTotal, candidateUrls)
+        } finally {
+            runCatching { X4KTitan.stopHeadless(code) }
         }
     }
 
@@ -426,6 +473,7 @@ class X4KDownloadService : Service() {
             throw lastErr ?: IllegalStateException("No se pudo descargar el flujo de video")
         }
         OfflineProgressBus.sendDone(app, id, downloadedBytes)
+        runCatching { dest.parentFile?.let { OfflineProgressFile.writeDone(it, id, downloadedBytes) } }
         runCatching { dest.parentFile?.let { OfflineProgressFile.clear(it, id) } }
         Log.i(TAG, "Descarga completada: $title ($downloadedBytes bytes)")
     }

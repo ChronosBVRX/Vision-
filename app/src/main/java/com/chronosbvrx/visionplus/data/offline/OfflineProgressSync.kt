@@ -38,7 +38,10 @@ object OfflineProgressSync {
 
     /**
      * Una pasada de sincronización. Retorna cuántos registros avanzaron.
-     * Solo toca items DOWNLOADING cuyo sidecar traiga bytes mayores.
+     * Prioridad: el RESULTADO final por archivo (`.done`/`.error`) — el camino que
+     * funciona aunque los broadcasts del servicio no lleguen (POCO/HyperOS/emulador):
+     * completa/pausa el item al instante y arranca la siguiente de la cola. Después,
+     * el progreso byte a byte de los que siguen bajando.
      */
     fun syncOnce(app: Context): Int {
         OfflineRegistry.init(app)
@@ -46,6 +49,27 @@ object OfflineProgressSync {
         val items = OfflineRegistry.getAll(app).filter { it.state == DownloadState.DOWNLOADING }
         for (item in items) {
             val vaultDir: File = runCatching { File(item.vaultFilePath).parentFile }.getOrNull() ?: continue
+            // ¿Corrida terminada? El servicio lo dejó como archivo junto al vault.
+            val err = OfflineProgressFile.readError(vaultDir, item.id)
+            if (err != null) {
+                OfflineProgressFile.clearOutcome(vaultDir, item.id)
+                OfflineRegistry.updateState(item.id, DownloadState.ERROR, err)
+                Log.i(TAG, "descarga ${item.id} falló (archivo): $err")
+                OfflineDownloadManager.onWorkerFinished(item.id)
+                synced++
+                continue
+            }
+            val doneBytes = OfflineProgressFile.readDone(vaultDir, item.id)
+            if (doneBytes != null) {
+                OfflineProgressFile.clearOutcome(vaultDir, item.id)
+                val bytes = if (doneBytes > 0L) doneBytes else item.bytesDownloaded
+                OfflineRegistry.updateProgress(item.id, bytes, bytes)
+                OfflineRegistry.updateState(item.id, DownloadState.COMPLETED)
+                Log.i(TAG, "descarga ${item.id} completada (archivo)")
+                OfflineDownloadManager.onWorkerFinished(item.id)
+                synced++
+                continue
+            }
             val (bytes, total) = OfflineProgressFile.read(vaultDir, item.id) ?: continue
             val current = OfflineRegistry.get(item.id, app) ?: continue
             if (current.state != DownloadState.DOWNLOADING) continue

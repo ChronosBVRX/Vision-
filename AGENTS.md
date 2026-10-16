@@ -5,6 +5,153 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Vision+ PC: producto portátil para Windows (emulador + app con aspecto de exe nativo) + fixes de motor/dedupe** (2026-10-16; sus fixes entraron en la OTA v2.5.84, aprobado por el usuario):
+  - *Descubrimiento*: el emulador oficial en PC x86_64 **sí** puede correr el motor ARM del X4K: las
+    imágenes Google APIs/Play (API 30+) traen la traducción ARM oficial de ARM
+    (`libndk_translation.so`; verificado en `Vision_Phone`: `abilist=x86_64,arm64-v8a`). El bloqueo
+    real era doble: el loader de la app pedía la carpeta ABI `x86_64` (inexistente en assets) **y** el
+    APK empaquetaba libs x86_64 de los AAR → el sistema instalaba la app como x86_64 nativa y el
+    dlopen ARM fallaba (`is for EM_AARCH64 (183) instead of EM_X86_64 (62)`).
+  - *Fix app (para correr el motor en emulador; en teléfonos/TV sin cambio)*: (1) `X4KTitan.pickNativeAbi()`:
+    extrae la primera ABI de `SUPPORTED_ABIS` **que exista en assets** (en el emulador cae a `arm64-v8a`);
+    (2) `abiFilters += arm64-v8a, armeabi-v7a` en `app/build.gradle.kts`: el APK deja de traer x86/x86_64
+    y el emulador lo instala como **arm64 traducido** (proceso invitado) → el motor carga y **reproduce
+    de verdad** (HEVC `c2.goldfish.hevc.decoder`, audio `FFP_MSG_AUDIO_RENDERING_START`, frames avanzando).
+  - *Bug real cazado de paso (crash del Inicio, dependiente de datos)*: una fila duplicada del servidor
+    tumbaba el Home: `IllegalArgumentException: Key "home-trending-xtv:…" was already used`. Fix:
+    `RemoteIndexSource.trending()` deduplica con `Popularity.dedupe` (cubre móvil y TV; la TV ya se
+    salvaba porque su clave lleva `-idx`) + `distinctBy { it.id }` defensivo en el renderer del Home
+    móvil (`HomeScreen.kt`).
+  - *Producto*: carpeta portátil en `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+ PC\` (~3.5 GB):
+    `sdk/` (emulador + imagen `android-36.1 google_apis_playstore x86_64` + platform-tools),
+    `avd/VisionPC` (1920x1080 landscape, density 240, sin sensores de orientación, touch+teclado),
+    `VisionPlus.apk` (release R8 con los fixes), `assets/logo.png`, `README.txt` y **`Vision+ PC.exe`**
+    (lanzador C# .NET 4.8 compilado con `csc`, ~66 KB, icono Vision+): splash de marca → arranca/reutiliza
+    el emulador (adb en puerto **5039**, consola 5556; no choca con el adb del usuario en 5037) →
+    provisiona kiosco (immersive, sin sleep, rotation 0, Play Store off, hora MX) → instala el APK por
+    hash (y precompila con `cmd package compile -m speed`) → abre la app (`am start`) → quita el marco
+    de la ventana y la deja **fullscreen con icono y título «Vision+»** (monitor cada 2 s; salir = Alt+F4).
+    Fuente en `Vision+ PC\launcher-src\` (recompilar: `csc /target:winexe /win32icon:…\vision_icon.ico
+    /win32manifest:app.manifest VisionPlusPC.cs`).
+  - *Validado end-to-end en esta PC*: launcher → boot → instalación → app → ventana sin marco →
+    reproducción fullscreen del hero (Spider-Man; capturas `Temp/opencode/desktop_play.png`, `vp_pc_*`).
+  - *Nota legal*: la traducción ARM (ARM/Google) es «solo desarrollo y depuración»; uso personal OK,
+    distribución amplia = zona gris. Emulador/imagen de Google: redistribución gris.
+  - *Pendiente*: en PCs sin virtualización el emulador no arranca (el launcher lo reporta con
+    instrucciones). *Resuelto el 2026-10-16*: suite completa 376/376 y decisión del usuario — `abiFilters`
+    solo-ARM **se queda** en producción y estos fixes viajan en la OTA v2.5.84.
+  - *Instalable + ocultado total (misma fecha)*: `VisionPlusPC_Setup_2.5.83.exe` (Inno Setup 6.7.3,
+    per-user sin admin, español, ~2.2 GB; accesos en escritorio y menú inicio; desinstalador) en
+    `Desktop\Proyectos\Vision+ PC (instalable)\`. **Cada PC instala con AVD limpio → identidad propia
+    (fin de patadas entre copias del paquete)**. El lanzador ahora mantiene el emulador **totalmente
+    oculto** (ventana oculta + fuera de la barra de tareas, incluido el sliver «Emulator» del toolbar)
+    hasta que Vision+ está cargado, y solo entonces la revela a pantalla completa con
+    `ShowWindow(SW_SHOW)` verificado + `AttachThreadInput` para traerla al frente aunque el usuario
+    esté en otra ventana (Windows niega `SetForegroundWindow` a procesos en segundo plano). Verificado
+    con un testigo de ventanas (cero flashes durante toda la carga) y una instalación real de punta a
+    punta (instalar → splash → Vision+ reproduciendo fullscreen). Nota: el instalador no está firmado
+    con certificado Windows (SmartScreen pedirá «Más información → Ejecutar de todas formas»).
+    Detalles del lanzador: `Vision+ PC\launcher-src\VisionPlusPC.cs` + `visionplus_pc.iss` (recompilar
+    con `csc` y `ISCC.exe`).
+- **Lote 2.5.86: descargas de series (temporada completa y por capítulo) + reproductor offline congruente — OTA publicada** (2026-10-16; 393 tests Android + pruebas en emulador/A32):
+  - *Pedido del usuario*: las descargas ya funcionaban, pero al abrir una serie no había forma de bajar capítulos y faltaba «descargar temporada completa».
+  - *Cola de un solo motor (lo delicado)*: el motor nativo solo mantiene un programa; dos descargas `xtv:` a la vez se pelearían. `OfflineDownloadManager` ahora serializa: una descarga activa (`activeRemoteId`) y el resto `QUEUED` («En cola») — al terminar arranca la siguiente. Pausar la activa suelta la temporada entera (pendientes a pausa); borrar una deja seguir; reinicio de app deja todo en PAUSA (reconcile). El servicio suma un `engineMutex` como red de seguridad.
+  - *Resultado por ARCHIVO (fin del bus) + vigilante*: en el emulador (y en POCO/HyperOS) los broadcasts `:x4k`→principal no llegan al receptor (en `dumpsys activity broadcasts` se ven enviados y «terminados», pero `onReceive` jamás corre) — la cola avanzaba 60-90 s tarde por el vigilante. Ahora el servicio deja `.done`/`.error` junto al vault y `OfflineProgressSync` (ticker 2 s) los consume: COMPLETED/ERROR al instante y siguiente capítulo en cola al momento. El vigilante (proceso `:x4k` muerto 60 s / sin bytes 5 min → ERROR + siguiente) queda de última red (ya salvó una corrida estancada real en el emulador).
+  - *Ficha móvil*: cada fila de capítulo trae su control de descarga (descargar / en cola / % con anillo / reproducir la copia / reanudar) y sobre la lista el botón de temporada con estado real («Descargar temporada · 22 de 22» → «Descargando · 1 de 22» → «Reanudar temporada · 19» → «Temporada descargada»). Reanudar re-encola pausadas/error y salta completadas.
+  - *Ficha TV*: mismo botón de temporada (TvCompactAction, D-pad) y cada tarjeta de capítulo suma un chip focusable («Descargar/En cola/%/Descargado·Reproducir/Reanudar») con enlace de foco arriba/abajo (OK en la tarjeta reproduce; OK en el chip baja). Sin USB sigue el TvNoUsbDialog.
+  - *Reproductor offline congruente (búnker) — 3 huecos cerrados*: (1) la ficha pasaba `EpisodePlay(code="vault:…")` con el film de catálogo y `PlayerScreen` solo miraba `film.videoUrl` → caía al handoff XTV y fallaba; ahora detecta `vault:` en el capítulo y abre el búnker (el botón «Descargado» de películas y series por fin reproduce la copia); (2) al terminar un capítulo descargado aparece «A continuación» con el siguiente descargado de la serie (cuenta regresiva 10 s si el auto-avance está activo, Atrás descarta, salta de temporada si hace falta) y el terminado queda visto sin recuerdo a medias; (3) «Reanudar automáticamente» (ajuste que ya honraba el reproductor nativo) ahora también salta directo en el búnker, sin diálogo.
+  - *Verificado*: emulador (Vision_Phone): temporada de 22 capítulos encolada y bajando en orden (4 completos y el 5º en curso), pausar suelta la cola («Reanudar temporada · 19»), reconciliación tras reinicio (todo PAUSA), reproducción del búnker con FLAG_SECURE y tarjeta offline en «Seguir viendo». **Prueba física del usuario: confirmada** («sí descarga capítulos individuales y descargar temporada»). A32 (USB, release R8 vc322 instalado encima de 2.5.85, Success; versión 2.5.86 confirmada).
+  - *Publicada*: release R8 vc322 (105.9 MB) con firma histórica `9593cb0d…` (apksigner) — **OTA v2.5.86** (asset `VisionPlus.apk`, enlace estable). Suite 395/395.
+- **Reproductor residente («Camino B»): aperturas casi instantáneas — el truco de la app del proveedor — OTA v2.5.85 publicada** (2026-10-16; 378 tests Android + prueba física TV/A32; release R8 vc321, firma histórica `9593cb0d…`):
+  - *Qué*: la queja era «la TV en vivo tarda más segundos que Xuper». Causa: Vision+ abría TODO en
+    frío por reproducción (proceso `:x4k` matado al salir + pantalla y vista del motor nuevas cada vez).
+    Fix: el reproductor ahora **reutiliza UNA sola vista del motor toda la vida del proceso** (patrón
+    del zapping, que el motor sí admite): al salir, la actividad queda residente en su tarea y la app
+    principal vuelve al frente; el siguiente play entra por `onNewIntent` (stop → play in-place) y
+    solo se reconstruyen las capas de UI por encima. Medido en la TV ZTE: lanzar→reuso→`play` en
+    ~130-150 ms (antes: 40-60 s de arranque frío con re-arranque interno incluido).
+  - *Cómo*: `X4KPlayerAty` → `launchMode=singleTask` + `taskAffinity` propia + `excludeFromRecents`
+    (tarea aparte, fuera de recientes; el Atrás no la revela y el doble Atrás sale a la app).
+    `onNewIntent` + `handleLaunchIntent` con `playGen` (hilos/retrys viejos invalidados por
+    generación), `resetForNewPlay`/`teardownPlaySurfaces` (vista del motor persistente; overlays
+    rehechos), `exitActionFor(hardReset)` pura (`ControlsState.kt`): salida residente normal; solo el
+    auto-reparado (`PlayerRecovery` rota la carpeta del motor) cierra con `finish()`+killProcess para
+    estrenar proceso. «motor :x4k ya precalentado; montando UI en 0 ms» ahora es la norma, no la excepción.
+  - *Convivencia con descargas (lo delicado)*: el motor headless de descargas exige un proceso en el
+    que la vista no haya reproducido. Al encargar una descarga, si `:x4k` ya reprodujo (marca ARCHIVO
+    `files/x4k_view_played` — no SharedPreferences: la copia cacheada del principal no ve lo escrito
+    por el otro proceso, lección 2.5.64), el principal ordena a `:x4k` reiniciarse
+    (`X4KWarmupReceiver.ACTION_DIE_FOR_DOWNLOADS`; el proceso se apaga solo — `killBackgroundProcesses`
+    NO mata procesos percibibles, probado en el A32) y ESPERA su muerte (`runningAppProcesses`, tope
+    4 s) antes de levantar el servicio: la descarga nace en un proceso limpio, como siempre.
+  - *Auto-descargar siguiente al salir*: la decisión se toma en el reproductor y se deja como ARCHIVO
+    (`files/x4k_pending_download.json`); el principal la consume al volver (`PendingAutoDownload` desde
+    el observer de `XtvHandoff`) y pasa por el gestor (con el reinicio incluido). Antes la orden nacía
+    en el proceso que moría al salir.
+  - *Verificado en físico (mismo APK release R8 de la OTA, vc320)*: **A32 (USB)**: play→salir (el `:x4k`
+    y la tarea del reproductor quedan VIVOS) → reuso con OTRA serie (log «vista reutilizada», 13 ms) →
+    vivo (ECDF) → OTRO canal (66 ms) → cruce vivo→película (Spider-Man) → descarga tras residencia
+    (reinicio ordenado: pid nuevo, bajó al 12% sin errores) → «pausar y ver ahora» con descarga activa
+    (reprodujo en ese proceso; la descarga quedó pausada; la descarga de prueba se borró). **TV ZTE
+    B866F**: serie (Reacher C1) → salir residente → C2 reusada (146 ms al `play`, captura a los 8 s ya
+    con video) → EN VIVO La Granja (captura a los 8 s con video) → salir → ECDF (132 ms, captura con
+    video). Capturas `Temp/opencode/res_*.png` y `tvre_*.png`.
+  - *Observado (no bloqueante)*: en el flujo «pausar descarga y ver ahora» el handoff lanzó dos veces
+    seguidas (crear+reusar en 55 ms) — inofensivo con singleTask; revisar si alguna vez molesta.
+  - *Pendiente*: uso diario del usuario (cualquier rareza se reporta). Los equipos ya tienen instalado
+    el build con los cambios (prueba física) y el resto se actualiza solo con la OTA v2.5.85 (vc321,
+    asset `VisionPlus.apk`; mismos cambios); el APK publicado quedó verificado con apksigner
+    (firma histórica).
+- **Lote 2.5.84: nombres normalizados (fin de guiones bajos; incl. la carga del episodio) + el D-pad ya llega a «Omitir intro» — OTA publicada** (2026-10-16; 376 tests Android):
+  - *Síntoma (usuario)*: en algunas pantallas —incluida la espera al abrir un capítulo— los nombres salían
+    con guiones bajos («para separar»); y en Smart TV la navegación del mando no llegaba a la píldora
+    «Omitir intro».
+  - *Causa 1 — nombres (verificada en vivo contra el portal)*: el portal rotula sus capítulos como
+    «Ley y orden: Unidad de Víctimas Especiales **T1_11**» (`simpleProgramList[].name`, confirmado con una
+    consulta real) y hay 33 títulos con `_` en la base del índice («Rebbeca_ Un documental…», «SAC_2045»).
+    Ese texto crudo llegaba a la espera, al selector de capítulos (ficha y reproductor) y a la tarjeta de
+    «siguiente».
+  - *Fix 1*: `normalizeDisplayName()` puro en `data/Catalog.kt` (guion bajo → espacio, espacios colapsados;
+    sin `_` el texto queda igual). Aplicado en la ingesta de títulos (X4KApi repisas+caché, RemoteIndexSource,
+    Magis, Archive, M3U, favoritos, descargas, `PlaybackHistory`) y en los nombres de capítulo de
+    `X4KApi.parseEpisodePrograms/parsePlayEpisodePrograms` (el número se sigue leyendo del nombre crudo —
+    numeración intacta). `cleanEpisodeName` (espera) y `episodeRowLabel` (fichas móvil/TV + selector del
+    reproductor + «siguiente capítulo» de `X4KPlayerAty`) quitan además la marca técnica «… T1 11» y, si lo
+    que queda solo repite la serie o el número, caen al genérico («T1 · Capítulo 11» / «Capítulo N»). Las
+    funciones privadas duplicadas `cleanEpisodeTitle`/`cleanTvEpisodeTitle` se retiraron (una sola fuente).
+  - *Causa 2 — D-pad a la píldora (leída en el código)*: la píldora se volvía enfocable (TV + controles
+    visibles) pero NINGÚN control apuntaba a ella: el enlace vivía en `buildControls` y corría cuando
+    `introPill` todavía era null (se crea al final) → el mando jamás llegaba.
+  - *Fix 2*: `wireSkipPillFocus()` (puro, probado): «arriba» desde la barra → píldora mientras esté visible
+    y enfocable; oculta, la barra queda en sí misma; en la píldora, izquierda/derecha/arriba no se escapan
+    y «abajo» vuelve a play/pausa. `updateIntroPill` refresca el enlace en cada cambio de visibilidad y
+    devuelve el foco a play/pausa si la píldora se oculta estando enfocada.
+  - *Guardián*: `SkipPillFocusTest` (Robolectric: enlace real + `FocusFinder` resolviendo la píldora),
+    `PlayerLoadingCardTest` (caso real «T1_11» → «T1 · Capítulo 11» sin línea de nombre; nombre real con
+    `_` normalizado; serie con sufijo «T1»), `X4KApiSeriesTest` (contrato del portal normalizado sin tocar
+    la numeración), `CatalogTest` (`normalizeDisplayName`), `RemoteIndexTest` (títulos del servidor). Suite 376/376.
+  - *Publicado*: release R8 vc320 (105.9 MB) con firma histórica `9593cb0d…` (apksigner) — **OTA v2.5.84**
+    (asset `VisionPlus.apk`; el enlace estable ya sirve la nueva). Incluye los fixes de Vision+ PC
+    (`abiFilters` solo-ARM aprobado para producción).
+  - *Verificado en el emulador VisionPC (mismo APK de la OTA)*: `pm install -r` encima de la 2.5.83
+    (firma continua, Success); ficha de SVU con filas «Capítulo 1/2/3» (antes «…Especiales T1_1»);
+    espera del capítulo «… · T1 · Capítulo 2» sin línea de nombre con guion bajo; el episodio reproduce
+    con video y cero crashes (capturas `Temp/opencode/vp_ficha2.png`, `vp_load_l3.png`, `vp_play_final.png`).
+  - *Verificado en físico (misma fecha, TV ZTE B866F + A32 por USB, APK de la OTA)*: `pm install -r` en
+    ambos (Success; el A32 venía de 2.5.78, datos intactos). **TV**: espera «Attack on Titan - Español
+    Latino · T2 · Capítulo 5» limpia; la píldora «Omitir intro» aparece en la ventana del intro y el
+    D-pad la alcanza (arriba desde la barra: foco con aro blanco) y OK salta 1:03→1:49; el selector de
+    capítulos del reproductor abre con el mando (pestañas T1–T4, «C5/C6/C7», estados Viendo/Visto/
+    Repetir, sin guiones bajos). **A32**: ficha «Capítulo 1/2/3», espera «T1 · Capítulo 3» y selector
+    del reproductor limpios; C3 reproduce con video y subtítulos. Capturas en `Temp/opencode`:
+    `tv20_wait.png`, `tv27_pill.png`, `tv29_skip.png`, `tv31_sel.png`, `a32v84_ficha.png`,
+    `a32v84_wait3.png`, `a32v84_sel.png`, `a32v84_c3play.png`.
+  - *Observación (pre-existente, ajena a esta tanda)*: iniciar un capítulo lo marca «Visto» al instante
+    (ficha: «Continuar» y toque de fila; reproductor: cambio interno) — confirmado en físico y por el
+    diff (la tanda no toca esas líneas). Además, `vision_user` (SharedPreferences) no cruza procesos:
+    una marca escrita por `:x4k` puede perderse si el principal reescribe con copia vieja (misma clase
+    que se arregló para `PlaybackHistory` en 2.5.64 — candidato a fix futuro). Las marcas que dejaron
+    las pruebas en el A32 se revirtieron (la ficha volvió a «Continuar · T1 · Capítulo 2 · 1 vistos»).
 - **Lote 2.5.83: fix DEFINITIVO del toque móvil — el gesto nunca llegaba al reproductor (onDown) — OTA publicada** (2026-10-15; 364 tests Android):
   - *Síntoma*: tras 2.5.82 el usuario reportó que seguía igual: «doy clic en el video y no se abre
     el menú de reproducción».
@@ -764,8 +911,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.83**
-  (versionCode **319**, release OTA v2.5.83). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.86**
+  (versionCode **322**, release OTA v2.5.86 — descargas de series + offline congruente). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
@@ -1670,6 +1817,19 @@
 - Verificar la pantalla Fútbol en la TV del usuario (D-pad); en móvil ya está probada (A32).
 - Fútbol: afinar el mapa liga→canales si algún partido sale con "Sin canal en tu lista" (p. ej. feeds
   sudamericanos); valorar aviso/recordatorio de partidos próximos.
+- **Fútbol — fuentes alternativas gee-sports (análisis 2026-10-16, decisión pendiente del usuario)**: re-análisis
+  completo del APK `gee-sports.apk` (`com.geesports.live`, rebrand CricZ TV; CMS en `absuehhd.online` sobre GitHub
+  Pages + Firebase RC para el dominio; bundles `channels/<slug>.json` base64 con `streamUrls[{title,link,type,api}]`).
+  Tipos: **0** HLS directo (sufijo `|origin/referer/ua` → headers al OkHttp del player), **3** DASH `cenc` ClearKey
+  `api=kid:key` (mismo JSON W3C que ya armamos con `GeeSportsFallback.buildClearKeyJson`), **1** POST `token_data`
+  + des-ofuscación, **2** llave AES-128 protegida (`keyUrl*tt`, rewrite del parser «sheda» — documentado). `header`/`body`
+  del bundle NO se usan en esta versión (verificado en smali). **Auditoría de vida (hoy): 8/370 links (2.2 %) vivos**
+  desde la red del usuario y el VPS por igual — ~60 % NXDOMAIN global (dominios rotos), paneles por IP inaccesibles;
+  vivos: amagi/cloudcdn/cinehub/kora/xsg/vintera/spectrum + star-sports-2 (3), sports-channels (2)… La «estabilidad»
+  de la app original = fetch fresco + N servidores por canal (sin filtro de vida). Plan propuesto (Fase 1): worker
+  VPS que refresca el CMS + resuelve bundles + smoke de vida + `/v1/gee/sports` + feedback + inyección «Deportes · Alternativo» en `SportsLinker`.
+  Detalle completo + pasos: `docs/ANALISIS_GEE_SPORTS.md` (Temp: `gee_apktool/`, `gee_src/`, `gee_probe_results.json`).
+  Pendiente: usuario prueba la app hoy (¿VPN?) y decide Fase 1 vs fetch directo en app.
 - Buscador de eventos específicos sobre la EPG (idea del usuario, no implementado).
 - Próxima OTA: publicar el release minificado (`:app:assembleNormalRelease`, firma histórica intacta) con
   el bump de versión; el update es directo (sin reinstalar). R8 ya verificado en A32.

@@ -508,7 +508,9 @@ private fun FilmRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            itemsIndexed(row.films.take(15), key = { _, film -> "${row.id}-${film.id}" }) { index, film ->
+            // distinctBy: la clave "row.id-film.id" exige unicidad; defensa extra ante datos
+            // duplicados (el Inicio se cayó una vez por una hilera repetida del servidor).
+            itemsIndexed(row.films.distinctBy { it.id }.take(15), key = { _, film -> "${row.id}-${film.id}" }) { index, film ->
                 val rank = if (isTopRow && index in 0..9) index + 1 else null
                 PosterCard(
                     title = film.title,

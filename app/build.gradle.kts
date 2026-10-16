@@ -33,8 +33,15 @@ android {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = 319
-        versionName = "2.5.83"
+        versionCode = 322
+        versionName = "2.5.86"
+        ndk {
+            // Solo ARM: el APK no empaqueta libs x86/x86_64 (los AAR traían credentials/
+            // graphics.path de x86_64). En dispositivos x86_64 con traducción ARM (emulador
+            // con imagen Google APIs/Play, ChromeOS) la app se instala como arm64 y su proceso
+            // corre en modo invitado (libndk_translation): así el motor nativo X4K carga bien.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {

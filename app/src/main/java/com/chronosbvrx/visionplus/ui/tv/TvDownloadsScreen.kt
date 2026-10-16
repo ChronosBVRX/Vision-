@@ -248,7 +248,7 @@ fun TvDownloadsScreen(
                             Spacer(Modifier.height(4.dp))
                             val statusText = when (item.state) {
                                 DownloadState.DOWNLOADING -> "Descargando en USB: ${item.progressPercent}% (${OfflineStoragePolicy.formatBytes(item.bytesDownloaded)} / ${OfflineStoragePolicy.formatBytes(item.totalBytes)})"
-                                DownloadState.QUEUED -> "Preparando flujo cifrado..."
+                                DownloadState.QUEUED -> "En cola de descarga…"
                                 DownloadState.PAUSED -> "En pausa (${item.progressPercent}%)"
                                 DownloadState.ERROR -> item.errorMessage ?: "Error en la descarga"
                                 DownloadState.COMPLETED -> "Completado"

@@ -97,6 +97,11 @@ object VisionSettings {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(KEY_AUTO_PLAY_NEXT, true)
 
+    /** Lectura directa de «reanudar automáticamente» (el búnker también lo honra). */
+    fun autoResumeOf(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AUTO_RESUME, true)
+
     fun skipIntroModeLabel(mode: String): String = when (mode) {
         SKIP_INTRO_AUTO -> "Automático"
         SKIP_INTRO_NEVER -> "Nunca"

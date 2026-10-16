@@ -33,6 +33,19 @@ data class SeasonRef(val n: Int, val titleId: String, val videoUrl: String)
 /** A titled row of films on Home. */
 data class CatalogRow(val id: String, val title: String, val films: List<Film>)
 
+private val WHITESPACE_RUN = Regex("\\s+")
+
+/**
+ * Nombre listo para pintar. El portal y algunas fuentes usan guiones bajos como separador
+ * («Rebbeca_ Un documental», «Ghost in the Shell SAC_2045», «…Especiales T1_11»): la UI
+ * muestra siempre espacios simples. Sin guiones bajos el texto queda igual que antes
+ * (el caso común no cambia ni un byte).
+ */
+fun normalizeDisplayName(raw: String): String {
+    if (raw.indexOf('_') < 0) return raw.trim()
+    return raw.replace('_', ' ').replace(WHITESPACE_RUN, " ").trim()
+}
+
 /** "1940 · 1 h 32 min": the year and the running time, omitting what is unknown. */
 fun Film.metaLine(): String {
     val duration = when {

@@ -13,6 +13,8 @@ object OfflineProgressFile {
 
     private const val SUFFIX = ".progress"
     private const val PAUSE_SUFFIX = ".paused"
+    private const val DONE_SUFFIX = ".done"
+    private const val ERROR_SUFFIX = ".error"
     private const val MIN_WRITE_INTERVAL_MS = 1_000L
     private val lastWriteMs = ConcurrentHashMap<String, Long>()
 
@@ -21,6 +23,10 @@ object OfflineProgressFile {
     private fun sidecar(vaultDir: File, id: String): File = File(vaultDir, "${safeId(id)}$SUFFIX")
 
     private fun pauseSidecar(vaultDir: File, id: String): File = File(vaultDir, "${safeId(id)}$PAUSE_SUFFIX")
+
+    private fun doneSidecar(vaultDir: File, id: String): File = File(vaultDir, "${safeId(id)}$DONE_SUFFIX")
+
+    private fun errorSidecar(vaultDir: File, id: String): File = File(vaultDir, "${safeId(id)}$ERROR_SUFFIX")
 
     /** Escribe bytes/total (acotado a 1 escritura/s por id). */
     fun write(vaultDir: File, id: String, bytes: Long, total: Long) {
@@ -67,5 +73,48 @@ object OfflineProgressFile {
 
     fun clearPauseFlag(vaultDir: File, id: String) {
         runCatching { pauseSidecar(vaultDir, id).delete() }
+    }
+
+    // -------------------------------------------------------------------------
+    // Resultado FINAL de la corrida por ARCHIVO (respaldo del bus): en equipos donde
+    // los broadcasts no llegan al proceso principal (lección POCO/HyperOS, visto
+    // también en el emulador), el servicio deja `.done` o `.error` junto al vault y
+    // el ticker del principal ([OfflineProgressSync]) lo consume en segundos.
+    // -------------------------------------------------------------------------
+
+    /** Marca de descarga COMPLETADA (lo escribe el servicio `:x4k` al cerrar el vault). */
+    fun writeDone(vaultDir: File, id: String, bytes: Long) {
+        runCatching {
+            vaultDir.mkdirs()
+            doneSidecar(vaultDir, id).writeText(bytes.toString())
+        }
+    }
+
+    /** Bytes finales si la corrida terminó bien, o null. */
+    fun readDone(vaultDir: File, id: String): Long? = runCatching {
+        val f = doneSidecar(vaultDir, id)
+        if (!f.exists()) return null
+        f.readText().trim().toLongOrNull() ?: 0L
+    }.getOrNull()
+
+    /** Marca de ERROR terminal de la corrida (mensaje incluido). */
+    fun writeError(vaultDir: File, id: String, message: String) {
+        runCatching {
+            vaultDir.mkdirs()
+            errorSidecar(vaultDir, id).writeText(message)
+        }
+    }
+
+    /** Mensaje de error terminal si la corrida falló, o null. */
+    fun readError(vaultDir: File, id: String): String? = runCatching {
+        val f = errorSidecar(vaultDir, id)
+        if (!f.exists()) return null
+        f.readText().ifBlank { "Error de red al descargar" }
+    }.getOrNull()
+
+    /** Retira las marcas de resultado (antes de un nuevo intento, para no heredar nada). */
+    fun clearOutcome(vaultDir: File, id: String) {
+        runCatching { doneSidecar(vaultDir, id).delete() }
+        runCatching { errorSidecar(vaultDir, id).delete() }
     }
 }

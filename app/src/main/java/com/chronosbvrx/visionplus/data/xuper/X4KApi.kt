@@ -7,6 +7,7 @@ import android.util.Log
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.PlaybackHistory
+import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -527,7 +528,7 @@ object X4KApi {
                         ?: ""
                     films += Film(
                         id = cid,
-                        title = a.optString("name"),
+                        title = normalizeDisplayName(a.optString("name")),
                         year = portalYear(a),
                         durationMin = 0,
                         synopsis = a.optString("description"),
@@ -927,7 +928,7 @@ object X4KApi {
                 ?: name.toIntOrNull()?.takeIf { it > 0 }
                 ?: EPISODE_NUMBER_REGEX.find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()?.takeIf { it > 0 }
                 ?: (i + 1)
-            raw += IndexedEp(EpisodeProgram(episodeId, explicitNum, name), i)
+            raw += IndexedEp(EpisodeProgram(episodeId, explicitNum, normalizeDisplayName(name)), i)
         }
         val distinct = raw
             .distinctBy { it.ep.contentId }
@@ -967,7 +968,7 @@ object X4KApi {
                 ?: epObj.optInt("seriesNumber", 0).takeIf { it > 0 }
                 ?: (i + 1)
             val epName = epObj.optString("name").trim()
-            raw += IndexedEp(EpisodeProgram(code, epNum, epName), i)
+            raw += IndexedEp(EpisodeProgram(code, epNum, normalizeDisplayName(epName)), i)
         }
         val distinct = raw
             .distinctBy { it.ep.contentId }
@@ -1128,7 +1129,7 @@ object X4KApi {
                 val f = fj.optJSONObject(j) ?: continue
                 films += Film(
                     id = f.optString("id"),
-                    title = f.optString("t"),
+                    title = normalizeDisplayName(f.optString("t")),
                     year = f.optInt("y", 0),
                     durationMin = 0,
                     synopsis = f.optString("s"),

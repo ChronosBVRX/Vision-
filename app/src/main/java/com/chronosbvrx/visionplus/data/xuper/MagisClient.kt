@@ -7,6 +7,7 @@ import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.PLUGIN_PACKAGE
+import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -637,7 +638,7 @@ class MagisClient(context: Context) {
                 fj.optJSONObject(j)?.let { f ->
                     Film(
                         id = f.optString("id"),
-                        title = f.optString("t"),
+                        title = normalizeDisplayName(f.optString("t")),
                         year = f.optInt("y"),
                         durationMin = f.optInt("d"),
                         synopsis = f.optString("s"),
@@ -803,7 +804,7 @@ private fun MagisAsset.toFilm(): Film? {
     } ?: 0
     return Film(
         id = contentId,
-        title = name,
+        title = normalizeDisplayName(name),
         year = YEAR_IN_TAGS.find(tags)?.value?.toIntOrNull() ?: 0,
         durationMin = minutes,
         synopsis = description,

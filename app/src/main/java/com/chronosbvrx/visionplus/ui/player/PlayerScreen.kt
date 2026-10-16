@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -82,6 +83,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -109,8 +111,10 @@ import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.ResumeInfo
 import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.metaLine
+import com.chronosbvrx.visionplus.data.offline.DownloadState
 import com.chronosbvrx.visionplus.data.offline.OfflineDownload
 import com.chronosbvrx.visionplus.data.offline.OfflineDownloadManager
+import com.chronosbvrx.visionplus.data.offline.OfflineRegistry
 import com.chronosbvrx.visionplus.data.xuper.MagisClient
 import com.chronosbvrx.visionplus.data.xuper.MagisTitan
 import com.chronosbvrx.visionplus.data.xuper.TitanSdk
@@ -118,6 +122,7 @@ import com.chronosbvrx.visionplus.ui.EpisodePlay
 import com.chronosbvrx.visionplus.ui.brand.VisionWordmark
 import com.chronosbvrx.visionplus.ui.formatDuration
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionLiveRed
 import com.chronosbvrx.visionplus.ui.tv.landingFocus
 import com.chronosbvrx.visionplus.ui.tv.modalFocusTrap
@@ -161,19 +166,37 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
         PlayerScreen(film.copy(id = "xtv:$cid", videoUrl = "xtv:$cid"), isTv, onBack, episode, resumeMs)
         return
     }
-    // A downloaded vault film (`vault:<id>`): reproduce inmediatamente desde el búnker cifrado
-    if (film.videoUrl.startsWith("vault:")) {
+    // Un título descargado (`vault:<id>`): puede venir como film (`Downloads` abre la ficha
+    // del búnker) o como el capítulo que pidió la ficha de catálogo (`EpisodePlay(code =
+    // "vault:…")` con el film siendo la serie/película). Ambos casos van al búnker cifrado.
+    val vaultUrl = when {
+        film.videoUrl.startsWith("vault:") -> film.videoUrl
+        episode?.code?.startsWith("vault:") == true -> episode.code
+        else -> null
+    }
+    if (vaultUrl != null) {
+        android.util.Log.i("VisionOffline", "reproduciendo desde el búnker: $vaultUrl")
+        val download = remember(vaultUrl) {
+            OfflineRegistry.init(libraryContext)
+            OfflineRegistry.get(vaultUrl.removePrefix("vault:"), libraryContext)
+        }
+        val vaultFilm = download?.toFilm()
         PlayerCore(
-            title = film.title,
-            subtitle = film.metaLine(),
-            url = film.videoUrl,
+            title = vaultFilm?.title ?: film.title,
+            subtitle = vaultFilm?.synopsis ?: film.metaLine(),
+            url = vaultUrl,
             isLive = false,
             isTv = isTv,
             onBack = onBack,
             showIntro = false,
-            resumeInfo = ResumeInfo(film.videoUrl, film.title, film.posterUrl, film.videoUrl),
+            resumeInfo = ResumeInfo(vaultUrl, vaultFilm?.title ?: film.title, download?.posterUrl ?: film.posterUrl, vaultUrl),
             resumeMs = resumeMs,
-            declaredDurationMs = if (episode != null && episode.durationMs > 0) episode.durationMs else if (film.durationMin > 0) film.durationMin * 60_000L else 0L,
+            declaredDurationMs = when {
+                episode != null && episode.durationMs > 0 -> episode.durationMs
+                download != null && download.durationMs > 0 -> download.durationMs
+                film.durationMin > 0 -> film.durationMin * 60_000L
+                else -> 0L
+            },
         )
         return
     }
@@ -668,6 +691,17 @@ private fun PlayerCore(
     val activity = remember(context) { context.findActivity() }
     val startWithIntro = showIntro && !IntroSession.played
     var introPlaying by remember { mutableStateOf(startWithIntro) }
+    // Encadenado offline: el capítulo descargado en curso y su «siguiente descargado».
+    // El búnker permite saltar de capítulo sin red, igual que la app lo hace en línea.
+    val isVault = url.startsWith("vault:")
+    var currentVaultUrl by remember(url) { mutableStateOf(url) }
+    var currentTitle by remember(url) { mutableStateOf(title) }
+    var currentSubtitle by remember(url) { mutableStateOf(subtitle) }
+    var currentResume by remember(url) { mutableStateOf(resumeInfo) }
+    var vaultDeclaredMs by remember(url) { mutableLongStateOf(declaredDurationMs) }
+    var nextVault by remember(url) { mutableStateOf<OfflineDownload?>(null) }
+    var nextCountdown by remember(url) { mutableStateOf(0) }
+    var vaultEndedHandled by remember(url) { mutableStateOf(false) }
     val player = remember {
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent(userAgent ?: VISION_USER_AGENT)
@@ -737,7 +771,7 @@ private fun PlayerCore(
     }
 
     fun saveHistory() {
-        val info = resumeInfo ?: return
+        val info = currentResume ?: return
         if (isLive) return
         val pos = positionMs
         val dur = durationMs
@@ -756,6 +790,66 @@ private fun PlayerCore(
         )
     }
 
+    /** El capítulo del búnker que se está viendo ahora (o null si no es una descarga). */
+    fun vaultDownload(): OfflineDownload? {
+        if (!isVault) return null
+        return runCatching {
+            OfflineRegistry.init(context)
+            OfflineRegistry.get(currentVaultUrl.removePrefix("vault:"), context)
+        }.getOrNull()
+    }
+
+    /**
+     * Fin del capítulo descargado: cuenta como visto, su recuerdo se retira y —si el
+     * siguiente capítulo de la serie YA está descargado— se ofrece «A continuación»
+     * (auto-avance con cuenta regresiva si el ajuste está activo, como en línea).
+     */
+    fun handleVaultEnded() {
+        if (!isVault || vaultEndedHandled) return
+        vaultEndedHandled = true
+        val current = vaultDownload()
+        if (current != null && current.seriesId.isNotBlank()) {
+            com.chronosbvrx.visionplus.data.UserLibrary.markEpisodeWatched(
+                context, current.seriesId, current.episodeIndex + 1,
+            )
+        }
+        com.chronosbvrx.visionplus.data.PlaybackHistory.delete(context, currentVaultUrl)
+        val next = current?.let {
+            com.chronosbvrx.visionplus.data.offline.nextDownloadedEpisode(it, OfflineRegistry.getAll(context))
+        } ?: return
+        android.util.Log.i("VisionOffline", "fin de capítulo descargado: ${currentVaultUrl} → siguiente ${next.playUri}")
+        nextVault = next
+        nextCountdown = if (com.chronosbvrx.visionplus.ui.settings.VisionSettings.autoPlayNextOf(context)) 10 else 0
+    }
+
+    /** Salta al siguiente capítulo descargado, sin salir del búnker ni tocar la red. */
+    fun playNextVault() {
+        val next = nextVault ?: return
+        android.util.Log.i("VisionOffline", "encadenando capítulo descargado: ${next.playUri}")
+        nextVault = null
+        nextCountdown = 0
+        vaultEndedHandled = false
+        val nextUrl = next.playUri
+        currentVaultUrl = nextUrl
+        val nextFilm = next.toFilm()
+        currentTitle = nextFilm.title
+        currentSubtitle = nextFilm.synopsis
+        currentResume = ResumeInfo(nextUrl, nextFilm.title, next.posterUrl, nextUrl)
+        vaultDeclaredMs = if (next.durationMs > 0L) next.durationMs else 0L
+        durationMs = vaultDeclaredMs
+        positionMs = 0L
+        error = null
+        buffering = true
+        resumeConsumed = true
+        resumeEntry = null
+        skipUsed = false
+        player.setMediaItem(mediaItemFor(nextUrl, isLive = false, drmType = null))
+        player.prepare()
+        player.playWhenReady = true
+        playing = true
+        controls.bump()
+    }
+
     fun acceptResume(atMs: Long) {
         resumeConsumed = true
         resumeEntry = null
@@ -769,7 +863,7 @@ private fun PlayerCore(
         introPlaying = false
         IntroSession.played = true
         buffering = true
-        player.setMediaItem(mediaItemFor(url, isLive, drmType))
+        player.setMediaItem(mediaItemFor(currentVaultUrl, isLive, drmType))
         player.prepare()
         player.playWhenReady = true
         playing = true
@@ -786,10 +880,10 @@ private fun PlayerCore(
                 if (state == Player.STATE_READY && !introPlaying) {
                     val d = player.duration.coerceAtLeast(0L)
                     val pos = player.currentPosition.coerceAtLeast(0L)
-                    if (!isBufferWindowDuration(d, pos, declaredDurationMs, isLive)) {
+                    if (!isBufferWindowDuration(d, pos, vaultDeclaredMs, isLive)) {
                         if (d > 0L) durationMs = d
-                    } else if (durationMs <= 0L && declaredDurationMs > 0L) {
-                        durationMs = declaredDurationMs
+                    } else if (durationMs <= 0L && vaultDeclaredMs > 0L) {
+                        durationMs = vaultDeclaredMs
                     }
                 }
                 if (state == Player.STATE_ENDED && introPlaying) startMainItem() else if (state == Player.STATE_ENDED) controls.bump()
@@ -824,13 +918,19 @@ private fun PlayerCore(
         while (true) {
             positionMs = player.currentPosition.coerceAtLeast(0L)
             val d = player.duration
-            if (!introPlaying && !isBufferWindowDuration(d, positionMs, declaredDurationMs, isLive)) {
+            if (!introPlaying && !isBufferWindowDuration(d, positionMs, vaultDeclaredMs, isLive)) {
                 if (d > 0L) durationMs = d
-            } else if (durationMs <= 0L && declaredDurationMs > 0L) {
-                durationMs = declaredDurationMs
+            } else if (durationMs <= 0L && vaultDeclaredMs > 0L) {
+                durationMs = vaultDeclaredMs
             }
             bufferedFraction = if (!introPlaying && durationMs > 0) player.bufferedPosition.toFloat() / durationMs else 0f
             playing = player.playWhenReady
+            // Fin de un capítulo descargado: encadena con el siguiente que esté en el búnker.
+            if (!introPlaying && isVault && !vaultEndedHandled &&
+                player.playbackState == Player.STATE_ENDED && error == null
+            ) {
+                handleVaultEnded()
+            }
             if (!isLive && !introPlaying && !resumeConsumed && resumeMs > 0 &&
                 player.playbackState == Player.STATE_READY && durationMs > 0
             ) {
@@ -845,6 +945,15 @@ private fun PlayerCore(
             }
             delay(500)
         }
+    }
+
+    // Cuenta regresiva de «A continuación» (solo si el auto-avance está activo).
+    LaunchedEffect(nextVault?.id, nextCountdown) {
+        if (nextVault == null || nextCountdown <= 0) return@LaunchedEffect
+        delay(1000)
+        val value = nextCountdown - 1
+        nextCountdown = value
+        if (value <= 0) playNextVault()
     }
 
     // Leaving the app pauses; coming back leaves it paused with the controls up.
@@ -920,8 +1029,10 @@ private fun PlayerCore(
     val markersFocus = remember { FocusRequester() }
     val skipFocus = remember { FocusRequester() }
     val brandSkipFocus = remember { FocusRequester() }
+    val nextCardFocus = remember { FocusRequester() }
     var skipFocused by remember { mutableStateOf(false) }
     var brandSkipFocused by remember { mutableStateOf(false) }
+    var nextCardFocused by remember { mutableStateOf(false) }
     val hasControlFocus = barFocused || rewindFocused || playPauseFocused || forwardFocused || tracksFocused || markersFocused || skipFocused
 
     // "Saltar intro" during the opening minutes; only interactive when navigation menu is visible.
@@ -940,18 +1051,20 @@ private fun PlayerCore(
     // TV: the overlay's play/pause takes focus as it opens; the video takes it back as it closes.
     // Repeated until it holds, since a request made while the overlay is still appearing can be dropped.
     // With the controls hidden, the surface ALWAYS holds focus so the first D-pad click only wakes the menu.
-    LaunchedEffect(controls.visible, isTv, brandSkipVisible, introPlaying) {
+    LaunchedEffect(controls.visible, isTv, brandSkipVisible, introPlaying, nextVault?.id) {
         if (!isTv) return@LaunchedEffect
         repeat(40) {
             val held = when {
+                nextVault != null && nextCardFocused -> true
                 brandSkipVisible && brandSkipFocused -> true
                 controls.visible && !introPlaying && hasControlFocus -> true
-                !controls.visible && surface.focused -> true
+                !controls.visible && nextVault == null && surface.focused -> true
                 else -> false
             }
             if (held) return@LaunchedEffect
             runCatching {
                 when {
+                    nextVault != null -> nextCardFocus.requestFocus()
                     brandSkipVisible -> brandSkipFocus.requestFocus()
                     controls.visible && !introPlaying -> playPauseFocus.requestFocus()
                     else -> surface.request()
@@ -961,7 +1074,24 @@ private fun PlayerCore(
         }
     }
 
+    // TV: la tarjeta «A continuación» toma el foco del mando al aparecer; con reintentos,
+    // porque un request hecho mientras aún se compone puede perderse.
+    LaunchedEffect(nextVault?.id, isTv) {
+        if (nextVault == null || !isTv) return@LaunchedEffect
+        repeat(20) {
+            if (nextCardFocused) return@LaunchedEffect
+            runCatching { nextCardFocus.requestFocus() }
+            delay(100)
+        }
+    }
+
     BackHandler {
+        // Con la tarjeta «A continuación» arriba, atrás la descarta (no sale del reproductor).
+        if (nextVault != null) {
+            nextVault = null
+            nextCountdown = 0
+            return@BackHandler
+        }
         // Con el diálogo de continuar, atrás continúa donde quedó (no destructivo).
         val pending = if (!resumeConsumed) resumeEntry else null
         if (pending != null) {
@@ -996,7 +1126,7 @@ private fun PlayerCore(
                 }
                 if (e.type == KeyEventType.KeyDown) {
                     swallowWakeupKey = null
-                    val modalOpen = showTracks || showMarkers || (!resumeConsumed && resumeEntry != null)
+                    val modalOpen = showTracks || showMarkers || nextVault != null || (!resumeConsumed && resumeEntry != null)
                     val action = resolvePlayerKeyDownAction(
                         keyCode = e.key.nativeKeyCode,
                         isLive = isLive,
@@ -1096,7 +1226,24 @@ private fun PlayerCore(
         }
 
         // "¿Continuar viendo?" al reabrir a medias (atrás también continúa: no destructivo).
-        val pendingResume = if (!resumeConsumed) resumeEntry else null
+        // Con «Reanudar automáticamente» activo (el ajuste que ya honra el reproductor
+        // nativo) el búnker salta directo al minuto guardado, sin preguntar.
+        val autoResumeSetting = remember {
+            com.chronosbvrx.visionplus.ui.settings.VisionSettings.autoResumeOf(context)
+        }
+        LaunchedEffect(Unit) {
+            if (autoResumeSetting) {
+                resumeEntry?.let { entry ->
+                    acceptResume(entry.positionMs)
+                    Toast.makeText(
+                        context,
+                        "Continuando en " + formatResume(entry.positionMs),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+        }
+        val pendingResume = if (!resumeConsumed && !autoResumeSetting) resumeEntry else null
         LaunchedEffect(pendingResume) {
             if (pendingResume != null) {
                 player.pause()
@@ -1173,7 +1320,7 @@ private fun PlayerCore(
                             .fillMaxWidth(0.6f),
                     ) {
                         Text(
-                            title,
+                            currentTitle,
                             color = Color.White,
                             style = MaterialTheme.typography.headlineMedium.copy(fontSize = 42.sp, lineHeight = 54.sp),
                             maxLines = 2,
@@ -1181,7 +1328,7 @@ private fun PlayerCore(
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            subtitle,
+                            currentSubtitle,
                             color = Color.White.copy(alpha = 0.75f),
                             style = MaterialTheme.typography.titleLarge,
                             maxLines = 1,
@@ -1201,14 +1348,14 @@ private fun PlayerCore(
                         }
                         Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
                             Text(
-                                title,
+                                currentTitle,
                                 color = Color.White,
                                 style = MaterialTheme.typography.titleMedium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                subtitle,
+                                currentSubtitle,
                                 color = Color.White.copy(alpha = 0.75f),
                                 style = MaterialTheme.typography.labelMedium,
                                 maxLines = 1,
@@ -1225,7 +1372,7 @@ private fun PlayerCore(
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                 ) {
                     if (!introPlaying && !isLive) {
-                        val totalDur = if (durationMs > 0) durationMs else declaredDurationMs
+                        val totalDur = if (durationMs > 0) durationMs else vaultDeclaredMs
                         val shownPosition = dragValue?.toLong() ?: positionMs
                         val seekStepMs = when {
                             totalDur > 90 * 60_000L -> 30_000L
@@ -1286,8 +1433,8 @@ private fun PlayerCore(
                     if (isLive && !introPlaying) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Box(Modifier.size(8.dp).background(VisionLiveRed, CircleShape))
-                            Text("EN VIVO", color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                            Text(title, color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.labelMedium, maxLines = 1, modifier = Modifier.weight(1f))
+                            Text("EN VIVO", color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            Text(currentTitle, color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.labelMedium, maxLines = 1, modifier = Modifier.weight(1f))
                         }
                         Spacer(Modifier.height(8.dp))
                     }
@@ -1424,6 +1571,65 @@ private fun PlayerCore(
                             .onFocusChanged { brandSkipFocused = it.isFocused },
                     ),
             )
+        }
+
+        // «A continuación»: el siguiente capítulo YA descargado, sin tocar la red (maratón offline).
+        nextVault?.let { next ->
+            val nextFilm = remember(next.id) { next.toFilm() }
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .systemBarsPadding()
+                    .padding(
+                        end = if (isTv) SAFE_H + 16.dp else 20.dp,
+                        bottom = if (isTv) SAFE_V + 24.dp else 40.dp,
+                    )
+                    .width(320.dp)
+                    .background(Color(0xE60F1626), RoundedCornerShape(16.dp))
+                    .border(1.dp, VisionBlue.copy(alpha = 0.55f), RoundedCornerShape(16.dp))
+                    .padding(14.dp),
+            ) {
+                Text(
+                    "A CONTINUACIÓN",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VisionBlueBright,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    nextFilm.title,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (next.subtitle.isNotBlank()) {
+                    Text(
+                        next.subtitle,
+                        color = Color.White.copy(alpha = 0.75f),
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = { if (!isTv || canExecuteControlAction()) playNextVault() },
+                        colors = ButtonDefaults.buttonColors(containerColor = VisionBlue, contentColor = Color.White),
+                        modifier = if (!isTv) Modifier else Modifier
+                            .focusRequester(nextCardFocus)
+                            .onFocusChanged { nextCardFocused = it.isFocused },
+                    ) { Text("Reproducir ahora", fontWeight = FontWeight.Bold) }
+                    if (nextCountdown > 0) {
+                        Text(
+                            "en ${nextCountdown} s…",
+                            color = Color.White.copy(alpha = 0.85f),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -1611,7 +1817,13 @@ private fun EngineDownloadGate(isTv: Boolean, onCancel: () -> Unit, content: @Co
                 text = {
                     Text(
                         buildString {
-                            append("«${item.title}» va al ${item.progressPercent}%. ")
+                            if (item.state == DownloadState.QUEUED || item.progressPercent <= 0) {
+                                append("«${item.title}» está en la cola de descargas")
+                                if (item.subtitle.isNotBlank()) append(" (${item.subtitle})")
+                                append(". ")
+                            } else {
+                                append("«${item.title}» va al ${item.progressPercent}%. ")
+                            }
                             append("Vision+ usa el mismo motor de video para descargar y para reproducir: ")
                             append("para ver en línea ahora hay que pausar la descarga. ")
                             append("Al reanudarla empezará desde el principio.")
@@ -1715,6 +1927,10 @@ private fun XtvHandoff(
                     kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
                         delay(600)
                         com.chronosbvrx.visionplus.data.xuper.X4KApi.prewarmEngine(appContext)
+                        // Auto-descarga del «siguiente capítulo»: la orden la dejó el
+                        // reproductor (proceso `:x4k`); aquí se encarga con el gestor del
+                        // principal, que devuelve `:x4k` a limpio antes de la descarga.
+                        com.chronosbvrx.visionplus.data.offline.PendingAutoDownload.runIfAny(appContext)
                     }
                     onDone()
                 }

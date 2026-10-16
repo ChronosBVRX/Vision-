@@ -23,12 +23,16 @@ class OfflineProgressReceiver : BroadcastReceiver() {
             }
             OfflineProgressBus.ACTION_DONE -> {
                 val bytes = intent.getLongExtra(OfflineProgressBus.EXTRA_BYTES, 0L)
+                android.util.Log.i("OfflineProgressReceiver", "DONE $id ($bytes bytes)")
                 OfflineRegistry.updateProgress(id, bytes, bytes)
                 OfflineRegistry.updateState(id, DownloadState.COMPLETED)
+                OfflineDownloadManager.onWorkerFinished(id)
             }
             OfflineProgressBus.ACTION_ERROR -> {
                 val msg = intent.getStringExtra(OfflineProgressBus.EXTRA_ERROR).orEmpty()
+                android.util.Log.w("OfflineProgressReceiver", "ERROR $id: $msg")
                 OfflineRegistry.updateState(id, DownloadState.ERROR, msg.ifBlank { "Error de red al descargar" })
+                OfflineDownloadManager.onWorkerFinished(id)
             }
         }
     }

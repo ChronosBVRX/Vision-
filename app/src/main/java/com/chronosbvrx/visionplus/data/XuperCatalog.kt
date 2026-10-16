@@ -259,7 +259,7 @@ fun xuperRows(channels: List<LiveChannel>): List<CatalogRow> {
 /** An M3U entry as a film: its poster is the entry logo, its video the stream URL. */
 private fun LiveChannel.toFilm(groupLabel: String) = Film(
     id = "${fold(groupLabel)}-${fold(name)}".replace(' ', '_'),
-    title = name,
+    title = normalizeDisplayName(name),
     year = 0,
     durationMin = 0,
     synopsis = "",

@@ -6,6 +6,7 @@ import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.PLUGIN_PACKAGE
 import com.chronosbvrx.visionplus.data.allFilms
 import com.chronosbvrx.visionplus.data.metaLine
+import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import com.chronosbvrx.visionplus.data.searchFilms
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.data.vodLabel
@@ -116,5 +117,17 @@ class CatalogTest {
         assertEquals("0:00", formatDuration(0))
         assertEquals("1:05", formatDuration(65_000))
         assertEquals("1:01:01", formatDuration(3_661_000))
+    }
+
+    @Test
+    fun displayNamesDropUnderscoresAndCollapseSpaces() {
+        // El portal usa guiones bajos como separador ("Rebbeca_ …", "SAC_2045"): fuera.
+        assertEquals("Rebbeca Un documental con Becky G", normalizeDisplayName("Rebbeca_ Un documental con Becky G"))
+        assertEquals("Ghost in the Shell SAC 2045", normalizeDisplayName("Ghost in the Shell SAC_2045"))
+        assertEquals("A B", normalizeDisplayName("  A__B  "))
+        assertEquals("", normalizeDisplayName("_"))
+        // Sin guiones bajos el texto queda intacto (el caso común no cambia).
+        assertEquals("Spider-Man 2", normalizeDisplayName(" Spider-Man 2 "))
+        assertEquals("", normalizeDisplayName("   "))
     }
 }

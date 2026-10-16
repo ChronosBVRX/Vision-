@@ -157,4 +157,24 @@ class RemoteIndexTest {
         assertEquals("xtv:E019F33B862F", film.id)
         assertEquals("xtv:E019F33B862F", film.videoUrl)
     }
+
+    @Test
+    fun underscoreTitlesFromTheServerShowNormalized() {
+        // La base del servidor trae 33 títulos con guion bajo («Rebbeca_ Un documental…»):
+        // el parseo los deja listos para pintar, sin tocar ids ni refs.
+        val categories = JSONArray(
+            """[{"id":"movies","title":"Películas","films":[
+                  {"id":"xtv:7C10","title":"Rebbeca_ Un documental con Becky G","year":2025,"durationMin":90,"synopsis":"s",
+                   "posterUrl":"p","videoUrl":"xtv:7C10","sourceUrl":"xtv","score":7.0}
+                ]}]""",
+        )
+        val film = RemoteIndexSource.parseRows(categories).single().films.single()
+        assertEquals("Rebbeca Un documental con Becky G", film.title)
+        assertEquals("xtv:7C10", film.id)
+
+        val single = RemoteIndexSource.parseFilmObject(
+            JSONObject("""{"id":"xtv:B9BF","title":"La chica nueva_ El reinicio","videoUrl":"xtv:B9BF"}"""),
+        )
+        assertEquals("La chica nueva El reinicio", single?.title)
+    }
 }

@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.player
 
+import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -8,6 +9,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import kotlinx.coroutines.delay
 
 /** Inactivity after which the overlay hides itself while the video plays. */
@@ -73,6 +75,20 @@ internal fun resolvePlayerBackAction(
     isNavigationVisible -> PlayerBackAction.HIDE_NAVIGATION
     else -> PlayerBackAction.EXIT_PLAYER
 }
+
+/**
+ * Salida del reproductor residente («Camino B»): normalmente la actividad se queda viva
+ * detrás con su vista del motor (la app principal vuelve al frente y el próximo play
+ * reutiliza la misma vista); solo el auto-reparado —estado del motor rotado a una
+ * generación nueva— pide cerrar y reiniciar el proceso para estrenar carpeta limpia.
+ */
+internal enum class PlayerExitAction {
+    HIDE_RESIDENT,
+    FINISH_AND_RELAUNCH,
+}
+
+internal fun exitActionFor(hardReset: Boolean): PlayerExitAction =
+    if (hardReset) PlayerExitAction.FINISH_AND_RELAUNCH else PlayerExitAction.HIDE_RESIDENT
 
 internal enum class LiveDpadAction {
     LIST_NAVIGATION,
@@ -305,28 +321,77 @@ internal fun resolveLoadingCardText(
     episodeIndex: Int,
     episodeName: String = "",
 ): LoadingCardText {
-    val raw = rawTitle.trim()
+    val raw = normalizeDisplayName(rawTitle)
     if (isLive) return LoadingCardText(raw, "Preparando la señal…", "", accent = false)
     if (!isSeries) return LoadingCardText(raw, "Preparando tu película…", "", accent = false)
     val episode = "Capítulo ${episodeIndex.coerceAtLeast(0) + 1}"
     val season = seasonLabel.trim()
+    val title = normalizeDisplayName(baseTitle).ifBlank { raw }
     return LoadingCardText(
-        title = baseTitle.trim().ifBlank { raw },
+        title = title,
         subtitle = if (season.isBlank()) episode else "$season · $episode",
-        episodeName = cleanEpisodeName(episodeName, episodeIndex),
+        episodeName = cleanEpisodeName(episodeName, episodeIndex, seriesTitle = title),
         accent = true,
     )
 }
 
+/** Marca técnica del portal al final del nombre del capítulo: «… T1_11» (ya normalizado: «… T1 11»). */
+private val EPISODE_MARK_REGEX = Regex("""(?:\s*[-–—·:]\s*)?[Tt]\d{1,2}\s+\d{1,3}\s*$""")
+
+/** Prefijo de temporada pegado al nombre de la serie: «Ley y orden: UVE T1». */
+private val SERIES_SEASON_SUFFIX = Regex("""\s*[Tt]\d{1,2}\s*$""")
+
+private fun stripEpisodeMark(name: String): String =
+    EPISODE_MARK_REGEX.replace(name, "").trim().trim('-', '–', '—', '·', ':').trim()
+
+/** El nombre base de la serie sin su marca de temporada (para comparar, no para pintar). */
+private fun seriesBase(name: String): String =
+    normalizeDisplayName(name).replace(SERIES_SEASON_SUFFIX, "").trim()
+
 /**
- * Un nombre de capítulo que solo repite el número («Capítulo 8», «Episodio 8», «8») no
- * aporta nada a la espera: se descarta y queda solo el contexto temporada/capítulo.
+ * Nombre de capítulo listo para pintar. El portal rotula sus capítulos con la marca
+ * técnica «<Serie> T<temp>_<cap>» («Ley y orden: UVE T1_11»): el guion bajo y la marca
+ * no son un nombre. Se normaliza el texto, se quita la marca y, si lo que queda solo
+ * repite el número o el nombre de la serie, se devuelve "" (la UI cae al genérico o
+ * esconde la línea, como con cualquier capítulo sin nombre propio).
  */
-internal fun cleanEpisodeName(name: String, episodeIndex: Int): String {
-    val candidate = name.trim()
+internal fun cleanEpisodeName(name: String, episodeIndex: Int, seriesTitle: String = ""): String {
+    val candidate = stripEpisodeMark(normalizeDisplayName(name))
     if (candidate.isBlank()) return ""
     val n = episodeIndex.coerceAtLeast(0) + 1
-    return if (candidate.lowercase() in setOf("capítulo $n", "capitulo $n", "episodio $n", "$n")) "" else candidate
+    if (candidate.lowercase() in setOf("capítulo $n", "capitulo $n", "episodio $n", "episode $n", "$n")) return ""
+    if (seriesTitle.isNotBlank() && seriesBase(candidate).equals(seriesBase(seriesTitle), ignoreCase = true)) return ""
+    return candidate
+}
+
+/**
+ * Fila de capítulo de una ficha o de un selector: el nombre real normalizado; cuando el
+ * portal no trae nombre propio (o solo su marca técnica) cae al clásico «Capítulo N».
+ */
+internal fun episodeRowLabel(rawName: String, epNumber: Int, seriesTitle: String = ""): String {
+    val clean = cleanEpisodeName(rawName, (epNumber - 1).coerceAtLeast(0), seriesTitle)
+    return clean.ifBlank { "Capítulo ${epNumber.coerceAtLeast(1)}" }
+}
+
+/**
+ * Enlaza el foco del D-pad con la píldora «Omitir intro / resumen». Regresión real (2.5.83):
+ * la píldora se volvía enfocable pero NINGÚN control apuntaba a ella, así que el mando jamás
+ * podía llegar. Entrada: «arriba» desde la barra (la píldora vive sobre ella) mientras esté
+ * visible y enfocable. Salida: «abajo» vuelve a play/pausa; izquierda/derecha/arriba se quedan
+ * en la píldora (no se escapa). Con la píldora oculta, «arriba» se queda en la barra.
+ */
+internal fun wireSkipPillFocus(seek: View?, pill: View?, pillFocusable: Boolean, playPauseId: Int) {
+    val pillId = pill?.id ?: View.NO_ID
+    if (pill != null && pillId != View.NO_ID) {
+        pill.nextFocusLeftId = pillId
+        pill.nextFocusRightId = pillId
+        pill.nextFocusUpId = pillId
+        pill.nextFocusDownId = if (playPauseId != View.NO_ID) playPauseId else pillId
+    }
+    val seekId = seek?.id ?: View.NO_ID
+    if (seek != null && seekId != View.NO_ID && pillId != View.NO_ID) {
+        seek.nextFocusUpId = if (pillFocusable) pillId else seekId
+    }
 }
 
 internal fun shouldPromptResume(
