@@ -87,6 +87,9 @@ fun TvApp(catalog: XuperCatalog, nav: Navigator) {
                 onRailPick = { railReturn = it },
                 filmReturn = filmReturn,
                 onFilmPick = { filmReturn = it },
+                // El regreso pendiente se invalida al salir del Inicio por un hub/otra sección
+                // (el onDone del efecto de regreso queda apagado: ver nota en TvHomeScreen).
+                onClearFilmReturn = { filmReturn = null },
                 liveReturn = liveReturn,
                 onChannelPick = { liveReturn = it },
             )
@@ -210,9 +213,11 @@ private fun TvRoute(
                 nav.push(resumeRoute(it))
             },
             onGoRoute = { guardedGo(it, viaTab = false) },
-            // El regreso vale una sola vez: al restaurarse se limpia y los hubs lo
-            // invalidan al salir (si no, cada vuelta re-dispara el regreso viejo).
-            onClearReturn = onClearFilmReturn,
+            // El «regreso vale una sola vez» del onDone queda APAGADO a propósito: el foco
+            // transitorio de una tarjeta reciclada cuenta como «usuario» y limpiar ahí rompe
+            // el regreso con contenido tardío (homeBackRestoresSameCardAfterLateContent lo
+            // caza). La invalidación buena es por navegación: guardedGo (riel y hubs) y las
+            // salidas de arriba (En vivo, Categorías, Continuar).
         )
         is Route.Title -> TvTitleScreen(route.film, onPlay = { ep -> nav.push(Route.Player(route.film, ep)) })
         is Route.Player -> PlayerScreen(route.film, isTv = true, onBack = { nav.pop() }, episode = route.episode, resumeMs = route.resumeMs)
