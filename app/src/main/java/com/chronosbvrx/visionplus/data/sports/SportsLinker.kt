@@ -52,7 +52,7 @@ object SportsLinker {
         "tv azteca deportes network" to listOf("azteca", "7"),
         "tudn en vivo" to listOf("tudn"),
         "tudn usa" to listOf("tudn", "usa"),
-        "fox mexico" to listOf("fox", "sports"),
+        "fox mexico" to listOf("fox"),
         "fox one" to listOf("fox", "sports", "1"),
         "fox sports mexico" to listOf("fox", "sports"),
         "fox sports 2 mexico" to listOf("fox", "sports", "2"),
@@ -214,14 +214,15 @@ object SportsLinker {
     private fun computeBrandInfo(rawName: String): BrandInfo {
         val n = norm(rawName)
         val toks = tokens(rawName)
+        val padded = " $n "
 
         val targetCountry = when {
-            n.contains("mexico") || n.contains("mex") || toks.contains("mx") -> "México"
-            n.contains("usa") || n.contains("estados unidos") || toks.contains("us") -> "EE. UU."
-            n.contains("argentina") || toks.contains("arg") || toks.contains("ar") -> "Argentina"
-            n.contains("chile") || toks.contains("cl") -> "Chile"
-            n.contains("colombia") || toks.contains("col") || toks.contains("co") -> "Colombia"
-            n.contains("espana") || n.contains("spain") || toks.contains("esp") -> "España"
+            n.contains("mexico") || n.contains("mex") || padded.contains(" mx ") -> "México"
+            n.contains("usa") || n.contains("estados unidos") || padded.contains(" us ") -> "EE. UU."
+            n.contains("argentina") || padded.contains(" arg ") || padded.contains(" ar ") -> "Argentina"
+            n.contains("chile") || padded.contains(" cl ") -> "Chile"
+            n.contains("colombia") || padded.contains(" col ") || padded.contains(" co ") -> "Colombia"
+            n.contains("espana") || n.contains("spain") || padded.contains(" esp ") -> "España"
             else -> null
         }
 
@@ -244,7 +245,12 @@ object SportsLinker {
                     else -> null
                 }
             }
-            cleanToks.contains("fox") && (cleanToks.contains("sports") || cleanToks.contains("sport") || cleanToks.contains("one") || cleanToks.contains("premium") || n.contains("fox 1") || n.contains("fox 2") || n.contains("fox 3") || n == "fox" || n == "fox mexico") -> {
+            cleanToks.contains("fox") && n.contains("deporte") -> {
+                // FOX DEPORTES: señal de EE. UU. (Disney) — no es Fox Sports MX ni el canal general.
+                brand = "fox deportes"
+                edition = null
+            }
+            cleanToks.contains("fox") && (cleanToks.contains("sports") || cleanToks.contains("sport") || cleanToks.contains("one") || cleanToks.contains("premium") || n.contains("fox 1") || n.contains("fox 2") || n.contains("fox 3")) -> {
                 brand = "fox sports"
                 edition = when {
                     cleanToks.contains("premium") -> "premium"
@@ -253,6 +259,11 @@ object SportsLinker {
                     cleanToks.contains("1") || cleanToks.contains("one") -> "1"
                     else -> null
                 }
+            }
+            n == "fox" || n == "fox channel" || n == "fox mexico" || n == "fox hd" -> {
+                // El canal general de la red FOX (Disney): NO es Fox Sports (Lauman).
+                brand = "fox"
+                edition = null
             }
             cleanToks.contains("tudn") -> {
                 brand = "tudn"
@@ -629,19 +640,6 @@ object SportsLinker {
         val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
         fmt.timeZone = MX_ZONE
         return fmt.format(java.util.Date(ms))
-    }
-
-    /**
-     * Los canales de TV reales de Vision+ que corresponden a la guía del partido:
-     * la parrilla oficial (TUDN, Azteca 7, Fox Sports, ESPN…) resuelta contra los
-     * canales en vivo de la lista — se sintonizan como cualquier canal, así que
-     * si el partido va por ese canal, se ve el partido.
-     */
-    fun tvChannelsFor(context: Context, event: GeeSportsSource.GeeEvent): List<LiveChannel> {
-        if (event.broadcasts.isEmpty()) return emptyList()
-        val channels = runCatching { X4KApi.cachedLiveChannels(context) }.getOrDefault(emptyList())
-        if (channels.isEmpty()) return emptyList()
-        return resolveChannels(event.broadcasts, channels, event.leagueId.ifBlank { null })
     }
 
     /**

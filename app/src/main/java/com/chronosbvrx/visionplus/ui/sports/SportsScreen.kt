@@ -46,8 +46,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
+import com.chronosbvrx.visionplus.data.gee.GeeGuide
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
-import com.chronosbvrx.visionplus.data.sports.SportsLinker
 import com.chronosbvrx.visionplus.data.sports.SportsSource
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
@@ -77,12 +77,12 @@ fun SportsScreen(
         pickingId?.let { id -> gee.events.firstOrNull { it.id == id } }
     }
     val context = LocalContext.current
-    // La guía del partido (parrilla oficial) y sus canales de TV reales de la lista.
+    // La guía del partido (parrilla oficial) y sus canales 24/7 del catálogo deportivo.
     val pickingGuide = remember(picking) { picking?.broadcasts.orEmpty() }
-    val pickingTv = remember(picking) {
+    val pickingTv = remember(picking, gee.groups) {
         val event = picking
         if (event == null) emptyList()
-        else runCatching { SportsLinker.tvChannelsFor(context, event) }.getOrDefault(emptyList())
+        else runCatching { GeeGuide.channelsFor(event.broadcasts, gee.groups) }.getOrDefault(emptyList())
     }
 
     val events = gee.selectedEvents
@@ -272,7 +272,7 @@ fun SportsScreen(
             },
             onPlay = onPlay,
             guide = pickingGuide,
-            tvChannels = pickingTv,
+            geeTv = pickingTv,
         )
     }
 }

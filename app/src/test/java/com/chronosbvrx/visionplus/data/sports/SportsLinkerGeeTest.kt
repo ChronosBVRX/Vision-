@@ -67,6 +67,12 @@ class SportsLinkerGeeTest {
         links = links,
     )
 
+    private fun channel(name: String) = com.chronosbvrx.visionplus.data.LiveChannel(
+        name = name,
+        url = "xtvlive:$name",
+        group = "Deportes",
+    )
+
     @Test
     fun matchesTeamsWithPortalAliasesOnTheSameDay() {
         val kickoff = Instant.parse("2026-10-17T02:00:00Z").toEpochMilli() // 16/10 20:00 en México
@@ -131,5 +137,31 @@ class SportsLinkerGeeTest {
         // 02:00 UTC del 17 sigue siendo 16 en México (UTC-6).
         assertEquals("2026-10-16", SportsLinker.dayIsoOf(Instant.parse("2026-10-17T02:00:00Z").toEpochMilli()))
         assertEquals("2026-10-17", SportsLinker.dayIsoOf(Instant.parse("2026-10-17T20:00:00Z").toEpochMilli()))
+    }
+
+    @Test
+    fun foxBrandsAreKeptApart() {
+        // Conflicto real de México: el canal general «Fox» (Disney) no es
+        // «Fox Sports» (Grupo Lauman) ni «FOX DEPORTES» (señal de EE. UU.).
+        assertEquals("fox", SportsLinker.extractBrandInfo("Fox").brand)
+        assertEquals("fox", SportsLinker.extractBrandInfo("Fox channel").brand)
+        assertEquals("fox deportes", SportsLinker.extractBrandInfo("FOX DEPORTES").brand)
+        val sports = SportsLinker.extractBrandInfo("Fox Sports 1 MX")
+        assertEquals("fox sports", sports.brand)
+        assertEquals("1", sports.edition)
+        assertEquals("México", sports.targetCountry)
+    }
+
+    @Test
+    fun foxSportsGuideNeverPicksTheGeneralFoxChannel() {
+        val channels = listOf(
+            channel("Fox"),
+            channel("Fox channel"),
+            channel("Fox Sports 1 MX"),
+            channel("Fox Sports 2 MX"),
+        )
+        val resolved = SportsLinker.resolveChannels(listOf("Fox Sports"), channels)
+        assertEquals("xtvlive:Fox Sports 1 MX", resolved.firstOrNull()?.url)
+        assertTrue(resolved.none { it.name == "Fox" || it.name == "Fox channel" })
     }
 }

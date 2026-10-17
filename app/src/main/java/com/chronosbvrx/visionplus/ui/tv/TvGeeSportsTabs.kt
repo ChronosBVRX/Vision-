@@ -49,6 +49,7 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
+import com.chronosbvrx.visionplus.data.gee.GeeGuide
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.ui.sports.GeeSportsState
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
@@ -227,7 +228,7 @@ internal fun TvGeeLinkPickDialog(
     onDismiss: () -> Unit,
     onPlay: (LiveChannel) -> Unit,
     guide: List<String> = emptyList(),
-    tvChannels: List<LiveChannel> = emptyList(),
+    geeTv: List<GeeGuide.TvOption> = emptyList(),
 ) {
     BackHandler(onBack = onDismiss)
     DisposableEffect(Unit) {
@@ -272,12 +273,12 @@ internal fun TvGeeLinkPickDialog(
                         )
                     }
                     Spacer(Modifier.height(14.dp))
-                    if (tvChannels.isEmpty() && links.isEmpty()) {
+                    if (geeTv.isEmpty() && links.isEmpty()) {
                         Text("Sin transmisiones disponibles por ahora.", style = MaterialTheme.typography.bodyMedium, color = VisionTextSecondary)
                         Spacer(Modifier.height(14.dp))
                         TvCompactAction("Volver", onClick = onDismiss, modifier = Modifier.landingFocus(modalLanding))
                     } else {
-                        val firstTv = tvChannels.firstOrNull()
+                        val firstTv = geeTv.firstOrNull()
                         val firstLink = links.firstOrNull()
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -286,17 +287,19 @@ internal fun TvGeeLinkPickDialog(
                             if (firstTv != null) {
                                 item(key = "tv_label") {
                                     Text(
-                                        "Canales de TV (tu lista):",
+                                        "Canales en vivo:",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = VisionTextSecondary,
                                         modifier = Modifier.padding(bottom = 2.dp),
                                     )
                                 }
-                                items(tvChannels, key = { "tv_" + it.url }) { channel ->
+                                items(geeTv, key = { "tv_" + it.title + "|" + it.link.link }) { option ->
                                     TvGeeTvChannelItem(
-                                        channel = channel,
-                                        onClick = { onPlay(channel) },
-                                        modifier = if (channel == firstTv) Modifier.landingFocus(modalLanding) else Modifier,
+                                        option = option,
+                                        onClick = {
+                                            onPlay(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo"))
+                                        },
+                                        modifier = if (option == firstTv) Modifier.landingFocus(modalLanding) else Modifier,
                                     )
                                 }
                             }
@@ -316,7 +319,7 @@ internal fun TvGeeLinkPickDialog(
                                         onClick = {
                                             onPlay(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
                                         },
-                                        modifier = if (tvChannels.isEmpty() && link == firstLink) Modifier.landingFocus(modalLanding) else Modifier,
+                                        modifier = if (geeTv.isEmpty() && link == firstLink) Modifier.landingFocus(modalLanding) else Modifier,
                                     )
                                 }
                             }
@@ -334,7 +337,7 @@ internal fun TvGeeLinkPickDialog(
 
 @Composable
 private fun TvGeeTvChannelItem(
-    channel: LiveChannel,
+    option: GeeGuide.TvOption,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -359,22 +362,22 @@ private fun TvGeeTvChannelItem(
         ) {
             Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(10.dp))
-            if (!channel.logo.isNullOrBlank()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(channel.logo)
-                        .size(56, 56)
-                        .crossfade(false)
-                        .build(),
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    contentScale = ContentScale.Fit,
-                )
-                Spacer(Modifier.width(10.dp))
-            }
             Column(Modifier.weight(1f)) {
-                Text(channel.name, style = MaterialTheme.typography.labelLarge, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("Canal de TV en vivo", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+                Text(option.title, style = MaterialTheme.typography.labelLarge, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Canal en vivo", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+            }
+            Spacer(Modifier.width(10.dp))
+            when (option.link.alive) {
+                true -> Surface(shape = RoundedCornerShape(50), colors = SurfaceDefaults.colors(containerColor = GeeLiveRed)) {
+                    Text(
+                        "EN VIVO",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+                null -> Text("Sin verificar", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+                else -> Text("Caído", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
             }
         }
     }

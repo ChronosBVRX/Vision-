@@ -53,8 +53,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
+import com.chronosbvrx.visionplus.data.gee.GeeGuide
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
-import com.chronosbvrx.visionplus.data.sports.SportsLinker
 import com.chronosbvrx.visionplus.data.sports.SportsSource
 import com.chronosbvrx.visionplus.ui.sports.geeCategoryLabel
 import com.chronosbvrx.visionplus.ui.sports.geeEventSubtitle
@@ -89,10 +89,10 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
     val listState = rememberLazyListState()
     val context = LocalContext.current
     val pickingGuide = remember(picking) { picking?.broadcasts.orEmpty() }
-    val pickingTv = remember(picking) {
+    val pickingTv = remember(picking, gee.groups) {
         val event = picking
         if (event == null) emptyList()
-        else runCatching { SportsLinker.tvChannelsFor(context, event) }.getOrDefault(emptyList())
+        else runCatching { GeeGuide.channelsFor(event.broadcasts, gee.groups) }.getOrDefault(emptyList())
     }
 
     val events = gee.selectedEvents
@@ -256,10 +256,9 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                 },
                 onPlay = onPlay,
                 guide = pickingGuide,
-                tvChannels = pickingTv,
+                geeTv = pickingTv,
             )
-        }
-    }
+        }    }
 }
 
 @Composable

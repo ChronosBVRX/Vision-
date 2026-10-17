@@ -43,6 +43,7 @@ import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
+import com.chronosbvrx.visionplus.data.gee.GeeGuide
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
@@ -232,7 +233,7 @@ fun GeeLinkPickDialog(
     onDismiss: () -> Unit,
     onPlay: (LiveChannel) -> Unit,
     guide: List<String> = emptyList(),
-    tvChannels: List<LiveChannel> = emptyList(),
+    geeTv: List<GeeGuide.TvOption> = emptyList(),
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -260,7 +261,7 @@ fun GeeLinkPickDialog(
                     )
                 }
                 Spacer(Modifier.height(14.dp))
-                if (tvChannels.isEmpty() && links.isEmpty()) {
+                if (geeTv.isEmpty() && links.isEmpty()) {
                     Text(
                         "Sin transmisiones disponibles por ahora.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -272,18 +273,20 @@ fun GeeLinkPickDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
                     ) {
-                        if (tvChannels.isNotEmpty()) {
+                        if (geeTv.isNotEmpty()) {
                             item(key = "tv_label") {
                                 Text(
-                                    "Canales de TV (tu lista):",
+                                    "Canales en vivo:",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = VisionTextSecondary,
                                     modifier = Modifier.padding(bottom = 2.dp),
                                 )
                             }
-                            items(tvChannels, key = { "tv_" + it.url }) { channel ->
+                            items(geeTv, key = { "tv_" + it.title + "|" + it.link.link }) { option ->
                                 Surface(
-                                    onClick = { onPlay(channel) },
+                                    onClick = {
+                                        onPlay(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo"))
+                                    },
                                     shape = RoundedCornerShape(12.dp),
                                     color = VisionSurfaceHigh,
                                     modifier = Modifier.fillMaxWidth(),
@@ -294,29 +297,18 @@ fun GeeLinkPickDialog(
                                     ) {
                                         Icon(Icons.Default.PlayArrow, contentDescription = null, tint = VisionBlue, modifier = Modifier.size(22.dp))
                                         Spacer(Modifier.width(10.dp))
-                                        if (!channel.logo.isNullOrBlank()) {
-                                            AsyncImage(
-                                                model = ImageRequest.Builder(LocalContext.current)
-                                                    .data(channel.logo)
-                                                    .size(56, 56)
-                                                    .crossfade(false)
-                                                    .build(),
-                                                contentDescription = null,
-                                                modifier = Modifier.size(22.dp),
-                                                contentScale = ContentScale.Fit,
-                                            )
-                                            Spacer(Modifier.width(8.dp))
-                                        }
                                         Column(Modifier.weight(1f)) {
                                             Text(
-                                                channel.name,
+                                                option.title,
                                                 style = MaterialTheme.typography.labelLarge,
                                                 color = Color.White,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
-                                            Text("Canal de TV en vivo", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+                                            Text("Canal en vivo", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
                                         }
+                                        Spacer(Modifier.width(8.dp))
+                                        GeeAliveBadge(option.link.alive)
                                     }
                                 }
                             }
