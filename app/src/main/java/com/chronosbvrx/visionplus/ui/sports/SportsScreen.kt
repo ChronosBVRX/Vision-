@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +58,7 @@ import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
+import kotlinx.coroutines.delay
 
 private val LiveRed = Color(0xFFD32F2F)
 
@@ -95,10 +97,20 @@ fun SportsScreen(
     val filtered = remember(events, league, isFootball) {
         if (!isFootball) events else events.filter { GeeAgenda.matchesLeague(it, league) }
     }
-    val sections = remember(filtered) { GeeAgenda.sections(filtered) }
+    // El reloj de la agenda: cada 30 s las fases se recalculan solas (el candado de
+    // «aún no comienza» se abre al llegar la hora, sin tocar nada).
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            gee.tick()
+        }
+    }
+    // El reloj entra en la llave: al pasar el tiempo los bloques se rearman solos.
+    val now = gee.clockMs
+    val sections = remember(filtered, now) { GeeAgenda.sections(filtered, now) }
     val days = remember { (0..7).map { SportsSource.shift(SportsSource.todayIso(), it) } }
-    val liveCount = remember(filtered) {
-        filtered.count { it.live || GeeAgenda.phaseOf(it) == GeeAgenda.Phase.Live }
+    val liveCount = remember(filtered, now) {
+        filtered.count { it.live || GeeAgenda.phaseOf(it, now) == GeeAgenda.Phase.Live }
     }
     val countText = when {
         gee.loading && filtered.isEmpty() -> "Cargando eventos…"
@@ -253,7 +265,7 @@ fun SportsScreen(
                                 GeeSectionHeader(section.title, section.events.size)
                             }
                             gridItems(section.events, key = { it.id }) { event ->
-                                GeeEventTile(event) {
+                                GeeEventTile(event, now) {
                                     DeportesReturn.pickingId = event.id
                                     pickingId = event.id
                                 }
@@ -277,6 +289,8 @@ fun SportsScreen(
             onPlay = onPlay,
             guide = pickingGuide,
             geeTv = pickingTv,
+            playable = GeeAgenda.playable(event, now),
+            blockNote = GeeAgenda.blockNote(event, now),
         )
     }
 }
@@ -322,7 +336,7 @@ private fun GeeSectionHeader(title: String, count: Int) {
  * Mismo ADN visual que la de Smart TV (misma lógica pura en [GeeTiles]).
  */
 @Composable
-private fun GeeEventTile(event: GeeSportsSource.GeeEvent, onClick: () -> Unit) {
+private fun GeeEventTile(event: GeeSportsSource.GeeEvent, nowMs: Long, onClick: () -> Unit) {
     val (home, away) = GeeTiles.teams(event)
     val hasTeams = home.isNotBlank()
 
@@ -355,7 +369,7 @@ private fun GeeEventTile(event: GeeSportsSource.GeeEvent, onClick: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                GeeStateBadge(event, compact = true)
+                GeeStateBadge(event, compact = true, nowMs = nowMs)
             }
             Spacer(Modifier.height(8.dp))
             if (hasTeams) {
@@ -391,7 +405,7 @@ private fun GeeEventTile(event: GeeSportsSource.GeeEvent, onClick: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(7.dp))
-            GeeTileFooter(event)
+            GeeTileFooter(event, nowMs)
         }
     }
 }
@@ -441,9 +455,9 @@ private fun GeeTileTeamLine(logo: String, name: String, score: Int?, live: Boole
     }
 }
 
-/** El pie: la guía de TV («TV: …») o si tiene señal, más el contador de enlaces vivos. */
+/** El pie: la guía de TV («TV: …») o cuántas señales hay. La píldora roja es SOLO para partidos en vivo. */
 @Composable
-private fun GeeTileFooter(event: GeeSportsSource.GeeEvent) {
+private fun GeeTileFooter(event: GeeSportsSource.GeeEvent, nowMs: Long) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         val tvLine = event.broadcasts.take(2).joinToString(" · ")
         Text(
@@ -454,7 +468,9 @@ private fun GeeTileFooter(event: GeeSportsSource.GeeEvent) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        if (event.alive > 0) {
+        // «en vivo» nunca en un partido que aún no comienza o ya terminó: `alive`
+        // solo dice si el enlace responde, no que se esté jugando.
+        if (GeeAgenda.playable(event, nowMs) && event.alive > 0) {
             Spacer(Modifier.width(6.dp))
             Surface(color = LiveRed, shape = RoundedCornerShape(50)) {
                 Text(
@@ -470,9 +486,9 @@ private fun GeeTileFooter(event: GeeSportsSource.GeeEvent) {
 
 /** EN VIVO con minuto, Final, o la hora con el día (Hoy/mañana/fecha). */
 @Composable
-private fun GeeStateBadge(event: GeeSportsSource.GeeEvent, compact: Boolean = false) {
+private fun GeeStateBadge(event: GeeSportsSource.GeeEvent, compact: Boolean = false, nowMs: Long = GeeAgenda.currentNow()) {
     when {
-        event.live -> Surface(color = LiveRed, shape = RoundedCornerShape(50)) {
+        event.live || GeeAgenda.phaseOf(event, nowMs) == GeeAgenda.Phase.Live -> Surface(color = LiveRed, shape = RoundedCornerShape(50)) {
             Text(
                 GeeTiles.liveLabel(event),
                 style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge,

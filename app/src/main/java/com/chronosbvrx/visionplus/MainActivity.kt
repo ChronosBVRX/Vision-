@@ -1,7 +1,11 @@
 package com.chronosbvrx.visionplus
 
+import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
+import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -14,7 +18,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +46,12 @@ import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.data.gate.GateClient
 import com.chronosbvrx.visionplus.data.launcher.LauncherWatchNext
+import com.chronosbvrx.visionplus.data.remote.RemoteBus
+import com.chronosbvrx.visionplus.data.remote.RemoteKeys
+import com.chronosbvrx.visionplus.data.remote.RemoteProto
+import com.chronosbvrx.visionplus.data.remote.RemoteServer
+import com.chronosbvrx.visionplus.data.remote.remoteLiveChannel
+import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import com.chronosbvrx.visionplus.ui.activation.ActivationScreen
 import com.chronosbvrx.visionplus.ui.LocalReducedEffects
 import com.chronosbvrx.visionplus.ui.Navigator
@@ -70,6 +83,9 @@ class MainActivity : ComponentActivity() {
     /** El back stack vive aquí: la tarjeta del launcher entra como ruta desde el intent. */
     private val nav = Navigator(listOf(Route.Home))
 
+    /** El servidor del control remoto; solo existe en la televisión. */
+    private var remoteServer: RemoteServer? = null
+
     /**
      * A D-pad key no view handled (onKeyDown only sees those), with nothing focused on the TV screen: the screen's landing
      * element takes the focus, so the remote never ends up doing nothing.
@@ -86,10 +102,45 @@ class MainActivity : ComponentActivity() {
         launcherIntentRoute(intent)?.let { nav.push(it) }
     }
 
+    /** El control remoto solo le habla a la pantalla que está al frente. */
+    private val remoteSink = object : RemoteBus.Sink {
+        override fun onRemoteKey(code: Int, action: String) {
+            // El servidor atiende en un hilo de red: la tecla se entrega en el hilo de la UI.
+            runOnUiThread { deliverRemoteKey(code, action) }
+        }
+    }
+
+    private fun deliverRemoteKey(code: Int, action: String) {
+        if (RemoteKeys.isVolume(code)) {
+            applyVolume(code)
+            return
+        }
+        // Atrás usa el despachador real (respeta los dos pasos y el diálogo de cierre).
+        if (code == KeyEvent.KEYCODE_BACK) {
+            runCatching { onBackPressedDispatcher.onBackPressed() }
+            return
+        }
+        dispatchRemoteKey(code, action)
+    }
+
     override fun onResume() {
         super.onResume()
+        RemoteBus.attach(remoteSink)
         // Google TV: al volver a la app, «Continuar viendo» se sincroniza con el historial.
         LauncherWatchNext.syncAsync(this, delayMs = 3_000L)
+    }
+
+    override fun onPause() {
+        RemoteBus.detach(remoteSink)
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        if (isFinishing) {
+            remoteServer?.stop()
+            remoteServer = null
+        }
+        super.onDestroy()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -109,6 +160,10 @@ class MainActivity : ComponentActivity() {
         com.chronosbvrx.visionplus.ui.settings.VisionSettings.init(this)
         com.chronosbvrx.visionplus.data.offline.OfflineRegistry.init(this)
         com.chronosbvrx.visionplus.data.offline.NetworkMonitor.init(this)
+        // Control remoto por LAN: solo la tele escucha (el teléfono es el que manda órdenes).
+        if (isTv) {
+            remoteServer = RemoteServer(this).also { runCatching { it.start() } }
+        }
         // Tarjeta del launcher en arranque en frío: la película/capítulo entra en la ruta base.
         if (savedInstanceState == null) {
             launcherIntentRoute(intent)?.let { nav.push(it) }
@@ -265,6 +320,14 @@ class MainActivity : ComponentActivity() {
                                     .padding(top = if (isTv) 14.dp else 56.dp),
                             )
                         }
+                        // Lo que la tele muestra, para que el control remoto lo refleje.
+                        val remoteRoute = navigator.current
+                        LaunchedEffect(remoteRoute) { RemoteBus.publishScreen(remoteRouteLabel(remoteRoute)) }
+                        // El PIN de emparejamiento: solo aparece cuando un teléfono lo pidió
+                        // desde la red local. Sin foco, para no robarle el D-pad a nadie.
+                        RemoteBus.pairingPin.value?.let { pin ->
+                            RemotePairingPin(pin, isTv)
+                        }
                     }
                 }
             }
@@ -279,8 +342,112 @@ class MainActivity : ComponentActivity() {
     private fun rememberCatalog(): XuperCatalog = remember { XuperCatalog(this) }
 
     /** La tarjeta del launcher llega como ACTION_VIEW con esquema `visionplus://watch/…`. */
-    private fun launcherIntentRoute(intent: Intent?): Route? =
-        if (intent != null && intent.action == Intent.ACTION_VIEW) launcherRouteFor(this, intent.data) else null
+    private fun launcherIntentRoute(intent: Intent?): Route? {
+        if (intent == null || intent.action != Intent.ACTION_VIEW) return null
+        val uri = intent.data ?: return null
+        // El control remoto abre canales con `visionplus://live/<código>`.
+        if ("live".equals(uri.host, ignoreCase = true)) return liveRouteFor(uri)
+        return launcherRouteFor(this, uri)
+    }
+
+    /** Un canal que el teléfono mandó a abrir: del catálogo cacheado, o mínimo con su código. */
+    private fun liveRouteFor(uri: Uri): Route? {
+        val code = uri.pathSegments.lastOrNull().orEmpty()
+        val name = uri.getQueryParameter("t").orEmpty()
+        val logo = uri.getQueryParameter("p")
+        val cached = runCatching { X4KApi.cachedLiveChannels(this) }.getOrDefault(emptyList())
+        val channel = remoteLiveChannel(code, name, logo, cached) ?: return null
+        return Route.LivePlayer(channel)
+    }
+
+    /** Entrega una tecla remota al sistema como si viniera del mando. */
+    private fun dispatchRemoteKey(code: Int, action: String) {
+        val down = SystemClock.uptimeMillis()
+        fun ev(a: Int) = KeyEvent(down, SystemClock.uptimeMillis(), a, code, 0)
+        runCatching {
+            when (action) {
+                RemoteProto.ACTION_DOWN -> dispatchKeyEvent(ev(KeyEvent.ACTION_DOWN))
+                RemoteProto.ACTION_UP -> dispatchKeyEvent(ev(KeyEvent.ACTION_UP))
+                else -> {
+                    dispatchKeyEvent(ev(KeyEvent.ACTION_DOWN))
+                    dispatchKeyEvent(ev(KeyEvent.ACTION_UP))
+                }
+            }
+        }
+    }
+
+    /** El volumen lo mueve el sistema (el motor de video no lo necesita). */
+    private fun applyVolume(code: Int) {
+        val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        runCatching {
+            val direction = when (code) {
+                KeyEvent.KEYCODE_VOLUME_UP -> AudioManager.ADJUST_RAISE
+                KeyEvent.KEYCODE_VOLUME_DOWN -> AudioManager.ADJUST_LOWER
+                else -> AudioManager.ADJUST_TOGGLE_MUTE
+            }
+            am.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI)
+        }
+    }
+}
+
+/** Cómo se llama cada pantalla para el «En la tele: …» del control remoto. */
+private fun remoteRouteLabel(route: Route): String = when (route) {
+    Route.Home -> "Inicio"
+    Route.Categories -> "Categorías"
+    Route.Library -> "Mi lista"
+    Route.Downloads -> "Descargas"
+    Route.Live -> "TV en vivo"
+    Route.Sports -> "Deportes en vivo"
+    Route.Settings -> "Ajustes"
+    Route.About -> "Acerca de"
+    Route.Search -> "Buscador"
+    Route.Assistant -> "Asistente"
+    Route.Remote -> "Control remoto"
+    is Route.Title -> route.film.title
+    is Route.Category -> route.title
+    is Route.Section -> route.title
+    is Route.Player -> route.film.title
+    is Route.LivePlayer -> route.channel.name
+}
+
+/** El PIN de emparejamiento del control remoto, en grande y sin foco. */
+@Composable
+private fun BoxScope.RemotePairingPin(pin: String, isTv: Boolean) {
+    Box(
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
+                .background(com.chronosbvrx.visionplus.ui.theme.VisionSurface)
+                .border(
+                    BorderStroke(1.dp, com.chronosbvrx.visionplus.ui.theme.VisionBlue.copy(alpha = 0.5f)),
+                    androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                )
+                .padding(horizontal = 48.dp, vertical = 36.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "Emparejar control remoto",
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            )
+            Text(
+                "Escribe este PIN en tu teléfono",
+                style = MaterialTheme.typography.bodyLarge,
+                color = com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary,
+            )
+            androidx.compose.foundation.layout.Spacer(Modifier.height(if (isTv) 20.dp else 16.dp))
+            Text(
+                pin.toCharArray().joinToString(" "),
+                style = MaterialTheme.typography.displayMedium,
+                color = com.chronosbvrx.visionplus.ui.theme.VisionBlueBright,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            )
+        }
+    }
 }
 
 private val DPAD_KEYS = setOf(

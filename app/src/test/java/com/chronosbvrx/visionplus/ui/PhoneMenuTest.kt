@@ -23,4 +23,12 @@ class PhoneMenuTest {
         val labels = TABS.map { it.label }
         assertEquals(labels.indexOf("En vivo") + 1, labels.indexOf("Deportes en vivo"))
     }
+
+    /** El control remoto (teléfono → tele) también vive en el menú lateral. */
+    @Test
+    fun sideMenuOffersTheRemoteControl() {
+        val remote = TABS.firstOrNull { it.route == Route.Remote }
+        assertNotNull("el menú lateral debe incluir el Control remoto", remote)
+        assertEquals("Control remoto", remote?.label)
+    }
 }

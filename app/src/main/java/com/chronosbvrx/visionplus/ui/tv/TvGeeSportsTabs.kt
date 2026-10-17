@@ -53,14 +53,34 @@ import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeGuide
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.ui.sports.GeeSportsState
+import com.chronosbvrx.visionplus.ui.sports.GeeZapSignals
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
+import com.chronosbvrx.visionplus.ui.theme.VisionSuccess
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.delay
 
-private val GeeLiveRed = Color(0xFFD32F2F)
+/**
+ * El badge de la SEÑAL de un enlace (si responde o no). Habla del enlace, NO de
+ * si el partido está en vivo: por eso dice «Disponible» y no «EN VIVO».
+ */
+@Composable
+private fun TvGeeSignalBadge(alive: Boolean?) {
+    when (alive) {
+        true -> Surface(shape = RoundedCornerShape(50), colors = SurfaceDefaults.colors(containerColor = VisionSuccess)) {
+            Text(
+                "Disponible",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF06170F),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            )
+        }
+        null -> Text("Sin verificar", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+        else -> Text("Caído", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+    }
+}
 
 /**
  * "Canales" en la TV: los grupos 24/7 de GeeSports. Cada canal abre sus enlaces.
@@ -107,7 +127,7 @@ internal fun TvGeeChannelsTab(
                                 Spacer(Modifier.width(10.dp))
                             }
                             Text(group.name, style = MaterialTheme.typography.titleMedium, color = Color.White, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("${group.alive}/${group.total} en vivo", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+                            Text("${group.alive}/${group.total} disponibles", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
                         }
                     }
                     items(
@@ -200,14 +220,7 @@ private fun TvGeeChannelRow(
             Text(channel.name, style = MaterialTheme.typography.bodyLarge, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(12.dp))
             if (alive > 0) {
-                Surface(shape = RoundedCornerShape(50), colors = SurfaceDefaults.colors(containerColor = GeeLiveRed)) {
-                    Text(
-                        "$alive en vivo",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                    )
-                }
+                Text("$alive disponibles", style = MaterialTheme.typography.labelLarge, color = VisionSuccess)
             } else {
                 Text("${channel.links.size} enlaces", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
             }
@@ -220,6 +233,9 @@ private fun TvGeeChannelRow(
 /**
  * El selector de transmisiones en la TV: los canales de TV reales de la lista
  * (resueltos de la guía) y las transmisiones directas, vivos primero. OK sintoniza.
+ *
+ * Con [playable] en false (el partido aún no comienza o ya terminó) NO se ofrecen
+ * señales: solo se muestra dónde se transmite y el aviso [blockNote].
  */
 @Composable
 internal fun TvGeeLinkPickDialog(
@@ -230,7 +246,21 @@ internal fun TvGeeLinkPickDialog(
     onPlay: (LiveChannel) -> Unit,
     guide: List<String> = emptyList(),
     geeTv: List<GeeGuide.TvOption> = emptyList(),
+    playable: Boolean = true,
+    blockNote: String = "",
 ) {
+    // Zapping dentro del bloque de opciones: la lista ORDENADA del evento (guía de la parrilla
+    // + enlaces directos) queda armada para el reproductor en línea, que la recoge al montar.
+    val zapOrder = remember(links, geeTv) {
+        buildList {
+            geeTv.forEach { option -> add(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo")) }
+            links.forEach { link -> add(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo")) }
+        }.distinctBy { it.url }
+    }
+    fun playZap(picked: LiveChannel) {
+        GeeZapSignals.arm(picked, zapOrder)
+        onPlay(picked)
+    }
     BackHandler(onBack = onDismiss)
     DisposableEffect(Unit) {
         FocusRescue.dialogsOpen++
@@ -274,7 +304,15 @@ internal fun TvGeeLinkPickDialog(
                         )
                     }
                     Spacer(Modifier.height(14.dp))
-                    if (geeTv.isEmpty() && links.isEmpty()) {
+                    if (!playable) {
+                        Text(
+                            blockNote.ifBlank { "Aún no comienza · podrás verlo cuando el partido esté en vivo." },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = VisionTextSecondary,
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        TvCompactAction("Volver", onClick = onDismiss, modifier = Modifier.landingFocus(modalLanding))
+                    } else if (geeTv.isEmpty() && links.isEmpty()) {
                         Text("Sin transmisiones disponibles por ahora.", style = MaterialTheme.typography.bodyMedium, color = VisionTextSecondary)
                         Spacer(Modifier.height(14.dp))
                         TvCompactAction("Volver", onClick = onDismiss, modifier = Modifier.landingFocus(modalLanding))
@@ -300,7 +338,7 @@ internal fun TvGeeLinkPickDialog(
                                     TvGeeTvChannelItem(
                                         option = option,
                                         onClick = {
-                                            onPlay(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo"))
+                                            playZap(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo"))
                                         },
                                         modifier = if (option == firstTv) Modifier.landingFocus(modalLanding) else Modifier,
                                     )
@@ -320,7 +358,7 @@ internal fun TvGeeLinkPickDialog(
                                         link = link,
                                         fallbackTitle = title,
                                         onClick = {
-                                            onPlay(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
+                                            playZap(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
                                         },
                                         modifier = if (geeTv.isEmpty() && link == firstLink) Modifier.landingFocus(modalLanding) else Modifier,
                                     )
@@ -370,18 +408,7 @@ private fun TvGeeTvChannelItem(
                 Text("Canal en vivo", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
             }
             Spacer(Modifier.width(10.dp))
-            when (option.link.alive) {
-                true -> Surface(shape = RoundedCornerShape(50), colors = SurfaceDefaults.colors(containerColor = GeeLiveRed)) {
-                    Text(
-                        "EN VIVO",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                    )
-                }
-                null -> Text("Sin verificar", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
-                else -> Text("Caído", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
-            }
+            TvGeeSignalBadge(option.link.alive)
         }
     }
 }
@@ -424,18 +451,7 @@ private fun TvGeeLinkItem(
                 Text(typeText, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
             }
             Spacer(Modifier.width(10.dp))
-            when (link.alive) {
-                true -> Surface(shape = RoundedCornerShape(50), colors = SurfaceDefaults.colors(containerColor = GeeLiveRed)) {
-                    Text(
-                        "EN VIVO",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                    )
-                }
-                null -> Text("Sin verificar", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
-                else -> Text("Caído", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
-            }
+            TvGeeSignalBadge(link.alive)
         }
     }
 }

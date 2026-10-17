@@ -34,9 +34,15 @@ internal object GeeTiles {
         return if (detail.isBlank() || detail.equals("in", true)) "EN VIVO" else "EN VIVO · $detail"
     }
 
-    /** El estado del partido: en vivo (con minuto), Final, o el día y la hora. */
-    fun state(event: GeeSportsSource.GeeEvent, todayIso: String): String = when {
-        event.live -> liveLabel(event)
+    /**
+     * El estado del partido: en vivo (con minuto), Final, o el día y la hora.
+     *
+     * [liveByClock] lo pone la pantalla cuando el RELOJ ya abrió el partido aunque la
+     * agenda siga en «pre» (su sincronizado llega unos minutos tarde): la tarjeta dice
+     * «EN VIVO» igual que el bloque donde está, jamás «Hoy 17:07» dentro de «En vivo».
+     */
+    fun state(event: GeeSportsSource.GeeEvent, todayIso: String, liveByClock: Boolean = false): String = when {
+        event.live || liveByClock -> liveLabel(event)
         event.status == "post" -> "Final"
         else -> {
             val whenText = when {
@@ -48,11 +54,16 @@ internal object GeeTiles {
         }
     }
 
-    /** El pie cuando no hay guía de TV: si el partido se puede ver o no. */
+    /**
+     * El pie cuando no hay guía de TV: cuántas señales están en pie.
+     * OJO: `alive` mide si el ENLACE responde, NO si el partido está en vivo — por
+     * eso aquí se dice «señal» y jamás «en vivo» (esa palabra es solo para partidos
+     * que de verdad se están jugando; ver [GeeAgenda.playable]).
+     */
     fun streams(event: GeeSportsSource.GeeEvent): String = when {
         event.alive <= 0 -> "Sin señal por ahora"
-        event.alive == 1 -> "1 transmisión en vivo"
-        else -> "${event.alive} transmisiones en vivo"
+        event.alive == 1 -> "1 señal disponible"
+        else -> "${event.alive} señales disponibles"
     }
 
     /** Letras de respaldo de un escudo que no carga ("Guadalajara" → "GU", "Real Madrid" → "RM"). */

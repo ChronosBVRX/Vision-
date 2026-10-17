@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -88,6 +89,9 @@ import com.chronosbvrx.visionplus.ui.theme.VisionSuccess
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
+import com.chronosbvrx.visionplus.data.remote.RemoteClient
+import com.chronosbvrx.visionplus.data.remote.RemoteStatus
+import com.chronosbvrx.visionplus.ui.remote.castableRef
 
 /**
  * A film's information page: backdrop and title, the main button, the professional metadata
@@ -355,6 +359,25 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                         modifier = Modifier.size(16.dp),
                                     )
                                     Text("Favorito", color = Color.White)
+                                }
+                            }
+
+                            // Abrir en la tele: solo con una conexión VIVA del control remoto, para no
+                            // dejar un botón muerto cuando no hay ninguna tele escuchando.
+                            if (castableRef(film.videoUrl) && RemoteClient.state.value.status == RemoteStatus.CONNECTED) {
+                                TextButton(onClick = {
+                                    RemoteClient.sendOpen(film.videoUrl, film.title, film.posterUrl)
+                                    Toast.makeText(context, "Abriendo en la tele…", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Icon(
+                                            Icons.Default.Cast,
+                                            contentDescription = null,
+                                            tint = VisionBlueBright,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Text("Ver en la TV", color = VisionBlueBright)
+                                    }
                                 }
                             }
 

@@ -20,6 +20,10 @@ keystore.properties
 # Local build notes
 BUILD-REPORT.md
 
+# Scratch de investigación (APKs descompilados, capturas, sondas): jamás al repo
+/Temp/
+/classes.jar
+
 # Release binaries (uploaded to GitHub Releases, not git repo)
 *.apk
 VisionPlus.apk

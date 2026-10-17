@@ -81,7 +81,54 @@ class GeeAgendaTest {
     fun phaseFollowsTheAgendaWhenThereIsACross() {
         assertEquals(GeeAgenda.Phase.Live, GeeAgenda.phaseOf(event("a", "X", live = true, status = "in")))
         assertEquals(GeeAgenda.Phase.Done, GeeAgenda.phaseOf(event("b", "X", status = "post", scoreHome = 2, scoreAway = 1)))
-        assertEquals(GeeAgenda.Phase.Soon, GeeAgenda.phaseOf(event("c", "X", status = "pre")))
+        // «pre» con el reloj antes del arranque: bloqueado (se fija el reloj para que la
+        // prueba no dependa de la hora a la que corra la suite).
+        val soon = event("c", "X", status = "pre", dateIso = "2026-10-17", time = "19:00:00")
+        assertEquals(GeeAgenda.Phase.Soon, GeeAgenda.phaseOf(soon, GeeAgenda.startMs(soon)!! - 60_000))
+    }
+
+    @Test
+    fun theLockOpensByTheClockEvenIfTheAgendaStillSaysPre() {
+        // El sincronizado de la agenda llega unos minutos tarde: un partido anunciado a las
+        // 19:00 que a las 19:05 sigue en «pre» DEBE abrirse. Era el candado que no se
+        // desbloqueaba a pesar de que ya era la hora.
+        val stale = event("k", "X", status = "pre", dateIso = "2026-10-17", time = "19:00:00")
+        val start = GeeAgenda.startMs(stale)!!
+        assertEquals(GeeAgenda.Phase.Soon, GeeAgenda.phaseOf(stale, start - 60_000))
+        assertFalse(GeeAgenda.playable(stale, start - 60_000))
+        assertEquals(GeeAgenda.Phase.Live, GeeAgenda.phaseOf(stale, start + 5 * 60_000))
+        assertTrue("la hora abre el candado aunque la agenda siga en «pre»", GeeAgenda.playable(stale, start + 5 * 60_000))
+        assertEquals("", GeeAgenda.blockNote(stale, start + 5 * 60_000))
+        // Y la ventana se cierra sola: pasadas las tres horas vuelve a estar terminado.
+        assertEquals(GeeAgenda.Phase.Done, GeeAgenda.phaseOf(stale, start + 4 * 3_600_000))
+        assertFalse(GeeAgenda.playable(stale, start + 4 * 3_600_000))
+    }
+
+    @Test
+    fun aFinishedMatchNeverReopensWithTheClock() {
+        val done = event("f", "X", status = "post", scoreHome = 1, scoreAway = 0, dateIso = "2026-10-17", time = "19:00:00")
+        val start = GeeAgenda.startMs(done)!!
+        assertEquals(GeeAgenda.Phase.Done, GeeAgenda.phaseOf(done, start + 60_000))
+        assertFalse(GeeAgenda.playable(done, start + 60_000))
+        assertTrue(GeeAgenda.blockNote(done, start + 60_000).contains("terminó"))
+    }
+
+    @Test
+    fun aCorrectedScheduleIsNotFrozenByTheCache() {
+        // El CMS corrige una hora: no puede quedarse pegada la primera lectura.
+        val original = event("z", "X", dateIso = "2026-10-18", time = "10:00:00")
+        val corrected = event("z", "X", dateIso = "2026-10-18", time = "12:00:00")
+        assertEquals(2 * 3_600_000L, GeeAgenda.startMs(corrected)!! - GeeAgenda.startMs(original)!!)
+    }
+
+    @Test
+    fun anEventWithoutAScheduleStillFollowsTheAgenda() {
+        // Sin fecha usable no hay reloj que valga: manda el estado.
+        val pre = event("nd", "X", dateIso = "", status = "pre")
+        assertEquals(GeeAgenda.Phase.Soon, GeeAgenda.phaseOf(pre, 0))
+        assertFalse(GeeAgenda.playable(pre, 0))
+        val playing = event("nd2", "X", dateIso = "", status = "in", live = true)
+        assertEquals(GeeAgenda.Phase.Live, GeeAgenda.phaseOf(playing, 0))
     }
 
     @Test
@@ -111,6 +158,31 @@ class GeeAgendaTest {
     fun emptySectionsAreOmitted() {
         val out = GeeAgenda.sections(listOf(event("s1", "X", status = "pre")), nowMs = 0)
         assertEquals(listOf("Comienzan pronto"), out.map { it.title })
+    }
+
+    @Test
+    fun onlyLiveMatchesArePlayable() {
+        // En vivo: se puede reproducir. Próximo o terminado: se bloquea (solo se
+        // muestra dónde se transmite) y con un aviso claro.
+        val live = event("l", "X", live = true, status = "in")
+        val soon = event("s", "X", status = "pre")
+        val done = event("d", "X", status = "post", scoreHome = 2, scoreAway = 1)
+        assertTrue(GeeAgenda.playable(live, nowMs = 0))
+        assertFalse(GeeAgenda.playable(soon, nowMs = 0))
+        assertFalse(GeeAgenda.playable(done, nowMs = 0))
+        assertEquals("", GeeAgenda.blockNote(live, nowMs = 0))
+        assertTrue(GeeAgenda.blockNote(soon, nowMs = 0).contains("no comienza"))
+        assertTrue(GeeAgenda.blockNote(done, nowMs = 0).contains("terminó"))
+    }
+
+    @Test
+    fun playableFollowsTheSameClockWindowAsTheLiveSection() {
+        // Sin cruce de agenda decide el reloj: mismo criterio que el bloque «En vivo».
+        val sample = event("x", "Torneo", dateIso = "2026-10-17", time = "19:00:00")
+        val start = GeeAgenda.startMs(sample)!!
+        assertFalse(GeeAgenda.playable(sample, nowMs = start - 60_000))
+        assertTrue(GeeAgenda.playable(sample, nowMs = start + 30 * 60_000))
+        assertFalse(GeeAgenda.playable(sample, nowMs = start + 4 * 3_600_000))
     }
 
     @Test

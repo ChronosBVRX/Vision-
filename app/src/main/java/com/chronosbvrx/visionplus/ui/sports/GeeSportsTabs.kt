@@ -49,11 +49,10 @@ import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
+import com.chronosbvrx.visionplus.ui.theme.VisionSuccess
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
-
-private val GeeLiveRed = Color(0xFFD32F2F)
 
 /** "Football" → "Fútbol" (y los demás deportes tal cual). */
 internal fun geeCategoryLabel(category: String): String = when (category.lowercase()) {
@@ -70,11 +69,15 @@ internal fun geeCategoryLabel(category: String): String = when (category.lowerca
 /** "19:00:00" → "19:00". */
 internal fun geeTimeLabel(time: String): String = time.take(5)
 
-/** El badge de estado de un enlace según el sondeo del servidor. */
+/**
+ * El badge de estado de un enlace según el sondeo del servidor. Habla de la
+ * SEÑAL (si el enlace responde), no de si el partido está en vivo: por eso dice
+ * «Disponible» y no «EN VIVO» (esa palabra queda solo para partidos jugándose).
+ */
 @Composable
 internal fun GeeAliveBadge(alive: Boolean?) {
     val (label, color) = when (alive) {
-        true -> "EN VIVO" to GeeLiveRed
+        true -> "Disponible" to VisionSuccess
         null -> "Sin verificar" to VisionTextSecondary
         else -> "Caído" to VisionTextSecondary
     }
@@ -83,7 +86,7 @@ internal fun GeeAliveBadge(alive: Boolean?) {
             Text(
                 label,
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White,
+                color = Color(0xFF06170F),
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
             )
         }
@@ -168,7 +171,7 @@ private fun GeeGroupHeader(group: GeeSportsSource.GeeGroup) {
             Spacer(Modifier.width(8.dp))
         }
         Text(group.name, style = MaterialTheme.typography.titleMedium, color = Color.White, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("${group.alive}/${group.total} en vivo", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+        Text("${group.alive}/${group.total} disponibles", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
     }
 }
 
@@ -205,9 +208,9 @@ private fun GeeChannelRow(channel: GeeSportsSource.GeeChannel, onClick: () -> Un
             )
             Spacer(Modifier.width(8.dp))
             if (alive > 0) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(GeeLiveRed))
+                Box(Modifier.size(7.dp).clip(CircleShape).background(VisionSuccess))
                 Spacer(Modifier.width(5.dp))
-                Text("$alive", style = MaterialTheme.typography.labelLarge, color = Color.White)
+                Text("$alive disponibles", style = MaterialTheme.typography.labelLarge, color = Color.White)
             } else {
                 Text(
                     "${channel.links.size} enlaces",
@@ -225,6 +228,9 @@ private fun GeeChannelRow(channel: GeeSportsSource.GeeChannel, onClick: () -> Un
  * El selector de transmisión: los canales de TV reales de la lista (resueltos de
  * la guía del partido) y las transmisiones directas (vivas primero, el servidor ya
  * las ordena). La guía («se transmite en: TUDN · ViX») siempre va visible.
+ *
+ * Con [playable] en false (el partido aún no comienza o ya terminó) NO se ofrecen
+ * señales para reproducir: solo se muestra dónde se transmite y el aviso [blockNote].
  */
 @Composable
 fun GeeLinkPickDialog(
@@ -235,7 +241,21 @@ fun GeeLinkPickDialog(
     onPlay: (LiveChannel) -> Unit,
     guide: List<String> = emptyList(),
     geeTv: List<GeeGuide.TvOption> = emptyList(),
+    playable: Boolean = true,
+    blockNote: String = "",
 ) {
+    // Zapping dentro del bloque de opciones: la lista ORDENADA del evento (guía de la parrilla
+    // + enlaces directos) queda armada para el reproductor en línea, que la recoge al montar.
+    val zapOrder = remember(links, geeTv) {
+        buildList {
+            geeTv.forEach { option -> add(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo")) }
+            links.forEach { link -> add(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo")) }
+        }.distinctBy { it.url }
+    }
+    fun playZap(picked: LiveChannel) {
+        GeeZapSignals.arm(picked, zapOrder)
+        onPlay(picked)
+    }
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(18.dp),
@@ -262,7 +282,14 @@ fun GeeLinkPickDialog(
                     )
                 }
                 Spacer(Modifier.height(14.dp))
-                if (geeTv.isEmpty() && links.isEmpty()) {
+                if (!playable) {
+                    Text(
+                        blockNote.ifBlank { "Aún no comienza · podrás verlo cuando el partido esté en vivo." },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = VisionTextSecondary,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                } else if (geeTv.isEmpty() && links.isEmpty()) {
                     Text(
                         "Sin transmisiones disponibles por ahora.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -288,7 +315,7 @@ fun GeeLinkPickDialog(
                             itemsIndexed(geeTv, key = { index, option -> "tv_${index}_${option.link.link}" }) { _, option ->
                                 Surface(
                                     onClick = {
-                                        onPlay(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo"))
+                                        playZap(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo"))
                                     },
                                     shape = RoundedCornerShape(12.dp),
                                     color = VisionSurfaceHigh,
@@ -329,7 +356,7 @@ fun GeeLinkPickDialog(
                             itemsIndexed(links, key = { index, link -> "link_${index}_${link.link}" }) { _, link ->
                                 Surface(
                                     onClick = {
-                                        onPlay(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
+                                        playZap(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
                                     },
                                     shape = RoundedCornerShape(12.dp),
                                     color = VisionSurfaceHigh,

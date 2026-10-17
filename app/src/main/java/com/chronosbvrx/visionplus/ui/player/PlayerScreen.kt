@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -53,6 +54,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +63,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -101,14 +104,20 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.chronosbvrx.visionplus.R
+import com.chronosbvrx.visionplus.DevicePerformance
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.ResumeInfo
+import com.chronosbvrx.visionplus.ui.sports.GeeZapSignals
 import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.data.offline.DownloadState
@@ -143,6 +152,9 @@ private const val SKIP_INTRO_MS = 85_000L
 
 /** The Vision+ pre-roll: "Omitir" appears after this long. */
 private const val BRAND_SKIP_DELAY_MS = 2_000L
+
+/** El zapping a dos toques: la segunda flecha consecutiva dentro de esta ventana cambia de canal. */
+private const val ZAP_ARM_MS = 2_500L
 
 /** The TV's overscan safe zone around the controls. */
 private val SAFE_H = 44.dp
@@ -324,6 +336,48 @@ fun LivePlayerScreen(
             com.chronosbvrx.visionplus.data.sports.GeeSportsFallback.parseStreamUrl(streamUrl)
         } else null
     }
+    // Zapping de deportes en vivo: el modal de opciones armó la lista ordenada de señales del
+    // evento; el canal en pantalla va al frente (índice 0) y el resto queda para Arriba/Abajo
+    // y para el failover automático. Por otro camino (Inicio, En vivo) el holder queda obsoleto
+    // y la lista sale vacía: zapping desactivado, sin cambios de conducta.
+    val zapTargets = remember(streamUrl, channel) {
+        buildList {
+            add(
+                ZapTarget(
+                    name = channel.name,
+                    url = parsedInline?.url ?: streamUrl,
+                    userAgent = channel.userAgent ?: parsedInline?.userAgent,
+                    referrer = channel.referrer ?: parsedInline?.referrer,
+                    origin = channel.origin ?: parsedInline?.origin,
+                    drmKey = channel.drmKey,
+                    drmType = channel.drmType,
+                ),
+            )
+            GeeZapSignals.takeFor(channel).forEach { alt ->
+                val p = if (alt.url.contains('|')) {
+                    com.chronosbvrx.visionplus.data.sports.GeeSportsFallback.parseStreamUrl(alt.url)
+                } else null
+                val resolved = p?.url ?: alt.url
+                // El ciclo de zapping es SOLO de señales directas http(s) (HLS/DASH): el
+                // PlayerCore no puede montar refs de fuentes del catálogo (`xuperch:`/`magis:`);
+                // esas quedan para el selector del reproductor nativo, como siempre.
+                if (!resolved.startsWith("http://", ignoreCase = true) &&
+                    !resolved.startsWith("https://", ignoreCase = true)
+                ) return@forEach
+                add(
+                    ZapTarget(
+                        name = alt.name,
+                        url = resolved,
+                        userAgent = alt.userAgent ?: p?.userAgent,
+                        referrer = alt.referrer ?: p?.referrer,
+                        origin = alt.origin ?: p?.origin,
+                        drmKey = alt.drmKey,
+                        drmType = alt.drmType,
+                    ),
+                )
+            }
+        }.distinctBy { it.url }
+    }
     PlayerCore(
         title = channel.name,
         subtitle = channel.group,
@@ -337,6 +391,7 @@ fun LivePlayerScreen(
         origin = channel.origin ?: parsedInline?.origin,
         drmKey = channel.drmKey,
         drmType = channel.drmType,
+        zapTargets = zapTargets,
     )
 }
 
@@ -683,6 +738,7 @@ private fun PlayerCore(
     origin: String? = null,
     drmKey: String? = null,
     drmType: String? = null,
+    zapTargets: List<ZapTarget> = emptyList(),
     resumeInfo: com.chronosbvrx.visionplus.data.ResumeInfo? = null,
     resumeMs: Long = 0,
     declaredDurationMs: Long = 0L,
@@ -702,10 +758,18 @@ private fun PlayerCore(
     var nextVault by remember(url) { mutableStateOf<OfflineDownload?>(null) }
     var nextCountdown by remember(url) { mutableStateOf(0) }
     var vaultEndedHandled by remember(url) { mutableStateOf(false) }
-    val player = remember {
+    // La llave ClearKey ACTIVA del reproductor (señal en pantalla); se cambia en cada zap
+    // antes del prepare y el proveedor del DRM la lee al momento.
+    val clearKeyJsonRef = remember { java.util.concurrent.atomic.AtomicReference<ByteArray?>(null) }
+    val player = remember(clearKeyJsonRef) {
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent(userAgent ?: VISION_USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
+            // Servidores sobrecargados responden lento pero vivo: 8 s de defecto condenaba
+            // lecturas lentas al mismo destino que una caída. La tolerancia la tienen las
+            // microcaídas; los servidores muertos los cubre la reconexión/failover.
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(20_000)
         val headers = buildMap {
             referrer?.takeIf { it.isNotBlank() }?.let { put("Referer", it) }
             origin?.takeIf { it.isNotBlank() }?.let { put("Origin", it) }
@@ -719,30 +783,69 @@ private fun PlayerCore(
         val extractorsFactory = androidx.media3.extractor.DefaultExtractorsFactory()
             .setConstantBitrateSeekingEnabled(true)
             .setConstantBitrateSeekingAlwaysEnabled(true)
+        // La política de carga del defecto rinde al ~3º fallo con backoff corto: una
+        // microcaída de 20-60 s del servidor la mataba. Columna tolerante: 6 reintentos
+        // por carga (manifest y segmentos) con backoff de hasta 8 s — el buffering honesto
+        // atraviesa la sobrecarga sin llegar jamás al error fatal.
+        val tolerantLoads = object : DefaultLoadErrorHandlingPolicy(6) {
+            override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorInfo): Long =
+                ((loadErrorInfo.errorCount - 1) * 1_000L).coerceAtMost(8_000L)
+        }
         val mediaSourceFactory = DefaultMediaSourceFactory(baseDataSourceFactory, extractorsFactory)
-        if (!drmKey.isNullOrBlank()) {
-            val clearKeyJson = com.chronosbvrx.visionplus.data.sports.GeeSportsFallback.buildClearKeyJson(drmKey)
-            if (clearKeyJson != null) {
-                val drmCallback = androidx.media3.exoplayer.drm.LocalMediaDrmCallback(clearKeyJson.toByteArray(Charsets.UTF_8))
-                val drmManager = androidx.media3.exoplayer.drm.DefaultDrmSessionManager.Builder()
+            .setLoadErrorHandlingPolicy(tolerantLoads)
+        // DRM ClearKey por señal: cada señal del evento (zapping/failover) puede traer SU
+        // propia llave DASH. El proveedor resuelve la llave ACTIVA al momento (se cambia en
+        // cada zap, antes del prepare); con señales sin DRM queda como no-DRM, igual que
+        // siempre.
+        drmKey.takeIf { !it.isNullOrBlank() }?.let { key ->
+            com.chronosbvrx.visionplus.data.sports.GeeSportsFallback.buildClearKeyJson(key)?.let { json ->
+                clearKeyJsonRef.set(json.toByteArray(Charsets.UTF_8))
+            }
+        }
+        mediaSourceFactory.setDrmSessionManagerProvider {
+            when (val bytes = clearKeyJsonRef.get()) {
+                null -> androidx.media3.exoplayer.drm.DrmSessionManager.DRM_UNSUPPORTED
+                else -> androidx.media3.exoplayer.drm.DefaultDrmSessionManager.Builder()
                     .setUuidAndExoMediaDrmProvider(
                         androidx.media3.common.C.CLEARKEY_UUID,
                         androidx.media3.exoplayer.drm.FrameworkMediaDrm.DEFAULT_PROVIDER,
                     )
                     .setMultiSession(false)
-                    .build(drmCallback)
-                mediaSourceFactory.setDrmSessionManagerProvider { drmManager }
+                    .build(androidx.media3.exoplayer.drm.LocalMediaDrmCallback(bytes))
             }
         }
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .build()
+        // Colchón de buffer solo para el vivo (deportes en vivo sobre todo): el defecto
+        // arranca la reproducción con ~2.5 s hacia adelante y back-buffer 0 — con un
+        // servidor inestable el colchón toca fondo y se pausa. En equipos modestos el
+        // colchón es menor (RAM corta: Chromecast/TV boxes) pero sigue generoso.
+        val loadControl = if (isLive) {
+            val lowEnd = DevicePerformance.isLowEndDevice(context)
+            val builder = DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    if (lowEnd) 25_000 else 45_000,
+                    if (lowEnd) 35_000 else 60_000,
+                    2_000,
+                    4_000,
+                )
+                .setBackBuffer(if (lowEnd) 20_000 else 45_000, true)
+            builder.build()
+        } else {
+            null
+        }
+        val builder = ExoPlayer.Builder(context).setMediaSourceFactory(mediaSourceFactory)
+        loadControl?.let { builder.setLoadControl(it) }
+        builder.build()
             .apply {
                 setMediaItem(if (startWithIntro) introMediaItem() else mediaItemFor(url, isLive, drmType))
                 prepare()
                 playWhenReady = true
             }
     }
+    // Resiliencia: reconexión automática ante microcaídas del servidor (o estancamiento
+    // sin error). Presupuesto compartido; tras avance sustentado vuelve a cero; al agotar
+    // sale la tarjeta «Reintentar / Volver» de siempre.
+    val recoveryScope = rememberCoroutineScope()
+
     var playing by remember { mutableStateOf(true) }
     var buffering by remember { mutableStateOf(true) }
     var positionMs by remember { mutableLongStateOf(0L) }
@@ -869,6 +972,117 @@ private fun PlayerCore(
         playing = true
     }
 
+    // Resiliencia: reconexión automática ante microcaídas del servidor (o estancamiento
+    // sin error) — el «Reintentar» que el usuario pulsaba a mano, hecho por la app.
+    // Presupuesto compartido entre errores y stalls; tras avance sustentado (+≈5 s
+    // fluidos) vuelve a cero; al agotar sale la tarjeta «Reintentar / Volver» de siempre.
+    var recoveryAttempts by remember { mutableStateOf(0) }
+    var recovering by remember { mutableStateOf(false) }
+    var pendingRecoverySeekMs by remember { mutableLongStateOf(0L) }
+    var catchUpLiveEdge by remember { mutableStateOf(false) }
+    var stallStartedAtMs by remember { mutableLongStateOf(0L) }
+    var lastProbePosMs by remember { mutableLongStateOf(0L) }
+    var smoothAdvanceTicks by remember { mutableStateOf(0) }
+    // Intento mostrado en la píldora «Reconectando…».
+    var recoveryAttemptShown by remember { mutableStateOf(0) }
+
+    // Zapping del vivo en línea: señales del mismo evento (armadas por el modal de opciones).
+    // Índice 0 = la señal por la que se abrió el reproductor. Con 0-1 señales, todo queda
+    // como siempre (sin zapping, sin failover).
+    var zapIndex by remember { mutableStateOf(0) }
+    var zapBannerName by remember { mutableStateOf<String?>(null) }
+    var zapBannerSerial by remember { mutableLongStateOf(0L) }
+    var showZapList by remember { mutableStateOf(false) }
+    var failovers by remember { mutableStateOf(0) }
+    val canZap = isLive && zapTargets.size > 1 && !introPlaying
+
+    fun buildClearKeyBytesOf(target: ZapTarget): ByteArray? =
+        runCatching {
+            target.drmKey
+                ?.takeIf { it.isNotBlank() }
+                ?.let { com.chronosbvrx.visionplus.data.sports.GeeSportsFallback.buildClearKeyJson(it) }
+                ?.toByteArray(Charsets.UTF_8)
+        }.getOrNull()
+
+    /** Cambia a la señal [index] del evento en pantalla, en el mismo reproductor (zapping). */
+    fun zapTo(index: Int) {
+        if (index < 0 || index >= zapTargets.size || index == zapIndex) return
+        val target = zapTargets[index]
+        zapIndex = index
+        recovering = false
+        pendingRecoverySeekMs = 0L
+        stallStartedAtMs = 0L
+        smoothAdvanceTicks = 0
+        recoveryAttempts = 0
+        error = null
+        buffering = true
+        positionMs = 0L
+        durationMs = 0L
+        catchUpLiveEdge = isLive
+        currentTitle = target.name
+        clearKeyJsonRef.set(buildClearKeyBytesOf(target))
+        player.setMediaItem(mediaItemFor(target.url, isLive, target.drmType))
+        player.prepare()
+        player.playWhenReady = true
+        playing = true
+        zapBannerName = target.name
+        zapBannerSerial += 1L
+        controls.bump()
+    }
+
+    fun zapStep(delta: Int) {
+        if (!canZap) return
+        zapTo(LiveResilience.cycleIndex(zapTargets.size, zapIndex, delta))
+    }
+
+    fun giveUpRecovery(detail: String) {
+        recovering = false
+        // Failover automático: si el evento trae más señales, la siguiente opción del
+        // modal recibe SU propio presupuesto de reconexión antes de rendirse de verdad.
+        if (LiveResilience.failoverAllowed(zapTargets.size, failovers)) {
+            failovers += 1
+            val next = LiveResilience.cycleIndex(zapTargets.size, zapIndex, 1)
+            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                "PLAYER_FAILOVER",
+                "$detail hacia=${zapTargets[next].name} intentos=$recoveryAttempts",
+            )
+            zapTo(next)
+            return
+        }
+        error = if (isLive) "No se pudo reproducir este canal." else "No se pudo reproducir este video."
+        buffering = false
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+            "PLAYER_RECONNECT_FAIL",
+            "$detail intentos=$recoveryAttempts " + (if (isLive) "vivo" else "vod"),
+        )
+    }
+
+    fun beginRecovery(detail: String) {
+        if (recovering || introPlaying) return
+        val waitMs = LiveResilience.delayFor(recoveryAttempts)
+        if (waitMs == null) {
+            giveUpRecovery(detail)
+            return
+        }
+        recoveryAttemptShown = recoveryAttempts + 1
+        recovering = true
+        error = null
+        buffering = true
+        stallStartedAtMs = 0L
+        // VOD: no perder el minuto en el que iba; vivo: el re-preparar vuelve al borde.
+        pendingRecoverySeekMs = if (!isLive) positionMs else 0L
+        catchUpLiveEdge = isLive
+        recoveryAttempts += 1
+        recoveryScope.launch {
+            delay(waitMs)
+            if (!recovering) return@launch
+            runCatching {
+                player.prepare()
+                player.playWhenReady = true
+            }.onFailure { giveUpRecovery("$detail ${it.javaClass.simpleName}") }
+        }
+    }
+
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -877,21 +1091,49 @@ private fun PlayerCore(
 
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING || state == Player.STATE_IDLE && error == null
-                if (state == Player.STATE_READY && !introPlaying) {
-                    val d = player.duration.coerceAtLeast(0L)
-                    val pos = player.currentPosition.coerceAtLeast(0L)
-                    if (!isBufferWindowDuration(d, pos, vaultDeclaredMs, isLive)) {
-                        if (d > 0L) durationMs = d
-                    } else if (durationMs <= 0L && vaultDeclaredMs > 0L) {
-                        durationMs = vaultDeclaredMs
+                if (state == Player.STATE_READY) {
+                    // Reconexión completada: devolver el minuto (VOD) o volver al borde
+                    // del vivo; el avance sustentado en el tick de 500 ms limpia el budget.
+                    if (recovering && !introPlaying) {
+                        recovering = false
+                        if (!isLive && pendingRecoverySeekMs > 0) player.seekTo(pendingRecoverySeekMs)
+                        if (isLive && catchUpLiveEdge) player.seekToDefaultPosition()
+                        pendingRecoverySeekMs = 0L
+                        catchUpLiveEdge = false
+                    } else if (catchUpLiveEdge && !introPlaying) {
+                        // Nueva señal tras zapping/failover: arrancar en el borde del vivo.
+                        catchUpLiveEdge = false
+                        if (isLive) player.seekToDefaultPosition()
+                    }
+                    if (!introPlaying) {
+                        val d = player.duration.coerceAtLeast(0L)
+                        val pos = player.currentPosition.coerceAtLeast(0L)
+                        if (!isBufferWindowDuration(d, pos, vaultDeclaredMs, isLive)) {
+                            if (d > 0L) durationMs = d
+                        } else if (durationMs <= 0L && vaultDeclaredMs > 0L) {
+                            durationMs = vaultDeclaredMs
+                        }
                     }
                 }
                 if (state == Player.STATE_ENDED && introPlaying) startMainItem() else if (state == Player.STATE_ENDED) controls.bump()
             }
 
             override fun onPlayerError(e: PlaybackException) {
-                error = if (isLive) "No se pudo reproducir este canal." else "No se pudo reproducir este video."
-                buffering = false
+                val status = e.cause?.let { it as? HttpDataSource.InvalidResponseCodeException }?.responseCode ?: -1
+                val detail = "code=${e.errorCode} http=${if (status > 0) status else -1}"
+                if (introPlaying) {
+                    // El pre-roll es un asset local: si falla ahí es terminal.
+                    error = "No se pudo reproducir el video de bienvenida."
+                    buffering = false
+                    return
+                }
+                val kind = LiveResilience.classify(e.errorCode, status)
+                if (kind == LiveResilience.Kind.FATAL) {
+                    giveUpRecovery(detail)
+                    return
+                }
+                // Microcaídas recuperables: reconexión automática silenciosa.
+                beginRecovery("err=$detail")
             }
         }
         player.addListener(listener)
@@ -925,6 +1167,35 @@ private fun PlayerCore(
             }
             bufferedFraction = if (!introPlaying && durationMs > 0) player.bufferedPosition.toFloat() / durationMs else 0f
             playing = player.playWhenReady
+            // Resiliencia: el estancamiento real (READY, con intención de reproducir y la
+            // posición sin avanzar ~10 s) también reconecta; y el avance sustentado
+            // (≈5 s fluidos) repone el presupuesto de intentos.
+            val readyNow = player.playbackState == Player.STATE_READY
+            val active = readyNow && player.playWhenReady && error == null && !introPlaying
+            if (active) {
+                if (positionMs > lastProbePosMs) {
+                    stallStartedAtMs = 0L
+                    smoothAdvanceTicks = (smoothAdvanceTicks + 1).coerceAtMost(20)
+                    if (smoothAdvanceTicks >= 10 && recoveryAttempts > 0) recoveryAttempts = 0
+                } else {
+                    smoothAdvanceTicks = 0
+                    if (stallStartedAtMs == 0L) stallStartedAtMs = android.os.SystemClock.uptimeMillis()
+                    val stallMs = android.os.SystemClock.uptimeMillis() - stallStartedAtMs
+                    if (LiveResilience.stallRecoveryNeeded(
+                            stateReady = readyNow,
+                            playWhenReady = player.playWhenReady,
+                            hasError = error != null,
+                            stallMs = stallMs,
+                        ) && !recovering
+                    ) {
+                        beginRecovery("stall=${stallMs}ms")
+                    }
+                }
+            } else {
+                stallStartedAtMs = 0L
+                smoothAdvanceTicks = 0
+            }
+            lastProbePosMs = positionMs
             // Fin de un capítulo descargado: encadena con el siguiente que esté en el búnker.
             if (!introPlaying && isVault && !vaultEndedHandled &&
                 player.playbackState == Player.STATE_ENDED && error == null
@@ -993,6 +1264,9 @@ private fun PlayerCore(
 
     var swallowWakeupKey by remember { mutableStateOf<Key?>(null) }
     var lastWakeupAtMs by remember { mutableLongStateOf(0L) }
+    // Zapping a dos toques: la última flecha armada y su momento (Arriba/Abajo del vivo).
+    var lastZapKey by remember { mutableStateOf<Key?>(null) }
+    var lastZapAtMs by remember { mutableLongStateOf(0L) }
 
     fun canExecuteControlAction(): Boolean {
         if (!controls.visible || swallowWakeupKey != null) return false
@@ -1030,10 +1304,13 @@ private fun PlayerCore(
     val skipFocus = remember { FocusRequester() }
     val brandSkipFocus = remember { FocusRequester() }
     val nextCardFocus = remember { FocusRequester() }
+    val zapListFocus = remember { FocusRequester() }
     var skipFocused by remember { mutableStateOf(false) }
     var brandSkipFocused by remember { mutableStateOf(false) }
     var nextCardFocused by remember { mutableStateOf(false) }
-    val hasControlFocus = barFocused || rewindFocused || playPauseFocused || forwardFocused || tracksFocused || markersFocused || skipFocused
+    var zapListFocused by remember { mutableStateOf(false) }
+    val hasControlFocus = barFocused || rewindFocused || playPauseFocused || forwardFocused ||
+        tracksFocused || markersFocused || skipFocused || zapListFocused
 
     // "Saltar intro" during the opening minutes; only interactive when navigation menu is visible.
     val showSkip = !isLive && !introPlaying && !skipUsed && error == null &&
@@ -1115,6 +1392,29 @@ private fun PlayerCore(
             .background(Color.Black)
             .landingFocus(surface)
             .onPreviewKeyEvent { e ->
+                // Zapping del vivo a dos toques (como el reproductor nativo): el primer
+                // Arriba/Abajo arma la señal y despierta los controles; el segundo
+                // consecutivo dentro de la ventana cambia al siguiente canal del evento.
+                if (canZap && (e.key == Key.DirectionUp || e.key == Key.DirectionDown)) {
+                    if (e.type != KeyEventType.KeyDown) {
+                        if (swallowWakeupKey != null) swallowWakeupKey = null
+                        return@onPreviewKeyEvent true
+                    }
+                    if (e.nativeKeyEvent.repeatCount > 0) return@onPreviewKeyEvent true
+                    val nowMs = android.os.SystemClock.uptimeMillis()
+                    if (lastZapKey == e.key && nowMs - lastZapAtMs < ZAP_ARM_MS) {
+                        lastZapAtMs = nowMs
+                        zapStep(if (e.key == Key.DirectionDown) 1 else -1)
+                        return@onPreviewKeyEvent true
+                    }
+                    lastZapKey = e.key
+                    lastZapAtMs = nowMs
+                    swallowWakeupKey = e.key
+                    lastWakeupAtMs = nowMs
+                    controls.bump()
+                    if (isTv) runCatching { playPauseFocus.requestFocus() }
+                    return@onPreviewKeyEvent true
+                }
                 if (swallowWakeupKey != null) {
                     if (e.type == KeyEventType.KeyUp) {
                         swallowWakeupKey = null
@@ -1207,7 +1507,81 @@ private fun PlayerCore(
         )
 
         if (buffering && error == null) {
-            CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp)
+            // Primera conexión (antes del primer frame): tarjeta de carga de marca, la
+            // misma del reproductor de TV En vivo. Buffering intermedio: spinner simple.
+            if (!introPlaying && positionMs <= 0) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    VisionWordmark(height = 34.dp)
+                    CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp)
+                    Text(
+                        if (isLive) "Preparando la señal…" else "Preparando tu película…",
+                        color = Color.White.copy(alpha = 0.75f),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            } else {
+                CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp)
+            }
+        }
+
+        if (recovering && error == null) {
+            // Reconexión automática en curso: píldora discreta, no vuelve al spinner grande.
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = SAFE_V),
+                contentAlignment = Alignment.Center,
+            ) {
+                Surface(
+                    color = Color(0xF20F1626),
+                    shape = RoundedCornerShape(50),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                    ) {
+                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                        Text(
+                            "Reconectando… intento ${recoveryAttemptShown}",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                }
+            }
+        }
+
+        // Banner del zapping: la señal que acaba de cambiar (se oculta solo, estilo cable).
+        zapBannerName?.let { bannerName ->
+            Box(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 28.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Surface(color = Color(0xF20F1626), shape = RoundedCornerShape(50)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    ) {
+                        Box(Modifier.size(8.dp).background(VisionLiveRed, CircleShape))
+                        Text(
+                            bannerName,
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+        LaunchedEffect(zapBannerSerial) {
+            if (zapBannerSerial != 0L) {
+                delay(2_200)
+                zapBannerName = null
+            }
         }
 
         error?.let { message ->
@@ -1217,6 +1591,9 @@ private fun PlayerCore(
                     onClick = {
                         error = null
                         buffering = true
+                        recoveryAttempts = 0
+                        recovering = false
+                        stallStartedAtMs = 0L
                         player.prepare()
                         player.play()
                     },
@@ -1494,9 +1871,26 @@ private fun PlayerCore(
                                     .onFocusChanged { tracksFocused = it.isFocused }
                                     .focusProperties {
                                         left = if (isLive) playPauseFocus else forwardFocus
-                                        right = if (isLive) tracksFocus else markersFocus
+                                        right = if (isLive && zapTargets.size > 1) zapListFocus else tracksFocus
                                         up = if (isLive) playPauseFocus else barFocus
                                         down = tracksFocus
+                                    },
+                            )
+                        }
+                        if (isLive && zapTargets.size > 1 && !introPlaying) {
+                            TransportButton(
+                                icon = Icons.Default.Tv,
+                                contentDescription = "Canales y señales del evento",
+                                onClick = { if (canExecuteControlAction()) { showZapList = true; controls.bump() } },
+                                iconSize = 26.dp,
+                                modifier = if (!isTv) Modifier else Modifier
+                                    .focusRequester(zapListFocus)
+                                    .onFocusChanged { zapListFocused = it.isFocused }
+                                    .focusProperties {
+                                        left = tracksFocus
+                                        right = zapListFocus
+                                        up = playPauseFocus
+                                        down = zapListFocus
                                     },
                             )
                         }
@@ -1634,6 +2028,17 @@ private fun PlayerCore(
     }
 
     if (showTracks) AudioAndSubtitlesDialog(menu, onDismiss = { showTracks = false })
+    if (showZapList) {
+        ZapListDialog(
+            targets = zapTargets,
+            currentIndex = zapIndex,
+            onDismiss = { showZapList = false },
+            onPick = { index ->
+                showZapList = false
+                zapTo(index)
+            },
+        )
+    }
     if (showMarkers && !isLive) {
         SkipMarkersDialog(
             positionLabel = formatDuration(positionMs),
@@ -1682,6 +2087,17 @@ private fun introMediaItem(): MediaItem =
     MediaItem.fromUri(Uri.parse("rawresource:///${R.raw.brand_intro}"))
 
 private const val VISION_USER_AGENT = "VisionPlus/2.0"
+
+/** Una señal del evento para el zapping/failover del vivo en línea (deportes en vivo). */
+internal data class ZapTarget(
+    val name: String,
+    val url: String,
+    val userAgent: String? = null,
+    val referrer: String? = null,
+    val origin: String? = null,
+    val drmKey: String? = null,
+    val drmType: String? = null,
+)
 
 /** A white-bordered pill over the video; inverts while it holds the D-pad focus. */
 @Composable

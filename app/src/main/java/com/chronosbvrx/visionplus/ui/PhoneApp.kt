@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
@@ -86,6 +87,7 @@ import kotlinx.coroutines.launch
 
 import androidx.compose.material.icons.filled.Download
 import com.chronosbvrx.visionplus.ui.phone.DownloadsScreen
+import com.chronosbvrx.visionplus.ui.remote.RemoteScreen
 
 internal data class Tab(val route: Route, val label: String, val icon: ImageVector)
 
@@ -98,6 +100,7 @@ internal val TABS = listOf(
     Tab(Route.Sports, "Deportes en vivo", Icons.Default.SportsSoccer),
     Tab(Route.Library, "Mi lista", Icons.Default.Bookmark),
     Tab(Route.Downloads, "Descargas", Icons.Default.Download),
+    Tab(Route.Remote, "Control remoto", Icons.Default.Cast),
     Tab(Route.Settings, "Ajustes", Icons.Default.Settings),
     Tab(Route.About, "Acerca de", Icons.Default.Info),
 )
@@ -347,6 +350,7 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
                             nav.push(Route.LivePlayer(ch, channelCodes = codes, groupTitle = scope))
                         })
                         Route.Settings -> SettingsScreen(padding)
+                        Route.Remote -> RemoteScreen(catalog, onBack = { nav.pop() })
                         Route.About -> AboutScreen(padding)
                         else -> Unit
                     }

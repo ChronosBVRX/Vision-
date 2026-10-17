@@ -98,9 +98,65 @@ class GeePickDialogDuplicateTest {
         assertText("Transmisiones en vivo:")
     }
 
+    @Test
+    fun phonePickerBlocksAStartedLaterMatchAndOnlyShowsWhereItAirs() {
+        compose.setContent {
+            VisionTheme {
+                GeeLinkPickDialog(
+                    title = "Liverpool vs Arsenal",
+                    subtitle = "Premier League · Hoy 21:00",
+                    links = listOf(link("ESPN")),
+                    onDismiss = {},
+                    onPlay = { _: LiveChannel -> },
+                    guide = listOf("ESPN"),
+                    playable = false,
+                    blockNote = "Aún no comienza · podrás verlo cuando el partido esté en vivo.",
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        // La guía se conserva (dónde se transmite)…
+        assertText("Se transmite en: ESPN")
+        assertText("podrás verlo cuando el partido esté en vivo")
+        // …pero NO se ofrecen señales para reproducir.
+        assertAbsent("Transmisiones en vivo:")
+        assertAbsent("Canales en vivo:")
+    }
+
+    @Test
+    fun tvPickerBlocksAStartedLaterMatchAndOnlyShowsWhereItAirs() {
+        compose.setContent {
+            VisionTheme {
+                TvGeeLinkPickDialog(
+                    title = "Liverpool vs Arsenal",
+                    subtitle = "Premier League · Hoy 21:00",
+                    links = listOf(link("ESPN")),
+                    onDismiss = {},
+                    onPlay = { _: LiveChannel -> },
+                    guide = listOf("ESPN"),
+                    playable = false,
+                    blockNote = "Aún no comienza · podrás verlo cuando el partido esté en vivo.",
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertText("Se transmite en: ESPN")
+        assertText("podrás verlo cuando el partido esté en vivo")
+        assertAbsent("Transmisiones en vivo:")
+        assertAbsent("Canales en vivo:")
+    }
+
     private fun assertText(text: String) {
         val matches = compose.onAllNodes(hasText(text, substring = true), useUnmergedTree = true)
             .fetchSemanticsNodes().size
         assertTrue("no aparece «$text»", matches >= 1)
+    }
+
+    private fun assertAbsent(text: String) {
+        val matches = compose.onAllNodes(hasText(text, substring = true), useUnmergedTree = true)
+            .fetchSemanticsNodes().size
+        assertTrue("no debía aparecer «$text»", matches == 0)
     }
 }

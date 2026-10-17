@@ -11,9 +11,11 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.sports.SportsSource
 import com.chronosbvrx.visionplus.ui.sports.DeportesReturn
 import com.chronosbvrx.visionplus.ui.theme.VisionTheme
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -46,7 +48,7 @@ class TvSportsMosaicTest {
                "home_name":"América","away_name":"Guadalajara","league_label":"Liga MX","league_id":"mex.1",
                "score":{"home":2,"away":1,"live":true,"detail":"23'","status":"in"}},
               {"id":"e2","event":"Premier League","category":"Football",
-               "date":"Hoy","date_iso":"$today","time":"21:00:00","alive":0,"total":2,
+               "date":"Hoy","date_iso":"$today","time":"21:00:00","alive":2,"total":2,
                "home_name":"Liverpool","away_name":"Arsenal","league_label":"Premier League","league_id":"eng.1",
                "score":{"live":false,"status":"pre"}},
               {"id":"e3","event":"Gran Premio de México","category":"Motorsports",
@@ -77,13 +79,35 @@ class TvSportsMosaicTest {
         assertTrue("$where: no aparece «$text»", matches >= 1)
     }
 
+    private fun assertAbsent(text: String) {
+        val matches = compose.onAllNodes(hasText(text, substring = true), useUnmergedTree = true)
+            .fetchSemanticsNodes().size
+        assertTrue("no debía aparecer «$text»", matches == 0)
+    }
+
     @Before
     fun setUp() {
         FocusRescue.target = null
         FocusRescue.screenHasFocus = false
         FocusRescue.dialogsOpen = 0
         DeportesReturn.pickingId = null
+        // Reloj fijo (18:00 CDMX del día sembrado): las fases del mosaico no dependen de la
+        // hora real a la que corra la suite (el partido de las 21:00 siempre está «pronto»).
+        GeeAgenda.clockForTestsMs = pinnedNow()
         seed()
+    }
+
+    @After
+    fun tearDown() {
+        GeeAgenda.clockForTestsMs = null
+    }
+
+    /** 18:00 CDMX del día de hoy, en el formato del CMS. */
+    private fun pinnedNow(): Long {
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+        fmt.timeZone = java.util.TimeZone.getTimeZone("America/Mexico_City")
+        fmt.isLenient = false
+        return fmt.parse("${SportsSource.todayIso()} 18:00:00")!!.time
     }
 
     @Test
@@ -100,6 +124,17 @@ class TvSportsMosaicTest {
         compose.mainClock.advanceTimeBy(400)
         compose.waitForIdle()
         assertTrue("Tras mover el mando, algo sigue enfocado", focusedCount() >= 1)
+    }
+
+    @Test
+    fun onlyTheLiveMatchGetsTheRedLivePill() {
+        start()
+        // e1 está en vivo con 3 señales: la píldora roja es correcta.
+        assertText("en vivo", "3 en vivo")
+        // e2 tiene 2 señales en pie pero AÚN NO COMIENZA: jamás se rotula «en vivo».
+        assertAbsent("2 en vivo")
+        // Su señal sí se cuenta, pero como «señal», no como «en vivo».
+        assertText("señal", "2 señales disponibles")
     }
 
     @Test

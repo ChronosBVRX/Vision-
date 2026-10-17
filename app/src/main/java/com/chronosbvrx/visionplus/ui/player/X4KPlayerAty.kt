@@ -1,8 +1,10 @@
 package com.chronosbvrx.visionplus.ui.player
 
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Canvas
@@ -11,6 +13,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -48,6 +51,9 @@ import com.chronosbvrx.visionplus.data.LiveTaxonomy
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.isFinished
+import com.chronosbvrx.visionplus.data.remote.RemoteBus
+import com.chronosbvrx.visionplus.data.remote.RemoteKeys
+import com.chronosbvrx.visionplus.data.remote.RemoteProto
 import com.chronosbvrx.visionplus.data.shouldCountWatchedOnSkip
 import com.chronosbvrx.visionplus.data.shouldKeep
 import com.chronosbvrx.visionplus.data.subs.SrtCue
@@ -280,6 +286,10 @@ class X4KPlayerAty : ComponentActivity() {
     /** Marca del doble Atrás para salir. */
     private var lastBackPressTime = 0L
 
+    /** Control remoto (teléfono → tele): teclas que llegan por el broadcast interno. */
+    private var remoteReceiver: BroadcastReceiver? = null
+    private var lastRemoteNow = ""
+
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -300,6 +310,7 @@ class X4KPlayerAty : ComponentActivity() {
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
         )
         installBackCallback()
+        installRemoteReceiver()
         handleLaunchIntent(intent)
     }
 
@@ -783,6 +794,85 @@ class X4KPlayerAty : ComponentActivity() {
         })
     }
 
+    /**
+     * El control remoto del teléfono también alcanza al reproductor, que vive en su propio
+     * proceso (`:x4k`). El menú y el reproductor nunca están al frente a la vez, así que cuando
+     * el reproductor manda se registra aquí para recibir las teclas por el broadcast interno y
+     * reinyectarlas como si vinieran del mando de la tele.
+     */
+    private fun installRemoteReceiver() {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                val code = intent?.getIntExtra(RemoteBus.EXTRA_KEY_CODE, KeyEvent.KEYCODE_UNKNOWN)
+                    ?: KeyEvent.KEYCODE_UNKNOWN
+                val action = intent?.getStringExtra(RemoteBus.EXTRA_KEY_ACTION) ?: RemoteProto.ACTION_TAP
+                handleRemoteKey(code, action)
+            }
+        }
+        remoteReceiver = receiver
+        runCatching {
+            val filter = IntentFilter(RemoteBus.ACTION_REMOTE_KEY)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                registerReceiver(receiver, filter)
+            }
+        }
+    }
+
+    /** Una tecla del teléfono, con las mismas reglas que un mando: lista blanca y volumen aparte. */
+    private fun handleRemoteKey(code: Int, action: String) {
+        if (!RemoteKeys.isAllowed(code)) return
+        if (RemoteKeys.isVolume(code)) {
+            applyRemoteVolume(code)
+            return
+        }
+        // Atrás se atiende por el despachador real (el mismo del mando): así respeta los dos
+        // pasos (cerrar diálogo / ocultar controles / salir) sin depender del «tracking» de
+        // teclas sintéticas.
+        if (code == KeyEvent.KEYCODE_BACK) {
+            runCatching { onBackPressedDispatcher.onBackPressed() }
+            return
+        }
+        dispatchRemoteKey(code, action)
+    }
+
+    /** Una pulsación sintética: abajo y arriba con el MISMO `downTime` (lo pide el sistema). */
+    private fun dispatchRemoteKey(code: Int, action: String) {
+        val down = android.os.SystemClock.uptimeMillis()
+        fun ev(a: Int) = KeyEvent(down, android.os.SystemClock.uptimeMillis(), a, code, 0)
+        runCatching {
+            when (action) {
+                RemoteProto.ACTION_DOWN -> dispatchKeyEvent(ev(KeyEvent.ACTION_DOWN))
+                RemoteProto.ACTION_UP -> dispatchKeyEvent(ev(KeyEvent.ACTION_UP))
+                else -> {
+                    dispatchKeyEvent(ev(KeyEvent.ACTION_DOWN))
+                    dispatchKeyEvent(ev(KeyEvent.ACTION_UP))
+                }
+            }
+        }
+    }
+
+    private fun applyRemoteVolume(code: Int) {
+        val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        runCatching {
+            val direction = when (code) {
+                KeyEvent.KEYCODE_VOLUME_UP -> AudioManager.ADJUST_RAISE
+                KeyEvent.KEYCODE_VOLUME_DOWN -> AudioManager.ADJUST_LOWER
+                else -> AudioManager.ADJUST_TOGGLE_MUTE
+            }
+            am.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI)
+        }
+    }
+
+    /** Le dice al teléfono qué se está viendo (otro proceso → broadcast al principal). */
+    private fun publishRemoteNow(text: String) {
+        if (text.isBlank() || text == lastRemoteNow) return
+        lastRemoteNow = text
+        RemoteBus.publishScreenRemote(this, text)
+    }
+
     /** Builds the view + the premium overlays and starts playback. */
     private fun mountUi(
         root: FrameLayout,
@@ -1044,6 +1134,8 @@ class X4KPlayerAty : ComponentActivity() {
         loadingSubView?.typeface = if (card.accent) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
         loadingEpNameView?.text = card.episodeName
         loadingEpNameView?.visibility = if (card.episodeName.isBlank()) View.GONE else View.VISIBLE
+        // El control remoto refleja lo que la tele está viendo (canal, serie con su capítulo…).
+        publishRemoteNow(listOf(card.title, card.subtitle).filter { it.isNotBlank() }.joinToString(" · "))
     }
 
     private fun buildError(root: FrameLayout) {
@@ -4772,6 +4864,8 @@ class X4KPlayerAty : ComponentActivity() {
     override fun onDestroy() {
         isPlayerActive = false
         if (residentInstance === this) residentInstance = null
+        remoteReceiver?.let { runCatching { unregisterReceiver(it) } }
+        remoteReceiver = null
         // Con commit: el proceso se mata al salir y el apply podría no alcanzar a escribir.
         saveHistory(immediate = true)
         handler.removeCallbacksAndMessages(null)

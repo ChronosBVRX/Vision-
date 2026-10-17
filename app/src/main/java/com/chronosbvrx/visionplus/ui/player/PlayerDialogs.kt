@@ -146,6 +146,43 @@ internal fun AudioAndSubtitlesDialog(state: PlayerMenuState, onDismiss: () -> Un
     )
 }
 
+/**
+ * "Canales del evento": las señales ordenadas del mismo partido (guía de la parrilla +
+ * enlaces directos). La actual va marcada; elegir otra cambia en el mismo reproductor
+ * (zapping), sin salir de la pantalla.
+ */
+@Composable
+internal fun ZapListDialog(
+    targets: List<ZapTarget>,
+    currentIndex: Int,
+    onPick: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val first = rememberDialogLanding()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = VisionSurface,
+        title = { Text("Canales del evento") },
+        text = {
+            Column(
+                Modifier
+                    .heightIn(max = 440.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                MenuSectionTitle("Señales en vivo", first = true)
+                targets.forEachIndexed { i, target ->
+                    MenuOption(
+                        target.name,
+                        modifier = if (i == currentIndex) first else Modifier,
+                        selected = i == currentIndex,
+                    ) { if (i != currentIndex) onPick(i) }
+                }
+            }
+        },
+        confirmButton = { MenuOption("Cerrar", fill = false, onClick = onDismiss) },
+    )
+}
+
 /** "Corregir intro y outro": marks where the opening ends or the ending starts, at the current position. */
 @Composable
 internal fun SkipMarkersDialog(positionLabel: String, onPick: (intro: Boolean) -> Unit, onDismiss: () -> Unit) {

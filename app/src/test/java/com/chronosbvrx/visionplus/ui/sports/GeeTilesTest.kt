@@ -96,13 +96,17 @@ class GeeTilesTest {
         assertEquals("18/10/2026 21:30", GeeTiles.state(event(dateIso = "2026-10-18", dateText = "18/10/2026", time = "21:30:00"), today))
         // Sin fecha de calendario: al menos la hora.
         assertEquals("19:00", GeeTiles.state(event(dateIso = "", dateText = ""), today))
+        // El reloj ya abrió el partido aunque la agenda siga en «pre»: dice EN VIVO, no la hora.
+        assertEquals("EN VIVO", GeeTiles.state(event(dateIso = today), today, liveByClock = true))
     }
 
     @Test
-    fun streamsTellWhetherTheMatchCanBeWatched() {
+    fun streamsNameTheSignalNeverTheMatchState() {
+        // `alive` cuenta enlaces que responden: se dice «señal», jamás «en vivo»
+        // (esa palabra es solo para partidos que de verdad se están jugando).
         assertEquals("Sin señal por ahora", GeeTiles.streams(event(alive = 0)))
-        assertEquals("1 transmisión en vivo", GeeTiles.streams(event(alive = 1)))
-        assertEquals("3 transmisiones en vivo", GeeTiles.streams(event(alive = 3)))
+        assertEquals("1 señal disponible", GeeTiles.streams(event(alive = 1)))
+        assertEquals("3 señales disponibles", GeeTiles.streams(event(alive = 3)))
     }
 
     @Test

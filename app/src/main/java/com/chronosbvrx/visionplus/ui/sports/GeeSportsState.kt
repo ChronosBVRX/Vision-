@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.sports.SportsSource
 import kotlinx.coroutines.CoroutineScope
@@ -38,6 +39,14 @@ class GeeSportsState(
     var loading by mutableStateOf(false)
         private set
     var refreshedAt by mutableLongStateOf(0L)
+        private set
+
+    /**
+     * El reloj de la agenda: las fases (en vivo / comienzan pronto / terminados) se
+     * recalculan solas al pasar el tiempo y el candado de «aún no comienza» se abre
+     * al llegar la hora, sin tocar nada ni esperar datos nuevos.
+     */
+    var clockMs by mutableLongStateOf(GeeAgenda.currentNow())
         private set
 
     init {
@@ -72,6 +81,11 @@ class GeeSportsState(
 
     fun selectCategory(category: String?) {
         selectedCategory = if (selectedCategory == category) null else category
+    }
+
+    /** Avanza el reloj de la agenda (lo llama el tic de la pantalla). */
+    fun tick(nowMs: Long = GeeAgenda.currentNow()) {
+        if (nowMs > clockMs) clockMs = nowMs
     }
 
     fun refresh(force: Boolean = false) {

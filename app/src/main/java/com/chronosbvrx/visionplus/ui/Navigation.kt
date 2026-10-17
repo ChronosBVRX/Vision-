@@ -17,6 +17,8 @@ sealed interface Route {
     data object About : Route
     data object Search : Route
     data object Assistant : Route
+    /** El control remoto por LAN (teléfono → tele). */
+    data object Remote : Route
     data class Title(val film: Film) : Route
     data class Player(val film: Film, val episode: EpisodePlay? = null, val resumeMs: Long = 0) : Route
     data class LivePlayer(
