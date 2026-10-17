@@ -34,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -143,7 +142,7 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                             channels = false
                             gee.selectCategory(category)
                         },
-                        modifier = Modifier.focusProperties { down = geeEntryFocus },
+                        modifier = Modifier.softFocusDown(geeEntryFocus),
                     )
                 }
                 item(key = "canales") {
@@ -151,7 +150,7 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                         label = "Canales",
                         selected = channels,
                         onClick = { channels = true },
-                        modifier = Modifier.focusProperties { down = geeEntryFocus },
+                        modifier = Modifier.softFocusDown(geeEntryFocus),
                     )
                 }
             }
@@ -174,7 +173,7 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                             label = SportsSource.dayLabel(date),
                             selected = gee.selectedDay == date,
                             onClick = { gee.pickDay(date) },
-                            modifier = Modifier.focusProperties { down = geeEntryFocus },
+                            modifier = Modifier.softFocusDown(geeEntryFocus),
                         )
                     }
                 }
@@ -189,7 +188,7 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                                 label = "Todas",
                                 selected = league == null,
                                 onClick = { league = null },
-                                modifier = Modifier.focusProperties { down = geeEntryFocus },
+                                modifier = Modifier.softFocusDown(geeEntryFocus),
                             )
                         }
                         items(leagues, key = { "liga_$it" }) { name ->
@@ -197,7 +196,7 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                                 label = name,
                                 selected = league == name,
                                 onClick = { league = if (league == name) null else name },
-                                modifier = Modifier.focusProperties { down = geeEntryFocus },
+                                modifier = Modifier.softFocusDown(geeEntryFocus),
                             )
                         }
                     }

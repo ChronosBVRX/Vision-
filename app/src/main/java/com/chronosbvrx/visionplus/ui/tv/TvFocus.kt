@@ -16,6 +16,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import kotlinx.coroutines.delay
 
 /** How many times, [RETRY_MS] apart, a screen asks for its landing focus before giving up (about 3 s). */
@@ -197,6 +202,38 @@ fun Modifier.modalFocusTrap(): Modifier = this
     .focusProperties {
         exit = { FocusRequester.Cancel }
     }
+
+/**
+ * Pide el foco SIN poder tumbar la pantalla. `FocusRequester.requestFocus()` lanza
+ * `IllegalStateException` («FocusRequester is not initialized») cuando su nodo ya no
+ * está adjunto: la tarjeta ancla se recicló al desplazarse (LazyColumn) o el control
+ * no existe por configuración (kill-switch). Devuelve `false` para que el llamador
+ * deje seguir la navegación estándar en vez de morir.
+ *
+ * OJO: en esta versión de Compose `requestFocus()` no reporta nada (Unit): «éxito»
+ * aquí es simplemente que no lanzó.
+ */
+internal fun requestFocusSafely(requester: FocusRequester): Boolean =
+    try {
+        requester.requestFocus()
+        true
+    } catch (_: Throwable) {
+        false
+    }
+
+/**
+ * «Abajo» dirigido a un control que puede no existir: si el destino está adjunto el
+ * foco salta a él (el atajo de siempre); si no, la tecla sigue su curso normal hacia
+ * el focusable más cercano — nunca un crash.
+ *
+ * OJO: no usar `focusProperties { down = requester }` con destinos que puedan
+ * desmontarse; esa propiedad revienta al pedir el foco de un requester huérfano.
+ */
+fun Modifier.softFocusDown(requester: FocusRequester): Modifier = onPreviewKeyEvent { event ->
+    event.type == KeyEventType.KeyDown &&
+        event.key == Key.DirectionDown &&
+        requestFocusSafely(requester)
+}
 
 /**
  * The safety net behind [rememberLandingFocus]: when a D-pad key reaches the activity unhandled and

@@ -881,10 +881,17 @@ async def gee38_events(
         else:
             where.append(f"payload->>'date_iso' = ${len(args)}")
     rows = await db().fetch(
-        f"select payload from gee38_catalog where {' and '.join(where)} order by sort",
+        f"select id, payload from gee38_catalog where {' and '.join(where)} order by sort",
         *args,
     )
-    events = [_gee_payload(r["payload"]) for r in rows]
+    events = []
+    for row in rows:
+        event = _gee_payload(row["payload"])
+        # El payload nuevo ya trae su id (lo escribe el worker); el viejo se rellena aquí
+        # con el id de la fila para que la app jamás caiga al respaldo por nombre|fecha|hora.
+        if not str(event.get("id") or "").strip():
+            event["id"] = row["id"]
+        events.append(event)
     for event in events:
         _gee_fix_event_times(event)
         _gee_fix_logos(event)
@@ -933,7 +940,17 @@ async def gee38_events(
         if _gee_date_of(match.get("kickoff")) not in near:
             continue
         out.append(_gee_match_card(match, links_by_match.get(str(match.get("id") or ""), [])))
-    return {"events": out}
+    # Una tarjeta por id: la app las pinta con `key = id` y un duplicado revienta la lista.
+    deduped: list[dict] = []
+    seen_ids: set[str] = set()
+    for card in out:
+        card_id = str(card.get("id") or "")
+        if card_id:
+            if card_id in seen_ids:
+                continue
+            seen_ids.add(card_id)
+        deduped.append(card)
+    return {"events": deduped}
 
 
 @app.post("/v1/gee38/feedback")

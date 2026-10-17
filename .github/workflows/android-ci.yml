@@ -24,6 +24,10 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # OJO: el input por defecto es «tools platform-tools» y Google retiró el
+          # paquete `tools` (jul-2025): el setup fallaba y TODO el CI quedaba en rojo.
+          packages: platform-tools
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -55,6 +59,10 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # OJO: el input por defecto es «tools platform-tools» y Google retiró el
+          # paquete `tools` (jul-2025): el setup fallaba y TODO el CI quedaba en rojo.
+          packages: platform-tools
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew

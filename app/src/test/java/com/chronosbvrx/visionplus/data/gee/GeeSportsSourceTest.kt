@@ -109,6 +109,56 @@ class GeeSportsSourceTest {
     }
 
     @Test
+    fun eventsWithoutIdGetTeamAwareFallbackKeys() {
+        // El CMS no trae id (visto en vivo: 210/210) y dos partidos distintos del mismo
+        // bloque comparten nombre/fecha/hora («NBA Preseason» 20:00): la clave de lista
+        // DEBE llevar los equipos o la pantalla se cae («Key … was already used»).
+        val json = """
+            {"events":[
+              {"category":"Basketball","event":"NBA Preseason","team_a":"Phoenix Suns","team_b":"Utah Jazz",
+               "date":"17/10/2026","time":"20:00:00","date_iso":"2026-10-17","links":[]},
+              {"category":"Basketball","event":"NBA Preseason","team_a":"Golden State Warriors","team_b":"Portland Trail Blazers",
+               "date":"17/10/2026","time":"20:00:00","date_iso":"2026-10-17","links":[]}
+            ]}
+        """.trimIndent()
+        val events = GeeSportsSource.parseEvents(json)
+        assertEquals(2, events.size)
+        assertTrue(events[0].id.isNotBlank())
+        assertTrue("el respaldo lleva los equipos", events[0].id != events[1].id)
+        assertEquals(2, events.map { it.id }.distinct().size)
+    }
+
+    @Test
+    fun duplicateEventsMergeTheirLinks() {
+        val json = """
+            {"events":[
+              {"id":"event:dup","category":"Football","event":"Liga MX","date":"17/10/2026","time":"21:00:00",
+               "links":[{"name":"A","link":"https://cdn/a.m3u8"}]},
+              {"id":"event:dup","category":"Football","event":"Liga MX","date":"17/10/2026","time":"21:00:00",
+               "links":[{"name":"A","link":"https://cdn/a.m3u8"},{"name":"B","link":"https://cdn/b.m3u8"}]}
+            ]}
+        """.trimIndent()
+        val events = GeeSportsSource.parseEvents(json)
+        assertEquals(1, events.size)
+        assertEquals(2, events[0].links.size)
+        assertEquals(listOf("https://cdn/a.m3u8", "https://cdn/b.m3u8"), events[0].links.map { it.link })
+    }
+
+    @Test
+    fun parseGroupsDropsDuplicateChannels() {
+        val json = """
+            {"groups":[
+              {"name":"TNT Sports","channels":[
+                {"name":"TNT Sports","links":[{"name":"1","link":"https://cdn/a.m3u8"}]},
+                {"name":"TNT Sports","links":[{"name":"1","link":"https://cdn/a.m3u8"}]}
+              ]}
+            ]}
+        """.trimIndent()
+        val groups = GeeSportsSource.parseGroups(json)
+        assertEquals(1, groups[0].channels.size)
+    }
+
+    @Test
     fun toChannelCarriesHeadersAndClearKey() {
         val dash = GeeSportsSource.GeeLink(
             name = "TNT SPORTS 1",

@@ -614,6 +614,10 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
             links = (old.get(eid) or {}).get("links") or []
         links = _sort_links(links)
         payload = {k: v for k, v in ev.items() if k != "idx"}
+        # El id estable VIAJA en el payload: la app lo usa como clave de lista (LazyColumn).
+        # Sin él, el respaldo por nombre|fecha|hora colisionaba entre partidos distintos
+        # del mismo bloque («NBA Preseason» 20:00) y tumbaba la pantalla (visto en vivo).
+        payload["id"] = eid
         payload["links"] = links
         payload["alive"] = sum(1 for lk in links if lk.get("alive"))
         payload["total"] = len(links)

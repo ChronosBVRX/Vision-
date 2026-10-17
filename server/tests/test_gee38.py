@@ -370,6 +370,8 @@ async def test_sync_events_writes_stable_ids_with_links(monkeypatch):
     assert eid == expected and category == "Football"
     payload = json.loads(raw_payload)
     assert payload["links"][0]["url"] == "https://cdn/azteca.m3u8"
+    # El id estable viaja en el payload: es la clave de lista de la app (LazyColumn).
+    assert payload["id"] == eid
     prunes = [sql for sql, _ in pool.executed if "delete from gee38_catalog" in sql]
     assert prunes and "kind = 'event'" in prunes[0]
 
@@ -427,7 +429,7 @@ async def test_gee38_events_filters_day_window(monkeypatch):
         "team_a": "Alfa", "team_b": "Beta",
         "date_iso": "2026-10-16", "time": "19:00:00", "links": [],
     })
-    fake = _FakePool(rows=[{"payload": payload}])
+    fake = _FakePool(rows=[{"id": "event:a", "payload": payload}])
     monkeypatch.setattr(api_app, "pool", fake)
     out = await api_app.gee38_events(category="Football", day="2026-10-16", days=3,
                                      x_api_key="test-key")
@@ -438,6 +440,34 @@ async def test_gee38_events_filters_day_window(monkeypatch):
     assert "payload->>'date_iso' < $3" in sql
     assert args == ("Football", "2026-10-16", "2026-10-19")
     assert out["events"][0]["event"] == "Liga MX, Apertura"
+    assert out["events"][0]["id"] == "event:a"
+
+
+@pytest.mark.anyio
+async def test_gee38_events_backfills_id_and_dedupes(monkeypatch):
+    # Payload viejo sin id (guardado antes del fix): se rellena con el id de la fila —
+    # sin él la app caía al respaldo nombre|fecha|hora y dos partidos del mismo bloque
+    # a la misma hora compartían clave de lista (crash del POCO en vivo).
+    old = json.dumps({
+        "category": "Basketball", "event": "NBA Preseason",
+        "team_a": "Golden State Warriors", "team_b": "Portland Trail Blazers",
+        "date_iso": "2026-10-16", "time": "20:00:00", "links": [],
+    })
+    fake = _FakePool(rows=[
+        {"id": "event:aaa", "payload": old},
+        {"id": "event:aaa", "payload": old},  # duplicado literal: una sola tarjeta
+        {"id": "event:bbb", "payload": json.dumps({
+            "category": "Basketball", "event": "NBA Preseason",
+            "team_a": "Phoenix Suns", "team_b": "Utah Jazz",
+            "date_iso": "2026-10-16", "time": "20:00:00", "links": [],
+        })},
+    ])
+    monkeypatch.setattr(api_app, "pool", fake)
+    out = await api_app.gee38_events(category=None, day="2026-10-16", days=0,
+                                     x_api_key="test-key")
+    ids = [e["id"] for e in out["events"]]
+    assert ids == ["event:aaa", "event:bbb"]
+    assert len(set(ids)) == len(ids)
 
 
 @pytest.mark.anyio

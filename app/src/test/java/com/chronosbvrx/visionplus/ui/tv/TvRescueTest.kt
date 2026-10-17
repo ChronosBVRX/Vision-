@@ -122,4 +122,16 @@ class TvRescueTest {
             homeReturnRowIndex("t1", "hero", top10, emptyList(), emptyList(), emptyList(), emptyList(), showPlaceholders = false, showNoRows = true),
         )
     }
+
+    // ---------------------------------------------------------- foco a prueba de balas
+
+    @Test
+    fun safeFocusRequestNeverThrowsOnDetachedRequester() {
+        // `FocusRequester.requestFocus()` lanza IllegalStateException cuando su nodo no está
+        // adjunto (tarjeta reciclada por el LazyColumn, control ausente por configuración):
+        // el crash real de la ZTE en «Deportes en vivo» (dispatchKeyEvent → FocusRequester).
+        // El envoltorio DEBE devolver false y jamás propagar la excepción.
+        val detached = androidx.compose.ui.focus.FocusRequester()
+        assertFalse("un requester huérfano no puede tumbar la pantalla", requestFocusSafely(detached))
+    }
 }

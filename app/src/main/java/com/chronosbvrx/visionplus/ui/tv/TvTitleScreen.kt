@@ -750,7 +750,9 @@ private fun TvSeriesSelectorPanel(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(cardFocus)
-                                .focusProperties { down = chipFocus },
+                                // El chip de descarga solo existe con [downloadsOn]: si no está,
+                                // «abajo» sigue su curso normal (antes: crash por requester huérfano).
+                                .softFocusDown(chipFocus),
                         ) {
                             Column {
                                 // Miniatura con la portada de la serie: el portal no trae stills

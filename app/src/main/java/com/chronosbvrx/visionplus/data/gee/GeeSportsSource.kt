@@ -187,7 +187,9 @@ object GeeSportsSource {
                     logo = safeImage(g.optString("logo")),
                     alive = g.optInt("alive"),
                     total = g.optInt("total"),
-                    channels = channels,
+                    // La lista usa «nombre + primer enlace» como clave de UI: un canal
+                    // repetido con la misma clave tumbaba la pantalla (LazyColumn).
+                    channels = channels.distinctBy { it.name + "|" + (it.links.firstOrNull()?.link ?: "") },
                 ),
             )
         }
@@ -205,7 +207,12 @@ object GeeSportsSource {
             val score = e.optJSONObject("score")
             out.add(
                 GeeEvent(
-                    id = e.optString("id", name + "|" + e.optString("date") + "|" + e.optString("time")),
+                    // El respaldo (servidor viejo o caché previa) lleva los EQUIPOS en la
+                    // clave: dos partidos de la misma liga a la misma hora («NBA Preseason»
+                    // 20:00) colisionaban en la clave de la lista y tumbaban la pantalla.
+                    id = e.optString("id").ifBlank {
+                        "$name|${e.optString("team_a")}|${e.optString("team_b")}|${e.optString("date")}|${e.optString("time")}"
+                    },
                     category = e.optString("category"),
                     name = name,
                     logo = safeImage(e.optString("logo")),
@@ -237,7 +244,28 @@ object GeeSportsSource {
                 ),
             )
         }
-        return out
+        return dedupeEvents(out)
+    }
+
+    /**
+     * Un solo elemento por id: la lista los pinta con `key = id` y un duplicado
+     * revienta el LazyColumn («Key … was already used»). Los duplicados reales
+     * (mismo partido en dos entradas del CMS) se fusionan sumando sus enlaces.
+     */
+    internal fun dedupeEvents(events: List<GeeEvent>): List<GeeEvent> {
+        val seen = LinkedHashMap<String, GeeEvent>(events.size)
+        for (event in events) {
+            val previous = seen[event.id]
+            if (previous == null) {
+                seen[event.id] = event
+                continue
+            }
+            val merged = previous.links + event.links.filter { link ->
+                previous.links.none { it.link == link.link }
+            }
+            if (merged.size != previous.links.size) seen[event.id] = previous.copy(links = merged)
+        }
+        return seen.values.toList()
     }
 
     // ------------------------------------------------------------------ caché
