@@ -87,13 +87,15 @@ import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Download
 import com.chronosbvrx.visionplus.ui.phone.DownloadsScreen
 
-private data class Tab(val route: Route, val label: String, val icon: ImageVector)
+internal data class Tab(val route: Route, val label: String, val icon: ImageVector)
 
-private val TABS = listOf(
+/** El menú lateral del móvil/tablet (drawer y riel en apaisado), en orden de aparición. */
+internal val TABS = listOf(
     Tab(Route.Home, "Inicio", Icons.Default.Home),
     Tab(Route.Section("movies", "Películas"), "Películas", Icons.Default.Movie),
     Tab(Route.Section("series", "Series"), "Series", Icons.Default.Theaters),
     Tab(Route.Live, "En vivo", Icons.Default.LiveTv),
+    Tab(Route.Sports, "Deportes en vivo", Icons.Default.SportsSoccer),
     Tab(Route.Library, "Mi lista", Icons.Default.Bookmark),
     Tab(Route.Downloads, "Descargas", Icons.Default.Download),
     Tab(Route.Settings, "Ajustes", Icons.Default.Settings),

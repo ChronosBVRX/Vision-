@@ -5,6 +5,12 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Lote 2.5.89: «Deportes en vivo» al menú lateral del móvil — OTA publicada** (2026-10-17; 426 tests Android):
+  - *Pedido del usuario*: «La sección de Eventos deportivos en el móvil tiene que estar en el menú lateral» — antes solo se llegaba por el acceso rápido del Inicio.
+  - *App*: `ui/PhoneApp.kt` — `TABS` suma `Tab(Route.Sports, "Deportes en vivo", Icons.Default.SportsSoccer)` entre «En vivo» y «Mi lista» (misma lista para el drawer y el riel de tablet en apaisado); `Tab`/`TABS` pasan a `internal` para el guardián. El PIN del modo niños ya contemplaba `Route.Sports`, y `nav.goTab` deja Home debajo (Atrás regresa al Inicio).
+  - *Guardián*: `PhoneMenuTest` (la entrada existe, con ese label, justo después de «En vivo»). Suite 426/426.
+  - *Verificado en el POCO*: debug y release R8 vc325 — drawer con la entrada (seleccionada al estar en la sección), tap → «Deportes en vivo» con chips de deporte/día/liga y eventos; Atrás → Inicio. Release R8 vc325 (105.9 MB) firma histórica `9593cb0d…` (apksigner); asset `VisionPlus.apk` de la OTA.
+  - *Nota*: en Smart TV sin cambios (ahí ya tenía acceso en los hubs del Inicio).
 - **Lote 2.5.88: «Deportes en vivo» — la guía REAL de dónde se transmite cada partido, «Canales en vivo» servidos SOLO del catálogo de Gee (sin XTV en este feed), conflicto FOX resuelto y Atrás→modal — OTA publicada** (2026-10-17; 424 tests Android + 165 backend):
   - *Pedido del usuario*: «sigue sin mostrar canales y lo que muestra está equivocado; ¿no hay guía de dónde pasan los partidos?» — la «guía» del CMS solo son los nombres de sus enlaces (a veces UN espejo genérico o el canal equivocado); la guía buena es la parrilla ESPN/LiveSoccerTV que YA teníamos, pero no se usaba en la app.
   - *Servidor*: `_gee_match_card` ahora incluye `guide`/`broadcasts` (dedup, tope 8) y `league_id` — la parrilla oficial viaja en la tarjeta.
@@ -925,8 +931,9 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.88**
-  (versionCode **324**, release OTA v2.5.88 — «Deportes en vivo»: guía real por partido, «Canales en vivo» solo
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.89**
+  (versionCode **325**, release OTA v2.5.89 — «Deportes en vivo» se sumó al menú lateral del móvil/tablet,
+  entre «En vivo» y «Mi lista»; trae lo del lote 2.5.88: guía real por partido, «Canales en vivo» solo
   del catálogo de Gee, conflicto FOX resuelto y Atrás del reproductor de vuelta al modal de opciones). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
