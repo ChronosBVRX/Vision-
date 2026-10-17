@@ -1167,31 +1167,30 @@ def _gee_channel_family(canonical: str) -> set[str]:
 
 
 def _gee_broadcast_filter(links: list[dict], match: dict) -> list[dict]:
-    """Solo los enlaces cuya cadena está en la parrilla oficial del partido.
+    """Ordena los enlaces por la parrilla oficial del partido (sin dejar sin opciones).
 
-    La agenda (ESPN/LiveSoccerTV) trae los canales que de verdad lo transmiten
-    —en México y fuera—: un enlace cuyo nombre no pertenece a esa parrilla se
-    descarta (así «CANAL MX» no sale en un partido que va por TUDN). Cuando la
-    parrilla existe pero ningún enlace coincide, quedan solo las señales
-    neutrales (agregadores tipo «HD QUALITY») y se tiran las marcas de TV
-    equivocadas; si no queda nada, el partido sale «Sin señal» — preferimos eso
-    a mandar al usuario a un canal que está dando otra cosa."""
+    La agenda (ESPN/LiveSoccerTV) trae los canales que lo transmiten —en México
+    y fuera—, pero esa lista es incompleta y cambia entre fuentes: por eso ya no
+    se descarta nada. Se ordena por niveles: primero las cadenas de la parrilla
+    (con sus señales hermanas: FOX Deportes≈Fox Sports, TUDN USA≈TUDN…), luego
+    las señales neutrales (agregadores tipo «HD QUALITY») y al final las demás
+    marcas — el usuario siempre ve la mejor opción arriba y no se queda sin nada."""
     official: set[str] = set()
     for name in list(match.get("broadcasts") or []) + list(match.get("channels") or []):
         official |= _gee_channel_family(canonical_channel(name or ""))
     official.discard("")
     if not official or not links:
         return links
-    kept = [
-        link for link in links
-        if _gee_channel_family(canonical_channel(link.get("name") or "")) & official
-    ]
-    if kept:
-        return kept
-    return [
-        link for link in links
-        if canonical_channel(link.get("name") or "") not in GEE_BRAND_CANONICALS
-    ]
+
+    def _tier(link: dict) -> int:
+        canonical = canonical_channel(link.get("name") or "")
+        if _gee_channel_family(canonical) & official:
+            return 0
+        if canonical not in GEE_BRAND_CANONICALS:
+            return 1
+        return 2
+
+    return sorted(links, key=_tier)  # estable: dentro de cada nivel manda el sondeo
 
 
 # Marcas de televisión reconocidas: si la parrilla oficial no las incluye, no se

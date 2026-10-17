@@ -557,42 +557,44 @@ def _link(name: str) -> dict:
     return {"name": name, "url": "https://x/" + name, "link": "https://x/" + name, "alive": True}
 
 
-def test_gee_broadcast_filter_keeps_only_official_channels():
-    # Necaxa-Atlas real: la parrilla es TUDN/ViX — CANAL MX y FOX DEPORTES no van.
+def test_gee_broadcast_filter_orders_official_channels_first():
+    # Necaxa-Atlas: la parrilla (TUDN/ViX) manda; CANAL MX queda al final.
     match = _espn_match("Necaxa", "Atlas")
     match["broadcasts"] = []
     match["channels"] = ["TUDN", "ViX Deportes"]
     links = [_link("CANAL MX FHD"), _link("FOX DEPORTES FHD"), _link("TUDN MEXICO FHD")]
     kept = api_app._gee_broadcast_filter(links, match)
-    assert [link["name"] for link in kept] == ["TUDN MEXICO FHD"]
+    assert [link["name"] for link in kept] == ["TUDN MEXICO FHD", "CANAL MX FHD", "FOX DEPORTES FHD"]
 
 
 def test_gee_broadcast_filter_accepts_sibling_feeds():
     match = _espn_match("Tijuana", "Puebla")
     match["broadcasts"] = ["FOX One", "TUDN USA"]
     match["channels"] = ["Fox Sports"]
-    links = [_link("FOX DEPORTES FHD"), _link("CANAL MX FHD"), _link("TUDN MEXICO FHD")]
+    links = [_link("CANAL MX FHD"), _link("FOX DEPORTES FHD"), _link("TUDN MEXICO FHD")]
     kept = api_app._gee_broadcast_filter(links, match)
-    assert sorted(link["name"] for link in kept) == ["FOX DEPORTES FHD", "TUDN MEXICO FHD"]
+    # Las señales hermanas van arriba; la marca ajena queda al final (nunca se tira).
+    assert [link["name"] for link in kept] == ["FOX DEPORTES FHD", "TUDN MEXICO FHD", "CANAL MX FHD"]
 
 
-def test_gee_broadcast_filter_keeps_only_neutral_links_without_a_match():
+def test_gee_broadcast_filter_orders_neutrals_before_other_brands():
     match = _espn_match("Eintracht Frankfurt", "FC Cologne", league="Bundesliga")
     match["broadcasts"] = ["Fandango"]
     match["channels"] = []
     links = [_link("DAZN SPORTS FHD"), _link("HD QUALITY"), _link("ONE SOCCER HD")]
     kept = api_app._gee_broadcast_filter(links, match)
-    # Las marcas que no están en la parrilla se tiran; los agregadores se quedan.
-    assert [link["name"] for link in kept] == ["HD QUALITY"]
+    # Sin coincidencia de parrilla: primero el agregador neutral, luego las marcas.
+    assert [link["name"] for link in kept] == ["HD QUALITY", "DAZN SPORTS FHD", "ONE SOCCER HD"]
 
 
-def test_gee_broadcast_filter_drops_wrong_brand_entirely():
-    # Tijuana-Puebla real: parrilla Fox One/TUDN USA; el único enlace es CANAL MX.
+def test_gee_broadcast_filter_keeps_options_when_only_off_brand_links_exist():
+    # Tijuana-Puebla real: el CMS solo trae CANAL MX — mejor una opción que nada.
     match = _espn_match("Tijuana", "Puebla")
     match["broadcasts"] = ["FOX One", "TUDN USA"]
     match["channels"] = ["Fox Sports"]
     links = [_link("CANAL MX FHD")]
-    assert api_app._gee_broadcast_filter(links, match) == []
+    kept = api_app._gee_broadcast_filter(links, match)
+    assert [link["name"] for link in kept] == ["CANAL MX FHD"]
 
 
 def test_gee_league_filters_by_id_and_name():
