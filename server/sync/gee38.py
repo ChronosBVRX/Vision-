@@ -345,9 +345,19 @@ def parse_events(data: bytes) -> list[dict]:
 # Red
 # ----------------------------------------------------------------------------
 
+def _busted_url(path_or_url: str) -> str:
+    """El hosting del CMS sirve copias cacheadas rancias sin un cache-buster:
+    los archivos del CMS se piden con `?t=` fresco; los enlaces externos no."""
+    if path_or_url.startswith("http"):
+        return path_or_url
+    url = BASE + path_or_url.lstrip("/")
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}t={int(time.time() * 1000)}"
+
+
 def _fetch(path_or_url: str, timeout: int = 25) -> str:
-    url = path_or_url if path_or_url.startswith("http") else BASE + path_or_url.lstrip("/")
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
+    url = _busted_url(path_or_url)
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*", "Cache-Control": "no-cache"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read().decode("utf-8", "replace")
 
@@ -358,8 +368,8 @@ async def _fetch_async(path_or_url: str, timeout: int = 25) -> str:
 
 async def _fetch_bytes_async(path_or_url: str, timeout: int = 25) -> bytes:
     def _go() -> bytes:
-        url = path_or_url if path_or_url.startswith("http") else BASE + path_or_url.lstrip("/")
-        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
+        url = _busted_url(path_or_url)
+        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*", "Cache-Control": "no-cache"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.read()
     return await asyncio.to_thread(_go)
@@ -496,6 +506,7 @@ async def _sync_groups(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
 
     written = 0
     async with pool.acquire() as conn:
+        stored_groups = int(await conn.fetchval("select count(*) from gee38_catalog where kind = 'group'") or 0)
         for gid, (rank, payload, sort) in best.items():
             if not payload["channels"]:
                 continue  # falló este ciclo: se conserva lo guardado antes
@@ -510,16 +521,29 @@ async def _sync_groups(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
                 gid, payload["name"], sort, json.dumps(payload, ensure_ascii=False),
             )
             written += 1
-        await conn.execute(
-            "delete from gee38_catalog where kind = 'group' and not (id = any($1::text[]))",
-            list(dict.fromkeys(seen_ids)),
-        )
+        unique_seen = list(dict.fromkeys(seen_ids))
+        if stored_groups > 12 and len(unique_seen) < stored_groups * 0.7:
+            # sports.txt también puede venir a medias: mejor conservar de más que perder.
+            log.warning("gee38: sports.txt vino a medias (%s vs %s grupos): no se poda", len(unique_seen), stored_groups)
+        else:
+            await conn.execute(
+                "delete from gee38_catalog where kind = 'group' and not (id = any($1::text[]))",
+                unique_seen,
+            )
     return written
 
-
 def _event_id(ev: dict) -> str:
-    """ID estable por contenido: el orden del archivo cambia entre ciclos."""
-    raw = f"{ev['category']}|{ev['event']}|{ev['date']}|{ev['time']}".encode("utf-8", "replace")
+    """ID estable por contenido: el orden del archivo cambia entre ciclos.
+
+    OJO: los equipos entran al hash — el CMS rotula todos los partidos de una
+    jornada igual («Liga MX, Apertura» + misma fecha/hora), y sin los equipos
+    dos partidos distintos colisionaban y uno pisaba al otro (visto en vivo:
+    214 eventos escritos, 149 guardados).
+    """
+    raw = (
+        f"{ev['category']}|{ev['event']}|{ev.get('team_a', '')}|{ev.get('team_b', '')}"
+        f"|{ev['date']}|{ev['time']}"
+    ).encode("utf-8", "replace")
     return "event:" + hashlib.sha1(raw).hexdigest()[:14]
 
 
@@ -590,10 +614,24 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
             )
         written += 1
     async with pool.acquire() as conn:
-        await conn.execute(
-            "delete from gee38_catalog where kind = 'event' and not (id = any($1::text[]))",
-            list(dict.fromkeys(seen_ids)),
-        )
+        unique_seen = list(dict.fromkeys(seen_ids))
+        stored_events = len(old)
+        if stored_events > 60 and len(unique_seen) < stored_events * 0.5:
+            # events.txt se publica a medias de vez en cuando (visto en vivo:
+            # 214 → 149 → 214 en minutos): nunca se poda con una lectura parcial.
+            log.warning(
+                "gee38: events.txt vino a medias (%s vs %s guardados): no se poda",
+                len(unique_seen), stored_events,
+            )
+        else:
+            # Solo se poda lo viejo: lo reciente/programado jamás se pierde.
+            cutoff = (today - timedelta(days=3)).isoformat()
+            await conn.execute(
+                "delete from gee38_catalog where kind = 'event'"
+                " and (payload->>'date_iso') < $1 and not (id = any($2::text[]))",
+                cutoff,
+                unique_seen,
+            )
     return written
 
 

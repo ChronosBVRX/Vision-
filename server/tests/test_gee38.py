@@ -193,6 +193,14 @@ def test_parse_app_keeps_known_fields():
     assert "otro" not in out and out["download_url"] == "https://d"
 
 
+def test_busted_url_protects_cms_files_but_not_external_ones():
+    url = gee38._busted_url("events.txt")
+    assert url.startswith("https://new.whatyouthink.site/events.txt?t=")
+    external = "https://fawasp.pages.dev/playlist.txt"
+    assert gee38._busted_url(external) == external
+    assert gee38._busted_url("channels/xyz.txt").startswith("https://new.whatyouthink.site/channels/xyz.txt?t=")
+
+
 def test_decrypt_body_rejects_a_retired_page():
     # Los archivos retirados devuelven la página HTML del hosting: no es payload.
     with pytest.raises(ValueError):
@@ -206,6 +214,20 @@ def test_event_id_is_stable_and_content_based():
     )[0]
     assert gee38._event_id(base) == gee38._event_id(dict(base))
     assert gee38._event_id(base) != gee38._event_id(other)
+
+
+def test_event_id_separates_matches_of_the_same_league_slot():
+    # El CMS rotula todos los partidos de la jornada igual («Liga MX, Apertura»
+    # + misma fecha/hora): sin los equipos en el hash, se pisaban (214 → 149).
+    def build(team_a: str, team_b: str) -> dict:
+        ev = dict(EVENT, eventName="Liga MX, Apertura", date="17/10/2026", time="03:00:00")
+        ev["teamAName"] = team_a
+        ev["teamBName"] = team_b
+        return gee38.parse_events(json.dumps([{"event": json.dumps(ev)}]).encode())[0]
+
+    atlante = build("Atlante FC", "Pumas UNAM")
+    tijuana = build("Club Tijuana", "Club Puebla")
+    assert gee38._event_id(atlante) != gee38._event_id(tijuana)
 
 
 def test_api_timestamp_reads_the_embedded_epoch():
@@ -227,6 +249,9 @@ class _SyncConn:
 
     async def fetch(self, sql, *args):
         return self.pool.select_rows
+
+    async def fetchval(self, sql, *args):
+        return 0
 
 
 class _SyncAcquire:
@@ -325,7 +350,7 @@ async def test_sync_events_writes_stable_ids_with_links(monkeypatch):
     assert len(inserts) == 1
     eid, name, category, sort, raw_payload = inserts[0]
     expected = "event:" + __import__("hashlib").sha1(
-        f"Football|{EVENT['eventName']}|30/06/2026|19:00:00".encode()
+        f"Football|{EVENT['eventName']}|{EVENT['teamAName']}|{EVENT['teamBName']}|30/06/2026|19:00:00".encode()
     ).hexdigest()[:14]
     assert eid == expected and category == "Football"
     payload = json.loads(raw_payload)
