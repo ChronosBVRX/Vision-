@@ -13,13 +13,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -61,8 +63,8 @@ private val LiveRed = Color(0xFFD32F2F)
 /**
  * "Deportes en vivo": la fuente única (GeeSports) con los deportes agrupados —
  * fútbol al frente y, dentro de él, las ligas grandes con Liga MX primero.
- * Los bloques son EN VIVO → COMIENZAN PRONTO → TERMINADOS, con escudos y
- * marcadores reales (cruzados en el servidor con la agenda en vivo).
+ * Los partidos se muestran como MOSAICO (parrilla de tarjetas con escudos y
+ * marcador): bloques EN VIVO → COMIENZAN PRONTO → TERMINADOS.
  */
 @Composable
 fun SportsScreen(
@@ -95,6 +97,15 @@ fun SportsScreen(
     }
     val sections = remember(filtered) { GeeAgenda.sections(filtered) }
     val days = remember { (0..7).map { SportsSource.shift(SportsSource.todayIso(), it) } }
+    val liveCount = remember(filtered) {
+        filtered.count { it.live || GeeAgenda.phaseOf(it) == GeeAgenda.Phase.Live }
+    }
+    val countText = when {
+        gee.loading && filtered.isEmpty() -> "Cargando eventos…"
+        filtered.isEmpty() -> "Sin eventos por ahora"
+        liveCount > 0 -> "${filtered.size} eventos · $liveCount en vivo"
+        else -> "${filtered.size} eventos"
+    }
 
     Column(
         Modifier
@@ -107,12 +118,14 @@ fun SportsScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "Deportes en vivo",
-                style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
-                modifier = Modifier.weight(1f),
-            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Deportes en vivo",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                )
+                Text(countText, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+            }
             IconButton(onClick = { gee.refresh(force = true) }) {
                 Icon(Icons.Default.Refresh, contentDescription = "Actualizar", tint = Color.White)
             }
@@ -217,42 +230,33 @@ fun SportsScreen(
                     }
                 }
             }
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val live = filtered.count { it.live || GeeAgenda.phaseOf(it) == GeeAgenda.Phase.Live }
-                val text = when {
-                    gee.loading && filtered.isEmpty() -> "Cargando eventos…"
-                    filtered.isEmpty() -> "Sin eventos por ahora"
-                    live > 0 -> "${filtered.size} eventos · $live en vivo"
-                    else -> "${filtered.size} eventos"
-                }
-                Text(text, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
-            }
             when {
                 gee.loading && filtered.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Cargando…", color = VisionTextSecondary)
                 }
                 filtered.isEmpty() -> EmptyState("Sin eventos", subtitle = "No hay eventos de este deporte en este momento.")
-                else -> LazyColumn(
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top = 2.dp,
-                        bottom = contentPadding.calculateBottomPadding() + 24.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    sections.forEach { section ->
-                        item(key = "sec_${section.title}") {
-                            GeeSectionHeader(section.title, section.events.size)
-                        }
-                        items(section.events, key = { it.id }) { event ->
-                            GeeEventCard(event) {
-                                DeportesReturn.pickingId = event.id
-                                pickingId = event.id
+                else -> {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 150.dp),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 4.dp,
+                            bottom = contentPadding.calculateBottomPadding() + 24.dp,
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        sections.forEach { section ->
+                            item(key = "sec_${section.title}", span = { GridItemSpan(maxLineSpan) }) {
+                                GeeSectionHeader(section.title, section.events.size)
+                            }
+                            gridItems(section.events, key = { it.id }) { event ->
+                                GeeEventTile(event) {
+                                    DeportesReturn.pickingId = event.id
+                                    pickingId = event.id
+                                }
                             }
                         }
                     }
@@ -279,11 +283,8 @@ fun SportsScreen(
 
 /** "América vs Guadalajara"; los eventos sin equipos usan el nombre del cuadro. */
 internal fun geeEventTitle(event: GeeSportsSource.GeeEvent): String {
-    val home = event.homeName.ifBlank { event.teamA }
-    val away = event.awayName.ifBlank { event.teamB }
-    if (home.isBlank() || away.isBlank() || home.equals(event.name, true) || away.equals(event.name, true)) {
-        return event.name
-    }
+    val (home, away) = GeeTiles.teams(event)
+    if (home.isBlank() || away.isBlank()) return event.name
     return "$home vs $away"
 }
 
@@ -316,52 +317,56 @@ private fun GeeSectionHeader(title: String, count: Int) {
     }
 }
 
-/** La tarjeta de un evento: escudos, marcador real y el estado (en vivo/final/hora). */
+/**
+ * La tarjeta-mosaico de un partido: escudos grandes, marcador real y estado.
+ * Mismo ADN visual que la de Smart TV (misma lógica pura en [GeeTiles]).
+ */
 @Composable
-private fun GeeEventCard(event: GeeSportsSource.GeeEvent, onClick: () -> Unit) {
-    val home = event.homeName.ifBlank { event.teamA }
-    val away = event.awayName.ifBlank { event.teamB }
-    val hasTeams = home.isNotBlank() && away.isNotBlank() &&
-        !home.equals(event.name, true) && !away.equals(event.name, true)
+private fun GeeEventTile(event: GeeSportsSource.GeeEvent, onClick: () -> Unit) {
+    val (home, away) = GeeTiles.teams(event)
+    val hasTeams = home.isNotBlank()
 
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
         color = VisionSurface,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(126.dp),
     ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (event.leagueLogo.isNotBlank()) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(event.leagueLogo)
-                            .size(40, 40)
+                            .size(32, 32)
                             .crossfade(false)
                             .build(),
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(13.dp),
                         contentScale = ContentScale.Fit,
                     )
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(5.dp))
                 }
                 Text(
                     GeeAgenda.leagueLabel(event),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelSmall,
                     color = VisionTextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                GeeStateBadge(event)
+                GeeStateBadge(event, compact = true)
             }
             Spacer(Modifier.height(8.dp))
             if (hasTeams) {
-                GeeTeamLine(event.homeLogo, home, event.scoreHome, event.live)
+                GeeTileTeamLine(event.homeLogo, home, event.scoreHome, event.live)
                 Spacer(Modifier.height(6.dp))
-                GeeTeamLine(event.awayLogo, away, event.scoreAway, event.live)
+                GeeTileTeamLine(event.awayLogo, away, event.scoreAway, event.live)
             } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f),
+                ) {
                     if (event.logo.isNotBlank()) {
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
@@ -370,14 +375,14 @@ private fun GeeEventCard(event: GeeSportsSource.GeeEvent, onClick: () -> Unit) {
                                 .crossfade(false)
                                 .build(),
                             contentDescription = null,
-                            modifier = Modifier.size(26.dp),
+                            modifier = Modifier.size(28.dp),
                             contentScale = ContentScale.Fit,
                         )
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(8.dp))
                     }
                     Text(
                         event.name,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.labelLarge,
                         color = Color.White,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -385,46 +390,24 @@ private fun GeeEventCard(event: GeeSportsSource.GeeEvent, onClick: () -> Unit) {
                     )
                 }
             }
-            Spacer(Modifier.height(9.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (event.alive > 0) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = VisionBlueBright, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(3.dp))
-                    Text(
-                        if (event.alive == 1) "1 transmisión en vivo" else "${event.alive} transmisiones en vivo",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = VisionBlueBright,
-                    )
-                } else {
-                    Text("Sin señal por ahora", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
-                }
-            }
-            if (event.broadcasts.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "TV: " + event.broadcasts.take(3).joinToString(" · "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = VisionTextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            Spacer(Modifier.height(7.dp))
+            GeeTileFooter(event)
         }
     }
 }
 
 @Composable
-private fun GeeTeamLine(logo: String, name: String, score: Int?, live: Boolean) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun GeeTileTeamLine(logo: String, name: String, score: Int?, live: Boolean) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(26.dp).clip(CircleShape).background(VisionSurfaceHigh),
+            Modifier.size(22.dp).clip(CircleShape).background(VisionSurfaceHigh),
             contentAlignment = Alignment.Center,
         ) {
             if (logo.isNotBlank()) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(logo)
-                        .size(56, 56)
+                        .size(44, 44)
                         .crossfade(false)
                         .build(),
                     contentDescription = null,
@@ -433,22 +416,22 @@ private fun GeeTeamLine(logo: String, name: String, score: Int?, live: Boolean) 
                 )
             } else {
                 Text(
-                    name.trim().split(' ').filter { it.length > 2 }.take(2)
-                        .map { it.first().uppercaseChar() }.joinToString("").ifBlank { name.take(2).uppercase() },
+                    GeeTiles.monogram(name),
                     style = MaterialTheme.typography.labelSmall,
                     color = VisionTextSecondary,
                 )
             }
         }
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(8.dp))
         Text(
             name,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.labelMedium,
             color = Color.White,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+        Spacer(Modifier.width(6.dp))
         Text(
             score?.toString() ?: "-",
             style = MaterialTheme.typography.titleMedium,
@@ -458,32 +441,57 @@ private fun GeeTeamLine(logo: String, name: String, score: Int?, live: Boolean) 
     }
 }
 
+/** El pie: la guía de TV («TV: …») o si tiene señal, más el contador de enlaces vivos. */
+@Composable
+private fun GeeTileFooter(event: GeeSportsSource.GeeEvent) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        val tvLine = event.broadcasts.take(2).joinToString(" · ")
+        Text(
+            if (tvLine.isNotBlank()) "TV: $tvLine" else GeeTiles.streams(event),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (tvLine.isBlank() && event.alive > 0) VisionBlueBright else VisionTextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (event.alive > 0) {
+            Spacer(Modifier.width(6.dp))
+            Surface(color = LiveRed, shape = RoundedCornerShape(50)) {
+                Text(
+                    "${event.alive} en vivo",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                )
+            }
+        }
+    }
+}
+
 /** EN VIVO con minuto, Final, o la hora con el día (Hoy/mañana/fecha). */
 @Composable
-private fun GeeStateBadge(event: GeeSportsSource.GeeEvent) {
+private fun GeeStateBadge(event: GeeSportsSource.GeeEvent, compact: Boolean = false) {
     when {
         event.live -> Surface(color = LiveRed, shape = RoundedCornerShape(50)) {
-            val detail = event.detail.trim()
             Text(
-                if (detail.isBlank() || detail.equals("in", true)) "EN VIVO" else "EN VIVO · $detail",
-                style = MaterialTheme.typography.labelLarge,
+                GeeTiles.liveLabel(event),
+                style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge,
                 color = Color.White,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.padding(
+                    horizontal = if (compact) 7.dp else 10.dp,
+                    vertical = if (compact) 2.dp else 4.dp,
+                ),
             )
         }
-        event.status == "post" -> Text("Final", style = MaterialTheme.typography.labelLarge, color = VisionTextSecondary)
-        else -> {
-            val today = SportsSource.todayIso()
-            val whenText = when {
-                event.dateIso == today -> "Hoy"
-                event.dateIso.isBlank() -> ""
-                else -> event.dateText.ifBlank { event.dateIso }
-            }
-            Text(
-                listOf(whenText, geeTimeLabel(event.time)).filter { it.isNotBlank() }.joinToString(" "),
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-            )
-        }
+        event.status == "post" -> Text(
+            "Final",
+            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge,
+            color = VisionTextSecondary,
+        )
+        else -> Text(
+            GeeTiles.state(event, SportsSource.todayIso()),
+            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.titleSmall,
+            color = Color.White,
+        )
     }
 }

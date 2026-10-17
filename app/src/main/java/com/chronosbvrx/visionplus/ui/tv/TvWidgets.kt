@@ -139,7 +139,11 @@ internal fun TvCompactAction(
     }
 }
 
-/** A chip to pick one option of several (categories): blue tint when selected, white border on focus. */
+/**
+ * A chip to pick one option of several (categories): blue tint when selected, white border on focus.
+ * Con [compact] (pantallas con muchos filtros apilados, p. ej. Deportes en vivo) el chip baja su
+ * relleno para ocupar menos alto: el contenido de la pantalla gana el espacio.
+ */
 @Composable
 internal fun TvChoiceChip(
     label: String,
@@ -147,6 +151,7 @@ internal fun TvChoiceChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
+    compact: Boolean = false,
 ) {
     Surface(
         onClick = onClick,
@@ -165,7 +170,10 @@ internal fun TvChoiceChip(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.padding(
+                horizontal = if (compact) 12.dp else 16.dp,
+                vertical = if (compact) 5.dp else 10.dp,
+            ),
         ) {
             if (icon != null) {
                 Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
