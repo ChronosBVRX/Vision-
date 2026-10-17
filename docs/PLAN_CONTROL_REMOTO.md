@@ -44,24 +44,62 @@ Nuevos:
 - `data/remote/RemoteProtocol.kt` — mensajes (@Serializable) + códec + lista blanca de teclas (puro).
 - `data/remote/RemotePairing.kt` — PIN y tokens (puro).
 - `data/remote/RemoteDiscovery.kt` — sonda/baliza de descubrimiento (puro) + puertos.
-- `data/remote/RemoteBus.kt` — bus en proceso: quién recibe las teclas, pantalla actual, estado.
+- `data/remote/RemoteBus.kt` — bus en proceso: quién recibe las teclas, pantalla actual, estado
+  (y `remoteOpenUriString`, puro: ref → deep link).
 - `data/remote/RemoteServer.kt` — la tele: UDP + TCP + emparejamiento + despacho.
 - `data/remote/RemoteClient.kt` — el teléfono: descubrimiento, conexión, órdenes, estado.
+- `data/remote/RemoteDeepLink.kt` — `visionplus://live/…` → ruta de canal.
 - `ui/remote/RemoteScreen.kt` — interfaz del control remoto (teléfono).
 - `ui/remote/RemoteCast.kt` — buscador de contenido para abrir en la tele.
 
 Modificados:
-- `AndroidManifest.xml` — permiso `CHANGE_WIFI_MULTICAST_STATE` y receptor del reproductor.
+- `AndroidManifest.xml` — permiso `CHANGE_WIFI_MULTICAST_STATE` y host `live` del deep link.
 - `ui/Navigation.kt` — `Route.Remote`.
 - `ui/PhoneApp.kt` — entrada en el menú lateral + pantalla.
-- `MainActivity.kt` — arranca/para el servidor en TV, recibe teclas, atiende `open`/`live`.
-- `ui/player/X4KPlayerAty.kt` — recibe teclas remotas mientras está al frente.
+- `MainActivity.kt` — arranca/para el servidor en TV, recibe teclas, atiende `open`/`live` y pinta
+  el PIN del emparejamiento.
+- `ui/player/X4KPlayerAty.kt` — recibe teclas remotas mientras está al frente y publica «qué está
+  viendo la tele».
+- `ui/title/TitleScreen.kt` — botón «Ver en la TV» (solo con conexión viva).
 
 ## Guardianes (tests)
 
 - `RemoteProtocolTest` — ida y vuelta de cada mensaje, basura de red, lista blanca de teclas.
 - `RemotePairingTest` — PIN, tokens (alta/validez/tope/orden).
 - `RemoteDiscoveryTest` — baliza y sonda, nombres con espacios, puerto inválido.
+- `RemoteOpenTest` / `RemoteDeepLinkTest` — la orden `open` → deep link (VOD, canal y URL).
+- `RemoteCastTest` / `RemoteTitleCastTest` — el buscador solo ofrece refs abribles y la ficha
+  móvil ofrece «Ver en la TV» únicamente con la conexión viva.
+- `RemoteServerFlowTest` — **de punta a punta sobre sockets reales** (lo que un emulador no puede
+  dar: dos AVD no comparten red): PIN → token → reconexión silenciosa, teclas al frente por bus y
+  por broadcast, tecla fuera de la lista que jamás llega, y `open` convertido en deep link.
+- `RemoteClientWireTest` — las escrituras del cable ocurren en `remote-send`, nunca en el hilo que
+  llama (ver «Lección» abajo).
+- `PhoneMenuTest` — la pestaña «Control remoto» existe en el menú lateral, tras «En vivo».
+
+## Lección (bug real cazado en vivo)
+
+Los botones de la pantalla corrían en el **hilo principal** y escribían el socket ahí:
+`NetworkOnMainThreadException`, tragada por un `runCatching`, y la orden se perdía **en silencio**.
+El `HELLO` sí viajaba porque corre en el hilo de conexión — por eso «conectaba» pero ninguna tecla
+llegaba. Fix: un **escritor único** (`Executors.newSingleThreadExecutor` llamado `remote-send`),
+`socket`/`out` `@Volatile` y `synchronized(writer)`. Toda orden nueva pasa por ahí.
+
+## Resultado (cerrado)
+
+- **OTA v2.5.98 publicada** (vc334, 101 MB, firma histórica `9593cb0d…`), 528 pruebas Android en
+  verde y verificación en emulador contra una tele simulada en el PC (`adb reverse tcp:48633`):
+  PIN 4321 → token guardado → conectado; todas las teclas llegando (OK, Abajo/Arriba, Play/Pausa,
+  Volumen+, Menú, Atrás); reconexión silenciosa sin PIN; y «Ver en la TV» desde la ficha de
+  Spider-Man enviando `{"t":"open","ref":"xtv:…"}` correcto, recibido con título y póster.
+- *Pendiente física*: probar teléfono + tele reales en la red de casa (el descubrimiento UDP real
+  entre dos equipos es lo único que el emulador no pudo ejercer).
+- *Limitación aceptada*: sin servicio en primer plano, si el proceso principal muere durante una
+  reproducción larga el control remoto se cae (reabrir la app en la tele lo revive).
+- *Nota*: `ui/remote/MiniPlayer.kt` (`RemoteMiniPlayer`, ya existente y conectado al `bottomBar`)
+  es un remanente del acompañante simulado — con `VisionCompanion.pairedTvs` vacío y `foundTvs`
+  fijo en `emptyList()`, **jamás se hace visible**. Candidato a limpieza junto con
+  `ui/settings/DemoCompanion.kt`.
 
 ## Regla de oro
 
