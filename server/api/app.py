@@ -14,6 +14,8 @@ import re
 import time
 import unicodedata
 from contextlib import asynccontextmanager
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import asyncpg
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query, Request
@@ -766,6 +768,560 @@ async def sports(
         "days": days,
         "matches": enriched,
     }
+
+
+# --- GeeSports V3.8: deportes en vivo (fuente principal de Fútbol y eventos) ------
+# El worker `sync/gee38.py` baja, descifra y sondea el CMS de GeeSports y deja el
+# catálogo ya resuelto en `gee38_catalog`; aquí solo se sirve. Cada enlace trae
+# `link` (URL con `|cabeceras`), `url`, `headers`, `type` (hls|dash), `drm`
+# ("kid:key" → ClearKey W3C en la app) y `alive`/`checked_at` del sondeo.
+
+
+def _gee_payload(value):
+    """asyncpg puede devolver jsonb como str; lo normaliza a dict."""
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:  # noqa: BLE001
+            return {}
+    return value or {}
+
+
+def _gee_logo(url: str) -> str:
+    """Sofascore en `http://` no carga en Android (cleartext bloqueado): a https.
+
+    `api.sofascore.com` también vive en `img.sofascore.com` (verificado en vivo).
+    """
+    if not url:
+        return url
+    if url.startswith("http://api.sofascore.com/") or url.startswith("http://img.sofascore.com/"):
+        return "https://img.sofascore.com/" + url.split("sofascore.com/", 1)[1]
+    if url.startswith("http://"):
+        return "https://" + url[7:]
+    return url
+
+
+def _gee_fix_logos(event: dict) -> None:
+    for key in ("logo", "flag_a", "flag_b", "league_logo", "home_logo", "away_logo"):
+        value = event.get(key)
+        if isinstance(value, str):
+            event[key] = _gee_logo(value)
+
+
+def _gee_fix_event_times(event: dict) -> None:
+    """El CMS marca los horarios en UTC: a hora de México (para mostrar y ordenar)."""
+    day = (event.get("date_iso") or "").strip()
+    if not day:
+        return
+    parts = (event.get("time") or "").strip().split(":")
+    try:
+        parsed_day = date.fromisoformat(day)
+        hour = int(parts[0]) if parts and parts[0] else 0
+        minute = int(parts[1]) if len(parts) > 1 else 0
+    except (ValueError, IndexError):
+        return
+    utc = datetime(parsed_day.year, parsed_day.month, parsed_day.day, hour, minute, tzinfo=ZoneInfo("UTC"))
+    local = utc.astimezone(ZoneInfo(SPORTS_TZ))
+    event["date_iso"] = local.date().isoformat()
+    event["time"] = local.strftime("%H:%M:%S")
+
+
+@app.get("/v1/gee38/sports")
+async def gee38_sports(x_api_key: str | None = Header(default=None)):
+    """Grupos de canales deportivos 24/7 (TNT Sports, FOX, Sky, LaLiga TV…)."""
+    require_key(x_api_key)
+    rows = await db().fetch(
+        "select payload, updated_at from gee38_catalog where kind = 'group' order by sort, name"
+    )
+    meta = await db().fetchrow("select v, updated_at from gee38_meta where k = 'app'")
+    stamp = max((r["updated_at"] for r in rows), default=None)
+    if stamp is None and meta:
+        stamp = meta["updated_at"]
+    groups = []
+    for row in rows:
+        group = _gee_payload(row["payload"])
+        group["logo"] = _gee_logo(group.get("logo") or "")
+        for channel in group.get("channels") or []:
+            channel["logo"] = _gee_logo(channel.get("logo") or "")
+        groups.append(group)
+    return {
+        "app": _gee_payload(meta["v"]) if meta else None,
+        "updatedAt": stamp.isoformat() if stamp else None,
+        "groups": groups,
+    }
+
+
+@app.get("/v1/gee38/events")
+async def gee38_events(
+    category: str | None = Query(default=None, max_length=40),
+    day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    days: int = Query(default=0, ge=0, le=30),
+    x_api_key: str | None = Header(default=None),
+):
+    """Eventos deportivos (fútbol, básquet, F1…). `day`(+`days`) acota por fecha
+    del evento; `category` filtra por deporte (p. ej. Football)."""
+    require_key(x_api_key)
+    where = ["kind = 'event'"]
+    args: list = []
+    if category:
+        args.append(category.strip())
+        where.append(f"category ilike ${len(args)}")
+    if day:
+        try:
+            first = date.fromisoformat(day)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="fecha inválida")
+        args.append(first.isoformat())
+        if days > 0:
+            args.append((first + timedelta(days=days)).isoformat())
+            where.append(
+                f"payload->>'date_iso' >= ${len(args) - 1}"
+                f" and payload->>'date_iso' < ${len(args)}"
+            )
+        else:
+            where.append(f"payload->>'date_iso' = ${len(args)}")
+    rows = await db().fetch(
+        f"select payload from gee38_catalog where {' and '.join(where)} order by sort",
+        *args,
+    )
+    events = [_gee_payload(r["payload"]) for r in rows]
+    for event in events:
+        _gee_fix_event_times(event)
+        _gee_fix_logos(event)
+    if not events:
+        return {"events": events}
+    entries = await _gee_window_matches(events)
+
+    # La agenda del fútbol se arma con TODOS los partidos del calendario (así no se
+    # pierde ningún Liga MX aunque GeeSports no lo liste) y a cada partido se le
+    # cruzan los enlaces que GeeSports recomienda para ese mismo juego. Solo se
+    # sirven los deportes principales y las ligas principales (+ MX y ascenso).
+    # La ventana cubre la semana (Hoy, Mañana, … +7) para las pestañas por día.
+    today = date.today()
+    near = {(today + timedelta(days=delta)).isoformat() for delta in range(-1, 8)}
+    links_by_match: dict[str, list[dict]] = {}
+    out: list[dict] = []
+    for event in events:
+        category = (event.get("category") or "").strip().lower()
+        if category not in GEE_ALLOWED_SPORTS:
+            continue
+        is_football = category == "football"
+        match = _gee_find_match(event, entries) if is_football else None
+        if match is not None:
+            if not _gee_league_allowed_match(match):
+                continue  # liga no principal: ni tarjeta ni evento
+            _gee_apply_match(event, match)
+            if _gee_date_of(match.get("kickoff")) in near:
+                match_id = str(match.get("id") or "")
+                bucket = links_by_match.setdefault(match_id, [])
+                known = {link.get("url") or link.get("link") for link in bucket}
+                for link in event.get("links") or []:
+                    key = link.get("url") or link.get("link")
+                    if key not in known:
+                        bucket.append(link)
+                        known.add(key)
+                continue  # el partido se sirve como tarjeta única (abajo)
+            if _gee_league_allowed_event(event):
+                out.append(event)
+            continue
+        if is_football and not _gee_league_allowed_event(event):
+            continue
+        out.append(event)
+    for match, _home, _away, _dt in entries:
+        if not _gee_league_allowed_match(match):
+            continue
+        if _gee_date_of(match.get("kickoff")) not in near:
+            continue
+        out.append(_gee_match_card(match, links_by_match.get(str(match.get("id") or ""), [])))
+    return {"events": out}
+
+
+@app.post("/v1/gee38/feedback")
+async def gee38_feedback(request: Request, x_api_key: str | None = Header(default=None)):
+    """La app reporta un enlace caído: se marca al instante (el worker lo
+    re-sondea y ordena en su siguiente ciclo)."""
+    require_key(x_api_key)
+    raw = await request.body()
+    if len(raw) > 8 * 1024:
+        raise HTTPException(status_code=413, detail="reporte demasiado grande")
+    try:
+        body = json.loads(raw.decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="json inválido")
+    url = str(body.get("url") or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="url requerida")
+    alive = body.get("alive")
+    rows = await db().fetch("select id, payload from gee38_catalog")
+    for row in rows:
+        payload = _gee_payload(row["payload"])
+        hit = False
+
+        def _mark(links):  # noqa: ANN001
+            nonlocal hit
+            for link in links or []:
+                if link.get("url") == url or link.get("link") == url:
+                    link["alive"] = None if alive is None else bool(alive)
+                    link["reported_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                    hit = True
+
+        for channel in payload.get("channels") or []:
+            _mark(channel.get("links"))
+        _mark(payload.get("links"))
+        if hit:
+            await db().execute(
+                "update gee38_catalog set payload = $2::jsonb where id = $1",
+                row["id"],
+                json.dumps(payload, ensure_ascii=False),
+            )
+            return {"ok": True, "updated": 1}
+    return {"ok": True, "updated": 0}
+
+
+# --- Cruce de los eventos GeeSports con la agenda (marcadores en vivo) ------------
+# La app muestra una sola fuente (GeeSports); los marcadores, logos finos y el
+# estado en vivo llegan de la agenda ESPN ya sincronizada en este VPS (cada 10
+# min) y se cruzan aquí, en una sola pasada: el evento sale completo y el
+# teléfono/TV no gasta CPU ni peticiones extra. El cruce es por equipos (con
+# alias del portal: Chivas = Guadalajara…) y cercanía de horario.
+
+# Palabras que no identifican a un equipo (sí a sociedades anónimas).
+GEE_TEAM_STOP = {
+    "club", "fc", "cf", "cd", "cs", "ca", "sc", "ac", "afc", "sad",
+    "la", "el", "los", "las", "de", "del", "y", "the", "and", "vs", "at",
+}
+
+# Alias que usa el CMS vs los nombres de la agenda.
+GEE_TEAM_ALIASES = {
+    "guadalajara": {"chivas"},
+    "chivas": {"guadalajara"},
+    "tijuana": {"xolos"},
+    "xolos": {"tijuana"},
+    "monterrey": {"rayados"},
+    "rayados": {"monterrey"},
+    "uanl": {"tigres"},
+    "tigres": {"uanl"},
+    "mexico": {"mex"},
+    "mex": {"mexico"},
+}
+
+
+def _gee_tokens(text: str) -> set[str]:
+    """Tokens significativos de un nombre de equipo (corta < 4 salvo los clásicos)."""
+    out: set[str] = set()
+    for token in _fold(text).split():
+        if token in GEE_TEAM_STOP:
+            continue
+        if len(token) >= 4 or token in ("psg", "leon", "roma", "ajax", "boca", "cruz"):
+            out.add(token)
+    return out
+
+
+def _gee_expand(tokens: set[str]) -> set[str]:
+    out = set(tokens)
+    for token in tokens:
+        out |= GEE_TEAM_ALIASES.get(token, set())
+    return out
+
+
+def _gee_dt(iso: str | None) -> datetime | None:
+    if not iso:
+        return None
+    try:
+        value = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=ZoneInfo(SPORTS_TZ))
+    return value.astimezone(ZoneInfo(SPORTS_TZ))
+
+
+def _gee_event_dt(event: dict) -> datetime | None:
+    day = (event.get("date_iso") or "").strip()
+    if not day:
+        return None
+    try:
+        parsed_day = date.fromisoformat(day)
+    except ValueError:
+        return None
+    parts = (event.get("time") or "").strip().split(":")
+    try:
+        hour = int(parts[0]) if parts and parts[0] else 0
+        minute = int(parts[1]) if len(parts) > 1 else 0
+    except ValueError:
+        hour, minute = 0, 0
+    return datetime(parsed_day.year, parsed_day.month, parsed_day.day, hour, minute, tzinfo=ZoneInfo(SPORTS_TZ))
+
+
+def _gee_match_entry(match: dict) -> tuple[dict, set[str], set[str], datetime | None]:
+    return (
+        match,
+        _gee_expand(_gee_tokens((match.get("home") or {}).get("name") or "")),
+        _gee_expand(_gee_tokens((match.get("away") or {}).get("name") or "")),
+        _gee_dt(match.get("kickoff")),
+    )
+
+
+def _gee_find_match(event: dict, entries: list[tuple]) -> dict | None:
+    """El partido de la agenda que corresponde al evento (equipos + horario).
+
+    Fuerte = ambos equipos caben en el texto del evento; débil = al menos un
+    token por equipo; el horario (36 h de margen) desempata."""
+    name = event.get("event") or ""
+    team_a = (event.get("team_a") or "").strip()
+    team_b = (event.get("team_b") or "").strip()
+    if not team_a or not team_b or _fold(team_a) == _fold(team_b):
+        return None
+    if _fold(team_a) == _fold(name) or _fold(team_b) == _fold(name):
+        return None  # el CMS repite la liga: no hay equipos reales que cruzar
+    hay = _gee_expand(_gee_tokens(f"{name} {team_a} {team_b}"))
+    event_dt = _gee_event_dt(event)
+    best: dict | None = None
+    best_score = float("-inf")
+    for match, home, away, match_dt in entries:
+        if not home or not away:
+            continue
+        strong = home <= hay and away <= hay
+        shared = len(home & hay) + len(away & hay)
+        if not strong and shared < 2:
+            continue
+        dist_min = None
+        if event_dt and match_dt:
+            dist_min = abs((event_dt - match_dt).total_seconds()) / 60.0
+            if dist_min > 36 * 60:
+                continue
+        score = (1000.0 if strong else 0.0) + shared * 10.0
+        if dist_min is not None:
+            score -= min(dist_min, 600.0) / 10.0
+        if score > best_score:
+            best_score = score
+            best = match
+    return best
+
+
+def _gee_apply_match(event: dict, match: dict) -> dict:
+    """Adjunta al evento el marcador/logos/estado del partido que le corresponde."""
+    home = match.get("home") or {}
+    away = match.get("away") or {}
+    league = match.get("league") or {}
+    status = (match.get("status") or "").strip()
+    event["score"] = {
+        "home": home.get("score"),
+        "away": away.get("score"),
+        "status": status,
+        "detail": (match.get("detail") or "").strip(),
+        "live": status == "in",
+    }
+    event["league_label"] = league.get("name") or ""
+    event["league_logo"] = league.get("logo") or ""
+    event["home_name"] = home.get("name") or event.get("team_a") or ""
+    event["away_name"] = away.get("name") or event.get("team_b") or ""
+    event["home_logo"] = home.get("logo") or event.get("flag_a") or ""
+    event["away_logo"] = away.get("logo") or event.get("flag_b") or ""
+    # El horario del calendario es el fino (el CMS marca UTC): manda el partido.
+    kickoff = _gee_dt(match.get("kickoff"))
+    if kickoff is not None:
+        event["date_iso"] = kickoff.date().isoformat()
+        event["time"] = kickoff.strftime("%H:%M:%S")
+        event["date"] = kickoff.strftime("%d/%m/%Y")
+    return event
+
+
+def _gee_enrich_event(event: dict, entries: list[tuple]) -> dict:
+    """Adjunta al evento el marcador/logos/estado del partido que le corresponde."""
+    if (event.get("category") or "").strip().lower() != "football":
+        return event
+    match = _gee_find_match(event, entries)
+    if not match:
+        return event
+    return _gee_apply_match(event, match)
+
+
+def _gee_date_of(iso: str | None) -> str:
+    value = _gee_dt(iso)
+    return value.date().isoformat() if value else ""
+
+
+# Familias de cadena: señales hermanas que sí pueden traer el mismo partido
+# (la parrilla oficial dice «Fox Sports» y el enlace se llama «FOX DEPORTES»…).
+GEE_CHANNEL_FAMILIES = {
+    "foxsports": {"foxdeportes", "foxone"},
+    "foxdeportes": {"foxsports", "foxone"},
+    "foxone": {"foxsports", "foxdeportes"},
+    "espn": {"espnmexico"},
+    "espnmexico": {"espn"},
+    "tudn": {"tudnusa"},
+    "tudnusa": {"tudn"},
+    "beinsports": {"bein1sports", "bein2sports", "bein3sports"},
+    "bein1sports": {"beinsports", "bein2sports"},
+    "bein2sports": {"beinsports", "bein1sports"},
+    "bein3sports": {"beinsports", "bein1sports"},
+}
+
+
+def _gee_channel_family(canonical: str) -> set[str]:
+    out = {canonical}
+    out |= GEE_CHANNEL_FAMILIES.get(canonical, set())
+    out.discard("")
+    return out
+
+
+def _gee_broadcast_filter(links: list[dict], match: dict) -> list[dict]:
+    """Solo los enlaces cuya cadena está en la parrilla oficial del partido.
+
+    La agenda (ESPN/LiveSoccerTV) trae los canales que de verdad lo transmiten
+    —en México y fuera—: un enlace cuyo nombre no pertenece a esa parrilla se
+    descarta (así «CANAL MX» no sale en un partido que va por TUDN). Cuando la
+    parrilla existe pero ningún enlace coincide, quedan solo las señales
+    neutrales (agregadores tipo «HD QUALITY») y se tiran las marcas de TV
+    equivocadas; si no queda nada, el partido sale «Sin señal» — preferimos eso
+    a mandar al usuario a un canal que está dando otra cosa."""
+    official: set[str] = set()
+    for name in list(match.get("broadcasts") or []) + list(match.get("channels") or []):
+        official |= _gee_channel_family(canonical_channel(name or ""))
+    official.discard("")
+    if not official or not links:
+        return links
+    kept = [
+        link for link in links
+        if _gee_channel_family(canonical_channel(link.get("name") or "")) & official
+    ]
+    if kept:
+        return kept
+    return [
+        link for link in links
+        if canonical_channel(link.get("name") or "") not in GEE_BRAND_CANONICALS
+    ]
+
+
+# Marcas de televisión reconocidas: si la parrilla oficial no las incluye, no se
+# ofrecen (estarían dando otra cosa). Los agregadores sin marca sí se conservan.
+GEE_BRAND_CANONICALS = {
+    "mx", "canal5", "azteca7", "lasestrellas", "foxsports", "foxdeportes", "foxone",
+    "espn", "espn2", "espn3", "espn4", "espn5", "espndeportes", "espnpremium",
+    "tudn", "tudnusa", "tudncom", "tudnapp", "vix", "universo", "network",
+    "cbs", "cbssports", "cbssn", "nbc", "nbcports", "paramount", "star", "max",
+    "dazn", "daznsports", "skysports", "sky", "tntsports", "tntsports1",
+    "tntsports2", "tntsports3", "tntsports4", "sportv", "sportvbr",
+    "fubosports", "onesoccer", "tycsports", "win", "claro", "movistar",
+    "directv", "beinsports", "bein1sports", "bein2sports", "bein3sports",
+    "fandango", "premiere", "premierer", "espnstar", "starsports", "supersport",
+}
+
+
+# Solo las ligas principales de fútbol: la MX, el ascenso mexicano y las grandes.
+GEE_LEAGUE_IDS = {
+    "mex.1", "mex.2", "eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "por.1",
+    "uefa.champions", "uefa.europa", "conmebol.libertadores", "conmebol.sudamericana",
+    "arg.1", "bra.1", "usa.1", "fifa.world",
+}
+
+# Nombres (normalizados) que se aceptan cuando el evento no se cruzó con la agenda.
+GEE_LEAGUE_NAMES = {
+    "liga mx", "liga de expansion mx", "uefa champions league", "champions league",
+    "premier league", "laliga", "serie a", "bundesliga", "ligue 1",
+    "liga profesional de futbol", "liga profesional argentina", "brasileirao",
+    "campeonato brasileiro serie a", "copa libertadores", "copa sudamericana",
+    "mls", "major league soccer", "eredivisie", "vriendenloterij eredivisie",
+    "primeira liga", "liga portugal", "fifa world cup", "copa mundial",
+}
+
+# Los deportes que sí se muestran (los demás no se sirven).
+GEE_ALLOWED_SPORTS = {
+    "football", "basketball", "american football", "motorsports", "baseball", "tennis",
+}
+
+
+def _gee_norm_league(text: str) -> str:
+    """Nombre de liga comparable: sin tildes, sin la cola («Liga MX, Apertura»)."""
+    lowered = unicodedata.normalize("NFD", (text or "").lower())
+    lowered = "".join(c for c in lowered if unicodedata.category(c) != "Mn")
+    lowered = lowered.split(",")[0]
+    return re.sub(r"[^a-z0-9]+", " ", lowered).strip()
+
+
+def _gee_league_allowed_match(match: dict) -> bool:
+    league = match.get("league") or {}
+    return (league.get("id") or "") in GEE_LEAGUE_IDS
+
+
+def _gee_league_allowed_event(event: dict) -> bool:
+    label = event.get("league_label") or event.get("event") or ""
+    return _gee_norm_league(label) in GEE_LEAGUE_NAMES
+
+
+def _gee_match_card(match: dict, links: list[dict]) -> dict:
+    """La tarjeta de un partido del calendario (con los enlaces de GeeSports cruzados).
+
+    Misma forma que un evento: la app la pinta igual (escudos, marcador real y hasta
+    `links` para el selector de transmisiones). Los enlaces se filtran contra la
+    parrilla oficial: solo se ofrecen las cadenas que de verdad lo transmiten."""
+    links = _gee_broadcast_filter(links, match)
+    home = match.get("home") or {}
+    away = match.get("away") or {}
+    league = match.get("league") or {}
+    kickoff = _gee_dt(match.get("kickoff"))
+    status = (match.get("status") or "").strip()
+    alive = sum(1 for link in links if link.get("alive"))
+    return {
+        "id": "espn:" + str(match.get("id") or ""),
+        "category": "Football",
+        "event": (league.get("name") or "").strip() or "Fútbol",
+        "logo": league.get("logo") or "",
+        "team_a": home.get("name") or "",
+        "team_b": away.get("name") or "",
+        "date_iso": kickoff.date().isoformat() if kickoff else "",
+        "date": kickoff.strftime("%d/%m/%Y") if kickoff else "",
+        "time": kickoff.strftime("%H:%M:%S") if kickoff else "",
+        "visible": True,
+        "priority": 0,
+        "link_names": [link.get("name") or "" for link in links],
+        "links": links,
+        "alive": alive,
+        "total": len(links),
+        "home_name": home.get("name") or "",
+        "away_name": away.get("name") or "",
+        "home_logo": home.get("logo") or "",
+        "away_logo": away.get("logo") or "",
+        "league_label": league.get("name") or "",
+        "league_logo": league.get("logo") or "",
+        "score": {
+            "home": home.get("score"),
+            "away": away.get("score"),
+            "status": status,
+            "detail": (match.get("detail") or "").strip(),
+            "live": status == "in",
+        },
+    }
+
+
+async def _gee_window_matches(events: list[dict]) -> list[tuple]:
+    """La agenda (ESPN) de la ventana de fechas de los eventos, una sola consulta."""
+    days = sorted({(e.get("date_iso") or "") for e in events if e.get("date_iso")})
+    if not days:
+        return []
+    today = date.today()
+    lo = max(days[0], (today - timedelta(days=3)).isoformat())
+    hi = min(days[-1], (today + timedelta(days=10)).isoformat())
+    if lo > hi:
+        return []
+    try:
+        rows = await db().fetch(
+            """
+            select id, league_id, league_name, league_logo,
+                   home_id, home_name, home_abbr, home_logo, home_score,
+                   away_id, away_name, away_abbr, away_logo, away_score,
+                   kickoff, status, status_detail, venue, broadcasts, channels
+            from sports_matches
+            where (kickoff at time zone $1::text)::date between $2::text::date and $3::text::date
+            """,
+            SPORTS_TZ,
+            lo,
+            hi,
+        )
+        return [_gee_match_entry(sport_match(record)) for record in rows]
+    except Exception:  # noqa: BLE001 - sin agenda, los eventos salen sin marcador
+        return []
 
 
 NOISE_WORDS = {

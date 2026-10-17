@@ -274,3 +274,27 @@ create table if not exists device_slots (
 alter table device_slots add column if not exists auto boolean not null default true;
 alter table device_slots add column if not exists created_at timestamptz not null default now();
 
+-- GeeSports V3.8 (deportes en vivo: fuente principal de Fútbol y eventos). El worker
+-- `sync/gee38.py` baja, descifra y sondea su CMS (grupos de canales 24/7 con enlaces
+-- HLS/DASH-ClearKey + eventos deportivos por categoría) y deja todo ya resuelto en
+-- JSONB; la API lo sirve tal cual (`/v1/gee38/*`). Nada de esto toca el índice de
+-- catálogo ni su versión.
+create table if not exists gee38_catalog (
+    id text primary key,                 -- group:<slug> | event:<idx>
+    kind text not null,                  -- group | event
+    name text not null default '',
+    category text,                       -- categoría del evento (Football, Basketball…)
+    sort integer not null default 0,
+    payload jsonb not null,
+    updated_at timestamptz not null default now()
+);
+create index if not exists idx_gee38_kind on gee38_catalog (kind, sort);
+create index if not exists idx_gee38_category on gee38_catalog (category);
+
+-- Metadatos de su app (versión del CMS, aviso, telegram, enlaces oficiales…).
+create table if not exists gee38_meta (
+    k text primary key,
+    v jsonb not null,
+    updated_at timestamptz not null default now()
+);
+

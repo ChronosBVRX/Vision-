@@ -18,6 +18,7 @@ import archive_ia
 import aniskip
 import diag
 import epg
+import gee38
 import grouping
 import index_build
 import magis
@@ -167,11 +168,13 @@ async def main() -> None:
         await apply_schema(pool)
         if SEED_DEMO:
             await seed_demo(pool)
-        # La agenda de fútbol, la guía EPG y el triage de diagnóstico corren aparte con
-        # sus propios intervalos: no tocan el índice de catálogo ni su versión.
+        # La agenda de fútbol, la guía EPG, el triage de diagnóstico y los deportes
+        # GeeSports corren aparte con sus propios intervalos: no tocan el índice de
+        # catálogo ni su versión.
         sports_task = asyncio.create_task(sports.loop(pool))
         epg_task = asyncio.create_task(epg.loop(pool))
         diag_task = asyncio.create_task(diag.loop(pool))
+        gee38_task = asyncio.create_task(gee38.loop(pool))
         try:
             while True:
                 changed = await run_connectors(pool)
@@ -227,6 +230,7 @@ async def main() -> None:
             sports_task.cancel()
             epg_task.cancel()
             diag_task.cancel()
+            gee38_task.cancel()
             try:
                 await sports_task
             except asyncio.CancelledError:
@@ -237,6 +241,10 @@ async def main() -> None:
                 pass
             try:
                 await diag_task
+            except asyncio.CancelledError:
+                pass
+            try:
+                await gee38_task
             except asyncio.CancelledError:
                 pass
     finally:

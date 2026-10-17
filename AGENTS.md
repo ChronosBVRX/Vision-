@@ -5,6 +5,12 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Lote 2.5.87: «Deportes en vivo» — agenda deportiva completa por días, una sola fuente, canales filtrados a la parrilla real y cero rastros de la fuente — OTA publicada** (2026-10-17; 415 tests Android + 163 backend):
+  - *Pedido del usuario*: fuente única (fin de la doble agenda), pestaña «Deportes en vivo» que agrupa los deportes dando protagonismo al fútbol y sus grandes ligas (Liga MX y Ascenso primero), agenda **por días** (Hoy/Mañana/+2…+7), bloques **EN VIVO → COMIENZAN PRONTO → TERMINADOS** con marcadores en tiempo real, SIN referencias visuales a la fuente externa, solo deportes top (Fútbol/F1/Americano/Básquet/Tenis/Béisbol) y solo ligas principales + MX + Ascenso; y que los canales ofrecidos sean **solo los que de verdad transmiten el partido** («le doy ver y sale otra cosa»).
+  - *Servidor (VPS, desplegado)*: worker `sync/gee38.py` (clave del CMS en el `.env` del VPS; receta en `.visionplus/gee38_key.txt` — NADA de esto al repo público) descifra y publica el catálogo (`gee38_catalog`/`gee38_meta`): 32 grupos 24/7 + eventos, sondeo de vida (vivos primero), feedback de caídos, archivos retirados = HTML detectado (se conserva lo bueno). `api/app.py`: `/v1/gee38/*`; **la agenda de fútbol se ARMA del calendario ESPN** (ventana −1..+7 días, 16 ligas) y a cada tarjeta se le cruzan los enlaces del CMS por equipos+horario (alias Chivas/Guadalajara, Tigres/UANL; ±36 h). Piezas: `_gee_fix_event_times` (el CMS publica en **UTC** — Necaxa 01:00 = 19:00 MX verificado ×3), `_gee_fix_logos` (Sofascore `http://` → `https://img.sofascore.com/…`; http daba 301/403 y Android bloquea cleartext), `_gee_broadcast_filter` = **solo canales de la parrilla oficial del partido** (familias FOX Deportes≈Fox Sports, TUDN USA≈TUDN, beIN≈beIN1; marcas fuera de parrilla se descartan; agregadores solo si no hay coincidencia; «Sin señal» si no queda nada — Tijuana-Puebla ya no manda a Canal 5), deportes permitidos y ligas permitidas (ids ESPN + nombres normalizados).
+  - *App*: `data/gee/` — `GeeSportsSource` (fetch `/v1/gee38/sports|events` con caché memoria+archivo, `safeImage` http→https, `toChannel` → PlayerScreen existente con `|headers` + ClearKey) y `GeeAgenda` (fases Live/Soon/Done, prioridad de ligas con **Liga MX primero**, alias de liga, secciones puras y probadas); `GeeSportsState` (día + deporte + filtro); rediseño total de `ui/sports/SportsScreen.kt` y `ui/tv/TvSportsScreen.kt` (chips deporte→día→liga, tarjetas con escudos/marcador/estado, selector de transmisiones vivos primero); entradas renombradas «Deportes en vivo» (Home y quick-hub TV); el reproductor muestra el grupo «Deportes en vivo» (sin rastro de la fuente); etiquetas F1/Americano/Básquet/Tenis/Béisbol.
+  - *Verificado*: 415 Android + 163 backend; VPS en vivo (144 eventos, jornadas MX completas con todos los partidos que antes faltaban, Necaxa-Atlas solo TUDN MEXICO FHD, Tijuana-Puebla/Atlante-Pumas «Sin señal» en vez de canales falsos, sin ligas basura); **A32 con el release final vc323**: chips de deporte y días (Hoy/Mañana/Dom 18/Lun 19), ligas con Liga MX al frente, EN VIVO con marcador al minuto (Atlante 0-0 Pumas 12') y reproducción real desde el selector (F1 en directo y Canal 5 DASH·ClearKey, verificado antes de publicar). Release R8 con firma histórica `9593cb0d…` (apksigner). **OTA v2.5.87 publicada** (asset `VisionPlus.apk`).
+  - *Pendiente*: prueba en la TV real (componentes idénticos a móvil; el D-pad no se ha probado en físico con este rediseño).
 - **Vision+ PC: producto portátil para Windows (emulador + app con aspecto de exe nativo) + fixes de motor/dedupe** (2026-10-16; sus fixes entraron en la OTA v2.5.84, aprobado por el usuario):
   - *Descubrimiento*: el emulador oficial en PC x86_64 **sí** puede correr el motor ARM del X4K: las
     imágenes Google APIs/Play (API 30+) traen la traducción ARM oficial de ARM
@@ -911,8 +917,9 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.86**
-  (versionCode **322**, release OTA v2.5.86 — descargas de series + offline congruente). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.87**
+  (versionCode **323**, release OTA v2.5.87 — «Deportes en vivo»: agenda deportiva completa por días, una sola
+  fuente, canales filtrados a la parrilla oficial y sin referencias a la fuente). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
@@ -1829,7 +1836,14 @@
   de la app original = fetch fresco + N servidores por canal (sin filtro de vida). Plan propuesto (Fase 1): worker
   VPS que refresca el CMS + resuelve bundles + smoke de vida + `/v1/gee/sports` + feedback + inyección «Deportes · Alternativo» en `SportsLinker`.
   Detalle completo + pasos: `docs/ANALISIS_GEE_SPORTS.md` (Temp: `gee_apktool/`, `gee_src/`, `gee_probe_results.json`).
-  Pendiente: usuario prueba la app hoy (¿VPN?) y decide Fase 1 vs fetch directo en app.
+  **Actualización misma fecha — APK NUEVA V3.8 (`com.live.geesports`, es OTRA app — la CricZ 1.3 de arriba es la vieja)**:
+  **✅ INDEPENDENCIA TOTAL LOGRADA (2026-10-17, misma sesión)**: descifrado en PYTHON PURO (sin Android, sin PC puente) —
+  clave derivada del certificado del APK; **receta y clave en el archivo local de credenciales** `C:\Users\Axel Rosete\.visionplus\gee38_key.txt`
+  (+ `gee38_crypto.py` ahí mismo; versión de trabajo en `Temp/opencode/gee38_crypto.py`) — **NO copiar al repo (es público)**.
+  Verificado EN VIVO contra el CMS (app/sports/events + `channels/*.txt` ✓); se re-deriva sola si rotan el certificado.
+  **Docker-Android en el VPS: NO viable (sin /dev/kvm ni vmx/svm) — e innecesario ya.** Método de rescate documentado (A32 root
+  + su dd de /proc/PID/mem + oráculo D(C1)^C0==P1) por si algo cambia. Siguiente: worker `sync/gee38.py` en el VPS + integración
+  app (pestañas por deporte carga diferida + "Alternativo" en Fútbol).
 - Buscador de eventos específicos sobre la EPG (idea del usuario, no implementado).
 - Próxima OTA: publicar el release minificado (`:app:assembleNormalRelease`, firma histórica intacta) con
   el bump de versión; el update es directo (sin reinstalar). R8 ya verificado en A32.

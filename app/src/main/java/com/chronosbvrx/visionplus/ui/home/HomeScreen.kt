@@ -105,7 +105,7 @@ private val SELECTIONS = listOf(
     HomeSelection("Películas", Icons.Default.Movie, Route.Section("movies", "Películas")),
     HomeSelection("Series", Icons.Default.Theaters, Route.Section("series", "Series")),
     HomeSelection("Descargas", Icons.Default.Download, Route.Downloads),
-    HomeSelection("Fútbol", Icons.Default.SportsSoccer, Route.Sports),
+    HomeSelection("Deportes en vivo", Icons.Default.SportsSoccer, Route.Sports),
     HomeSelection("TV en Vivo", Icons.Default.LiveTv, Route.Live),
     HomeSelection("Anime", Icons.Default.Animation, Route.Section("anime", "Anime")),
     HomeSelection("Novelas", Icons.Default.AutoStories, Route.Section("novelas", "Novelas")),

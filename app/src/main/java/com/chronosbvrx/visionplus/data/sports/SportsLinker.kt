@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.LiveTaxonomy
+import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -473,8 +474,17 @@ object SportsLinker {
     ): Link {
         val queries = targetQueryNames(match)
         val primary = resolveChannels(queries, channels, match.league.id)
+        // GeeSports primero (fuente principal de deportes en vivo), luego los canales
+        // de la lista de Vision+: el usuario ve primero los enlaces directos frescos.
+        val merged = LinkedHashMap<String, LiveChannel>()
+        for (channel in geeChannelsFor(match, GeeSportsSource.memoryEvents().orEmpty())) {
+            merged.putIfAbsent(channel.url, channel)
+        }
+        for (channel in primary) {
+            merged.putIfAbsent(channel.url, channel)
+        }
         return Link(
-            candidates = primary,
+            candidates = merged.values.take(MAX_TOTAL_WITH_FALLBACK),
             confirmed = null,
             epgPrograms = emptyMap(),
         )
@@ -515,7 +525,9 @@ object SportsLinker {
 
     suspend fun resolve(context: Context, matches: List<SportMatch>): Map<String, Link> =
         withContext(Dispatchers.IO) {
-            runCatching { GeeSportsFallback.refreshIfNeeded(context) }
+            // La fuente principal (GeeSports) se refresca aquí: candidatos al instante.
+            runCatching { GeeSportsSource.refreshEvents(context) }
+                .onFailure { Log.w(TAG, "gee38 sin eventos: ${it.message}") }
             val channels = runCatching { X4KApi.liveChannelsFor(context) }
                 .onFailure { Log.w(TAG, "sin canales en vivo: ${it.message}") }
                 .getOrDefault(emptyList())
@@ -603,6 +615,55 @@ object SportsLinker {
         if (match.status != "pre" || match.kickoffMs <= 0) return false
         val delta = match.kickoffMs - System.currentTimeMillis()
         return delta in -5 * 60_000..30 * 60_000
+    }
+
+    // ----- GeeSports (fuente principal de deportes en vivo) -----
+
+    private const val MAX_GEE_CHANNELS = 12
+
+    private val MX_ZONE: java.util.TimeZone = java.util.TimeZone.getTimeZone("America/Mexico_City")
+
+    /** El día (hora de México) de un instante, en yyyy-MM-dd ("" si no hay instante). */
+    internal fun dayIsoOf(ms: Long): String {
+        if (ms <= 0) return ""
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        fmt.timeZone = MX_ZONE
+        return fmt.format(java.util.Date(ms))
+    }
+
+    /**
+     * Los canales GeeSports que transmiten este partido (fuente principal): se cruzan
+     * los eventos de fútbol por equipos —con alias y tolerancia de fecha— y se toman
+     * sus enlaces en el orden del servidor (vivos primero). Puro y probado.
+     */
+    internal fun geeChannelsFor(
+        match: SportMatch,
+        events: List<GeeSportsSource.GeeEvent>,
+    ): List<LiveChannel> {
+        if (events.isEmpty()) return emptyList()
+        val home = teamTokens(match.home.name)
+        val away = teamTokens(match.away.name)
+        if (home.isEmpty() || away.isEmpty()) return emptyList()
+        val day = dayIsoOf(match.kickoffMs)
+        val out = LinkedHashMap<String, LiveChannel>()
+        var matched = false
+        for (pass in 0..1) {
+            if (pass == 1 && (matched || day.isBlank())) break
+            for (event in events) {
+                if (!event.category.equals("Football", ignoreCase = true)) continue
+                if (event.links.isEmpty()) continue
+                if (pass == 0 && event.dateIso != day) continue
+                val hay = tokens("${event.name} ${event.teamA} ${event.teamB}").toSet()
+                if (home.none { it in hay } || away.none { it in hay }) continue
+                matched = true
+                for (link in event.links) {
+                    val channel = GeeSportsSource.toChannel(link, link.name, "Deportes en vivo")
+                    out.putIfAbsent(channel.url, channel)
+                    if (out.size >= MAX_GEE_CHANNELS) return out.values.toList()
+                }
+            }
+        }
+        return out.values.toList()
     }
 
     internal fun matchChannel(channelTokens: List<String>, needle: List<String>): Boolean {

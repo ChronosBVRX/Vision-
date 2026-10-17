@@ -642,7 +642,7 @@ private data class TvQuickHub(
 )
 
 private val TV_QUICK_HUBS = listOf(
-    TvQuickHub("Fútbol en Vivo", "EN DIRECTO", Icons.Default.SportsSoccer, Route.Sports),
+    TvQuickHub("Deportes en vivo", "EN DIRECTO", Icons.Default.SportsSoccer, Route.Sports),
     TvQuickHub("Descargas (USB)", "OFFLINE", Icons.Default.Usb, Route.Downloads),
     TvQuickHub("Anime", "COLECCIÓN", Icons.Default.Animation, Route.Section("anime", "Anime")),
     TvQuickHub("Novelas", "POPULAR", Icons.Default.AutoStories, Route.Section("novelas", "Novelas")),
