@@ -5,7 +5,7 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- **Fix post-OTA 2.5.89 (crash real del POCO en «Deportes en vivo») + la clase de crash D-pad de la ZTE + automatización de operación** (2026-10-17; 430 tests Android + 170 backend; **servidor YA desplegado; la parte de app viaja en la próxima OTA**):
+- **Fix post-OTA 2.5.89 (crash real del POCO en «Deportes en vivo») + la clase de crash D-pad de la ZTE + automatización de operación — OTA v2.5.90 publicada** (2026-10-17; 430 tests Android + 170 backend):
   - *Reporte del usuario*: «el POCO crasheó» — cazado con `dumpsys dropbox` + el diagnóstico del VPS: `IllegalArgumentException: Key "NBA Preseason|17/10/2026|20:00:00" was already used` en pantalla=Sports, vc324 (2.5.88), proceso principal.
   - *Causa raíz (verificada en vivo contra la BD)*: **el CMS de Gee NO trae `id` por evento (210/210)** y el payload servido tampoco; la app caía al respaldo `nombre|fecha|hora` para la clave de la lista → dos partidos NBA distintos a la MISMA hora («NBA Preseason» 20:00) compartían clave → LazyColumn muere. El `_event_id` del worker YA incluía equipos (fix 2.5.88) pero **solo vivía en la fila de la BD, no en el JSON**.
   - *Fix en DOS capas*: (1) **servidor (desplegado 2026-10-17 06:31 UTC, protege YA a toda app 2.5.87+)**: el worker `sync/gee38.py` escribe `payload["id"] = eid` y `/v1/gee38/events` rellena ids faltantes desde el row id + deduplica la salida por id; (2) **app**: respaldo de id con EQUIPOS y `dedupeEvents` (fusiona enlaces de duplicados reales) en `GeeSportsSource`; canales de un grupo deduplicados por nombre+primer enlace; líder `GeeSportsSourceTest` (4 nuevos). Verificado en vivo: **141 eventos, 0 sin id, 0 duplicados, los dos NBA 20:00 con ids distintos** (`event:62d8…` / `event:2cd7…`).
@@ -13,7 +13,8 @@
   - *Nota de API*: en Compose 1.7.3 `FocusRequester.requestFocus()` devuelve `void` (no Boolean) — el wrapper no puede leer un resultado, «éxito» = no lanzó (comentado en el código).
   - *Automatización de operación (mismo día)*: **CI reparado (DOS roturas encadenadas)** — (1) `setup-android@v3` intentaba instalar el paquete `tools` (retirado por Google en 2025): el step fallaba y **TODOS los runs** morían ahí; ahora `packages: platform-tools`. (2) Al destaparlo, el daemon fallaba con «Java home supplied is invalid»: el repo traía `org.gradle.java.home` con una **ruta local de Windows** en `gradle.properties` → retirado (el CI usa su JDK 17; local se exporta `JAVA_HOME`, ya documentado). **Run verde confirmado** (6m17s, los 3 jobs). **Protección de `main` ACTIVADA** (pendiente histórico de AGENTS): checks requeridos `unit-tests`/`server-tests`/`release-build` (OJO: quedó sin force-push; si se necesita, `gh api -X PUT ... -f allow_force_pushes=true`). **VPS**: `backup.sh` (respaldo diario 03:30, retención 7, probado: dump de 21M) + `watchdog.sh` (cada 5 min: si `/healthz` ≠ 200 reinicia la API y lo anota; probado) — instalados con cron idempotente junto al de laveinte.
   - *Verificado en el POCO (release R8 vc325 instalado encima, firma histórica)*: Deportes → Básquet → «3 eventos · 1 en vivo» sin crash; tarjeta → modal → Atrás OK; logcat limpio. Pendiente de la próxima OTA: el fix de app (la parte de servidor ya protege la app instalada).
-  - *Pendiente de decisión del usuario*: publicar OTA 2.5.90 con la parte de app; configurar el canal de alertas del triage (Telegram/webhook en el `.env` del VPS: hoy las alertas solo van al log — nadie las ve).
+  - *OTA v2.5.90 PUBLICADA* (decidida por el usuario en la misma sesión): vc326 (101 MB) firmada con la llave histórica `9593cb0d…` (apksigner), asset `VisionPlus.apk`, notas firmadas; instalada encima en el POCO (`pm install -r` Success → 2.5.90, arranque y Deportes sin crashes).
+  - *Pendiente (usuario)*: pasar el token del bot de Telegram (o webhook) para el canal de alertas del triage — con eso el sistema avisa SOLO de crashes/ANR nuevos (hoy: solo al log del VPS). Se configura en `/opt/streaming-backend/.env` (`DIAG_TELEGRAM_TOKEN` + `DIAG_TELEGRAM_CHAT`) y se reinicia el sync.
 - **Lote 2.5.89: «Deportes en vivo» al menú lateral del móvil — OTA publicada** (2026-10-17; 426 tests Android):
   - *Pedido del usuario*: «La sección de Eventos deportivos en el móvil tiene que estar en el menú lateral» — antes solo se llegaba por el acceso rápido del Inicio.
   - *App*: `ui/PhoneApp.kt` — `TABS` suma `Tab(Route.Sports, "Deportes en vivo", Icons.Default.SportsSoccer)` entre «En vivo» y «Mi lista» (misma lista para el drawer y el riel de tablet en apaisado); `Tab`/`TABS` pasan a `internal` para el guardián. El PIN del modo niños ya contemplaba `Route.Sports`, y `nav.goTab` deja Home debajo (Atrás regresa al Inicio).
@@ -940,10 +941,9 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.89**
-  (versionCode **325**, release OTA v2.5.89 — «Deportes en vivo» se sumó al menú lateral del móvil/tablet,
-  entre «En vivo» y «Mi lista»; trae lo del lote 2.5.88: guía real por partido, «Canales en vivo» solo
-  del catálogo de Gee, conflicto FOX resuelto y Atrás del reproductor de vuelta al modal de opciones). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.90**
+  (versionCode **326**, release OTA v2.5.90 — fin del crash de «Deportes en vivo» (id estable por evento)
+  y de la clase de crash D-pad por FocusRequester huérfano en TV; ver el lote de arriba). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app
