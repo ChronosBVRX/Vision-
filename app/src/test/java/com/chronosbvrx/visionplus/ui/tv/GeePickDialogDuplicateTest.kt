@@ -1,14 +1,22 @@
 package com.chronosbvrx.visionplus.ui.tv
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.chronosbvrx.visionplus.data.LiveChannel
+import com.chronosbvrx.visionplus.data.gee.GeeBackstop
 import com.chronosbvrx.visionplus.data.gee.GeeGuide
+import com.chronosbvrx.visionplus.data.gee.GeeHealth
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.ui.sports.GeeLinkPickDialog
 import com.chronosbvrx.visionplus.ui.theme.VisionTheme
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -158,5 +166,187 @@ class GeePickDialogDuplicateTest {
         val matches = compose.onAllNodes(hasText(text, substring = true), useUnmergedTree = true)
             .fetchSemanticsNodes().size
         assertTrue("no debía aparecer «$text»", matches == 0)
+    }
+
+    // ----- respaldo + vigilante de vida -------------------------------------------------------
+
+    private val telemundo = LiveChannel(name = "TELEMUNDO EAST HD", url = "xtvlive:tm-east")
+
+    private fun backstop() = GeeBackstop.Backstop(guideName = "Telemundo", channel = telemundo)
+
+    @Test
+    fun thePhonePickerOffersTheBackstopAndPlaysTheHouseChannel() {
+        var played: LiveChannel? = null
+        compose.setContent {
+            VisionTheme {
+                GeeLinkPickDialog(
+                    title = "Guadalajara vs Tigres UANL",
+                    subtitle = "Liga MX · Hoy 17:07",
+                    links = listOf(link("TUDN MEXICO FHD")),
+                    onDismiss = {},
+                    onPlay = { played = it },
+                    guide = listOf("Telemundo", "TUDN"),
+                    backstops = listOf(backstop()),
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertText("Respaldo en tu lista:")
+        assertText("TELEMUNDO EAST HD")
+        assertText("Respaldo de Telemundo")
+        assertText("Confirmado")
+        // La fuente deportiva sigue primero: el respaldo va al final.
+        assertText("Transmisiones en vivo:")
+        compose.onNodeWithText("TELEMUNDO EAST HD", substring = true).performClick()
+        compose.waitForIdle()
+        assertEquals("xtvlive:tm-east", played?.url)
+    }
+
+    @Test
+    fun theTvPickerOffersTheBackstopAndPlaysTheHouseChannel() {
+        var played: LiveChannel? = null
+        compose.setContent {
+            VisionTheme {
+                TvGeeLinkPickDialog(
+                    title = "Guadalajara vs Tigres UANL",
+                    subtitle = "Liga MX · Hoy 17:07",
+                    links = listOf(link("TUDN MEXICO FHD")),
+                    onDismiss = {},
+                    onPlay = { played = it },
+                    guide = listOf("Telemundo", "TUDN"),
+                    backstops = listOf(backstop()),
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(700)
+        compose.waitForIdle()
+        assertText("Respaldo en tu lista:")
+        assertText("TELEMUNDO EAST HD")
+        assertText("Respaldo de Telemundo")
+        // La fila del respaldo es accionable (OK/Enter la sintoniza).
+        compose.onNodeWithText("TELEMUNDO EAST HD", substring = true).assert(hasClickAction())
+        assertNull("todavía no se sintoniza sola", played)
+    }
+
+    @Test
+    fun aDeadSportsChannelGetsItsBackstopRightBelowAndNoOrphanSection() {
+        val dead = GeeSportsSource.GeeLink(
+            name = "Telemundo",
+            link = "https://cdn.test/telemundo.m3u8",
+            headers = emptyMap(),
+            type = "hls",
+            drm = "",
+            alive = false,
+        )
+        compose.setContent {
+            VisionTheme {
+                GeeLinkPickDialog(
+                    title = "Guadalajara vs Tigres UANL",
+                    subtitle = "Liga MX · Hoy 17:07",
+                    links = emptyList(),
+                    onDismiss = {},
+                    onPlay = { _: LiveChannel -> },
+                    guide = listOf("Telemundo"),
+                    geeTv = listOf(GeeGuide.TvOption(guideName = "Telemundo", title = "Telemundo", link = dead, score = 100)),
+                    backstops = listOf(backstop()),
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertText("Caído")
+        assertText("TELEMUNDO EAST HD")
+        assertText("Respaldo de Telemundo")
+        // El respaldo va pegado a su cadena caída: no se repite en una sección aparte.
+        assertAbsent("Respaldo en tu lista:")
+    }
+
+    @Test
+    fun whenTheSportsChannelIsHealthyTheBackstopDisappears() {
+        // La misma fila, pero la fuente deportiva ya responde: ella vuelve a ser la primera opción.
+        val up = GeeSportsSource.GeeLink(
+            name = "Telemundo",
+            link = "https://cdn.test/telemundo.m3u8",
+            headers = emptyMap(),
+            type = "hls",
+            drm = "",
+            alive = true,
+        )
+        compose.setContent {
+            VisionTheme {
+                GeeLinkPickDialog(
+                    title = "Guadalajara vs Tigres UANL",
+                    subtitle = "Liga MX · Hoy 17:07",
+                    links = emptyList(),
+                    onDismiss = {},
+                    onPlay = { _: LiveChannel -> },
+                    guide = listOf("Telemundo"),
+                    geeTv = listOf(GeeGuide.TvOption(guideName = "Telemundo", title = "Telemundo", link = up, score = 100)),
+                    backstops = listOf(backstop()),
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertText("Disponible")
+        assertAbsent("TELEMUNDO EAST HD")
+    }
+
+    @Test
+    fun aFreshCheckBeatsTheServersStaleVerdict() {
+        // El servidor lo dio por caído hace minutos y la app acaba de comprobarlo vivo.
+        val reported = GeeSportsSource.GeeLink(
+            name = "TUDN MEXICO FHD",
+            link = "https://cdn.test/vivo.m3u8",
+            headers = emptyMap(),
+            type = "dash",
+            drm = "",
+            alive = false,
+        )
+        compose.setContent {
+            VisionTheme {
+                GeeLinkPickDialog(
+                    title = "Santos vs Querétaro",
+                    subtitle = "Liga MX · Hoy 17:00",
+                    links = listOf(reported),
+                    onDismiss = {},
+                    onPlay = { _: LiveChannel -> },
+                    checks = mapOf("https://cdn.test/vivo.m3u8" to GeeHealth.Check(alive = true, atMs = 1L)),
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertText("Disponible")
+        assertAbsent("Caído")
+    }
+
+    @Test
+    fun aFreshCheckThatFoundItDeadBeatsAHealthyServerVerdict() {
+        val reported = GeeSportsSource.GeeLink(
+            name = "TUDN MEXICO FHD",
+            link = "https://cdn.test/muerto.m3u8",
+            headers = emptyMap(),
+            type = "dash",
+            drm = "",
+            alive = true,
+        )
+        compose.setContent {
+            VisionTheme {
+                GeeLinkPickDialog(
+                    title = "Santos vs Querétaro",
+                    subtitle = "Liga MX · Hoy 17:00",
+                    links = listOf(reported),
+                    onDismiss = {},
+                    onPlay = { _: LiveChannel -> },
+                    checks = mapOf("https://cdn.test/muerto.m3u8" to GeeHealth.Check(alive = false, atMs = 1L)),
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertText("Caído")
+        assertAbsent("Disponible")
     }
 }

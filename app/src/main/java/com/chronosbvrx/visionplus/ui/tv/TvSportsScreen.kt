@@ -53,6 +53,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
+import com.chronosbvrx.visionplus.data.gee.GeeBackstop
 import com.chronosbvrx.visionplus.data.gee.GeeGuide
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.sports.SportsSource
@@ -97,6 +98,23 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
         if (event == null) emptyList()
         else runCatching { GeeGuide.channelsFor(event.broadcasts, gee.groups) }.getOrDefault(emptyList())
     }
+    // El respaldo: las cadenas de la parrilla que la fuente deportiva NO puede servir en vivo y
+    // que sí tenemos en el catálogo de la casa (coincidencia del 100 %, nunca un parecido).
+    val pickingBackstops = remember(picking, pickingTv, gee.xtvChannels, gee.checks) {
+        val event = picking
+        if (event == null) {
+            emptyList()
+        } else {
+            GeeBackstop.needed(
+                guide = event.broadcasts,
+                liveOptions = buildList {
+                    pickingTv.forEach { option -> add(GeeBackstop.LiveOption(option.title, gee.aliveOf(option.link) == true)) }
+                    event.links.forEach { link -> add(GeeBackstop.LiveOption(link.name, gee.aliveOf(link) == true)) }
+                },
+                xtv = gee.xtvChannels,
+            )
+        }
+    }
 
     val events = gee.selectedEvents
     val isFootball = (gee.selectedCategory ?: "Football").equals("Football", ignoreCase = true)
@@ -132,6 +150,9 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
             if (ticks % 4 == 0) gee.refresh()
         }
     }
+    // El vigilante de vida: mientras la pantalla está abierta, comprueba sin parar las señales
+    // de los partidos EN VIVO (una caída se ve al momento y un levantamiento también).
+    LaunchedEffect(Unit) { gee.watchSignals() }
     LaunchedEffect(gee.selectedCategory, league, channels) {
         runCatching { gridState.scrollToItem(0) }
         FocusRescue.screenHasFocus = false
@@ -298,6 +319,8 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                 geeTv = pickingTv,
                 playable = GeeAgenda.playable(event, now),
                 blockNote = GeeAgenda.blockNote(event, now),
+                checks = gee.checks,
+                backstops = pickingBackstops,
             )
         }
     }

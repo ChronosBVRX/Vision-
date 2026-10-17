@@ -44,8 +44,11 @@ import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
+import com.chronosbvrx.visionplus.data.gee.GeeBackstop
 import com.chronosbvrx.visionplus.data.gee.GeeGuide
+import com.chronosbvrx.visionplus.data.gee.GeeHealth
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.data.sports.SportsLinker
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
@@ -92,6 +95,46 @@ internal fun GeeAliveBadge(alive: Boolean?) {
         }
     } else {
         Text(label, style = MaterialTheme.typography.bodySmall, color = color)
+    }
+}
+
+/**
+ * La fila del respaldo: el canal de la casa que cubre una cadena que la fuente deportiva no pudo
+ * servir. Va pegada a la fila caída que reemplaza, y solo existe mientras la fuente no pueda
+ * servirla: en cuanto se recupera, ella vuelve a ser la primera opción.
+ */
+@Composable
+internal fun GeeBackstopRow(back: GeeBackstop.Backstop, onClick: () -> Unit) {
+    val sameName = SportsLinker.norm(back.guideName) == SportsLinker.norm(back.channel.name)
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = VisionBlue.copy(alpha = 0.16f),
+        modifier = Modifier.fillMaxWidth().padding(start = 14.dp),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = VisionBlueBright, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    back.channel.name,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    if (sameName) "En tu lista · Confirmado" else "Respaldo de ${back.guideName} · Confirmado",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VisionBlueBright,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
@@ -231,6 +274,10 @@ private fun GeeChannelRow(channel: GeeSportsSource.GeeChannel, onClick: () -> Un
  *
  * Con [playable] en false (el partido aún no comienza o ya terminó) NO se ofrecen
  * señales para reproducir: solo se muestra dónde se transmite y el aviso [blockNote].
+ *
+ * [checks] son las comprobaciones de vida que la app acaba de hacer (mandan sobre el
+ * dato del servidor: una caída y un levantamiento se ven al momento) y [backstops] los
+ * canales de la casa que cubren una cadena que la fuente deportiva no puede servir.
  */
 @Composable
 fun GeeLinkPickDialog(
@@ -243,7 +290,13 @@ fun GeeLinkPickDialog(
     geeTv: List<GeeGuide.TvOption> = emptyList(),
     playable: Boolean = true,
     blockNote: String = "",
+    checks: Map<String, GeeHealth.Check> = emptyMap(),
+    backstops: List<GeeBackstop.Backstop> = emptyList(),
 ) {
+    // El estado REAL de cada señal: lo comprobado por la app ahora mismo manda sobre el
+    // dato del servidor (que puede tener minutos).
+    fun aliveOf(link: GeeSportsSource.GeeLink): Boolean? =
+        GeeHealth.effective(link.alive, checks[link.link.trim()])
     // Zapping dentro del bloque de opciones: la lista ORDENADA del evento (guía de la parrilla
     // + enlaces directos) queda armada para el reproductor en línea, que la recoge al montar.
     val zapOrder = remember(links, geeTv) {
@@ -289,7 +342,7 @@ fun GeeLinkPickDialog(
                         color = VisionTextSecondary,
                     )
                     Spacer(Modifier.height(6.dp))
-                } else if (geeTv.isEmpty() && links.isEmpty()) {
+                } else if (geeTv.isEmpty() && links.isEmpty() && backstops.isEmpty()) {
                     Text(
                         "Sin transmisiones disponibles por ahora.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -313,32 +366,46 @@ fun GeeLinkPickDialog(
                             // Clave con índice: el dedupe de la guía ya evita repetidos, pero
                             // una clave duplicada JAMÁS debe tumbar la pantalla (LazyColumn).
                             itemsIndexed(geeTv, key = { index, option -> "tv_${index}_${option.link.link}" }) { _, option ->
-                                Surface(
-                                    onClick = {
-                                        playZap(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo"))
-                                    },
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = VisionSurfaceHigh,
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) {
-                                    Row(
-                                        Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
+                                Column {
+                                    Surface(
+                                        onClick = {
+                                            playZap(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo"))
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = VisionSurfaceHigh,
+                                        modifier = Modifier.fillMaxWidth(),
                                     ) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = VisionBlue, modifier = Modifier.size(22.dp))
-                                        Spacer(Modifier.width(10.dp))
-                                        Column(Modifier.weight(1f)) {
-                                            Text(
-                                                option.title,
-                                                style = MaterialTheme.typography.labelLarge,
-                                                color = Color.White,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            Text("Canal en vivo", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+                                        Row(
+                                            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = VisionBlue, modifier = Modifier.size(22.dp))
+                                            Spacer(Modifier.width(10.dp))
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    option.title,
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = Color.White,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                                Text("Canal en vivo", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+                                            }
+                                            Spacer(Modifier.width(8.dp))
+                                            GeeAliveBadge(aliveOf(option.link))
                                         }
-                                        Spacer(Modifier.width(8.dp))
-                                        GeeAliveBadge(option.link.alive)
+                                    }
+                                    // Si esta cadena no se puede ver, el respaldo va pegado a ella: la
+                                    // fuente deportiva sigue primero y el respaldo aparece solo cuando
+                                    // hace falta (en cuanto se recupera, desaparece).
+                                    val back = if (aliveOf(option.link) == true) {
+                                        null
+                                    } else {
+                                        GeeBackstop.forGuide(backstops, option.guideName)
+                                    }
+                                    if (back != null) {
+                                        Spacer(Modifier.height(4.dp))
+                                        GeeBackstopRow(back) { onPlay(back.channel) }
                                     }
                                 }
                             }
@@ -384,9 +451,26 @@ fun GeeLinkPickDialog(
                                             Text(typeText, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
                                         }
                                         Spacer(Modifier.width(8.dp))
-                                        GeeAliveBadge(link.alive)
+                                        GeeAliveBadge(aliveOf(link))
                                     }
                                 }
+                            }
+                        }
+                        val orphanBacks = GeeBackstop.orphans(backstops, geeTv.map { it.guideName })
+                        if (orphanBacks.isNotEmpty()) {
+                            item(key = "back_label") {
+                                Text(
+                                    "Respaldo en tu lista:",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = VisionTextSecondary,
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
+                                )
+                            }
+                            itemsIndexed(
+                                orphanBacks,
+                                key = { index, back -> "back_${index}_${back.channel.url}" },
+                            ) { _, back ->
+                                GeeBackstopRow(back) { onPlay(back.channel) }
                             }
                         }
                     }
