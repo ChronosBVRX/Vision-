@@ -582,14 +582,20 @@ fun TvHomeScreen(
             if (updatesBadge > 0) {
                 val latest = com.chronosbvrx.visionplus.data.AppUpdate.latest?.version.orEmpty()
                 val skipped = tvContext.getSharedPreferences("updates", 0).getString("skipped", "")
-                if (latest.isNotBlank() && skipped != latest) showPluginUpdates = true
+                // Con versión mínima forzada el "skip" se ignora: la oferta vuelve cada apertura.
+                if (latest.isNotBlank() &&
+                    (com.chronosbvrx.visionplus.data.AppUpdate.forced(tvContext) || skipped != latest)
+                ) showPluginUpdates = true
             }
         }
         if (showPluginUpdates) {
             TvAppUpdatesDialog(onDismiss = {
                 showPluginUpdates = false
-                com.chronosbvrx.visionplus.data.AppUpdate.latest?.version?.let { v ->
-                    tvContext.getSharedPreferences("updates", 0).edit().putString("skipped", v).apply()
+                // Con actualización forzada NO se recuerda el "skip".
+                if (!com.chronosbvrx.visionplus.data.AppUpdate.forced(tvContext)) {
+                    com.chronosbvrx.visionplus.data.AppUpdate.latest?.version?.let { v ->
+                        tvContext.getSharedPreferences("updates", 0).edit().putString("skipped", v).apply()
+                    }
                 }
             })
         }

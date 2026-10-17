@@ -50,6 +50,7 @@ internal object PluginUpdatesCopy {
     const val DOWNLOAD_FAILED = "No se pudo abrir la descarga de la actualización"
     const val DOWNLOADING = "Descargando"
     const val INSTALLING = "Abriendo el instalador…"
+    const val FORCED = "Actualización requerida"
     const val BY = "Creada por ChronosBVRX"
 }
 
@@ -94,7 +95,10 @@ fun appUpdateBadgeCount(): Int {
 fun AppUpdatesDialog(release: Release?, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val updater = com.chronosbvrx.visionplus.ui.settings.rememberInAppUpdate()
-    Dialog(onDismissRequest = { if (!updater.running) onDismiss() }) {
+    // Con versión mínima forzada el toque afuera / Atrás no cierra: se sale con el botón
+    // (y la oferta vuelve en la próxima apertura; el "skip" no se recuerda).
+    val forced = AppUpdate.forced(context)
+    Dialog(onDismissRequest = { if (!updater.running && !forced) onDismiss() }) {
         Surface(shape = RoundedCornerShape(16.dp), color = VisionSurface, modifier = Modifier.widthIn(max = 560.dp)) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(PluginUpdatesCopy.TITLE, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.SemiBold)
@@ -112,6 +116,9 @@ fun AppUpdatesDialog(release: Release?, onDismiss: () -> Unit) {
                     if (release == null || !AppUpdate.pending(context)) {
                         Text(PluginUpdatesCopy.UP_TO_DATE, style = MaterialTheme.typography.bodyLarge, color = Color.White)
                     } else {
+                        if (forced) {
+                            Text(PluginUpdatesCopy.FORCED, style = MaterialTheme.typography.titleSmall, color = Color(0xFFF5C518))
+                        }
                         Text(PluginUpdatesCopy.NEW_VERSION, style = MaterialTheme.typography.titleSmall, color = VisionBlue)
                         Text(versionLine(AppUpdate.currentVersion(context), release.version), style = MaterialTheme.typography.bodyLarge, color = Color.White)
                         if (!release.notes.isNullOrBlank()) {

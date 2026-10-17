@@ -54,6 +54,19 @@ object RemoteConfig {
             else -> default
         }
 
+    /** Lectura de un flag numérico (kill-switch de versión mínima): tolera número o string. */
+    fun intFlag(context: Context, name: String, default: Int): Int {
+        if (flags.length() == 0) load(context)
+        return intFlagFrom(flags, name, default)
+    }
+
+    internal fun intFlagFrom(flags: JSONObject, name: String, default: Int): Int =
+        when (val value = flags.opt(name)) {
+            is Number -> value.toInt()
+            is String -> value.trim().toIntOrNull() ?: default
+            else -> default
+        }
+
     /** Del JSON de `/v1/config` saca el objeto `flags` (pura, testeable). */
     internal fun parseFlags(text: String?): JSONObject =
         runCatching { JSONObject(text ?: "{}").optJSONObject("flags") ?: JSONObject() }

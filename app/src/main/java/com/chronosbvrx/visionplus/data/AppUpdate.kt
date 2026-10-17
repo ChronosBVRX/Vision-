@@ -6,6 +6,8 @@ import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.pm.PackageInfoCompat
+import com.chronosbvrx.visionplus.data.config.RemoteConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -55,16 +57,47 @@ object AppUpdate {
         val release = latest ?: return false
         val current = parseReleaseNumber(currentVersion(context))
         val remote = parseReleaseNumber(release.version)
-        // Evita bucle: si las versiones son iguales o la remota es más vieja, no hay actualización.
-        // También evita intentar instalar debug sobre release (firma distinta).
-        if (remote <= current) return false
         // Heurística: si el APK del release es debug (no firmado de release), no lo ofrezcas.
         val apkUrl = release.apkUrl ?: ""
-        if (apkUrl.contains("-debug", ignoreCase = true) || apkUrl.contains("-unsigned", ignoreCase = true)) {
-            return false
-        }
-        return true
+        val apkInstallable = !(apkUrl.contains("-debug", ignoreCase = true) || apkUrl.contains("-unsigned", ignoreCase = true))
+        return updateOffer(
+            forced = forced(context),
+            paused = paused(context),
+            remoteNewer = remote > current,
+            apkInstallable = apkInstallable,
+        )
     }
+
+    /** El versionCode de ESTE build (contra él se mide `min_version_code`). */
+    fun currentVersionCode(context: Context): Long = runCatching {
+        PackageInfoCompat.getLongVersionCode(context.packageManager.getPackageInfo(context.packageName, 0))
+    }.getOrDefault(0L)
+
+    /** ¿La actualización está pausada? Kill-switch remoto `ota_paused` (build malo: se frena la oferta). */
+    fun paused(context: Context): Boolean = RemoteConfig.flag(context, "ota_paused", false)
+
+    /**
+     * ¿Este build quedó por debajo de la versión mínima exigida? Kill-switch remoto
+     * `min_version_code`: si el operador lo sube, los builds viejos se fuerzan a actualizar
+     * sin publicar nada.
+     */
+    fun forced(context: Context): Boolean =
+        shouldForce(RemoteConfig.intFlag(context, "min_version_code", 0), currentVersionCode(context).toInt())
+
+    internal fun shouldForce(minVersionCode: Int, ownVersionCode: Int): Boolean =
+        minVersionCode > 0 && ownVersionCode < minVersionCode
+
+    /**
+     * La política de la oferta de actualización (pura, probada): la forzada SIEMPRE gana
+     * (aunque esté pausada o la remota no se vea más nueva), la pausa bloquea las ofertas
+     * normales, y lo normal exige remota más nueva + APK instalable.
+     */
+    internal fun updateOffer(forced: Boolean, paused: Boolean, remoteNewer: Boolean, apkInstallable: Boolean): Boolean =
+        when {
+            forced -> true
+            paused -> false
+            else -> remoteNewer && apkInstallable
+        }
 
     /**
      * Asks the one source's repository for its latest release. Quiet callers (Home, every launch)

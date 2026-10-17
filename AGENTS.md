@@ -5,6 +5,14 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Lote 2.5.91: red de seguridad de actualizaciones + OTA en un comando + respaldo off-site con verificación + vigilante externo — OTA publicada** (2026-10-17; 433 tests Android + 170 backend):
+  - *Pedido del usuario*: «¿qué podemos resolver ahora?» de la lista comercial — automatización total sin intervención: actualizaciones a prueba de build malo, respaldos fuera del VPS y vigilancia que no viva en el VPS.
+  - *App — kill-switches de actualización* (probados EN VIVO en el POCO): `min_version_code` (si el servidor lo sube por encima del `versionCode` instalado, la app muestra «Actualización requerida» en TODAS las aperturas e **ignora el `skip`**; toque afuera/Atrás no cierran) y `ota_paused` (deja de ofrecerse la actualización: campana sin badge, sin diálogo — probado: aviso normal con 2.5.91 publicada → pausa → sin aviso). Política pura `AppUpdate.updateOffer/shouldForce` + `RemoteConfig.intFlag` con guardianes (`AppUpdatePolicyTest`, `RemoteConfigTest.intFlagAcceptsNumbersAndStrings`). Operador: `POST /v1/config` con `X-Admin-Key` y `{"min_version_code": 999}` / `{"ota_paused": true}` (la llave vive en `.visionplus/CREDENCIALES.txt` y en el `.env` del VPS — OJO: la copia local estaba rancia, usar la del VPS).
+  - *Publicación en UN comando*: `tools/publish_ota.ps1 -Version X.Y.Z -NotesFile ota_notes_X.Y.Z.md` — bump, tests, build R8, **verificación de firma histórica** (aborta si no coincide) y `gh release create`; si algo falla restaura `app/build.gradle.kts`. Estrenado con la v2.5.91 (vc327, 101 MB, firma `9593cb0d…`). Queda como decisión del usuario meter la llave de firma en GitHub Secrets para compilar en la nube (no se hizo: repo público + llave histórica = riesgo irreversible).
+  - *VPS — respaldo off-site*: `backup.sh` (diario 03:30, retención 7) manda el dump a Telegram los domingos (`disable_notification`) — probado con `--telegram` (archivo de 21 MB recibido). 
+  - *VPS — verificación de restauración*: `restore_check.sh` (domingos 03:45) restaura el último dump en una base temporal `restore_check`, cuenta `titles`/`gee38_catalog` y reporta por Telegram — probado: **«respaldo verificado: titles=34942»**. Es también el heartbeat semanal (si no llega el domingo, algo murió).
+  - *Vigilante EXTERNO*: GitHub Actions `uptime.yml` (cada 15 min, `workflow_dispatch` para probar) comprueba `visionplusv2.duckdns.org/healthz` y `la20.com.mx/catalogo/healthz` y **alerta al Telegram** si alguno falla — corre fuera del VPS, cubre la caída del host entero. Secrets `DIAG_TELEGRAM_TOKEN`/`DIAG_TELEGRAM_CHAT` en el repo (revocables). Probado: run manual 200/200 → «OK: backend sano».
+  - *Lección de quoting*: los `curl` largos por `ssh` desde PowerShell se destrozan — para operar el VPS usar SIEMPRE un script `scp`-eado y `bash /tmp/x.sh` (adoptado en todos los pasos de hoy).
 - **Fix post-OTA 2.5.89 (crash real del POCO en «Deportes en vivo») + la clase de crash D-pad de la ZTE + automatización de operación — OTA v2.5.90 publicada** (2026-10-17; 430 tests Android + 170 backend):
   - *Reporte del usuario*: «el POCO crasheó» — cazado con `dumpsys dropbox` + el diagnóstico del VPS: `IllegalArgumentException: Key "NBA Preseason|17/10/2026|20:00:00" was already used` en pantalla=Sports, vc324 (2.5.88), proceso principal.
   - *Causa raíz (verificada en vivo contra la BD)*: **el CMS de Gee NO trae `id` por evento (210/210)** y el payload servido tampoco; la app caía al respaldo `nombre|fecha|hora` para la clave de la lista → dos partidos NBA distintos a la MISMA hora («NBA Preseason» 20:00) compartían clave → LazyColumn muere. El `_event_id` del worker YA incluía equipos (fix 2.5.88) pero **solo vivía en la fila de la BD, no en el JSON**.
@@ -942,9 +950,10 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.90**
-  (versionCode **326**, release OTA v2.5.90 — fin del crash de «Deportes en vivo» (id estable por evento)
-  y de la clase de crash D-pad por FocusRequester huérfano en TV; ver el lote de arriba). Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.91**
+  (versionCode **327**, release OTA v2.5.91 — red de seguridad de actualizaciones (`min_version_code`/`ota_paused`),
+  OTA en un comando (`tools/publish_ota.ps1`), respaldo off-site + verificación semanal, vigilante externo de uptime;
+  ver el lote de arriba). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

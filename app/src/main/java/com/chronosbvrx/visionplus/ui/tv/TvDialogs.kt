@@ -108,7 +108,9 @@ internal fun TvAppUpdatesDialog(onDismiss: () -> Unit) {
     val updater = com.chronosbvrx.visionplus.ui.settings.rememberInAppUpdate()
     val release = AppUpdate.latest
     val pending = AppUpdate.pending(context)
-    TvDialog(PluginUpdatesCopy.TITLE, onDismiss) {
+    // Forzada: Atrás/afuera no cierran; el botón Cerrar sí (y la oferta vuelve a la próxima).
+    val forced = AppUpdate.forced(context)
+    TvDialog(PluginUpdatesCopy.TITLE, onDismiss = { if (!forced) onDismiss() }) {
         Text(
             "${PluginUpdatesCopy.CURRENT}: v${AppUpdate.currentVersion(context)}",
             style = MaterialTheme.typography.bodyMedium,
@@ -125,6 +127,9 @@ internal fun TvAppUpdatesDialog(onDismiss: () -> Unit) {
                 TvCompactAction(label = PluginUpdatesCopy.CLOSE, modifier = Modifier.dialogFocus(focus), onClick = onDismiss)
             }
         } else {
+            if (forced) {
+                Text(PluginUpdatesCopy.FORCED, style = MaterialTheme.typography.titleSmall, color = Color(0xFFF5C518))
+            }
             Text(PluginUpdatesCopy.NEW_VERSION, style = MaterialTheme.typography.titleSmall, color = VisionBlue)
             Text(versionLine(AppUpdate.currentVersion(context), release.version), style = MaterialTheme.typography.bodyLarge, color = Color.White)
             if (!release.notes.isNullOrBlank()) {

@@ -120,12 +120,13 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
     var showPluginUpdates by rememberSaveable { mutableStateOf(false) }
     val updatesBadge = appUpdateBadgeCount()
     // The manager speaks up by itself once per version: if this release was not skipped, the
-    // sheet opens so the update can be taken without leaving the app.
+    // sheet opens so the update can be taken without leaving the app. La versión mínima
+    // forzada (kill-switch remoto) ignora el "skip": la oferta vuelve en cada apertura.
     LaunchedEffect(updatesBadge) {
         if (updatesBadge > 0) {
             val latest = AppUpdate.latest?.version.orEmpty()
             val skipped = context.getSharedPreferences("updates", 0).getString("skipped", "")
-            if (latest.isNotBlank() && skipped != latest) showPluginUpdates = true
+            if (latest.isNotBlank() && (AppUpdate.forced(context) || skipped != latest)) showPluginUpdates = true
         }
     }
     if (showPluginUpdates) {
@@ -133,8 +134,11 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
             release = AppUpdate.latest,
             onDismiss = {
                 showPluginUpdates = false
-                AppUpdate.latest?.version?.let { v ->
-                    context.getSharedPreferences("updates", 0).edit().putString("skipped", v).apply()
+                // Con actualización forzada NO se recuerda el "skip": la próxima apertura vuelve a pedirla.
+                if (!AppUpdate.forced(context)) {
+                    AppUpdate.latest?.version?.let { v ->
+                        context.getSharedPreferences("updates", 0).edit().putString("skipped", v).apply()
+                    }
                 }
             },
         )

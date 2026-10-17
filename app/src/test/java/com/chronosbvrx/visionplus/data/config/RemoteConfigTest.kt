@@ -36,4 +36,15 @@ class RemoteConfigTest {
         assertTrue(RemoteConfig.flagFrom(flags, "missing", true))
         assertFalse(RemoteConfig.flagFrom(flags, "missing", false))
     }
+
+    @Test
+    fun intFlagAcceptsNumbersAndStrings() {
+        val flags = JSONObject("""{"a":327,"b":"328","c":"no-numero","d":true}""")
+        assertEquals(327, RemoteConfig.intFlagFrom(flags, "a", 0))
+        assertEquals(328, RemoteConfig.intFlagFrom(flags, "b", 0))
+        // Basura o tipo raro: manda el default (0 = sin exigencia).
+        assertEquals(0, RemoteConfig.intFlagFrom(flags, "c", 0))
+        assertEquals(0, RemoteConfig.intFlagFrom(flags, "d", 0))
+        assertEquals(7, RemoteConfig.intFlagFrom(flags, "missing", 7))
+    }
 }
