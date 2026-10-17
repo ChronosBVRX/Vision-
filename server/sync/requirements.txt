@@ -1,2 +1,4 @@
 asyncpg>=0.29,<1
 pycryptodome>=3.20,<4
+# Solo para re-derivar la clave del APK si rotan su certificado (autonomía del worker).
+cryptography>=42,<46

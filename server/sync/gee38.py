@@ -32,6 +32,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from datetime import date, datetime, timedelta
 
 import asyncpg
@@ -43,6 +44,14 @@ BASE_DEFAULT = "https://new.whatyouthink.site/"
 BASE = os.environ.get("GEE38_BASE", BASE_DEFAULT).rstrip("/") + "/"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 IV = b"bkmlmKnk9i5Khs9n"  # constante de su APK (ver .visionplus/gee38_key.txt)
+
+# Firebase Remote Config de su app V3.8: publica el dominio vigente del CMS.
+RC_URL = (
+    "https://firebaseremoteconfig.googleapis.com/v1/projects/723237950983"
+    "/namespaces/firebase:fetch?key=AIzaSyDzfPo4ElrL-uZViIScGwfBnpJ-pADNJ5U"
+)
+RC_APP_ID = "1:723237950983:android:84dfd1ce9f6664417bfca2"
+RC_PACKAGE = "com.live.geesports"
 
 PROBE_CONCURRENCY = 24
 PROBE_TIMEOUT = 6.0
@@ -93,20 +102,28 @@ def derive_key_from_apk(apk_path: str) -> bytes | None:
 
 def resolve_key() -> bytes | None:
     """Clave del CMS: GEE38_KEY (hex o ascii) o derivada de GEE38_APK."""
-    env = os.environ.get("GEE38_KEY", "").strip()
+    env = _key_from_env()
     if env:
-        try:
-            raw = bytes.fromhex(env)
-            if len(raw) == 16:
-                return raw
-        except ValueError:
-            pass
-        if len(env) == 16:
-            return env.encode()
-        log.error("gee38: GEE38_KEY inválida (16 chars ascii o 32 hex)")
+        return env
     apk = os.environ.get("GEE38_APK", "").strip()
     if apk and os.path.exists(apk):
         return derive_key_from_apk(apk)
+    return None
+
+
+def _key_from_env() -> bytes | None:
+    env = os.environ.get("GEE38_KEY", "").strip()
+    if not env:
+        return None
+    try:
+        raw = bytes.fromhex(env)
+        if len(raw) == 16:
+            return raw
+    except ValueError:
+        pass
+    if len(env) == 16:
+        return env.encode()
+    log.error("gee38: GEE38_KEY inválida (16 chars ascii o 32 hex)")
     return None
 
 
@@ -635,20 +652,128 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
     return written
 
 
-async def sync(pool: asyncpg.Pool) -> int:
-    key = resolve_key()
-    if not key:
-        log.warning("gee38: sin clave (GEE38_KEY/GEE38_APK); se omite el ciclo")
-        return 0
-    app = parse_app(decrypt_body(await _fetch_async("app.txt"), key))
+# ----------------------------------------------------------------------------
+# Autonomía: dominio (Firebase RC) y clave (APK) se resuelven solos
+# ----------------------------------------------------------------------------
+
+def _rc_api_url(payload: dict) -> str:
+    """El dominio vigente del CMS tal como lo publica su Firebase Remote Config."""
+    entries = payload.get("entries") if isinstance(payload, dict) else None
+    url = (entries or {}).get("api_url") if isinstance(entries, dict) else ""
+    url = str(url or "").strip()
+    return url if url.startswith("http") else ""
+
+
+async def _meta_get(pool: asyncpg.Pool, key: str):
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("select v from gee38_meta where k = $1", key)
+    if row is None:
+        return None
+    value = row["v"]
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:  # noqa: BLE001
+            return value
+    return value
+
+
+async def _meta_set(pool: asyncpg.Pool, key: str, value) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            insert into gee38_meta (k, v, updated_at) values ('app', $1::jsonb, now())
+            insert into gee38_meta (k, v, updated_at) values ($1, $2::jsonb, now())
             on conflict (k) do update set v = excluded.v, updated_at = now()
             """,
-            json.dumps(app, ensure_ascii=False),
+            key,
+            json.dumps(value, ensure_ascii=False),
         )
+
+
+async def _refresh_base(pool: asyncpg.Pool) -> None:
+    """Si rotan el dominio del CMS, su Remote Config lo publica: se descubre solo."""
+    global BASE
+    stored = await _meta_get(pool, "base")
+    if isinstance(stored, str) and stored.startswith("http"):
+        BASE = stored.rstrip("/") + "/"
+    try:
+        body = json.dumps({
+            "app_instance_id": uuid.uuid4().hex,
+            "app_id": RC_APP_ID,
+            "package_name": RC_PACKAGE,
+        }).encode()
+
+        def _go() -> bytes:
+            req = urllib.request.Request(RC_URL, data=body, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return resp.read()
+
+        raw = await asyncio.to_thread(_go)
+        url = _rc_api_url(json.loads(raw.decode("utf-8", "replace")))
+        if url:
+            url = url.rstrip("/") + "/"
+            if url != BASE:
+                log.info("gee38: el dominio rotó a %s (Firebase RC)", url)
+                BASE = url
+            await _meta_set(pool, "base", BASE)
+    except Exception as exc:  # noqa: BLE001 - sin RC seguimos con el dominio guardado
+        log.warning("gee38: Firebase RC no disponible (%s); sigo con %s", exc, BASE)
+
+
+def _download_file(url: str, path: str) -> None:
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=60) as resp, open(path, "wb") as out:
+        out.write(resp.read())
+
+
+async def _key_works(key: bytes) -> bool:
+    try:
+        decrypt_body(await _fetch_async("app.txt"), key)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+async def _resolve_key_auto(pool: asyncpg.Pool) -> bytes | None:
+    """La clave, sola: entorno → guardada → re-derivada del APK si rotó el certificado."""
+    candidates: list[bytes] = []
+    env = _key_from_env()
+    if env:
+        candidates.append(env)
+    stored = await _meta_get(pool, "key")
+    if isinstance(stored, str) and stored:
+        try:
+            candidates.append(base64.b64decode(stored))
+        except Exception:  # noqa: BLE001
+            pass
+    for key in candidates:
+        if await _key_works(key):
+            await _meta_set(pool, "key", base64.b64encode(key).decode())
+            return key
+    app = await _meta_get(pool, "app") or {}
+    download_url = str(app.get("download_url") or "").strip()
+    if download_url.startswith("http"):
+        path = "/tmp/gee38_update.apk"
+        try:
+            await asyncio.to_thread(_download_file, download_url, path)
+            derived = derive_key_from_apk(path)
+            if derived and await _key_works(derived):
+                log.info("gee38: el certificado rotó — clave re-derivada del APK nuevo")
+                await _meta_set(pool, "key", base64.b64encode(derived).decode())
+                return derived
+        except Exception as exc:  # noqa: BLE001
+            log.warning("gee38: no se pudo re-derivar la clave del APK (%s)", exc)
+    return None
+
+
+async def sync(pool: asyncpg.Pool) -> int:
+    await _refresh_base(pool)
+    key = await _resolve_key_auto(pool)
+    if not key:
+        log.warning("gee38: sin clave utilizable (entorno/guardada/APK); se omite el ciclo")
+        return 0
+    app = parse_app(decrypt_body(await _fetch_async("app.txt"), key))
+    await _meta_set(pool, "app", app)
     groups = await _sync_groups(pool, key, app)
     events = await _sync_events(pool, key, app)
     log.info("gee38: %s grupos + %s eventos actualizados (v%s)", groups, events, app.get("app_version"))

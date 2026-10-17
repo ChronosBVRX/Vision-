@@ -201,6 +201,21 @@ def test_busted_url_protects_cms_files_but_not_external_ones():
     assert gee38._busted_url("channels/xyz.txt").startswith("https://new.whatyouthink.site/channels/xyz.txt?t=")
 
 
+def test_rc_api_url_extracts_the_domain():
+    assert gee38._rc_api_url({"entries": {"api_url": "https://nuevo.dominio/"}}) == "https://nuevo.dominio/"
+    assert gee38._rc_api_url({"entries": {"api_url": "no-url"}}) == ""
+    assert gee38._rc_api_url({}) == ""
+
+
+def test_key_from_env_forms(monkeypatch):
+    monkeypatch.setenv("GEE38_KEY", "TestKey123456789")
+    assert gee38._key_from_env() == KEY
+    monkeypatch.setenv("GEE38_KEY", KEY.hex())
+    assert gee38._key_from_env() == KEY
+    monkeypatch.setenv("GEE38_KEY", "corta")
+    assert gee38._key_from_env() is None
+
+
 def test_decrypt_body_rejects_a_retired_page():
     # Los archivos retirados devuelven la página HTML del hosting: no es payload.
     with pytest.raises(ValueError):
