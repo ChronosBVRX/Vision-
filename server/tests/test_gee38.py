@@ -608,6 +608,17 @@ def test_gee_broadcast_filter_keeps_options_when_only_off_brand_links_exist():
     assert [link["name"] for link in kept] == ["CANAL MX FHD"]
 
 
+def test_gee_broadcast_filter_links_caliente_with_fox_one():
+    # Caliente TV es FOX One en México: cuando el enlace exista, va arriba.
+    match = _espn_match("Tijuana", "Puebla")
+    match["broadcasts"] = ["Caliente TV", "Fox Sports"]
+    match["channels"] = []
+    links = [_link("CANAL MX FHD"), _link("FOX ONE"), _link("FOX SPORTS 1 MX")]
+    kept = api_app._gee_broadcast_filter(links, match)
+    assert [link["name"] for link in kept[:2]] == ["FOX ONE", "FOX SPORTS 1 MX"]
+    assert kept[-1]["name"] == "CANAL MX FHD"
+
+
 def test_gee_league_filters_by_id_and_name():
     assert api_app._gee_league_allowed_match({"league": {"id": "mex.2"}})
     assert api_app._gee_league_allowed_match({"league": {"id": "uefa.champions"}})

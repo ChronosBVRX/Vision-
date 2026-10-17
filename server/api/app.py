@@ -1156,6 +1156,10 @@ GEE_CHANNEL_FAMILIES = {
     "bein1sports": {"beinsports", "bein2sports"},
     "bein2sports": {"beinsports", "bein1sports"},
     "bein3sports": {"beinsports", "bein1sports"},
+    # «Caliente TV» se convirtió en «FOX One» en México (Fox Corporation): misma señal.
+    "caliente": {"foxone"},
+    "calientesports": {"foxone"},
+    "foxone": {"caliente", "calientesports", "foxsports"},
 }
 
 

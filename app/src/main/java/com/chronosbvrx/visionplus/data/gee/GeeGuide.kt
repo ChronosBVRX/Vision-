@@ -22,6 +22,18 @@ object GeeGuide {
     )
 
     /**
+     * Alias de guía → nombre en el catálogo. El caso estrella: «Caliente TV» se
+     * convirtió en «FOX One» en México (Fox Corporation la adquirió; la marca
+     * Caliente desapareció el 1-dic-2025) — cuando su catálogo traiga FOX One,
+     * el partido se ofrece solo.
+     */
+    private val GUIDE_ALIASES = mapOf(
+        "caliente tv" to "fox one",
+        "caliente sports" to "fox one",
+        "caliente" to "fox one",
+    )
+
+    /**
      * Para cada entrada de la guía, el mejor enlace del catálogo 24/7 que le
      * corresponde (misma marca y edición; se prefiere la señal mexicana y la viva).
      * Puro: la UI solo pinta el resultado.
@@ -34,16 +46,21 @@ object GeeGuide {
         val out = ArrayList<TvOption>()
         for (guideName in guide) {
             val query = SportsLinker.extractBrandInfo(guideName)
-            if (query.brand.isBlank()) continue
+            val alias = GUIDE_ALIASES[SportsLinker.norm(guideName)]
+            if (query.brand.isBlank() && alias == null) continue
             var best: TvOption? = null
             for (group in groups) {
                 for (channel in group.channels) {
                     for (link in channel.links) {
                         val title = link.name.ifBlank { channel.name }
+                        val matches = if (alias != null && !directBrandMatches(query, title)) {
+                            SportsLinker.norm(title).contains(alias)
+                        } else {
+                            directBrandMatches(query, title)
+                        }
+                        if (!matches) continue
+                        var score = if (alias != null && !directBrandMatches(query, title)) 90 else 100
                         val info = SportsLinker.extractBrandInfo(title)
-                        if (info.brand != query.brand) continue
-                        if (normalizeEdition(info.edition) != normalizeEdition(query.edition)) continue
-                        var score = 100
                         score += when {
                             query.targetCountry != null ->
                                 if (info.targetCountry == query.targetCountry) 40 else 0
@@ -61,6 +78,13 @@ object GeeGuide {
             if (best != null) out.add(best)
         }
         return out
+    }
+
+    private fun directBrandMatches(query: SportsLinker.BrandInfo, title: String): Boolean {
+        if (query.brand.isBlank()) return false
+        val info = SportsLinker.extractBrandInfo(title)
+        return info.brand == query.brand &&
+            normalizeEdition(info.edition) == normalizeEdition(query.edition)
     }
 
     /** La edición «1» es la señal base: para emparejar vale como sin edición. */

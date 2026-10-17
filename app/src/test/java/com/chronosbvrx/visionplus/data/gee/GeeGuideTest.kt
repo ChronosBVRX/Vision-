@@ -68,8 +68,17 @@ class GeeGuideTest {
 
     @Test
     fun calienteIsNotInTheCatalog() {
-        // La fuente no trae Caliente TV: se dice con la verdad (sin opciones), no se inventa.
+        // La fuente (hoy) no trae Caliente/FOX One: se dice con la verdad, no se inventa.
         assertTrue(GeeGuide.channelsFor(listOf("Caliente TV"), groups).isEmpty())
+    }
+
+    @Test
+    fun calienteTvResolvesToFoxOneWhenTheCatalogHasIt() {
+        // Caliente TV se convirtió en FOX One en México: en cuanto su catálogo
+        // lo traiga, el partido se ofrece solo (misma señal).
+        val withOne = groups + group("Nuevos", link("FOX ONE"))
+        val out = GeeGuide.channelsFor(listOf("Caliente TV"), withOne)
+        assertEquals("FOX ONE", out.single().title)
     }
 
     @Test
