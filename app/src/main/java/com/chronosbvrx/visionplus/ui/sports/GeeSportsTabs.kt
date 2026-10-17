@@ -46,6 +46,7 @@ import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
@@ -137,7 +138,10 @@ fun GeeChannelsTab(
             subtitle = pickingGroup,
             links = channel.links,
             onDismiss = { pickingChannel = null },
-            onPlay = onPlay,
+            onPlay = { picked ->
+                pickingChannel = null
+                onPlay(picked)
+            },
         )
     }
 }
@@ -216,8 +220,9 @@ private fun GeeChannelRow(channel: GeeSportsSource.GeeChannel, onClick: () -> Un
 }
 
 /**
- * El selector de transmisión: los enlaces del evento/canal, vivos primero (el
- * servidor ya los ordena), con su tipo (HLS o DASH-ClearKey) y su estado.
+ * El selector de transmisión: los canales de TV reales de la lista (resueltos de
+ * la guía del partido) y las transmisiones directas (vivas primero, el servidor ya
+ * las ordena). La guía («se transmite en: TUDN · ViX») siempre va visible.
  */
 @Composable
 fun GeeLinkPickDialog(
@@ -226,6 +231,8 @@ fun GeeLinkPickDialog(
     links: List<GeeSportsSource.GeeLink>,
     onDismiss: () -> Unit,
     onPlay: (LiveChannel) -> Unit,
+    guide: List<String> = emptyList(),
+    tvChannels: List<LiveChannel> = emptyList(),
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -244,8 +251,16 @@ fun GeeLinkPickDialog(
                 if (subtitle.isNotBlank()) {
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary, modifier = Modifier.padding(top = 2.dp))
                 }
+                if (guide.isNotEmpty()) {
+                    Text(
+                        "Se transmite en: " + guide.take(4).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = VisionBlueBright,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
                 Spacer(Modifier.height(14.dp))
-                if (links.isEmpty()) {
+                if (tvChannels.isEmpty() && links.isEmpty()) {
                     Text(
                         "Sin transmisiones disponibles por ahora.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -253,49 +268,102 @@ fun GeeLinkPickDialog(
                     )
                     Spacer(Modifier.height(6.dp))
                 } else {
-                    Text(
-                        if (links.size > 1) "Elige la transmisión:" else "Transmisión disponible:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = VisionTextSecondary,
-                        modifier = Modifier.padding(bottom = 10.dp),
-                    )
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 340.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
                     ) {
-                        items(links, key = { it.name + "|" + it.link }) { link ->
-                            Surface(
-                                onClick = {
-                                    onPlay(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
-                                    onDismiss()
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                color = VisionSurfaceHigh,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Row(
-                                    Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
+                        if (tvChannels.isNotEmpty()) {
+                            item(key = "tv_label") {
+                                Text(
+                                    "Canales de TV (tu lista):",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = VisionTextSecondary,
+                                    modifier = Modifier.padding(bottom = 2.dp),
+                                )
+                            }
+                            items(tvChannels, key = { "tv_" + it.url }) { channel ->
+                                Surface(
+                                    onClick = { onPlay(channel) },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = VisionSurfaceHigh,
+                                    modifier = Modifier.fillMaxWidth(),
                                 ) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = VisionBlue, modifier = Modifier.size(22.dp))
-                                    Spacer(Modifier.width(10.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            link.name.ifBlank { title },
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = Color.White,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        val typeText = when {
-                                            link.type == "dash" && link.drm.isNotBlank() -> "DASH · ClearKey"
-                                            link.type == "dash" -> "DASH"
-                                            else -> "HLS"
+                                    Row(
+                                        Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = VisionBlue, modifier = Modifier.size(22.dp))
+                                        Spacer(Modifier.width(10.dp))
+                                        if (!channel.logo.isNullOrBlank()) {
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(LocalContext.current)
+                                                    .data(channel.logo)
+                                                    .size(56, 56)
+                                                    .crossfade(false)
+                                                    .build(),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(22.dp),
+                                                contentScale = ContentScale.Fit,
+                                            )
+                                            Spacer(Modifier.width(8.dp))
                                         }
-                                        Text(typeText, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                channel.name,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = Color.White,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            Text("Canal de TV en vivo", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+                                        }
                                     }
-                                    Spacer(Modifier.width(8.dp))
-                                    GeeAliveBadge(link.alive)
+                                }
+                            }
+                            item(key = "tv_gap") { Spacer(Modifier.height(2.dp)) }
+                        }
+                        if (links.isNotEmpty()) {
+                            item(key = "links_label") {
+                                Text(
+                                    "Transmisiones en vivo:",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = VisionTextSecondary,
+                                    modifier = Modifier.padding(bottom = 2.dp),
+                                )
+                            }
+                            items(links, key = { it.name + "|" + it.link }) { link ->
+                                Surface(
+                                    onClick = {
+                                        onPlay(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = VisionSurfaceHigh,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Row(
+                                        Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = VisionBlue, modifier = Modifier.size(22.dp))
+                                        Spacer(Modifier.width(10.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                link.name.ifBlank { title },
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = Color.White,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            val typeText = when {
+                                                link.type == "dash" && link.drm.isNotBlank() -> "DASH · ClearKey"
+                                                link.type == "dash" -> "DASH"
+                                                else -> "HLS"
+                                            }
+                                            Text(typeText, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+                                        }
+                                        Spacer(Modifier.width(8.dp))
+                                        GeeAliveBadge(link.alive)
+                                    }
                                 }
                             }
                         }

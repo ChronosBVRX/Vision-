@@ -97,3 +97,12 @@ fun rememberGeeSportsState(): GeeSportsState {
     val scope = rememberCoroutineScope()
     return remember { GeeSportsState(app, scope) }
 }
+
+/**
+ * Recuerdo del partido con el modal de opciones abierto: al volver del
+ * reproductor (Atrás), el modal reaparece en vez de caer a la lista, para
+ * poder elegir otro canal sin buscar de nuevo el partido.
+ */
+internal object DeportesReturn {
+    var pickingId: String? = null
+}

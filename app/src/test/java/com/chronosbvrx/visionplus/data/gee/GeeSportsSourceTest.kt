@@ -58,6 +58,7 @@ class GeeSportsSourceTest {
            "home_name":"Necaxa","away_name":"Puebla",
            "home_logo":"https://l/home.png","away_logo":"https://l/away.png",
            "league_label":"Liga MX","league_logo":"https://l/league.png",
+           "league_id":"mex.1","broadcasts":["TUDN","ViX Deportes"],
            "score":{"home":0,"away":1,"status":"in","detail":"21'","live":true},
            "links":[
              {"name":"CANAL MX FHD","link":"https://cdn/mx.mpd","url":"https://cdn/mx.mpd",
@@ -86,6 +87,8 @@ class GeeSportsSourceTest {
         assertEquals("Puebla", football.awayName)
         assertEquals("https://l/home.png", football.homeLogo)
         assertEquals("Liga MX", football.leagueLabel)
+        assertEquals("mex.1", football.leagueId)
+        assertEquals(listOf("TUDN", "ViX Deportes"), football.broadcasts)
         assertEquals(0, football.scoreHome)
         assertEquals(1, football.scoreAway)
         assertTrue(football.live)

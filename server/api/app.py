@@ -1253,8 +1253,9 @@ def _gee_match_card(match: dict, links: list[dict]) -> dict:
     """La tarjeta de un partido del calendario (con los enlaces de GeeSports cruzados).
 
     Misma forma que un evento: la app la pinta igual (escudos, marcador real y hasta
-    `links` para el selector de transmisiones). Los enlaces se filtran contra la
-    parrilla oficial: solo se ofrecen las cadenas que de verdad lo transmiten."""
+    `links` para el selector de transmisiones). Los enlaces se ordenan contra la
+    parrilla oficial y la tarjeta lleva esa parrilla (`broadcasts`/`guide`): la app
+    la usa como guía («se transmite en…») y para ofrecer los canales de TV reales."""
     links = _gee_broadcast_filter(links, match)
     home = match.get("home") or {}
     away = match.get("away") or {}
@@ -1262,6 +1263,11 @@ def _gee_match_card(match: dict, links: list[dict]) -> dict:
     kickoff = _gee_dt(match.get("kickoff"))
     status = (match.get("status") or "").strip()
     alive = sum(1 for link in links if link.get("alive"))
+    guide: list[str] = []
+    for name in list(match.get("broadcasts") or []) + list(match.get("channels") or []):
+        clean = (name or "").strip()
+        if clean and clean not in guide:
+            guide.append(clean)
     return {
         "id": "espn:" + str(match.get("id") or ""),
         "category": "Football",
@@ -1284,6 +1290,9 @@ def _gee_match_card(match: dict, links: list[dict]) -> dict:
         "away_logo": away.get("logo") or "",
         "league_label": league.get("name") or "",
         "league_logo": league.get("logo") or "",
+        "league_id": league.get("id") or "",
+        "broadcasts": guide[:8],
+        "guide": guide[:8],
         "score": {
             "home": home.get("score"),
             "away": away.get("score"),

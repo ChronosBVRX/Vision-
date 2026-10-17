@@ -553,6 +553,17 @@ def test_gee_match_card_shape():
     assert card["date_iso"] == "2026-10-16" and card["time"] == "21:05:00"
 
 
+def test_gee_match_card_carries_the_guide():
+    # La parrilla oficial viaja en la tarjeta: la app la usa como guía «se transmite en…».
+    match = _espn_match("Necaxa", "Atlas")
+    match["broadcasts"] = ["TUDN", "ViX Deportes", "TUDN"]
+    match["channels"] = ["TUDN", "ViX Deportes"]
+    card = api_app._gee_match_card(match, [])
+    assert card["guide"] == ["TUDN", "ViX Deportes"]
+    assert card["broadcasts"] == ["TUDN", "ViX Deportes"]
+    assert card["league_id"] == "mex.1"
+
+
 def _link(name: str) -> dict:
     return {"name": name, "url": "https://x/" + name, "link": "https://x/" + name, "alive": True}
 

@@ -52,6 +52,7 @@ import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.ui.sports.GeeSportsState
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
@@ -145,7 +146,10 @@ internal fun TvGeeChannelsTab(
             subtitle = pickingGroup,
             links = channel.links,
             onDismiss = { picking = null },
-            onPlay = onPlay,
+            onPlay = { picked ->
+                picking = null
+                onPlay(picked)
+            },
         )
     }
 }
@@ -212,8 +216,8 @@ private fun TvGeeChannelRow(
 }
 
 /**
- * El selector de transmisiones en la TV: las opciones del evento/canal, vivos
- * primero (el servidor ya los ordena), con tipo y estado. OK sintoniza.
+ * El selector de transmisiones en la TV: los canales de TV reales de la lista
+ * (resueltos de la guía) y las transmisiones directas, vivos primero. OK sintoniza.
  */
 @Composable
 internal fun TvGeeLinkPickDialog(
@@ -222,6 +226,8 @@ internal fun TvGeeLinkPickDialog(
     links: List<GeeSportsSource.GeeLink>,
     onDismiss: () -> Unit,
     onPlay: (LiveChannel) -> Unit,
+    guide: List<String> = emptyList(),
+    tvChannels: List<LiveChannel> = emptyList(),
 ) {
     BackHandler(onBack = onDismiss)
     DisposableEffect(Unit) {
@@ -257,33 +263,62 @@ internal fun TvGeeLinkPickDialog(
                     if (subtitle.isNotBlank()) {
                         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary, modifier = Modifier.padding(top = 2.dp))
                     }
+                    if (guide.isNotEmpty()) {
+                        Text(
+                            "Se transmite en: " + guide.take(4).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = VisionBlueBright,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                     Spacer(Modifier.height(14.dp))
-                    if (links.isEmpty()) {
+                    if (tvChannels.isEmpty() && links.isEmpty()) {
                         Text("Sin transmisiones disponibles por ahora.", style = MaterialTheme.typography.bodyMedium, color = VisionTextSecondary)
                         Spacer(Modifier.height(14.dp))
                         TvCompactAction("Volver", onClick = onDismiss, modifier = Modifier.landingFocus(modalLanding))
                     } else {
-                        Text(
-                            if (links.size > 1) "Elige la transmisión:" else "Transmisión disponible:",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = VisionTextSecondary,
-                            modifier = Modifier.padding(bottom = 10.dp),
-                        )
+                        val firstTv = tvChannels.firstOrNull()
+                        val firstLink = links.firstOrNull()
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
                         ) {
-                            items(links, key = { it.name + "|" + it.link }) { link ->
-                                val isFirst = links.first() == link
-                                TvGeeLinkItem(
-                                    link = link,
-                                    fallbackTitle = title,
-                                    onClick = {
-                                        onPlay(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
-                                        onDismiss()
-                                    },
-                                    modifier = if (isFirst) Modifier.landingFocus(modalLanding) else Modifier,
-                                )
+                            if (firstTv != null) {
+                                item(key = "tv_label") {
+                                    Text(
+                                        "Canales de TV (tu lista):",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = VisionTextSecondary,
+                                        modifier = Modifier.padding(bottom = 2.dp),
+                                    )
+                                }
+                                items(tvChannels, key = { "tv_" + it.url }) { channel ->
+                                    TvGeeTvChannelItem(
+                                        channel = channel,
+                                        onClick = { onPlay(channel) },
+                                        modifier = if (channel == firstTv) Modifier.landingFocus(modalLanding) else Modifier,
+                                    )
+                                }
+                            }
+                            if (firstLink != null) {
+                                item(key = "links_label") {
+                                    Text(
+                                        "Transmisiones en vivo:",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = VisionTextSecondary,
+                                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                                    )
+                                }
+                                items(links, key = { it.name + "|" + it.link }) { link ->
+                                    TvGeeLinkItem(
+                                        link = link,
+                                        fallbackTitle = title,
+                                        onClick = {
+                                            onPlay(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
+                                        },
+                                        modifier = if (tvChannels.isEmpty() && link == firstLink) Modifier.landingFocus(modalLanding) else Modifier,
+                                    )
+                                }
                             }
                         }
                         Spacer(Modifier.height(14.dp))
@@ -292,6 +327,54 @@ internal fun TvGeeLinkPickDialog(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvGeeTvChannelItem(
+    channel: LiveChannel,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(10.dp)
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = ClickableSurfaceDefaults.shape(shape),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = VisionSurfaceHigh,
+            focusedContainerColor = VisionBlue,
+            contentColor = Color.White,
+            focusedContentColor = Color.White,
+        ),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = shape),
+        ),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(10.dp))
+            if (!channel.logo.isNullOrBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(channel.logo)
+                        .size(56, 56)
+                        .crossfade(false)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    contentScale = ContentScale.Fit,
+                )
+                Spacer(Modifier.width(10.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(channel.name, style = MaterialTheme.typography.labelLarge, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Canal de TV en vivo", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
             }
         }
     }

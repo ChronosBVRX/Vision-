@@ -75,6 +75,8 @@ object GeeSportsSource {
         val awayLogo: String = "",
         val leagueLabel: String = "",
         val leagueLogo: String = "",
+        val leagueId: String = "",
+        val broadcasts: List<String> = emptyList(),
         val scoreHome: Int? = null,
         val scoreAway: Int? = null,
         val live: Boolean = false,
@@ -221,6 +223,12 @@ object GeeSportsSource {
                     awayLogo = safeImage(e.optString("away_logo")),
                     leagueLabel = e.optString("league_label"),
                     leagueLogo = safeImage(e.optString("league_logo")),
+                    leagueId = e.optString("league_id"),
+                    broadcasts = e.optJSONArray("broadcasts")?.let { array ->
+                        (0 until array.length()).mapNotNull { index ->
+                            array.optString(index).trim().takeIf { it.isNotBlank() }
+                        }
+                    } ?: emptyList(),
                     scoreHome = if (score == null || score.isNull("home")) null else score.optInt("home"),
                     scoreAway = if (score == null || score.isNull("away")) null else score.optInt("away"),
                     live = score?.optBoolean("live") ?: false,

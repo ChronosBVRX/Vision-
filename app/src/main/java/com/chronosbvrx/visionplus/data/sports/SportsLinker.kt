@@ -632,6 +632,19 @@ object SportsLinker {
     }
 
     /**
+     * Los canales de TV reales de Vision+ que corresponden a la guía del partido:
+     * la parrilla oficial (TUDN, Azteca 7, Fox Sports, ESPN…) resuelta contra los
+     * canales en vivo de la lista — se sintonizan como cualquier canal, así que
+     * si el partido va por ese canal, se ve el partido.
+     */
+    fun tvChannelsFor(context: Context, event: GeeSportsSource.GeeEvent): List<LiveChannel> {
+        if (event.broadcasts.isEmpty()) return emptyList()
+        val channels = runCatching { X4KApi.cachedLiveChannels(context) }.getOrDefault(emptyList())
+        if (channels.isEmpty()) return emptyList()
+        return resolveChannels(event.broadcasts, channels, event.leagueId.ifBlank { null })
+    }
+
+    /**
      * Los canales GeeSports que transmiten este partido (fuente principal): se cruzan
      * los eventos de fútbol por equipos —con alias y tolerancia de fecha— y se toman
      * sus enlaces en el orden del servidor (vivos primero). Puro y probado.

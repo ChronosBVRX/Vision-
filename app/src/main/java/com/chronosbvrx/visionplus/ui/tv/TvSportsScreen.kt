@@ -54,6 +54,7 @@ import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.data.sports.SportsLinker
 import com.chronosbvrx.visionplus.data.sports.SportsSource
 import com.chronosbvrx.visionplus.ui.sports.geeCategoryLabel
 import com.chronosbvrx.visionplus.ui.sports.geeEventSubtitle
@@ -80,9 +81,19 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
     val gee = rememberGeeSportsState()
     var league by remember { mutableStateOf<String?>(null) }
     var channels by remember { mutableStateOf(false) }
-    var picking by remember { mutableStateOf<GeeSportsSource.GeeEvent?>(null) }
+    var pickingId by remember { mutableStateOf(com.chronosbvrx.visionplus.ui.sports.DeportesReturn.pickingId) }
+    val picking = remember(pickingId, gee.events) {
+        pickingId?.let { id -> gee.events.firstOrNull { it.id == id } }
+    }
     val geeEntryFocus = remember { FocusRequester() }
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+    val pickingGuide = remember(picking) { picking?.broadcasts.orEmpty() }
+    val pickingTv = remember(picking) {
+        val event = picking
+        if (event == null) emptyList()
+        else runCatching { SportsLinker.tvChannelsFor(context, event) }.getOrDefault(emptyList())
+    }
 
     val events = gee.selectedEvents
     val isFootball = (gee.selectedCategory ?: "Football").equals("Football", ignoreCase = true)
@@ -222,7 +233,10 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                                 TvGeeEventCard(
                                     event = event,
                                     modifier = if (event.id == firstEventId) Modifier.focusRequester(geeEntryFocus) else Modifier,
-                                    onClick = { picking = event },
+                                    onClick = {
+                                        com.chronosbvrx.visionplus.ui.sports.DeportesReturn.pickingId = event.id
+                                        pickingId = event.id
+                                    },
                                 )
                             }
                         }
@@ -236,8 +250,13 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                 title = geeEventTitle(event),
                 subtitle = geeEventSubtitle(event),
                 links = event.links,
-                onDismiss = { picking = null },
+                onDismiss = {
+                    com.chronosbvrx.visionplus.ui.sports.DeportesReturn.pickingId = null
+                    pickingId = null
+                },
                 onPlay = onPlay,
+                guide = pickingGuide,
+                tvChannels = pickingTv,
             )
         }
     }
@@ -347,6 +366,15 @@ private fun TvGeeEventCard(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                }
+                if (event.broadcasts.isNotEmpty()) {
+                    Text(
+                        "TV: " + event.broadcasts.take(3).joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VisionTextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             Spacer(Modifier.width(16.dp))

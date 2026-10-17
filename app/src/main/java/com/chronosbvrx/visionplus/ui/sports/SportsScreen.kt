@@ -47,6 +47,7 @@ import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.data.sports.SportsLinker
 import com.chronosbvrx.visionplus.data.sports.SportsSource
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
@@ -69,9 +70,20 @@ fun SportsScreen(
     onPlay: (LiveChannel) -> Unit,
 ) {
     val gee = rememberGeeSportsState()
-    var picking by remember { mutableStateOf<GeeSportsSource.GeeEvent?>(null) }
+    var pickingId by remember { mutableStateOf(DeportesReturn.pickingId) }
     var league by remember { mutableStateOf<String?>(null) }
     var channels by remember { mutableStateOf(false) }
+    val picking = remember(pickingId, gee.events) {
+        pickingId?.let { id -> gee.events.firstOrNull { it.id == id } }
+    }
+    val context = LocalContext.current
+    // La guía del partido (parrilla oficial) y sus canales de TV reales de la lista.
+    val pickingGuide = remember(picking) { picking?.broadcasts.orEmpty() }
+    val pickingTv = remember(picking) {
+        val event = picking
+        if (event == null) emptyList()
+        else runCatching { SportsLinker.tvChannelsFor(context, event) }.getOrDefault(emptyList())
+    }
 
     val events = gee.selectedEvents
     val isFootball = (gee.selectedCategory ?: "Football").equals("Football", ignoreCase = true)
@@ -238,7 +250,10 @@ fun SportsScreen(
                             GeeSectionHeader(section.title, section.events.size)
                         }
                         items(section.events, key = { it.id }) { event ->
-                            GeeEventCard(event) { picking = event }
+                            GeeEventCard(event) {
+                                DeportesReturn.pickingId = event.id
+                                pickingId = event.id
+                            }
                         }
                     }
                 }
@@ -251,8 +266,13 @@ fun SportsScreen(
             title = geeEventTitle(event),
             subtitle = geeEventSubtitle(event),
             links = event.links,
-            onDismiss = { picking = null },
+            onDismiss = {
+                DeportesReturn.pickingId = null
+                pickingId = null
+            },
             onPlay = onPlay,
+            guide = pickingGuide,
+            tvChannels = pickingTv,
         )
     }
 }
@@ -378,6 +398,16 @@ private fun GeeEventCard(event: GeeSportsSource.GeeEvent, onClick: () -> Unit) {
                 } else {
                     Text("Sin señal por ahora", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
                 }
+            }
+            if (event.broadcasts.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "TV: " + event.broadcasts.take(3).joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VisionTextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
