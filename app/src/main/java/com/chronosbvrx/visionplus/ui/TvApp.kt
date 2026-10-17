@@ -195,9 +195,20 @@ private fun TvRoute(
                 onRailPick("")
                 nav.push(Route.Title(it))
             },
-            onOpenLive = { nav.push(Route.Live) },
-            onOpenCategories = { nav.push(Route.Categories) },
-            onResume = { nav.push(resumeRoute(it)) },
+            onOpenLive = {
+                // Salir del Inicio por un hub invalida el regreso pendiente: si no, cada vuelta
+                // re-dispara el regreso viejo (reveal del scroll + robo de foco del D-pad).
+                onClearFilmReturn()
+                nav.push(Route.Live)
+            },
+            onOpenCategories = {
+                onClearFilmReturn()
+                nav.push(Route.Categories)
+            },
+            onResume = {
+                onClearFilmReturn()
+                nav.push(resumeRoute(it))
+            },
             onGoRoute = { guardedGo(it, viaTab = false) },
             // El regreso vale una sola vez: al restaurarse se limpia y los hubs lo
             // invalidan al salir (si no, cada vuelta re-dispara el regreso viejo).

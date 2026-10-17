@@ -14,6 +14,12 @@ import com.chronosbvrx.visionplus.ui.player.X4KPlayerAty
  */
 class X4KWarmupReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
+        // Salida de la app pedida por el principal: el reproductor residente (su tarea aparte)
+        // se cierra para que el sistema no lo traiga al frente al soltar la actividad principal.
+        if (intent?.action == ACTION_FINISH_FOR_EXIT) {
+            X4KPlayerAty.finishResidentForExit()
+            return
+        }
         // Reinicio ordenado del proceso pedido por el principal (descargas): el motor
         // headless exige un proceso en el que la vista del reproductor no haya reproducido.
         // Sin reproducción activa, el proceso entero se reinicia; el principal espera a que
@@ -70,5 +76,8 @@ class X4KWarmupReceiver : BroadcastReceiver() {
     companion object {
         /** Orden del principal: el proceso `:x4k` se reinicia antes de una descarga. */
         const val ACTION_DIE_FOR_DOWNLOADS = "com.chronosbvrx.visionplus.action.X4K_DIE_FOR_DOWNLOADS"
+
+        /** Orden del principal: el reproductor residente se cierra (salida de la app). */
+        const val ACTION_FINISH_FOR_EXIT = "com.chronosbvrx.visionplus.action.X4K_FINISH_FOR_EXIT"
     }
 }

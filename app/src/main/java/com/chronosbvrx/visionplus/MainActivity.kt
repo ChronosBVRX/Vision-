@@ -4,21 +4,36 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.data.XuperCatalog
@@ -105,6 +120,28 @@ class MainActivity : ComponentActivity() {
                     val catalog = remember { XuperCatalog(this@MainActivity) }
                     val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
 
+                    // Salida con confirmación desde la pantalla principal: el primer Atrás
+                    // avisa («presiona de nuevo»), el segundo dentro de la ventana cierra la
+                    // app de verdad — llevándose al reproductor residente para que el sistema
+                    // no lo traiga al frente (el bucle reportado: Atrás → reproductor → Atrás…).
+                    val exitGuard = remember { com.chronosbvrx.visionplus.ui.BackExitGuard() }
+                    var exitHint by remember { mutableStateOf(false) }
+                    var exitPresses by remember { mutableIntStateOf(0) }
+                    BackHandler(enabled = !needsActivation && navigator.stack.size <= 1) {
+                        if (exitGuard.press(System.currentTimeMillis())) {
+                            exitHint = false
+                            com.chronosbvrx.visionplus.ui.exitAppCleanly(this@MainActivity)
+                        } else {
+                            exitHint = true
+                            exitPresses++
+                        }
+                    }
+                    LaunchedEffect(exitPresses) {
+                        if (exitPresses == 0) return@LaunchedEffect
+                        delay(com.chronosbvrx.visionplus.ui.BACK_EXIT_WINDOW_MS)
+                        if (!exitGuard.hintVisible(System.currentTimeMillis())) exitHint = false
+                    }
+
                     // Si el dispositivo arranca sin internet, abrimos en 600 ms directo a la interfaz
                     // especial de Modo Sin Conexión sin esperar los 9 segundos de timeout de red.
                     LaunchedEffect(Unit) {
@@ -163,6 +200,30 @@ class MainActivity : ComponentActivity() {
                                 canExit = bootReady,
                                 onFinished = { splashVisible = false },
                             )
+                        }
+                        // El aviso del cierre con confirmación: sin foco y sin toques (jamás
+                        // se roba el D-pad), encima de lo que esté en pantalla.
+                        AnimatedVisibility(
+                            visible = exitHint,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = if (isTv) 56.dp else 120.dp),
+                            enter = fadeIn(),
+                            exit = fadeOut(),
+                        ) {
+                            Box(
+                                Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color.Black.copy(alpha = 0.86f))
+                                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)), RoundedCornerShape(50))
+                                    .padding(horizontal = 22.dp, vertical = 12.dp),
+                            ) {
+                                Text(
+                                    "Presiona atrás de nuevo para cerrar la aplicación",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = Color.White,
+                                )
+                            }
                         }
                     }
                 }

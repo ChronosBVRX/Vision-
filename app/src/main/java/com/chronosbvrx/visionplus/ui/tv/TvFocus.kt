@@ -158,7 +158,15 @@ fun rememberReturnFocus(
         // OJO: aquí NO se avisa [onDone]: si el contenido sigue llegando, el efecto se
         // re-arma con la nueva [contentKey] y reintenta la tarjeta exacta; limpiar ahora
         // es lo que dejaba el foco en el héroe aunque la tarjeta llegara un segundo después.
-        val rescued = entryRequester != null && runCatching { entryRequester.requestFocus() }.isSuccess
+        val rescued = entryRequester != null && requestFocusSafely(entryRequester)
+        // Nada enfocado todavía y la tarjeta exacta no compuso (índice de fila viejo,
+        // contenido cambiado): la columna vuelve al inicio para que el destino de la
+        // pantalla (héroe) EXISTA. Sin esto, un regreso a una fila que ya no está dejaba
+        // el mando muerto sin que ni el rescate pudiera actuar (héroe descompuesto).
+        if (!FocusRescue.screenHasFocus && columnState != null) {
+            runCatching { columnState.scrollToItem(0) }
+            delay(80)
+        }
         if (!FocusRescue.screenHasFocus) landing.request()
         if (!FocusRescue.screenHasFocus) {
             com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(

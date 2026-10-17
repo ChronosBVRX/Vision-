@@ -315,6 +315,7 @@ fun TvHomeScreen(
         heroFilmId = featured?.film?.id,
         top10 = top10Films,
         premieres = estrenosFilms,
+        trending = trendingFilms,
         continueCards = continueCards,
         ownKindRows = ownKindRows,
         otherRows = otherRows,
@@ -754,15 +755,22 @@ private fun TvQuickHubCard(
 
 /**
  * Índice del `LazyColumn` del Inicio donde vive la tarjeta del regreso (-1 si no hay
- * regreso). Réplica exacta del orden de los `item`/`items` de la lista: billboard,
- * hubs, placeholders, Top 10, Estrenos, Seguir viendo, filas propias y resto.
- * Puro y testeable: con él, el regreso revela la fila verticalmente antes de pedir foco.
+ * regreso). Réplica exacta del orden de los `item`/`items` de la lista: billboard, hubs,
+ * placeholders, Top 10, Estrenos, Populares de la semana, Seguir viendo, filas propias y
+ * resto. Puro y testeable: con él, el regreso revela la fila verticalmente antes de pedir
+ * foco.
+ *
+ * OJO: cada fila que se agregue al `LazyColumn` del Inicio debe sumarse aquí en su MISMA
+ * posición; una fila olvidada corre el índice y el regreso revela/compone la fila
+ * equivocada (el foco cae lejos o el mando queda muerto) — pasó con «Populares de la
+ * semana», que llegó después de escribir esto.
  */
 internal fun homeReturnRowIndex(
     returnFilmId: String?,
     heroFilmId: String?,
     top10: List<Film>,
     premieres: List<Film>,
+    trending: List<Film>,
     continueCards: List<ResumeCard>,
     ownKindRows: List<CatalogRow>,
     otherRows: List<CatalogRow>,
@@ -777,6 +785,8 @@ internal fun homeReturnRowIndex(
     if (top10.isNotEmpty()) index += 1
     if (premieres.any { it.id == returnFilmId }) return index
     if (premieres.isNotEmpty()) index += 1
+    if (trending.any { it.id == returnFilmId }) return index
+    if (trending.isNotEmpty()) index += 1
     if (continueCards.any { it.film?.id == returnFilmId || it.entry.key == returnFilmId || it.entry.xtvCode == returnFilmId }) return index
     if (continueCards.isNotEmpty()) index += 1
     for (row in ownKindRows) {
@@ -796,17 +806,18 @@ private fun rememberReturnRowIndex(
     heroFilmId: String?,
     top10: List<Film>,
     premieres: List<Film>,
+    trending: List<Film>,
     continueCards: List<ResumeCard>,
     ownKindRows: List<CatalogRow>,
     otherRows: List<CatalogRow>,
     showPlaceholders: Boolean,
     showNoRows: Boolean,
 ): Int = remember(
-    returnFilmId, heroFilmId, top10, premieres, continueCards, ownKindRows, otherRows,
+    returnFilmId, heroFilmId, top10, premieres, trending, continueCards, ownKindRows, otherRows,
     showPlaceholders, showNoRows,
 ) {
     homeReturnRowIndex(
-        returnFilmId, heroFilmId, top10, premieres, continueCards,
+        returnFilmId, heroFilmId, top10, premieres, trending, continueCards,
         ownKindRows, otherRows, showPlaceholders, showNoRows,
     )
 }

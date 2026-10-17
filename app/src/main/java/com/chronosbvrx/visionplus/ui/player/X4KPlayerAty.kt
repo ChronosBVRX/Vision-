@@ -283,6 +283,7 @@ class X4KPlayerAty : ComponentActivity() {
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        residentInstance = this
         // Identidad del portal en este proceso (:x4k tiene su propia memoria).
         com.chronosbvrx.visionplus.data.xuper.X4KApi.initSlots(this)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
@@ -4738,6 +4739,7 @@ class X4KPlayerAty : ComponentActivity() {
 
     override fun onDestroy() {
         isPlayerActive = false
+        if (residentInstance === this) residentInstance = null
         // Con commit: el proceso se mata al salir y el apply podría no alcanzar a escribir.
         saveHistory(immediate = true)
         handler.removeCallbacksAndMessages(null)
@@ -4760,5 +4762,20 @@ class X4KPlayerAty : ComponentActivity() {
 
         @Volatile
         var isPlayerActive = false
+
+        /** La actividad residente viva (una sola): la salida de la app la cierra con su tarea. */
+        @Volatile
+        private var residentInstance: X4KPlayerAty? = null
+
+        /**
+         * El proceso principal pidió salir de la app: si el reproductor residente sigue
+         * vivo, se cierra aquí mismo (su tarea desaparece y el proceso se apaga con él al
+         * terminarse la actividad). Sin residencia no hay nada que hacer.
+         */
+        internal fun finishResidentForExit() {
+            val activity = residentInstance ?: return
+            Log.i(TAG, "salida de la app: cerrando el reproductor residente")
+            runCatching { activity.finishAndRemoveTask() }
+        }
     }
 }
