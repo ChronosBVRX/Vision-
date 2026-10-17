@@ -87,4 +87,49 @@ class GeeGuideTest {
         val out = GeeGuide.channelsFor(listOf("Fox Sports"), withGeneral)
         assertEquals("FOX SPORTS 1 MX", out.single().title)
     }
+
+    @Test
+    fun duplicateGuideEntriesResolveToASingleChannel() {
+        // «Canal 5» y «Canal 5 Televisa» son entradas distintas de la parrilla que
+        // caen en el MISMO canal: sin dedupe el modal repetía clave y tumbaba la
+        // pantalla (IllegalArgumentException).
+        val out = GeeGuide.channelsFor(listOf("Canal 5", "Canal 5 Televisa"), groups)
+        assertEquals(1, out.size)
+        assertEquals("Canal 5", out.single().title)
+    }
+
+    @Test
+    fun espnAndEspnPlusDoNotDuplicateTheSameChannel() {
+        val withEspn = groups + group("ESPN", link("ESPN"))
+        val out = GeeGuide.channelsFor(listOf("ESPN", "ESPN+"), withEspn)
+        assertEquals(1, out.size)
+        assertEquals("ESPN", out.single().title)
+    }
+
+    @Test
+    fun foxOneAndFoxSportsDoNotDuplicateTheSameChannel() {
+        val withOne = groups + group("Nuevos", link("FOX ONE"))
+        val out = GeeGuide.channelsFor(listOf("FOX One", "Fox Sports"), withOne)
+        val titles = out.map { it.title }
+        assertEquals("sin repetir señal: $titles", titles.size, titles.distinct().size)
+    }
+
+    @Test
+    fun distinctChannelsSurviveTheDedupe() {
+        val out = GeeGuide.channelsFor(listOf("TUDN", "Azteca 7"), groups)
+        assertEquals(listOf("TUDN MX", "Azteca 7"), out.map { it.title })
+    }
+
+    @Test
+    fun dedupeKeepsTheBestScoreForTheSameChannel() {
+        val base = GeeGuide.TvOption(
+            guideName = "Canal 5",
+            title = "Canal 5",
+            link = link("Canal 5"),
+            score = 100,
+        )
+        val out = GeeGuide.dedupeOptions(listOf(base, base.copy(score = 155)))
+        assertEquals(1, out.size)
+        assertEquals(155, out.single().score)
+    }
 }

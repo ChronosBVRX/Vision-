@@ -90,6 +90,14 @@ internal enum class PlayerExitAction {
 internal fun exitActionFor(hardReset: Boolean): PlayerExitAction =
     if (hardReset) PlayerExitAction.FINISH_AND_RELAUNCH else PlayerExitAction.HIDE_RESIDENT
 
+/**
+ * El reproductor residente ya salió (`exiting = true`) y la actividad vuelve a
+ * primer plano SIN reproducción: no puede quedarse en un fondo negro sin salida.
+ * En ese estado Atrás (y el propio regreso al frente) deben cerrar la tarea.
+ */
+internal fun shouldFinishIdleResidentOnExit(exiting: Boolean, isPlayerActive: Boolean): Boolean =
+    exiting && !isPlayerActive
+
 internal enum class LiveDpadAction {
     LIST_NAVIGATION,
     SHOW_NAVIGATION,

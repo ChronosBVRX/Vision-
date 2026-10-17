@@ -1,14 +1,28 @@
 package com.chronosbvrx.visionplus.ui
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import com.chronosbvrx.visionplus.data.xuper.X4KWarmupReceiver
 
 /** Ventana del «dos veces Atrás»: el segundo toque dentro de este tiempo cierra la app. */
 internal const val BACK_EXIT_WINDOW_MS = 2_500L
+
+/** Clase real de la actividad del reproductor residente (tarea aparte, proceso :x4k). */
+internal const val PLAYER_ACTIVITY_CLASS = "com.chronosbvrx.visionplus.ui.player.X4KPlayerAty"
+
+/**
+ * ¿Esta tarea es la del reproductor residente? (por base o por tope). Puro y
+ * probado: cerrar el reproductor al salir no puede depender de adivinar por el
+ * proceso — un proceso vivo puede no tener tarea y una tarea puede sobrevivir a
+ * la muerte del proceso.
+ */
+internal fun isPlayerTask(baseClass: String?, topClass: String?): Boolean =
+    baseClass == PLAYER_ACTIVITY_CLASS || topClass == PLAYER_ACTIVITY_CLASS
 
 /**
  * Política pura del cierre con confirmación (probada): el primer Atrás de la pantalla
@@ -38,21 +52,46 @@ private fun x4kAlive(context: Context): Boolean = runCatching {
 }.getOrDefault(false)
 
 /**
+ * Intenta cerrar la tarea del reproductor residente desde el proceso principal
+ * (`AppTask`). Best-effort: en algunos equipos la tarea queda fuera de `getAppTasks`
+ * por `excludeFromRecents`; ahí siguen el broadcast y la red de seguridad del
+ * propio reproductor (se cierra solo si vuelve al frente sin reproducción).
+ */
+private fun finishPlayerTasks(context: Context): Boolean {
+    val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+    var closed = false
+    val tasks = runCatching { am.appTasks }.getOrNull().orEmpty()
+    for (task in tasks) {
+        val info = runCatching { task.taskInfo }.getOrNull() ?: continue
+        if (!isPlayerTask(info.baseActivity?.className, info.topActivity?.className)) continue
+        runCatching { task.finishAndRemoveTask() }
+            .onSuccess { closed = true }
+            .onFailure { Log.w("ExitFlow", "no se pudo cerrar la tarea del reproductor: ${it.message}") }
+    }
+    return closed
+}
+
+/**
  * Salida real de la app desde la pantalla principal (segundo Atrás):
  *
- *  1. Si el reproductor residente sigue vivo (el proceso `:x4k` guarda su actividad con
- *     tarea propia), se le pide cerrarse: sin eso el sistema traería ESA tarea al frente
- *     al soltar la principal — el «cae en el reproductor de nuevo» del reporte, del que
- *     ya no se salía con Atrás.
- *  2. Recién entonces se suelta la tarea principal (`finishAndRemoveTask`): la casa queda
+ *  1. Se intenta cerrar la tarea del reproductor residente DESDE AQUÍ (`AppTask`): no se
+ *     depende de que un proceso `:x4k` congelado (los ANR de la tele lo mostraban) alcance
+ *     a procesar un broadcast. Sin esa tarea, el sistema no puede traerla al frente al
+ *     soltar la principal — el «cae en el reproductor de nuevo» del reporte, del que ya
+ *     no se salía con Atrás.
+ *  2. Si el sistema no deja ver la tarea, se le pide cerrarse por broadcast y se le da un
+ *     instante (tope 700 ms); el reproductor, además, se cierra solo si vuelve al frente
+ *     sin reproducción.
+ *  3. Recién entonces se suelta la tarea principal (`finishAndRemoveTask`): la casa queda
  *     al frente, como cualquier app que se cierra.
- *
- * Si `:x4k` no está vivo la salida es instantánea; si está vivo, se le da un instante
- * (tope 700 ms) para soltar su tarea antes de cerrar (el proceso muere solo al cerrar su
- * actividad, liberando el motor).
  */
 internal fun exitAppCleanly(activity: Activity) {
     val app = activity.applicationContext
+    if (finishPlayerTasks(app)) {
+        Log.i("ExitFlow", "tarea del reproductor cerrada antes de salir")
+        activity.finishAndRemoveTask()
+        return
+    }
     if (!x4kAlive(app)) {
         activity.finishAndRemoveTask()
         return

@@ -4226,7 +4226,16 @@ class X4KPlayerAty : ComponentActivity() {
     }
 
     private fun exitPlayer() {
-        if (exiting) return
+        if (exiting) {
+            // La actividad residente no debe encerrar a nadie: si vuelve a primer plano
+            // sin reproducción (el caso del fondo negro), Atrás cierra su tarea. Antes
+            // esta bandera hacía que Atrás fuera un no-op silencioso para siempre.
+            if (shouldFinishIdleResidentOnExit(exiting, isPlayerActive)) {
+                Log.i(TAG, "reproductor residente sin reproducción: cerrando la tarea")
+                runCatching { finishAndRemoveTask() }
+            }
+            return
+        }
         exiting = true
         // Con el motor todavía vivo: al detenerlo la posición se pierde y el cierre guardaba
         // un minuto viejo (o nada). El commit deja el avance exacto antes de soltar el motor.
@@ -4525,6 +4534,15 @@ class X4KPlayerAty : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Red de seguridad del «Camino B»: la actividad se queda residente detrás, pero
+        // si el sistema la trae al frente cuando YA no hay reproducción (salida normal,
+        // proceso :x4k congelado o tarea huérfana) se cierra sola. Jamás un fondo negro
+        // sin controles ni salida.
+        if (!isPlayerActive) {
+            Log.i(TAG, "reproductor residente sin reproducción al volver al frente: se cierra")
+            runCatching { finishAndRemoveTask() }
+            return
+        }
         applyImmersiveMode()
     }
 

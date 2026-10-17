@@ -77,7 +77,25 @@ object GeeGuide {
             }
             if (best != null) out.add(best)
         }
-        return out
+        return dedupeOptions(out)
+    }
+
+    /**
+     * Un solo elemento por canal (`title` + enlace). Dos entradas de la guía que
+     * son marcas distintas pero resuelven al MISMO canal —«ESPN» y «ESPN+»,
+     * «Canal 5» y «Canal 5 Televisa», «FOX One» y «Fox Sports»— producían dos
+     * tarjetas idénticas y el `LazyColumn` del selector reventaba con
+     * `IllegalArgumentException` al medir (clave repetida). Se conserva la
+     * primera posición y, si aparece otra igual, la de mejor puntuación.
+     */
+    internal fun dedupeOptions(options: List<TvOption>): List<TvOption> {
+        val best = LinkedHashMap<Pair<String, String>, TvOption>(options.size)
+        for (option in options) {
+            val key = option.title to option.link.link
+            val current = best[key]
+            if (current == null || option.score > current.score) best[key] = option
+        }
+        return best.values.toList()
     }
 
     private fun directBrandMatches(query: SportsLinker.BrandInfo, title: String): Boolean {

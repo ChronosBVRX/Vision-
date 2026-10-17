@@ -1,6 +1,8 @@
 package com.chronosbvrx.visionplus.ui.player
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -19,5 +21,23 @@ class ResidentPlayerTest {
     @Test
     fun exitActionFinishesAndRelaunchesOnlyForTheSelfHealReset() {
         assertEquals(PlayerExitAction.FINISH_AND_RELAUNCH, exitActionFor(hardReset = true))
+    }
+
+    @Test
+    fun exitingAndIdleMustFinishTheTaskInsteadOfStayingBlack() {
+        // El caso reportado: el residente vuelve al frente sin reproducción y Atrás
+        // era un no-op. Debe cerrar la tarea.
+        assertTrue(shouldFinishIdleResidentOnExit(exiting = true, isPlayerActive = false))
+    }
+
+    @Test
+    fun exitingWhilePlayingDoesNotForceFinish() {
+        assertFalse(shouldFinishIdleResidentOnExit(exiting = true, isPlayerActive = true))
+    }
+
+    @Test
+    fun firstExitIsNeverForcedToFinish() {
+        assertFalse(shouldFinishIdleResidentOnExit(exiting = false, isPlayerActive = false))
+        assertFalse(shouldFinishIdleResidentOnExit(exiting = false, isPlayerActive = true))
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -293,7 +294,9 @@ internal fun TvGeeLinkPickDialog(
                                         modifier = Modifier.padding(bottom = 2.dp),
                                     )
                                 }
-                                items(geeTv, key = { "tv_" + it.title + "|" + it.link.link }) { option ->
+                                // Clave con índice: el dedupe de la guía ya evita repetidos, pero
+                                // una clave duplicada JAMÁS debe tumbar la pantalla (LazyColumn).
+                                itemsIndexed(geeTv, key = { index, option -> "tv_${index}_${option.link.link}" }) { _, option ->
                                     TvGeeTvChannelItem(
                                         option = option,
                                         onClick = {
@@ -312,7 +315,7 @@ internal fun TvGeeLinkPickDialog(
                                         modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
                                     )
                                 }
-                                items(links, key = { it.name + "|" + it.link }) { link ->
+                                itemsIndexed(links, key = { index, link -> "link_${index}_${link.link}" }) { _, link ->
                                     TvGeeLinkItem(
                                         link = link,
                                         fallbackTitle = title,
