@@ -33,6 +33,10 @@
 - **185 pruebas backend** en verde (sin cambios de servidor en este lote).
 - Build release con R8 y **firma histórica `9593cb0d…`**, versionCode 331.
 - Prueba en emulador móvil (2.5.95 instalado encima): arranque, Deportes en vivo con datos
-  reales, selector de transmisiones abierto sin crash; reproducción normal.
+  reales (57 eventos) y el selector de transmisiones abierto sin crash —incluida la guía
+  `ESPN Deportes · ESPN+ · ESPN` que tumbaba la 2.5.93—. Nota de la prueba: en este
+  emulador x86_64 con traducción ARM el motor nativo aborta al detenerse (limitación del
+  entorno, no del APK); en equipos físicos el cierre del reproductor se comporta como
+  siempre (residente y reutilización intactas).
 
 — ChronosBVRX
