@@ -29,6 +29,7 @@ import logging
 import os
 import re
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -59,7 +60,9 @@ PROBE_BYTES = 800
 
 # Cuántos eventos reciben enlaces frescos por ciclo (priorizados por cercanía:
 # hoy/mañana primero). Los demás conservan los enlaces del ciclo anterior.
-EVENTS_LINKS_MAX = 160
+# Con el catálogo actual (~220 eventos) el presupuesto los cubre a todos: cada
+# partido que la app puede mostrar sale con su lista de enlaces recién bajada.
+EVENTS_LINKS_MAX = 320
 
 
 # ----------------------------------------------------------------------------
@@ -428,11 +431,10 @@ _ALIVE_ORDER = {True: 0, None: 1, False: 2}
 
 
 def _sort_links(links: list[dict]) -> list[dict]:
-    """Vivos primero, en duda en medio, caídos al final (la app toma el primero)."""
-    return sorted(
-        links,
-        key=lambda lk: (_ALIVE_ORDER.get(lk.get("alive"), 1), str(lk.get("name", ""))),
-    )
+    """Vivos primero, en duda en medio, caídos al final — conservando el orden de
+    origen dentro de cada grupo (el CMS publica su mejor opción primero y los
+    hermanos del mismo cruce entran por cercanía: la app toma el primero)."""
+    return sorted(links, key=lambda lk: _ALIVE_ORDER.get(lk.get("alive"), 1))
 
 
 # ----------------------------------------------------------------------------
@@ -575,6 +577,68 @@ def _event_rank(ev: dict, today: date) -> tuple:
     return (0 if ev["visible"] else 1, dist, ev["event"])
 
 
+def _norm_team(text: str) -> str:
+    """Nombre de equipo comparable: sin tildes, minúsculas, sin signos."""
+    lowered = unicodedata.normalize("NFD", (text or "").lower())
+    lowered = "".join(c for c in lowered if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^a-z0-9]+", " ", lowered).strip()
+
+
+def _team_pair_key(team_a: str, team_b: str) -> str:
+    """El cruce (par de equipos, sin importar el orden); vacío si no hay par real."""
+    a, b = _norm_team(team_a), _norm_team(team_b)
+    if not a or not b or a == b:
+        return ""
+    return "|".join(sorted((a, b)))
+
+
+def _day_distance(day: str, other: str) -> int:
+    try:
+        return abs((date.fromisoformat(day) - date.fromisoformat(other)).days)
+    except ValueError:
+        return 999
+
+
+def _merge_sibling_links(
+    own: list[dict],
+    own_day: str,
+    siblings: list[tuple[str, list[dict]]],
+    cap: int = 18,
+) -> list[dict]:
+    """Une los enlaces del MISMO cruce (el CMS publica varias entradas por partido).
+
+    Visto en vivo: la entrada «de hoy» de un partido traía UN enlace muerto
+    (Everton-Chelsea 17-oct) mientras su hermana viva/visible (13-oct) traía la
+    lista completa con 6 vivos — la app original enseña esa lista. Aquí se fusionan:
+    primero los propios (el día correcto), luego los hermanos por cercanía de fecha
+    y cantidad de vivos; sin duplicados por URL, listos para el selector.
+    """
+    best: dict[str, dict] = {}
+
+    def add(link: dict) -> None:
+        url = str(link.get("url") or link.get("link") or "").strip()
+        if not url:
+            return
+        prev = best.get(url)
+        # El propio manda; un hermano solo pisa si está vivo y el propio no.
+        if prev is None or (link.get("alive") and not prev.get("alive")):
+            best[url] = link
+
+    for link in own:
+        add(link)
+    ordered = sorted(
+        siblings,
+        key=lambda item: (
+            _day_distance(item[0], own_day),
+            -sum(1 for lk in item[1] if lk.get("alive")),
+        ),
+    )
+    for _day, links in ordered:
+        for link in links:
+            add(link)
+    return _sort_links(list(best.values()))[:cap]
+
+
 async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
     events = parse_events(decrypt_body(await _fetch_async("events.txt"), key))
     today = date.today()
@@ -594,6 +658,17 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
     fresh_budget = EVENTS_LINKS_MAX
     seen_ids: list[str] = []
     written = 0
+    # Hermanos del mismo cruce (mismo par de equipos, cualquier fecha): con sus
+    # enlaces guardados se completa la lista del partido cuando su propia entrada
+    # viene pobre (un enlace muerto) y la buena vive en otra entrada.
+    pair_links: dict[str, list[tuple[str, list[dict]]]] = {}
+    for value in old.values():
+        pair = _team_pair_key(value.get("team_a", ""), value.get("team_b", ""))
+        if not pair:
+            continue
+        stored = [lk for lk in (value.get("links") or []) if isinstance(lk, dict)]
+        if stored:
+            pair_links.setdefault(pair, []).append((str(value.get("date_iso") or ""), stored))
     for ev in sorted(events, key=lambda e: _event_rank(e, today)):
         eid = _event_id(ev)
         seen_ids.append(eid)
@@ -605,14 +680,21 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
                 links = parse_pro(decrypt_body(await _fetch_async(ev["links_ref"]), key))
                 fresh_budget -= 1
                 fetched = True
-                if ev["date_iso"] in window_str:
-                    await _probe_many(links)
             except Exception as exc:  # noqa: BLE001
                 log.warning("gee38: evento %s sin enlaces (%s)", ev["event"][:40], exc)
         if not fetched:
             # Sin presupuesto este ciclo: conserva los enlaces del ciclo anterior.
             links = (old.get(eid) or {}).get("links") or []
-        links = _sort_links(links)
+        pair = _team_pair_key(ev.get("team_a", ""), ev.get("team_b", ""))
+        if pair and pair_links.get(pair):
+            links = _merge_sibling_links(links, str(ev.get("date_iso") or ""), pair_links[pair])
+        else:
+            links = _sort_links(links)
+        # El sondeo va sobre la lista FINAL (hermanos incluidos): los badges de
+        # «EN VIVO / Caído» que ve el usuario son del momento, no de hace días.
+        if links and ev["date_iso"] in window_str:
+            await _probe_many(links)
+            links = _sort_links(links)
         payload = {k: v for k, v in ev.items() if k != "idx"}
         # El id estable VIAJA en el payload: la app lo usa como clave de lista (LazyColumn).
         # Sin él, el respaldo por nombre|fecha|hora colisionaba entre partidos distintos
@@ -634,6 +716,39 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
                 json.dumps(payload, ensure_ascii=False),
             )
         written += 1
+    # Segunda pasada: eventos de la ventana que NO vinieron en este ciclo (el CMS rota
+    # sus archivos: una entrada puede desaparecer un rato y volver). Se re-fusionan sus
+    # hermanos y se sondean sus enlaces para que los badges «EN VIVO / Caído» que ve el
+    # usuario sigan siendo del momento (y la tarjeta no quede con un solo enlace muerto).
+    seen = set(seen_ids)
+    extra_budget = 80
+    for eid, value in old.items():
+        if extra_budget <= 0:
+            break
+        if eid in seen:
+            continue
+        day = str(value.get("date_iso") or "")
+        if day not in window_str:
+            continue
+        links = [lk for lk in (value.get("links") or []) if isinstance(lk, dict)]
+        # Aunque la entrada venga vacía, sus hermanos del mismo cruce la completan:
+        # primero se fusiona y luego se sondea el conjunto final.
+        pair = _team_pair_key(value.get("team_a", ""), value.get("team_b", ""))
+        if pair and pair_links.get(pair):
+            links = _merge_sibling_links(links, day, pair_links[pair])
+        if not links:
+            continue
+        await _probe_many(links)
+        links = _sort_links(links)
+        value["links"] = links
+        value["alive"] = sum(1 for lk in links if lk.get("alive"))
+        value["total"] = len(links)
+        extra_budget -= 1
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "update gee38_catalog set payload = $2::jsonb, updated_at = now() where id = $1",
+                eid, json.dumps(value, ensure_ascii=False),
+            )
     async with pool.acquire() as conn:
         unique_seen = list(dict.fromkeys(seen_ids))
         stored_events = len(old)

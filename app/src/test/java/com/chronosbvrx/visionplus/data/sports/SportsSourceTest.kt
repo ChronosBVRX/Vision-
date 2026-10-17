@@ -79,6 +79,31 @@ class SportsSourceTest {
         assertEquals("2027-01-01", SportsSource.shift("2026-12-31", 1))
     }
 
+    private fun utcMs(iso: String): Long =
+        java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+            .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+            .parse(iso)!!
+            .time
+
+    @Test
+    fun dayMathFollowsMexicoCentralEvenOnOtherTimezones() {
+        // La agenda (servidor y chips «Hoy/Mañana») vive en el centro de México: a las
+        // 02:00 UTC del día 18 en el centro todavía es 20:00 del 17.
+        assertEquals("2026-10-17", SportsSource.todayIso(utcMs("2026-10-18T02:00:00")))
+        assertEquals("2026-10-18", SportsSource.todayIso(utcMs("2026-10-18T07:00:00")))
+        // Y el corte de día cae a las 06:00 UTC (medianoche del centro, UTC−6 en octubre).
+        assertEquals("2026-10-17", SportsSource.todayIso(utcMs("2026-10-18T05:59:59")))
+        assertEquals("2026-10-18", SportsSource.todayIso(utcMs("2026-10-18T06:00:01")))
+    }
+
+    @Test
+    fun kickoffLabelFollowsMexicoCentral() {
+        // 01:00 UTC del 18 = 19:00 del 17 en la Ciudad de México.
+        assertEquals("19:00", SportsSource.timeLabel(utcMs("2026-10-18T01:00:00")))
+        assertEquals("07:30", SportsSource.timeLabel(utcMs("2026-10-17T13:30:00")))
+        assertEquals("", SportsSource.timeLabel(0L))
+    }
+
     @Test
     fun byLeagueGroupingHandlesEmptyAndMultipleLeagues() {
         val matches = listOf(

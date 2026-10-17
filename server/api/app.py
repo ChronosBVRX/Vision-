@@ -907,11 +907,26 @@ async def gee38_events(
     today = date.today()
     near = {(today + timedelta(days=delta)).isoformat() for delta in range(-1, 8)}
     links_by_match: dict[str, list[dict]] = {}
+    # TODOS los enlaces del cruce (mismo par de equipos, cualquier fecha): el CMS
+    # publica varias entradas por partido y la lista completa puede vivir en otra
+    # («Everton vs Chelsea»: la de hoy traía 1 enlace muerto; su hermana visible
+    # traía 10 con 6 vivos — la app original enseña esa lista). Aquí se fusionan
+    # también en el API para que la tarjeta del calendario nunca salga pobre.
+    pair_links: dict[str, list[dict]] = {}
     out: list[dict] = []
     for event in events:
         category = (event.get("category") or "").strip().lower()
         if category not in GEE_ALLOWED_SPORTS:
             continue
+        pair = _gee_pair_key(event.get("team_a", ""), event.get("team_b", ""))
+        if pair:
+            bucket = pair_links.setdefault(pair, [])
+            known = {link.get("url") or link.get("link") for link in bucket}
+            for link in event.get("links") or []:
+                key = link.get("url") or link.get("link")
+                if key and key not in known:
+                    bucket.append(link)
+                    known.add(key)
         is_football = category == "football"
         match = _gee_find_match(event, entries) if is_football else None
         if match is not None:
@@ -939,7 +954,27 @@ async def gee38_events(
             continue
         if _gee_date_of(match.get("kickoff")) not in near:
             continue
-        out.append(_gee_match_card(match, links_by_match.get(str(match.get("id") or ""), [])))
+        match_id = str(match.get("id") or "")
+        card_links = list(links_by_match.get(match_id, []))
+        home = (match.get("home") or {}).get("name") or ""
+        away = (match.get("away") or {}).get("name") or ""
+        extra = pair_links.get(_gee_pair_key(home, away), [])
+        if extra:
+            # Sin duplicados por URL; si la copia del cruce viene sondeada y la primera
+            # no, se queda la sondeada (los badges de la app son del momento).
+            index = {(link.get("url") or link.get("link")): i for i, link in enumerate(card_links)}
+            for link in extra:
+                key = link.get("url") or link.get("link")
+                if not key:
+                    continue
+                previous = index.get(key)
+                if previous is None:
+                    index[key] = len(card_links)
+                    card_links.append(link)
+                elif card_links[previous].get("alive") is None and link.get("alive") is not None:
+                    card_links[previous] = link
+        card_links.sort(key=_gee_link_rank)  # vivos primero (estable dentro del grupo)
+        out.append(_gee_match_card(match, card_links))
     # Una tarjeta por id: la app las pinta con `key = id` y un duplicado revienta la lista.
     deduped: list[dict] = []
     seen_ids: set[str] = set()
@@ -1157,6 +1192,26 @@ def _gee_enrich_event(event: dict, entries: list[tuple]) -> dict:
 def _gee_date_of(iso: str | None) -> str:
     value = _gee_dt(iso)
     return value.date().isoformat() if value else ""
+
+
+def _gee_pair_key(team_a: str, team_b: str) -> str:
+    """Clave del cruce (par de equipos, sin importar el orden); vacía si no hay par.
+
+    El CMS publica VARIAS entradas por partido («Everton vs Chelsea» del 17-oct con
+    1 enlace muerto y la del 13-oct —visible— con 10, 6 vivos): la lista buena puede
+    vivir en otra entrada del mismo cruce, así que se agrupan por esta clave."""
+    a, b = _fold(team_a), _fold(team_b)
+    if not a or not b or a == b:
+        return ""
+    return "|".join(sorted((a, b)))
+
+
+_ALIVE_RANK = {True: 0, None: 1, False: 2}
+
+
+def _gee_link_rank(link: dict) -> int:
+    """Vivos primero (el orden se conserva dentro de cada grupo: estable)."""
+    return _ALIVE_RANK.get(link.get("alive"), 1)
 
 
 # Familias de cadena: señales hermanas que sí pueden traer el mismo partido

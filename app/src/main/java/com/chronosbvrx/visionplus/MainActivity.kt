@@ -120,6 +120,15 @@ class MainActivity : ComponentActivity() {
                     val catalog = remember { XuperCatalog(this@MainActivity) }
                     val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
 
+                    // El reloj del menú (móvil y TV): hora del centro de México en toda la
+                    // navegación. Se apaga en los reproductores (ahí manda el contenido) y en
+                    // el buscador (el teclado ocupa la parte superior).
+                    val clockRoute = navigator.current
+                    val showClock = !needsActivation &&
+                        clockRoute !is Route.Player &&
+                        clockRoute !is Route.LivePlayer &&
+                        clockRoute !is Route.Search
+
                     // Salida con confirmación desde la pantalla principal: el primer Atrás
                     // avisa («presiona de nuevo»), el segundo dentro de la ventana cierra la
                     // app de verdad — llevándose al reproductor residente para que el sistema
@@ -224,6 +233,16 @@ class MainActivity : ComponentActivity() {
                                     color = Color.White,
                                 )
                             }
+                        }
+                        // El reloj de la casa, arriba al centro de TODO el menú: hora del
+                        // centro de México, sin foco (el D-pad nunca cae en él).
+                        if (showClock) {
+                            com.chronosbvrx.visionplus.ui.VisionClockBadge(
+                                isTv = isTv,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = if (isTv) 14.dp else 56.dp),
+                            )
                         }
                     }
                 }

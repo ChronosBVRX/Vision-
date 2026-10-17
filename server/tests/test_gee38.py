@@ -174,7 +174,7 @@ def test_parse_events_tolerates_bad_dates():
     assert out[0]["date_iso"] is None
 
 
-def test_sort_links_puts_alive_first_and_dead_last():
+def test_sort_links_puts_alive_first_and_keeps_origin_order():
     links = [
         {"name": "muerto", "alive": False},
         {"name": "vivo2", "alive": True},
@@ -182,7 +182,57 @@ def test_sort_links_puts_alive_first_and_dead_last():
         {"name": "vivo1", "alive": True},
     ]
     out = gee38._sort_links(links)
-    assert [lk["name"] for lk in out] == ["vivo1", "vivo2", "duda", "muerto"]
+    # Vivos primero (conservando su orden de origen: el CMS publica el mejor primero),
+    # luego los de duda y al final los caídos.
+    assert [lk["name"] for lk in out] == ["vivo2", "vivo1", "duda", "muerto"]
+
+
+# ------------------------------------------- hermanos del mismo cruce (enlaces)
+
+def _lk(name, url, alive=None):
+    return {"name": name, "url": url, "link": url, "alive": alive, "type": "hls", "drm": "", "headers": {}}
+
+
+def test_team_pair_key_ignores_order_accents_and_signs():
+    assert gee38._team_pair_key("Atlético Madrid", "Espanyol") == gee38._team_pair_key("Espanyol", "Atl\u00e9tico  Madrid")
+    assert gee38._team_pair_key("Everton", "Chelsea") == "chelsea|everton"
+    assert gee38._team_pair_key("", "Chelsea") == ""
+    assert gee38._team_pair_key("X", "x") == ""
+
+
+def test_merge_sibling_links_completes_a_poor_list_with_the_live_sibling():
+    # El caso real (Everton-Chelsea 17-oct): la entrada de hoy traía UN enlace muerto;
+    # su hermana (13-oct) traía la lista completa con 6 vivos. Se fusionan y los vivos
+    # quedan primero: lo que la app original ya mostraba.
+    own = [_lk("STREAM TV + HD", "https://edgestream2.pro/hls/.m3u8", alive=False)]
+    sibling = [
+        _lk("TNT1UK SPORTS FHD", "https://otte/a", alive=True),
+        _lk("FUBO SPORTS FHD", "https://fubo/b", alive=True),
+    ]
+    out = gee38._merge_sibling_links(own, "2026-10-17", [("2026-10-13", sibling)])
+    assert [lk["url"] for lk in out] == ["https://otte/a", "https://fubo/b", "https://edgestream2.pro/hls/.m3u8"]
+
+
+def test_merge_sibling_links_prefers_own_and_never_duplicates():
+    own = [_lk("TV QUALITY", "https://a", alive=True)]
+    sibling = [_lk("TV QUALITY (viejo)", "https://a", alive=False), _lk("HD QUALITY", "https://b", alive=True)]
+    out = gee38._merge_sibling_links(own, "2026-10-17", [("2026-10-16", sibling)])
+    assert len(out) == 2
+    first = next(lk for lk in out if lk["url"] == "https://a")
+    assert first["name"] == "TV QUALITY" and first["alive"] is True
+
+
+def test_merge_sibling_links_orders_siblings_by_day_proximity():
+    near = [_lk("NEAR", "https://near", alive=True)]
+    far = [_lk("FAR", "https://far", alive=True)]
+    out = gee38._merge_sibling_links([], "2026-10-17", [("2026-10-05", far), ("2026-10-16", near)])
+    assert [lk["url"] for lk in out] == ["https://near", "https://far"]
+
+
+def test_merge_sibling_links_caps_the_selector():
+    many = [_lk(f"L{i}", f"https://x/{i}", alive=True) for i in range(30)]
+    out = gee38._merge_sibling_links([], "2026-10-17", [("2026-10-16", many)], cap=18)
+    assert len(out) == 18
 
 
 def test_parse_app_keeps_known_fields():
@@ -376,6 +426,47 @@ async def test_sync_events_writes_stable_ids_with_links(monkeypatch):
     assert prunes and "kind = 'event'" in prunes[0]
 
 
+@pytest.mark.anyio
+async def test_sync_events_second_pass_probes_window_rows_missing_from_the_file(monkeypatch):
+    # El CMS rota events.txt: una entrada puede desaparecer un rato. La fila guardada de
+    # un partido de la ventana se sondea igual (badges frescos) y se re-fusiona con sus
+    # hermanos del mismo cruce (la lista rica) — el caso real de Everton-Chelsea.
+    async def fake_fetch(path, timeout=25):
+        if path == "events.txt":
+            return encrypt_for_test(json.dumps([]).encode(), KEY)
+        raise AssertionError(path)
+
+    async def fake_probe_many(links):
+        for link in links:
+            link["alive"] = True
+
+    stale = {
+        "id": "event:stale", "category": "Football", "event": "Premier League",
+        "team_a": "Everton", "team_b": "Chelsea",
+        "date_iso": date.today().isoformat(), "time": "11:30:00",
+        "links": [{"name": "STREAM TV + HD", "url": "https://muerto", "link": "https://muerto", "alive": False}],
+    }
+    sibling = {
+        "id": "event:sib", "category": "Football", "event": "Premier League",
+        "team_a": "Chelsea", "team_b": "Everton", "date_iso": "2026-10-13", "time": "11:30:00",
+        "links": [{"name": "TNT1UK SPORTS FHD", "url": "https://vivo", "link": "https://vivo", "alive": None}],
+    }
+    pool = SyncPool(select_rows=[
+        {"id": "event:stale", "payload": stale},
+        {"id": "event:sib", "payload": sibling},
+    ])
+    monkeypatch.setattr(gee38, "_fetch_async", fake_fetch)
+    monkeypatch.setattr(gee38, "_probe_many", fake_probe_many)
+
+    await gee38._sync_events(pool, KEY, {})
+    updates = [args for sql, args in pool.executed if "update gee38_catalog" in sql]
+    assert updates, "la pasada extra debe actualizar la fila de la ventana"
+    payload = json.loads(updates[0][1])
+    urls = [lk["url"] for lk in payload["links"]]
+    assert "https://vivo" in urls and "https://muerto" in urls
+    assert payload["alive"] == 2 and payload["total"] == 2
+
+
 # ------------------------------------------------------------------ API
 
 import app as api_app  # noqa: E402  (conftest ya ajustó sys.path)
@@ -468,6 +559,64 @@ async def test_gee38_events_backfills_id_and_dedupes(monkeypatch):
     ids = [e["id"] for e in out["events"]]
     assert ids == ["event:aaa", "event:bbb"]
     assert len(set(ids)) == len(ids)
+
+
+@pytest.mark.anyio
+async def test_gee38_events_merges_links_of_the_same_fixture(monkeypatch):
+    # El caso real (Everton-Chelsea): la entrada del día traía 1 enlace muerto y su
+    # hermana —mismo cruce, otro día— la lista completa con los vivos. La tarjeta del
+    # calendario debe ofrecer TODAS las señales del cruce (lo que enseña su app),
+    # con los vivos primero.
+    day_event = json.dumps({
+        "id": "event:day", "category": "Football", "event": "Premier League",
+        "team_a": "Everton", "team_b": "Chelsea",
+        "date_iso": "2026-10-17", "time": "11:30:00",  # UTC → 05:30 MX
+        "links": [{"name": "STREAM TV + HD", "url": "https://muerto",
+                   "link": "https://muerto", "alive": False}],
+    })
+    sib_event = json.dumps({
+        "id": "event:sib", "category": "Football", "event": "Premier League",
+        "team_a": "Chelsea", "team_b": "Everton",  # mismo cruce, orden invertido
+        "date_iso": "2026-10-13", "time": "11:30:00",
+        "links": [
+            {"name": "TNT1UK SPORTS FHD", "url": "https://vivo1", "link": "https://vivo1", "alive": True},
+            {"name": "FUBO SPORTS FHD", "url": "https://vivo2", "link": "https://vivo2", "alive": True},
+        ],
+    })
+    fake = _FakePool(rows=[
+        {"id": "event:day", "payload": day_event},
+        {"id": "event:sib", "payload": sib_event},
+    ])
+    monkeypatch.setattr(api_app, "pool", fake)
+
+    async def fake_window(events):  # la agenda ESPN de la ventana
+        return [(
+            {
+                "id": "401878771", "league": {"id": "eng.1", "name": "Premier League", "logo": ""},
+                "home": {"name": "Everton", "logo": "", "score": None},
+                "away": {"name": "Chelsea", "logo": "", "score": None},
+                "kickoff": "2026-10-17T11:30:00+00:00", "status": "pre", "detail": "",
+                "broadcasts": ["TNT Sports"], "channels": [],
+            },
+            {"everton"}, {"chelsea"},
+            datetime(2026, 10, 17, 11, 30, tzinfo=timezone.utc),
+        )]
+
+    monkeypatch.setattr(api_app, "_gee_window_matches", fake_window)
+    out = await api_app.gee38_events(category=None, day="2026-10-17", days=0, x_api_key="test-key")
+    cards = [e for e in out["events"] if str(e.get("id")) == "espn:401878771"]
+    assert cards, "la tarjeta del calendario debe servirse"
+    urls = [lk["url"] for lk in cards[0]["links"]]
+    assert "https://vivo1" in urls and "https://vivo2" in urls and "https://muerto" in urls
+    assert urls.index("https://muerto") > urls.index("https://vivo1"), "los vivos van primero"
+    assert cards[0]["total"] == 3
+
+
+def test_gee_pair_key_normalizes_order_and_accents():
+    assert api_app._gee_pair_key("Everton", "Chelsea") == "chelsea|everton"
+    assert api_app._gee_pair_key("Atlético Madrid", "Espanyol") == api_app._gee_pair_key("Espanyol", "atletico  madrid")
+    assert api_app._gee_pair_key("Everton", "everton") == ""
+    assert api_app._gee_pair_key("", "Chelsea") == ""
 
 
 @pytest.mark.anyio

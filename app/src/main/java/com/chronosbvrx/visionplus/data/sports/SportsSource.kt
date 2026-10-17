@@ -115,12 +115,24 @@ object SportsSource {
 
     // ----- fechas -----
 
-    fun todayIso(): String = isoOf(Calendar.getInstance())
+    /**
+     * El horario de la casa para TODA la agenda: el centro de México (sin horario de
+     * verano desde 2022). El servidor agrupa los días y publica los horarios en esa
+     * zona; aquí los chips «Hoy/Mañana/…» se calculan igual aunque el equipo esté
+     * configurado en otra zona horaria.
+     */
+    private val MX_ZONE: TimeZone = TimeZone.getTimeZone("America/Mexico_City")
+
+    fun todayIso(nowMs: Long = System.currentTimeMillis()): String {
+        val cal = Calendar.getInstance(MX_ZONE)
+        cal.timeInMillis = nowMs
+        return isoOf(cal)
+    }
 
     /** El día `days` después de `dateIso` (negativo para atrás). */
     fun shift(dateIso: String, days: Int): String {
         val parts = dateIso.split("-")
-        val cal = Calendar.getInstance()
+        val cal = Calendar.getInstance(MX_ZONE)
         cal.clear()
         cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt())
         cal.add(Calendar.DAY_OF_MONTH, days)
@@ -137,10 +149,12 @@ object SportsSource {
 
     private fun weekdayLabel(dateIso: String): String {
         val parts = dateIso.split("-")
-        val cal = Calendar.getInstance()
+        val cal = Calendar.getInstance(MX_ZONE)
         cal.clear()
         cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt())
-        val day = SimpleDateFormat("EEE", Locale.forLanguageTag("es")).format(cal.time)
+        val day = SimpleDateFormat("EEE", Locale.forLanguageTag("es"))
+            .apply { timeZone = MX_ZONE }
+            .format(cal.time)
         return day.replaceFirstChar { it.uppercase() } + " " + parts[2].toInt()
     }
 
@@ -149,10 +163,12 @@ object SportsSource {
         cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH),
     )
 
-    /** La hora local de un kickoff ("21:00"); vacío si no hay fecha. */
+    /** La hora de un kickoff en el centro de México ("21:00"); vacío si no hay fecha. */
     fun timeLabel(kickoffMs: Long): String {
         if (kickoffMs <= 0) return ""
-        return SimpleDateFormat("HH:mm", Locale.getDefault()).format(kickoffMs)
+        return SimpleDateFormat("HH:mm", Locale.getDefault())
+            .apply { timeZone = MX_ZONE }
+            .format(kickoffMs)
     }
 
     // ----- json -----
