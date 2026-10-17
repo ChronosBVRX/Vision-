@@ -2,6 +2,8 @@
 
 Loop propio (como sports/epg): revisa los reportes que la app envía a `/v1/diag` y
   - huella nueva  -> alerta (webhook genérico o Telegram; si no hay config, log),
+  - huella ya avisada con reportes nuevos -> REINCIDENCIA (versión distinta / regresó
+    tras el autocierre / lleva 24 h repitiéndose),
   - huella sin reportes en RESOLVE_HOURS -> "resuelta" (autocierre).
 
 Las alertas van en dos capas: primero **qué pasó en lenguaje humano** (qué vio la
@@ -30,6 +32,16 @@ TG_CHAT = os.environ.get("DIAG_TELEGRAM_CHAT", "").strip()
 
 # Telegram corta en 4096 caracteres; se deja margen para no perder el envío.
 MAX_ALERT_CHARS = 3900
+
+# Si una huella ya alertada sigue reportándose MUCHO después en la misma versión,
+# se avisa de nuevo (una vez al día) para que el problema no pase inadvertido.
+NAG_HOURS = 24
+
+_REPEAT_TITLE = {
+    "regreso": "🔁 Regresó: un problema que ya se había cerrado volvió a reportarse",
+    "reincidencia": "🔁 Reincidencia: un problema conocido volvió a aparecer en otra versión",
+    "sigue": "🔁 Sigue ocurriendo: el mismo problema lleva un día reportándose en la misma versión",
+}
 
 _ANR_RX = re.compile(r"MAIN_BLOCKED_(\d+)s")
 
@@ -336,6 +348,11 @@ def _technical_lines(row, payload: dict) -> list[str]:
     lines = [
         "— Detalles técnicos —",
         f"tipo: {kind} · código: {code}",
+    ]
+    tech_message = str(payload.get("message") or "").strip()
+    if tech_message:
+        lines.append(f"mensaje: {_clip(tech_message, 300)}")
+    lines += [
         f"versión: {' · '.join(counts)}",
         f"huella: {fingerprint}",
     ]
@@ -351,7 +368,27 @@ def _technical_lines(row, payload: dict) -> list[str]:
     return lines
 
 
-def alert_text(row) -> str:
+def repeat_alert_reason(resolved_at, alert_version, latest_version, hours_since_alert: float) -> str | None:
+    """Decide si una huella YA alertada merece aviso de repetición (puro, testeable).
+
+    - «regreso»: la huella se había cerrado (autocierre a las 48 h) y vuelve a reportarse.
+    - «reincidencia»: reporta en una versión DIFERENTE de la avisada — el caso cruel:
+      el mismo bug reaparece (o llega a un equipo nuevo) y el bot se quedaba callado.
+    - «sigue»: lleva [NAG_HOURS] h o más reportándose en la misma versión.
+    - None: todavía no (mismo lote de reportes de siempre, versión sin cambios).
+    """
+    if resolved_at is not None:
+        return "regreso"
+    known_version = str(alert_version or "").strip()
+    latest = str(latest_version or "").strip()
+    if known_version and latest and known_version != latest:
+        return "reincidencia"
+    if hours_since_alert >= NAG_HOURS:
+        return "sigue"
+    return None
+
+
+def alert_text(row, headline: str | None = None) -> str:
     """Mensaje legible de una huella nueva (pura, testeable).
 
     Primero explica en lenguaje humano qué pasó y qué conviene revisar; después
@@ -362,7 +399,7 @@ def alert_text(row) -> str:
     code = str(_field(row, "code") or "").strip()
     payload = _payload_of(row)
 
-    lines = [_KIND_TITLE.get(kind, f"⚠️ Alerta nueva en Vision+: {kind}")]
+    lines = [headline or _KIND_TITLE.get(kind, f"⚠️ Alerta nueva en Vision+: {kind}")]
 
     if kind == "feedback":
         user_text = str(payload.get("detail") or "").strip()
@@ -398,6 +435,9 @@ def alert_text(row) -> str:
     elif kind == "crash":
         what, review = _crash_hint(code)
         lines.append(what)
+        system_message = str(payload.get("message") or "").strip()
+        if system_message:
+            lines.append(f"Mensaje: {_clip(system_message, 240)}")
         lines.append(f"👉 Qué revisar: {review}")
     else:
         what, review = _anomaly_hint(code)
@@ -418,6 +458,15 @@ def alert_text(row) -> str:
             lines.extend(f"· {frame}" for frame in frames)
 
     return _clip("\n".join(lines), MAX_ALERT_CHARS)
+
+
+def repeat_text(row, reason: str) -> str:
+    """Mensaje humano de una huella CONOCIDA que vuelve a reportarse.
+
+    Reutiliza [alert_text] con el titular de repetición («reincidencia», «regreso»,
+    «sigue») y conserva íntegras las dos capas: humano + técnico.
+    """
+    return alert_text(row, headline=_REPEAT_TITLE.get(reason, _REPEAT_TITLE["sigue"]))
 
 
 def resolved_text(row) -> str:
@@ -493,10 +542,64 @@ async def triage(pool) -> int:
         )
         for row in new_rows:
             await conn.execute(
-                "insert into diag_alert_state (fingerprint) values ($1) on conflict do nothing",
-                row["fingerprint"],
+                "insert into diag_alert_state (fingerprint, alert_version) values ($1, $2) on conflict do nothing",
+                row["fingerprint"], str(row["latest_version"] or ""),
             )
             await asyncio.to_thread(send_alert, alert_text(row))
+            sent += 1
+        # REINCIDENCIAS: reportes que llegaron DESPUÉS de la última alerta de una huella
+        # ya conocida. Antes el bot avisaba una sola vez y jamás repetía: así un bug
+        # fixed corría igual en una versión vieja (o en un equipo nuevo) sin que se
+        # supiera. Ahora avisa cuando (a) la huella estaba cerrada y regresó, (b) la
+        # versión cambió respecto de la avisada o (c) lleva 24 h repitiéndose.
+        repeats = await conn.fetch(
+            """
+            select r.fingerprint,
+                   (array_agg(r.kind order by r.created_at desc))[1] as kind,
+                   (array_agg(r.code order by r.created_at desc))[1] as code,
+                   (array_agg(r.app_version order by r.created_at desc))[1] as latest_version,
+                   (array_agg(r.device order by r.created_at desc))[1] as device,
+                   (array_agg(r.android order by r.created_at desc))[1] as android,
+                   (array_agg(r.payload order by r.created_at desc))[1] as payload,
+                   count(*) as hits,
+                   count(distinct r.device) as devices,
+                   to_char(max(r.created_at) at time zone 'America/Mexico_City',
+                           'DD/MM/YYYY HH24:MI') as last_seen,
+                   s.alert_version as alert_version,
+                   s.resolved_at as resolved_at,
+                   extract(epoch from (now() - s.alerted_at)) / 3600.0 as hours_since_alert
+            from diag_reports r
+            join diag_alert_state s on s.fingerprint = r.fingerprint
+            where r.created_at > s.alerted_at
+            group by r.fingerprint, s.alert_version, s.resolved_at, s.alerted_at
+            order by max(r.created_at) desc
+            """
+        )
+        for row in repeats:
+            reason = repeat_alert_reason(
+                row["resolved_at"], row["alert_version"],
+                str(row["latest_version"] or ""), float(row["hours_since_alert"] or 0.0),
+            )
+            if not reason:
+                # Huellas previas a la columna `alert_version`: se fija en silencio una vez
+                # para que a partir de aquí la escalación de versión sí compare.
+                if row["alert_version"] in (None, ""):
+                    await conn.execute(
+                        "update diag_alert_state set alert_version = $2 where fingerprint = $1",
+                        row["fingerprint"], str(row["latest_version"] or ""),
+                    )
+                continue
+            await asyncio.to_thread(send_alert, repeat_text(row, reason))
+            # La alerta se vuelve el universo nuevo: así cada rebrote avisa UNA vez y
+            # el autocierre a las 48 h vuelve a armar desde aquí.
+            await conn.execute(
+                """
+                update diag_alert_state
+                   set alerted_at = now(), alert_version = $2, resolved_at = null
+                 where fingerprint = $1
+                """,
+                row["fingerprint"], str(row["latest_version"] or ""),
+            )
             sent += 1
         # Un solo statement: se cierra y se devuelve el tipo/código para el mensaje humano,
         # sin ventana de carrera con un reporte que llegue en ese instante.

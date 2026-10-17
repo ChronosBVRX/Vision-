@@ -58,8 +58,14 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** How long the boot screen waits at most for the first catalogue answer. */
 private const val BOOT_CAP_MS = 9_000L
 
+/** A partir de este ms de arranque en frío se reporta `BOOT_SLOW` con los ms por fase. */
+private const val BOOT_SLOW_TRACE_MS = 6_000L
+
 class MainActivity : ComponentActivity() {
     private var isTv = false
+
+    /** Inicio del arranque en frío milisegundos de reloj estable (telemetría `BOOT_SLOW`). */
+    private var bootStartedMs = 0L
 
     /** El back stack vive aquí: la tarjeta del launcher entra como ruta desde el intent. */
     private val nav = Navigator(listOf(Route.Home))
@@ -87,6 +93,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        bootStartedMs = android.os.SystemClock.uptimeMillis()
         installSplashScreen()
         super.onCreate(savedInstanceState)
         // Identidad propia automática (cero códigos para el usuario): si el servidor
@@ -155,19 +162,33 @@ class MainActivity : ComponentActivity() {
                     // especial de Modo Sin Conexión sin esperar los 9 segundos de timeout de red.
                     LaunchedEffect(Unit) {
                         val minSplash = launch { delay(600L) }
+                        var hitCap = false
                         if (com.chronosbvrx.visionplus.data.offline.NetworkMonitor.refresh(this@MainActivity)) {
                             if (deepLinked) {
                                 // La tarjeta del launcher manda: el catálogo carga detrás, sin
                                 // hacer esperar a la película que la persona ya eligió.
                                 launch { runCatching { catalog.load() } }
                             } else {
-                                withTimeoutOrNull(BOOT_CAP_MS) {
+                                hitCap = withTimeoutOrNull(BOOT_CAP_MS) {
                                     catalog.load()
-                                }
+                                } == null
                             }
                         }
                         minSplash.join()
                         bootReady = true
+                        // Telemetría del arranque en frío: si abrir el Inicio tardó más de lo
+                        // justo se reporta con los ms de cada fase (el diagnóstico aclarará si
+                        // la lentitud es del arranque del sistema o de nuestra carga). El
+                        // handicap del reloj: el primer frame del splash ya contaba.
+                        val bootMs = android.os.SystemClock.uptimeMillis() - bootStartedMs
+                        if (bootMs > BOOT_SLOW_TRACE_MS) {
+                            runCatching {
+                                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                                    "BOOT_SLOW",
+                                    "bootMs=$bootMs hitCap=$hitCap ${catalog.lastLoadTimings.take(300)}",
+                                )
+                            }
+                        }
                         if (com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.value) {
                             launch(kotlinx.coroutines.Dispatchers.IO) {
                                 delay(4_000L)

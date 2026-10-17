@@ -190,6 +190,7 @@ create table if not exists diag_alert_state (
     alerted_at timestamptz not null default now(),
     resolved_at timestamptz
 );
+alter table diag_alert_state add column if not exists alert_version text;
 
 -- Configuración remota (Fase 2): flags para mitigar un problema sin publicar OTA
 -- (p. ej. downloads_enabled=false apaga las descargas al instante).

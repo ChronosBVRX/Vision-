@@ -40,6 +40,74 @@ def test_clean_diag_text():
     assert len(app._clean_diag_text("x" * 100, 10)) == 10
 
 
+# ----- reincidencias: el «ya se avisó» deja de tapar un bug vivo -----
+
+
+def test_repeat_reason_when_already_resolved_returns_back():
+    assert diag.repeat_alert_reason(
+        resolved_at="2026-10-17 09:00:00-06",
+        alert_version="2.5.93",
+        latest_version="2.5.94",
+        hours_since_alert=2.0,
+    ) == "regreso"
+
+
+def test_repeat_reason_version_escalation_returns_reincidencia():
+    assert diag.repeat_alert_reason(
+        resolved_at=None,
+        alert_version="2.5.93",
+        latest_version="2.5.94",
+        hours_since_alert=2.0,
+    ) == "reincidencia"
+
+
+def test_repeat_reason_same_version_stays_quiet_until_the_daily_nag():
+    assert diag.repeat_alert_reason(
+        resolved_at=None,
+        alert_version="2.5.95",
+        latest_version="2.5.95",
+        hours_since_alert=2.0,
+    ) is None
+    assert diag.repeat_alert_reason(
+        resolved_at=None,
+        alert_version="2.5.95",
+        latest_version="2.5.95",
+        hours_since_alert=25.0,
+    ) == "sigue"
+
+
+def test_repeat_reason_unknown_alerted_version_is_still_quiet_today():
+    # Filas legacy sin la versión avisada: hoy no genera reincidencia (evita una
+    # andanada de alertas al desplegar el worker).
+    assert diag.repeat_alert_reason(
+        resolved_at=None,
+        alert_version=None,
+        latest_version="2.5.95",
+        hours_since_alert=1.0,
+    ) is None
+
+
+def test_repeat_text_keeps_both_layers_and_changes_the_headline():
+    text = diag.repeat_text(_row(), "reincidencia")
+    assert "Reincidencia" in text
+    # La capa humana sigue intacta (explicación + qué revisar) y la técnica completa.
+    assert "estado inconsistente" in text
+    assert "Qué revisar" in text
+    assert "huella: 6171ce10085be490" in text
+
+
+def test_alert_text_crash_includes_the_system_message():
+    row = _row(payload={
+        "process": "p", "screen": "Sports", "phase": "reproductor", "engine": "cargado",
+        "network": "wifi", "tv": False,
+        "detail": "com.foo.Bar.baz(Bar.kt:123)",
+        "message": "Key \"NBA Preseason|17/10/2026|20:00:00\" was already used",
+    })
+    text = diag.alert_text(row)
+    # La causa ya no hay que adivinarla: el mensaje del sistema viaja en ambas capas.
+    assert 'Key "NBA Preseason|17/10/2026|20:00:00" was already used' in text
+
+
 def test_diag_rate_ok_sliding_window():
     bucket = {}
     now = 1000.0

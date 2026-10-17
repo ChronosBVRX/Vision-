@@ -88,6 +88,20 @@ class XuperCatalog(context: Context) {
     var loading by mutableStateOf(false)
         private set
 
+    /**
+     * Tiempos del último arranque («cacheMs=…,semillaMs=…,portalMs=…»): diagnóstico del
+     * arranque en frío; la anomalía `BOOT_SLOW` del Inicio incluye estos ms en su detalle.
+     */
+    @Volatile
+    internal var lastLoadTimings: String = ""
+
+    /** Evita dos fases del portal a la vez (recarga de Inicio mientras un arranque aún sondea). */
+    @Volatile
+    private var portalLoading = false
+
+    /** Umbral de reporte `PORTAL_SLOW`: la fase del portal en segundo plano tardó demasiado. */
+    internal val PORTAL_SLOW_MS = 20_000L
+
     /** Only for the UI tests: pretend the sources already answered. */
     internal fun seed(seed: List<CatalogRow>) {
         rows = seed
@@ -116,63 +130,31 @@ class XuperCatalog(context: Context) {
         if (loading) return
         loading = true
         try {
-            // Lo cacheado del índice se pinta al instante (Categorías con contenido mientras llega lo fresco).
-            // El parseo del JSON va en IO: el payload puede pesar varios MB y bloquear el arranque.
-            val cachedIndex = kotlinx.coroutines.withContext(Dispatchers.IO) { RemoteIndexSource.cached(app) }
-            if (cachedIndex.isNotEmpty()) {
-                indexRows = cachedIndex
-            }
-            // En frío sin caché: semilla inmediata en 0 ms para garantizar que el usuario jamás vea un inicio vacío.
+            val bootStarted = android.os.SystemClock.uptimeMillis()
+            // Primer frame con contenido real en 0 ms: la semilla se pinta ANTES de
+            // parsear nada. El cacheo del índice pesa varios MB y su parseo puede
+            // tardar segundos (medido: «cacheMs=4430» en arranque frío) — ahora corre
+            // en segundo plano y el Inicio refresca con lo suyo apenas está listo.
             if (rows.isEmpty()) {
-                val estrenosRow = cachedIndex.firstOrNull { it.id == "estrenos" }
-                if (estrenosRow != null && estrenosRow.films.isNotEmpty()) {
-                    rows = listOf(estrenosRow)
-                } else {
-                    rows = CatalogSeed.initialRows()
-                }
+                rows = CatalogSeed.initialRows()
                 status = XuperStatus.READY
                 message = null
             }
+            val afterSeedMs = android.os.SystemClock.uptimeMillis()
             refreshPersonal()
             xuper.prime(app)
+            lastLoadTimings = "semillaMs=${afterSeedMs - bootStarted},cacheMs=0,portalMs=0"
+            // El parseo del índice en CACHÉ (varios MB: «cacheMs=4430» medido en frío) también
+            // sale del camino crítico: corre en segundo plano y el Inicio refresca con lo suyo
+            // apenas está listo (y conserva las filas que ya estén pintadas).
+            CoroutineScope(Dispatchers.IO).launch { cachedIndexRows() }
+            // El portal (metadatos de fichas + fila de TV en vivo) SALIÓ del arranque crítico:
+            // si la sesión está fría son segundos de re-acuñado + 5 llamadas del portal + un
+            // JSON de ~2 MB de canales, y eso rebasaba el tope del arranque (Inicio a medias y
+            // el «HOME_ROWS_FAIL» crónico). Ahora el Inicio abre con lo suyo (semilla/índice)
+            // en un par de segundos y estas filas se refrescan solas en cuanto el portal responde.
+            CoroutineScope(Dispatchers.IO).launch { portalRows() }
 
-            // El portal se consulta SOLO por los metadatos profesionales de las fichas
-            // (score, reparto, géneros en K_META). Sus hileras crudas («HBO Movie»,
-            // «Maldición misteriosa», «All»…) ya no se muestran en Inicio: el catálogo
-            // visible lo construye Vision+ sobre su propio índice (novedades + ranking).
-            runCatching { com.chronosbvrx.visionplus.data.xuper.X4KApi.homeRows(app) }
-
-            val xtvLive = runCatching {
-                com.chronosbvrx.visionplus.data.xuper.X4KApi.liveRow(app)
-            }.getOrNull()
-
-            val estrenosRow = indexRows.firstOrNull { it.id == "estrenos" }
-
-            if (estrenosRow != null || xtvLive != null) {
-                rows = buildList {
-                    if (estrenosRow != null && estrenosRow.films.isNotEmpty()) add(estrenosRow)
-                    if (xtvLive != null) add(xtvLive)
-                }
-                status = XuperStatus.READY
-                message = null
-            }
-
-            val baseRows = try {
-                withTimeoutOrNull(2000L) {
-                    gateway.homeRows()
-                } ?: emptyList()
-            } catch (e: Exception) {
-                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-                    "HOME_ROWS_FAIL", "${e.javaClass.simpleName}: ${e.message}",
-                )
-                emptyList()
-            }.filterNot { it.id.startsWith("magis") }
-
-            rows = buildList {
-                if (estrenosRow != null && estrenosRow.films.isNotEmpty()) add(estrenosRow)
-                if (xtvLive != null) add(xtvLive)
-                addAll(baseRows)
-            }
             // Sincronización diferida del índice remoto (25k+ títulos) tras 3.5 segundos:
             // la pantalla de inicio conserva las filas curadas mientras se descarga el índice para Búsqueda.
             CoroutineScope(Dispatchers.IO).launch {
@@ -222,6 +204,79 @@ class XuperCatalog(context: Context) {
             }
         } finally {
             loading = false
+        }
+    }
+
+    /**
+     * Índice en CACHÉ (segundo plano): manda Búsqueda/Categorías al instante con el último
+     * curado y sustituye la semilla del primer frame por el estreno #1 del índice sin
+     * pisar las filas que ya estén pintadas (vivo/base a medias del portal, p. ej.).
+     */
+    private suspend fun cachedIndexRows() {
+        val started = android.os.SystemClock.uptimeMillis()
+        val cachedIndex = kotlinx.coroutines.withContext(Dispatchers.IO) { RemoteIndexSource.cached(app) }
+        lastLoadTimings = lastLoadTimings.replaceFirst("cacheMs=0", "cacheMs=${android.os.SystemClock.uptimeMillis() - started}")
+        if (cachedIndex.isEmpty()) return
+        indexRows = cachedIndex
+        val estrenosCached = cachedIndex.firstOrNull { it.id == "estrenos" }
+        if (estrenosCached != null && estrenosCached.films.isNotEmpty()) {
+            val current = rows
+            // El estreno #1 real sustituye a la semilla del primer frame; las filas que ya
+            // pintó el portal (TV en vivo, fuentes) o el usuario se conservan.
+            rows = listOf(estrenosCached) + current.filterNot { it.id.startsWith("seed-") || it.id == "estrenos" }
+        }
+    }
+
+    /**
+     * Fase del portal (segundo plano): las mismas filas de siempre — estrenos del índice,
+     * TV en vivo del portal y las filas base de las fuentes — pero sin retener el arranque.
+     * Guardián de tiempo: si el portal sigue lento (sesión fría, red mala) queda el reporte
+     * `PORTAL_SLOW` para el diagnóstico sin tocar la experiencia ya abierta.
+     */
+    private suspend fun portalRows() {
+        if (portalLoading) return
+        portalLoading = true
+        try {
+            val started = android.os.SystemClock.uptimeMillis()
+            runCatching { com.chronosbvrx.visionplus.data.xuper.X4KApi.homeRows(app) }
+            val xtvLive = runCatching {
+                com.chronosbvrx.visionplus.data.xuper.X4KApi.liveRow(app)
+            }.getOrNull()
+
+            val estrenosRow = indexRows.firstOrNull { it.id == "estrenos" }
+
+            if (estrenosRow != null || xtvLive != null) {
+                rows = buildList {
+                    if (estrenosRow != null && estrenosRow.films.isNotEmpty()) add(estrenosRow)
+                    if (xtvLive != null) add(xtvLive)
+                }
+                status = XuperStatus.READY
+                message = null
+            }
+
+            val baseRows = try {
+                withTimeoutOrNull(2000L) {
+                    gateway.homeRows()
+                } ?: emptyList()
+            } catch (e: Exception) {
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "HOME_ROWS_FAIL", "${e.javaClass.simpleName}: ${e.message}",
+                )
+                emptyList()
+            }.filterNot { it.id.startsWith("magis") }
+
+            rows = buildList {
+                if (estrenosRow != null && estrenosRow.films.isNotEmpty()) add(estrenosRow)
+                if (xtvLive != null) add(xtvLive)
+                addAll(baseRows)
+            }
+            val portalMs = android.os.SystemClock.uptimeMillis() - started
+            lastLoadTimings = lastLoadTimings.substringBefore(",portalMs=") + ",portalMs=$portalMs"
+            if (portalMs > PORTAL_SLOW_MS) {
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly("PORTAL_SLOW", lastLoadTimings)
+            }
+        } finally {
+            portalLoading = false
         }
     }
 }

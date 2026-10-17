@@ -284,6 +284,9 @@ class X4KPlayerAty : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         residentInstance = this
+        // Contexto de diagnóstico del proceso :x4k: sus ANR eran los únicos sin pantalla.
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.screen("Player")
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.phase("reproductor-arranque")
         // Identidad del portal en este proceso (:x4k tiene su propia memoria).
         com.chronosbvrx.visionplus.data.xuper.X4KApi.initSlots(this)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
@@ -335,6 +338,9 @@ class X4KPlayerAty : ComponentActivity() {
         val code = intent.getStringExtra("code").orEmpty()
         val rawTitle = intent.getStringExtra("title").orEmpty().ifBlank { code }
         liveMode = mode == "live"
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.phase(
+            if (liveMode) "reproductor-vivo" else "reproductor-vod",
+        )
         val title = if (liveMode) X4KApi.displayChannelName(code, rawTitle) else rawTitle
         curCode = code
         curTitle = title
@@ -4232,6 +4238,10 @@ class X4KPlayerAty : ComponentActivity() {
             // esta bandera hacía que Atrás fuera un no-op silencioso para siempre.
             if (shouldFinishIdleResidentOnExit(exiting, isPlayerActive)) {
                 Log.i(TAG, "reproductor residente sin reproducción: cerrando la tarea")
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "PLAYER_RESIDENT_IDLE",
+                    "la tarea del reproductor volvió al frente sin reproducción (se autocierra)",
+                )
                 runCatching { finishAndRemoveTask() }
             }
             return
@@ -4540,6 +4550,10 @@ class X4KPlayerAty : ComponentActivity() {
         // sin controles ni salida.
         if (!isPlayerActive) {
             Log.i(TAG, "reproductor residente sin reproducción al volver al frente: se cierra")
+            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                "PLAYER_RESIDENT_IDLE",
+                "la tarea del reproductor volvió al frente sin reproducción (se autocierra)",
+            )
             runCatching { finishAndRemoveTask() }
             return
         }

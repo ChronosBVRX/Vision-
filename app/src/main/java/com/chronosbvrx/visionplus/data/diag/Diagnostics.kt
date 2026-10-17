@@ -108,7 +108,10 @@ object Diagnostics {
     }
 
     internal fun reportCrash(t: Thread, e: Throwable) {
-        enqueue(build(kind = "crash", code = e.javaClass.simpleName, detail = stackOf(e), thread = t.name))
+        // El mensaje del sistema (p. ej. «Key X was already used») viaja aparte: la huella
+        // se calcula del stack (estable aunque cambie la redacción), pero sin el mensaje
+        // el diagnóstico en campo no puede distinguir entre causas parecidas.
+        enqueue(build(kind = "crash", code = e.javaClass.simpleName, detail = stackOf(e), thread = t.name, message = e.message.orEmpty()))
     }
 
     internal fun reportAnr(blockedMs: Long) {
@@ -120,7 +123,7 @@ object Diagnostics {
 
     // ----- internos -----
 
-    private fun build(kind: String, code: String, detail: String, thread: String = ""): JSONObject? {
+    private fun build(kind: String, code: String, detail: String, thread: String = "", message: String = ""): JSONObject? {
         val ctx = app ?: return null
         return runCatching {
             val payload = JSONObject().apply {
@@ -135,6 +138,7 @@ object Diagnostics {
                 put("freeStorageMb", ctx.filesDir.usableSpace / (1024 * 1024))
                 put("uptimeMin", SystemClock.elapsedRealtime() / 60_000)
                 put("deviceId", deviceHash(ctx))
+                if (message.isNotBlank()) put("message", message.take(400))
                 if (detail.isNotBlank()) put("detail", detail.take(MAX_DETAIL_CHARS))
             }
             JSONObject().apply {
