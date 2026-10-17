@@ -1,0 +1,43 @@
+name: Uptime Vision+
+
+# Vigilante EXTERNO (corre en GitHub, no en el VPS): si el backend deja de responder,
+# avisa al Telegram del dueño. El vigilante interno del VPS (cron cada 5 min) reinicia
+# la API si se cuelga; ESTE avisa si el VPS entero se cae — nadie más podría hacerlo.
+#
+# Nota: los cron de GitHub pueden retrasarse unos minutos bajo carga; es un heartbeat
+# externo gratuito, no un monitor de segundos.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Comprobar el backend (y avisar por Telegram si falla)
+        env:
+          TG_TOKEN: ${{ secrets.DIAG_TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.DIAG_TELEGRAM_CHAT }}
+        run: |
+          set -u
+          fail=""
+          for url in "https://visionplusv2.duckdns.org/healthz" "https://la20.com.mx/catalogo/healthz"; do
+            code=$(curl -s -o /dev/null -m 15 --retry 2 --retry-delay 5 -w '%{http_code}' "$url" || echo 000)
+            echo "$url -> $code"
+            if [ "$code" != "200" ]; then
+              fail="$fail$url (HTTP $code) — "
+            fi
+          done
+          if [ -n "$fail" ]; then
+            echo "FALLO: $fail"
+            if [ -n "${TG_TOKEN}" ] && [ -n "${TG_CHAT}" ]; then
+              curl -s -m 15 "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+                --data-urlencode "chat_id=${TG_CHAT}" \
+                --data-urlencode "text=🚨 Vision+ — el backend NO responde: ${fail}revisa el VPS (o espera al vigilante interno)." > /dev/null || true
+            fi
+            exit 1
+          fi
+          echo "OK: backend sano"
