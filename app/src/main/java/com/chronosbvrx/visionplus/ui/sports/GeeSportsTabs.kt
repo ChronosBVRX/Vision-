@@ -280,7 +280,7 @@ private fun GeeChannelRow(channel: GeeSportsSource.GeeChannel, onClick: () -> Un
  * canales de la casa que cubren una cadena que la fuente deportiva no puede servir.
  */
 @Composable
-fun GeeLinkPickDialog(
+internal fun GeeLinkPickDialog(
     title: String,
     subtitle: String,
     links: List<GeeSportsSource.GeeLink>,
@@ -292,6 +292,7 @@ fun GeeLinkPickDialog(
     blockNote: String = "",
     checks: Map<String, GeeHealth.Check> = emptyMap(),
     backstops: List<GeeBackstop.Backstop> = emptyList(),
+    eventInfo: GeeZapSignals.EventInfo? = null,
 ) {
     // El estado REAL de cada señal: lo comprobado por la app ahora mismo manda sobre el
     // dato del servidor (que puede tener minutos).
@@ -306,7 +307,7 @@ fun GeeLinkPickDialog(
         }.distinctBy { it.url }
     }
     fun playZap(picked: LiveChannel) {
-        GeeZapSignals.arm(picked, zapOrder)
+        GeeZapSignals.arm(picked, zapOrder, eventInfo)
         onPlay(picked)
     }
     Dialog(onDismissRequest = onDismiss) {

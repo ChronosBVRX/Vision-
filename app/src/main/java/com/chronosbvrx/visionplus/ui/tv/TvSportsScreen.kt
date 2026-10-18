@@ -58,9 +58,11 @@ import com.chronosbvrx.visionplus.data.gee.GeeGuide
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.sports.SportsSource
 import com.chronosbvrx.visionplus.ui.sports.GeeTiles
+import com.chronosbvrx.visionplus.ui.sports.GeeZapSignals
 import com.chronosbvrx.visionplus.ui.sports.geeCategoryLabel
 import com.chronosbvrx.visionplus.ui.sports.geeEventSubtitle
 import com.chronosbvrx.visionplus.ui.sports.geeEventTitle
+import com.chronosbvrx.visionplus.ui.sports.geeScoreLine
 import com.chronosbvrx.visionplus.ui.sports.rememberGeeSportsState
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
@@ -97,6 +99,22 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
         val event = picking
         if (event == null) emptyList()
         else runCatching { GeeGuide.channelsFor(event.broadcasts, gee.groups) }.getOrDefault(emptyList())
+    }
+    // El contexto del partido que viaja al reproductor (su aviso de cable usa la misma interfaz
+    // que la TV en vivo: liga, marcador y dónde se transmite).
+    val pickingInfo = remember(picking) {
+        val event = picking
+        if (event == null) {
+            null
+        } else {
+            GeeZapSignals.EventInfo(
+                title = geeEventTitle(event),
+                league = GeeAgenda.leagueLabel(event),
+                scoreLine = geeScoreLine(event),
+                guide = event.broadcasts,
+                signals = event.links.size,
+            )
+        }
     }
     // El respaldo: las cadenas de la parrilla que la fuente deportiva NO puede servir en vivo y
     // que sí tenemos en el catálogo de la casa (coincidencia del 100 %, nunca un parecido).
@@ -321,6 +339,7 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                 blockNote = GeeAgenda.blockNote(event, now),
                 checks = gee.checks,
                 backstops = pickingBackstops,
+                eventInfo = pickingInfo,
             )
         }
     }

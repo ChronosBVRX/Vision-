@@ -89,6 +89,22 @@ fun SportsScreen(
         if (event == null) emptyList()
         else runCatching { GeeGuide.channelsFor(event.broadcasts, gee.groups) }.getOrDefault(emptyList())
     }
+    // El contexto del partido que viaja al reproductor (su aviso de cable usa la misma interfaz
+    // que la TV en vivo: liga, marcador y dónde se transmite).
+    val pickingInfo = remember(picking) {
+        val event = picking
+        if (event == null) {
+            null
+        } else {
+            GeeZapSignals.EventInfo(
+                title = geeEventTitle(event),
+                league = GeeAgenda.leagueLabel(event),
+                scoreLine = geeScoreLine(event),
+                guide = event.broadcasts,
+                signals = event.links.size,
+            )
+        }
+    }
     // El respaldo: las cadenas de la parrilla que la fuente deportiva NO puede servir en vivo y
     // que sí tenemos en el catálogo de la casa (coincidencia del 100 %, nunca un parecido).
     val pickingBackstops = remember(picking, pickingTv, gee.xtvChannels, gee.checks) {
@@ -314,6 +330,7 @@ fun SportsScreen(
             blockNote = GeeAgenda.blockNote(event, now),
             checks = gee.checks,
             backstops = pickingBackstops,
+            eventInfo = pickingInfo,
         )
     }
 }
@@ -332,6 +349,17 @@ internal fun geeEventSubtitle(event: GeeSportsSource.GeeEvent): String {
     return listOf(GeeAgenda.leagueLabel(event), "$whenText ${geeTimeLabel(event.time)}".trim())
         .filter { it.isNotBlank() }
         .joinToString(" · ")
+}
+
+/**
+ * «1 - 0 · 37'» con lo que la agenda traiga (marcador y minuto). Vacío cuando el partido aún no
+ * tiene nada que contar: el aviso del reproductor simplemente omite la línea.
+ */
+internal fun geeScoreLine(event: GeeSportsSource.GeeEvent): String {
+    val home = event.scoreHome
+    val away = event.scoreAway
+    val score = if (home != null && away != null) "$home - $away" else ""
+    return listOf(score, event.detail.trim()).filter { it.isNotBlank() }.joinToString(" · ")
 }
 
 @Composable

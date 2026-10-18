@@ -256,6 +256,7 @@ internal fun TvGeeLinkPickDialog(
     blockNote: String = "",
     checks: Map<String, GeeHealth.Check> = emptyMap(),
     backstops: List<GeeBackstop.Backstop> = emptyList(),
+    eventInfo: GeeZapSignals.EventInfo? = null,
 ) {
     // El estado REAL de cada señal: lo comprobado por la app ahora mismo manda sobre el
     // dato del servidor (que puede tener minutos).
@@ -270,7 +271,7 @@ internal fun TvGeeLinkPickDialog(
         }.distinctBy { it.url }
     }
     fun playZap(picked: LiveChannel) {
-        GeeZapSignals.arm(picked, zapOrder)
+        GeeZapSignals.arm(picked, zapOrder, eventInfo)
         onPlay(picked)
     }
     BackHandler(onBack = onDismiss)

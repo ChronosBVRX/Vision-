@@ -18,7 +18,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +37,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
@@ -67,6 +70,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -340,9 +344,11 @@ fun LivePlayerScreen(
     // evento; el canal en pantalla va al frente (índice 0) y el resto queda para Arriba/Abajo
     // y para el failover automático. Por otro camino (Inicio, En vivo) el holder queda obsoleto
     // y la lista sale vacía: zapping desactivado, sin cambios de conducta.
+    // El contexto del partido (liga, marcador, dónde se transmite) para el aviso de cable del
+    // reproductor: la MISMA interfaz que la TV en vivo. Se lee ANTES que las señales.
+    val eventInfo = remember(streamUrl, channel) { GeeZapSignals.takeInfoFor(channel) }
     val zapTargets = remember(streamUrl, channel) {
-        buildList {
-            add(
+        buildList {            add(
                 ZapTarget(
                     name = channel.name,
                     url = parsedInline?.url ?: streamUrl,
@@ -392,6 +398,7 @@ fun LivePlayerScreen(
         drmKey = channel.drmKey,
         drmType = channel.drmType,
         zapTargets = zapTargets,
+        eventInfo = eventInfo,
     )
 }
 
@@ -739,6 +746,7 @@ private fun PlayerCore(
     drmKey: String? = null,
     drmType: String? = null,
     zapTargets: List<ZapTarget> = emptyList(),
+    eventInfo: com.chronosbvrx.visionplus.ui.sports.GeeZapSignals.EventInfo? = null,
     resumeInfo: com.chronosbvrx.visionplus.data.ResumeInfo? = null,
     resumeMs: Long = 0,
     declaredDurationMs: Long = 0L,
@@ -990,11 +998,16 @@ private fun PlayerCore(
     // Índice 0 = la señal por la que se abrió el reproductor. Con 0-1 señales, todo queda
     // como siempre (sin zapping, sin failover).
     var zapIndex by remember { mutableStateOf(0) }
-    var zapBannerName by remember { mutableStateOf<String?>(null) }
-    var zapBannerSerial by remember { mutableLongStateOf(0L) }
     var showZapList by remember { mutableStateOf(false) }
+    var showLiveInfo by remember { mutableStateOf(false) }
     var failovers by remember { mutableStateOf(0) }
     val canZap = isLive && zapTargets.size > 1 && !introPlaying
+    // La señal en pantalla (la que el aviso de cable rotula como «AHORA»): su dirección y su
+    // cifrado son los del destino actual, que cambia al zappear.
+    val currentTarget = zapTargets.getOrNull(zapIndex.coerceIn(0, (zapTargets.size - 1).coerceAtLeast(0)))
+    val currentTargetUrl = currentTarget?.url ?: url
+    val currentTargetDrmType = currentTarget?.drmType ?: drmType
+    val currentTargetDrmKey = currentTarget?.drmKey ?: drmKey
 
     fun buildClearKeyBytesOf(target: ZapTarget): ByteArray? =
         runCatching {
@@ -1025,8 +1038,8 @@ private fun PlayerCore(
         player.prepare()
         player.playWhenReady = true
         playing = true
-        zapBannerName = target.name
-        zapBannerSerial += 1L
+        // El aviso de cable ya muestra la señal nueva (y el overlay se queda unos segundos
+        // visible tras el zap): no hace falta una píldora aparte, igual que en la TV en vivo.
         controls.bump()
     }
 
@@ -1305,12 +1318,14 @@ private fun PlayerCore(
     val brandSkipFocus = remember { FocusRequester() }
     val nextCardFocus = remember { FocusRequester() }
     val zapListFocus = remember { FocusRequester() }
+    val liveInfoFocus = remember { FocusRequester() }
     var skipFocused by remember { mutableStateOf(false) }
     var brandSkipFocused by remember { mutableStateOf(false) }
     var nextCardFocused by remember { mutableStateOf(false) }
     var zapListFocused by remember { mutableStateOf(false) }
+    var liveInfoFocused by remember { mutableStateOf(false) }
     val hasControlFocus = barFocused || rewindFocused || playPauseFocused || forwardFocused ||
-        tracksFocused || markersFocused || skipFocused || zapListFocused
+        tracksFocused || markersFocused || skipFocused || zapListFocused || liveInfoFocused
 
     // "Saltar intro" during the opening minutes; only interactive when navigation menu is visible.
     val showSkip = !isLive && !introPlaying && !skipUsed && error == null &&
@@ -1552,38 +1567,6 @@ private fun PlayerCore(
             }
         }
 
-        // Banner del zapping: la señal que acaba de cambiar (se oculta solo, estilo cable).
-        zapBannerName?.let { bannerName ->
-            Box(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 28.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Surface(color = Color(0xF20F1626), shape = RoundedCornerShape(50)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    ) {
-                        Box(Modifier.size(8.dp).background(VisionLiveRed, CircleShape))
-                        Text(
-                            bannerName,
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                        )
-                    }
-                }
-            }
-        }
-        LaunchedEffect(zapBannerSerial) {
-            if (zapBannerSerial != 0L) {
-                delay(2_200)
-                zapBannerName = null
-            }
-        }
-
         error?.let { message ->
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(message, color = Color.White, style = MaterialTheme.typography.titleMedium)
@@ -1688,7 +1671,34 @@ private fun PlayerCore(
                     }
                     .then(if (isTv) Modifier.padding(horizontal = SAFE_H, vertical = SAFE_V) else Modifier),
             ) {
-                if (isTv) {
+                if (isLive) {
+                    // Aviso de cable: la MISMA interfaz que la TV en vivo (panel con la píldora
+                    // EN VIVO, la etiqueta del grupo/liga, el título y las líneas de guía).
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .fillMaxWidth()
+                            .systemBarsPadding()
+                            .padding(start = if (isTv) 16.dp else 2.dp, end = 16.dp, top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (!isTv) {
+                            IconButton(onClick = { if (canExecuteControlAction()) onBack() }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White)
+                            }
+                        }
+                        LiveCableBanner(
+                            title = eventInfo?.title?.takeIf { it.isNotBlank() } ?: currentTitle,
+                            group = eventInfo?.league?.takeIf { it.isNotBlank() } ?: currentSubtitle,
+                            signalName = if (eventInfo != null) currentTitle else "",
+                            signalType = if (eventInfo != null) zapSignalType(currentTargetUrl, currentTargetDrmType, currentTargetDrmKey) else "",
+                            scoreLine = eventInfo?.scoreLine.orEmpty(),
+                            guide = eventInfo?.guide.orEmpty(),
+                            isTv = isTv,
+                            modifier = if (isTv) Modifier.fillMaxWidth(0.62f) else Modifier.weight(1f),
+                        )
+                    }
+                } else if (isTv) {
                     Column(
                         modifier = Modifier
                             .align(Alignment.TopStart)
@@ -1807,15 +1817,86 @@ private fun PlayerCore(
                         }
                         Spacer(Modifier.height(8.dp))
                     }
+                    // La fila de controles del EN VIVO es la de la TV en vivo: píldoras etiquetadas
+                    // (Canales / Información, con las funciones propias del reproductor en línea
+                    // —pausa y audio— en la misma piel). En el móvil la fila se desliza.
                     if (isLive && !introPlaying) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(Modifier.size(8.dp).background(VisionLiveRed, CircleShape))
-                            Text("EN VIVO", color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                            Text(currentTitle, color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.labelMedium, maxLines = 1, modifier = Modifier.weight(1f))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(if (isTv) Modifier else Modifier.horizontalScroll(rememberScrollState())),
+                            horizontalArrangement = if (isTv) Arrangement.spacedBy(12.dp) else Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (canZap) {
+                                PlayerPill(
+                                    icon = Icons.Default.Tv,
+                                    label = "Canales",
+                                    onClick = { if (canExecuteControlAction()) { showZapList = true; controls.bump() } },
+                                    modifier = if (!isTv) Modifier else Modifier
+                                        .focusRequester(zapListFocus)
+                                        .onFocusChanged { zapListFocused = it.isFocused }
+                                        .focusProperties { left = playPauseFocus; right = liveInfoFocus; up = playPauseFocus; down = zapListFocus },
+                                )
+                            }
+                            PlayerPill(
+                                icon = Icons.Default.Info,
+                                label = "Información",
+                                onClick = { if (canExecuteControlAction()) { showLiveInfo = true; controls.bump() } },
+                                modifier = if (!isTv) Modifier else Modifier
+                                    .focusRequester(liveInfoFocus)
+                                    .onFocusChanged { liveInfoFocused = it.isFocused }
+                                    .focusProperties {
+                                        left = if (canZap) zapListFocus else playPauseFocus
+                                        right = playPauseFocus
+                                        up = playPauseFocus
+                                        down = liveInfoFocus
+                                    },
+                            )
+                            PlayerPill(
+                                icon = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                label = if (playing) "Pausa" else "Reproducir",
+                                onClick = { if (canExecuteControlAction()) togglePlayPause() },
+                                modifier = if (!isTv) Modifier else Modifier
+                                    .focusRequester(playPauseFocus)
+                                    .onFocusChanged { playPauseFocused = it.isFocused }
+                                    .focusProperties {
+                                        left = liveInfoFocus
+                                        right = tracksFocus
+                                        up = playPauseFocus
+                                        down = playPauseFocus
+                                    },
+                            )
+                            PlayerPill(
+                                icon = Icons.Default.Subtitles,
+                                label = "Audio y subtítulos",
+                                onClick = { if (canExecuteControlAction()) { showTracks = true; controls.bump() } },
+                                modifier = if (!isTv) Modifier else Modifier
+                                    .focusRequester(tracksFocus)
+                                    .onFocusChanged { tracksFocused = it.isFocused }
+                                    .focusProperties {
+                                        left = playPauseFocus
+                                        right = if (canZap) zapListFocus else playPauseFocus
+                                        up = playPauseFocus
+                                        down = tracksFocus
+                                    },
+                            )
+                            if (!isTv) {
+                                val activity = context.findActivity()
+                                PlayerPill(
+                                    icon = Icons.Default.ScreenRotation,
+                                    label = if (isLandscape) "Vertical" else "Horizontal",
+                                    onClick = {
+                                        activity?.requestedOrientation = if (isLandscape) {
+                                            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                                        } else {
+                                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                        }
+                                    },
+                                )
+                            }
                         }
-                        Spacer(Modifier.height(8.dp))
-                    }
-
+                    } else {
                     Row(
                         modifier = if (isTv) Modifier else Modifier.fillMaxWidth(),
                         horizontalArrangement = if (!isTv && !isLandscape) Arrangement.SpaceEvenly else Arrangement.spacedBy(20.dp),
@@ -1923,6 +2004,7 @@ private fun PlayerCore(
                                 )
                             }
                         }
+                    }
                     }
                 }
             }
@@ -2037,6 +2119,20 @@ private fun PlayerCore(
                 showZapList = false
                 zapTo(index)
             },
+        )
+    }
+    if (showLiveInfo && isLive) {
+        GeeMatchInfoDialog(
+            title = eventInfo?.title?.takeIf { it.isNotBlank() } ?: currentTitle,
+            subtitle = currentSubtitle,
+            league = eventInfo?.league.orEmpty(),
+            scoreLine = eventInfo?.scoreLine.orEmpty(),
+            guide = eventInfo?.guide.orEmpty(),
+            signalName = currentTitle,
+            signalType = zapSignalType(currentTargetUrl, currentTargetDrmType, currentTargetDrmKey),
+            signals = zapTargets.map { it.name },
+            currentIndex = zapIndex,
+            onDismiss = { showLiveInfo = false },
         )
     }
     if (showMarkers && !isLive) {
@@ -2179,6 +2275,143 @@ private fun TransportButton(
             .background(if (focused) Color.White else Color.Transparent, CircleShape),
     ) {
         Icon(icon, contentDescription = contentDescription, tint = if (focused) Color.Black else Color.White, modifier = Modifier.size(iconSize))
+    }
+}
+
+/**
+ * Una píldora etiquetada del reproductor en vivo, con la MISMA piel que las de la TV en vivo
+ * (`pill()` del reproductor nativo): fondo oscuro redondeado, icono y palabra; al enfocar se pinta
+ * de azul, igual que con el mando.
+ */
+@Composable
+private fun PlayerPill(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconTint: Color = Color.White,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        color = if (focused) VisionBlue else Color(0xCC1B2538),
+        shape = RoundedCornerShape(50),
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .onFocusChanged { focused = it.isFocused },
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+        ) {
+            Icon(icon, contentDescription = null, tint = if (focused) Color.White else iconTint, modifier = Modifier.size(17.dp))
+            Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        }
+    }
+}
+
+/**
+ * El aviso de cable del reproductor en vivo: la MISMA interfaz que la TV en vivo (panel oscuro,
+ * píldora EN VIVO con punto, etiqueta del grupo/liga, título grande y líneas de guía con etiqueta
+ * azul), adaptada a lo que un partido sabe contar — la señal en pantalla y el marcador.
+ */
+@Composable
+private fun LiveCableBanner(
+    title: String,
+    group: String,
+    signalName: String,
+    signalType: String,
+    scoreLine: String,
+    guide: List<String>,
+    isTv: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Surface(color = Color(0xF20F1626), shape = RoundedCornerShape(12.dp), modifier = modifier) {
+        Column(
+            Modifier.padding(
+                horizontal = if (isTv) 20.dp else 14.dp,
+                vertical = if (isTv) 16.dp else 11.dp,
+            ),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Surface(color = VisionLiveRed.copy(alpha = 0.20f), shape = RoundedCornerShape(50)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    ) {
+                        Box(Modifier.size(7.dp).background(VisionLiveRed, CircleShape))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "EN VIVO",
+                            color = VisionLiveRed,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                if (group.isNotBlank()) {
+                    Surface(color = VisionBlue.copy(alpha = 0.22f), shape = RoundedCornerShape(6.dp)) {
+                        Text(
+                            group,
+                            color = VisionBlueBright,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                title,
+                color = Color.White,
+                style = if (isTv) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (signalName.isNotBlank()) {
+                Spacer(Modifier.height(5.dp))
+                LiveBannerLine("AHORA:", listOf(signalName, signalType).filter { it.isNotBlank() }.joinToString(" · "))
+            }
+            val detail = when {
+                scoreLine.isNotBlank() -> "MARCADOR:" to scoreLine
+                guide.isNotEmpty() -> "SE TRANSMITE EN:" to guide.take(4).joinToString(" · ")
+                else -> null
+            }
+            if (detail != null) {
+                Spacer(Modifier.height(2.dp))
+                LiveBannerLine(detail.first, detail.second)
+            }
+        }
+    }
+}
+
+/** Una línea del aviso con su etiqueta azul, como las de «AHORA/DESPUÉS» de la TV en vivo. */
+@Composable
+private fun LiveBannerLine(label: String, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = VisionBlueBright, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text,
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** «DASH · ClearKey», «DASH» o «HLS»: lo mismo que rotula la lista de señales del evento. */
+internal fun zapSignalType(url: String, drmType: String?, drmKey: String?): String {
+    val dash = drmType == "dash" || url.contains(".mpd", ignoreCase = true)
+    return when {
+        dash && !drmKey.isNullOrBlank() -> "DASH · ClearKey"
+        dash -> "DASH"
+        else -> "HLS"
     }
 }
 

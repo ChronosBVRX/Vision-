@@ -15,13 +15,31 @@ import com.chronosbvrx.visionplus.data.LiveChannel
  */
 internal object GeeZapSignals {
 
+    /**
+     * El contexto del partido que el reproductor pinta en su aviso de cable, con la MISMA
+     * interfaz que la TV en vivo: liga, marcador y dónde se transmite.
+     */
+    data class EventInfo(
+        val title: String,
+        val league: String = "",
+        /** «1 - 0 · 37'» cuando la agenda trae marcador; vacío si no. */
+        val scoreLine: String = "",
+        /** La parrilla oficial del partido («Telemundo · TUDN · ViX Deportes»). */
+        val guide: List<String> = emptyList(),
+        /** Cuántas señales trae el evento por la fuente deportiva. */
+        val signals: Int = 0,
+        val source: String = "Deportes en vivo",
+    )
+
     private var armedUrl: String? = null
     private var signals: List<LiveChannel> = emptyList()
+    private var info: EventInfo? = null
 
     /** El modal lo llama justo antes de `onPlay(picked)`. */
-    fun arm(current: LiveChannel, ordered: List<LiveChannel>) {
+    fun arm(current: LiveChannel, ordered: List<LiveChannel>, eventInfo: EventInfo? = null) {
         armedUrl = current.url
         signals = ordered
+        info = eventInfo
     }
 
     /**
@@ -37,6 +55,16 @@ internal object GeeZapSignals {
         }
         armedUrl = null
         signals = emptyList()
+        return out
+    }
+
+    /**
+     * El contexto del partido para el canal que se está abriendo (una sola vez, misma validación
+     * que las señales). Se lee ANTES que [takeFor]: el aviso de cable lo necesita al montar.
+     */
+    fun takeInfoFor(channel: LiveChannel): EventInfo? {
+        val out = if (armedUrl == channel.url) info else null
+        info = null
         return out
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -29,6 +30,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
@@ -175,12 +177,84 @@ internal fun ZapListDialog(
                         target.name,
                         modifier = if (i == currentIndex) first else Modifier,
                         selected = i == currentIndex,
+                        detail = zapSignalType(target.url, target.drmType, target.drmKey),
                     ) { if (i != currentIndex) onPick(i) }
                 }
             }
         },
         confirmButton = { MenuOption("Cerrar", fill = false, onClick = onDismiss) },
     )
+}
+
+/**
+ * "Información" del partido en el reproductor en vivo: la misma idea que la ficha de canal de la
+ * TV en vivo (qué se está viendo y qué más hay), con lo que un partido sabe contar — la liga, el
+ * marcador, dónde se transmite y las señales del evento.
+ */
+@Composable
+internal fun GeeMatchInfoDialog(
+    title: String,
+    subtitle: String,
+    league: String,
+    scoreLine: String,
+    guide: List<String>,
+    signalName: String,
+    signalType: String,
+    signals: List<String>,
+    currentIndex: Int,
+    onDismiss: () -> Unit,
+) {
+    val first = rememberDialogLanding()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = VisionSurface,
+        title = { Text("Información") },
+        text = {
+            Column(
+                Modifier
+                    .heightIn(max = 440.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                MenuNote(title)
+                if (subtitle.isNotBlank()) MenuNote(subtitle)
+                if (league.isNotBlank()) MenuRow("Liga", league)
+                if (scoreLine.isNotBlank()) MenuRow("Marcador", scoreLine)
+                MenuRow("Señal en pantalla", listOf(signalName, signalType).filter { it.isNotBlank() }.joinToString(" · "))
+                if (guide.isNotEmpty()) MenuRow("Se transmite en", guide.take(4).joinToString(" · "))
+                if (signals.size > 1) {
+                    MenuSectionTitle("Señales del evento (${signals.size})")
+                    signals.forEachIndexed { index, name ->
+                        MenuOption(
+                            name,
+                            modifier = if (index == 0) first else Modifier,
+                            selected = index == currentIndex,
+                        ) {}
+                    }
+                }
+            }
+        },
+        confirmButton = { MenuOption("Cerrar", fill = false, onClick = onDismiss) },
+    )
+}
+
+/** Una fila «etiqueta: valor» de la ficha, con la etiqueta en el azul de la casa. */
+@Composable
+private fun MenuRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+        Text(
+            label,
+            color = VisionBlueBright,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.width(132.dp),
+        )
+        Text(
+            value,
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 /** "Corregir intro y outro": marks where the opening ends or the ending starts, at the current position. */
@@ -242,6 +316,7 @@ private fun MenuOption(
     modifier: Modifier = Modifier,
     fill: Boolean = true,
     selected: Boolean = false,
+    detail: String = "",
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -263,6 +338,11 @@ private fun MenuOption(
                 modifier = Modifier.size(16.dp),
             )
         }
-        Text(label, color = Color.White, maxLines = 2)
+        Column {
+            Text(label, color = Color.White, maxLines = 2)
+            if (detail.isNotBlank()) {
+                Text(detail, color = VisionTextSecondary, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            }
+        }
     }
 }

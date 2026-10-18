@@ -467,6 +467,82 @@ async def test_sync_events_second_pass_probes_window_rows_missing_from_the_file(
     assert payload["alive"] == 2 and payload["total"] == 2
 
 
+@pytest.mark.anyio
+async def test_sync_events_second_pass_refetches_the_pro_of_a_rotated_entry(monkeypatch):
+    # Visto en vivo (Chivas-Tigres, 17-oct): el CMS rotó la entrada fuera de events.txt y su
+    # fila guardada se quedó con 2 enlaces mientras el `pro` ya publicaba 3 — la app enseñaba
+    # menos opciones que la original. La pasada extra RE-DESCARGA el archivo del evento.
+    pro_path = "pro/chivas.txt"
+    fresh_pro = json.dumps([
+        {"name": "TUDN MEXICO FHD", "link": "https://vivo1", "api": "kid1:key1"},
+        {"name": "LOW QUALITY (USE VPN)", "link": "http://panel/hls/x.m3u8|user-agent=UA", "api": ""},
+    ]).encode()
+
+    async def fake_fetch(path, timeout=25):
+        if path == "events.txt":
+            return encrypt_for_test(json.dumps([]).encode(), KEY)
+        if path == pro_path:
+            return encrypt_for_test(fresh_pro, KEY)
+        raise AssertionError(path)
+
+    async def fake_probe_many(links):
+        for link in links:
+            link["alive"] = True
+
+    stale = {
+        "id": "event:rotada", "category": "Football", "event": "Liga MX, Apertura",
+        "team_a": "CD Guadalajara", "team_b": "Tigres UANL",
+        "date_iso": date.today().isoformat(), "time": "17:07:00",
+        "links_ref": pro_path,
+        "links": [{"name": "TUDN MEXICO FHD", "url": "https://vivo1", "link": "https://vivo1", "alive": True}],
+    }
+    pool = SyncPool(select_rows=[{"id": "event:rotada", "payload": stale}])
+    monkeypatch.setattr(gee38, "_fetch_async", fake_fetch)
+    monkeypatch.setattr(gee38, "_probe_many", fake_probe_many)
+
+    await gee38._sync_events(pool, KEY, {})
+    updates = [args for sql, args in pool.executed if "update gee38_catalog" in sql]
+    assert updates, "la pasada extra debe actualizar la fila de la ventana"
+    payload = json.loads(updates[0][1])
+    names = [lk["name"] for lk in payload["links"]]
+    assert names == ["TUDN MEXICO FHD", "LOW QUALITY (USE VPN)"], names
+    assert payload["total"] == 2 and payload["alive"] == 2
+    # El enlace con cabeceras tras «|» viaja tal cual (el reproductor lo parte al abrirlo).
+    hls = [lk for lk in payload["links"] if lk["name"].startswith("LOW")][0]
+    assert hls["link"].endswith("|user-agent=UA") and hls["type"] == "hls"
+
+
+@pytest.mark.anyio
+async def test_sync_events_second_pass_keeps_the_stored_links_when_the_pro_is_retired(monkeypatch):
+    # Si el archivo del evento ya no está publicado, lo guardado se conserva: nunca se pierde
+    # la lista por un archivo retirado (el CMS publica a medias y rota archivos).
+    async def fake_fetch(path, timeout=25):
+        if path == "events.txt":
+            return encrypt_for_test(json.dumps([]).encode(), KEY)
+        return "no-cifrado"
+
+    async def fake_probe_many(links):
+        for link in links:
+            link["alive"] = True
+
+    stale = {
+        "id": "event:vieja", "category": "Football", "event": "Liga MX, Apertura",
+        "team_a": "Santos", "team_b": "Queretaro",
+        "date_iso": date.today().isoformat(), "time": "17:00:00",
+        "links_ref": "pro/retirado.txt",
+        "links": [{"name": "CANAL MX FHD", "url": "https://vivo", "link": "https://vivo", "alive": None}],
+    }
+    pool = SyncPool(select_rows=[{"id": "event:vieja", "payload": stale}])
+    monkeypatch.setattr(gee38, "_fetch_async", fake_fetch)
+    monkeypatch.setattr(gee38, "_probe_many", fake_probe_many)
+
+    await gee38._sync_events(pool, KEY, {})
+    updates = [args for sql, args in pool.executed if "update gee38_catalog" in sql]
+    assert updates
+    payload = json.loads(updates[0][1])
+    assert [lk["name"] for lk in payload["links"]] == ["CANAL MX FHD"]
+
+
 # ------------------------------------------------------------------ API
 
 import app as api_app  # noqa: E402  (conftest ya ajustó sys.path)

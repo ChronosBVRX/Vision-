@@ -731,6 +731,23 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
         if day not in window_str:
             continue
         links = [lk for lk in (value.get("links") or []) if isinstance(lk, dict)]
+        # La entrada rotó fuera de events.txt (el CMS publica a medias y va rotando), pero su
+        # archivo `pro/<…>.txt` puede seguir publicado CON MÁS enlaces que los guardados: se
+        # RE-DESCARGA para que la lista del partido no se quede congelada. Visto en vivo
+        # (Chivas-Tigres, 17-oct): la fila llevaba horas con 2 enlaces mientras el CMS ya
+        # servía 3 (faltaba «LOW QUALITY (USE VPN)») — la app enseñaba menos que la original.
+        ref = str(value.get("links_ref") or "").strip()
+        if ref and extra_budget > 0:
+            try:
+                fresh = parse_pro(decrypt_body(await _fetch_async(ref), key))
+                if fresh:
+                    links = fresh
+                    extra_budget -= 1
+            except Exception as exc:  # noqa: BLE001 - archivo retirado: se conserva lo guardado
+                log.warning(
+                    "gee38: %s sin refrescar enlaces (%s)",
+                    str(value.get("event") or "")[:40], exc,
+                )
         # Aunque la entrada venga vacía, sus hermanos del mismo cruce la completan:
         # primero se fusiona y luego se sondea el conjunto final.
         pair = _team_pair_key(value.get("team_a", ""), value.get("team_b", ""))
