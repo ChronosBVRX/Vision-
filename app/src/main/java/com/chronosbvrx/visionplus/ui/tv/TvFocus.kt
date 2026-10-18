@@ -100,6 +100,12 @@ fun Modifier.landingFocus(landing: LandingFocus): Modifier =
 private const val RETURN_ATTEMPTS = 15
 private const val RETURN_RETRY_MS = 100L
 
+/** Cada cuánto vigila el regreso que el foco no se quede vacío (una fila que se recarga). */
+private const val RETURN_KEEPER_MS = 500L
+
+/** Respiro del vigilante para que un pedido de foco recién hecho se refleje. */
+private const val RETURN_KEEPER_SETTLE_MS = 120L
+
 /**
  * Restauración del foco al volver de una ficha: pide la tarjeta exacta ([filmId]) una y otra
  * vez. Se re-arma cuando llega contenido nuevo ([contentKey], las filas se pintan en segundo
@@ -136,43 +142,60 @@ fun rememberReturnFocus(
         // Si el foco ya lo eligió alguien (el usuario moviéndose), se respeta. El único foco que
         // se puede corregir es el automático de la pantalla ([landing], el héroe): ese no lo
         // eligió nadie, así que seguimos intentando la tarjeta exacta en cuanto componga.
+        var tookOver = false
         repeat(RETURN_ATTEMPTS) {
+            if (tookOver) return@repeat
             if (FocusRescue.screenHasFocus && !landing.focused) {
                 onDone()
-                return@LaunchedEffect
+                tookOver = true
+                return@repeat
             }
             attempts++
             val ok = runCatching { requester.requestFocus() }.isSuccess
             if (ok) attached = true
             if (FocusRescue.screenHasFocus && !landing.focused) {
                 onDone()
-                return@LaunchedEffect
+                tookOver = true
+                return@repeat
             }
             delay(RETURN_RETRY_MS)
         }
-        if (FocusRescue.screenHasFocus && !landing.focused) {
-            onDone()
-            return@LaunchedEffect
+        if (!tookOver) {
+            // Último recurso: cualquier tarjeta visible y, si no, el destino de la pantalla.
+            // OJO: aquí NO se avisa [onDone]: si el contenido sigue llegando, el efecto se
+            // re-arma con la nueva [contentKey] y reintenta la tarjeta exacta; limpiar ahora
+            // es lo que dejaba el foco en el héroe aunque la tarjeta llegara un segundo después.
+            val rescued = entryRequester != null && requestFocusSafely(entryRequester)
+            // Nada enfocado todavía y la tarjeta exacta no compuso (índice de fila viejo,
+            // contenido cambiado): la columna vuelve al inicio para que el destino de la
+            // pantalla (héroe) EXISTA. Sin esto, un regreso a una fila que ya no está dejaba
+            // el mando muerto sin que ni el rescate pudiera actuar (héroe descompuesto).
+            if (!FocusRescue.screenHasFocus && columnState != null) {
+                runCatching { columnState.scrollToItem(0) }
+                delay(80)
+            }
+            if (!FocusRescue.screenHasFocus) landing.request()
+            if (!FocusRescue.screenHasFocus) {
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "FOCUS_LOST",
+                    "id=$filmId intentos=$attempts adjunta=$attached entrada=$rescued clave=$contentKey",
+                )
+            }
         }
-        // Último recurso: cualquier tarjeta visible y, si no, el destino de la pantalla.
-        // OJO: aquí NO se avisa [onDone]: si el contenido sigue llegando, el efecto se
-        // re-arma con la nueva [contentKey] y reintenta la tarjeta exacta; limpiar ahora
-        // es lo que dejaba el foco en el héroe aunque la tarjeta llegara un segundo después.
-        val rescued = entryRequester != null && requestFocusSafely(entryRequester)
-        // Nada enfocado todavía y la tarjeta exacta no compuso (índice de fila viejo,
-        // contenido cambiado): la columna vuelve al inicio para que el destino de la
-        // pantalla (héroe) EXISTA. Sin esto, un regreso a una fila que ya no está dejaba
-        // el mando muerto sin que ni el rescate pudiera actuar (héroe descompuesto).
-        if (!FocusRescue.screenHasFocus && columnState != null) {
-            runCatching { columnState.scrollToItem(0) }
-            delay(80)
-        }
-        if (!FocusRescue.screenHasFocus) landing.request()
-        if (!FocusRescue.screenHasFocus) {
-            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-                "FOCUS_LOST",
-                "id=$filmId intentos=$attempts adjunta=$attached entrada=$rescued clave=$contentKey",
-            )
+        // El regreso queda VIGILANDO mientras la pantalla viva: si más tarde la tarjeta que
+        // tenía el foco desaparece —«Seguir viendo» se recarga al terminar una película— el
+        // foco se queda vacío sin que nadie lo retome (el usuario reportó el mando muerto
+        // justo así: película terminada y vuelta al Inicio). Aquí vuelve a caer en algo
+        // visible, sin pelear jamás con un foco que sí exista ni comer una tecla en el aire.
+        while (true) {
+            delay(RETURN_KEEPER_MS)
+            // Con un diálogo abierto el foco pertenece a su ventana: aquí no se toca nada.
+            if (FocusRescue.dialogsOpen > 0) continue
+            if (FocusRescue.screenHasFocus) continue
+            runCatching { requester.requestFocus() }
+            delay(RETURN_KEEPER_SETTLE_MS)
+            if (FocusRescue.screenHasFocus) continue
+            if (entryRequester == null || !requestFocusSafely(entryRequester)) landing.request()
         }
     }
 }
@@ -284,8 +307,13 @@ object FocusRescue {
 
     /** Returns true when it moved the focus. */
     fun rescue(): Boolean {
-        if (!shouldConsumeKey(dialogsOpen, screenHasFocus, target?.attached ?: false)) return false
-        target?.request()
+        // El destino de arriba puede no estar compuesto (el héroe del Inicio cuando la lista está
+        // desplazada): se prueban del último al primero y manda el último que SÍ puede tomar el
+        // foco. Si ninguno puede, la tecla sigue su curso: jamás se come una tecla en el aire.
+        val chosen = synchronized(targets) { targets.toList() }
+            .lastOrNull { shouldConsumeKey(dialogsOpen, screenHasFocus, it.attached) }
+            ?: return false
+        chosen.request()
         return true
     }
 }

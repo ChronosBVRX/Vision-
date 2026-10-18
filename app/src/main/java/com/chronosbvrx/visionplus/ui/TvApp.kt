@@ -52,6 +52,24 @@ import com.chronosbvrx.visionplus.ui.tv.landingFocus
 import com.chronosbvrx.visionplus.ui.kids.rememberLockedIndexRows
 import com.chronosbvrx.visionplus.ui.tv.rememberLandingFocus
 
+/** Un pilar del menú lateral de la TV. */
+internal data class TvRailSpec(val label: String, val icon: ImageVector, val target: Route)
+
+/**
+ * Los pilares del menú lateral de la TV: **los mismos que el del teléfono** (Buscar, Inicio,
+ * Películas, Series, En vivo, **Deportes en vivo**, Mi lista) para que los eventos deportivos
+ * sean alcanzables desde cualquier pantalla de la tele, no solo por el acceso rápido del Inicio.
+ */
+internal val TV_RAIL_SPECS = listOf(
+    TvRailSpec("Buscar", Icons.Default.Search, Route.Search),
+    TvRailSpec("Inicio", Icons.Default.Home, Route.Home),
+    TvRailSpec("Películas", Icons.Default.Movie, Route.Section("movies", "Películas")),
+    TvRailSpec("Series", Icons.Default.Theaters, Route.Section("series", "Series")),
+    TvRailSpec("En vivo", Icons.Default.LiveTv, Route.Live),
+    TvRailSpec("Deportes en vivo", Icons.Default.SportsSoccer, Route.Sports),
+    TvRailSpec("Mi lista", Icons.Default.Bookmark, Route.Library),
+)
+
 /** The TV's shell: Home with its rail, and every other place full screen with Back to return. */
 @Composable
 fun TvApp(catalog: XuperCatalog, nav: Navigator) {
@@ -182,14 +200,7 @@ private fun TvRoute(
     when (route) {
         Route.Home -> TvHomeScreen(
             catalog = catalog,
-            railItems = listOf(
-                rail(Icons.Default.Search, "Buscar", Route.Search),
-                rail(Icons.Default.Home, "Inicio", Route.Home),
-                rail(Icons.Default.Movie, "Películas", Route.Section("movies", "Películas")),
-                rail(Icons.Default.Theaters, "Series", Route.Section("series", "Series")),
-                rail(Icons.Default.LiveTv, "En vivo", Route.Live),
-                rail(Icons.Default.Bookmark, "Mi lista", Route.Library),
-            ),
+            railItems = TV_RAIL_SPECS.map { rail(it.icon, it.label, it.target) },
             bottomItems = listOf(rail(Icons.Default.Settings, "Opciones", Route.Settings)),
             railReturn = railReturn,
             returnFilmId = filmReturn,

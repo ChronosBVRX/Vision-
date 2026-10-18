@@ -66,6 +66,24 @@ class TvRescueTest {
         FocusRescue.popTarget(attached)
     }
 
+    @Test
+    fun rescueFallsBackToAnAttachedTargetWhenTheTopOneIsGone() {
+        // El héroe del Inicio puede salir de composición (lista desplazada) mientras otro
+        // destino de la pantalla —la primera tarjeta compuesta— sí puede tomar el foco: el
+        // rescate debe caer en ese, no rendirse dejando el mando muerto (caso reportado del
+        // D-pad perdido al volver al Inicio).
+        FocusRescue.target = null
+        FocusRescue.screenHasFocus = false
+        FocusRescue.dialogsOpen = 0
+        val alive = LandingFocus()
+        val gone = LandingFocus().apply { attached = false }
+        FocusRescue.pushTarget(alive)
+        FocusRescue.pushTarget(gone) // el de arriba: sin componer
+        assertTrue("el rescate debe caer en el destino compuesto de abajo", FocusRescue.rescue())
+        FocusRescue.popTarget(gone)
+        FocusRescue.popTarget(alive)
+    }
+
     // ---------------------------------------------------------- índice de la fila
 
     private fun rows(ids: List<String>, prefix: String) =

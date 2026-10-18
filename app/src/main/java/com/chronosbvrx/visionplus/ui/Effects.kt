@@ -34,8 +34,14 @@ import androidx.tv.material3.CardScale
 fun systemAnimationsOff(context: Context): Boolean =
     Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
 
-/** Reduced effects for everything below the provider; `false` (full effects) by default. */
-val LocalReducedEffects = compositionLocalOf { false }
+/**
+ * Reduced effects for everything below the provider. La app SIEMPRE inyecta su valor real en
+ * `MainActivity`; el valor por defecto es LIGERO a propósito: si algo (una prueba, un host futuro)
+ * compone fuera de la app, no arrastra animaciones infinitas (el drift del héroe, los springs del
+ * riel) que dejan la composición sin asentar nunca — los tests de Compose no llegan a «idle» y
+ * el reloj de pruebas se queda girando.
+ */
+val LocalReducedEffects = compositionLocalOf { true }
 
 /**
  * The hero backdrop's slow left-right drift, 0..1. Returns a [State] so callers read it inside

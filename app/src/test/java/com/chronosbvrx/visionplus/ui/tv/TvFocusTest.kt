@@ -1,5 +1,8 @@
 package com.chronosbvrx.visionplus.ui.tv
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -126,6 +129,18 @@ class TvFocusTest {
     }
 
     @Test
+    fun theTvRailPaintsTheSportsPillar() {
+        // El riel de la tele PINTA «Deportes en vivo» (cerrado, cada icono lleva su etiqueta como
+        // descripción). Se mide sobre la app TV real: es la ruta estable en la suite completa.
+        start(Route.Home)
+        assertLanded("Inicio")
+        val pintado = compose
+            .onAllNodes(androidx.compose.ui.test.hasContentDescription("Deportes en vivo", substring = true), useUnmergedTree = true)
+            .fetchSemanticsNodes().size
+        assertTrue("el riel de la tele no pinta «Deportes en vivo»", pintado >= 1)
+    }
+
+    @Test
     fun homeToFilmToPlayerAndBack() {
         val nav = start(Route.Home)
         assertLanded("Inicio")
@@ -171,6 +186,59 @@ class TvFocusTest {
         assertTrue("Inicio tras serie: el foco se perdió al bajar", focusedCount() >= 1)
         press(Key.DirectionRight)
         assertTrue("Inicio tras serie: el foco se perdió al navegar", focusedCount() >= 1)
+    }
+
+    @Test
+    fun homeReloadAfterAReturnKeepsThePadAlive() {
+        // Flujo del caso reportado: se vuelve al Inicio con un regreso pendiente y el catálogo
+        // se recarga ENTERO con ids nuevos (la película terminó y su fila se rehízo): la
+        // tarjeta que tenía el foco desaparece y el mando no puede quedarse muerto. El tamaño
+        // del catálogo no cambia: la llave vieja del regreso —el tamaño del pool— no se mueve.
+        val films = (1..20).map {
+            film(it).copy(
+                posterUrl = "https://example.com/p$it.jpg",
+                score = 7.0 + (it % 5) * 0.5,
+                voteCount = 500 + it * 10,
+            )
+        }
+        val rows = listOf(CatalogRow("destacadas", "Destacadas", films))
+        val target = com.chronosbvrx.visionplus.data.Popularity
+            .homeCurated(rows, emptyList()).top10.getOrNull(1)?.id
+        assertTrue("el Top 10 debe tener al menos 2 tarjetas", target != null)
+        catalog = XuperCatalog(ApplicationProvider.getApplicationContext())
+        catalog.seed(rows)
+        compose.setContent {
+            VisionTheme {
+                CompositionLocalProvider(com.chronosbvrx.visionplus.ui.LocalReducedEffects provides true) {
+                    TvHomeScreen(
+                        catalog = catalog,
+                        railItems = listOf(TvRailItem(Icons.Default.Home, "Inicio", {})),
+                        returnFilmId = target,
+                        onOpenFilm = {},
+                        onOpenLive = {},
+                        onOpenCategories = {},
+                        onResume = {},
+                    )
+                }
+            }
+        }
+        // El curado llega en segundo plano y el regreso asienta: el mando queda vivo.
+        compose.mainClock.advanceTimeBy(6_000)
+        compose.waitForIdle()
+        press(Key.DirectionDown)
+        press(Key.DirectionDown)
+        press(Key.DirectionRight)
+        assertTrue("el mando debe estar vivo antes de la recarga", focusedCount() >= 1)
+        // El catálogo se recarga entero con ids nuevos (la película terminó y su fila se rehízo):
+        // la tarjeta que tenía el foco desaparece. Mismo tamaño: la llave vieja no se mueve.
+        compose.runOnIdle {
+            catalog.seed(listOf(CatalogRow("destacadas", "Destacadas", (1..20).map { film(200 + it) })))
+        }
+        compose.mainClock.advanceTimeBy(4_000)
+        compose.waitForIdle()
+        assertTrue("el mando se quedó sin foco al desaparecer la tarjeta enfocada", focusedCount() >= 1)
+        press(Key.DirectionRight)
+        assertTrue("el D-pad murió al desaparecer la tarjeta enfocada", focusedCount() >= 1)
     }
 
     @Test

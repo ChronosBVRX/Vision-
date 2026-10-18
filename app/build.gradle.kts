@@ -33,8 +33,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = 340
-        versionName = "2.5.104"
+        versionCode = 341
+        versionName = "2.5.105"
         ndk {
             // Solo ARM: el APK no empaqueta libs x86/x86_64 (los AAR traían credentials/
             // graphics.path de x86_64). En dispositivos x86_64 con traducción ARM (emulador
@@ -96,6 +96,14 @@ android {
     testOptions {
         // Robolectric runs the TV focus tests on the JVM with the app's real resources.
         unitTests.isIncludeAndroidResources = true
+        // OJO: el JVM de pruebas arranca con 512 MB por defecto y la suite completa (más de 100
+        // clases Robolectric + Compose, cada una con su carga) lo ahoga: los tests pesados de
+        // `ui.tv.*` no alcanzaban a quedar «idle» en 60 s y la suite entera caía ahí (pasaban
+        // aislados). Con heap y metaspace holgados la suite completa queda verde.
+        unitTests.all {
+            it.maxHeapSize = "2g"
+            it.jvmArgs("-XX:MetaspaceSize=256m", "-XX:MaxMetaspaceSize=1g")
+        }
     }
     packaging {
         resources {
