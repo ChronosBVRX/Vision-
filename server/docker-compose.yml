@@ -107,6 +107,12 @@ services:
       TMDB_REMATCH_BATCH: "${TMDB_REMATCH_BATCH:-2500}"
       TMDB_REMATCH_COOLDOWN_DAYS: "${TMDB_REMATCH_COOLDOWN_DAYS:-14}"
       TMDB_BACKFILL_BATCH: "${TMDB_BACKFILL_BATCH:-3000}"
+      # Nombres para buscar (es-MX/original/regionales) de matches ya hechos: lote por
+      # ciclo y ritmo propio (una llamada por título conocido, sin búsqueda).
+      TMDB_ALIAS_BATCH: "${TMDB_ALIAS_BATCH:-1500}"
+      TMDB_ALIAS_GAP_SECONDS: "${TMDB_ALIAS_GAP_SECONDS:-0.08}"
+      # Texto de búsqueda materializado: títulos por ciclo que se rehacen de más.
+      SEARCH_TEXT_BATCH: "${SEARCH_TEXT_BATCH:-20000}"
       TZ: "${TZ:-America/Mexico_City}"
     depends_on:
       postgres:

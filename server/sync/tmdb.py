@@ -15,10 +15,12 @@ import logging
 import os
 import time
 import unicodedata
+import urllib.error
 import urllib.parse
 import urllib.request
 
 import grouping
+import search_text
 
 log = logging.getLogger("tmdb")
 
@@ -38,6 +40,11 @@ REMATCH_COOLDOWN_DAYS = int(os.environ.get("TMDB_REMATCH_COOLDOWN_DAYS", "14"))
 ALGO_VERSION = "2"
 # Backfill de popularidad/votos para matches viejos (los que llegaron antes de las columnas).
 BACKFILL_BATCH = int(os.environ.get("TMDB_BACKFILL_BATCH", "3000"))
+# Backfill de NOMBRES (es-MX/original/alternativos) para matches viejos: una llamada por
+# título ya conocido (sin búsqueda) y con su propio ritmo, más rápido que el gota a gota
+# del enriquecimiento pero lejos del límite de TMDB (una pasada de estreno puede subirse).
+ALIAS_BATCH = int(os.environ.get("TMDB_ALIAS_BATCH", "1500"))
+ALIAS_GAP = float(os.environ.get("TMDB_ALIAS_GAP_SECONDS", "0.08"))
 
 
 def _norm(text: str) -> str:
@@ -73,14 +80,43 @@ def _search_specs(kind: str) -> list[tuple[str, str]]:
     return [("/search/tv", "first_air_date_year"), ("/search/movie", "year")]
 
 
-def _get(path: str, **params) -> dict:
+def _get(path: str, gap: float | None = None, **params) -> dict:
     params["api_key"] = KEY
     url = f"{API}{path}?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url, headers={"User-Agent": "VisionPlusIndex/1.0"})
-    if REQUEST_GAP:
-        time.sleep(REQUEST_GAP)
+    delay = REQUEST_GAP if gap is None else gap
+    if delay:
+        time.sleep(delay)
     with urllib.request.urlopen(req, timeout=20) as resp:
         return json.loads(resp.read().decode("utf-8"))
+
+
+def parse_alt_titles(payload) -> list[str]:
+    """Títulos alternativos de TMDB: películas usan `titles`, series `results`.
+
+    Cada entrada trae {title|name, iso_3166_1, type}. Se limpian, deduplican sin
+    distinguir caja y se cortan a 40: los nombres regionales útiles («Vaiana» para
+    «Moana») suelen venir entre los primeros; el resto es cola de transliteraciones.
+    """
+    if not isinstance(payload, dict):
+        return []
+    items = payload.get("titles")
+    if not isinstance(items, list):
+        items = payload.get("results")
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        name = (item.get("title") or item.get("name") or "").strip()
+        key = name.lower()
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        out.append(name)
+        if len(out) >= 40:
+            break
+    return out
 
 
 def current_week() -> str:
@@ -221,7 +257,12 @@ def _match(kind: str, title: str, original: str | None, year: int | None) -> tup
     media = best.get("_media") or ("tv" if kind == "series" else "movie")
     detail_path = f"/tv/{tmdb_id}" if media == "tv" else f"/movie/{tmdb_id}"
     try:
-        details = _get(detail_path, language="es-MX", append_to_response="external_ids")
+        # alternative_titles: los nombres regionales/alternativos viajan en la MISMA
+        # llamada que la ficha: sin ellos, «vaiana» no encuentra «Moana».
+        details = _get(
+            detail_path, language="es-MX",
+            append_to_response="external_ids,alternative_titles",
+        )
     except Exception:  # noqa: BLE001
         return None, True
     genres = [g.get("name") for g in details.get("genres") or [] if g.get("name")]
@@ -240,6 +281,10 @@ def _match(kind: str, title: str, original: str | None, year: int | None) -> tup
         "overview": (details.get("overview") or "").strip(),
         "vote_count": votes,
         "popularity": popularity,
+        # Nombres para buscar («buscando a nemo» → «Finding Nemo»).
+        "original_title": (details.get("original_title") or details.get("original_name") or "").strip(),
+        "localized_title": (details.get("title") or details.get("name") or "").strip(),
+        "alt_titles": parse_alt_titles(details.get("alternative_titles")),
     }, False
 
 
@@ -269,19 +314,27 @@ async def _store_match(pool, title_id: str, match: dict) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            insert into enrichment (title_id, imdb_id, tmdb_id, match_confidence, rating, year, genres, overview, popularity, vote_count, match_algo, updated_at)
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+            insert into enrichment (title_id, imdb_id, tmdb_id, match_confidence, rating, year,
+                                    genres, overview, popularity, vote_count, match_algo,
+                                    original_title, localized_title, alt_titles, aliases_at, updated_at)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now(), now())
             on conflict (title_id) do update set
                 imdb_id = excluded.imdb_id, tmdb_id = excluded.tmdb_id,
                 match_confidence = excluded.match_confidence, rating = excluded.rating,
                 year = excluded.year, genres = excluded.genres,
                 overview = excluded.overview, popularity = excluded.popularity,
                 vote_count = excluded.vote_count, match_algo = excluded.match_algo,
+                original_title = excluded.original_title,
+                localized_title = excluded.localized_title,
+                alt_titles = excluded.alt_titles,
+                aliases_at = now(),
                 updated_at = now()
             """,
             title_id, match["imdb_id"], match["tmdb_id"], match["confidence"],
             match["rating"], match["year"], match["genres"], match["overview"],
             match.get("popularity", 0.0), match.get("vote_count", 0), ALGO_VERSION,
+            match.get("original_title", ""), match.get("localized_title", ""),
+            list(match.get("alt_titles") or []),
         )
         # Propaga el impacto a titles para que el índice ordene por popularidad
         # sin joins por fila (estrenos/géneros profesionales).
@@ -289,6 +342,12 @@ async def _store_match(pool, title_id: str, match: dict) -> None:
             "update titles set popularity = $2, vote_count = $3, updated_at = now() where id = $1",
             title_id, match.get("popularity", 0.0), match.get("vote_count", 0),
         )
+    try:
+        # El texto de búsqueda se rehace al momento (si fallara, el pase de
+        # mantenimiento del ciclo lo detecta por updated_at y lo rehace igual).
+        await search_text.rebuild(pool, ids=[title_id])
+    except Exception:  # noqa: BLE001
+        log.warning("TMDB: texto de búsqueda de %s no se pudo rehacer", title_id)
 
 
 async def _mark_no_match(pool, title_id: str) -> None:
@@ -434,6 +493,103 @@ async def backfill_popularity(pool) -> int:
     return done
 
 
+def _fetch_alias_bundle(tmdb_id: int, kind: str) -> dict | None:
+    """Nombres de un título ya casado en TMDB: (es-MX, original, alternativos).
+
+    Prueba el tipo probable primero (películas: movie; series/anime/kids: tv) y cae al
+    otro: el `kind` de la repisa no siempre coincide con el tipo real de TMDB.
+    Devuelve None si TMDB ya no tiene el id (404 en ambos tipos: ficha borrada/fusionada).
+    Los errores de red se propagan: la fila queda sin marca y se reintenta otro ciclo.
+    """
+    order = ("tv", "movie") if _media_for(kind) == "tv" else ("movie", "tv")
+    for media in order:
+        try:
+            details = _get(
+                f"/{media}/{tmdb_id}", language="es-MX",
+                append_to_response="alternative_titles", gap=ALIAS_GAP,
+            )
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                continue
+            if exc.code == 429:  # límite de la API: se le da aire y se reintenta otro ciclo
+                time.sleep(3.0)
+            raise
+        return {
+            "original_title": (details.get("original_title") or details.get("original_name") or "").strip(),
+            "localized_title": (details.get("title") or details.get("name") or "").strip(),
+            "alt_titles": parse_alt_titles(details.get("alternative_titles")),
+        }
+    return None
+
+
+async def backfill_aliases(pool, workers: int = 1) -> int:
+    """Nombres para buscar en los matches YA existentes (sin ellos, «buscando a nemo»
+    no encontraba «Finding Nemo» ni «vaiana» encontraba «Moana»; brecha medida 2026-10-18).
+
+    Una llamada por título conocido (sin búsqueda), con ritmo propio (`ALIAS_GAP`) y
+    marca `aliases_at` para no repetir: los populares primero. Tras guardar, rehace el
+    texto de búsqueda de esos títulos. `workers > 1` (solo el catch-up manual con
+    `python tmdb.py --aliases N`): las descargas viajan en olas paralelas, las
+    escrituras siguen en el hilo principal.
+    """
+    if not KEY:
+        return 0
+    async with pool.acquire() as conn:
+        pending = await conn.fetch(
+            """
+            select e.title_id, e.tmdb_id, t.kind, t.title
+            from enrichment e
+            join titles t on t.id = e.title_id
+            where e.tmdb_id is not null and coalesce(e.match_confidence, 0) >= 0.5
+              and e.aliases_at is null
+            order by t.popularity desc nulls last, t.score desc nulls last
+            limit $1
+            """,
+            ALIAS_BATCH,
+        )
+    if not pending:
+        return 0
+    done, ids, gone = 0, [], 0
+    wave_size = max(1, workers)
+    for start in range(0, len(pending), wave_size):
+        wave = pending[start:start + wave_size]
+        results = await asyncio.gather(
+            *(asyncio.to_thread(_fetch_alias_bundle, row["tmdb_id"], row["kind"]) for row in wave),
+            return_exceptions=True,
+        )
+        for row, result in zip(wave, results):
+            if isinstance(result, BaseException):  # noqa: BLE001 - se reintenta otro ciclo
+                log.warning("TMDB alias: %s no se pudo consultar (%s)", row["title"], result)
+                continue
+            async with pool.acquire() as conn:
+                if result is None:
+                    # TMDB ya no tiene ese id: se marca para no reintentarlo para siempre.
+                    await conn.execute(
+                        "update enrichment set aliases_at = now() where title_id = $1",
+                        row["title_id"],
+                    )
+                    gone += 1
+                    continue
+                await conn.execute(
+                    """
+                    update enrichment set original_title = $2, localized_title = $3,
+                           alt_titles = $4, aliases_at = now(), updated_at = now()
+                    where title_id = $1
+                    """,
+                    row["title_id"], result["original_title"], result["localized_title"],
+                    result["alt_titles"],
+                )
+            ids.append(row["title_id"])
+            done += 1
+    if ids:
+        try:
+            await search_text.rebuild(pool, ids=ids)
+        except Exception:  # noqa: BLE001 - el pase de mantenimiento lo rehará
+            log.warning("TMDB alias: textos de búsqueda pendientes (los rehará el pase)")
+    log.info("TMDB alias: %s/%s nombres (ids perdidos en TMDB: %s)", done, len(pending), gone)
+    return done
+
+
 async def coverage(pool) -> list[dict]:
     """Cobertura de fichas por tipo (total, con match y sin intentar) — el medidor del ciclo."""
     if not KEY:
@@ -462,3 +618,33 @@ def format_coverage(rows) -> str:
         pct = round(100.0 * matched / total) if total else 0
         parts.append(f"{row['kind']} {matched}/{total} ({pct}%)")
     return " · ".join(parts)
+
+
+if __name__ == "__main__":
+    import sys
+
+    import asyncpg
+
+    async def _cli() -> None:
+        """Catch-up manual del backfill de nombres: `python tmdb.py --aliases [workers]`."""
+        if "--aliases" not in sys.argv:
+            print("uso: python tmdb.py --aliases [workers]   (nombres para buscar de matches ya hechos)")
+            return
+        workers = 1
+        idx = sys.argv.index("--aliases") + 1
+        if idx < len(sys.argv) and sys.argv[idx].isdigit():
+            workers = max(1, int(sys.argv[idx]))
+        pool = await asyncpg.create_pool(os.environ["DATABASE_URL"], min_size=1, max_size=2)
+        try:
+            total = 0
+            while True:
+                n = await backfill_aliases(pool, workers=workers)
+                total += n
+                print(f"alias: {n} (total {total})", flush=True)
+                if n == 0:
+                    break
+            print(f"alias completo: {total}")
+        finally:
+            await pool.close()
+
+    asyncio.run(_cli())

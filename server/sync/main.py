@@ -23,6 +23,7 @@ import grouping
 import index_build
 import magis
 import schedule
+import search_text
 import sports
 import tmdb
 import xtv
@@ -198,6 +199,18 @@ async def main() -> None:
                     changed += await tmdb.backfill_popularity(pool)
                 except Exception:  # noqa: BLE001
                     log.exception("el backfill de popularidad TMDB falló")
+                try:
+                    # Nombres para buscar (es-MX/original/regionales) de los matches ya
+                    # hechos: sin esto, «buscando a nemo» no encuentra «Finding Nemo».
+                    await tmdb.backfill_aliases(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el backfill de nombres TMDB falló")
+                try:
+                    # Mantenimiento del texto de búsqueda: títulos nuevos o con
+                    # enriquecimiento más nuevo que su texto (no toca la versión).
+                    await search_text.rebuild(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el texto de búsqueda no se pudo mantener")
                 try:
                     # Mapeo TMDB→MAL para AniSkip: semanal o si está vacío (no toca versión).
                     await aniskip.sync(pool)

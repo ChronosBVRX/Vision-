@@ -84,6 +84,40 @@ create index if not exists idx_titles_source on titles (source);
 create index if not exists idx_title_categories_category on title_categories (category_id, position);
 create index if not exists idx_titles_title_lower on titles (lower(title));
 
+-- Nombres como la gente busca (2026-10-18): un título del portal puede llamarse
+-- «Finding Nemo» (y el usuario buscar «buscando a nemo»): el es-MX de TMDB, su
+-- original (inglés) y los alternativos por región («Vaiana» para «Moana») entran
+-- al enriquecimiento para que el buscador los encuentre (sync/search_text.py).
+alter table enrichment add column if not exists original_title text not null default '';
+alter table enrichment add column if not exists localized_title text not null default '';
+alter table enrichment add column if not exists alt_titles text[] not null default '{}';
+-- Marca de intento del backfill de nombres (una llamada por título, para no repetir).
+alter table enrichment add column if not exists aliases_at timestamptz;
+
+-- Texto de búsqueda materializado de cada título (nombres plegados + compactos):
+-- el buscador matchea aquí primero (índice GIN) y solo cae a la búsqueda profunda
+-- (reparto/sinopsis) y al fuzzy cuando esta no da resultados.
+alter table titles add column if not exists search_text text not null default '';
+alter table titles add column if not exists search_text_at timestamptz;
+
+-- Trigramas: búsqueda tolerante a errores de escritura («termintor 2» encuentra
+-- «Terminator 2») y aceleración de LIKE '%…%' sobre search_text. Si la extensión
+-- no estuviera disponible el buscador sigue funcionando (a lo sumo, sin ese atajo).
+do $$
+begin
+    create extension if not exists pg_trgm;
+exception when others then
+    raise notice 'pg_trgm no disponible: la busqueda difusa queda desactivada';
+end $$;
+
+do $$
+begin
+    create index if not exists idx_titles_search_trgm
+        on titles using gin (search_text gin_trgm_ops);
+exception when others then
+    raise notice 'indice trgm no creado: se buscara sin aceleracion';
+end $$;
+
 -- Agenda de fútbol (GET /v1/sports): partidos que baja el conector sports.py.
 -- Fuera del índice de catálogo y de su versión: tiene su propio ciclo rápido.
 create table if not exists sports_matches (

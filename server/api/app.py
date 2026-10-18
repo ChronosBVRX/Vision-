@@ -146,7 +146,8 @@ async def _enrichment_map(ids) -> dict:
     if not unique:
         return {}
     rows = await db().fetch(
-        """select title_id, rating, year, overview, popularity, vote_count from enrichment
+        """select title_id, rating, year, overview, popularity, vote_count, original_title
+           from enrichment
            where title_id = any($1::text[]) and coalesce(match_confidence, 0) >= 0.5""",
         unique,
     )
@@ -510,6 +511,166 @@ async def category(
 _SEARCH_CACHE: dict[str, tuple[float, list[dict]]] = {}
 _SEARCH_CACHE_TTL = 300.0  # 5 minutos
 
+# El buscador por etapas (auditoría 2026-10-18): la gente busca con el nombre que
+# conoce, que no siempre es el del portal («buscando a nemo» → «Finding Nemo»,
+# «vaiana» → «Moana»). `titles.search_text` materializa TODOS los nombres (portal,
+# es-MX de TMDB, original y alternativos regionales); se consulta ahí primero.
+_SEARCH_FROM = """
+    from titles t
+    left join enrichment e on e.title_id = t.id and coalesce(e.match_confidence, 0) >= 0.5
+"""
+
+
+def build_rank(clean_q: str) -> tuple[str, list[str]]:
+    """Orden por relevancia de nombres: exacto > prefijo > contiene, en cascada
+    título del portal → alias del portal → es-MX de TMDB → original de TMDB →
+    alternativos por región. Lo demás queda al final (popularidad lo ordena)."""
+    return (
+        """
+        case
+            when unaccent(lower(t.title)) = $1 then 1
+            when unaccent(lower(t.title)) like $2 then 2
+            when unaccent(lower(t.title)) like $3 then 3
+            when unaccent(lower(coalesce(t.original_title, ''))) = $1 then 4
+            when unaccent(lower(coalesce(t.original_title, ''))) like $2 then 5
+            when unaccent(lower(coalesce(e.localized_title, ''))) = $1 then 6
+            when unaccent(lower(coalesce(e.localized_title, ''))) like $2 then 7
+            when unaccent(lower(coalesce(e.original_title, ''))) = $1 then 8
+            when unaccent(lower(coalesce(e.original_title, ''))) like $2 then 9
+            when exists (select 1 from unnest(coalesce(e.alt_titles, '{}'::text[])) a
+                         where unaccent(lower(a)) = $1) then 10
+            when exists (select 1 from unnest(coalesce(e.alt_titles, '{}'::text[])) a
+                         where unaccent(lower(a)) like $2) then 11
+            else 12
+        end
+        """,
+        [clean_q, f"{clean_q}%", f"%{clean_q}%"],
+    )
+
+
+def build_name_match(words: list[str], offset: int = 0) -> tuple[str, list[str]]:
+    """Etapa rápida: cada palabra debe vivir en el texto de búsqueda (nombres del
+    título: portal + es-MX/original/regionales de TMDB, con formas compactas).
+
+    Matchea contra la columna materializada: el índice GIN de trigramas la acelera
+    y el reparto/sinopsis (ruidoso con palabras cortas) no entra aquí — para eso
+    está la etapa profunda, solo de respaldo.
+    """
+    params = [f"%{w}%" for w in words]
+    clauses = [f"t.search_text like ${offset + i + 1}" for i in range(len(params))]
+    return " and ".join(clauses), params
+
+
+def build_deep_match(words: list[str], offset: int = 0) -> tuple[str, list[str]]:
+    """Etapa profunda (solo si la rápida no dio nada): cada palabra puede venir del
+    reparto, la dirección, la sinopsis o los nombres TMDB. Es el comportamiento
+    clásico del buscador, ahora también con los nombres regionales.
+
+    Las palabras de UN carácter solo prueban contra los nombres: en reparto o
+    sinopsis una «x» matchea cualquier texto y envenena la búsqueda («fast x»).
+    """
+    params: list[str] = []
+    clauses: list[str] = []
+    for i, word in enumerate(words):
+        params.append(f"%{word}%")
+        n = offset + i + 1
+        parts = [
+            f"coalesce(t.search_text, '') like ${n}",
+            f"unaccent(lower(t.title)) like ${n}",
+            f"unaccent(lower(coalesce(t.original_title, ''))) like ${n}",
+        ]
+        if len(word) > 1:
+            parts += [
+                f"unaccent(lower(t.director)) like ${n}",
+                f"unaccent(lower(t.cast_list)) like ${n}",
+                f"unaccent(lower(t.synopsis)) like ${n}",
+                f"unaccent(lower(coalesce(e.overview, ''))) like ${n}",
+            ]
+        parts += [
+            f"unaccent(lower(coalesce(e.localized_title, ''))) like ${n}",
+            f"unaccent(lower(coalesce(e.original_title, ''))) like ${n}",
+            f"exists (select 1 from unnest(coalesce(e.alt_titles, '{{}}'::text[])) a "
+            f"where unaccent(lower(a)) like ${n})",
+        ]
+        clauses.append("(" + " or ".join(parts) + ")")
+    return " and ".join(clauses), params
+
+
+async def _search_page(match_sql: str, match_params: list[str], clean_q: str, limit: int):
+    """Una página de resultados con el orden de relevancia de nombres."""
+    rank_sql, rank_params = build_rank(clean_q)
+    params = [*rank_params, *match_params, limit]
+    sql = f"""
+        select {FILM_COLUMNS}
+        {_SEARCH_FROM}
+        where {match_sql}
+        order by {rank_sql},
+            t.popularity desc nulls last,
+            t.score desc nulls last,
+            t.year desc nulls last
+        limit ${len(params)}
+    """
+    return await db().fetch(sql, *params)
+
+
+def fuzzy_probe(clean_q: str) -> str:
+    """La palabra con la que se prueba la similitud: la más larga de la consulta.
+
+    «termintor 2» debe probarse como «termintor»: medido contra la base real, la
+    frase completa da 0.533 (por debajo del umbral) y la palabra sola 0.615.
+    """
+    words = [w for w in clean_q.split() if w]
+    if not words:
+        return clean_q
+    return max(words, key=len)
+
+
+async def _search_fuzzy(clean_q: str, limit: int):
+    """Última red: similitud por trigramas («termintor» → «Terminator»).
+
+    Solo corre cuando las etapas anteriores no dieron NADA; con una palabra muy
+    corta (<4) no vale la pena y sin pg_trgm disponible el que llama absorbe el
+    error y devuelve vacío.
+    """
+    probe = fuzzy_probe(clean_q)
+    if len(probe) < 4:
+        return []
+    return await db().fetch(
+        f"""
+        select {FILM_COLUMNS}
+        {_SEARCH_FROM}
+        where word_similarity(
+                  $1, coalesce(nullif(t.search_text, ''), unaccent(lower(t.title)))
+              ) > 0.55
+        order by word_similarity(
+                     $1, coalesce(nullif(t.search_text, ''), unaccent(lower(t.title)))
+                 ) desc,
+                 t.popularity desc nulls last,
+                 t.score desc nulls last
+        limit $2
+        """,
+        probe,
+        min(limit, 20),
+    )
+
+
+def _attach_original_title(entry: dict, row, enr) -> None:
+    """Nombre original para «también conocida como»: solo si difiere del mostrado.
+
+    La app actual ignora el campo (llega sin costo); una OTA futura puede enseñarlo
+    para que el usuario entienda por qué apareció al buscar en otro idioma.
+    """
+    if enr is None or entry["id"] != row["id"]:
+        return
+    try:
+        if "original_title" not in enr.keys():
+            return
+        original = (enr["original_title"] or "").strip()
+    except (KeyError, TypeError):
+        return
+    if original and _fold(original) != _fold(entry["title"]):
+        entry["originalTitle"] = original
+
 
 @app.get("/v1/search")
 async def search(
@@ -533,67 +694,53 @@ async def search(
     if not words:
         return {"query": q, "films": []}
 
-    exact_phrase = f"%{clean_q}%"
-    prefix_phrase = f"{clean_q}%"
+    name_sql, name_params = build_name_match(words, offset=3)
+    deep_sql, deep_params = build_deep_match(words, offset=3)
 
-    params = [clean_q, prefix_phrase, exact_phrase]
-    word_clauses = []
-    for w in words:
-        idx = len(params) + 1
-        params.append(f"%{w}%")
-        word_clauses.append(
-            f"(unaccent(lower(t.title)) like ${idx} "
-            f"or unaccent(lower(coalesce(t.original_title, ''))) like ${idx} "
-            f"or unaccent(lower(coalesce(t.director, ''))) like ${idx} "
-            f"or unaccent(lower(coalesce(t.cast_list, ''))) like ${idx} "
-            f"or unaccent(lower(t.synopsis)) like ${idx})"
-        )
-
-    all_words_cond = " and ".join(word_clauses)
-    limit_idx = len(params) + 1
-    params.append(limit)
-
-    query_sql = f"""
-        select {FILM_COLUMNS}
-        from titles t
-        where (unaccent(lower(t.title)) like $3 or unaccent(lower(coalesce(t.original_title, ''))) like $3)
-           or ({all_words_cond})
-        order by
-            case
-                when unaccent(lower(t.title)) = $1 then 1
-                when unaccent(lower(t.title)) like $2 then 2
-                when unaccent(lower(t.title)) like $3 then 3
-                when unaccent(lower(coalesce(t.original_title, ''))) = $1 then 4
-                when unaccent(lower(coalesce(t.original_title, ''))) like $2 then 5
-                else 6
-            end,
-            t.popularity desc nulls last,
-            t.score desc nulls last,
-            t.year desc nulls last
-        limit ${limit_idx}
-    """
-
+    rows: list = []
+    deep_failed = False
     try:
-        rows = await db().fetch(query_sql, *params)
+        # 1) Nombres (título/alias/es-MX/original/regionales): vía rápida y precisa.
+        rows = await _search_page(name_sql, name_params, clean_q, limit)
     except Exception:
-        # Fallback de contingencia si unaccent no estuviese disponible
+        rows = []
+    if not rows:
+        try:
+            # 2) Búsqueda clásica profunda (reparto/dirección/sinopsis) de respaldo.
+            rows = await _search_page(deep_sql, deep_params, clean_q, limit)
+        except Exception:
+            deep_failed = True
+            rows = []
+    if not rows:
+        try:
+            # 3) Difusa por trigramas: perdona errores de escritura («termintor»).
+            rows = await _search_fuzzy(clean_q, limit)
+        except Exception:
+            rows = []
+    if not rows and deep_failed:
+        # 4) Contingencia final (la de la versión clásica): LIKE plano sin unaccent.
         like = f"%{clean_q}%"
-        fallback_sql = f"""
-            select {FILM_COLUMNS}
-            from titles t
-            where t.title ilike $1 or coalesce(t.original_title, '') ilike $1
-            order by
-                case
-                    when lower(t.title) = lower($2) then 1
-                    when lower(t.title) ilike lower($2 || '%') then 2
-                    else 3
-                end,
-                t.popularity desc nulls last,
-                t.score desc nulls last,
-                t.year desc nulls last
-            limit $3
-        """
-        rows = await db().fetch(fallback_sql, like, clean_q, limit)
+        try:
+            rows = await db().fetch(
+                f"""
+                select {FILM_COLUMNS}
+                from titles t
+                where t.title ilike $1 or coalesce(t.original_title, '') ilike $1
+                order by
+                    case
+                        when lower(t.title) = lower($2) then 1
+                        when lower(t.title) ilike lower($2 || '%') then 2
+                        else 3
+                    end,
+                    t.popularity desc nulls last,
+                    t.score desc nulls last,
+                    t.year desc nulls last
+                limit $3
+                """,
+                like, clean_q, limit,
+            )
+        except Exception:
+            rows = []
 
     member_of, seasons_by_group, base_of_group = await _group_maps()
     enr = await _enrichment_map([r["id"] for r in rows])
@@ -611,6 +758,7 @@ async def search(
             if group_id in seen_groups:
                 continue
             seen_groups.add(group_id)
+        _attach_original_title(entry, r, enr.get(r["id"]))
         out.append(entry)
 
     if len(_SEARCH_CACHE) > 300:
