@@ -183,7 +183,17 @@ def test_alias_backfill_marks_rows_so_it_never_loops():
     source = inspect.getsource(tmdb.backfill_aliases)
     assert "aliases_at is null" in source
     assert "aliases_at = now()" in source
-    assert "search_text.rebuild" in source
+    assert "_rebuild_ids" in source
+    assert "search_text.rebuild" in inspect.getsource(tmdb._rebuild_ids)
+    # El texto se rehace por trozos: una muerte a media pasada no deja textos viejos.
+    assert "ALIAS_REBUILD_CHUNK" in source
+    # El catch-up del CLI sanea los textos viejos de pasadas interrumpidas.
+    assert "textos sanados" in inspect.getsource(tmdb)
+
+
+def test_search_text_has_a_pending_heal_mode():
+    source = inspect.getsource(search_text)
+    assert '"--pending"' in source
 
 
 class _WritesConn:
@@ -241,6 +251,28 @@ def test_alias_backfill_runs_waves_and_rebuilds_each_saved_title(monkeypatch):
     assert sorted(seen) == [11, 22, 33]
     assert sorted(rebuilt) == ["xtv:1", "xtv:2", "xtv:3"]
     assert len(pool.writes) == 3  # una escritura de nombres por fila
+
+
+def test_alias_backfill_rebuilds_text_in_chunks(monkeypatch):
+    monkeypatch.setattr(tmdb, "KEY", "test-key")
+    monkeypatch.setattr(tmdb, "ALIAS_REBUILD_CHUNK", 1)
+    rows = [
+        {"title_id": "xtv:1", "tmdb_id": 11, "kind": "movie", "title": "A"},
+        {"title_id": "xtv:2", "tmdb_id": 22, "kind": "movie", "title": "B"},
+    ]
+    monkeypatch.setattr(
+        tmdb, "_fetch_alias_bundle",
+        lambda tmdb_id, kind: {"original_title": "X", "localized_title": "Y", "alt_titles": []},
+    )
+    calls = []
+
+    async def fake_rebuild(pool, ids=None, limit=None):
+        calls.append(sorted(ids or []))
+        return len(ids or [])
+
+    monkeypatch.setattr(tmdb.search_text, "rebuild", fake_rebuild)
+    assert asyncio.run(tmdb.backfill_aliases(_WritesPool(rows), workers=1)) == 2
+    assert calls == [["xtv:1"], ["xtv:2"]]
 
 
 def test_alias_backfill_marks_tmdb_deleted_ids_without_counting_them(monkeypatch):

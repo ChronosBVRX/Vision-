@@ -45,6 +45,11 @@ BACKFILL_BATCH = int(os.environ.get("TMDB_BACKFILL_BATCH", "3000"))
 # del enriquecimiento pero lejos del límite de TMDB (una pasada de estreno puede subirse).
 ALIAS_BATCH = int(os.environ.get("TMDB_ALIAS_BATCH", "1500"))
 ALIAS_GAP = float(os.environ.get("TMDB_ALIAS_GAP_SECONDS", "0.08"))
+# El texto de búsqueda se rehace por trozos mientras se guardan nombres: si el proceso
+# muere a media pasada (reinicio del contenedor), lo ya guardado queda fresco igual.
+# Antes se rehacía todo al final y una muerte a mitad dejó ~3.4k textos viejos ya
+# marcados como hechos — «buscando a nemo» dejó de encontrar «Finding Nemo» (2026-10-18).
+ALIAS_REBUILD_CHUNK = 500
 
 
 def _norm(text: str) -> str:
@@ -522,6 +527,14 @@ def _fetch_alias_bundle(tmdb_id: int, kind: str) -> dict | None:
     return None
 
 
+async def _rebuild_ids(pool, ids) -> None:
+    """Rehace el texto de búsqueda de los títulos indicados (a prueba de fallos)."""
+    try:
+        await search_text.rebuild(pool, ids=ids)
+    except Exception:  # noqa: BLE001 - el pase de mantenimiento lo rehará
+        log.warning("TMDB alias: textos de búsqueda pendientes (los rehará el pase)")
+
+
 async def backfill_aliases(pool, workers: int = 1) -> int:
     """Nombres para buscar en los matches YA existentes (sin ellos, «buscando a nemo»
     no encontraba «Finding Nemo» ni «vaiana» encontraba «Moana»; brecha medida 2026-10-18).
@@ -581,11 +594,11 @@ async def backfill_aliases(pool, workers: int = 1) -> int:
                 )
             ids.append(row["title_id"])
             done += 1
+        if len(ids) >= ALIAS_REBUILD_CHUNK:
+            await _rebuild_ids(pool, ids)
+            ids = []
     if ids:
-        try:
-            await search_text.rebuild(pool, ids=ids)
-        except Exception:  # noqa: BLE001 - el pase de mantenimiento lo rehará
-            log.warning("TMDB alias: textos de búsqueda pendientes (los rehará el pase)")
+        await _rebuild_ids(pool, ids)
     log.info("TMDB alias: %s/%s nombres (ids perdidos en TMDB: %s)", done, len(pending), gone)
     return done
 
@@ -640,8 +653,11 @@ if __name__ == "__main__":
             while True:
                 n = await backfill_aliases(pool, workers=workers)
                 total += n
-                print(f"alias: {n} (total {total})", flush=True)
-                if n == 0:
+                # Barrido de sanación: cualquier texto viejo (p. ej. de una pasada
+                # interrumpida por un reinicio) se rehace aquí, no en horas.
+                healed = await search_text.rebuild(pool)
+                print(f"alias: {n} (total {total}); textos sanados: {healed}", flush=True)
+                if n == 0 and healed == 0:
                     break
             print(f"alias completo: {total}")
         finally:

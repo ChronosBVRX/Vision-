@@ -170,14 +170,27 @@ async def rebuild_all(pool, batch: int = 5000) -> int:
 
 if __name__ == "__main__":
     import asyncio
+    import sys
 
     import asyncpg
 
     async def _main() -> None:
         pool = await asyncpg.create_pool(os.environ["DATABASE_URL"], min_size=1, max_size=3)
         try:
-            total = await rebuild_all(pool)
-            print(f"search_text completo: {total}")
+            if "--pending" in sys.argv:
+                # Sanación: rehace solo los textos viejos (enriquecimiento más nuevo
+                # que el texto) — útil tras una pasada interrumpida.
+                total = 0
+                while True:
+                    n = await rebuild(pool, limit=20000)
+                    total += n
+                    print(f"search_text pendientes: {n} (total {total})", flush=True)
+                    if n == 0:
+                        break
+                print(f"search_text sanado: {total}")
+            else:
+                total = await rebuild_all(pool)
+                print(f"search_text completo: {total}")
         finally:
             await pool.close()
 
