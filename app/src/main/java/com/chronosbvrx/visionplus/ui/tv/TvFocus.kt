@@ -21,6 +21,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.node.ModifierNodeElement
 import kotlinx.coroutines.delay
 
 /** How many times, [RETRY_MS] apart, a screen asks for its landing focus before giving up (about 3 s). */
@@ -39,17 +40,46 @@ class LandingFocus internal constructor() {
     var focused by mutableStateOf(false)
         internal set
     /**
-     * Si el destino está compuesto (y puede tomar el foco). Por defecto se asume que
-     * sí —los destinos fijos siempre lo están—; el héroe del Inicio lo apaga al salir
-     * de composición ([RescueAnchor]), porque pedirle foco entonces solo come teclas.
+     * Si el destino está compuesto (y puede tomar el foco). Lo mantiene [landingFocus]
+     * mientras su nodo viva: al desmontarse (fila reciclada, modo que cambió, control
+     * ausente por configuración) queda en false, y el rescate jamás intenta un destino
+     * muerto. [RescueAnchor] lo maneja para anclas que no llevan [landingFocus]
+     * (el héroe del Inicio).
      */
-    var attached by mutableStateOf(true)
+    var attached by mutableStateOf(false)
         internal set
 
     fun request() {
         runCatching { requester.requestFocus() }
     }
 }
+
+/**
+ * Nodo que mantiene [LandingFocus.attached] atado al ciclo de vida real del elemento:
+ * alta cuando el nodo entra al árbol, baja (y foco limpio) cuando sale. Es la bandera
+ * que usa el rescate para no comerse una tecla en un destino que ya no existe.
+ */
+private class LandingAttachNode(var landing: LandingFocus) : Modifier.Node() {
+    override fun onAttach() {
+        landing.attached = true
+    }
+
+    override fun onDetach() {
+        landing.attached = false
+        landing.focused = false
+    }
+}
+
+private data class LandingAttachElement(val landing: LandingFocus) : ModifierNodeElement<LandingAttachNode>() {
+    override fun create() = LandingAttachNode(landing)
+
+    override fun update(node: LandingAttachNode) {
+        node.landing = landing
+    }
+}
+
+private fun Modifier.landingAttached(landing: LandingFocus): Modifier =
+    this then LandingAttachElement(landing)
 
 /**
  * Marca que el destino de rescate está compuesto: mientras este efecto viva, el
@@ -67,6 +97,18 @@ fun RescueAnchor(landing: LandingFocus) {
 /** Decisión pura del rescate: solo consume la tecla si puede caer en algo compuesto. */
 internal fun shouldConsumeKey(dialogsOpen: Int, screenHasFocus: Boolean, targetAttached: Boolean): Boolean =
     dialogsOpen <= 0 && !screenHasFocus && targetAttached
+
+/**
+ * Candidatos del rescate, del último al primero: los destinos compuestos ([LandingFocus.attached])
+ * que el estado actual permite consumir. Puro y probado; el rescate además VERIFICA que el foco
+ * aterrizó antes de comerse la tecla.
+ */
+internal fun rescueCandidates(
+    targets: List<LandingFocus>,
+    dialogsOpen: Int,
+    screenHasFocus: Boolean,
+): List<LandingFocus> =
+    targets.asReversed().filter { shouldConsumeKey(dialogsOpen, screenHasFocus, it.attached) }
 
 /**
  * The screen's landing focus, requested on entry (and again whenever [key] changes). The target is
@@ -94,7 +136,9 @@ fun rememberLandingFocus(key: Any? = Unit): LandingFocus {
 
 /** Marks the element [landing] puts the focus on. Goes before the element's own focusable. */
 fun Modifier.landingFocus(landing: LandingFocus): Modifier =
-    focusRequester(landing.requester).onFocusChanged { landing.focused = it.isFocused }
+    focusRequester(landing.requester)
+        .onFocusChanged { landing.focused = it.isFocused }
+        .landingAttached(landing)
 
 /** Intentos del regreso a una ficha (y su espera): cubren el rato en que el contenido tarda en pintar. */
 private const val RETURN_ATTEMPTS = 15
@@ -305,15 +349,45 @@ object FocusRescue {
     /** How many TV dialogs are open: while there is one, the keys and the focus belong to it. */
     var dialogsOpen = 0
 
-    /** Returns true when it moved the focus. */
+    /** Freno del reporte `FOCUS_RESCUE_MISS`: una pantalla muerta no inunda el diagnóstico. */
+    private var lastMissReportMs = 0L
+
+    /**
+     * Rescata el foco moviéndolo a un destino COMPUESTO. Se prueban del último al primero
+     * y se VERIFICA que el foco aterrizó ([LandingFocus.focused]): un destino muerto —el
+     * nodo se recicló, el modo cambió, el control no existe— no se come la tecla, se
+     * prueba el siguiente y, si ninguno puede, la tecla sigue su curso (jamás una tecla
+     * comida en el aire). Devuelve true solo cuando consumió y movió el foco.
+     */
     fun rescue(): Boolean {
-        // El destino de arriba puede no estar compuesto (el héroe del Inicio cuando la lista está
-        // desplazada): se prueban del último al primero y manda el último que SÍ puede tomar el
-        // foco. Si ninguno puede, la tecla sigue su curso: jamás se come una tecla en el aire.
-        val chosen = synchronized(targets) { targets.toList() }
-            .lastOrNull { shouldConsumeKey(dialogsOpen, screenHasFocus, it.attached) }
-            ?: return false
-        chosen.request()
-        return true
+        val candidates = synchronized(targets) {
+            rescueCandidates(targets.toList(), dialogsOpen, screenHasFocus)
+        }
+        for (candidate in candidates) {
+            candidate.request()
+            if (candidate.focused) return true
+        }
+        if (candidates.isNotEmpty()) reportMiss(candidates.size)
+        return false
+    }
+
+    /**
+     * El rescate existe pero NINGÚN destino compuesto pudo tomar el foco: esa pantalla
+     * dejaría el mando comido por su propia red de seguridad. Se reporta (con freno de
+     * 30 s) para que el caso aparezca en el diagnóstico de la tele real con su pantalla.
+     */
+    private fun reportMiss(count: Int) {
+        val now = java.lang.System.currentTimeMillis()
+        if (now - lastMissReportMs < MISS_REPORT_MS) return
+        lastMissReportMs = now
+        runCatching {
+            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                "FOCUS_RESCUE_MISS",
+                "el rescate no pudo aterrizar en ${count} destino(s) compuestos",
+            )
+        }
     }
 }
+
+/** Freno del reporte de rescate fallido (una pantalla muerta reporta, no inunda). */
+private const val MISS_REPORT_MS = 30_000L

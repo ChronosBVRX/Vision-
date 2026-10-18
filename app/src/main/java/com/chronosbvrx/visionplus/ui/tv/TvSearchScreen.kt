@@ -204,13 +204,18 @@ fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFil
 
     val landing = rememberLandingFocus()
     // Al volver de una ficha: la tarjeta exacta que la abrió (el teclado queda de respaldo).
-    // La lista se reconstruye al entrar, así que el intento se re-arma cuando llega.
+    // La lista se reconstruye al entrar y CAMBIA con cada búsqueda, así que el intento se
+    // re-arma con los resultados reales y, si la tarjeta exacta ya no está, cae en la
+    // primera tarjeta visible (no siempre al teclado).
     val returnRequester = remember { FocusRequester() }
+    val firstResultRequester = remember { FocusRequester() }
+    val firstResultId = results.firstOrNull()?.id
     rememberReturnFocus(
         filmId = returnFilmId,
         requester = returnRequester,
         landing = landing,
-        contentKey = initialFilms.size,
+        contentKey = results,
+        entryRequester = firstResultRequester,
     )
 
     Box(Modifier.fillMaxSize().background(VisionBlack)) {
@@ -338,7 +343,11 @@ fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFil
                                 title = film.title,
                                 imageUrl = film.posterUrl,
                                 cardHeight = 96.dp,
-                                modifier = if (film.id == returnFilmId) Modifier.focusRequester(returnRequester) else Modifier,
+                                modifier = when {
+                                    film.id == returnFilmId -> Modifier.focusRequester(returnRequester)
+                                    film.id == firstResultId -> Modifier.focusRequester(firstResultRequester)
+                                    else -> Modifier
+                                },
                                 onClick = { onOpenFilm(film) },
                             )
                             Text(

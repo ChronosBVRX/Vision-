@@ -26,6 +26,7 @@ import com.chronosbvrx.visionplus.ui.Route
 import com.chronosbvrx.visionplus.ui.TvApp
 import com.chronosbvrx.visionplus.ui.theme.VisionTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -115,6 +116,9 @@ class TvFocusTest {
         FocusRescue.target = null
         FocusRescue.screenHasFocus = false
         FocusRescue.dialogsOpen = 0
+        // La caché en memoria de la fuente deportiva cruza clases de test: se limpia para
+        // que el estado inicial de Deportes sea el de la tele en frío (sin datos).
+        com.chronosbvrx.visionplus.data.gee.GeeSportsSource.resetMemoryForTests()
         val app = ApplicationProvider.getApplicationContext<android.content.Context>()
         val testLiveChannels = listOf(
             LiveChannel("Noticias 24", "xtvlive:c1", null, "Noticias"),
@@ -623,8 +627,8 @@ class TvFocusTest {
 
     @Test
     fun sportsModalDismissRestoresDpadFocus() {
-        val parentLanding = LandingFocus()
-        val modalLanding = LandingFocus()
+        val parentLanding = LandingFocus().apply { attached = true }
+        val modalLanding = LandingFocus().apply { attached = true }
 
         // Simulamos la apertura del modal de canales sobre Fútbol
         FocusRescue.pushTarget(parentLanding)
@@ -640,6 +644,78 @@ class TvFocusTest {
         FocusRescue.screenHasFocus = false
 
         assertEquals("El target activo debe ser el landing padre de la pantalla", parentLanding, FocusRescue.target)
-        assertTrue("Al descartar modal, FocusRescue debe poder rescatar el foco inmediatamente", FocusRescue.rescue())
+        // Al descartar el modal el rescate ya puede intervenir: el candidato es el padre
+        // (la verificación del aterrizaje real se cubre componiendo, en los tests de arriba).
+        assertEquals(
+            "Al descartar modal, el rescate debe tener como candidato al landing padre",
+            listOf(parentLanding),
+            rescueCandidates(listOf(parentLanding), FocusRescue.dialogsOpen, FocusRescue.screenHasFocus),
+        )
+        assertFalse("Sin composición real no se come la tecla", FocusRescue.rescue())
+        FocusRescue.popTarget(parentLanding)
+    }
+
+    @Test
+    fun rescueSkipsADeadTargetAndLandsOnARealOne() {
+        // El caso que dejaba el mando muerto: en la pila del rescate había un destino
+        // marcado como compuesto cuyo nodo ya no existía (el riel en una pantalla que no
+        // es Inicio, el héroe con la lista desplazada). El rescate debe SALTARLO, caer en
+        // el destino compuesto de abajo y consumir la tecla solo por haber movido el foco.
+        start(Route.Home)
+        assertLanded("Inicio")
+        val dead = LandingFocus().apply { attached = true } // nunca compuesto
+        compose.runOnIdle { FocusRescue.pushTarget(dead) }
+        var rescued = false
+        compose.runOnIdle {
+            FocusRescue.screenHasFocus = false
+            rescued = FocusRescue.rescue()
+        }
+        assertTrue("el rescate debe caer en el destino compuesto de abajo", rescued)
+        compose.mainClock.advanceTimeBy(300)
+        compose.waitForIdle()
+        assertTrue("algo debe quedar enfocado tras el rescate", focusedCount() >= 1)
+        compose.runOnIdle { FocusRescue.popTarget(dead) }
+    }
+
+    @Test
+    fun categoryChipEntersTheGridWithThePadAlive() {
+        // Pulsar OK en un chip cambia al modo cuadrícula: la fila de chips se RE-CREA y el
+        // héroe desaparece, así que el foco moría ahí (el landing del héroe ya no compone).
+        // Con el aterrizaje del modo nuevo, el mando sigue vivo al entrar y al volver.
+        writeSectionCache("movies", rows)
+        val nav = startWith(rows, Route.Home, Route.Section("movies", "Películas"))
+        assertLanded("Sección")
+        // Del héroe a la fila de chips; camina los chips hasta un género y entra a la cuadrícula.
+        press(Key.DirectionDown)
+        press(Key.DirectionRight)
+        press(Key.DirectionRight)
+        press(Key.DirectionCenter)
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+        assertTrue("al entrar a la cuadrícula el mando quedó muerto", focusedCount() >= 1)
+        press(Key.DirectionDown)
+        assertTrue("cuadrícula: el foco se perdió al navegar", focusedCount() >= 1)
+        press(Key.DirectionRight)
+        assertTrue("cuadrícula: el foco se perdió al moverse", focusedCount() >= 1)
+        // Atrás vuelve al feed de destacados sin dejar el mando muerto.
+        compose.runOnIdle { nav.pop() }
+        compose.mainClock.advanceTimeBy(300)
+        compose.waitForIdle()
+        assertLanded("Inicio tras la sección")
+    }
+
+    @Test
+    fun sportsEntryKeepsThePadAlive() {
+        // Deportes en vivo es la pantalla más expuesta: en frío la agenda llega tarde y su
+        // mosaico puede estar vacío. Antes se quedaba sin destino de foco (el mando parecía
+        // muerto); ahora el aterrizaje cae en el primer chip compuesto y, cuando la agenda
+        // llega, se re-arma solo. Aquí se exige lo invariante: el mando SIEMPRE está vivo.
+        val nav = start(Route.Home)
+        compose.runOnIdle { nav.push(Route.Sports) }
+        assertLanded("Deportes")
+        press(Key.DirectionDown)
+        assertTrue("Deportes: el foco se perdió al bajar", focusedCount() >= 1)
+        press(Key.DirectionRight)
+        assertTrue("Deportes: el foco se perdió al navegar", focusedCount() >= 1)
     }
 }

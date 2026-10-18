@@ -120,6 +120,12 @@ class MainActivity : ComponentActivity() {
             runCatching { onBackPressedDispatcher.onBackPressed() }
             return
         }
+        // Si esta actividad ya no está al frente (el reproductor tomó la pantalla), la tecla
+        // viaja al proceso :x4k: jamás a un menú invisible.
+        if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+            RemoteBus.broadcastKey(this, code, action)
+            return
+        }
         dispatchRemoteKey(code, action)
     }
 

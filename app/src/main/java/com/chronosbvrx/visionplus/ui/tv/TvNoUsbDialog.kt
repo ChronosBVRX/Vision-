@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,6 +38,11 @@ import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 @Composable
 fun TvNoUsbDialog(onDismiss: () -> Unit) {
     val landing = rememberLandingFocus("tv_no_usb_dialog")
+    // Mientras el diálogo exista, el rescate de la pantalla de atrás no debe robarle las teclas.
+    DisposableEffect(Unit) {
+        FocusRescue.dialogsOpen++
+        onDispose { FocusRescue.dialogsOpen-- }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Box(

@@ -91,6 +91,9 @@ class TvSportsMosaicTest {
         FocusRescue.screenHasFocus = false
         FocusRescue.dialogsOpen = 0
         DeportesReturn.pickingId = null
+        // La caché en memoria cruza clases de test (Robolectric no reinicia los estáticos):
+        // aquí se siembra el archivo, así que la memoria arranca limpia y se lee del disco.
+        com.chronosbvrx.visionplus.data.gee.GeeSportsSource.resetMemoryForTests()
         // Reloj fijo (18:00 CDMX del día sembrado): las fases del mosaico no dependen de la
         // hora real a la que corra la suite (el partido de las 21:00 siempre está «pronto»).
         GeeAgenda.clockForTestsMs = pinnedNow()

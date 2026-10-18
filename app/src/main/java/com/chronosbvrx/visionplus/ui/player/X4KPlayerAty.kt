@@ -269,6 +269,8 @@ class X4KPlayerAty : ComponentActivity() {
     private var scrubbing = false
     private var swallowWakeupKeyCode: Int = KeyEvent.KEYCODE_UNKNOWN
     private var lastControlsWakeupMs: Long = 0L
+    /** Cuándo se armó el swallow: un mando que no manda el UP no puede dejar la tecla muerta. */
+    private var swallowWakeupAtMs: Long = 0L
 
     /** La espera de marca se está desvaneciendo (evita relanzar el fundido en cada sondeo). */
     private var loadingFading = false
@@ -647,6 +649,7 @@ class X4KPlayerAty : ComponentActivity() {
         lastPickerSourceBtn = null
         controlsVisible = false
         swallowWakeupKeyCode = KeyEvent.KEYCODE_UNKNOWN
+        swallowWakeupAtMs = 0L
         // Banderas de reproducción.
         firstFrame = false
         errorShown = false
@@ -4677,11 +4680,17 @@ class X4KPlayerAty : ComponentActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (swallowWakeupKeyCode != KeyEvent.KEYCODE_UNKNOWN) {
-            if (event.action == KeyEvent.ACTION_UP || event.isCanceled) {
+            val nowMs = android.os.SystemClock.uptimeMillis()
+            if (shouldClearSwallowedWakeup(nowMs, swallowWakeupAtMs)) {
+                // El mando no mandó el UP (o se perdió): la tecla no puede quedar muerta.
+                swallowWakeupKeyCode = KeyEvent.KEYCODE_UNKNOWN
+            } else if (event.action == KeyEvent.ACTION_UP || event.isCanceled) {
                 swallowWakeupKeyCode = KeyEvent.KEYCODE_UNKNOWN
                 return true
-            }
-            if (event.keyCode == swallowWakeupKeyCode) {
+            } else if (event.keyCode == swallowWakeupKeyCode) {
+                // Repetición del mismo toque (tecla sostenida): se traga y se refresca el
+                // vencimiento para no soltarla a media pulsación.
+                swallowWakeupAtMs = nowMs
                 return true
             }
         }
@@ -4699,6 +4708,7 @@ class X4KPlayerAty : ComponentActivity() {
             when (action) {
                 PlayerKeyDownAction.WAKE_CONTROLS_ONLY -> {
                     swallowWakeupKeyCode = event.keyCode
+                    swallowWakeupAtMs = android.os.SystemClock.uptimeMillis()
                     lastControlsWakeupMs = android.os.SystemClock.uptimeMillis()
                     showControlsBriefly()
                     return true
@@ -4750,25 +4760,38 @@ class X4KPlayerAty : ComponentActivity() {
             }
             KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> {
                 if (inModal || introView != null || onControl) return super.onKeyDown(keyCode, event)
+                // La repetición de una tecla sostenida no alterna play/pausa en cadena.
+                if (event.repeatCount > 0) return true
                 togglePlay()
                 return true
             }
             KeyEvent.KEYCODE_MEDIA_REWIND -> {
                 if (inModal || introView != null || onControl) return super.onKeyDown(keyCode, event)
-                if (liveMode) switchChannel(liveIndex - 1)
-                else performSeekBy(-10_000L)
+                if (liveMode) {
+                    // Sostener la tecla no puede recorrer la lista de canales sin control.
+                    if (event.repeatCount > 0) return true
+                    switchChannel(liveIndex - 1)
+                } else {
+                    performSeekBy(-10_000L)
+                }
                 showControlsBriefly()
                 return true
             }
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
                 if (inModal || introView != null || onControl) return super.onKeyDown(keyCode, event)
-                if (liveMode) switchChannel(liveIndex + 1)
-                else performSeekBy(10_000L)
+                if (liveMode) {
+                    if (event.repeatCount > 0) return true
+                    switchChannel(liveIndex + 1)
+                } else {
+                    performSeekBy(10_000L)
+                }
                 showControlsBriefly()
                 return true
             }
             KeyEvent.KEYCODE_MEDIA_NEXT -> {
                 if (inModal || introView != null) return super.onKeyDown(keyCode, event)
+                // Sostener «siguiente» no salta varios capítulos.
+                if (event.repeatCount > 0) return true
                 if (hasNextEpisode()) {
                     playNextEpisodeFromControls()
                     return true
@@ -4786,6 +4809,8 @@ class X4KPlayerAty : ComponentActivity() {
                     return true
                 }
                 if (liveMode) {
+                    // El zapping es a dos toques: sostener la flecha no recorre los canales.
+                    if (event.repeatCount > 0) return true
                     switchChannel(liveIndex + 1)
                     showControlsBriefly()
                     return true
@@ -4803,6 +4828,7 @@ class X4KPlayerAty : ComponentActivity() {
                     return true
                 }
                 if (liveMode) {
+                    if (event.repeatCount > 0) return true
                     switchChannel(liveIndex - 1)
                     showControlsBriefly()
                     return true
@@ -4838,14 +4864,25 @@ class X4KPlayerAty : ComponentActivity() {
             if (!hasFocusedControl()) {
                 val target = if (liveMode) channelsBtn else playPauseBtn
                 target?.requestFocus()
-                target?.post {
-                    if (controlsVisible && !isModalActive && !hasFocusedControl()) {
-                        target.requestFocus()
-                    }
-                }
+                retryControlFocus(target, attempts = 2)
             }
         }
         scheduleHide()
+    }
+
+    /**
+     * Reintentos del foco de los controles: la petición hecha mientras la vista aún no
+     * puede tomarlo (o la caja anda ocupada arrancando el motor) se descarta en silencio;
+     * dos reintentos cortos la recuperan sin que el usuario tenga que volver a picar.
+     */
+    private fun retryControlFocus(target: View?, attempts: Int) {
+        if (target == null || attempts <= 0) return
+        target.postDelayed({
+            if (controlsVisible && !isModalActive && !hasFocusedControl()) {
+                target.requestFocus()
+                retryControlFocus(target, attempts - 1)
+            }
+        }, 160L)
     }
 
     override fun onStop() {

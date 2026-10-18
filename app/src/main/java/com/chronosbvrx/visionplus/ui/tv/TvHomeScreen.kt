@@ -310,18 +310,27 @@ fun TvHomeScreen(
     // Regreso a la tarjeta exacta con revelado vertical de su fila: el curado llega tarde
     // y con otra estructura, así que primero se desplaza la columna hasta la fila (sin eso
     // la tarjeta ni se compone) y luego se pide el foco; al terminar se limpia el regreso.
-    val returnRowIndex = rememberReturnRowIndex(
-        returnFilmId = if (returnPending) returnFilmId else null,
-        heroFilmId = featured?.film?.id,
-        top10 = top10Films,
-        premieres = estrenosFilms,
-        trending = trendingFilms,
-        continueCards = continueCards,
-        ownKindRows = ownKindRows,
-        otherRows = otherRows,
-        showPlaceholders = rows.isEmpty() && catalog.loading,
-        showNoRows = noCatalogMessage != null,
-    )
+    // Las filas salen de [homeRowSlots] — la MISMA lista que pinta el LazyColumn —, así que
+    // el índice no puede correrse al agregar una fila.
+    val homeSlots = remember(
+        featured, top10Films, estrenosFilms, trendingFilms, continueCards, ownKindRows, otherRows,
+        rows.isEmpty(), catalog.loading,
+    ) {
+        homeRowSlots(
+            heroFilmId = featured?.film?.id,
+            top10 = top10Films,
+            premieres = estrenosFilms,
+            trending = trendingFilms,
+            continueCards = continueCards,
+            ownKindRows = ownKindRows,
+            otherRows = otherRows,
+            showPlaceholders = rows.isEmpty() && catalog.loading,
+            showNoRows = noCatalogMessage != null,
+        )
+    }
+    val returnRowIndex = remember(homeSlots, returnFilmId, returnPending) {
+        homeRowIndexOf(homeSlots, if (returnPending) returnFilmId else null)
+    }
     rememberReturnFocus(
         filmId = if (returnPending) returnFilmId else null,
         requester = returnRequester,
@@ -424,44 +433,46 @@ fun TvHomeScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp),
                 ) {
-                    // 1. BILLBOARD HERO INTERACTIVO CON ACCIONES DIRECTAS
-                    item(key = "billboard") {
-                        HeroBillboard(
-                            featured = featured,
-                            currentFilm = currentFilm,
-                            inFavorites = inFavorites,
-                            landing = landing,
-                            returnRequester = returnRequester,
-                            returnFilmId = returnFilmId,
-                            onOpenFilm = onOpenFilm,
-                            onToggleFavorite = {
-                                currentFilm?.let { f ->
-                                    UserLibrary.toggleFavorite(context, f)
-                                    inFavorites = !inFavorites
-                                }
-                            },
-                        )
-                    }
+                    // Las filas salen de [homeSlots], la MISMA lista que calcula el índice del
+                    // regreso: pintar y regresar ya no pueden desincronizarse.
+                    homeSlots.forEach { slot ->
+                        when (slot) {
+                            // 1. BILLBOARD HERO INTERACTIVO CON ACCIONES DIRECTAS
+                            is HomeRowSlot.Billboard -> item(key = slot.key) {
+                                HeroBillboard(
+                                    featured = featured,
+                                    currentFilm = currentFilm,
+                                    inFavorites = inFavorites,
+                                    landing = landing,
+                                    returnRequester = returnRequester,
+                                    returnFilmId = returnFilmId,
+                                    onOpenFilm = onOpenFilm,
+                                    onToggleFavorite = {
+                                        currentFilm?.let { f ->
+                                            UserLibrary.toggleFavorite(context, f)
+                                            inFavorites = !inFavorites
+                                        }
+                                    },
+                                )
+                            }
 
                     // 2. ACCESOS RÁPIDOS A COLECCIONES Y ESPECIALES (Brand Hubs: Fútbol, Anime, Novelas, Categorías)
-                    item(key = "home_quick_hubs") {
+                    HomeRowSlot.Hubs -> item(key = slot.key) {
                         TvQuickHubsRow(onGoRoute = onGoRoute)
                     }
 
                     // Estados de carga o reintento si el catálogo aún no responde
-                    if (rows.isEmpty() && catalog.loading) {
-                        item(key = "ghosts") {
+                    HomeRowSlot.Status -> item(key = slot.key) {
+                        if (rows.isEmpty() && catalog.loading) {
                             Column(Modifier.padding(horizontal = 48.dp, vertical = 12.dp)) {
                                 GhostRow(count = 5, cardWidth = 140.dp, cardHeight = 210.dp, horizontalPadding = 0.dp)
                                 GhostRow(count = 5, cardWidth = 140.dp, cardHeight = 210.dp, horizontalPadding = 0.dp)
                             }
-                        }
-                    } else if (noCatalogMessage != null) {
-                        item(key = "norows") {
+                        } else {
                             val scope = rememberCoroutineScope()
                             Column(Modifier.padding(horizontal = 48.dp, vertical = 16.dp)) {
                                 Text(
-                                    noCatalogMessage,
+                                    noCatalogMessage.orEmpty(),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = Color.White,
                                     modifier = Modifier.padding(end = 160.dp),
@@ -474,75 +485,67 @@ fun TvHomeScreen(
                     }
 
                     // 3. FILA 1: TOP 10 EN VISION+ HOY (TENDENCIAS CON NÚMEROS GIGANTES)
-                    if (top10Films.isNotEmpty()) {
-                        item(key = "home_top10") {
-                            HomePosterRow(
-                                title = "Top 10 en Vision+ Hoy",
-                                films = top10Films,
-                                isTop10 = true,
-                                returnRequester = returnRequester,
-                                returnFilmId = returnFilmId,
-                                entryRequester = rowEntry,
-                                onFocusFilm = { focusFilm = it },
-                                onOpenFilm = onOpenFilm,
-                            )
-                        }
+                    is HomeRowSlot.Top10 -> item(key = slot.key) {
+                        HomePosterRow(
+                            title = "Top 10 en Vision+ Hoy",
+                            films = top10Films,
+                            isTop10 = true,
+                            returnRequester = returnRequester,
+                            returnFilmId = returnFilmId,
+                            entryRequester = rowEntry,
+                            onFocusFilm = { focusFilm = it },
+                            onOpenFilm = onOpenFilm,
+                        )
                     }
 
                     // 4. FILA 2: NOVEDADES Y ESTRENOS
-                    if (estrenosFilms.isNotEmpty()) {
-                        item(key = "home_estrenos") {
-                            HomePosterRow(
-                                title = "Novedades y Estrenos",
-                                films = estrenosFilms,
-                                isNew = true,
-                                icon = VisionIcons.Novelties,
-                                returnRequester = returnRequester,
-                                returnFilmId = returnFilmId,
-                                entryRequester = rowEntry,
-                                onFocusFilm = { focusFilm = it },
-                                onOpenFilm = onOpenFilm,
-                            )
-                        }
+                    is HomeRowSlot.Premieres -> item(key = slot.key) {
+                        HomePosterRow(
+                            title = "Novedades y Estrenos",
+                            films = estrenosFilms,
+                            isNew = true,
+                            icon = VisionIcons.Novelties,
+                            returnRequester = returnRequester,
+                            returnFilmId = returnFilmId,
+                            entryRequester = rowEntry,
+                            onFocusFilm = { focusFilm = it },
+                            onOpenFilm = onOpenFilm,
+                        )
                     }
 
                     // FILA: POPULARES DE LA SEMANA (TMDB, casada con el catálogo)
-                    if (trendingFilms.isNotEmpty()) {
-                        item(key = "home_trending_week") {
-                            HomePosterRow(
-                                title = "Populares de la semana",
-                                films = trendingFilms,
-                                icon = VisionIcons.WeeklyTrending,
-                                returnRequester = returnRequester,
-                                returnFilmId = returnFilmId,
-                                entryRequester = rowEntry,
-                                onFocusFilm = { focusFilm = it },
-                                onOpenFilm = onOpenFilm,
-                            )
-                        }
+                    is HomeRowSlot.Trending -> item(key = slot.key) {
+                        HomePosterRow(
+                            title = "Populares de la semana",
+                            films = trendingFilms,
+                            icon = VisionIcons.WeeklyTrending,
+                            returnRequester = returnRequester,
+                            returnFilmId = returnFilmId,
+                            entryRequester = rowEntry,
+                            onFocusFilm = { focusFilm = it },
+                            onOpenFilm = onOpenFilm,
+                        )
                     }
 
                     // 5. FILA 3: SEGUIR VIENDO (con barra de avance neón)
-                    if (continueCards.isNotEmpty()) {
-                        item(key = "continue") {
-                            ContinueRow(
-                                cards = continueCards,
-                                returnRequester = returnRequester,
-                                returnFilmId = returnFilmId,
-                                entryRequester = rowEntry,
-                                onFocusFilm = { focusFilm = it },
-                                onResume = onResume,
-                            )
-                        }
+                    is HomeRowSlot.Continue -> item(key = slot.key) {
+                        ContinueRow(
+                            cards = continueCards,
+                            returnRequester = returnRequester,
+                            returnFilmId = returnFilmId,
+                            entryRequester = rowEntry,
+                            onFocusFilm = { focusFilm = it },
+                            onResume = onResume,
+                        )
                     }
 
                     // 6. FILAS PROPIAS POR TIPO (populares, no nicho)
-                    items(ownKindRows, key = { it.id }) { row ->
-                        val limitedFilms = remember(row.films) { row.films.take(15) }
+                    is HomeRowSlot.Kind -> item(key = slot.key) {
+                        val limitedFilms = remember(slot.row.films) { slot.row.films.take(15) }
                         HomePosterRow(
-                            title = row.title,
+                            title = slot.row.title,
                             films = limitedFilms,
-                            icon = homeRowIcon(row.id),
+                            icon = homeRowIcon(slot.row.id),
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
@@ -552,10 +555,10 @@ fun TvHomeScreen(
                     }
 
                     // 7. RESTO DE FILAS: TV EN VIVO Y LAS FUENTES PROPIAS
-                    items(otherRows, key = { it.id }) { row ->
-                        val limitedFilms = remember(row.films) { row.films.take(15) }
+                    is HomeRowSlot.Other -> item(key = slot.key) {
+                        val limitedFilms = remember(slot.row.films) { slot.row.films.take(15) }
                         HomePosterRow(
-                            title = row.title,
+                            title = slot.row.title,
                             films = limitedFilms,
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
@@ -565,8 +568,10 @@ fun TvHomeScreen(
                         )
                     }
 
-                    item(key = "end_spacer") {
+                    HomeRowSlot.End -> item(key = slot.key) {
                         Spacer(Modifier.height(32.dp))
+                    }
+                        }
                     }
                 }
             }
@@ -754,16 +759,109 @@ private fun TvQuickHubCard(
 }
 
 /**
- * Índice del `LazyColumn` del Inicio donde vive la tarjeta del regreso (-1 si no hay
- * regreso). Réplica exacta del orden de los `item`/`items` de la lista: billboard, hubs,
- * placeholders, Top 10, Estrenos, Populares de la semana, Seguir viendo, filas propias y
- * resto. Puro y testeable: con él, el regreso revela la fila verticalmente antes de pedir
- * foco.
- *
- * OJO: cada fila que se agregue al `LazyColumn` del Inicio debe sumarse aquí en su MISMA
- * posición; una fila olvidada corre el índice y el regreso revela/compone la fila
- * equivocada (el foco cae lejos o el mando queda muerto) — pasó con «Populares de la
- * semana», que llegó después de escribir esto.
+ * Una fila del Inicio, en el orden EXACTO en que se pinta. Es la fuente única del
+ * `LazyColumn` y del índice del regreso: agregar una fila ya no puede desincronizar el
+ * revelado del scroll (el fallo de «Populares de la semana», que corrió el índice y dejó
+ * el mando muerto al volver de una serie).
+ */
+internal sealed interface HomeRowSlot {
+    val key: String
+
+    /** ¿Esta fila contiene la tarjeta de [filmId]? (para el índice del regreso). */
+    fun containsFilm(filmId: String): Boolean
+
+    data class Billboard(val filmId: String?) : HomeRowSlot {
+        override val key: String get() = "billboard"
+        override fun containsFilm(filmId: String) = filmId == this.filmId && filmId.isNotBlank()
+    }
+
+    data object Hubs : HomeRowSlot {
+        override val key: String get() = "home_quick_hubs"
+        override fun containsFilm(filmId: String) = false
+    }
+
+    data object Status : HomeRowSlot {
+        override val key: String get() = "home_status"
+        override fun containsFilm(filmId: String) = false
+    }
+
+    data class Top10(val films: List<Film>) : HomeRowSlot {
+        override val key: String get() = "home_top10"
+        override fun containsFilm(filmId: String) = films.any { it.id == filmId }
+    }
+
+    data class Premieres(val films: List<Film>) : HomeRowSlot {
+        override val key: String get() = "home_estrenos"
+        override fun containsFilm(filmId: String) = films.any { it.id == filmId }
+    }
+
+    data class Trending(val films: List<Film>) : HomeRowSlot {
+        override val key: String get() = "home_trending_week"
+        override fun containsFilm(filmId: String) = films.any { it.id == filmId }
+    }
+
+    data class Continue(val cards: List<ResumeCard>) : HomeRowSlot {
+        override val key: String get() = "continue"
+        override fun containsFilm(filmId: String) =
+            cards.any { it.film?.id == filmId || it.entry.key == filmId || it.entry.xtvCode == filmId }
+    }
+
+    /** Una fila propia por tipo (home-kind-*): su clave es el id de la fila, como al pintar. */
+    data class Kind(val row: CatalogRow) : HomeRowSlot {
+        override val key: String get() = row.id
+        override fun containsFilm(filmId: String) = row.films.any { it.id == filmId }
+    }
+
+    /** El resto de filas del catálogo: misma regla de clave que al pintar. */
+    data class Other(val row: CatalogRow) : HomeRowSlot {
+        override val key: String get() = row.id
+        override fun containsFilm(filmId: String) = row.films.any { it.id == filmId }
+    }
+
+    data object End : HomeRowSlot {
+        override val key: String get() = "end_spacer"
+        override fun containsFilm(filmId: String) = false
+    }
+}
+
+/**
+ * Las filas del Inicio en su orden real de pintado. Réplica EXACTA de lo que compone el
+ * `LazyColumn` —ahora es la misma lista que lo alimenta—: billboard, hubs, estado
+ * (fantasmas/reintento), Top 10, Estrenos, Populares de la semana, Seguir viendo, filas
+ * propias, resto y el espaciador final.
+ */
+internal fun homeRowSlots(
+    heroFilmId: String?,
+    top10: List<Film>,
+    premieres: List<Film>,
+    trending: List<Film>,
+    continueCards: List<ResumeCard>,
+    ownKindRows: List<CatalogRow>,
+    otherRows: List<CatalogRow>,
+    showPlaceholders: Boolean,
+    showNoRows: Boolean,
+): List<HomeRowSlot> = buildList {
+    add(HomeRowSlot.Billboard(heroFilmId))
+    add(HomeRowSlot.Hubs)
+    if (showPlaceholders || showNoRows) add(HomeRowSlot.Status)
+    if (top10.isNotEmpty()) add(HomeRowSlot.Top10(top10))
+    if (premieres.isNotEmpty()) add(HomeRowSlot.Premieres(premieres))
+    if (trending.isNotEmpty()) add(HomeRowSlot.Trending(trending))
+    if (continueCards.isNotEmpty()) add(HomeRowSlot.Continue(continueCards))
+    ownKindRows.forEach { add(HomeRowSlot.Kind(it)) }
+    otherRows.forEach { add(HomeRowSlot.Other(it)) }
+    add(HomeRowSlot.End)
+}
+
+/** Índice vertical de la fila que contiene la tarjeta del regreso (-1 si no está). */
+internal fun homeRowIndexOf(slots: List<HomeRowSlot>, returnFilmId: String?): Int {
+    if (returnFilmId == null) return -1
+    return slots.indexOfFirst { it.containsFilm(returnFilmId) }
+}
+
+/**
+ * Compatibilidad: el índice del regreso a partir de las piezas del Inicio (los guardianes
+ * puros lo usan). Es un envoltorio de [homeRowSlots] + [homeRowIndexOf].
  */
 internal fun homeReturnRowIndex(
     returnFilmId: String?,
@@ -776,51 +874,20 @@ internal fun homeReturnRowIndex(
     otherRows: List<CatalogRow>,
     showPlaceholders: Boolean,
     showNoRows: Boolean,
-): Int {
-    if (returnFilmId == null) return -1
-    if (heroFilmId == returnFilmId) return 0
-    var index = 2 // billboard (0) + hubs (1)
-    if (showPlaceholders || showNoRows) index += 1
-    if (top10.any { it.id == returnFilmId }) return index
-    if (top10.isNotEmpty()) index += 1
-    if (premieres.any { it.id == returnFilmId }) return index
-    if (premieres.isNotEmpty()) index += 1
-    if (trending.any { it.id == returnFilmId }) return index
-    if (trending.isNotEmpty()) index += 1
-    if (continueCards.any { it.film?.id == returnFilmId || it.entry.key == returnFilmId || it.entry.xtvCode == returnFilmId }) return index
-    if (continueCards.isNotEmpty()) index += 1
-    for (row in ownKindRows) {
-        if (row.films.any { it.id == returnFilmId }) return index
-        index += 1
-    }
-    for (row in otherRows) {
-        if (row.films.any { it.id == returnFilmId }) return index
-        index += 1
-    }
-    return -1
-}
-
-@Composable
-private fun rememberReturnRowIndex(
-    returnFilmId: String?,
-    heroFilmId: String?,
-    top10: List<Film>,
-    premieres: List<Film>,
-    trending: List<Film>,
-    continueCards: List<ResumeCard>,
-    ownKindRows: List<CatalogRow>,
-    otherRows: List<CatalogRow>,
-    showPlaceholders: Boolean,
-    showNoRows: Boolean,
-): Int = remember(
-    returnFilmId, heroFilmId, top10, premieres, trending, continueCards, ownKindRows, otherRows,
-    showPlaceholders, showNoRows,
-) {
-    homeReturnRowIndex(
-        returnFilmId, heroFilmId, top10, premieres, trending, continueCards,
-        ownKindRows, otherRows, showPlaceholders, showNoRows,
-    )
-}
+): Int = homeRowIndexOf(
+    homeRowSlots(
+        heroFilmId = heroFilmId,
+        top10 = top10,
+        premieres = premieres,
+        trending = trending,
+        continueCards = continueCards,
+        ownKindRows = ownKindRows,
+        otherRows = otherRows,
+        showPlaceholders = showPlaceholders,
+        showNoRows = showNoRows,
+    ),
+    returnFilmId,
+)
 
 /**
  * Billboard Cinemático del Hero con badge, metadatos y botones directos interactivos.

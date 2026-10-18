@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -92,6 +93,10 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
         pickingId?.let { id -> gee.events.firstOrNull { it.id == id } }
     }
     val geeEntryFocus = remember { FocusRequester() }
+    // Destino de aterrizaje SIEMPRE compuesto (el primer chip del deporte, o «Canales»):
+    // con la agenda vacía o en camino no hay mosaico que enfocar y la pantalla se quedaba
+    // sin destino (el mando parecía muerto hasta Atrás).
+    val landing = rememberLandingFocus("tv_sports")
     val gridState = rememberLazyGridState()
     val context = LocalContext.current
     val pickingGuide = remember(picking) { picking?.broadcasts.orEmpty() }
@@ -174,11 +179,14 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
     // El vigilante de vida: mientras la pantalla está abierta, comprueba sin parar las señales
     // de los partidos EN VIVO (una caída se ve al momento y un levantamiento también).
     LaunchedEffect(Unit) { gee.watchSignals() }
-    LaunchedEffect(gee.selectedCategory, league, channels) {
+    // Aterrizaje: la primera tarjeta del mosaico (o el primer canal en «Canales»); si aún no
+    // existe —agenda vacía o en camino—, el foco cae en un chip compuesto. La llave incluye
+    // «hay eventos»: cuando la agenda llega tarde, el intento se re-arma solo y el mosaico
+    // queda enfocado sin que el usuario toque nada.
+    LaunchedEffect(gee.selectedCategory, league, channels, filtered.isEmpty()) {
         runCatching { gridState.scrollToItem(0) }
-        FocusRescue.screenHasFocus = false
         delay(140)
-        runCatching { geeEntryFocus.requestFocus() }
+        if (!requestFocusSafely(geeEntryFocus)) landing.request()
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -212,7 +220,7 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(horizontal = 2.dp),
             ) {
-                items(gee.categories, key = { it }) { category ->
+                itemsIndexed(gee.categories, key = { _, it -> it }) { index, category ->
                     TvChoiceChip(
                         label = geeCategoryLabel(category),
                         selected = !channels && gee.selectedCategory == category,
@@ -221,7 +229,9 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                             channels = false
                             gee.selectCategory(category)
                         },
-                        modifier = Modifier.softFocusDown(geeEntryFocus),
+                        // El primer chip del deporte es el destino de respaldo (siempre compuesto).
+                        modifier = (if (index == 0) Modifier.landingFocus(landing) else Modifier)
+                            .softFocusDown(geeEntryFocus),
                     )
                 }
                 item(key = "canales") {
@@ -230,7 +240,9 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                         selected = channels,
                         compact = true,
                         onClick = { channels = true },
-                        modifier = Modifier.softFocusDown(geeEntryFocus),
+                        // Sin deportes listados, «Canales» (siempre pintado) sostiene el rescate.
+                        modifier = (if (gee.categories.isEmpty()) Modifier.landingFocus(landing) else Modifier)
+                            .softFocusDown(geeEntryFocus),
                     )
                 }
             }

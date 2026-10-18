@@ -64,6 +64,16 @@ object RemoteBus {
             local.onRemoteKey(code, action)
             return
         }
+        broadcastKey(context, code, action)
+    }
+
+    /**
+     * Manda la tecla al reproductor (`:x4k`) por el broadcast interno, aunque el menú
+     * local siga registrado: cuando el reproductor está al frente (transición de
+     * actividad), la tecla no puede caer en la pantalla invisible del menú.
+     */
+    fun broadcastKey(context: Context, code: Int, action: String) {
+        if (!RemoteKeys.isAllowed(code)) return
         runCatching {
             context.sendBroadcast(
                 Intent(ACTION_REMOTE_KEY)

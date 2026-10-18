@@ -819,6 +819,17 @@ class PlayerNavigationTest {
             ),
         )
     }
+
+    @Test
+    fun swallowedWakeupKeyExpiresWhenTheUpNeverArrives() {
+        // Una pulsación normal (con su UP cerca) no expira: la ventana es amplia.
+        assertFalse(shouldClearSwallowedWakeup(nowMs = 1_000L, wakeupAtMs = 1_000L))
+        assertFalse(shouldClearSwallowedWakeup(nowMs = 2_000L, wakeupAtMs = 1_000L))
+        // Sin UP (mando que no lo manda, o se perdió), el trago se libera al vencer el tope:
+        // la tecla no puede quedar muerta para siempre.
+        assertTrue(shouldClearSwallowedWakeup(nowMs = 2_250L, wakeupAtMs = 1_000L))
+        assertTrue(shouldClearSwallowedWakeup(nowMs = 8_000L, wakeupAtMs = 100L))
+    }
 }
 
 

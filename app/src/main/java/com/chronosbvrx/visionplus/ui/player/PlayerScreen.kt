@@ -496,12 +496,20 @@ private fun TitanLivePlayer(channel: LiveChannel, onBack: () -> Unit) {
             .background(Color.Black)
             .landingFocus(surface)
             .onPreviewKeyEvent { e ->
+                if (swallowWakeupKey != null && shouldClearSwallowedWakeup(android.os.SystemClock.uptimeMillis(), lastWakeupAtMs)) {
+                    // El UP se perdió (o el mando no lo manda): la tecla no puede quedar muerta.
+                    swallowWakeupKey = null
+                }
                 if (swallowWakeupKey != null) {
                     if (e.type == KeyEventType.KeyUp) {
                         swallowWakeupKey = null
                         return@onPreviewKeyEvent true
                     }
-                    if (e.key == swallowWakeupKey) return@onPreviewKeyEvent true
+                    if (e.key == swallowWakeupKey) {
+                        // Repetición de la tecla sostenida: se traga y se refresca el vencimiento.
+                        lastWakeupAtMs = android.os.SystemClock.uptimeMillis()
+                        return@onPreviewKeyEvent true
+                    }
                 }
                 if (e.type == KeyEventType.KeyDown) {
                     swallowWakeupKey = null
@@ -665,12 +673,20 @@ fun TitanVodPlayerScreen(film: Film, onBack: () -> Unit) {
             .background(Color.Black)
             .landingFocus(surface)
             .onPreviewKeyEvent { e ->
+                if (swallowWakeupKey != null && shouldClearSwallowedWakeup(android.os.SystemClock.uptimeMillis(), lastWakeupAtMs)) {
+                    // El UP se perdió (o el mando no lo manda): la tecla no puede quedar muerta.
+                    swallowWakeupKey = null
+                }
                 if (swallowWakeupKey != null) {
                     if (e.type == KeyEventType.KeyUp) {
                         swallowWakeupKey = null
                         return@onPreviewKeyEvent true
                     }
-                    if (e.key == swallowWakeupKey) return@onPreviewKeyEvent true
+                    if (e.key == swallowWakeupKey) {
+                        // Repetición de la tecla sostenida: se traga y se refresca el vencimiento.
+                        lastWakeupAtMs = android.os.SystemClock.uptimeMillis()
+                        return@onPreviewKeyEvent true
+                    }
                 }
                 if (e.type == KeyEventType.KeyDown) {
                     swallowWakeupKey = null
@@ -1472,12 +1488,18 @@ private fun PlayerCore(
                     if (isTv) runCatching { playPauseFocus.requestFocus() }
                     return@onPreviewKeyEvent true
                 }
+                if (swallowWakeupKey != null && shouldClearSwallowedWakeup(android.os.SystemClock.uptimeMillis(), lastWakeupAtMs)) {
+                    // El UP se perdió (o el mando no lo manda): la tecla no puede quedar muerta.
+                    swallowWakeupKey = null
+                }
                 if (swallowWakeupKey != null) {
                     if (e.type == KeyEventType.KeyUp) {
                         swallowWakeupKey = null
                         return@onPreviewKeyEvent true
                     }
                     if (e.key == swallowWakeupKey) {
+                        // Repetición de la tecla sostenida: se traga y se refresca el vencimiento.
+                        lastWakeupAtMs = android.os.SystemClock.uptimeMillis()
                         return@onPreviewKeyEvent true
                     }
                 }

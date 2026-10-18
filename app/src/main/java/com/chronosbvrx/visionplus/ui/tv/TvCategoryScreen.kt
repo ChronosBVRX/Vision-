@@ -56,6 +56,7 @@ import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionRatingGold
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
+import kotlinx.coroutines.delay
 import java.text.Normalizer
 
 private const val CHIP_ALL = "Todo / Destacados"
@@ -106,6 +107,14 @@ fun TvCategoryScreen(
     var selectedCategory by rememberSaveable(section ?: key) { mutableStateOf<String?>(null) }
     BackHandler(enabled = selectedCategory != null) {
         selectedCategory = null
+    }
+    // Cambiar de modo (destacados ↔ cuadrícula) o de categoría RE-CREA la fila de chips y,
+    // en la cuadrícula, el héroe desaparece: sin un aterrizaje nuevo el foco moría ahí (el
+    // landing del héroe ya no está compuesto). Pide el destino del modo activo.
+    val activeCategory = selectedCategory
+    LaunchedEffect(activeCategory) {
+        delay(120)
+        landing.request()
     }
 
     val films = remember(rows, key, sectionRows) {
@@ -172,7 +181,6 @@ fun TvCategoryScreen(
         }
     }
 
-    val activeCategory = selectedCategory
     if (activeCategory == null) {
         // MODO 1: FEED CURADO POR MÓDULOS ("Todo / Destacados")
         LazyColumn(Modifier.fillMaxSize().background(VisionBlack)) {
@@ -336,6 +344,7 @@ fun TvCategoryScreen(
             returnRequester = returnRequester,
             returnFilmId = returnFilmId,
             entryRequester = rowEntry,
+            landing = landing,
         )
     }
 }
@@ -373,6 +382,7 @@ private fun TvCategoryGrid(
     returnRequester: FocusRequester? = null,
     returnFilmId: String? = null,
     entryRequester: FocusRequester? = null,
+    landing: LandingFocus? = null,
 ) {
     var visibleCount by remember(categoryName) { mutableIntStateOf(GRID_BATCH_SIZE) }
     val displayedFilms = remember(films, visibleCount) { films.take(visibleCount) }
@@ -411,6 +421,9 @@ private fun TvCategoryGrid(
             TvCompactAction(
                 label = "Volver a Todo",
                 icon = VisionIcons.Back,
+                // Destino del aterrizaje en modo cuadrícula: el héroe (landing del feed) no
+                // está compuesto aquí y este botón siempre existe.
+                modifier = if (landing != null) Modifier.landingFocus(landing) else Modifier,
                 onClick = onBackToAll,
             )
             Spacer(Modifier.width(18.dp))

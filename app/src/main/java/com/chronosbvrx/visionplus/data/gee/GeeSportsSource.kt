@@ -277,6 +277,19 @@ object GeeSportsSource {
     /** La copia en memoria (para caminos síncronos: candidatos de un partido). */
     fun memoryEvents(): List<GeeEvent>? = memoryEventsList
 
+    /**
+     * Solo pruebas: olvida las copias en memoria. Los estáticos de este objeto cruzan
+     * clases de test dentro del mismo JVM (Robolectric no los reinicia): sin esto, una
+     * suite puede «ver» los eventos que sembró otra clase y el foco de Deportes pasaría
+     * por el caché de un test ajeno.
+     */
+    internal fun resetMemoryForTests() {
+        memoryGroups = null
+        memoryGroupsAt = 0L
+        memoryEventsList = null
+        memoryEventsAt = 0L
+    }
+
     /** La última copia buena (memoria o archivo), sin red. */
     fun cachedGroups(context: Context): List<GeeGroup> {
         memoryGroups?.let { return it }

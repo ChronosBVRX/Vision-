@@ -42,7 +42,7 @@ class TvRescueTest {
     }
 
     @Test
-    fun rescueDoesNotEatKeysWithoutAnAttachedTarget() {
+    fun rescueDoesNotEatKeysWithoutAComposedTarget() {
         FocusRescue.target = null
         FocusRescue.screenHasFocus = false
         FocusRescue.dialogsOpen = 0
@@ -52,9 +52,12 @@ class TvRescueTest {
         FocusRescue.pushTarget(detached)
         assertFalse("destino sin componer no se consume", FocusRescue.rescue())
 
-        val attached = LandingFocus()
-        FocusRescue.pushTarget(attached)
-        assertTrue("destino compuesto sí rescata", FocusRescue.rescue())
+        // Un destino marcado como compuesto pero cuyo nodo no existe (sin composición real)
+        // tampoco se come la tecla: el rescate VERIFICA el aterrizaje antes de consumir —
+        // antes la tecla se perdía en silencio (el caso FOCUS_RESCUE_MISS).
+        val phantom = LandingFocus().apply { attached = true }
+        FocusRescue.pushTarget(phantom)
+        assertFalse("un destino fantasma no se come la tecla", FocusRescue.rescue())
 
         FocusRescue.dialogsOpen = 1
         assertFalse("con diálogo no se consume", FocusRescue.rescue())
@@ -62,26 +65,20 @@ class TvRescueTest {
         FocusRescue.screenHasFocus = true
         assertFalse("con foco no se consume", FocusRescue.rescue())
         FocusRescue.screenHasFocus = false
+        FocusRescue.popTarget(phantom)
         FocusRescue.popTarget(detached)
-        FocusRescue.popTarget(attached)
     }
 
     @Test
-    fun rescueFallsBackToAnAttachedTargetWhenTheTopOneIsGone() {
-        // El héroe del Inicio puede salir de composición (lista desplazada) mientras otro
-        // destino de la pantalla —la primera tarjeta compuesta— sí puede tomar el foco: el
-        // rescate debe caer en ese, no rendirse dejando el mando muerto (caso reportado del
-        // D-pad perdido al volver al Inicio).
-        FocusRescue.target = null
-        FocusRescue.screenHasFocus = false
-        FocusRescue.dialogsOpen = 0
-        val alive = LandingFocus()
-        val gone = LandingFocus().apply { attached = false }
-        FocusRescue.pushTarget(alive)
-        FocusRescue.pushTarget(gone) // el de arriba: sin componer
-        assertTrue("el rescate debe caer en el destino compuesto de abajo", FocusRescue.rescue())
-        FocusRescue.popTarget(gone)
-        FocusRescue.popTarget(alive)
+    fun rescueCandidatesSkipDeadTargetsAndKeepTheOrder() {
+        val dead = LandingFocus().apply { attached = false }
+        val alive = LandingFocus().apply { attached = true }
+        val top = LandingFocus().apply { attached = true }
+        // Del último al primero, solo los compuestos: si el de arriba está muerto, el rescate
+        // sigue con el de abajo en vez de comerse la tecla.
+        assertEquals(listOf(top, alive), rescueCandidates(listOf(dead, alive, top), dialogsOpen = 0, screenHasFocus = false))
+        assertTrue(rescueCandidates(listOf(dead, alive, top), dialogsOpen = 1, screenHasFocus = false).isEmpty())
+        assertTrue(rescueCandidates(listOf(dead, alive, top), dialogsOpen = 0, screenHasFocus = true).isEmpty())
     }
 
     // ---------------------------------------------------------- índice de la fila
@@ -163,6 +160,59 @@ class TvRescueTest {
             3,
             homeReturnRowIndex("t1", "hero", top10, emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), showPlaceholders = false, showNoRows = true),
         )
+    }
+
+    @Test
+    fun homeRowSlotsFollowThePaintingOrder() {
+        // Fuente única: el orden de las claves es el orden real de pintado y el índice del
+        // regreso sale de la MISMA lista (agregar una fila ya no puede correrlo).
+        val top10 = listOf(film("t1"))
+        val premieres = listOf(film("e1"))
+        val trending = listOf(film("w1"))
+        val cards = listOf(card("c1"))
+        val own = listOf(CatalogRow("home-kind-series", "Series", listOf(film("s1"))))
+        val other = listOf(CatalogRow("portal", "Portal", listOf(film("p1"))))
+        val slots = homeRowSlots(
+            heroFilmId = "hero",
+            top10 = top10,
+            premieres = premieres,
+            trending = trending,
+            continueCards = cards,
+            ownKindRows = own,
+            otherRows = other,
+            showPlaceholders = false,
+            showNoRows = false,
+        )
+        assertEquals(
+            listOf(
+                "billboard", "home_quick_hubs", "home_top10", "home_estrenos", "home_trending_week",
+                "continue", "home-kind-series", "portal", "end_spacer",
+            ),
+            slots.map { it.key },
+        )
+        assertEquals("el héroe vive en la fila 0", 0, homeRowIndexOf(slots, "hero"))
+        assertEquals(2, homeRowIndexOf(slots, "t1"))
+        assertEquals(3, homeRowIndexOf(slots, "e1"))
+        assertEquals(4, homeRowIndexOf(slots, "w1"))
+        assertEquals(5, homeRowIndexOf(slots, "c1"))
+        assertEquals(6, homeRowIndexOf(slots, "s1"))
+        assertEquals(7, homeRowIndexOf(slots, "p1"))
+        assertEquals(-1, homeRowIndexOf(slots, "fantasma"))
+        assertEquals(-1, homeRowIndexOf(slots, null))
+
+        // Con fantasmas de carga (o el aviso de reintento) hay una fila extra justo después de hubs.
+        val withStatus = homeRowSlots(
+            heroFilmId = null,
+            top10 = top10,
+            premieres = emptyList(),
+            trending = emptyList(),
+            continueCards = emptyList(),
+            ownKindRows = emptyList(),
+            otherRows = emptyList(),
+            showPlaceholders = true,
+            showNoRows = false,
+        )
+        assertEquals(listOf("billboard", "home_quick_hubs", "home_status", "home_top10", "end_spacer"), withStatus.map { it.key })
     }
 
     // ---------------------------------------------------------- foco a prueba de balas

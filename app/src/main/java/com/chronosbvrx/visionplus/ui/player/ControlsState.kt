@@ -223,6 +223,21 @@ internal fun resolvePlayerKeyDownAction(
 internal const val CONTROL_ACTION_COOLDOWN_MS = 220L
 
 /**
+ * Un «trago» de tecla de despertar (swallow) que nunca recibió su UP —mandos que no lo
+ * envían, o el UP perdido en el aire— no puede dejar esa tecla muerta para siempre: pasado
+ * el tope se libera y la siguiente pulsación vuelve a procesarse normal. Las repeticiones
+ * de una tecla sostenida refrescan la marca, así el tope solo salta cuando la tecla dejó
+ * de llegar sin cerrar el toque.
+ */
+internal const val SWALLOW_WAKEUP_TIMEOUT_MS = 1_200L
+
+internal fun shouldClearSwallowedWakeup(
+    nowMs: Long,
+    wakeupAtMs: Long,
+    timeoutMs: Long = SWALLOW_WAKEUP_TIMEOUT_MS,
+): Boolean = nowMs - wakeupAtMs > timeoutMs
+
+/**
  * Evita que un mismo evento de tecla (por rebote o repetición rápida de hardware)
  * ejecute inmediatamente una acción en el control recién enfocado tras abrir el menú.
  */

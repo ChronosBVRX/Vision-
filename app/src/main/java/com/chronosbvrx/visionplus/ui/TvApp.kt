@@ -84,13 +84,14 @@ fun TvApp(catalog: XuperCatalog, nav: Navigator) {
     // El regreso a la TV en vivo recuerda el último canal abierto (igual que las fichas).
     var liveReturn by rememberSaveable { mutableStateOf<String?>(null) }
     // Red definitiva contra el foco huérfano al volver: la pantalla recompuesta ya re-pide
-    // su foco sola, pero si a los 300 ms el mando sigue sin nada enfocado, el destino de
-    // la pantalla lo toma. Solo actúa sin foco (nunca pelea con el usuario).
+    // su foco sola, pero si a los 300 ms el mando sigue sin nada enfocado, el rescate
+    // verificado (solo destinos compuestos) lo devuelve. Solo actúa sin foco (nunca pelea
+    // con el usuario).
     LaunchedEffect(nav.stack.size) {
         delay(300)
         repeat(10) {
             if (FocusRescue.screenHasFocus) return@LaunchedEffect
-            FocusRescue.target?.request()
+            FocusRescue.rescue()
             delay(100)
         }
     }
@@ -135,8 +136,11 @@ private fun TvRoute(
     // El índice remoto manda en Categorías y Búsqueda; Home conserva las filas curadas.
     // Modo niños: Inicio y Buscar solo muestran infantil (el resto pide el PIN).
     val indexRows = rememberLockedIndexRows(catalog.indexRows.ifEmpty { rows })
-    // El foco del riel se re-pide al volver (la clave cambia con la ruta).
-    val railLanding = rememberLandingFocus("$railReturn|$route")
+    // El foco del riel se re-pide al volver (la clave cambia con la ruta). El riel SOLO
+    // existe en Inicio: en las demás pantallas su destino no debe quedar registrado — un
+    // destino sin nodo compuesto convertía el rescate en una tecla comida (el mando
+    // parecía muerto hasta Atrás).
+    val railLanding = if (route == Route.Home) rememberLandingFocus("$railReturn|$route") else null
     var pinTarget by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Route?>(null) }
     fun guardedGo(target: Route, viaTab: Boolean) {
         val gated = target == Route.Live || target == Route.Library || target == Route.Downloads ||
@@ -178,7 +182,7 @@ private fun TvRoute(
             onRailPick(label)
             guardedGo(target, viaTab = true)
         },
-        modifier = if (label == railReturn) Modifier.landingFocus(railLanding) else Modifier,
+        modifier = if (label == railReturn && railLanding != null) Modifier.landingFocus(railLanding) else Modifier,
     )
 
     if (route !is Route.Player && !isOnline) {

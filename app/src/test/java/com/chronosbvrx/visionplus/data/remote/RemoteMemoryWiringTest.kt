@@ -39,6 +39,21 @@ class RemoteMemoryWiringTest {
         assertTrue("conectar nunca pide PIN si ya está vinculada", text.contains("isPaired(context, last)"))
     }
 
+    @Test
+    fun theRemoteKeyNeverLandsOnAnInvisibleMenu() {
+        // Si el menú ya no está al frente (el reproductor tomó la pantalla), la tecla del
+        // teléfono debe viajar al proceso :x4k por broadcast, no inyectarse en la ventana
+        // invisible del menú.
+        val activity = requireSource("src/main/java/com/chronosbvrx/visionplus/MainActivity.kt")
+        assertTrue(
+            "la tecla remota debe revisar que el menú esté al frente antes de inyectarla",
+            activity.contains("lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)"),
+        )
+        assertTrue("el respaldo viaja al reproductor por broadcast", activity.contains("RemoteBus.broadcastKey("))
+        val bus = requireSource("src/main/java/com/chronosbvrx/visionplus/data/remote/RemoteBus.kt")
+        assertTrue("broadcastKey existe en el bus", bus.contains("fun broadcastKey("))
+    }
+
     private fun requireSource(rel: String): String {
         val found = listOf(File("app/$rel"), File(rel), File("../app/$rel")).firstOrNull { it.exists() }
         assertNotNull("fuente no encontrada: $rel", found)
