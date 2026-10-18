@@ -149,6 +149,32 @@ class GeeBackstopTest {
     }
 
     @Test
+    fun theSportsBrandWordMustBeInTheChannelToo() {
+        // «Claro Sports» no se cubre con «CANAL CLARO HD» (el canal general), sí con su deportivo.
+        val claro = listOf(ch("CANAL CLARO HD", "claro-gen"), ch("Claro Sports 1 HD", "claro-1"))
+        val out = GeeBackstop.needed(listOf("Claro Sports"), emptyList(), claro)
+        assertEquals("Claro Sports 1 HD", out.single().channel.name)
+        assertTrue(
+            "sin el deportivo no hay respaldo",
+            GeeBackstop.needed(listOf("Claro Sports"), emptyList(), listOf(ch("CANAL CLARO HD", "claro-gen"))).isEmpty(),
+        )
+    }
+
+    @Test
+    fun theNamesTheSourceDeclaresButCannotServeGetTheirChannel() {
+        // El caso real de León-América: la fuente declara «TUDN US» y «UNIVISION HD» sin URL.
+        val catalog = listOf(
+            ch("TUDN USA HD", "tudn-usa"),
+            ch("Univision East FHD", "uni-east"),
+            ch("FOX ONE", "foxone"),
+        )
+        val out = GeeBackstop.needed(listOf("TUDN US", "UNIVISION HD"), emptyList(), catalog)
+        assertEquals(listOf("TUDN US", "UNIVISION HD"), out.map { it.guideName })
+        assertEquals("TUDN USA HD", out[0].channel.name)
+        assertEquals("Univision East FHD", out[1].channel.name)
+    }
+
+    @Test
     fun theBackstopIsFoundByItsGuide() {
         val backs = GeeBackstop.needed(listOf("Telemundo", "TUDN"), emptyList(), xtv)
         assertEquals(2, backs.size)

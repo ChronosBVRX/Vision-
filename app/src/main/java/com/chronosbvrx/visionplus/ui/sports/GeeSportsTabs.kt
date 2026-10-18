@@ -265,7 +265,10 @@ internal fun GeeLinkPickDialog(
     val zapOrder = remember(links, geeTv) {
         buildList {
             geeTv.forEach { option -> add(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo")) }
-            links.forEach { link -> add(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo")) }
+            // Las ranuras que la fuente declara sin dirección todavía no entran al zapping.
+            links.filter { it.link.isNotBlank() }.forEach { link ->
+                add(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
+            }
         }.distinctBy { it.url }
     }
 
@@ -279,7 +282,7 @@ internal fun GeeLinkPickDialog(
         val backstop = if (!dead) {
             null
         } else if (guideName != null) {
-            GeeBackstop.forGuide(backstops, guideName)
+            GeeBackstop.forGuide(backstops, guideName) ?: backstops.firstOrNull()
         } else {
             backstops.firstOrNull()
         }
@@ -399,11 +402,13 @@ internal fun GeeLinkPickDialog(
                             }
                             itemsIndexed(links, key = { index, link -> "link_${index}_${link.link}" }) { _, link ->
                                 val linkAlive = aliveOf(link) == true
+                                val pending = link.link.isBlank()
                                 Surface(
                                     onClick = {
                                         playZap(
                                             GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"),
                                             dead = !linkAlive,
+                                            guideName = link.name,
                                         )
                                     },
                                     shape = RoundedCornerShape(12.dp),
@@ -425,6 +430,7 @@ internal fun GeeLinkPickDialog(
                                                 overflow = TextOverflow.Ellipsis,
                                             )
                                             val typeText = when {
+                                                pending -> "La fuente aún no publica su señal"
                                                 link.type == "dash" && link.drm.isNotBlank() -> "DASH · ClearKey"
                                                 link.type == "dash" -> "DASH"
                                                 else -> "HLS"

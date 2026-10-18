@@ -135,7 +135,11 @@ object GeeSportsSource {
         for (i in 0 until array.length()) {
             val item = array.optJSONObject(i) ?: continue
             val link = item.optString("link")
-            if (link.isBlank()) continue
+            val name = item.optString("name")
+            // La fuente declara canales que todavía no sirve (sin dirección): viajan igual para
+            // que la lista salga COMPLETA (como la app original) y la app los resuelva solos con
+            // el canal confirmado de la casa al tocarlos (respaldo automático).
+            if (link.isBlank() && name.isBlank()) continue
             val headersJson = item.optJSONObject("headers")
             val headers = LinkedHashMap<String, String>()
             if (headersJson != null) {
@@ -146,7 +150,7 @@ object GeeSportsSource {
             }
             out.add(
                 GeeLink(
-                    name = item.optString("name"),
+                    name = name,
                     link = link,
                     headers = headers,
                     type = item.optString("type", "hls"),

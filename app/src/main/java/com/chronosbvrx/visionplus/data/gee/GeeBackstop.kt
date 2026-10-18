@@ -95,8 +95,12 @@ object GeeBackstop {
         val query = SportsLinker.extractBrandInfo(guideName)
         if (query.brand.isBlank()) return false
         val candidate = SportsLinker.extractBrandInfo(candidateName)
-        if (candidate.brand != query.brand) return false
+        // Los feeds nacionales del mercado hispano («Univision East HD») son la MISMA cadena.
+        if (brandOf(candidate) != brandOf(query)) return false
         if (editionOf(query) != editionOf(candidate)) return false
+        // Una marca con palabra deportiva exige que el canal también la traiga: «Claro Sports»
+        // NO se cubre con «CANAL CLARO» (el canal general) ni «Fox Sports» con «FOX One».
+        if (SPORT_WORDS.any { query.brand.contains(it) } && SPORT_WORDS.none { normalized.contains(it) }) return false
         // El país solo se exige cuando la parrilla lo dice («TUDN USA» no se cubre con la señal
         // mexicana); sin país, cualquier señal de la marca vale.
         val wanted = query.targetCountry ?: return true
@@ -114,6 +118,10 @@ object GeeBackstop {
     /** La edición «1» es la señal base: para emparejar vale como sin edición. */
     private fun editionOf(info: SportsLinker.BrandInfo): String =
         if (info.edition == "1") "" else info.edition.orEmpty()
+
+    /** La marca sin los rótulos de feed nacional («univision east» → «univision»). */
+    private fun brandOf(info: SportsLinker.BrandInfo): String =
+        info.brand.split(' ').filter { it.isNotBlank() && it !in NATIONAL_FEED }.joinToString(" ")
 
     /**
      * Desempate determinista entre canales que son la MISMA marca: primero el nombre idéntico,
@@ -155,6 +163,9 @@ object GeeBackstop {
 
     /** Los feeds nacionales del mercado hispano de EE. UU. (antes que sus estaciones locales). */
     private val NATIONAL_FEED = setOf("east", "west", "este", "oeste")
+
+    /** Palabras que marcan una marca DEPORTIVA: el canal también tiene que traerlas. */
+    private val SPORT_WORDS = listOf("sport", "deport")
 
     /**
      * Alias de parrilla → nombre en el catálogo. El caso estrella: «Caliente TV» se convirtió en

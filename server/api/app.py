@@ -907,6 +907,10 @@ async def gee38_events(
     today = date.today()
     near = {(today + timedelta(days=delta)).isoformat() for delta in range(-1, 8)}
     links_by_match: dict[str, list[dict]] = {}
+    # Los canales que la fuente DECLARA para cada partido, aunque todavía no publique su URL
+    # (su lista de nombres va completa: «TUDN US», «UNIVISION HD»…). La app los enseña como la
+    # original y, al tocarlos, se resuelven solos con el catálogo de la casa (respaldo automático).
+    declared_by_match: dict[str, list[str]] = {}
     # TODOS los enlaces del cruce (mismo par de equipos, cualquier fecha): el CMS
     # publica varias entradas por partido y la lista completa puede vivir en otra
     # («Everton vs Chelsea»: la de hoy traía 1 enlace muerto; su hermana visible
@@ -942,6 +946,11 @@ async def gee38_events(
                     if key not in known:
                         bucket.append(link)
                         known.add(key)
+                names = declared_by_match.setdefault(match_id, [])
+                for name in event.get("link_names") or []:
+                    clean = str(name or "").strip()
+                    if clean and clean not in names:
+                        names.append(clean)
                 continue  # el partido se sirve como tarjeta única (abajo)
             if _gee_league_allowed_event(event):
                 out.append(event)
@@ -974,7 +983,7 @@ async def gee38_events(
                 elif card_links[previous].get("alive") is None and link.get("alive") is not None:
                     card_links[previous] = link
         card_links.sort(key=_gee_link_rank)  # vivos primero (estable dentro del grupo)
-        out.append(_gee_match_card(match, card_links))
+        out.append(_gee_match_card(match, card_links, declared_by_match.get(match_id, [])))
     # Una tarjeta por id: la app las pinta con `key = id` y un duplicado revienta la lista.
     deduped: list[dict] = []
     seen_ids: set[str] = set()
@@ -1325,14 +1334,38 @@ def _gee_league_allowed_event(event: dict) -> bool:
     return _gee_norm_league(label) in GEE_LEAGUE_NAMES
 
 
-def _gee_match_card(match: dict, links: list[dict]) -> dict:
+def _gee_match_card(match: dict, links: list[dict], declared: list[str] | None = None) -> dict:
     """La tarjeta de un partido del calendario (con los enlaces de GeeSports cruzados).
 
     Misma forma que un evento: la app la pinta igual (escudos, marcador real y hasta
     `links` para el selector de transmisiones). Los enlaces se ordenan contra la
     parrilla oficial y la tarjeta lleva esa parrilla (`broadcasts`/`guide`): la app
-    la usa como guía («se transmite en…») y para ofrecer los canales de TV reales."""
+    la usa como guía («se transmite en…») y para ofrecer los canales de TV reales.
+
+    [declared] son los nombres que la fuente declara para el partido aunque todavía no
+    publique su URL («TUDN US», «UNIVISION HD»…). Se entregan como ranuras sin dirección para
+    que la app muestre la lista COMPLETA (como la app original) y, al tocarlas, se resuelvan
+    solas con el canal 100 % confirmado del catálogo de la casa (respaldo automático).
+    """
     links = _gee_broadcast_filter(links, match)
+    served = {str(link.get("name") or "").strip().lower() for link in links}
+    for name in declared or []:
+        clean = str(name or "").strip()
+        if not clean or clean.lower() in served:
+            continue
+        served.add(clean.lower())
+        links.append({
+            "name": clean,
+            "link": "",
+            "url": "",
+            "headers": {},
+            "scheme": 0,
+            "drm": "",
+            "type": "hls",
+            "alive": None,
+            "checked_at": None,
+            "pending": True,  # la fuente aún no publica su dirección: se resuelve en la app
+        })
     home = match.get("home") or {}
     away = match.get("away") or {}
     league = match.get("league") or {}

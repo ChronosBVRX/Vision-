@@ -110,7 +110,7 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
             emptyList()
         } else {
             GeeBackstop.needed(
-                guide = event.broadcasts,
+                guide = event.broadcasts + event.links.map { it.name },
                 liveOptions = buildList {
                     pickingTv.forEach { option -> add(GeeBackstop.LiveOption(option.title, gee.aliveOf(option.link) == true)) }
                     event.links.forEach { link -> add(GeeBackstop.LiveOption(link.name, gee.aliveOf(link) == true)) }

@@ -256,6 +256,42 @@ class GeePickDialogDuplicateTest {
     }
 
     @Test
+    fun aDeclaredNameWithoutUrlIsListedAndTappingItUsesTheBackstopForThatName() {
+        // El caso de León-América: la fuente declara «TUDN US» sin URL. Se lista (como la app
+        // original) y al tocarla se reproduce NUESTRO canal confirmado de ese nombre.
+        val pending = GeeSportsSource.GeeLink(
+            name = "TUDN US",
+            link = "",
+            headers = emptyMap(),
+            type = "hls",
+            drm = "",
+            alive = null,
+        )
+        val tudnUsa = LiveChannel(name = "TUDN USA HD", url = "xtvlive:tudn-usa")
+        var played: LiveChannel? = null
+        compose.setContent {
+            VisionTheme {
+                GeeLinkPickDialog(
+                    title = "León vs América",
+                    subtitle = "Liga MX · Hoy 19:00",
+                    links = listOf(pending),
+                    onDismiss = {},
+                    onPlay = { played = it },
+                    backstops = listOf(GeeBackstop.Backstop(guideName = "TUDN US", channel = tudnUsa)),
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertText("TUDN US")
+        assertText("La fuente aún no publica su señal")
+        assertText("respaldo automático")
+        compose.onNodeWithText("TUDN US").performClick()
+        compose.waitForIdle()
+        assertEquals("xtvlive:tudn-usa", played?.url)
+    }
+
+    @Test
     fun aHealthySportsSourceAlwaysWinsEvenIfABackstopExists() {
         // La fuente deportiva manda SIEMPRE: con su señal viva se reproduce la suya, no el respaldo.
         var played: LiveChannel? = null

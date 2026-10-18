@@ -267,7 +267,10 @@ internal fun TvGeeLinkPickDialog(
     val zapOrder = remember(links, geeTv) {
         buildList {
             geeTv.forEach { option -> add(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo")) }
-            links.forEach { link -> add(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo")) }
+            // Las ranuras que la fuente declara sin dirección todavía no entran al zapping.
+            links.filter { it.link.isNotBlank() }.forEach { link ->
+                add(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
+            }
         }.distinctBy { it.url }
     }
 
@@ -281,7 +284,7 @@ internal fun TvGeeLinkPickDialog(
         val backstop = if (!dead) {
             null
         } else if (guideName != null) {
-            GeeBackstop.forGuide(backstops, guideName)
+            GeeBackstop.forGuide(backstops, guideName) ?: backstops.firstOrNull()
         } else {
             backstops.firstOrNull()
         }
@@ -401,6 +404,7 @@ internal fun TvGeeLinkPickDialog(
                                             playZap(
                                                 GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"),
                                                 dead = !linkAlive,
+                                                guideName = link.name,
                                             )
                                         },
                                         modifier = if (geeTv.isEmpty() && link == firstLink) Modifier.landingFocus(modalLanding) else Modifier,
@@ -471,6 +475,7 @@ private fun TvGeeLinkItem(
 ) {
     val shape = RoundedCornerShape(10.dp)
     val typeText = when {
+        link.link.isBlank() -> "La fuente aún no publica su señal"
         link.type == "dash" && link.drm.isNotBlank() -> "DASH · ClearKey"
         link.type == "dash" -> "DASH"
         else -> "HLS"

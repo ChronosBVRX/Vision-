@@ -859,6 +859,24 @@ def test_gee_match_card_carries_the_guide():
     assert card["league_id"] == "mex.1"
 
 
+def test_gee_match_card_lists_the_declared_names_even_without_a_url():
+    # El caso real de León-América: la fuente declara 8 canales y solo 2 traen dirección. La
+    # tarjeta viaja COMPLETA (como la app original): los que aún no tienen URL van como ranuras
+    # sin dirección y la app los resuelve solos con el catálogo de la casa (respaldo automático).
+    match = _espn_match("León", "América")
+    served = {"name": "TUDN MEXICO FHD", "url": "https://x/y.mpd", "link": "https://x/y.mpd", "alive": True}
+    declared = ["XTREME + FHD", "TUDN US", "TUDN MEXICO FHD", "UNIVISION HD", "HD QUALITY"]
+    card = api_app._gee_match_card(match, [served], declared)
+    names = [lk["name"] for lk in card["links"]]
+    assert names[0] == "TUDN MEXICO FHD"          # lo que la fuente sí sirve, primero
+    assert "TUDN US" in names and "UNIVISION HD" in names
+    assert names.count("TUDN MEXICO FHD") == 1     # sin duplicar
+    pend = [lk for lk in card["links"] if lk.get("pending")]
+    assert len(pend) == 4 and all(lk["link"] == "" and lk["alive"] is None for lk in pend)
+    assert card["total"] == 5 and card["alive"] == 1
+    assert card["link_names"] == names
+
+
 def _link(name: str) -> dict:
     return {"name": name, "url": "https://x/" + name, "link": "https://x/" + name, "alive": True}
 
