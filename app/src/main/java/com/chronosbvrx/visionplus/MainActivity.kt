@@ -99,7 +99,9 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        launcherIntentRoute(intent)?.let { nav.push(it) }
+        // `pushPlayer` reemplaza el reproductor en curso: si el teléfono manda algo mientras
+        // se está viendo otra cosa, el play viejo no se queda apilado (ni revive al volver).
+        launcherIntentRoute(intent)?.let { nav.pushPlayer(it) }
     }
 
     /** El control remoto solo le habla a la pantalla que está al frente. */
@@ -172,7 +174,7 @@ class MainActivity : ComponentActivity() {
         }
         // Tarjeta del launcher en arranque en frío: la película/capítulo entra en la ruta base.
         if (savedInstanceState == null) {
-            launcherIntentRoute(intent)?.let { nav.push(it) }
+            launcherIntentRoute(intent)?.let { nav.pushPlayer(it) }
         }
         val deepLinked = nav.stack.size > 1
 

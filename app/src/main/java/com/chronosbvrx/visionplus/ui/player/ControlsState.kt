@@ -98,6 +98,17 @@ internal fun exitActionFor(hardReset: Boolean): PlayerExitAction =
 internal fun shouldFinishIdleResidentOnExit(exiting: Boolean, isPlayerActive: Boolean): Boolean =
     exiting && !isPlayerActive
 
+/**
+ * El reproductor quedó DETRÁS mientras reproducía (algo lo tapó: el control remoto trajo el
+ * menú al frente para abrir otro título, el usuario salió a la pantalla de inicio, la tele se
+ * apagó): el video no puede seguir sonando invisible — es el «se sigue escuchando de fondo
+ * pero ya estamos en el menú». Se suelta el motor con el minuto ya guardado y la actividad
+ * queda residente para el siguiente play. Tras una salida normal (`exiting`) no hay nada que
+ * soltar: el motor ya quedó detenido por `exitPlayer`.
+ */
+internal fun shouldParkPlaybackOnStop(isPlayerActive: Boolean, exiting: Boolean): Boolean =
+    isPlayerActive && !exiting
+
 internal enum class LiveDpadAction {
     LIST_NAVIGATION,
     SHOW_NAVIGATION,

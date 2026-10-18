@@ -70,6 +70,32 @@ class Navigator(start: List<Route>) {
         return true
     }
 
+    /**
+     * Abre una reproducción que llega de FUERA (el control remoto del teléfono, una tarjeta
+     * del launcher): si ya había un reproductor en curso se REEMPLAZA en vez de apilarse.
+     * Apilarlo era el bug del «play viejo resucitado»: al volver del nuevo, la pantalla de
+     * espera vieja seguía compuesta y re-disparaba su reproducción; además cada orden del
+     * teléfono dejaba una rutina de player colgada en el stack.
+     */
+    fun pushPlayer(route: Route) {
+        if (stack.size > 1 && (stack.last() is Route.Player || stack.last() is Route.LivePlayer)) {
+            stack.removeAt(stack.lastIndex)
+        }
+        push(route)
+    }
+
+    /**
+     * Cierra UNA ruta, solo si sigue siendo la de arriba. La pantalla de espera («Abriendo…»)
+     * trata un regreso a primer plano como «el reproductor se cerró»; con el control remoto
+     * ese regreso también lo dispara el deep link nuevo que trae el menú al frente — sin esta
+     * guarda, la espera VIEJA deshacía la reproducción que el teléfono acababa de mandar.
+     */
+    fun close(route: Route): Boolean {
+        if (stack.size <= 1 || stack.last() !== route) return false
+        stack.removeAt(stack.lastIndex)
+        return true
+    }
+
     /** A top-level section: Home underneath, the section on top (Home alone for Home). */
     fun goTab(route: Route) {
         stack.clear()

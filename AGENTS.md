@@ -5,6 +5,14 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Fix post-OTA 2.5.107 (incluido en la OTA 2.5.108): mandar contenido desde el control remoto mientras la tele reproduce ya no deja el menú con el audio de fondo — el handoff viejo ya no deshace el play nuevo y el motor se suelta al quedar detrás — OTA publicada** (2026-10-18; 628 tests Android en verde):
+  - *Reporte del usuario*: «si estoy reproduciendo algo en la TV e intento mandar algo desde el control con el catálogo no se reproduce y se buggea, se sigue escuchando la reproducción de fondo pero ya estamos en el menú principal».
+  - *Causa 1 (el menú)*: el reproductor residente vive en su TAREA propia (`taskAffinity`), así que mientras se reproduce el menú (`MainActivity`) queda detenido con su pila `[Home, Player(viejo)]` y la espera «Abriendo…» del play viejo COMPUESTA. Su `XtvHandoff` trata CUALQUIER regreso a primer plano como «el reproductor se cerró» (`DisposableEffect` + ON_RESUME) — el deep link del teléfono también trae el menú al frente, y el cierre ATRASADO de la espera vieja (`nav.pop()`) deshacía la reproducción nueva (con `push` además el play viejo quedaba apilado y podía re-dispararse al volver).
+  - *Causa 2 (el audio)*: `X4KPlayerAty.onStop()` solo guardaba el minuto; al quedar la actividad detrás (menú al frente) el motor seguía sonando invisible.
+  - *Fix*: (1) `Navigator.pushPlayer()` — los deep links (control remoto y tarjetas del launcher) REEMPLAZAN el reproductor en curso en vez de apilarlo; (2) `Navigator.close(route)` — el cierre del handoff es por IDENTIDAD de ruta (la espera vieja ya no puede cerrar la pantalla nueva), aplicado a los `onBack` de Player/LivePlayer en `TvApp`/`PhoneApp`; (3) `shouldParkPlaybackOnStop` (pura) + `parkPlaybackInBackground` en `X4KPlayerAty.onStop`: si queda reproducción viva detrás se suelta el motor (commit del minuto + `X4KTitan.stop`, la actividad queda residente para reutilizar la vista) y el poller se apaga (no re-arranca nada en segundo plano).
+  - *Guardianes*: `NavigationTest` +4 (reemplazo del player en curso, vivo incluido, el cierre viejo no toca la pantalla nueva, `close` no vacía la pila), `ResidentPlayerTest` +2 (`shouldParkPlaybackOnStop`), `RemotePlaybackWiringTest` (cableado: pushPlayer/close/park). Suite 628/628.
+  - *OTA v2.5.108 PUBLICADA* (vc344, firma histórica `9593cb0d…`, asset `VisionPlus.apk`, notas en `ota_notes_2.5.108.md`).
+  - *Pendiente*: prueba física en la tele (reproducir y mandar otra película/canal desde el control: el contenido nuevo debe abrir solo y jamás quedar audio de fondo en el menú).
 - **Lote D-pad a prueba de fallos: el rescate VERIFICA el aterrizaje (fin de la tecla comida en silencio), toda pantalla/modo tiene destino compuesto, y los diálogos, el zumbido de teclas y el control remoto dejan de poder matar el mando — OTA publicada** (2026-10-18; 619 tests Android en verde):
   - *Pedido del usuario*: «Analiza toda nuestra navegación D-pad, que sea robusta y que nunca falle; dime dónde podemos reforzarla y a prueba de errores» → plan Fase 0→4 ejecutado (infraestructura → pantallas → reproductores → guardianes).
   - *El hueco estructural (H1)*: `LandingFocus.attached` nacía en `true` y nada lo apagaba salvo el héroe del Inicio; `FocusRescue.rescue()` **consumía la tecla aunque `requestFocus()` hubiera fallado** — con un destino muerto (el riel en una pantalla que no es Inicio, el héroe con la lista desplazada) cada tecla se perdía sin mover nada: «el mando no responde». Fix en `TvFocus.kt`: (1) `Modifier.landingFocus` mantiene `attached`/`focused` con un `Modifier.Node` real (alta al entrar al árbol, baja al salir — API verificada de Compose 1.7.6); (2) `rescue()` recorre los candidatos DE VERDAD y solo consume cuando `focused` quedó en true tras la petición; si ninguno aterriza, la tecla SIGUE SU CURSO; (3) `rescueCandidates()` pura (del último al primero, solo compuestos) probada; (4) telemetría `FOCUS_RESCUE_MISS` con freno de 30 s (`currentTimeMillis`, no `SystemClock`, para que la lógica viva también en tests JVM puros).
@@ -1108,8 +1116,11 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.107**
-  (versionCode **343**, release OTA v2.5.107 — el D-pad a prueba de fallos: el rescate del foco VERIFICA el
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.108**
+  (versionCode **344**, release OTA v2.5.108 — el control remoto ya no deja la tele a medias: el deep link
+  REEMPLAZA el reproductor en curso (nada de players apilados), el cierre de la espera es por identidad de ruta
+  (el handoff viejo ya no deshace el play nuevo) y el reproductor suelta el motor si queda detrás con
+  reproducción viva (fin del audio de fondo en el menú); la v2.5.107 el D-pad a prueba de fallos: el rescate del foco VERIFICA el
   aterrizaje (fin de la tecla comida en silencio), toda pantalla/modo tiene destino compuesto (Deportes en frío,
   la cuadrícula de sección, el riel solo en Inicio), el orden de filas del Inicio es fuente única y los
   reproductores/diálogos/control remoto dejan de poder matar el mando; la v2.5.106 el control remoto pide

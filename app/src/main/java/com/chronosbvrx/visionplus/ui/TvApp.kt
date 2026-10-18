@@ -235,13 +235,13 @@ private fun TvRoute(
             // salidas de arriba (En vivo, Categorías, Continuar).
         )
         is Route.Title -> TvTitleScreen(route.film, onPlay = { ep -> nav.push(Route.Player(route.film, ep)) })
-        is Route.Player -> PlayerScreen(route.film, isTv = true, onBack = { nav.pop() }, episode = route.episode, resumeMs = route.resumeMs)
+        is Route.Player -> PlayerScreen(route.film, isTv = true, onBack = { nav.close(route) }, episode = route.episode, resumeMs = route.resumeMs)
         is Route.LivePlayer -> LivePlayerScreen(
             channel = route.channel,
             isTv = true,
             channelCodes = route.channelCodes,
             groupTitle = route.groupTitle,
-            onBack = { nav.pop() },
+            onBack = { nav.close(route) },
         )
         Route.Search -> TvSearchScreen(
             indexRows,

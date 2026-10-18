@@ -184,7 +184,7 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
     BackHandler(enabled = !drawerState.isOpen && nav.stack.size > 1 && route !is Route.Player && route !is Route.LivePlayer) { nav.pop() }
 
     when (route) {
-        is Route.Player -> { PlayerScreen(route.film, isTv = false, onBack = { nav.pop() }, episode = route.episode, resumeMs = route.resumeMs); return }
+        is Route.Player -> { PlayerScreen(route.film, isTv = false, onBack = { nav.close(route) }, episode = route.episode, resumeMs = route.resumeMs); return }
         else -> Unit
     }
 
@@ -208,7 +208,7 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
                 isTv = false,
                 channelCodes = route.channelCodes,
                 groupTitle = route.groupTitle,
-                onBack = { nav.pop() },
+                onBack = { nav.close(route) },
             )
             return
         }

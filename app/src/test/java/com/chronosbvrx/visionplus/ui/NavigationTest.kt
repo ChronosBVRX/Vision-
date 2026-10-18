@@ -30,6 +30,59 @@ class NavigationTest {
     }
 
     @Test
+    fun externalOpenReplacesThePlayerInProgressInsteadOfStacking() {
+        // El caso real: estás viendo algo y el control remoto manda otro título. El play
+        // viejo YA NO se apila (si no, al volver se re-disparaba y cada orden dejaba basura).
+        val nav = Navigator(listOf(Route.Home))
+        val first = Route.Player(film("old"))
+        nav.pushPlayer(first)
+        assertEquals(listOf(Route.Home, first), nav.stack.toList())
+        val second = Route.Player(film("new"))
+        nav.pushPlayer(second)
+        assertEquals("el reproductor nuevo reemplaza al viejo", listOf(Route.Home, second), nav.stack.toList())
+        assertTrue("el cierre del nuevo vuelve a Inicio, jamás al play viejo", nav.close(second))
+        assertEquals(Route.Home, nav.current)
+    }
+
+    @Test
+    fun externalOpenReplacesALivePlayerTooAndKeepsTheScreensBelow() {
+        val nav = Navigator(listOf(Route.Home, Route.Title(film("t"))))
+        val ch = LiveChannel("TUDN", "xtvlive:tudn", null, "Deportes")
+        nav.pushPlayer(Route.LivePlayer(ch, channelCodes = listOf("tudn"), groupTitle = "Deportes"))
+        val moved = Route.Player(film("movie"))
+        nav.pushPlayer(moved)
+        assertEquals(
+            "la pantalla de abajo (la ficha) se conserva; solo el reproductor se reemplaza",
+            listOf(Route.Home, Route.Title(film("t")), moved),
+            nav.stack.toList(),
+        )
+    }
+
+    @Test
+    fun staleHandoffCloseCannotUndoTheNewPlay() {
+        // El «el reproductor se cerró» de la pantalla de espera VIEJA llegaba también cuando
+        // el deep link del teléfono traía el menú al frente: sin la guarda, deshacía la
+        // reproducción nueva y dejaba el menú con el audio viejo de fondo.
+        val nav = Navigator(listOf(Route.Home))
+        val old = Route.Player(film("old"))
+        nav.pushPlayer(old)
+        val fresh = Route.Player(film("new"))
+        nav.pushPlayer(fresh)
+        assertFalse("el cierre del handoff viejo no toca la pantalla nueva", nav.close(old))
+        assertEquals(fresh, nav.current)
+        assertTrue("solo el dueño de la pantalla puede cerrarla", nav.close(fresh))
+        assertEquals(Route.Home, nav.current)
+    }
+
+    @Test
+    fun closeNeverEmptiesTheStackBelowHome() {
+        val nav = Navigator(listOf(Route.Home))
+        assertFalse(nav.close(Route.Home))
+        assertFalse(nav.close(Route.Player(film("x"))))
+        assertEquals(Route.Home, nav.current)
+    }
+
+    @Test
     fun popKeepsAtLeastHome() {
         val nav = Navigator(listOf(Route.Home))
         assertFalse(nav.pop())

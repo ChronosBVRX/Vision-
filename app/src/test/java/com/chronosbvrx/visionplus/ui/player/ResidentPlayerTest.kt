@@ -40,4 +40,19 @@ class ResidentPlayerTest {
         assertFalse(shouldFinishIdleResidentOnExit(exiting = false, isPlayerActive = false))
         assertFalse(shouldFinishIdleResidentOnExit(exiting = false, isPlayerActive = true))
     }
+
+    @Test
+    fun playbackParksWhenThePlayerGoesBehindWhilePlaying() {
+        // El caso reportado: suena la reproducción de fondo mientras el menú está al frente.
+        // Si la actividad quedó detrás con reproducción viva, el motor se suelta.
+        assertTrue(shouldParkPlaybackOnStop(isPlayerActive = true, exiting = false))
+    }
+
+    @Test
+    fun aCleanResidentExitDoesNotParkTwice() {
+        // Salida normal: exitPlayer ya detuvo el motor; el onStop posterior no repite trabajo.
+        assertFalse(shouldParkPlaybackOnStop(isPlayerActive = true, exiting = true))
+        assertFalse(shouldParkPlaybackOnStop(isPlayerActive = false, exiting = false))
+        assertFalse(shouldParkPlaybackOnStop(isPlayerActive = false, exiting = true))
+    }
 }

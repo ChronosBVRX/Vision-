@@ -4454,6 +4454,10 @@ class X4KPlayerAty : ComponentActivity() {
 
     private val poller = object : Runnable {
         override fun run() {
+            // Sin reproducción viva (salida normal o estacionado al fondo) el sondeo no tiene
+            // nada que hacer: ni re-arranques internos ni errores en una pantalla que ya no se
+            // ve. El próximo play lo vuelve a lanzar desde cero.
+            if (!isPlayerActive) return
             val v = playerView
             if (v != null) {
                 val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
@@ -4887,15 +4891,39 @@ class X4KPlayerAty : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Cierre de seguridad al dejar la app (botón Inicio, pantalla apagada): el tic periódico
-        // va con apply y el sistema puede matar el proceso en segundo plano sin pasar por
-        // onDestroy; un commit deja el minuto en disco para la fila «Seguir viendo».
-        saveHistory(immediate = true)
+        if (shouldParkPlaybackOnStop(isPlayerActive, exiting)) {
+            // El reproductor quedó DETRÁS con reproducción viva (el control remoto trajo el
+            // menú al frente para abrir otro título, el usuario salió a Inicio, se apagó la
+            // tele): soltar el motor aquí evita el video sonando invisible en el menú.
+            parkPlaybackInBackground()
+        } else {
+            // Cierre de seguridad al dejar la app (botón Inicio, pantalla apagada): el tic periódico
+            // va con apply y el sistema puede matar el proceso en segundo plano sin pasar por
+            // onDestroy; un commit deja el minuto en disco para la fila «Seguir viendo».
+            saveHistory(immediate = true)
+        }
         // El canal «Continuar viendo» del launcher de TV (Google TV) se actualiza al salir del
         // reproductor: este es el proceso que trae el minuto fresco del historial. La llamada es
         // silenciosa y con freno propio; si el proceso muere al salir (Atrás), el proceso
         // principal re-sincroniza al volver, ya con el commit final en disco.
         runCatching { com.chronosbvrx.visionplus.data.launcher.LauncherWatchNext.syncAsync(this) }
+    }
+
+    /**
+     * El video quedó invisible pero vivo: se suelta el motor con el minuto ya comprometido y
+     * la actividad queda residente (la próxima reproducción reutiliza la vista, como siempre).
+     * El auto-reparado del motor conserva su cierre duro para estrenar carpeta limpia.
+     */
+    private fun parkPlaybackInBackground() {
+        android.util.Log.i(TAG, "reproductor al fondo con reproducción activa: se suelta el motor")
+        exiting = true
+        stopSubsTicker()
+        saveHistory(immediate = true)
+        playerView?.let { runCatching { X4KTitan.stop(it) } }
+        isPlayerActive = false
+        if (exitActionFor(hardResetNext) == PlayerExitAction.FINISH_AND_RELAUNCH) {
+            runCatching { finish() }
+        }
     }
 
     override fun onDestroy() {
