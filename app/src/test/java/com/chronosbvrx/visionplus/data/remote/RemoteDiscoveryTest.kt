@@ -31,6 +31,25 @@ class RemoteDiscoveryTest {
     }
 
     @Test
+    fun beaconCarriesTheStableIdentityOfTheTv() {
+        val beacon = RemoteDiscovery.parseBeacon(RemoteDiscovery.beaconLine("Sala", "Chromecast", id = "tv-1"))
+        assertEquals("tv-1", beacon?.id)
+        // Una baliza de una versión vieja (sin identidad) sigue siendo una tele válida.
+        assertEquals("", RemoteDiscovery.parseBeacon(RemoteDiscovery.beaconLine("Sala", "Chromecast"))?.id)
+    }
+
+    @Test
+    fun theLinkIsRememberedByIdentityNotByAddress() {
+        // La misma tele en otra dirección conserva su clave: el vínculo no se pierde con la IP.
+        assertEquals(
+            RemoteTv(host = "10.0.0.5", id = "abc").key,
+            RemoteTv(host = "10.0.0.99", port = 5555, id = "abc").key,
+        )
+        // Sin identidad (versión vieja) se cae a la dirección de siempre.
+        assertEquals("10.0.0.5:48633", RemoteTv(host = "10.0.0.5").key)
+    }
+
+    @Test
     fun beaconWithoutPortIsNotATElevision() {
         assertNull(RemoteDiscovery.parseBeacon("""{"t":"hello","name":"TV"}"""))
         assertNull(RemoteDiscovery.parseBeacon("""{"t":"probe"}"""))

@@ -116,6 +116,9 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
     var description by remember(film.id) { mutableStateOf(film.synopsis) }
     var episodePrograms by remember(film.id) { mutableStateOf<List<X4KApi.EpisodeProgram>>(emptyList()) }
     var watchedTick by remember(film.id) { mutableStateOf(0) }
+    // El selector de temporada/capítulo del botón «Ver en la TV» (solo series, y solo cuando
+    // el control remoto tiene una conexión viva).
+    var castPicker by remember(film.id) { mutableStateOf(false) }
     val episodes = remember(episodePrograms) { episodePrograms.map { it.contentId } }
     val episodeNames = remember(episodePrograms) { episodePrograms.map { it.name } }
 
@@ -363,11 +366,17 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                             }
 
                             // Abrir en la tele: solo con una conexión VIVA del control remoto, para no
-                            // dejar un botón muerto cuando no hay ninguna tele escuchando.
+                            // dejar un botón muerto cuando no hay ninguna tele escuchando. En series
+                            // abre el selector de temporada/capítulo: mandar la serie «en general»
+                            // abría en la tele sin el capítulo que uno está eligiendo.
                             if (castableRef(film.videoUrl) && RemoteClient.state.value.status == RemoteStatus.CONNECTED) {
                                 TextButton(onClick = {
-                                    RemoteClient.sendOpen(film.videoUrl, film.title, film.posterUrl)
-                                    Toast.makeText(context, "Abriendo en la tele…", Toast.LENGTH_SHORT).show()
+                                    if (isSeriesTitle) {
+                                        castPicker = true
+                                    } else {
+                                        RemoteClient.sendOpen(film.videoUrl, film.title, film.posterUrl)
+                                        Toast.makeText(context, "Abriendo en la tele…", Toast.LENGTH_SHORT).show()
+                                    }
                                 }) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Icon(
@@ -524,6 +533,32 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
             }
         }
         BackButton(onBack, Modifier.align(Alignment.TopStart))
+
+        if (castPicker) {
+            com.chronosbvrx.visionplus.ui.remote.CastEpisodeDialog(
+                film = film,
+                initialSeasonIndex = seasonIdx,
+                onDismiss = { castPicker = false },
+                onSend = { ep ->
+                    RemoteClient.sendOpen(
+                        ep.ref,
+                        ep.title,
+                        ep.poster,
+                        seriesId = ep.seriesId,
+                        seasonIndex = ep.seasonIndex,
+                        seasonIds = ep.seasonIds,
+                        seasonNames = ep.seasonNames,
+                    )
+                    Toast.makeText(context, "Abriendo ${ep.title} en la tele…", Toast.LENGTH_SHORT).show()
+                    castPicker = false
+                },
+                onSendTitle = {
+                    RemoteClient.sendOpen(film.videoUrl, film.title, film.posterUrl)
+                    Toast.makeText(context, "Abriendo en la tele…", Toast.LENGTH_SHORT).show()
+                    castPicker = false
+                },
+            )
+        }
     }
 }
 

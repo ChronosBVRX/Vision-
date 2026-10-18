@@ -51,6 +51,31 @@ class RemoteProtocolTest {
     }
 
     @Test
+    fun episodeContextTravelsOnTheWire() {
+        val msg = RemoteMsg(
+            t = RemoteProto.OPEN,
+            ref = "xtv:EP5",
+            title = "La Casa de Papel · T2 · C5",
+            series = "t2ref",
+            seasonIndex = 1,
+            seasonIds = listOf("t1ref", "t2ref"),
+            seasonNames = listOf("T1", "T2"),
+        )
+        val back = RemoteProto.decode(RemoteProto.encode(msg))
+        assertEquals("t2ref", back?.series)
+        assertEquals(1, back?.seasonIndex)
+        assertEquals(listOf("t1ref", "t2ref"), back?.seasonIds)
+        assertEquals(listOf("T1", "T2"), back?.seasonNames)
+    }
+
+    @Test
+    fun aMovieOpenStaysShortOnTheWire() {
+        val line = RemoteProto.encode(RemoteMsg(t = RemoteProto.OPEN, ref = "xtv:M1", title = "Moana"))
+        assertFalse("una película no arrastra contexto de serie", line.contains("series"))
+        assertFalse(line.contains("seasonIds"))
+    }
+
+    @Test
     fun allowlistBlocksTheDangerousKeys() {
         // El D-pad, la reproducción y el volumen entran.
         assertTrue(RemoteKeys.isAllowed(RemoteKeys.UP))

@@ -36,12 +36,27 @@ data class RemoteMsg(
     val poster: String? = null,
     /** URL de respaldo (videoUrl o dirección del canal). */
     val url: String? = null,
+    /**
+     * Contexto del capítulo cuando `ref` es el playCode de un episodio: la temporada activa
+     * (su titleId) y sus vecinas, para que la tele reproduzca ESE capítulo y pueda seguir con
+     * el siguiente sin volver al catálogo.
+     */
+    val series: String? = null,
+    val seasonIndex: Int? = null,
+    val seasonIds: List<String>? = null,
+    val seasonNames: List<String>? = null,
     /** Qué está viendo la tele (para el teléfono). */
     val screen: String? = null,
     val reason: String? = null,
     val msg: String? = null,
     /** Puerto de control de la tele (va en la baliza del descubrimiento). */
     val port: Int? = null,
+    /**
+     * Identidad estable de la tele (sobrevive reinicios y cambios de dirección): el teléfono
+     * recuerda su vínculo por aquí, no por la IP. Va en la baliza, en el `hello`, en el
+     * `needpin` y en el `ok`.
+     */
+    val id: String? = null,
     val proto: Int = REMOTE_PROTO,
 )
 

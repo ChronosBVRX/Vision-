@@ -80,7 +80,13 @@ object RemoteClient {
                         val text = String(packet.data, 0, packet.length, Charsets.UTF_8)
                         val beacon = RemoteDiscovery.parseBeacon(text) ?: continue
                         val host = packet.address.hostAddress ?: continue
-                        found[host] = RemoteTv(host = host, port = beacon.port, name = beacon.name, model = beacon.model)
+                        found[beacon.id.ifBlank { host }] = RemoteTv(
+                            host = host,
+                            port = beacon.port,
+                            name = beacon.name,
+                            model = beacon.model,
+                            id = beacon.id,
+                        )
                     }
                 }
             } catch (_: Throwable) {
@@ -147,6 +153,9 @@ object RemoteClient {
 
     private fun handle(context: Context, tv: RemoteTv, msg: RemoteMsg, myGen: Int) {
         if (gen != myGen) return
+        // La respuesta trae la identidad estable de la tele: se aprende al instante y el token
+        // guardado por dirección se muda a esa identidad (el vínculo no depende de la IP).
+        val activeTv = learnTvId(context, state.value.tv ?: tv, msg.id)
         when (msg.t) {
             RemoteProto.HELLO -> {
                 if (msg.paired == true) {
@@ -157,7 +166,7 @@ object RemoteClient {
                 state.value = state.value.copy(status = RemoteStatus.NEED_PIN, error = null)
             }
             RemoteProto.OK -> {
-                msg.token?.let { saveToken(context, tv, it) }
+                msg.token?.let { saveToken(context, activeTv, it) }
                 state.value = state.value.copy(status = RemoteStatus.CONNECTED, paired = true, error = null)
             }
             RemoteProto.DENIED -> {
@@ -203,8 +212,32 @@ object RemoteClient {
         send(RemoteMsg(t = RemoteProto.KEY, code = code, action = action))
     }
 
-    fun sendOpen(ref: String, title: String, poster: String = "") {
-        send(RemoteMsg(t = RemoteProto.OPEN, ref = ref, title = title, poster = poster))
+    /**
+     * Pide abrir contenido en la tele. Cuando es un capítulo de serie viaja también su contexto
+     * ([seriesId] = la temporada activa y sus vecinas) para que la tele reproduzca ESE capítulo
+     * y pueda seguir con el siguiente, en vez de mandar la serie a medias.
+     */
+    fun sendOpen(
+        ref: String,
+        title: String,
+        poster: String = "",
+        seriesId: String = "",
+        seasonIndex: Int = 0,
+        seasonIds: List<String> = emptyList(),
+        seasonNames: List<String> = emptyList(),
+    ) {
+        send(
+            RemoteMsg(
+                t = RemoteProto.OPEN,
+                ref = ref,
+                title = title,
+                poster = poster,
+                series = seriesId.trim().ifBlank { null },
+                seasonIndex = seasonIndex.takeIf { it > 0 },
+                seasonIds = seasonIds.takeIf { it.isNotEmpty() },
+                seasonNames = seasonNames.takeIf { it.isNotEmpty() },
+            ),
+        )
     }
 
     private fun send(msg: RemoteMsg) {
@@ -223,8 +256,22 @@ object RemoteClient {
 
     // --- Tokens del teléfono ----------------------------------------------------------------
 
-    fun tokenFor(context: Context, tv: RemoteTv): String =
-        prefs(context).getString(keyFor(tv), null).orEmpty()
+    /**
+     * El token de una tele. Se recuerda contra su identidad estable (sobrevive a los cambios
+     * de IP); un vínculo viejo guardado por dirección se muda solo la primera vez.
+     */
+    fun tokenFor(context: Context, tv: RemoteTv): String {
+        val p = prefs(context)
+        val stored = p.getString(keyFor(tv), null)
+        if (!stored.isNullOrBlank()) return stored
+        if (tv.id.isBlank()) return ""
+        // Migración: el mismo equipo ya vinculado puede traer su token bajo "host:puerto".
+        val legacy = p.getString(legacyKeyFor(tv), null)
+        if (!legacy.isNullOrBlank()) {
+            p.edit().putString(keyFor(tv), legacy).apply()
+        }
+        return legacy.orEmpty()
+    }
 
     fun isPaired(context: Context, tv: RemoteTv): Boolean = tokenFor(context, tv).isNotBlank()
 
@@ -238,15 +285,41 @@ object RemoteClient {
             port = p.getInt(KEY_LAST_PORT, RemoteDiscovery.CONTROL_PORT),
             name = p.getString(KEY_LAST_NAME, "").orEmpty(),
             model = p.getString(KEY_LAST_MODEL, "").orEmpty(),
+            id = p.getString(KEY_LAST_ID, "").orEmpty(),
         )
     }
 
+    /** Las teles conocidas (aunque hoy no estén en la red), la más reciente primero. */
+    fun knownTvs(context: Context): List<RemoteTv> =
+        parseKnownTvs(prefs(context).getString(KEY_KNOWN_TVS, null))
+
+    /** Las teles ya vinculadas: funcionan aunque el descubrimiento no las vea. */
+    fun pairedTvs(context: Context): List<RemoteTv> = knownTvs(context).filter { isPaired(context, it) }
+
+    /**
+     * Todas las teles que el teléfono recuerda y con las que ya está vinculado: la última
+     * usada primero, sin repetir. Sobre esto se conecta y se pinta «Tus teles vinculadas».
+     */
+    fun rememberedTvs(context: Context): List<RemoteTv> {
+        val out = ArrayList<RemoteTv>(MAX_KNOWN_TVS)
+        lastTv(context)?.takeIf { isPaired(context, it) }?.let { last ->
+            if (out.none { it.key == last.key }) out += last
+        }
+        pairedTvs(context).forEach { tv ->
+            if (out.none { it.key == tv.key }) out += tv
+        }
+        return out
+    }
+
     fun rememberTv(context: Context, tv: RemoteTv) {
-        prefs(context).edit()
+        val p = prefs(context)
+        p.edit()
             .putString(KEY_LAST_HOST, tv.host)
             .putInt(KEY_LAST_PORT, tv.port)
             .putString(KEY_LAST_NAME, tv.name)
             .putString(KEY_LAST_MODEL, tv.model)
+            .putString(KEY_LAST_ID, tv.id)
+            .putString(KEY_KNOWN_TVS, upsertKnownTv(p.getString(KEY_KNOWN_TVS, null), tv))
             .apply()
     }
 
@@ -255,7 +328,31 @@ object RemoteClient {
         rememberTv(context, tv)
     }
 
+    /**
+     * Aprende la identidad estable de la tele (baliza o respuesta) y muda el token guardado
+     * por dirección: el vínculo nunca se pierde por un cambio de IP. Devuelve la tele al día.
+     */
+    private fun learnTvId(context: Context, tv: RemoteTv, id: String?): RemoteTv {
+        val clean = id?.trim().orEmpty().take(64)
+        if (clean.isEmpty() || clean == tv.id) return tv
+        val updated = tv.copy(id = clean)
+        val p = prefs(context)
+        if (p.getString(keyFor(updated), null).isNullOrBlank()) {
+            p.getString(legacyKeyFor(tv), null)?.takeIf { it.isNotBlank() }?.let {
+                p.edit().putString(keyFor(updated), it).remove(legacyKeyFor(tv)).apply()
+            }
+        }
+        rememberTv(context, updated)
+        if (state.value.tv == null || state.value.tv?.key == tv.key) {
+            state.value = state.value.copy(tv = updated)
+        }
+        return updated
+    }
+
     private fun keyFor(tv: RemoteTv): String = "tok_${tv.key}"
+
+    /** La clave vieja (por dirección), solo para mudar vínculos de versiones anteriores. */
+    private fun legacyKeyFor(tv: RemoteTv): String = "tok_${tv.host}:${tv.port}"
 
     /**
      * Solo para pruebas: engancha (o quita) un escritor falso del cable para observar en qué hilo
@@ -277,4 +374,70 @@ object RemoteClient {
     private const val KEY_LAST_PORT = "last_port"
     private const val KEY_LAST_NAME = "last_name"
     private const val KEY_LAST_MODEL = "last_model"
+    private const val KEY_LAST_ID = "last_id"
+    private const val KEY_KNOWN_TVS = "known_tvs"
+}
+
+/** Cómo rotula la pantalla a una tele: ya vinculada (entra sola, sin PIN) o por conectar. */
+internal fun tvRowLabel(paired: Boolean): String = if (paired) "Vinculada" else "Conectar"
+
+/** Cuántas teles recuerda el teléfono. */
+private const val MAX_KNOWN_TVS = 5
+
+/**
+ * La lista de teles conocidas (JSON) con [tv] al frente: sin repetir (manda la identidad
+ * estable) y sin crecer sin fin. Puro: lo que se recuerda queda cubierto por pruebas.
+ *
+ * Una tele sin identidad que ya conocemos mejor (la misma dirección con id) no la rediscribe:
+ * la entrada con identidad vale más y evita el par duplicado de la migración.
+ */
+internal fun upsertKnownTv(raw: String?, tv: RemoteTv, max: Int = MAX_KNOWN_TVS): String {
+    val existing = parseKnownTvs(raw)
+    val sameBox = { other: RemoteTv -> other.host == tv.host && other.port == tv.port }
+    if (tv.id.isBlank()) {
+        if (existing.any { it.id.isNotBlank() && sameBox(it) }) return raw.orEmpty()
+        val list = existing.filter { it.key != tv.key && !(it.id.isBlank() && sameBox(it)) }
+        return knownTvsJson((listOf(tv) + list).take(max.coerceAtLeast(1)))
+    }
+    val list = existing.filter { it.key != tv.key && !sameBox(it) }
+    return knownTvsJson((listOf(tv) + list).take(max.coerceAtLeast(1)))
+}
+
+private fun knownTvsJson(tvs: List<RemoteTv>): String {
+    val arr = org.json.JSONArray()
+    tvs.forEach { t ->
+        arr.put(
+            org.json.JSONObject().apply {
+                put("id", t.id)
+                put("host", t.host)
+                put("port", t.port)
+                put("name", t.name)
+                put("model", t.model)
+            },
+        )
+    }
+    return arr.toString()
+}
+
+/** Lee la lista de teles conocidas; una entrada rara se descarta sola. */
+internal fun parseKnownTvs(raw: String?): List<RemoteTv> {
+    val text = raw?.trim().orEmpty()
+    if (text.isEmpty()) return emptyList()
+    val arr = runCatching { org.json.JSONArray(text) }.getOrNull() ?: return emptyList()
+    val out = ArrayList<RemoteTv>(arr.length())
+    for (i in 0 until arr.length()) {
+        val o = arr.optJSONObject(i) ?: continue
+        val host = o.optString("host").trim()
+        if (host.isEmpty()) continue
+        val port = o.optInt("port", RemoteDiscovery.CONTROL_PORT)
+        if (port !in 1..65535) continue
+        out += RemoteTv(
+            host = host,
+            port = port,
+            name = o.optString("name").orEmpty(),
+            model = o.optString("model").orEmpty(),
+            id = o.optString("id").orEmpty(),
+        )
+    }
+    return out
 }

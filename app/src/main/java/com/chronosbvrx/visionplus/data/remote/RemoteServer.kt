@@ -59,11 +59,16 @@ class RemoteServer(private val context: Context) {
         listOf(maker, "Android $rel".trim()).filter { it.isNotBlank() }.joinToString(" ")
     }
 
+    /** Identidad estable de esta tele: una vez creada, el vínculo del teléfono no depende de la IP. */
+    private val tvId: String by lazy { tvIdOf(app) }
+
     private var nowReceiver: BroadcastReceiver? = null
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
         pin = RemotePairing.newPin()
+        // Los dispositivos recordados quedan visibles para Ajustes (aunque nadie esté conectado).
+        RemoteBus.pairedDevices.value = rememberedDevices(app)
         // Los drivers Wi-Fi filtran la difusión si nadie la reclama: sin esto el teléfono
         // tiene que saber la IP a mano.
         runCatching {
@@ -109,7 +114,8 @@ class RemoteServer(private val context: Context) {
                 if (!ok) break
                 val text = String(packet.data, 0, packet.length, Charsets.UTF_8)
                 if (!RemoteDiscovery.isProbe(text)) continue
-                val reply = RemoteDiscovery.beaconLine(deviceName, deviceModel).toByteArray(Charsets.UTF_8)
+                val reply = RemoteDiscovery.beaconLine(deviceName, deviceModel, RemoteDiscovery.CONTROL_PORT, tvId)
+                    .toByteArray(Charsets.UTF_8)
                 runCatching { socket.send(DatagramPacket(reply, reply.size, packet.address, packet.port)) }
             }
         }
@@ -213,26 +219,31 @@ class RemoteServer(private val context: Context) {
                     val tokens = tokens()
                     if (RemotePairing.isValidToken(tokens, msg.token)) {
                         authorized = true
+                        // El recordado sube al frente: la lista queda ordenada por reciente.
+                        val tok = msg.token.orEmpty()
+                        if (tokens.firstOrNull() != tok) saveTokens(RemotePairing.addToken(tokens, tok))
                         RemoteBus.clients.value = clients.count { it.authorized }
-                        send(RemoteMsg(t = RemoteProto.HELLO, name = deviceName, model = deviceModel, paired = true))
+                        send(RemoteMsg(t = RemoteProto.HELLO, name = deviceName, model = deviceModel, paired = true, id = tvId))
                         send(RemoteMsg(t = RemoteProto.NOW, screen = RemoteBus.screen.value))
                     } else {
                         // Primera vez: la tele enseña el PIN (solo ahora, porque alguien lo pidió).
                         RemoteBus.pairingPin.value = pin
-                        send(RemoteMsg(t = RemoteProto.NEED_PIN, name = deviceName, model = deviceModel))
+                        send(RemoteMsg(t = RemoteProto.NEED_PIN, name = deviceName, model = deviceModel, id = tvId))
                     }
                 }
 
                 RemoteProto.PIN -> {
                     if (RemotePairing.pinMatches(pin, msg.pin)) {
                         val token = RemotePairing.newToken(Random.Default)
+                        // El nombre viaja con el token: la tele recuerda QUIÉN es cada vinculado.
+                        saveDeviceName(token, name)
                         saveTokens(RemotePairing.addToken(tokens(), token))
                         authorized = true
                         pin = RemotePairing.newPin()
                         RemoteBus.pairingPin.value = null
                         RemoteBus.pairedWith.value = name
                         RemoteBus.clients.value = clients.count { it.authorized }
-                        send(RemoteMsg(t = RemoteProto.OK, token = token, name = deviceName))
+                        send(RemoteMsg(t = RemoteProto.OK, token = token, name = deviceName, id = tvId))
                         send(RemoteMsg(t = RemoteProto.NOW, screen = RemoteBus.screen.value))
                     } else {
                         attempts++
@@ -263,7 +274,15 @@ class RemoteServer(private val context: Context) {
     }
 
     private fun launchOpen(msg: RemoteMsg) {
-        val uri = remoteOpenUriString(msg.ref.orEmpty(), msg.title.orEmpty(), msg.poster.orEmpty()) ?: return
+        val uri = remoteOpenUriString(
+            ref = msg.ref.orEmpty(),
+            title = msg.title.orEmpty(),
+            poster = msg.poster.orEmpty(),
+            seriesId = msg.series.orEmpty(),
+            seasonIndex = msg.seasonIndex ?: 0,
+            seasonIds = msg.seasonIds.orEmpty(),
+            seasonNames = msg.seasonNames.orEmpty(),
+        ) ?: return
         runCatching {
             app.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse(uri))
@@ -281,11 +300,66 @@ class RemoteServer(private val context: Context) {
         prefs().getString(KEY_TOKENS, "").orEmpty().split('|').filter { it.isNotBlank() }
 
     private fun saveTokens(list: List<String>) {
-        prefs().edit().putString(KEY_TOKENS, list.joinToString("|")).apply()
+        val p = prefs()
+        val knownNames = p.all.keys.filter { it.startsWith(DEVICE_PREFIX) }
+        val edit = p.edit().putString(KEY_TOKENS, list.joinToString("|"))
+        // Un token que sale de la lista (tope de recordados) se lleva su nombre.
+        knownNames.forEach { key ->
+            if (key.removePrefix(DEVICE_PREFIX) !in list) edit.remove(key)
+        }
+        edit.apply()
+        RemoteBus.pairedDevices.value = rememberedDevices(app)
+    }
+
+    /** El nombre con el que se recuerda a este dispositivo (la tele lo muestra en Ajustes). */
+    private fun saveDeviceName(token: String, deviceName: String) {
+        if (token.isBlank()) return
+        prefs().edit().putString(DEVICE_PREFIX + token, deviceName.trim().take(48).ifBlank { "Teléfono" }).apply()
     }
 
     companion object {
         private const val KEY_TOKENS = "tv_tokens"
+        private const val KEY_TV_ID = "tv_id"
+        private const val DEVICE_PREFIX = "dev_"
         private const val MAX_PIN_ATTEMPTS = 5
+
+        private fun pairingPrefs(context: Context) =
+            context.applicationContext.getSharedPreferences("remote_pairing", Context.MODE_PRIVATE)
+
+        /**
+         * Identidad estable de esta tele: se crea una vez y no cambia más. El teléfono guarda
+         * su token contra este id (no contra la IP), así el vínculo sobrevive a los reinicios
+         * y a los cambios de dirección.
+         */
+        internal fun tvIdOf(context: Context): String {
+            val p = pairingPrefs(context)
+            val existing = p.getString(KEY_TV_ID, null).orEmpty()
+            if (existing.isNotBlank()) return existing
+            val fresh = RemotePairing.newToken(Random.Default)
+            p.edit().putString(KEY_TV_ID, fresh).apply()
+            return fresh
+        }
+
+        /** Los dispositivos recordados (sus nombres, el más reciente primero). */
+        fun rememberedDevices(context: Context): List<String> {
+            val p = pairingPrefs(context)
+            return p.getString(KEY_TOKENS, "").orEmpty().split('|')
+                .filter { it.isNotBlank() }
+                .map { token -> p.getString(DEVICE_PREFIX + token, null).orEmpty().ifBlank { "Teléfono" } }
+        }
+
+        /**
+         * Olvida TODOS los vínculos: la próxima vez cada teléfono tendrá que emparejar de
+         * nuevo con el PIN. Devuelve cuántos dispositivos se olvidaron.
+         */
+        fun forgetPairings(context: Context): Int {
+            val p = pairingPrefs(context)
+            val tokens = p.getString(KEY_TOKENS, "").orEmpty().split('|').filter { it.isNotBlank() }
+            val edit = p.edit().remove(KEY_TOKENS)
+            tokens.forEach { edit.remove(DEVICE_PREFIX + it) }
+            edit.apply()
+            RemoteBus.pairedDevices.value = emptyList()
+            return tokens.size
+        }
     }
 }

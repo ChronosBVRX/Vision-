@@ -62,12 +62,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
+import android.widget.Toast
 import coil.compose.AsyncImage
+import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.data.remote.RemoteClient
 import com.chronosbvrx.visionplus.data.remote.RemoteKeys
 import com.chronosbvrx.visionplus.data.remote.RemoteStatus
 import com.chronosbvrx.visionplus.data.remote.RemoteTv
+import com.chronosbvrx.visionplus.data.remote.tvRowLabel
 import com.chronosbvrx.visionplus.data.searchFilms
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
@@ -90,14 +93,15 @@ fun RemoteScreen(catalog: XuperCatalog, onBack: () -> Unit) {
     val context = LocalContext.current
     val state by RemoteClient.state
 
-    // Al abrir: si ya hubo una tele, se intenta sola; si no, se busca en la red.
+    // Al abrir: si ya hubo una tele vinculada, se intenta sola; si no, se busca en la red.
     LaunchedEffect(Unit) {
         if (RemoteClient.state.value.status == RemoteStatus.IDLE) {
             val last = RemoteClient.lastTv(context)
-            if (last != null && RemoteClient.isPaired(context, last)) {
-                RemoteClient.connect(context, last)
-            } else {
-                RemoteClient.search()
+            val remembered = RemoteClient.rememberedTvs(context).firstOrNull()
+            when {
+                last != null && RemoteClient.isPaired(context, last) -> RemoteClient.connect(context, last)
+                remembered != null -> RemoteClient.connect(context, remembered)
+                else -> RemoteClient.search()
             }
         }
     }
@@ -213,6 +217,9 @@ private fun RemoteHeader(tv: RemoteTv?, connected: Boolean, onBack: () -> Unit) 
 private fun DiscoveryPanel(error: String?) {
     val context = LocalContext.current
     val state by RemoteClient.state
+    // Las teles que el teléfono ya vinculó: entran solas (sin PIN) y funcionan aunque el
+    // descubrimiento no las vea (dirección cambiada, difusión filtrada por el router).
+    val remembered = remember(state.status, state.tvs) { RemoteClient.rememberedTvs(context) }
     Column(Modifier.fillMaxWidth()) {
         Icon(VisionIcons.Globe, contentDescription = null, tint = VisionBlue, modifier = Modifier.size(44.dp).align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(12.dp))
@@ -237,24 +244,29 @@ private fun DiscoveryPanel(error: String?) {
             Spacer(Modifier.height(12.dp))
             Text(error, color = VisionTextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.align(Alignment.CenterHorizontally))
         }
-        val last = remember { RemoteClient.lastTv(context) }
-        if (last != null && RemoteClient.isPaired(context, last)) {
+        if (remembered.isNotEmpty()) {
             Spacer(Modifier.height(18.dp))
-            Text("La última vez", style = MaterialTheme.typography.labelMedium, color = VisionTextSecondary)
-            TvRow(tv = last, onClick = { RemoteClient.connect(context, last) })
+            Text("Tus teles vinculadas", style = MaterialTheme.typography.labelMedium, color = VisionTextSecondary)
+            remembered.forEach { tv ->
+                TvRow(tv = tv, paired = true, onClick = { RemoteClient.connect(context, tv) })
+            }
         }
         if (state.tvs.isNotEmpty()) {
             Spacer(Modifier.height(18.dp))
             Text("Encontradas (${state.tvs.size})", style = MaterialTheme.typography.labelMedium, color = VisionTextSecondary)
             state.tvs.forEach { tv ->
-                TvRow(tv = tv, onClick = { RemoteClient.connect(context, tv) })
+                TvRow(
+                    tv = tv,
+                    paired = RemoteClient.isPaired(context, tv),
+                    onClick = { RemoteClient.connect(context, tv) },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun TvRow(tv: RemoteTv, onClick: () -> Unit) {
+private fun TvRow(tv: RemoteTv, paired: Boolean, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -271,7 +283,11 @@ private fun TvRow(tv: RemoteTv, onClick: () -> Unit) {
             Text(tv.name.ifBlank { "Vision+ TV" }, color = VisionTextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(tv.model.ifBlank { tv.host }, color = VisionTextSecondary, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text("Conectar", color = VisionBlueBright, style = MaterialTheme.typography.labelLarge)
+        Text(
+            tvRowLabel(paired),
+            color = if (paired) VisionSuccess else VisionBlueBright,
+            style = MaterialTheme.typography.labelLarge,
+        )
     }
 }
 
@@ -382,6 +398,8 @@ private fun WideKey(icon: ImageVector, desc: String, modifier: Modifier = Modifi
 private fun CastPanel(catalog: XuperCatalog) {
     val context = LocalContext.current
     var query by remember { mutableStateOf("") }
+    // La serie cuyo temporada/capítulo se está eligiendo (null = sin selector abierto).
+    var pickingFilm by remember { mutableStateOf<Film?>(null) }
     val rows = catalog.indexRows.ifEmpty { catalog.rows }
     val channels = remember { runCatching { X4KApi.cachedLiveChannels(context) }.getOrDefault(emptyList()) }
     val results = remember(query, rows, channels) {
@@ -415,12 +433,45 @@ private fun CastPanel(catalog: XuperCatalog) {
             modifier = Modifier.fillMaxWidth(),
         )
         results.forEach { item ->
-            CastRow(item) { RemoteClient.sendOpen(item.ref, item.title, item.art.orEmpty()) }
+            CastRow(item) {
+                // Una serie no se manda «en general»: primero se elige temporada y capítulo.
+                val vod = item as? CastItem.Vod
+                if (vod != null && isCastSeries(vod.film)) {
+                    pickingFilm = vod.film
+                } else {
+                    RemoteClient.sendOpen(item.ref, item.title, item.art.orEmpty())
+                }
+            }
         }
         if (query.trim().length >= 2 && results.isEmpty()) {
             Spacer(Modifier.height(12.dp))
             Text("Nada que se pueda abrir con eso.", color = VisionTextSecondary, style = MaterialTheme.typography.bodySmall)
         }
+    }
+
+    pickingFilm?.let { film ->
+        CastEpisodeDialog(
+            film = film,
+            onDismiss = { pickingFilm = null },
+            onSend = { ep ->
+                RemoteClient.sendOpen(
+                    ep.ref,
+                    ep.title,
+                    ep.poster,
+                    seriesId = ep.seriesId,
+                    seasonIndex = ep.seasonIndex,
+                    seasonIds = ep.seasonIds,
+                    seasonNames = ep.seasonNames,
+                )
+                Toast.makeText(context, "Abriendo ${ep.title} en la tele…", Toast.LENGTH_SHORT).show()
+                pickingFilm = null
+            },
+            onSendTitle = {
+                RemoteClient.sendOpen(film.videoUrl, film.title, film.posterUrl)
+                Toast.makeText(context, "Abriendo en la tele…", Toast.LENGTH_SHORT).show()
+                pickingFilm = null
+            },
+        )
     }
 }
 
@@ -457,7 +508,11 @@ private fun CastRow(item: CastItem, onClick: () -> Unit) {
             }
         }
         Text(
-            if (item is CastItem.Channel) "Canal" else "Reproducir",
+            when {
+                item is CastItem.Channel -> "Canal"
+                item is CastItem.Vod && isCastSeries(item.film) -> "Capítulos"
+                else -> "Reproducir"
+            },
             color = VisionBlueBright,
             style = MaterialTheme.typography.labelLarge,
         )

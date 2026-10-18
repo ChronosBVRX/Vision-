@@ -2,6 +2,7 @@ package com.chronosbvrx.visionplus.ui.remote
 
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.LiveChannel
+import com.chronosbvrx.visionplus.data.SeasonRef
 
 /**
  * El buscador del control remoto: encuentra en el catálogo lo que se puede abrir en la tele.
@@ -20,6 +21,8 @@ internal sealed interface CastItem {
         override val subtitle: String,
         override val art: String?,
         override val ref: String,
+        /** La ficha completa: con ella se decide si hay que elegir temporada/capítulo. */
+        val film: Film,
     ) : CastItem
 
     data class Channel(
@@ -40,6 +43,71 @@ internal fun castableRef(videoUrl: String): Boolean {
         else -> false
     }
 }
+
+/**
+ * ¿Este título se abre eligiendo temporada y capítulo? Las series del índice traen su tipo
+ * (`kind`) y su lista de temporadas; una película se reproduce directo como siempre. Sin la
+ * lista de capítulos del portal (que se pide al abrir el selector) jamás se bloquea nada: el
+ * selector cae al botón «Reproducir el título».
+ */
+internal fun isCastSeries(film: Film): Boolean =
+    film.seasons.isNotEmpty() || film.kind.trim().lowercase() in CAST_SERIES_KINDS
+
+private val CAST_SERIES_KINDS = setOf("series", "teleplay", "anime")
+
+/** La etiqueta de una temporada del grupo: «T2», o «Completa» cuando no tiene número. */
+internal fun castSeasonLabel(n: Int): String = if (n <= 0) "Completa" else "T$n"
+
+/**
+ * El capítulo que el teléfono va a abrir en la tele: la referencia del capítulo con TODO el
+ * contexto de su serie (temporada activa y sus vecinas) para que el reproductor de la tele
+ * ofrezca «siguiente» sin volver al teléfono.
+ */
+internal data class CastEpisode(
+    val ref: String,
+    val title: String,
+    val poster: String,
+    val seriesId: String,
+    val seasonIndex: Int,
+    val seasonIds: List<String>,
+    val seasonNames: List<String>,
+)
+
+/**
+ * Arma la orden del capítulo: `seasonIndex` es el índice dentro de [Film.seasons] (0 cuando la
+ * serie tiene una sola temporada y no trae lista). La referencia del capítulo es su playCode
+ * (`xtv:<code>`). Puro: lo que viaja al cable queda cubierto por pruebas.
+ */
+internal fun castEpisodeFor(film: Film, seasonIndex: Int, episodeCode: String, episodeNumber: Int): CastEpisode {
+    val seasons = film.seasons
+    val idx = seasonIndex.coerceIn(0, (seasons.size - 1).coerceAtLeast(0))
+    val active = seasons.getOrNull(idx)
+    val label = active?.let { castSeasonLabel(it.n) }
+    return CastEpisode(
+        ref = castEpisodeRef(episodeCode),
+        title = castEpisodeTitle(film.title, label, episodeNumber),
+        poster = film.posterUrl,
+        seriesId = active?.titleId ?: film.id,
+        seasonIndex = idx,
+        seasonIds = seasons.map { it.titleId },
+        seasonNames = seasons.map { castSeasonLabel(it.n) },
+    )
+}
+
+/** El playCode de un capítulo, con el prefijo que la app sabe abrir. */
+internal fun castEpisodeRef(code: String): String {
+    val clean = code.trim()
+    return if (clean.startsWith("xtv:")) clean else "xtv:$clean"
+}
+
+/** «La Casa de Papel · T2 · C5»: el rótulo con el que la tele anuncia el capítulo. */
+internal fun castEpisodeTitle(seriesTitle: String, seasonLabel: String?, episodeNumber: Int): String =
+    listOfNotNull(
+        seriesTitle.trim().ifBlank { null },
+        seasonLabel?.trim()?.takeIf { it.isNotEmpty() },
+        "C${episodeNumber.coerceAtLeast(1)}",
+    ).joinToString(" · ")
+
 
 /**
  * Arma la lista del buscador: primero lo del catálogo (películas/series) y luego los canales en
@@ -67,6 +135,7 @@ internal fun buildCastResults(
                 subtitle = vodSubtitle(it),
                 art = it.posterUrl.takeIf { url -> url.isNotBlank() },
                 ref = it.videoUrl,
+                film = it,
             )
         }
         .toList()

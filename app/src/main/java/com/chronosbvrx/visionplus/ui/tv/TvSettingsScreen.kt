@@ -46,6 +46,8 @@ import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.follow.FollowStore
 import com.chronosbvrx.visionplus.data.kids.KidsMode
+import com.chronosbvrx.visionplus.data.remote.RemoteBus
+import com.chronosbvrx.visionplus.data.remote.RemoteServer
 import com.chronosbvrx.visionplus.data.stats.formatMinutes
 import com.chronosbvrx.visionplus.data.stats.kindLabel
 import com.chronosbvrx.visionplus.data.stats.summarize
@@ -256,6 +258,20 @@ private fun ColumnScope.TvSystemTab() {
     TvActionOption("Enviar diagnóstico ahora") {
         com.chronosbvrx.visionplus.data.diag.Diagnostics.feedback("Diagnóstico manual desde Ajustes (TV)")
         Toast.makeText(context, "Diagnóstico enviado", Toast.LENGTH_SHORT).show()
+    }
+
+    TvSectionTitle("Control remoto")
+    val pairedDevices = RemoteBus.pairedDevices.value
+    if (pairedDevices.isEmpty()) {
+        Note("Ningún dispositivo vinculado todavía. Al emparejar con el PIN, cada teléfono queda recordado y la próxima vez entra solo.")
+    } else {
+        Note("Dispositivos vinculados: ${pairedDevices.size} · entran solos, sin PIN.")
+        pairedDevices.forEach { device -> Note("· $device") }
+        TvActionOption("Olvidar dispositivos vinculados") {
+            val forgotten = RemoteServer.forgetPairings(context)
+            Toast.makeText(context, "Vínculos olvidados: $forgotten", Toast.LENGTH_SHORT).show()
+        }
+        Note("Los teléfonos tendrán que emparejar de nuevo con el PIN que muestre la tele.")
     }
 
     TvSectionTitle("Modo niños")

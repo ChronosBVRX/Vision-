@@ -4,11 +4,12 @@ import android.net.Uri
 
 /**
  * El enlace con el que las tarjetas del launcher de TV (canal Watch Next / «Continuar viendo»)
- * vuelven a la app: `visionplus://watch/<clave>?t=…&p=…&c=…&u=…`.
+ * y el control remoto del teléfono vuelven a la app: `visionplus://watch/<clave>?t=…&p=…&c=…`.
  *
  * La clave es la del historial (playCode XTV o clave de videoUrl). t/p/c/u son el respaldo
  * (título, póster, playCode XTV y videoUrl) por si el historial ya se podó cuando el usuario
- * toca la tarjeta.
+ * toca la tarjeta. Cuando el control remoto manda un CAPÍTULO, además viaja el contexto de su
+ * serie (s/sx/sl/sn) para abrir ese capítulo exacto y poder seguir con el siguiente.
  */
 internal data class WatchLink(
     val key: String,
@@ -16,6 +17,11 @@ internal data class WatchLink(
     val posterUrl: String = "",
     val code: String = "",
     val videoUrl: String = "",
+    /** Temporada activa del capítulo (su titleId), vacío en películas. */
+    val seriesId: String = "",
+    val seasonIndex: Int = 0,
+    val seasonIds: List<String> = emptyList(),
+    val seasonNames: List<String> = emptyList(),
 )
 
 internal object LauncherLinks {
@@ -32,6 +38,10 @@ internal object LauncherLinks {
         .apply {
             if (link.code.isNotBlank()) appendQueryParameter("c", link.code)
             if (link.videoUrl.isNotBlank()) appendQueryParameter("u", link.videoUrl)
+            if (link.seriesId.isNotBlank()) appendQueryParameter("s", link.seriesId)
+            if (link.seasonIndex > 0) appendQueryParameter("sx", link.seasonIndex.toString())
+            if (link.seasonIds.isNotEmpty()) appendQueryParameter("sl", link.seasonIds.joinToString(SEP))
+            if (link.seasonNames.isNotEmpty()) appendQueryParameter("sn", link.seasonNames.joinToString(SEP))
         }
         .build()
 
@@ -48,6 +58,16 @@ internal object LauncherLinks {
             posterUrl = uri.getQueryParameter("p").orEmpty(),
             code = uri.getQueryParameter("c").orEmpty(),
             videoUrl = uri.getQueryParameter("u").orEmpty(),
+            seriesId = uri.getQueryParameter("s").orEmpty(),
+            seasonIndex = uri.getQueryParameter("sx")?.trim()?.toIntOrNull() ?: 0,
+            seasonIds = splitList(uri.getQueryParameter("sl")),
+            seasonNames = splitList(uri.getQueryParameter("sn")),
         )
     }
+
+    /** Separa una lista del enlace (`T1|T2|T3`): sin vacíos y sin espacios de sobra. */
+    private fun splitList(raw: String?): List<String> =
+        raw.orEmpty().split(SEP).map { it.trim() }.filter { it.isNotEmpty() }
+
+    private const val SEP = "|"
 }

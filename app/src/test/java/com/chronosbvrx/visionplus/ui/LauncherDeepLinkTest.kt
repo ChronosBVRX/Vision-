@@ -10,6 +10,7 @@ import com.chronosbvrx.visionplus.data.launcher.LauncherLinks
 import com.chronosbvrx.visionplus.data.launcher.WatchLink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -78,6 +79,46 @@ class LauncherDeepLinkTest {
         assertEquals("xtv:m1", route.film.videoUrl)
         // En XTV el minuto viaja en el episodio (la app lo trata como reproducción con contexto).
         assertEquals(300_000L, route.episode?.resumeMs)
+    }
+
+    @Test
+    fun episodeContextSurvivesTheLinkRoundTrip() {
+        val link = WatchLink(
+            key = "xtv:ep5", title = "La Casa de Papel · T2 · C5", posterUrl = "p", code = "ep5",
+            seriesId = "t2ref", seasonIndex = 1,
+            seasonIds = listOf("t1ref", "t2ref"), seasonNames = listOf("T1", "T2"),
+        )
+        assertEquals(link, LauncherLinks.parse(LauncherLinks.uriFor(link)))
+    }
+
+    @Test
+    fun routeOpensTheExactEpisodeTheRemoteCastPicked() {
+        val route = launcherRouteFor(
+            context,
+            LauncherLinks.uriFor(
+                WatchLink(
+                    key = "xtv:ep5", title = "La Casa de Papel · T2 · C5", posterUrl = "p", code = "ep5",
+                    seriesId = "t2ref", seasonIndex = 1,
+                    seasonIds = listOf("t1ref", "t2ref"), seasonNames = listOf("T1", "T2"),
+                ),
+            ),
+        ) as Route.Player
+        assertEquals("xtv:ep5", route.film.videoUrl)
+        assertEquals("La Casa de Papel · T2 · C5", route.film.title)
+        assertEquals("ep5", route.episode?.code)
+        assertEquals("t2ref", route.episode?.seriesId)
+        assertEquals(1, route.episode?.seasonIndex)
+        assertEquals(listOf("t1ref", "t2ref"), route.episode?.seasonIds)
+        assertEquals(listOf("T1", "T2"), route.episode?.seasonNames)
+    }
+
+    @Test
+    fun aPlainWatchLinkStillCarriesNoEpisodeContext() {
+        val parsed = LauncherLinks.parse(LauncherLinks.uriFor(WatchLink(key = "m1", title = "Película")))!!
+        assertEquals("", parsed.seriesId)
+        assertEquals(0, parsed.seasonIndex)
+        assertTrue(parsed.seasonIds.isEmpty())
+        assertTrue(parsed.seasonNames.isEmpty())
     }
 
     @Test

@@ -218,6 +218,40 @@ class RemoteServerFlowTest {
     }
 
     @Test
+    fun anEpisodeOpenCarriesTheSeriesContextInTheDeepLink() {
+        val token = pair(Phone())
+        Phone().use { phone ->
+            phone.send(RemoteMsg(t = RemoteProto.HELLO, token = token))
+            phone.read(); phone.read()
+            phone.send(
+                RemoteMsg(
+                    t = RemoteProto.OPEN,
+                    ref = "xtv:EP5",
+                    title = "La Casa de Papel · T2 · C5",
+                    poster = "p",
+                    series = "t2ref",
+                    seasonIndex = 1,
+                    seasonIds = listOf("t1ref", "t2ref"),
+                    seasonNames = listOf("T1", "T2"),
+                ),
+            )
+            val deadline = System.currentTimeMillis() + 3_000
+            var started: Intent? = null
+            while (started == null && System.currentTimeMillis() < deadline) {
+                started = shadowOf(context as android.app.Application).nextStartedActivity
+                if (started == null) Thread.sleep(30)
+            }
+            assertNotNull("la tele debe abrir el capítulo exacto", started)
+            val uri = started?.data.toString().orEmpty()
+            assertTrue("el capítulo viaja como su propia ref", uri.contains("c=EP5"))
+            assertTrue("la temporada activa viaja en s", uri.contains("s=t2ref"))
+            assertTrue(uri.contains("sx=1"))
+            assertTrue("las temporadas del grupo viajan separadas por |", uri.contains("sl=t1ref%7Ct2ref"))
+            assertTrue(uri.contains("sn=T1%7CT2"))
+        }
+    }
+
+    @Test
     fun theTvTellsThePhoneWhatIsOnScreen() {
         val token = pair(Phone())
         Phone().use { phone ->
@@ -231,6 +265,72 @@ class RemoteServerFlowTest {
                 if (msg.t == RemoteProto.NOW) screen = msg.screen.orEmpty()
             }
             assertEquals("Ajustes", screen)
+        }
+    }
+
+    @Test
+    fun beaconCarriesAStableIdentityAndTheHelloConfirmsIt() {
+        val first = probeBeacon()
+        assertNotNull("la tele debe contestar la sonda", first)
+        val id = first!!.id
+        assertTrue("la baliza trae una identidad estable", id.isNotBlank())
+        assertEquals("y no cambia entre sondas", id, probeBeacon()?.id)
+
+        // El teléfono que vuelve con su token recibe la MISMA identidad en el hello.
+        val token = pair(Phone())
+        Phone().use { phone ->
+            phone.send(RemoteMsg(t = RemoteProto.HELLO, token = token))
+            val hello = phone.read()
+            assertEquals(RemoteProto.HELLO, hello.t)
+            assertEquals(true, hello.paired)
+            assertEquals(id, hello.id)
+        }
+    }
+
+    @Test
+    fun theTvRemembersTheDevicesByNameAndForgetsThemOnDemand() {
+        val token: String
+        Phone().use { phone ->
+            phone.send(RemoteMsg(t = RemoteProto.HELLO, name = "POCO de Axel"))
+            assertEquals(RemoteProto.NEED_PIN, phone.read().t)
+            val pin = RemoteBus.pairingPin.value ?: error("sin PIN")
+            phone.send(RemoteMsg(t = RemoteProto.PIN, pin = pin))
+            val ok = phone.read()
+            assertEquals(RemoteProto.OK, ok.t)
+            assertTrue("el ok también trae la identidad", !ok.id.isNullOrBlank())
+            token = ok.token ?: error("sin token")
+        }
+        // La tele recuerda QUIÉN está vinculado (visible en Ajustes).
+        assertEquals(listOf("POCO de Axel"), RemoteServer.rememberedDevices(context))
+        assertEquals(listOf("POCO de Axel"), RemoteBus.pairedDevices.value)
+
+        // Olvidar: el vínculo desaparece y ese token ya no entra solo (volverá a pedir PIN).
+        assertEquals(1, RemoteServer.forgetPairings(context))
+        assertTrue(RemoteServer.rememberedDevices(context).isEmpty())
+        assertTrue(RemoteBus.pairedDevices.value.isEmpty())
+        Phone().use { phone ->
+            phone.send(RemoteMsg(t = RemoteProto.HELLO, token = token))
+            assertEquals(RemoteProto.NEED_PIN, phone.read().t)
+        }
+    }
+
+    /** Una sonda de descubrimiento por loopback; null si la tele no contesta a tiempo. */
+    private fun probeBeacon(): RemoteDiscovery.Beacon? {
+        return java.net.DatagramSocket().use { udp ->
+            udp.soTimeout = 3_000
+            val probe = RemoteDiscovery.probeLine().toByteArray(Charsets.UTF_8)
+            udp.send(
+                java.net.DatagramPacket(
+                    probe,
+                    probe.size,
+                    java.net.InetAddress.getByName("127.0.0.1"),
+                    RemoteDiscovery.PORT,
+                ),
+            )
+            val buffer = ByteArray(512)
+            val packet = java.net.DatagramPacket(buffer, buffer.size)
+            if (runCatching { udp.receive(packet) }.isFailure) return null
+            RemoteDiscovery.parseBeacon(String(packet.data, 0, packet.length, Charsets.UTF_8))
         }
     }
 

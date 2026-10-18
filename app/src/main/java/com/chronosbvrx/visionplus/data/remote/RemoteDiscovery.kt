@@ -17,14 +17,15 @@ object RemoteDiscovery {
     /** La línea que difunde el teléfono. */
     fun probeLine(): String = RemoteProto.encode(RemoteMsg(t = RemoteProto.PROBE))
 
-    /** La línea con la que la tele se da a conocer. */
-    fun beaconLine(name: String, model: String, port: Int = CONTROL_PORT): String =
+    /** La línea con la que la tele se da a conocer (incluye su identidad estable). */
+    fun beaconLine(name: String, model: String, port: Int = CONTROL_PORT, id: String = ""): String =
         RemoteProto.encode(
             RemoteMsg(
                 t = RemoteProto.HELLO,
                 name = name.take(48).ifBlank { "Vision+ TV" },
                 model = model.take(48),
                 port = port,
+                id = id.trim().take(64).ifBlank { null },
             ),
         )
 
@@ -37,11 +38,11 @@ object RemoteDiscovery {
         if (msg.t != RemoteProto.HELLO) return null
         val port = msg.port ?: return null
         if (port !in 1..65535) return null
-        return Beacon(name = msg.name.orEmpty(), model = msg.model.orEmpty(), port = port)
+        return Beacon(name = msg.name.orEmpty(), model = msg.model.orEmpty(), port = port, id = msg.id.orEmpty())
     }
 
     /** Lo que una tele dice de sí misma. */
-    data class Beacon(val name: String, val model: String, val port: Int)
+    data class Beacon(val name: String, val model: String, val port: Int, val id: String = "")
 }
 
 /** Una tele encontrada (o escrita a mano): dónde y cómo llegarle. */
@@ -50,7 +51,12 @@ data class RemoteTv(
     val port: Int = RemoteDiscovery.CONTROL_PORT,
     val name: String = "",
     val model: String = "",
+    /** Identidad estable de la tele (vacío en balizas de versiones viejas). */
+    val id: String = "",
 ) {
-    /** Clave estable para recordar el token de ESTA tele. */
-    val key: String get() = "$host:$port"
+    /**
+     * Clave estable para recordar el token de ESTA tele: su identidad si la conocemos (así el
+     * vínculo sobrevive a los cambios de IP) y, si no, la dirección de siempre.
+     */
+    val key: String get() = id.trim().ifBlank { "$host:$port" }
 }

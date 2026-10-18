@@ -27,6 +27,12 @@ object RemoteBus {
     /** Cuántos teléfonos escuchan (Ajustes/avisos lo muestran). */
     val clients = mutableStateOf(0)
 
+    /**
+     * Los dispositivos que esta tele recuerda (nombres, el más reciente primero): los
+     * vinculados alguna vez entran solos, sin PIN. Ajustes lo muestra y deja olvidarlos.
+     */
+    val pairedDevices = mutableStateOf<List<String>>(emptyList())
+
     /** Lo que la tele está mostrando, para que el teléfono lo refleje. */
     val screen = mutableStateOf("")
 
@@ -94,10 +100,21 @@ object RemoteBus {
  * probar sin Android) para que la decisión de a dónde va cada referencia quede clara y cubierta.
  *
  * - `xtvlive:<código>` → canal en vivo.
- * - `xtv:<playCode>` → película/serie del portal (por su playCode).
+ * - `xtv:<playCode>` → película/serie del portal (por su playCode). Cuando es un capítulo, el
+ *   contexto de su serie viaja en los parámetros `s` (temporada activa), `sx` (índice de
+ *   temporada) y `sl`/`sn` (las temporadas del grupo): la tele abre ESE capítulo y puede
+ *   seguir con el siguiente.
  * - cualquier otra cosa (una URL suelta) → se abre tal cual.
  */
-internal fun remoteOpenUriString(ref: String, title: String, poster: String): String? {
+internal fun remoteOpenUriString(
+    ref: String,
+    title: String,
+    poster: String,
+    seriesId: String = "",
+    seasonIndex: Int = 0,
+    seasonIds: List<String> = emptyList(),
+    seasonNames: List<String> = emptyList(),
+): String? {
     val clean = ref.trim()
     if (clean.isEmpty()) return null
     val t = enc(title)
@@ -111,12 +128,34 @@ internal fun remoteOpenUriString(ref: String, title: String, poster: String): St
         clean.startsWith("xtv:") -> {
             val code = clean.removePrefix("xtv:").trim()
             if (code.isEmpty()) return null
-            "visionplus://watch/${enc(clean)}?t=$t&p=$p&c=${enc(code)}"
+            "visionplus://watch/${enc(clean)}?t=$t&p=$p&c=${enc(code)}" +
+                seriesQuery(seriesId, seasonIndex, seasonIds, seasonNames)
         }
         clean.startsWith("http://") || clean.startsWith("https://") ->
             "visionplus://watch/${enc(clean)}?t=$t&p=$p&u=${enc(clean)}"
         else -> null
     }
+}
+
+/**
+ * El contexto del capítulo como parámetros del enlace (vacío para una película). Solo viaja
+ * cuando hay una serie: sin `s` no hay nada que reconstruir en la tele.
+ */
+private fun seriesQuery(
+    seriesId: String,
+    seasonIndex: Int,
+    seasonIds: List<String>,
+    seasonNames: List<String>,
+): String {
+    val cleanSeries = seriesId.trim()
+    if (cleanSeries.isEmpty()) return ""
+    val sb = StringBuilder("&s=").append(enc(cleanSeries))
+    if (seasonIndex > 0) sb.append("&sx=").append(seasonIndex)
+    val ids = seasonIds.map { it.trim() }.filter { it.isNotEmpty() }
+    if (ids.isNotEmpty()) sb.append("&sl=").append(enc(ids.joinToString("|")))
+    val names = seasonNames.map { it.trim() }.filter { it.isNotEmpty() }
+    if (names.isNotEmpty()) sb.append("&sn=").append(enc(names.joinToString("|")))
+    return sb.toString()
 }
 
 /** Percent-encoding de un parámetro de consulta (URLEncoder con `+` → `%20`). */
