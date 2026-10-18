@@ -3,6 +3,7 @@ package com.chronosbvrx.visionplus.data.gee
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeBackstop.LiveOption
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -175,8 +176,18 @@ class GeeBackstopTest {
     }
 
     @Test
-    fun theBackstopIsFoundByItsGuide() {
-        val backs = GeeBackstop.needed(listOf("Telemundo", "TUDN"), emptyList(), xtv)
+    fun theSameChannelIsRecognisedSoTheListDoesNotRepeatIt() {
+        // «TUDN MX» y «TUDN MEXICO FHD» son la misma cadena (la confusión reportada con el Cruz Azul).
+        assertTrue(GeeBackstop.isSameChannel("TUDN", "TUDN MEXICO FHD"))
+        assertTrue(GeeBackstop.isSameChannel("TUDN MX", "TUDN MEXICO FHD"))
+        assertTrue(GeeBackstop.isSameChannel("Telemundo", "TELEMUNDO EAST HD"))
+        // Canales distintos no se confunden entre sí.
+        assertFalse(GeeBackstop.isSameChannel("Canal 5", "CANAL MX FHD"))
+        assertFalse(GeeBackstop.isSameChannel("TNT Sports", "TNT SERIES HD"))
+    }
+
+    @Test
+    fun theBackstopIsFoundByItsGuide() {        val backs = GeeBackstop.needed(listOf("Telemundo", "TUDN"), emptyList(), xtv)
         assertEquals(2, backs.size)
         assertEquals("Telemundo", GeeBackstop.forGuide(backs, "telemundo")?.guideName)
         assertEquals("TUDN", GeeBackstop.forGuide(backs, "TUDN")?.guideName)

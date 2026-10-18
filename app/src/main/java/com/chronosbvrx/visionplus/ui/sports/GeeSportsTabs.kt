@@ -72,6 +72,17 @@ internal fun geeCategoryLabel(category: String): String = when (category.lowerca
 /** "19:00:00" → "19:00". */
 internal fun geeTimeLabel(time: String): String = time.take(5)
 
+/** El enlace tal cual, sin las cabeceras embebidas: se enseña para que no haya falsa expectativa. */
+internal fun linkDisplay(link: String): String = link.substringBefore('|').trim()
+
+/**
+ * La recomendación del intercalado (móvil y TV): la fuente declara canales que pueden estar dando
+ * OTRO partido, así que se dice claro y se explica cómo cambiar hasta encontrar el bueno.
+ */
+internal const val ZAP_HINT =
+    "Puede que alguna esté dando otro partido: cambia entre ellas " +
+        "(Arriba/Abajo durante la reproducción) hasta encontrar la que lo dé."
+
 /**
  * El badge de estado de un enlace según el sondeo del servidor. Habla de la
  * SEÑAL (si el enlace responde), no de si el partido está en vivo: por eso dice
@@ -278,6 +289,26 @@ internal fun GeeLinkPickDialog(
      * la primera cadena del partido que la fuente no pueda servir). Sin botones extra ni listas
      * duplicadas: la lista enseña solo lo de GeeSports.
      */
+    /**
+     * Una sola fila por canal: si el partido ya trae su canal VIVO en la otra sección, la copia
+     * caída no se repite —«TUDN MX · Caído» arriba y «TUDN MEXICO FHD · Disponible» abajo eran el
+     * MISMO canal con dos estados y confundían—.
+     */
+    val liveLinks = remember(links, checks) { links.filter { aliveOf(it) == true } }
+    val liveTv = remember(geeTv, checks) { geeTv.filter { aliveOf(it.link) == true } }
+    val tvRows = remember(geeTv, liveLinks) {
+        geeTv.filter { option ->
+            aliveOf(option.link) == true ||
+                liveLinks.none { GeeBackstop.isSameChannel(option.guideName, it.name) }
+        }
+    }
+    val linkRows = remember(links, liveTv) {
+        links.filter { link ->
+            aliveOf(link) == true ||
+                liveTv.none { GeeBackstop.isSameChannel(it.guideName, link.name) }
+        }
+    }
+
     fun playZap(picked: LiveChannel, dead: Boolean = false, guideName: String? = null) {
         val backstop = if (!dead) {
             null
@@ -327,7 +358,7 @@ internal fun GeeLinkPickDialog(
                         color = VisionTextSecondary,
                     )
                     Spacer(Modifier.height(6.dp))
-                } else if (geeTv.isEmpty() && links.isEmpty() && backstops.isEmpty()) {
+                } else if (tvRows.isEmpty() && linkRows.isEmpty()) {
                     Text(
                         "Sin transmisiones disponibles por ahora.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -339,10 +370,10 @@ internal fun GeeLinkPickDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
                     ) {
-                        if (geeTv.isNotEmpty()) {
+                        if (tvRows.isNotEmpty()) {
                             item(key = "tv_label") {
                                 Text(
-                                    "Canales en vivo:",
+                                    "Canales posibles:",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = VisionTextSecondary,
                                     modifier = Modifier.padding(bottom = 2.dp),
@@ -350,7 +381,7 @@ internal fun GeeLinkPickDialog(
                             }
                             // Clave con índice: el dedupe de la guía ya evita repetidos, pero
                             // una clave duplicada JAMÁS debe tumbar la pantalla (LazyColumn).
-                            itemsIndexed(geeTv, key = { index, option -> "tv_${index}_${option.link.link}" }) { _, option ->
+                            itemsIndexed(tvRows, key = { index, option -> "tv_${index}_${option.link.link}" }) { _, option ->
                                 val optionAlive = aliveOf(option.link) == true
                                 Surface(
                                     onClick = {
@@ -391,16 +422,16 @@ internal fun GeeLinkPickDialog(
                             }
                             item(key = "tv_gap") { Spacer(Modifier.height(2.dp)) }
                         }
-                        if (links.isNotEmpty()) {
+                        if (linkRows.isNotEmpty()) {
                             item(key = "links_label") {
                                 Text(
-                                    "Transmisiones en vivo:",
+                                    "Posibles transmisiones:",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = VisionTextSecondary,
                                     modifier = Modifier.padding(bottom = 2.dp),
                                 )
                             }
-                            itemsIndexed(links, key = { index, link -> "link_${index}_${link.link}" }) { _, link ->
+                            itemsIndexed(linkRows, key = { index, link -> "link_${index}_${link.link}" }) { _, link ->
                                 val linkAlive = aliveOf(link) == true
                                 val pending = link.link.isBlank()
                                 Surface(
@@ -440,10 +471,31 @@ internal fun GeeLinkPickDialog(
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = VisionTextSecondary,
                                             )
+                                            // El enlace a la vista: la fuente declara canales que
+                                            // pueden estar dando OTRO partido — sin falsa expectativa.
+                                            if (!pending) {
+                                                Text(
+                                                    linkDisplay(link.link),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = VisionTextSecondary.copy(alpha = 0.75f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
                                         }
                                         Spacer(Modifier.width(8.dp))
                                         GeeAliveBadge(aliveOf(link))
                                     }
+                                }
+                            }
+                            if (liveLinks.isNotEmpty()) {
+                                item(key = "links_note") {
+                                    Text(
+                                        ZAP_HINT,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = VisionBlueBright,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    )
                                 }
                             }
                         }

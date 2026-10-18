@@ -5,6 +5,12 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Lote 2.5.104: Deportes en vivo — una sola fila por canal, lenguaje honesto («posibles») y los enlaces a la vista — OTA publicada** (2026-10-17; 573 tests Android + 194 backend en verde):
+  - *Pedido del usuario (captura del Cruz Azul vs FC Juárez)*: «El mismo canal con dos estados (TUDN MX «Caído» y TUDN MEXICO FHD «Disponible»)» genera confusión + «sé más claro en el lenguaje para no generar falsa expectativa: di posibles transmisiones, muestra los enlaces y recomienda intercalar entre transmisiones hasta encontrar el partido».
+  - *Una sola fila por canal*: los modales calculan `liveLinks`/`liveTv` (los vivos de cada sección) y filtran con `GeeBackstop.isSameChannel(guideName, candidateName)` (misma marca y edición, país solo cuando se pide; feeds nacionales equivalentes; marca deportiva exige su palabra): la copia caída del mismo canal **se oculta** cuando la otra sección ya lo sirve VIVO — se acabó el «TUDN MX · Caído» + «TUDN MEXICO FHD · Disponible». El guardián del caso real está en `GeePickDialogDuplicateTest.theSameChannelNeverAppearsTwiceWithOppositeStates`.
+  - *Lenguaje honesto*: secciones renombradas a **«Canales posibles»** y **«Posibles transmisiones»**; cada transmisión **enseña su enlace** (`linkDisplay` = la dirección sin las cabeceras tras `|`); y tras la lista va `ZAP_HINT`: «Puede que alguna esté dando otro partido: cambia entre ellas (Arriba/Abajo durante la reproducción) hasta encontrar la que lo dé». Motivo documentado en las notas: se midió en vivo que un canal listado puede estar dando OTRO partido (el «TUDN MEXICO FHD» del León–América estaba con Toluca–San Luis) y que la parrilla a veces nombra un canal equivocado.
+  - *Verificado en el emulador (Cruz Azul vs FC Juárez, 21:10)*: «Canales posibles: Canal 5, Vix Deportes» (TUDN ya no se repite) + «Posibles transmisiones: TUDN MEXICO FHD y CANAL MX FHD» **con sus enlaces completos** y los declarados sin señal (XTREME + FHD, UNIVISION HD…).
+  - *OTA v2.5.104 PUBLICADA* (vc340, 101 MB, firma histórica `9593cb0d…`, notas en `ota_notes_2.5.104.md`).
 - **Lote 2.5.103: el caso León–América a fondo — la lista COMPLETA de cada partido (los canales que la fuente declara sin dirección) y cada uno resuelto solo — OTA publicada** (2026-10-17; 570 tests Android + 194 backend en verde):
   - *Pedido del usuario*: «el partido del América en gee sí tiene fuentes que funcionan y en visión no; que no se vuelva a repetir, corrobóralo muy bien» + «tienes el APK de geesports, instálalo en el emulador… no te detengas hasta que lo obtengas».
   - *Diagnóstico medido (VPS + CMS + APK + emulador)*: (1) el sitio del CMS (`new.whatyouthink.site`, Cloudflare) está **bloqueado por un aviso legal (DMCA → 451/1023)**: responde 403 «Website Access Blocked» a TODO (nuestro worker, el VPS, mi PC, el navegador y los proxies públicos) → nuestro espejo **congeló** en el ciclo de 19:19 y el worker omite ciclos sin perder datos; el dominio no rotó (Firebase RC sigue diciendo el mismo). La app original tampoco descarga: en el emulador abre con «sin conexión» (lo que se ve en el teléfono del usuario es su copia en memoria). (2) Para **Club León vs Club América** la fuente declara **8 canales** (`XTREME + FHD, TUDN US, TUDN US 2, UNIVISION HD, TUDN MEXICO FHD, CANAL MX FHD, HD QUALITY, SD QUALITY`) y **solo 2 traían dirección**: el parser de la app (`jsonLinks` descartaba `link` vacío) tiraba los otros seis → «pocas fuentes». (3) Los 2 servidos son los **canales lineales** de OTTe/Amazon compartidos por 7 partidos (`TUDN MEXICO FHD` mostraba **Toluca–San Luis** en pantalla, captura revisada). (4) La parrilla (ESPN) decía «Fox Sports · Claro Sports» pero el canal que lo transmitía era **FOX One** (prensa: El Universal/Depor) — y **nuestro FOX ONE (xtvlive:cyx_A4C363F00DD17F7A4) estaba con el partido** (captura: jugadores del León). (5) Bug nuestro: el respaldo de «Claro Sports» podía caer en «CANAL CLARO HD» (canal general) en vez de «Claro Sports 1 HD».
@@ -1061,12 +1067,12 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.103**
-  (versionCode **339**, release OTA v2.5.103 — Deportes en vivo: la lista completa de cada partido (nombres
-  declarados sin dirección) y cada canal con su respaldo automático; la v2.5.102 dejó la lista solo con lo de
-  GeeSports, la v2.5.101 le dio al reproductor la interfaz de TV en vivo, la v2.5.100 el respaldo + vigilante,
-  la v2.5.99 abrió el candado de horario y la v2.5.98 el **control remoto**; ver los lotes de arriba).
-  Es una app de streaming personal del usuario (ChronosBVRX).
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.104**
+  (versionCode **340**, release OTA v2.5.104 — Deportes en vivo: una sola fila por canal, «posibles
+  transmisiones» con su enlace y la recomendación de intercalar; la v2.5.103 completó la lista con los canales
+  declarados, la v2.5.102 la dejó solo con lo de GeeSports, la v2.5.101 le dio al reproductor la interfaz de
+  TV en vivo, la v2.5.100 el respaldo + vigilante, la v2.5.99 abrió el candado de horario y la v2.5.98 el
+  **control remoto**; ver los lotes de arriba). Es una app de streaming personal del usuario (ChronosBVRX).
 - Integra el catálogo **Xuper/XTV** (tenant "masnew"): películas/series/kids/anime + **1000+ canales en vivo**,
   con el motor nativo propio del proveedor (Titan/Ranger) embebido.
 - **Directivas del usuario**: sin distinción free/pago (todo el catálogo para todos); sin salir de la app

@@ -69,6 +69,13 @@ object GeeBackstop {
         return backstops.firstOrNull { SportsLinker.norm(it.guideName) == needle }
     }
 
+    /**
+     * ¿Son la MISMA cadena? (misma marca y edición, con el país solo cuando lo piden). Lo usan los
+     * modales para no enseñar dos veces el mismo canal con estados opuestos — «TUDN MX · Caído»
+     * arriba y «TUDN MEXICO FHD · Disponible» abajo, que era justo la confusión reportada.
+     */
+    fun isSameChannel(guideName: String, channelName: String): Boolean = covers(guideName, channelName)
+
     /** El mejor canal del catálogo para una cadena de la parrilla; null si no hay ninguno del 100 %. */
     private fun bestFor(guideName: String, xtv: List<LiveChannel>): LiveChannel? {
         val query = SportsLinker.extractBrandInfo(guideName)
