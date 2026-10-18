@@ -65,13 +65,46 @@ class LiveSportsPlayerUiTest {
     }
 
     @Test
-    fun theSportsDialogHandsTheMatchContextToThePlayer() {
+    fun theSportsDialogHandsTheMatchContextAndTheBackstopToThePlayer() {
         val mobile = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/sports/GeeSportsTabs.kt")
         val tv = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/tv/TvGeeSportsTabs.kt")
         for ((name, text) in listOf("móvil" to mobile, "TV" to tv)) {
             assertTrue("$name: arma el contexto", text.contains("eventInfo: GeeZapSignals.EventInfo? = null"))
             assertTrue("$name: lo entrega al reproductor", text.contains("GeeZapSignals.arm(picked, zapOrder, eventInfo)"))
+            assertTrue("$name: respaldo automático al tocar una caída", text.contains("GeeBackstop.forGuide(backstops, guideName)"))
+            assertTrue("$name: lo dice en la fila", text.contains("respaldo automático"))
+            // La lista enseña SOLO lo de GeeSports: ningún respaldo pintado.
+            assertFalse("$name: sin sección de respaldos", text.contains("Respaldo en tu lista"))
+            assertFalse("$name: sin filas de respaldo", text.contains("Backstop.Backstop,") || text.contains("back.channel.name"))
         }
+        val screenMobile = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/sports/SportsScreen.kt")
+        val screenTv = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/tv/TvSportsScreen.kt")
+        for ((name, text) in listOf("móvil" to screenMobile, "TV" to screenTv)) {
+            assertTrue("$name: el respaldo viaja al reproductor", text.contains("fallback = pickingBackstops.firstOrNull()?.channel"))
+        }
+    }
+
+    @Test
+    fun thePlayerFallsBackToTheHouseChannelByItselfWhenEverythingElseGivesUp() {
+        val player = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
+        // El respaldo es del reproductor: al agotarse las señales lo pide, con telemetría.
+        assertTrue("lo pide al agotarse", player.contains("PLAYER_FAILOVER_XTV"))
+        assertTrue("una sola vez", player.contains("fellBackToXtv"))
+        assertTrue("por el puente del proceso", player.contains("GeeZapSignals.requestFallback(back)"))
+        // Y el reproductor en vivo lo atiende abriendo el canal de la casa con el motor nativo.
+        assertTrue("atiende el pedido", player.contains("GeeZapSignals.consumeFallback()"))
+        assertTrue("con el reproductor nativo", player.contains("X4KApi.playLive("))
+        // La firma del reproductor NO crece: ART rechaza las composables con demasiados parámetros
+        // (VerifyError visto en vivo al agregar dos más).
+        assertFalse("sin parámetros nuevos", player.contains("xtvFallback: LiveChannel? = null"))
+    }
+
+    @Test
+    fun theGeeSportsSourceAlwaysKeepsPriority() {
+        val backstop = requireSource("src/main/java/com/chronosbvrx/visionplus/data/gee/GeeBackstop.kt")
+        // La regla vive en el motor: solo se ofrece respaldo de una cadena que la fuente NO
+        // pueda servir EN VIVO (si su opción está viva, no hay respaldo que valga).
+        assertTrue("solo si la fuente no la sirve", backstop.contains("if (liveOptions.any { it.alive && covers(guideName, it.name) }) continue"))
     }
 
     @Test

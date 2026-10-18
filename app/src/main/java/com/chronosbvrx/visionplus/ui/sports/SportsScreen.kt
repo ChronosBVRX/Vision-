@@ -89,24 +89,10 @@ fun SportsScreen(
         if (event == null) emptyList()
         else runCatching { GeeGuide.channelsFor(event.broadcasts, gee.groups) }.getOrDefault(emptyList())
     }
-    // El contexto del partido que viaja al reproductor (su aviso de cable usa la misma interfaz
-    // que la TV en vivo: liga, marcador y dónde se transmite).
-    val pickingInfo = remember(picking) {
-        val event = picking
-        if (event == null) {
-            null
-        } else {
-            GeeZapSignals.EventInfo(
-                title = geeEventTitle(event),
-                league = GeeAgenda.leagueLabel(event),
-                scoreLine = geeScoreLine(event),
-                guide = event.broadcasts,
-                signals = event.links.size,
-            )
-        }
-    }
     // El respaldo: las cadenas de la parrilla que la fuente deportiva NO puede servir en vivo y
     // que sí tenemos en el catálogo de la casa (coincidencia del 100 %, nunca un parecido).
+    // NO se enseña en la lista (la lista es solo de la fuente deportiva): es para el respaldo
+    // AUTOMÁTICO, tanto al tocar una fuente caída como al agotarse las señales.
     val pickingBackstops = remember(picking, pickingTv, gee.xtvChannels, gee.checks) {
         val event = picking
         if (event == null) {
@@ -119,6 +105,23 @@ fun SportsScreen(
                     event.links.forEach { link -> add(GeeBackstop.LiveOption(link.name, gee.aliveOf(link) == true)) }
                 },
                 xtv = gee.xtvChannels,
+            )
+        }
+    }
+    // El contexto del partido que viaja al reproductor (su aviso de cable usa la misma interfaz
+    // que la TV en vivo: liga, marcador y dónde se transmite; el respaldo va con él).
+    val pickingInfo = remember(picking, pickingBackstops) {
+        val event = picking
+        if (event == null) {
+            null
+        } else {
+            GeeZapSignals.EventInfo(
+                title = geeEventTitle(event),
+                league = GeeAgenda.leagueLabel(event),
+                scoreLine = geeScoreLine(event),
+                guide = event.broadcasts,
+                signals = event.links.size,
+                fallback = pickingBackstops.firstOrNull()?.channel,
             )
         }
     }

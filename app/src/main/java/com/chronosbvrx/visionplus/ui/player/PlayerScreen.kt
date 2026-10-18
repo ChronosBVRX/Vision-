@@ -347,6 +347,33 @@ fun LivePlayerScreen(
     // El contexto del partido (liga, marcador, dónde se transmite) para el aviso de cable del
     // reproductor: la MISMA interfaz que la TV en vivo. Se lee ANTES que las señales.
     val eventInfo = remember(streamUrl, channel) { GeeZapSignals.takeInfoFor(channel) }
+    // Respaldo AUTOMÁTICO del partido: cuando el reproductor se queda sin ninguna señal de la
+    // fuente deportiva, pide el canal confirmado del catálogo de la casa y aquí se abre con el
+    // reproductor nativo (el mismo de TV en vivo). La fuente deportiva manda hasta el final.
+    val fallbackRequested by GeeZapSignals.fallbackRequest
+    var autoFallback by remember(channel.url) { mutableStateOf<LiveChannel?>(null) }
+    LaunchedEffect(fallbackRequested) {
+        fallbackRequested?.let { autoFallback = GeeZapSignals.consumeFallback() }
+    }
+    autoFallback?.let { target ->
+        EngineDownloadGate(isTv = isTv, onCancel = onBack) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            XtvHandoff(
+                title = target.name,
+                prepare = {
+                    com.chronosbvrx.visionplus.data.xuper.X4KApi.playLive(
+                        context,
+                        target.url.substringAfter(':'),
+                        target.name,
+                        channelCodes = channelCodes,
+                        groupTitle = groupTitle,
+                    )
+                },
+                onDone = onBack,
+            )
+        }
+        return
+    }
     val zapTargets = remember(streamUrl, channel) {
         buildList {            add(
                 ZapTarget(
@@ -1001,6 +1028,7 @@ private fun PlayerCore(
     var showZapList by remember { mutableStateOf(false) }
     var showLiveInfo by remember { mutableStateOf(false) }
     var failovers by remember { mutableStateOf(0) }
+    var fellBackToXtv by remember { mutableStateOf(false) }
     val canZap = isLive && zapTargets.size > 1 && !introPlaying
     // La señal en pantalla (la que el aviso de cable rotula como «AHORA»): su dirección y su
     // cifrado son los del destino actual, que cambia al zappear.
@@ -1060,6 +1088,20 @@ private fun PlayerCore(
                 "$detail hacia=${zapTargets[next].name} intentos=$recoveryAttempts",
             )
             zapTo(next)
+            return
+        }
+        // Señales agotadas: si el partido trae un respaldo confirmado en el catálogo de la casa,
+        // se pide desde aquí (el reproductor en vivo lo atiende y cambia SOLO a él) en vez de
+        // dejar la tarjeta de error. La fuente deportiva mandó hasta el final: con cualquier
+        // señal suya viva, esto no corre.
+        val back = eventInfo?.fallback
+        if (back != null && !fellBackToXtv) {
+            fellBackToXtv = true
+            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                "PLAYER_FAILOVER_XTV",
+                "$detail respaldo=${back.name} intentos=$recoveryAttempts",
+            )
+            com.chronosbvrx.visionplus.ui.sports.GeeZapSignals.requestFallback(back)
             return
         }
         error = if (isLive) "No se pudo reproducir este canal." else "No se pudo reproducir este video."

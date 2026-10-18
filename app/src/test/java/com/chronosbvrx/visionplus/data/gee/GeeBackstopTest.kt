@@ -149,18 +149,11 @@ class GeeBackstopTest {
     }
 
     @Test
-    fun theBackstopIsFoundByItsGuideAndTheOrphansAreTheOnesWithoutARow() {
+    fun theBackstopIsFoundByItsGuide() {
         val backs = GeeBackstop.needed(listOf("Telemundo", "TUDN"), emptyList(), xtv)
         assertEquals(2, backs.size)
         assertEquals("Telemundo", GeeBackstop.forGuide(backs, "telemundo")?.guideName)
         assertEquals("TUDN", GeeBackstop.forGuide(backs, "TUDN")?.guideName)
         assertNull(GeeBackstop.forGuide(backs, "Fox Sports"))
-        // «TUDN» sí tiene fila en la parrilla resuelta; «Telemundo» también: no hay huérfanos.
-        assertTrue(GeeBackstop.orphans(backs, listOf("Telemundo", "TUDN")).isEmpty())
-        // Si la parrilla no resolvió «Telemundo», su respaldo va en su propia sección.
-        assertEquals(
-            listOf("Telemundo"),
-            GeeBackstop.orphans(backs, listOf("TUDN")).map { it.guideName },
-        )
     }
 }

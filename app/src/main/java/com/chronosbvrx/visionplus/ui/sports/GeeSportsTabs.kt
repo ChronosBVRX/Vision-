@@ -99,46 +99,6 @@ internal fun GeeAliveBadge(alive: Boolean?) {
 }
 
 /**
- * La fila del respaldo: el canal de la casa que cubre una cadena que la fuente deportiva no pudo
- * servir. Va pegada a la fila caída que reemplaza, y solo existe mientras la fuente no pueda
- * servirla: en cuanto se recupera, ella vuelve a ser la primera opción.
- */
-@Composable
-internal fun GeeBackstopRow(back: GeeBackstop.Backstop, onClick: () -> Unit) {
-    val sameName = SportsLinker.norm(back.guideName) == SportsLinker.norm(back.channel.name)
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = VisionBlue.copy(alpha = 0.16f),
-        modifier = Modifier.fillMaxWidth().padding(start = 14.dp),
-    ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = VisionBlueBright, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    back.channel.name,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    if (sameName) "En tu lista · Confirmado" else "Respaldo de ${back.guideName} · Confirmado",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = VisionBlueBright,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-/**
  * "Canales": los grupos 24/7 de GeeSports (TNT Sports, FOX, BeIN…). Cada canal
  * muestra cuántos enlaces tiene; al abrir se eligen las opciones.
  */
@@ -276,8 +236,10 @@ private fun GeeChannelRow(channel: GeeSportsSource.GeeChannel, onClick: () -> Un
  * señales para reproducir: solo se muestra dónde se transmite y el aviso [blockNote].
  *
  * [checks] son las comprobaciones de vida que la app acaba de hacer (mandan sobre el
- * dato del servidor: una caída y un levantamiento se ven al momento) y [backstops] los
- * canales de la casa que cubren una cadena que la fuente deportiva no puede servir.
+ * dato del servidor: una caída y un levantamiento se ven al momento). [backstops] NO se
+ * pintan: sirven para el respaldo AUTOMÁTICO — si tocas una fuente caída y tenemos esa
+ * misma cadena confirmada en el catálogo de la casa, se reproduce esa sin preguntar
+ * (con la fuente deportiva viva, ella manda y el respaldo no se toca).
  */
 @Composable
 internal fun GeeLinkPickDialog(
@@ -306,7 +268,26 @@ internal fun GeeLinkPickDialog(
             links.forEach { link -> add(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo")) }
         }.distinctBy { it.url }
     }
-    fun playZap(picked: LiveChannel) {
+
+    /**
+     * El respaldo AUTOMÁTICO: si la opción que se toca no está viva, se reproduce la misma
+     * cadena confirmada del catálogo (por su nombre de parrilla; para un enlace directo caído,
+     * la primera cadena del partido que la fuente no pueda servir). Sin botones extra ni listas
+     * duplicadas: la lista enseña solo lo de GeeSports.
+     */
+    fun playZap(picked: LiveChannel, dead: Boolean = false, guideName: String? = null) {
+        val backstop = if (!dead) {
+            null
+        } else if (guideName != null) {
+            GeeBackstop.forGuide(backstops, guideName)
+        } else {
+            backstops.firstOrNull()
+        }
+        if (backstop != null) {
+            GeeZapSignals.arm(backstop.channel, emptyList(), eventInfo)
+            onPlay(backstop.channel)
+            return
+        }
         GeeZapSignals.arm(picked, zapOrder, eventInfo)
         onPlay(picked)
     }
@@ -367,46 +348,41 @@ internal fun GeeLinkPickDialog(
                             // Clave con índice: el dedupe de la guía ya evita repetidos, pero
                             // una clave duplicada JAMÁS debe tumbar la pantalla (LazyColumn).
                             itemsIndexed(geeTv, key = { index, option -> "tv_${index}_${option.link.link}" }) { _, option ->
-                                Column {
-                                    Surface(
-                                        onClick = {
-                                            playZap(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo"))
-                                        },
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = VisionSurfaceHigh,
-                                        modifier = Modifier.fillMaxWidth(),
+                                val optionAlive = aliveOf(option.link) == true
+                                Surface(
+                                    onClick = {
+                                        playZap(
+                                            GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo"),
+                                            dead = !optionAlive,
+                                            guideName = option.guideName,
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = VisionSurfaceHigh,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Row(
+                                        Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        Row(
-                                            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = VisionBlue, modifier = Modifier.size(22.dp))
-                                            Spacer(Modifier.width(10.dp))
-                                            Column(Modifier.weight(1f)) {
-                                                Text(
-                                                    option.title,
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    color = Color.White,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                )
-                                                Text("Canal en vivo", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
-                                            }
-                                            Spacer(Modifier.width(8.dp))
-                                            GeeAliveBadge(aliveOf(option.link))
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = VisionBlue, modifier = Modifier.size(22.dp))
+                                        Spacer(Modifier.width(10.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                option.title,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = Color.White,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            Text(
+                                                if (optionAlive) "Canal en vivo" else "Canal en vivo · respaldo automático",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = VisionTextSecondary,
+                                            )
                                         }
-                                    }
-                                    // Si esta cadena no se puede ver, el respaldo va pegado a ella: la
-                                    // fuente deportiva sigue primero y el respaldo aparece solo cuando
-                                    // hace falta (en cuanto se recupera, desaparece).
-                                    val back = if (aliveOf(option.link) == true) {
-                                        null
-                                    } else {
-                                        GeeBackstop.forGuide(backstops, option.guideName)
-                                    }
-                                    if (back != null) {
-                                        Spacer(Modifier.height(4.dp))
-                                        GeeBackstopRow(back) { onPlay(back.channel) }
+                                        Spacer(Modifier.width(8.dp))
+                                        GeeAliveBadge(aliveOf(option.link))
                                     }
                                 }
                             }
@@ -422,9 +398,13 @@ internal fun GeeLinkPickDialog(
                                 )
                             }
                             itemsIndexed(links, key = { index, link -> "link_${index}_${link.link}" }) { _, link ->
+                                val linkAlive = aliveOf(link) == true
                                 Surface(
                                     onClick = {
-                                        playZap(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
+                                        playZap(
+                                            GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"),
+                                            dead = !linkAlive,
+                                        )
                                     },
                                     shape = RoundedCornerShape(12.dp),
                                     color = VisionSurfaceHigh,
@@ -449,29 +429,16 @@ internal fun GeeLinkPickDialog(
                                                 link.type == "dash" -> "DASH"
                                                 else -> "HLS"
                                             }
-                                            Text(typeText, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+                                            Text(
+                                                if (linkAlive) typeText else "$typeText · respaldo automático",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = VisionTextSecondary,
+                                            )
                                         }
                                         Spacer(Modifier.width(8.dp))
                                         GeeAliveBadge(aliveOf(link))
                                     }
                                 }
-                            }
-                        }
-                        val orphanBacks = GeeBackstop.orphans(backstops, geeTv.map { it.guideName })
-                        if (orphanBacks.isNotEmpty()) {
-                            item(key = "back_label") {
-                                Text(
-                                    "Respaldo en tu lista:",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = VisionTextSecondary,
-                                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
-                                )
-                            }
-                            itemsIndexed(
-                                orphanBacks,
-                                key = { index, back -> "back_${index}_${back.channel.url}" },
-                            ) { _, back ->
-                                GeeBackstopRow(back) { onPlay(back.channel) }
                             }
                         }
                     }

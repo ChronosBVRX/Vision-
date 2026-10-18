@@ -29,11 +29,39 @@ internal object GeeZapSignals {
         /** Cuántas señales trae el evento por la fuente deportiva. */
         val signals: Int = 0,
         val source: String = "Deportes en vivo",
+        /**
+         * El respaldo AUTOMÁTICO del partido: una cadena de su parrilla que sí tenemos en el
+         * catálogo de la casa y que la fuente deportiva no puede servir. Solo se usa cuando ya
+         * no queda ninguna señal suya (y nunca se enseña en la lista: la lista es solo de la
+         * fuente deportiva).
+         */
+        val fallback: LiveChannel? = null,
     )
 
     private var armedUrl: String? = null
     private var signals: List<LiveChannel> = emptyList()
     private var info: EventInfo? = null
+
+    /**
+     * El respaldo PEDIDO por el reproductor cuando se queda sin señales: `LivePlayerScreen` lo
+     * observa y cambia al canal confirmado de la casa (el reproductor nativo). Objeto de proceso,
+     * como el resto del puente: nada nuevo viaja por la pila de navegación y la firma del
+     * reproductor no crece (ART rechaza las composables con demasiados parámetros).
+     */
+    var fallbackRequest = androidx.compose.runtime.mutableStateOf<LiveChannel?>(null)
+        private set
+
+    /** El reproductor pide el respaldo: solo cuando ya no le queda ninguna señal. */
+    fun requestFallback(channel: LiveChannel) {
+        if (fallbackRequest.value?.url != channel.url) fallbackRequest.value = channel
+    }
+
+    /** Quien lo atiende lo consume (una sola vez). */
+    fun consumeFallback(): LiveChannel? {
+        val out = fallbackRequest.value
+        fallbackRequest.value = null
+        return out
+    }
 
     /** El modal lo llama justo antes de `onPlay(picked)`. */
     fun arm(current: LiveChannel, ordered: List<LiveChannel>, eventInfo: EventInfo? = null) {

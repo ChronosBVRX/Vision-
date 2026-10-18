@@ -69,13 +69,6 @@ object GeeBackstop {
         return backstops.firstOrNull { SportsLinker.norm(it.guideName) == needle }
     }
 
-    /**
-     * Los respaldos que NO tienen fila en la parrilla resuelta del partido (la fuente deportiva no
-     * trae ese canal): van en su propia sección, porque no hay una fila caída a la que pegarse.
-     */
-    fun orphans(backstops: List<Backstop>, resolvedTitles: List<String>): List<Backstop> = backstops
-        .filter { back -> resolvedTitles.none { SportsLinker.norm(it) == SportsLinker.norm(back.guideName) } }
-
     /** El mejor canal del catálogo para una cadena de la parrilla; null si no hay ninguno del 100 %. */
     private fun bestFor(guideName: String, xtv: List<LiveChannel>): LiveChannel? {
         val query = SportsLinker.extractBrandInfo(guideName)
