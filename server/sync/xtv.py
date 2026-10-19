@@ -16,11 +16,12 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import ssl
 import unicodedata
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from wire import XTV_KEY, wire_decrypt, wire_encrypt
 
@@ -52,6 +53,10 @@ VOD_ROOTS = {
     "masnew_anime": ("anime", "anime"),
 }
 LIVE_COLUMN = 76182
+
+# Espacio libre mínimo (GB) en el filesystem del contenedor — que es el mismo del
+# Docker Root del VPS — para arrancar una pasada profunda. Ver `_deep_due`.
+DEEP_MIN_FREE_BYTES = int(os.environ.get("XTV_DEEP_MIN_FREE_GB", "2") or 0) << 30
 
 # La opción «destacados» de cada sección en la app Xuper son sus repisas de estreno:
 # ahí viven los títulos nuevos que el portal promueve. Se rescatan en una categoría
@@ -391,6 +396,9 @@ async def _sync_column(pool, client: XtvClient, column_id: int, kind: str, categ
             await conn.executemany(TITLE_SQL, rows)
             await conn.executemany(LINK_SQL, links)
         inserted += len(rows)
+        if max_pages and page % 25 == 0:
+            # La pasada profunda dura muchos minutos: sin esto el log parece colgado.
+            log.info("XTV: %s página %s (%s títulos)", category_id, page, inserted)
         if max_pages and page >= max_pages:
             break
         if total and inserted >= total:
@@ -423,6 +431,54 @@ async def _worker_slot(pool) -> tuple[str, str]:
     except Exception as exc:  # noqa: BLE001 - sin tabla (schema viejo) se sigue como antes
         log.warning("XTV: no se pudo leer el slot del worker (%s)", exc)
     return "", ""
+
+
+async def _deep_due(pool, every_hours: int) -> bool:
+    """¿Toca la pasada PROFUNDA de colecciones? (marca en `sync_meta`).
+
+    Los listados del portal topan en 10.000 títulos por columna y las colecciones se
+    bajaban solo 3 páginas (300): los clásicos quedaban fuera del índice («Guerra de
+    Papás» en Comedia página 73, «El padrino» en Crimen página 35 — medido 2026-10-18).
+    La pasada profunda los trae, pero es larga (~1.900 peticiones), así que corre cada
+    `every_hours` (semanal por defecto) y no en cada ciclo.
+
+    Antes de arrancar se comprueba el disco: en el VPS el Docker Root vive en un
+    volumen de 15 GB y una pasada con el disco casi lleno dejó a Postgres sin poder
+    escribir el WAL (crash-loop real del 2026-10-18). Con poco espacio se aplaza.
+    """
+    if every_hours <= 0:
+        return False
+    free = shutil.disk_usage("/app").free
+    if free < DEEP_MIN_FREE_BYTES:
+        log.warning(
+            "XTV: pasada profunda aplazada por disco (%.1f GB libres)",
+            free / (1 << 30),
+        )
+        return False
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "select updated_at from sync_meta where key = 'xtv_deep_at'"
+            )
+    except Exception:  # noqa: BLE001 - sin tabla (schema viejo): no se fuerza
+        return False
+    if row is None:
+        return True
+    return datetime.now(timezone.utc) - row["updated_at"] >= timedelta(hours=every_hours)
+
+
+async def _mark_deep(pool) -> None:
+    """Anota que la pasada profunda terminó (para no repetirla cada ciclo)."""
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                insert into sync_meta (key, value, updated_at) values ('xtv_deep_at', '', now())
+                on conflict (key) do update set value = excluded.value, updated_at = now()
+                """
+            )
+    except Exception as exc:  # noqa: BLE001 - la próxima pasada se repetirá
+        log.warning("XTV: no se pudo marcar la pasada profunda (%s)", exc)
 
 
 async def _revalidate(pool):
@@ -493,6 +549,15 @@ async def sync(pool) -> int:
     # trae 21k en el portal y el tope por listado es 10k, así que las temporadas viejas
     # solo aparecen en colecciones (3 páginas = 300 títulos las dejaba fuera).
     series_collection_pages = int(os.environ.get("XTV_SERIES_COLLECTION_PAGES", "0"))
+    # Pasada profunda (semanal por defecto): cada colección hasta donde el portal deje.
+    # El tope real por listado es 100 páginas (10.000 títulos; luego `portal100081`).
+    deep_pages = min(int(os.environ.get("XTV_COLLECTION_DEEP_PAGES", "0") or 0), 100)
+    deep_every = int(os.environ.get("XTV_DEEP_EVERY_HOURS", "168") or 0)
+    deep = deep_pages > 0 and await _deep_due(pool, deep_every)
+    deep_failures = 0
+    deep_columns = 0
+    if deep:
+        log.info("XTV: pasada PROFUNDA de colecciones (%s páginas por colección)", deep_pages)
     delay = float(os.environ.get("XTV_PAGE_DELAY_SECONDS", "0.15"))
     total = 0
     global _REVALIDATED
@@ -557,9 +622,13 @@ async def sync(pool) -> int:
                 title = f"{short_label(short)} (todas)" if is_all else name
                 async with pool.acquire() as conn:
                     await conn.execute(CAT_SQL, category_id, title, "source", 50 if is_all else 100)
-                pages = max_pages if is_all else (collection_pages or max_pages)
+                pages = min(max_pages or 100, 100) if is_all else (collection_pages or max_pages)
                 if not is_all and kind in ("series", "anime", "kids"):
                     pages = series_collection_pages or collection_pages or max_pages
+                if deep and not is_all:
+                    # La pasada profunda manda: cada colección hasta el tope del portal.
+                    pages = deep_pages
+                deep_columns += 1
                 try:
                     count, client = await _sync_column(
                         pool, client, int(child["id"]), kind, category_id, title,
@@ -569,9 +638,27 @@ async def sync(pool) -> int:
                     log.info("XTV: %s [%s] %s títulos", category_id, name, count)
                     total += count
                 except Exception:  # noqa: BLE001
+                    deep_failures += 1
                     log.exception("XTV: la columna %s falló (se continúa)", category_id)
         except Exception:  # noqa: BLE001
+            deep_failures += 1
             log.exception("XTV: la raíz %s falló (se continúa)", root_code)
+
+    if deep:
+        # Una pasada con la mayoría de colecciones bien se da por buena: reintentar
+        # cada ciclo una colección retirada del portal martillaría sin ganar nada.
+        failed_fraction = (deep_failures / deep_columns) if deep_columns else 1.0
+        if failed_fraction <= 0.25:
+            await _mark_deep(pool)
+            log.info(
+                "XTV: pasada profunda completada (%s colecciones, %s fallos)",
+                deep_columns, deep_failures,
+            )
+        else:
+            log.warning(
+                "XTV: pasada profunda incompleta (%s/%s fallos); se reintenta el próximo ciclo",
+                deep_failures, deep_columns,
+            )
 
     # Recomendados: las repisas de masnew_featured (los títulos se suben aquí
     # también, por si el tope de páginas no los trajo en las secciones).

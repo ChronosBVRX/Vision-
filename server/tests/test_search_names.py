@@ -335,11 +335,22 @@ def test_fuzzy_skips_short_probes_without_touching_the_db(monkeypatch):
 
 def test_rank_prefers_exact_and_covers_every_name():
     sql, params = app.build_rank("buscando a nemo")
-    assert params == ["buscando a nemo", "buscando a nemo%", "%buscando a nemo%"]
+    assert params == ["buscando a nemo", "buscando a nemo%", "%buscando a nemo%", "buscandoanemo"]
     for field in (
         "t.title", "t.original_title", "e.localized_title", "e.original_title", "e.alt_titles",
     ):
         assert field in sql
+
+
+def test_rank_folds_punctuation_like_the_query():
+    # «Daddy's Home» (alias del portal) debe empatar con «daddy s home» (consulta
+    # plegada): sin el plegado en SQL, el rank 4 no aplicaba y ganaba «My Melody y
+    # Kuromi» (TMDB le regaló un alternativo «Daddy's Home») por popularidad.
+    expr = app._fold_sql("t.original_title")
+    assert "regexp_replace" in expr
+    assert "unaccent(lower(t.original_title))" in expr
+    sql, _ = app.build_rank("daddy s home")
+    assert sql.count("regexp_replace") >= 8
 
 
 class _CaptureDb:
@@ -355,10 +366,17 @@ def test_search_page_placeholder_count_matches_params(monkeypatch):
     fake = _CaptureDb()
     monkeypatch.setattr(app, "db", lambda: fake)
     asyncio.run(app._search_page(
-        "t.search_text like $4 and t.search_text like $5", ["%a%", "%b%"], "a b", 10))
+        "t.search_text like $5 and t.search_text like $6", ["%a%", "%b%"], "a b", 10))
     sql, params = fake.calls[0]
-    assert len(params) == 6  # 3 del orden + 2 del match + el límite
-    assert "limit $6" in sql
+    assert len(params) == 7  # 4 del orden + 2 del match + el límite
+    assert "limit $7" in sql
+
+
+def test_search_offsets_follow_the_rank_params():
+    _, rank_params = app.build_rank("daddy s home")
+    assert len(rank_params) == 4  # exacto/prefijo/contiene + compacto
+    name_sql, _ = app.build_name_match(["daddy", "home"], offset=len(rank_params))
+    assert "$5" in name_sql and "$6" in name_sql and "$4" not in name_sql
 
 
 def test_search_entry_carries_the_original_name_when_it_differs():

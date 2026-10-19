@@ -125,6 +125,14 @@ La forma de cada título (`id`, `title`, `year`, `durationMin`, `synopsis`,
 - El portal XTV limita cada listado "All" a **10.000 títulos** (`portal100081`); el
   worker usa `XTV_MAX_PAGES=100` (100/página) y las colecciones propias van a 3
   páginas cada una (`XTV_COLLECTION_PAGES`). Un ciclo completo tarda ~10-15 min.
+  Cada `XTV_DEEP_EVERY_HOURS` (168 h) corre una **pasada profunda**
+  (`XTV_COLLECTION_DEEP_PAGES=100`): todas las páginas de cada colección hasta el
+  tope del portal. Es la que trae los clásicos que no caben en el "All" ni en las
+  primeras 3 páginas de un género («Guerra de Papás» vive en Comedia página 73).
+  Dura ~25-30 min y deja marca en `sync_meta.xtv_deep_at`.
+- El buscador (`/v1/search`) consulta **también el portal** en paralelo
+  (`v3/searchByName`, con la sesión del worker): así encuentra lo que aún no está
+  en el índice, como la app original, y da de alta los títulos encontrados.
 - Para activar el enriquecimiento: poner `TMDB_API_KEY` en `.env` y
   `docker compose up -d sync` (procesa `ENRICH_BATCH` títulos por ciclo).
 - La versión del índice (`/v1/categories`) sube una vez por ciclo con cambios.

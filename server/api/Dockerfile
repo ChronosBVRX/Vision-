@@ -8,7 +8,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py markers.py slots.py ./
+COPY app.py markers.py slots.py wire.py portal.py ./
 
 RUN useradd --system --uid 10001 --create-home app
 USER app

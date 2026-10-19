@@ -10,6 +10,14 @@ create table if not exists sync_state (
 insert into sync_state (id, version) values (1, 1)
 on conflict (id) do nothing;
 
+-- Metadatos del worker que sobreviven reinicios (p. ej. cuándo fue la última
+-- pasada PROFUNDA de colecciones del portal). Clave-valor simple.
+create table if not exists sync_meta (
+    key text primary key,
+    value text not null default '',
+    updated_at timestamptz not null default now()
+);
+
 create table if not exists titles (
     id text primary key,                       -- id estable con prefijo de fuente: xtv:<cid>
     source text not null,                      -- xtv | magis | ia | m3u

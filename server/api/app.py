@@ -22,6 +22,7 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query, Requ
 from starlette.middleware.gzip import GZipMiddleware
 
 import markers as skip_markers
+import portal as portal_search
 import slots as device_slots
 
 DATABASE_URL = os.environ["DATABASE_URL"]
@@ -511,6 +512,11 @@ async def category(
 _SEARCH_CACHE: dict[str, tuple[float, list[dict]]] = {}
 _SEARCH_CACHE_TTL = 300.0  # 5 minutos
 
+# Las filas del buscador llevan además el texto materializado: decide si el índice
+# ya tiene el NOMBRE que se busca (cualquiera de sus formas) y, por tanto, si su
+# orden manda sobre el del portal. No se usa en los demás endpoints (no viaja).
+_SEARCH_COLUMNS = FILM_COLUMNS + ", t.search_text"
+
 # El buscador por etapas (auditoría 2026-10-18): la gente busca con el nombre que
 # conoce, que no siempre es el del portal («buscando a nemo» → «Finding Nemo»,
 # «vaiana» → «Moana»). `titles.search_text` materializa TODOS los nombres (portal,
@@ -521,30 +527,64 @@ _SEARCH_FROM = """
 """
 
 
-def build_rank(clean_q: str) -> tuple[str, list[str]]:
-    """Orden por relevancia de nombres: exacto > prefijo > contiene, en cascada
-    título del portal → alias del portal → es-MX de TMDB → original de TMDB →
-    alternativos por región. Lo demás queda al final (popularidad lo ordena)."""
+def _fold_sql(expr: str) -> str:
+    """Pliegue del query en SQL: espejo de `_fold` (minúsculas, sin acentos, signos
+    → espacios, espacios colapsados). Comparar `«Daddy's Home»` con `daddy s home`
+    tal cual NO matchea (el apóstrofo se queda): el plegado lo convierte en espacios.
+    """
+    folded = f"unaccent(lower({expr}))"
     return (
-        """
+        f"btrim(regexp_replace(regexp_replace({folded}, '[^a-z0-9]+', ' ', 'g'), ' +', ' ', 'g'))"
+    )
+
+
+def build_rank(clean_q: str) -> tuple[str, list[str]]:
+    """Orden por relevancia de nombres: exacto > prefijo > contiene > compacto, en
+    cascada título del portal → alias del portal → es-MX de TMDB → original de TMDB →
+    alternativos por región. Lo demás queda al final (popularidad lo ordena).
+
+    El compacto («daddys home» → «daddyshome») cubre a quien teclea sin apóstrofos
+    ni espacios, que es la mitad de las búsquedas de un mando de TV.
+    """
+    compact = clean_q.replace(" ", "")
+
+    def folded(expr: str) -> str:
+        return _fold_sql(expr)
+
+    def compacted(expr: str) -> str:
+        return f"replace({folded(expr)}, ' ', '')"
+
+    title = folded("t.title")
+    portal_original = folded("coalesce(t.original_title, '')")
+    localized = folded("coalesce(e.localized_title, '')")
+    original = folded("coalesce(e.original_title, '')")
+    alt = folded("a")
+    return (
+        f"""
         case
-            when unaccent(lower(t.title)) = $1 then 1
-            when unaccent(lower(t.title)) like $2 then 2
-            when unaccent(lower(t.title)) like $3 then 3
-            when unaccent(lower(coalesce(t.original_title, ''))) = $1 then 4
-            when unaccent(lower(coalesce(t.original_title, ''))) like $2 then 5
-            when unaccent(lower(coalesce(e.localized_title, ''))) = $1 then 6
-            when unaccent(lower(coalesce(e.localized_title, ''))) like $2 then 7
-            when unaccent(lower(coalesce(e.original_title, ''))) = $1 then 8
-            when unaccent(lower(coalesce(e.original_title, ''))) like $2 then 9
-            when exists (select 1 from unnest(coalesce(e.alt_titles, '{}'::text[])) a
-                         where unaccent(lower(a)) = $1) then 10
-            when exists (select 1 from unnest(coalesce(e.alt_titles, '{}'::text[])) a
-                         where unaccent(lower(a)) like $2) then 11
-            else 12
+            when {title} = $1 then 1
+            when {title} like $2 then 2
+            when {title} like $3 then 3
+            when {compacted('t.title')} = $4 then 4
+            when {portal_original} = $1 then 5
+            when {portal_original} like $2 then 6
+            when {compacted("coalesce(t.original_title, '')")} = $4 then 7
+            when {localized} = $1 then 8
+            when {localized} like $2 then 9
+            when {compacted("coalesce(e.localized_title, '')")} = $4 then 10
+            when {original} = $1 then 11
+            when {original} like $2 then 12
+            when {compacted("coalesce(e.original_title, '')")} = $4 then 13
+            when exists (select 1 from unnest(coalesce(e.alt_titles, '{{}}'::text[])) a
+                         where {alt} = $1) then 14
+            when exists (select 1 from unnest(coalesce(e.alt_titles, '{{}}'::text[])) a
+                         where {alt} like $2) then 15
+            when exists (select 1 from unnest(coalesce(e.alt_titles, '{{}}'::text[])) a
+                         where {compacted('a')} = $4) then 16
+            else 17
         end
         """,
-        [clean_q, f"{clean_q}%", f"%{clean_q}%"],
+        [clean_q, f"{clean_q}%", f"%{clean_q}%", compact],
     )
 
 
@@ -601,7 +641,7 @@ async def _search_page(match_sql: str, match_params: list[str], clean_q: str, li
     rank_sql, rank_params = build_rank(clean_q)
     params = [*rank_params, *match_params, limit]
     sql = f"""
-        select {FILM_COLUMNS}
+        select {_SEARCH_COLUMNS}
         {_SEARCH_FROM}
         where {match_sql}
         order by {rank_sql},
@@ -625,33 +665,101 @@ def fuzzy_probe(clean_q: str) -> str:
     return max(words, key=len)
 
 
+def fuzzy_probes(clean_q: str) -> list[str]:
+    """TODAS las palabras útiles de la consulta, no solo la más larga.
+
+    Con una sola palabra, «guerra de papas» devolvía cualquier título cuyo nombre
+    TMDB en otro idioma dijera «guerra» («A Guerra dos Tronos» → Juego de tronos):
+    el ruido medido en vivo el 2026-10-18. La etapa difusa exige que cada palabra
+    larga se parezca a algo del título. Las vacías («para», «este», «the»…) no
+    cuentan: son las que hacen que una consulta sin sentido «encuentre» algo.
+    """
+    return list(dict.fromkeys(
+        w for w in clean_q.split()
+        if len(w) >= 4 and w not in portal_search.STOPWORDS
+    ))
+
+
 async def _search_fuzzy(clean_q: str, limit: int):
     """Última red: similitud por trigramas («termintor» → «Terminator»).
 
-    Solo corre cuando las etapas anteriores no dieron NADA; con una palabra muy
-    corta (<4) no vale la pena y sin pg_trgm disponible el que llama absorbe el
-    error y devuelve vacío.
+    Solo corre cuando las etapas anteriores no dieron NADA; con palabras de menos de
+    4 letras no vale la pena y sin pg_trgm disponible el que llama absorbe el error
+    y devuelve vacío. Cada palabra larga debe superar el umbral (AND): así una
+    coincidencia parcial («guerra» en el título portugués de otra serie) no basta.
     """
-    probe = fuzzy_probe(clean_q)
-    if len(probe) < 4:
+    probes = fuzzy_probes(clean_q)[:3]
+    if not probes:
         return []
+    text = "coalesce(nullif(t.search_text, ''), unaccent(lower(t.title)))"
+    sims = [f"word_similarity(${i + 1}, {text})" for i in range(len(probes))]
+    where = " and ".join(f"{sim} > 0.55" for sim in sims)
+    ordering = f"least({', '.join(sims)}) desc"
     return await db().fetch(
         f"""
-        select {FILM_COLUMNS}
+        select {_SEARCH_COLUMNS}
         {_SEARCH_FROM}
-        where word_similarity(
-                  $1, coalesce(nullif(t.search_text, ''), unaccent(lower(t.title)))
-              ) > 0.55
-        order by word_similarity(
-                     $1, coalesce(nullif(t.search_text, ''), unaccent(lower(t.title)))
-                 ) desc,
+        where {where}
+        order by {ordering},
                  t.popularity desc nulls last,
                  t.score desc nulls last
-        limit $2
+        limit ${len(probes) + 1}
         """,
-        probe,
+        *probes,
         min(limit, 20),
     )
+
+
+def _row_search_text(row) -> str:
+    """El texto materializado de una fila del buscador ('' si no viaja)."""
+    try:
+        return (row["search_text"] or "") if "search_text" in row.keys() else ""
+    except (AttributeError, TypeError):
+        return ""
+
+
+def _local_has_the_name(rows, clean_q: str) -> bool:
+    """¿El índice local ya tiene ESTE nombre (en cualquiera de sus formas)?
+
+    Se mira `search_text` (portal + alias + es-MX/original/regionales de TMDB), no
+    solo el título visible: «buscando a nemo» debe reconocer «Finding Nemo» como
+    acierto local aunque su título no diga «buscando».
+    """
+    words = [w for w in clean_q.split() if w]
+    if not words:
+        return False
+    for row in rows:
+        text = _row_search_text(row)
+        if text and all(word in text for word in words):
+            return True
+    return False
+
+
+def merge_search_rows(local_rows: list, portal_rows: list, clean_q: str, limit: int) -> list:
+    """Une índice local + portal en el orden que espera la gente.
+
+    El portal es la verdad para «¿existe este título?» (es el buscador de la app
+    original); el índice local aporta fichas enriquecidas, agrupación de temporadas
+    y búsqueda profunda (reparto/dirección/sinopsis). Si el índice ya tiene el
+    nombre buscado (título, alias o nombre TMDB), manda su orden. Si no, los
+    aciertos del portal van primero: el caso medido es «guerra de papas» → el
+    índice devolvía Juego de tronos y el portal devuelve Guerra de Papás.
+    """
+    if not portal_rows:
+        return local_rows
+    local_first = _local_has_the_name(local_rows, clean_q)
+    first, second = (local_rows, portal_rows) if local_first else (portal_rows, local_rows)
+    merged: list = []
+    seen: set[str] = set()
+    for row in (*first, *second):
+        if row["id"] in seen:
+            continue
+        seen.add(row["id"])
+        merged.append(row)
+        if len(merged) >= limit:
+            break
+    return merged
+
 
 
 def _attach_original_title(entry: dict, row, enr) -> None:
@@ -694,8 +802,18 @@ async def search(
     if not words:
         return {"query": q, "films": []}
 
-    name_sql, name_params = build_name_match(words, offset=3)
-    deep_sql, deep_params = build_deep_match(words, offset=3)
+    # El portal, en paralelo: su buscador es el de la app original y sí encuentra lo
+    # que el índice no tiene (listados topados y colecciones poco profundas). Nunca
+    # lanza ni acuña sesión; si falla, la búsqueda sigue solo con el índice local.
+    portal_task = None
+    if len(clean_q) >= 3:
+        portal_task = asyncio.create_task(portal_search.lookup(db(), raw_q))
+
+    # El offset de los placeholders del match sale del propio rank (si el rank crece,
+    # la búsqueda sigue alineada; el guardián lo clava).
+    offset = len(build_rank(clean_q)[1])
+    name_sql, name_params = build_name_match(words, offset=offset)
+    deep_sql, deep_params = build_deep_match(words, offset=offset)
 
     rows: list = []
     deep_failed = False
@@ -723,7 +841,7 @@ async def search(
         try:
             rows = await db().fetch(
                 f"""
-                select {FILM_COLUMNS}
+                select {_SEARCH_COLUMNS}
                 from titles t
                 where t.title ilike $1 or coalesce(t.original_title, '') ilike $1
                 order by
@@ -741,6 +859,14 @@ async def search(
             )
         except Exception:
             rows = []
+
+    portal_rows: list = []
+    if portal_task is not None:
+        try:
+            portal_rows = await portal_task
+        except Exception:  # noqa: BLE001 - el portal jamás tumba la búsqueda
+            portal_rows = []
+    rows = merge_search_rows(rows, portal_rows, clean_q, limit)
 
     member_of, seasons_by_group, base_of_group = await _group_maps()
     enr = await _enrichment_map([r["id"] for r in rows])
