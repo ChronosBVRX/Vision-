@@ -99,6 +99,11 @@ services:
       GEE38_KEY: "${GEE38_KEY:-}"
       DIAG_INTERVAL_SECONDS: "${DIAG_INTERVAL_SECONDS:-300}"
       DIAG_RESOLVE_HOURS: "${DIAG_RESOLVE_HOURS:-48}"
+      # Salud del catálogo: avisa si el ciclo de sync (6 h) o la pasada profunda
+      # semanal dejan de correr. Sin esto, el catálogo se queda viejo en silencio.
+      DIAG_CATALOG_STALE_HOURS: "${DIAG_CATALOG_STALE_HOURS:-10}"
+      DIAG_DEEP_STALE_DAYS: "${DIAG_DEEP_STALE_DAYS:-8}"
+      DIAG_HEALTH_COOLDOWN_HOURS: "${DIAG_HEALTH_COOLDOWN_HOURS:-12}"
       DIAG_ALERT_WEBHOOK: "${DIAG_ALERT_WEBHOOK:-}"
       DIAG_TELEGRAM_TOKEN: "${DIAG_TELEGRAM_TOKEN:-}"
       DIAG_TELEGRAM_CHAT: "${DIAG_TELEGRAM_CHAT:-}"

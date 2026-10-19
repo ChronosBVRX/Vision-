@@ -219,3 +219,30 @@ def test_config_admin_ok():
 def test_config_endpoints_registered():
     paths = {r.path for r in app.app.routes}
     assert "/v1/config" in paths
+
+
+# ----- salud del catálogo (lo que mantiene el buscador al día) -----
+
+
+def test_is_stale_only_alerts_with_a_known_heartbeat():
+    import datetime as dt
+
+    now = dt.datetime(2026, 10, 19, 12, tzinfo=dt.timezone.utc)
+    assert diag.is_stale(None, now, dt.timedelta(hours=10)) is False
+    assert diag.is_stale(now - dt.timedelta(hours=9), now, dt.timedelta(hours=10)) is False
+    assert diag.is_stale(now - dt.timedelta(hours=10), now, dt.timedelta(hours=10)) is True
+    assert diag.is_stale(now - dt.timedelta(days=9), now, dt.timedelta(days=8)) is True
+
+
+def test_health_alert_text_says_what_happened_and_what_to_check():
+    import datetime as dt
+
+    now = dt.datetime(2026, 10, 19, 12, tzinfo=dt.timezone.utc)
+    cycle = diag.health_alert_text("cycle", now - dt.timedelta(hours=14), now)
+    assert "dejó de actualizarse" in cycle
+    assert "hace 14 h" in cycle
+    assert "docker compose logs" in cycle
+    deep = diag.health_alert_text("deep", now - dt.timedelta(days=9), now)
+    assert "pasada profunda" in deep
+    assert "hace 9 días" in deep
+    assert "df -h /var/oled" in deep

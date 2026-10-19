@@ -37,6 +37,15 @@ MAX_ALERT_CHARS = 3900
 # se avisa de nuevo (una vez al día) para que el problema no pase inadvertido.
 NAG_HOURS = 24
 
+# Salud del catálogo (lo que mantiene el buscador al día): el ciclo de sync corre
+# cada 6 h; si deja de refrescar 10 h (o la pasada profunda semanal no corre en 8
+# días) se avisa al Telegram. Sin esto, un worker colgado dejaría de entrar
+# contenido nuevo en silencio (el buscador del portal lo taparía al buscar, pero
+# las filas del Inicio y las secciones se quedarían viejas).
+CATALOG_STALE_HOURS = int(os.environ.get("DIAG_CATALOG_STALE_HOURS", "10"))
+DEEP_STALE_DAYS = int(os.environ.get("DIAG_DEEP_STALE_DAYS", "8"))
+HEALTH_COOLDOWN_HOURS = int(os.environ.get("DIAG_HEALTH_COOLDOWN_HOURS", "12"))
+
 _REPEAT_TITLE = {
     "regreso": "🔁 Regresó: un problema que ya se había cerrado volvió a reportarse",
     "reincidencia": "🔁 Reincidencia: un problema conocido volvió a aparecer en otra versión",
@@ -635,10 +644,102 @@ async def triage(pool) -> int:
     return sent
 
 
+def is_stale(last: dt.datetime | None, now: dt.datetime, max_age: dt.timedelta) -> bool:
+    """¿El último latido supera `max_age`? Sin dato no se alerta (primer arranque)."""
+    if last is None:
+        return False
+    return now - last >= max_age
+
+
+def _mx_stamp(moment: dt.datetime) -> str:
+    return moment.astimezone(dt.timezone(dt.timedelta(hours=-6))).strftime("%d/%m %H:%M")
+
+
+def health_alert_text(kind: str, last: dt.datetime, now: dt.datetime) -> str:
+    """Aviso humano de catálogo viejo (dos capas, como el resto del bot)."""
+    age = now - last
+    hours = int(age.total_seconds() // 3600)
+    when = _mx_stamp(last)
+    if kind == "cycle":
+        return (
+            "🟠 El catálogo dejó de actualizarse\n\n"
+            f"Último ciclo completo: {when} (hace {hours} h).\n"
+            "El worker corre cada 6 h; si pasa de 10 h, algo lo detuvo o falla en silencio.\n\n"
+            "👉 Revisar en el VPS: `docker compose ps sync` y "
+            "`docker compose logs --tail 120 sync` (y el disco con `df -h /var/oled`).\n\n"
+            "Aviso automático de Vision+ · catálogo"
+        )
+    return (
+        "🟠 La pasada profunda del catálogo no corre\n\n"
+        f"Última pasada: {when} (hace {hours // 24} días).\n"
+        "Es la que trae los clásicos que no caben en los listados del portal (cada 7 días).\n\n"
+        "👉 Revisar: `df -h /var/oled` (se aplaza sola si quedan <2 GB) y "
+        "`docker compose logs --tail 200 sync | grep -i profunda`.\n\n"
+        "Aviso automático de Vision+ · catálogo"
+    )
+
+
+async def _stamp_health_alert(conn, key: str, now: dt.datetime) -> None:
+    await conn.execute(
+        """
+        insert into sync_meta (key, value, updated_at) values ($1, '', $2)
+        on conflict (key) do update set value = excluded.value, updated_at = excluded.updated_at
+        """,
+        key, now,
+    )
+
+
+async def catalog_health(pool) -> int:
+    """Avisa si el catálogo dejó de refrescarse o si la pasada profunda no corre.
+
+    Corre en el mismo loop del triage (cada 5 min). El aviso se repite como mucho
+    cada `HEALTH_COOLDOWN_HOURS` para no inundar el Telegram si algo queda caído
+    un fin de semana. El estado del aviso vive en `sync_meta` (sobrevive reinicios).
+    """
+    now = dt.datetime.now(dt.timezone.utc)
+    try:
+        async with pool.acquire() as conn:
+            state = await conn.fetchrow("select updated_at from sync_state where id = 1")
+            deep = await conn.fetchrow(
+                "select updated_at from sync_meta where key = 'xtv_deep_at'"
+            )
+            alerts = await conn.fetch(
+                "select key, updated_at from sync_meta where key in "
+                "('health_cycle_alert_at', 'health_deep_alert_at')"
+            )
+            last_alert = {row["key"]: row["updated_at"] for row in alerts}
+            sent = 0
+            checks = (
+                ("cycle", state["updated_at"] if state else None, "health_cycle_alert_at",
+                 dt.timedelta(hours=CATALOG_STALE_HOURS)),
+                ("deep", deep["updated_at"] if deep else None, "health_deep_alert_at",
+                 dt.timedelta(days=DEEP_STALE_DAYS)),
+            )
+            for kind, last, alert_key, max_age in checks:
+                if not is_stale(last, now, max_age):
+                    continue
+                previous = last_alert.get(alert_key)
+                if previous is not None and now - previous < dt.timedelta(
+                    hours=HEALTH_COOLDOWN_HOURS
+                ):
+                    continue
+                await asyncio.to_thread(send_alert, health_alert_text(kind, last, now))
+                await _stamp_health_alert(conn, alert_key, now)
+                sent += 1
+            return sent
+    except Exception:  # noqa: BLE001 - la salud del catálogo no tumba el triage
+        log.exception("la salud del catálogo no se pudo revisar")
+        return 0
+
+
 async def loop(pool) -> None:
     while True:
         try:
             await triage(pool)
         except Exception:  # noqa: BLE001 - el triage no tumba el worker
             log.exception("triage de diagnóstico falló")
+        try:
+            await catalog_health(pool)
+        except Exception:  # noqa: BLE001 - la salud del catálogo no tumba el worker
+            log.exception("salud del catálogo falló")
         await asyncio.sleep(INTERVAL)
