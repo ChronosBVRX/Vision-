@@ -10,7 +10,7 @@ prueban con un pool falso que captura el SQL. La clave real vive solo en el
 
 import base64
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -643,17 +643,22 @@ async def test_gee38_events_merges_links_of_the_same_fixture(monkeypatch):
     # hermana —mismo cruce, otro día— la lista completa con los vivos. La tarjeta del
     # calendario debe ofrecer TODAS las señales del cruce (lo que enseña su app),
     # con los vivos primero.
+    # La fecha se deriva de «hoy» (ayer, dentro de la ventana -1..+7 del endpoint):
+    # con una fecha fija, el test detonaba solo al pasar el día real (CI en UTC).
+    fixture = date.today() - timedelta(days=1)
+    fixture_day = fixture.isoformat()
+    sibling_day = (fixture - timedelta(days=4)).isoformat()
     day_event = json.dumps({
         "id": "event:day", "category": "Football", "event": "Premier League",
         "team_a": "Everton", "team_b": "Chelsea",
-        "date_iso": "2026-10-17", "time": "11:30:00",  # UTC → 05:30 MX
+        "date_iso": fixture_day, "time": "11:30:00",  # UTC → 05:30 MX
         "links": [{"name": "STREAM TV + HD", "url": "https://muerto",
                    "link": "https://muerto", "alive": False}],
     })
     sib_event = json.dumps({
         "id": "event:sib", "category": "Football", "event": "Premier League",
         "team_a": "Chelsea", "team_b": "Everton",  # mismo cruce, orden invertido
-        "date_iso": "2026-10-13", "time": "11:30:00",
+        "date_iso": sibling_day, "time": "11:30:00",
         "links": [
             {"name": "TNT1UK SPORTS FHD", "url": "https://vivo1", "link": "https://vivo1", "alive": True},
             {"name": "FUBO SPORTS FHD", "url": "https://vivo2", "link": "https://vivo2", "alive": True},
@@ -671,15 +676,15 @@ async def test_gee38_events_merges_links_of_the_same_fixture(monkeypatch):
                 "id": "401878771", "league": {"id": "eng.1", "name": "Premier League", "logo": ""},
                 "home": {"name": "Everton", "logo": "", "score": None},
                 "away": {"name": "Chelsea", "logo": "", "score": None},
-                "kickoff": "2026-10-17T11:30:00+00:00", "status": "pre", "detail": "",
+                "kickoff": f"{fixture_day}T11:30:00+00:00", "status": "pre", "detail": "",
                 "broadcasts": ["TNT Sports"], "channels": [],
             },
             {"everton"}, {"chelsea"},
-            datetime(2026, 10, 17, 11, 30, tzinfo=timezone.utc),
+            datetime(fixture.year, fixture.month, fixture.day, 11, 30, tzinfo=timezone.utc),
         )]
 
     monkeypatch.setattr(api_app, "_gee_window_matches", fake_window)
-    out = await api_app.gee38_events(category=None, day="2026-10-17", days=0, x_api_key="test-key")
+    out = await api_app.gee38_events(category=None, day=fixture_day, days=0, x_api_key="test-key")
     cards = [e for e in out["events"] if str(e.get("id")) == "espn:401878771"]
     assert cards, "la tarjeta del calendario debe servirse"
     urls = [lk["url"] for lk in cards[0]["links"]]
