@@ -44,6 +44,8 @@ data class EpisodePlay(
     val seriesId: String = "",
     val episodeIds: List<String> = emptyList(),
     val episodeNames: List<String> = emptyList(),
+    /** Número real de episodio (MAL/TMDB), no el índice de la lista del portal. */
+    val episodeNumbers: List<Int> = emptyList(),
     val episodeIndex: Int = 0,
     val seasonIds: List<String> = emptyList(),
     val seasonNames: List<String> = emptyList(),

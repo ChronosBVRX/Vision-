@@ -31,6 +31,8 @@ class VisionSettingsTest {
         assertEquals("Auto", VisionSettings.defaultQuality)
         assertTrue(VisionSettings.autoPlayNext)
         assertTrue(VisionSettings.autoResume)
+        assertEquals("Automático", VisionSettings.skipIntroModeLabel(VisionSettings.skipIntroMode))
+        assertFalse(VisionSettings.nextOnCredits)
         assertEquals(0, VisionSettings.defaultAspect)
         assertEquals("Rápido (0.5s)", VisionSettings.liveBuffer)
     }
@@ -56,6 +58,16 @@ class VisionSettingsTest {
         VisionSettings.init(context)
         assertFalse(VisionSettings.autoPlayNext)
         assertFalse(VisionSettings.autoResume)
+    }
+
+    @Test
+    fun fastCreditsAdvanceIsOptionalAndPersists() {
+        assertFalse(VisionSettings.nextOnCreditsOf(context))
+        VisionSettings.setNextOnCredits(context, true)
+        assertTrue(VisionSettings.nextOnCredits)
+        VisionSettings.init(context)
+        assertTrue(VisionSettings.nextOnCredits)
+        assertTrue(VisionSettings.nextOnCreditsOf(context))
     }
 
     @Test

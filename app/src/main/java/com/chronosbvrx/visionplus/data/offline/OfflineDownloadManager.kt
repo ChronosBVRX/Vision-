@@ -242,6 +242,20 @@ object OfflineDownloadManager {
 
     private fun dispatchWorker(context: Context, item: OfflineDownload) {
         appContext = context.applicationContext
+        // El búnker también omite intro/créditos: deja el plan del capítulo en la caché
+        // de disco mientras hay red (el reproductor offline no puede pedirlo después).
+        if (item.isSeries && item.seriesId.isNotBlank()) {
+            scope.launch {
+                runCatching {
+                    com.chronosbvrx.visionplus.data.markers.MarkersStore.prefetch(
+                        context = context.applicationContext,
+                        ref = item.seriesId,
+                        episodes = listOf(item.episodeIndex + 1, item.episodeIndex + 2),
+                        lengthSeconds = (item.durationMs / 1000L).toInt().coerceAtLeast(0),
+                    )
+                }
+            }
+        }
         val existingJob = activeJobs[item.id]
         if (existingJob != null && existingJob.isActive) return
 

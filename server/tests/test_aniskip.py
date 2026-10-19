@@ -26,6 +26,16 @@ def test_parse_entries_maps_tmdb_season_to_mal():
     assert out == {(26209, 1): 290, (62913, 1): 300}
 
 
+def test_parse_entries_falls_back_to_season_one_without_season_block():
+    # One Piece (Fribb) no trae `season`: antes se perdía y AniSkip no se usaba.
+    entries = [
+        {"mal_id": 21, "themoviedb_id": {"tv": 37854}},
+        {"mal_id": 22, "themoviedb_id": {"tv": 37854}, "season": {"tmdb": 1}},
+    ]
+    out = aniskip.parse_entries(entries)
+    assert out[(37854, 1)] == 22, "el mapeo explícito gana sobre el fallback"
+
+
 def test_parse_entries_tolerates_garbage():
     assert aniskip.parse_entries(None) == {}
     assert aniskip.parse_entries("no") == {}

@@ -11,7 +11,6 @@ import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -1198,13 +1197,28 @@ object X4KApi {
             val prep = prepareVod(context, cid, "", cleanSeries, fallbackDurationMs)
             if (prep != null) vodPrefetch[cid] = PrefetchedVod(now, prep)
         }
-        // Los marcadores de la serie también quedan calientes (su caché es de 6 h).
+        // Los marcadores de la serie también quedan calientes (caché en disco de 6 h):
+        // el capítulo actual para arrancar al instante y los dos siguientes para la
+        // maratón. Si la red tarda, el reproductor los pide por su cuenta.
         if (cleanSeries.isNotBlank()) {
+            val len = (fallbackDurationMs / 1000L).toInt().coerceAtLeast(0)
             runCatching {
                 withTimeoutOrNull(2_500L) {
                     com.chronosbvrx.visionplus.data.markers.MarkersStore.fetchForPlayer(
+                        context = context,
                         ref = cleanSeries,
                         ep = epNumber.coerceAtLeast(1),
+                        lengthSeconds = len,
+                    )
+                }
+            }
+            runCatching {
+                withTimeoutOrNull(4_000L) {
+                    com.chronosbvrx.visionplus.data.markers.MarkersStore.prefetch(
+                        context = context,
+                        ref = cleanSeries,
+                        episodes = (epNumber + 1)..(epNumber + 2),
+                        lengthSeconds = len,
                     )
                 }
             }
@@ -1381,6 +1395,7 @@ object X4KApi {
         seriesId: String = "",
         episodeIds: List<String> = emptyList(),
         episodeNames: List<String> = emptyList(),
+        episodeNumbers: List<Int> = emptyList(),
         episodeIndex: Int = 0,
         seasonIds: List<String> = emptyList(),
         seasonNames: List<String> = emptyList(),
@@ -1391,15 +1406,24 @@ object X4KApi {
     ): Boolean = withContext(Dispatchers.IO) {
         var resolvedEpIds = episodeIds
         var resolvedEpNames = episodeNames
+        var resolvedEpNumbers = episodeNumbers
         var resolvedEpIndex = episodeIndex
         var cleanSeriesId = if (seriesId.isNotBlank()) xtvPortalId(seriesId) else ""
-        if (cleanSeriesId.isNotBlank() && resolvedEpIds.isEmpty()) {
+        if (cleanSeriesId.isNotBlank() &&
+            (resolvedEpIds.isEmpty() || resolvedEpNumbers.size != resolvedEpIds.size)
+        ) {
             val programs = episodeProgramsFor(context, cleanSeriesId)
             if (programs.isNotEmpty()) {
-                resolvedEpIds = programs.map { it.contentId }
-                resolvedEpNames = programs.map { it.name }
-                val idx = resolvedEpIds.indexOf(xtvPortalId(contentId))
-                resolvedEpIndex = if (idx >= 0) idx else episodeIndex.coerceIn(0, resolvedEpIds.lastIndex)
+                if (resolvedEpIds.isEmpty()) {
+                    resolvedEpIds = programs.map { it.contentId }
+                    resolvedEpNames = programs.map { it.name }
+                    val idx = resolvedEpIds.indexOf(xtvPortalId(contentId))
+                    resolvedEpIndex = if (idx >= 0) idx else episodeIndex.coerceIn(0, resolvedEpIds.lastIndex)
+                }
+                if (resolvedEpNumbers.size != resolvedEpIds.size) {
+                    val byCode = programs.associate { xtvPortalId(it.contentId) to it.number }
+                    resolvedEpNumbers = resolvedEpIds.map { code -> byCode[xtvPortalId(code)] ?: 0 }
+                }
             }
         }
         // Película con contexto de serie residual (1 capítulo / 1 temporada / seriesId
@@ -1408,28 +1432,30 @@ object X4KApi {
             cleanSeriesId = ""
             resolvedEpIds = emptyList()
             resolvedEpNames = emptyList()
+            resolvedEpNumbers = emptyList()
             resolvedEpIndex = 0
         }
         var cid = xtvPortalId(contentId)
         if (cleanSeriesId.isNotBlank() && cid == cleanSeriesId && resolvedEpIds.isNotEmpty()) {
             cid = resolvedEpIds[resolvedEpIndex.coerceIn(0, resolvedEpIds.lastIndex)]
         }
-        // Marcadores de salto («omitir intro» / «pasar en créditos»): se piden en paralelo
-        // al handshake del portal (tope 2.5 s) y viajan por el intent al reproductor; si no
-        // hay dato, no se pinta nada (el handoff jamás espera de más por esto).
-        val markersJob = if (cleanSeriesId.isNotBlank() && (resolvedEpIds.size > 1 || seasonIds.size > 1)) {
-            async {
-                runCatching {
-                    withTimeoutOrNull(2_500L) {
-                        com.chronosbvrx.visionplus.data.markers.MarkersStore.fetchForPlayer(
-                            ref = if (seriesId.isNotBlank()) seriesId else cleanSeriesId,
-                            ep = resolvedEpIndex + 1,
-                        )
-                    }
-                }.getOrNull().orEmpty()
-            }
+        // Marcadores de salto: SOLO lo que ya está en caché (memoria/disco). El
+        // reproductor pide el resto en segundo plano; el handoff no espera a la red.
+        val isSeries = cleanSeriesId.isNotBlank() && (resolvedEpIds.size > 1 || seasonIds.size > 1)
+        val markerRef = if (seriesId.isNotBlank()) seriesId else cleanSeriesId
+        val markerEp = resolvedEpNumbers.getOrNull(resolvedEpIndex)?.takeIf { it > 0 }
+            ?: (resolvedEpIndex + 1)
+        val markerLengthSec = (fallbackDurationMs / 1000L).toInt().coerceAtLeast(0)
+        val cachedMarkers = if (isSeries && markerRef.isNotBlank()) {
+            runCatching {
+                com.chronosbvrx.visionplus.data.markers.MarkersStore.cachedJson(
+                    context = context,
+                    ref = markerRef,
+                    ep = markerEp,
+                )
+            }.getOrDefault("")
         } else {
-            null
+            ""
         }
         var prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs)
         if (prep == null) {
@@ -1437,11 +1463,9 @@ object X4KApi {
             prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs)
         }
         if (prep == null) {
-            markersJob?.cancel()
             return@withContext false
         }
         val finalDuration = if (prep.durationMs > 0L) prep.durationMs else fallbackDurationMs
-        val isSeries = cleanSeriesId.isNotBlank() && (resolvedEpIds.size > 1 || seasonIds.size > 1)
         launch(
             context = context,
             mode = "vod",
@@ -1453,13 +1477,17 @@ object X4KApi {
             seriesId = if (isSeries) cleanSeriesId else "",
             episodeIds = if (isSeries) resolvedEpIds else emptyList(),
             episodeNames = if (isSeries) resolvedEpNames else emptyList(),
+            episodeNumbers = if (isSeries) resolvedEpNumbers else emptyList(),
             episodeIndex = if (isSeries) resolvedEpIndex else 0,
             seasonIds = if (isSeries) seasonIds else emptyList(),
             seasonNames = if (isSeries) seasonNames else emptyList(),
             seasonIndex = if (isSeries) seasonIndex else 0,
             resumeMs = resumeMs,
             posterUrl = posterUrl,
-            markersJson = markersJob?.await().orEmpty(),
+            markersRef = if (isSeries) markerRef else "",
+            markersEp = if (isSeries) markerEp else 0,
+            markersLengthSec = if (isSeries) markerLengthSec else 0,
+            markersJson = cachedMarkers,
         )
         true
     }
@@ -1651,6 +1679,7 @@ object X4KApi {
         seriesId: String = "",
         episodeIds: List<String> = emptyList(),
         episodeNames: List<String> = emptyList(),
+        episodeNumbers: List<Int> = emptyList(),
         episodeIndex: Int = 0,
         seasonIds: List<String> = emptyList(),
         seasonNames: List<String> = emptyList(),
@@ -1659,6 +1688,9 @@ object X4KApi {
         posterUrl: String = "",
         channelCodes: List<String> = emptyList(),
         groupTitle: String = "",
+        markersRef: String = "",
+        markersEp: Int = 0,
+        markersLengthSec: Int = 0,
         markersJson: String = "",
     ) {
         val p = prefs(context)
@@ -1686,6 +1718,9 @@ object X4KApi {
                 putExtra("seriesId", seriesId)
                 putStringArrayListExtra("epIds", ArrayList(episodeIds))
                 putStringArrayListExtra("epNames", ArrayList(episodeNames))
+                if (episodeNumbers.isNotEmpty()) {
+                    putIntegerArrayListExtra("epNumbers", ArrayList(episodeNumbers))
+                }
                 putExtra("epIndex", episodeIndex)
                 putStringArrayListExtra("seasonIds", ArrayList(seasonIds))
                 putStringArrayListExtra("seasonNames", ArrayList(seasonNames))
@@ -1693,6 +1728,9 @@ object X4KApi {
             }
             if (resumeMs > 0) putExtra("resumeMs", resumeMs)
             if (posterUrl.isNotBlank()) putExtra("posterUrl", posterUrl)
+            if (markersRef.isNotBlank()) putExtra("markersRef", markersRef)
+            if (markersEp > 0) putExtra("markersEp", markersEp)
+            if (markersLengthSec > 0) putExtra("markersLengthSec", markersLengthSec)
             if (markersJson.isNotBlank()) putExtra("markersJson", markersJson)
             if (channelCodes.isNotEmpty()) {
                 putStringArrayListExtra("channelCodes", ArrayList(channelCodes))

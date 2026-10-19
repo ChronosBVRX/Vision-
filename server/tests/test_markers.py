@@ -240,8 +240,11 @@ def test_fetch_global_queries_both_sources_and_merges(monkeypatch):
     monkeypatch.setattr(markers, "_get_json", fake_get)
     out = markers.fetch_global(2560140, "tt2560140", season=1, episode=1)
     assert len(calls) == 2
-    assert "tmdb_id=2560140" in calls[0] and "season=1" in calls[0] and "episode=1" in calls[0]
-    assert "imdb_id=tt2560140" in calls[1]
+    # Las fuentes van EN PARALELO: el orden de llegada no es contrato.
+    tmdb_call = next(url for url in calls if "theintrodb" in url)
+    imdb_call = next(url for url in calls if "introdb.app" in url)
+    assert "tmdb_id=2560140" in tmdb_call and "season=1" in tmdb_call and "episode=1" in tmdb_call
+    assert "imdb_id=tt2560140" in imdb_call
     assert out["intro"]["src"] == "introdb"          # 5 votos le gana a 1
     assert out["credits"]["s"] == 1434000
 
@@ -264,6 +267,45 @@ def test_fetch_global_without_ids_never_calls_network(monkeypatch):
 
     monkeypatch.setattr(markers, "_get_json", fake_get)
     assert markers.fetch_global(None, "", season=1, episode=1) == {}
+
+
+def test_fetch_global_status_flags_a_source_failure(monkeypatch):
+    def fake_get(url, timeout):
+        if "aniskip" in url:
+            raise RuntimeError("caída")
+        return {"intro": [{"start_ms": 90000, "end_ms": 150000, "submission_count": 2}]}
+
+    monkeypatch.setattr(markers, "_get_json", fake_get)
+    segments, all_ok = markers.fetch_global_status(2560140, "", season=1, episode=1, mal_id=290)
+    assert segments["intro"]["src"] == "theintrodb"
+    assert all_ok is False, "una fuente caída no puede pasar por «no hay datos»"
+
+
+def test_fetch_global_status_true_negative_is_not_a_failure(monkeypatch):
+    def fake_get(url, timeout):
+        return {"found": False, "results": []}
+
+    monkeypatch.setattr(markers, "_get_json", fake_get)
+    segments, all_ok = markers.fetch_global_status(None, "", season=1, episode=1, mal_id=290)
+    assert segments == {}
+    assert all_ok is True
+
+
+def test_aniskip_falls_back_to_720_after_404(monkeypatch):
+    calls = []
+
+    def fake_get(url, timeout):
+        calls.append(url)
+        if "episodeLength=1440" in url:
+            raise RuntimeError("HTTP 404")
+        return {"found": True, "results": [
+            {"skipType": "op", "interval": {"startTime": 5.0, "endTime": 65.0}},
+        ]}
+
+    monkeypatch.setattr(markers, "_get_json", fake_get)
+    out = markers.fetch_global(None, "", season=1, episode=1, mal_id=290)
+    assert out["intro"]["s"] == 5000
+    assert any("episodeLength=720" in url for url in calls)
 
 
 # ---------------------------------------------------------------- AniSkip
@@ -302,14 +344,23 @@ def test_parse_anime_list_maps_tmdb_season_to_mal():
         {"mal_id": 1225, "themoviedb_id": {"tv": 62913}, "season": {"tmdb": 2}},
         {"mal_id": 0, "themoviedb_id": {"tv": 1}, "season": {"tmdb": 1}},       # sin mal: fuera
         {"mal_id": 5, "themoviedb_id": {}, "season": {"tmdb": 1}},              # sin tmdb: fuera
-        {"mal_id": 6, "themoviedb_id": {"tv": 9}, "season": {}},                # sin temporada: fuera
+        {"mal_id": 6, "themoviedb_id": {"tv": 9}, "season": {}},                # sin temporada: T1
+        {"mal_id": 7, "themoviedb_id": {"tv": 9}, "season": {"tmdb": 1}},       # explícito gana
         "basura",
     ]
     out = markers.parse_anime_list(entries)
     assert out[(26209, 1)] == 290
     assert out[(62913, 1)] == 300
     assert out[(62913, 2)] == 1225
-    assert len(out) == 3
+    assert out[(9, 1)] == 7, "un mapeo explícito no se pisa con el fallback"
+    assert len(out) == 4
+
+
+def test_parse_anime_list_falls_back_to_season_one_for_long_running_shows():
+    # One Piece en Fribb no trae bloque `season`; antes se descartaba y AniSkip
+    # nunca se usaba para la serie. El fallback la recupera.
+    entries = [{"mal_id": 21, "themoviedb_id": {"tv": 37854}}]
+    assert markers.parse_anime_list(entries) == {(37854, 1): 21}
 
 
 def test_merge_aniskip_wins_ties_but_loses_to_heavily_voted():

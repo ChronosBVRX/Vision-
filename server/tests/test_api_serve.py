@@ -21,6 +21,18 @@ def test_strip_marks_display():
     assert app.strip_season_mark("Show 2", "kids") == "Show 2"
 
 
+def test_markers_cover_long_running_anime():
+    # One Piece y series largas pasan de 400 capítulos.
+    assert app.MARKERS_EPISODE_MAX >= 5000
+
+
+def test_markers_title_sql_prefers_the_exact_ref_and_anime_copy():
+    sql = " ".join(app._MARKERS_TITLE_SQL.lower().split())
+    assert "order by" in sql
+    assert "t.id = $1 or t.play_ref = $1" in sql
+    assert "(coalesce(t.kind, '') = 'anime') desc" in sql
+
+
 def test_film_cleans_series_title():
     assert app.film(_record())["title"] == "Show"
     assert app.film(_record(title="Avatar 2", kind="movie"))["title"] == "Avatar 2"

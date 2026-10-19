@@ -123,6 +123,14 @@ import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.ResumeInfo
 import com.chronosbvrx.visionplus.ui.sports.GeeZapSignals
 import com.chronosbvrx.visionplus.data.formatResume
+import com.chronosbvrx.visionplus.data.markers.MarkersStore
+import com.chronosbvrx.visionplus.data.markers.autoSkipTarget
+import com.chronosbvrx.visionplus.data.markers.canShowSkipPill
+import com.chronosbvrx.visionplus.data.markers.creditsCardStartMs
+import com.chronosbvrx.visionplus.data.markers.parseMarkers
+import com.chronosbvrx.visionplus.data.markers.skipIntroWindow
+import com.chronosbvrx.visionplus.data.markers.skipRecapWindow
+import com.chronosbvrx.visionplus.data.markers.validPostCredits
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.data.offline.DownloadState
 import com.chronosbvrx.visionplus.data.offline.OfflineDownload
@@ -147,12 +155,6 @@ import kotlinx.coroutines.withContext
 
 /** How far the arrows and the ±10 buttons jump. */
 private const val SEEK_STEP_MS = 10_000L
-
-/** "Saltar intro": shown between these positions, on films long enough to have an opening; jumps this far. */
-private const val SKIP_FROM_MS = 3_000L
-private const val SKIP_UNTIL_MS = 120_000L
-private const val SKIP_MIN_DURATION_MS = 10 * 60_000L
-private const val SKIP_INTRO_MS = 85_000L
 
 /** The Vision+ pre-roll: "Omitir" appears after this long. */
 private const val BRAND_SKIP_DELAY_MS = 2_000L
@@ -236,7 +238,8 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
                     if (live) com.chronosbvrx.visionplus.data.xuper.X4KApi.playLive(context, code, film.title)
                     else if (ep != null) com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(
                         context, ep.code, film.title + ep.titleSuffix, seriesId = ep.seriesId,
-                        episodeIds = ep.episodeIds, episodeNames = ep.episodeNames, episodeIndex = ep.episodeIndex,
+                        episodeIds = ep.episodeIds, episodeNames = ep.episodeNames,
+                        episodeNumbers = ep.episodeNumbers, episodeIndex = ep.episodeIndex,
                         seasonIds = ep.seasonIds, seasonNames = ep.seasonNames, seasonIndex = ep.seasonIndex,
                         resumeMs = ep.resumeMs, posterUrl = film.posterUrl,
                         fallbackDurationMs = fallbackDuration,
@@ -801,6 +804,16 @@ private fun PlayerCore(
     // Encadenado offline: el capítulo descargado en curso y su «siguiente descargado».
     // El búnker permite saltar de capítulo sin red, igual que la app lo hace en línea.
     val isVault = url.startsWith("vault:")
+    fun vaultMarkersFor(vaultUrl: String): String {
+        if (!vaultUrl.startsWith("vault:")) return ""
+        return runCatching {
+            val item = OfflineRegistry.get(vaultUrl.removePrefix("vault:"), context) ?: return ""
+            if (item.seriesId.isBlank()) ""
+            else MarkersStore.cachedJson(context, item.seriesId, item.episodeIndex + 1)
+        }.getOrDefault("")
+    }
+    var currentMarkersJson by remember(url) { mutableStateOf(if (isVault) vaultMarkersFor(url) else "") }
+    val markers = remember(currentMarkersJson) { parseMarkers(currentMarkersJson) }
     var currentVaultUrl by remember(url) { mutableStateOf(url) }
     var currentTitle by remember(url) { mutableStateOf(title) }
     var currentSubtitle by remember(url) { mutableStateOf(subtitle) }
@@ -909,8 +922,8 @@ private fun PlayerCore(
     AutoHideEffect(controls, playing)
     val menu = rememberPlayerMenuState()
     var showTracks by remember { mutableStateOf(false) }
-    var showMarkers by remember { mutableStateOf(false) }
     var skipUsed by remember { mutableStateOf(false) }
+    var recapUsed by remember { mutableStateOf(false) }
     // Historial («Seguir viendo»): minuto guardado y diálogo de continuar.
     var resumeConsumed by remember { mutableStateOf(false) }
     var resumeEntry by remember {
@@ -968,6 +981,7 @@ private fun PlayerCore(
             )
         }
         com.chronosbvrx.visionplus.data.PlaybackHistory.delete(context, currentVaultUrl)
+        if (nextVault != null) return
         val next = current?.let {
             com.chronosbvrx.visionplus.data.offline.nextDownloadedEpisode(it, OfflineRegistry.getAll(context))
         } ?: return
@@ -989,6 +1003,7 @@ private fun PlayerCore(
         currentTitle = nextFilm.title
         currentSubtitle = nextFilm.synopsis
         currentResume = ResumeInfo(nextUrl, nextFilm.title, next.posterUrl, nextUrl)
+        currentMarkersJson = vaultMarkersFor(nextUrl)
         vaultDeclaredMs = if (next.durationMs > 0L) next.durationMs else 0L
         durationMs = vaultDeclaredMs
         positionMs = 0L
@@ -997,6 +1012,7 @@ private fun PlayerCore(
         resumeConsumed = true
         resumeEntry = null
         skipUsed = false
+        recapUsed = false
         player.setMediaItem(mediaItemFor(nextUrl, isLive = false, drmType = null))
         player.prepare()
         player.playWhenReady = true
@@ -1289,9 +1305,27 @@ private fun PlayerCore(
         }
     }
 
-    // Cuenta regresiva de «A continuación» (solo si el auto-avance está activo).
-    LaunchedEffect(nextVault?.id, nextCountdown) {
-        if (nextVault == null || nextCountdown <= 0) return@LaunchedEffect
+    // Modo rápido del búnker: si hay créditos válidos y no hay post-créditos, la
+    // tarjeta de «A continuación» sale al terminar los créditos. El modo seguro
+    // (default) espera al final en handleVaultEnded.
+    LaunchedEffect(positionMs, markers, nextVault, playing, vaultEndedHandled) {
+        if (!isVault || nextVault != null || vaultEndedHandled || !playing) return@LaunchedEffect
+        if (!com.chronosbvrx.visionplus.ui.settings.VisionSettings.nextOnCreditsOf(context)) return@LaunchedEffect
+        if (validPostCredits(markers, durationMs)) return@LaunchedEffect
+        val start = creditsCardStartMs(markers, durationMs) ?: return@LaunchedEffect
+        if (positionMs < start) return@LaunchedEffect
+        val current = vaultDownload() ?: return@LaunchedEffect
+        val next = com.chronosbvrx.visionplus.data.offline.nextDownloadedEpisode(
+            current, OfflineRegistry.getAll(context),
+        ) ?: return@LaunchedEffect
+        nextVault = next
+        nextCountdown = 10
+    }
+
+    // Cuenta regresiva de «A continuación» (solo si el auto-avance está activo y el
+    // video sigue reproduciendo; una pausa o salir al menú congela el contador).
+    LaunchedEffect(nextVault?.id, nextCountdown, playing) {
+        if (nextVault == null || nextCountdown <= 0 || !playing) return@LaunchedEffect
         delay(1000)
         val value = nextCountdown - 1
         nextCountdown = value
@@ -1364,14 +1398,12 @@ private fun PlayerCore(
     var playPauseFocused by remember { mutableStateOf(false) }
     var forwardFocused by remember { mutableStateOf(false) }
     var tracksFocused by remember { mutableStateOf(false) }
-    var markersFocused by remember { mutableStateOf(false) }
     val barFocus = remember { FocusRequester() }
     val resumeFocus = remember { FocusRequester() }
     val rewindFocus = remember { FocusRequester() }
     val playPauseFocus = remember { FocusRequester() }
     val forwardFocus = remember { FocusRequester() }
     val tracksFocus = remember { FocusRequester() }
-    val markersFocus = remember { FocusRequester() }
     val skipFocus = remember { FocusRequester() }
     val brandSkipFocus = remember { FocusRequester() }
     val nextCardFocus = remember { FocusRequester() }
@@ -1383,16 +1415,54 @@ private fun PlayerCore(
     var zapListFocused by remember { mutableStateOf(false) }
     var liveInfoFocused by remember { mutableStateOf(false) }
     val hasControlFocus = barFocused || rewindFocused || playPauseFocused || forwardFocused ||
-        tracksFocused || markersFocused || skipFocused || zapListFocused || liveInfoFocused
+        tracksFocused || skipFocused || zapListFocused || liveInfoFocused
 
-    // "Saltar intro" during the opening minutes; only interactive when navigation menu is visible.
-    val showSkip = !isLive && !introPlaying && !skipUsed && error == null &&
-        durationMs > SKIP_MIN_DURATION_MS && positionMs in SKIP_FROM_MS..SKIP_UNTIL_MS
+    fun skipTargetNow(pos: Long): Pair<String, Long>? {
+        if (!recapUsed) {
+            val recap = skipRecapWindow(markers)
+            if (recap != null && pos in recap) return "Omitir resumen" to markers.recapEndMs
+        }
+        if (!skipUsed) {
+            val intro = skipIntroWindow(markers)
+            if (intro != null && pos in intro) return "Omitir intro" to markers.introEndMs
+        }
+        return null
+    }
+
+    val skipMode = com.chronosbvrx.visionplus.ui.settings.VisionSettings.skipIntroModeOf(context)
+    val skipTarget = skipTargetNow(positionMs)
+    // El botón solo sale cuando el video ya se está viendo (no en la pantalla de carga),
+    // y nunca sobre el diálogo de reanudar.
+    val videoReady = !isLive && !introPlaying && !buffering && positionMs > 0L
+    val showSkip = canShowSkipPill(
+        hasTarget = skipTarget != null,
+        buttonMode = skipMode == com.chronosbvrx.visionplus.ui.settings.VisionSettings.SKIP_INTRO_BUTTON,
+        videoReady = videoReady,
+        blocked = error != null || (!resumeConsumed && resumeEntry != null),
+    )
     fun skipIntro() {
+        val target = skipTargetNow(positionMs) ?: return
         if (!canExecuteControlAction()) return
-        skipUsed = true
-        seekBy(SKIP_INTRO_MS)
+        if (target.first.contains("resumen")) recapUsed = true else skipUsed = true
+        player.seekTo(target.second)
         if (isTv) controls.hide()
+    }
+
+    // Modo automático: mismo motor de política que el reproductor nativo (inicio
+    // conocido, duración real, sin cortar contenido si el plan llegó tarde).
+    LaunchedEffect(positionMs, playing, buffering, markers, skipMode, introPlaying, error) {
+        if (skipMode != com.chronosbvrx.visionplus.ui.settings.VisionSettings.SKIP_INTRO_AUTO) return@LaunchedEffect
+        if (isLive || !playing || buffering || introPlaying || error != null) return@LaunchedEffect
+        val target = autoSkipTarget(markers, positionMs, durationMs, playing) ?: return@LaunchedEffect
+        if (!com.chronosbvrx.visionplus.data.markers.shouldApplyAutoSkip(
+                target.kind, recapUsed, skipUsed,
+            )
+        ) {
+            return@LaunchedEffect
+        }
+        if (target.kind == "recap") recapUsed = true else skipUsed = true
+        // Margen para no quedar en el keyframe anterior y repetir el salto.
+        player.seekTo(target.endMs + 1_000L)
     }
 
     // The pre-roll's "Omitir", after a couple of seconds.
@@ -1505,7 +1575,7 @@ private fun PlayerCore(
                 }
                 if (e.type == KeyEventType.KeyDown) {
                     swallowWakeupKey = null
-                    val modalOpen = showTracks || showMarkers || nextVault != null || (!resumeConsumed && resumeEntry != null)
+                    val modalOpen = showTracks || nextVault != null || (!resumeConsumed && resumeEntry != null)
                     val action = resolvePlayerKeyDownAction(
                         keyCode = e.key.nativeKeyCode,
                         isLive = isLive,
@@ -2039,18 +2109,6 @@ private fun PlayerCore(
                                     },
                             )
                         }
-                        if (!isLive && !introPlaying) {
-                            TransportButton(
-                                icon = Icons.Default.Tune,
-                                contentDescription = "Corregir intro y outro",
-                                onClick = { if (canExecuteControlAction()) { showMarkers = true; controls.bump() } },
-                                iconSize = 26.dp,
-                                modifier = if (!isTv) Modifier else Modifier
-                                    .focusRequester(markersFocus)
-                                    .onFocusChanged { markersFocused = it.isFocused }
-                                    .focusProperties { left = tracksFocus; right = markersFocus; up = barFocus; down = markersFocus },
-                            )
-                        }
                         if (!isTv && !introPlaying) {
                             if (isLandscape) Spacer(Modifier.weight(1f))
                             // Rotate: forces the orientation the system's auto-rotate would not give.
@@ -2076,7 +2134,7 @@ private fun PlayerCore(
 
         if (showSkip && controls.visible) {
             SkipPill(
-                label = "Saltar intro",
+                label = skipTarget?.first ?: "Omitir intro",
                 onClick = { skipIntro() },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -2199,28 +2257,10 @@ private fun PlayerCore(
             onDismiss = { showLiveInfo = false },
         )
     }
-    if (showMarkers && !isLive) {
-        SkipMarkersDialog(
-            positionLabel = formatDuration(positionMs),
-            onPick = { intro ->
-                showMarkers = false
-                val what = if (intro) "Fin de la intro" else "Inicio del outro"
-                Toast.makeText(context, "$what marcado en ${formatDuration(positionMs)}", Toast.LENGTH_SHORT).show()
-            },
-            onDismiss = { showMarkers = false },
-        )
-    }
-
     LaunchedEffect(showTracks) {
         if (!showTracks && isTv && controls.visible) {
             delay(100)
             runCatching { tracksFocus.requestFocus() }
-        }
-    }
-    LaunchedEffect(showMarkers) {
-        if (!showMarkers && isTv && controls.visible) {
-            delay(100)
-            runCatching { markersFocus.requestFocus() }
         }
     }
 }

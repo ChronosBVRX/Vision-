@@ -2338,26 +2338,36 @@ async def slots_worker(request: Request, x_admin_key: str | None = Header(defaul
 # resultado en Postgres. Las marcas del usuario (POST) pisan a las globales por tipo
 # y viajan a todos los equipos.
 
-MARKERS_POS_TTL = 30 * 24 * 3600   # dato encontrado: se revalida cada 30 días
-MARKERS_NEG_TTL = 2 * 24 * 3600    # «aquí no hay dato»: se reintenta a los 2 días
-MARKERS_EPISODE_MAX = 400
+MARKERS_POS_TTL = 14 * 24 * 3600   # dato encontrado: se revalida cada 14 días
+MARKERS_NEG_TTL = 2 * 24 * 3600    # «aquí no hay dato» real: se reintenta a los 2 días
+MARKERS_RETRY_TTL = 24 * 3600      # dato positivo pero con una fuente caída: refrescar en 1 día
+MARKERS_ERROR_TTL = 3600           # todas las fuentes fallaron: reintentar en 1 hora
+MARKERS_EPISODE_MAX = 5000         # One Piece y series largas pasan de 400
 MARKERS_MAX_BODY = 2048
 _markers_bucket: dict[str, list[float]] = {}
 
+# La misma serie puede existir como XTV (anime) y Magis (series). Primero la fila
+# EXACTA del ref que reprodujo la app; después la versión XTV/anime, para que AniSkip
+# no se desactive por una copia duplicada.
 _MARKERS_TITLE_SQL = """
     select t.id, t.title, t.kind, t.duration_min,
            e.tmdb_id, e.imdb_id, e.match_confidence,
            (select gm.season from group_members gm where gm.title_id = t.id limit 1) as group_season
     from titles t
     left join enrichment e on e.title_id = t.id
-    where t.id = any($1::text[]) or t.play_ref = any($1::text[])
+    where t.id = $1 or t.play_ref = $1
+       or t.id = any($2::text[]) or t.play_ref = any($2::text[])
+    order by (t.id = $1 or t.play_ref = $1) desc,
+             (coalesce(t.kind, '') = 'anime') desc,
+             (t.id like 'xtv:%') desc,
+             t.id
     limit 1
 """
 
 
 async def _markers_season(key: str) -> int:
     """Temporada de la fila (grupo de temporadas o marca del título); 1 si no se sabe."""
-    title = await db().fetchrow(_MARKERS_TITLE_SQL, skip_markers.ref_variants(key))
+    title = await db().fetchrow(_MARKERS_TITLE_SQL, key, skip_markers.ref_variants(key))
     if title is None:
         return 1
     if title["group_season"]:
@@ -2370,13 +2380,14 @@ async def markers_get(
     background: BackgroundTasks,
     ref: str = Query(min_length=1, max_length=80),
     ep: int = Query(ge=1, le=MARKERS_EPISODE_MAX),
+    length: int = Query(default=0, ge=0, le=6 * 3600, alias="len"),
     x_api_key: str | None = Header(default=None),
 ):
     """Marcadores de un episodio: caché local → bases globales → caché negativa.
 
     `ref` es la fila de temporada tal como la app la conoce (`xtv:…`); `ep` el índice
-    1-based del capítulo dentro de la temporada (el próximo capítulo repite el mismo
-    intro: un desfase de numeración de ±1 es inofensivo).
+    1-based del capítulo dentro de la temporada y `len` la duración real en segundos
+    (opcional; mejora el saneo y la elección de longitud de AniSkip).
 
     Al servir, deja en segundo plano los dos capítulos siguientes (cascada): el
     siguiente «Omitir intro» ya está en caché cuando el usuario llega ahí.
@@ -2394,17 +2405,17 @@ async def markers_get(
         age = time.time() - (row["fetched_at"].timestamp() if row["fetched_at"] else 0.0)
         ttl = MARKERS_POS_TTL if cached else MARKERS_NEG_TTL
         if age < ttl:
-            background.add_task(_warm_next_markers, key, int(row["season"]), ep)
+            background.add_task(_warm_next_markers, key, int(row["season"]), ep, length)
             return skip_markers.payload(key, ep, row["season"], cached)
 
     season = int(row["season"]) if row is not None else 1
-    found = await _resolve_markers(key, ep, season, row)
-    background.add_task(_warm_next_markers, key, season, ep)
+    found, season = await _resolve_markers(key, ep, season, row, length)
+    background.add_task(_warm_next_markers, key, season, ep, length)
     return skip_markers.payload(key, ep, season, found)
 
 
-async def _resolve_markers(key: str, ep: int, season: int, row=None) -> dict:
-    """Resuelve y cachea los marcadores de (ref, episodio); devuelve los segmentos."""
+async def _resolve_markers(key: str, ep: int, season: int, row=None, length_sec: int = 0) -> tuple[dict, int]:
+    """Resuelve y cachea los marcadores de (ref, episodio); devuelve (segmentos, temporada)."""
     if row is None:
         row = await db().fetchrow(
             "select season, segments, fetched_at from skip_markers where ref = $1 and episode = $2",
@@ -2413,7 +2424,8 @@ async def _resolve_markers(key: str, ep: int, season: int, row=None) -> dict:
     if row is not None:
         season = int(row["season"]) or season
     found = {}
-    title = await db().fetchrow(_MARKERS_TITLE_SQL, skip_markers.ref_variants(key))
+    all_sources_ok = True
+    title = await db().fetchrow(_MARKERS_TITLE_SQL, key, skip_markers.ref_variants(key))
     if title is not None:
         if title["group_season"]:
             season = int(title["group_season"])
@@ -2431,14 +2443,16 @@ async def _resolve_markers(key: str, ep: int, season: int, row=None) -> dict:
                 tmdb_id, season,
             )
         duration_min = int(title["duration_min"] or 0)
+        if duration_min <= 0 and length_sec > 0:
+            duration_min = max(1, int(length_sec) // 60)
         if tmdb_id or imdb_id or mal_id:
             try:
-                raw = await asyncio.to_thread(
-                    skip_markers.fetch_global, tmdb_id, imdb_id, season, ep,
-                    mal_id, duration_min * 60,
+                raw, all_sources_ok = await asyncio.to_thread(
+                    skip_markers.fetch_global_status, tmdb_id, imdb_id, season, ep,
+                    mal_id, length_sec if length_sec > 0 else duration_min * 60,
                 )
             except Exception:  # noqa: BLE001 — fuente caída: se sirve lo que haya
-                raw = {}
+                raw, all_sources_ok = {}, False
             found = skip_markers.sanitize(raw, duration_min)
 
     # Las marcas del usuario jamás se pierden: mandan sobre lo recién llegado.
@@ -2450,19 +2464,27 @@ async def _resolve_markers(key: str, ep: int, season: int, row=None) -> dict:
         }
         found = skip_markers.overlay(found, user)
 
+    # Si una fuente falló, el resultado no es «definitivo»: se guarda con una edad
+    # artificial para que caduque pronto (1 h si no hay nada, 1 día si hay datos).
+    stored_at = time.time()
+    if not all_sources_ok:
+        if found:
+            stored_at -= max(0, MARKERS_POS_TTL - MARKERS_RETRY_TTL)
+        else:
+            stored_at -= max(0, MARKERS_NEG_TTL - MARKERS_ERROR_TTL)
     await db().execute(
         """
         insert into skip_markers (ref, episode, season, segments, fetched_at)
-        values ($1, $2, $3, $4::jsonb, now())
+        values ($1, $2, $3, $4::jsonb, to_timestamp($5))
         on conflict (ref, episode) do update set
-            season = excluded.season, segments = excluded.segments, fetched_at = now()
+            season = excluded.season, segments = excluded.segments, fetched_at = excluded.fetched_at
         """,
-        key, ep, season, json.dumps(found, ensure_ascii=False),
+        key, ep, season, json.dumps(found, ensure_ascii=False), stored_at,
     )
-    return found
+    return found, season
 
 
-async def _warm_next_markers(key: str, season: int, ep: int) -> None:
+async def _warm_next_markers(key: str, season: int, ep: int, length_sec: int = 0) -> None:
     """Cascada: deja listos los 2 capítulos siguientes (solo si no están en caché)."""
     try:
         for nxt in (ep + 1, ep + 2):
@@ -2472,7 +2494,7 @@ async def _warm_next_markers(key: str, season: int, ep: int) -> None:
                 "select 1 from skip_markers where ref = $1 and episode = $2", key, nxt
             )
             if exists is None:
-                await _resolve_markers(key, nxt, season)
+                await _resolve_markers(key, nxt, season, None, length_sec)
     except Exception:  # noqa: BLE001 — calentar nunca rompe la respuesta servida
         pass
 

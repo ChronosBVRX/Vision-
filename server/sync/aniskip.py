@@ -20,10 +20,16 @@ TIMEOUT = 60.0
 
 
 def parse_entries(entries) -> dict:
-    """Dataset Fribb anime-lists → {(tmdb_id, tmdb_season): mal_id} (puro, testeable)."""
-    out = {}
+    """Dataset Fribb anime-lists → {(tmdb_id, tmdb_season): mal_id} (puro, testeable).
+
+    Las series largas (One Piece, Naruto…) vienen SIN `season.tmdb`; antes se
+    descartaban y AniSkip nunca se usaba. Esas entradas caen a temporada 1, pero un
+    mapeo explícito siempre gana.
+    """
+    explicit = {}
+    fallback = {}
     if not isinstance(entries, list):
-        return out
+        return explicit
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -40,10 +46,15 @@ def parse_entries(entries) -> dict:
             season = int(season_block.get("tmdb") or 0)
         except (TypeError, ValueError, AttributeError):
             continue
-        if tmdb_id <= 0 or season <= 0:
+        if tmdb_id <= 0:
             continue
-        out.setdefault((tmdb_id, season), mal_id)
-    return out
+        if season <= 0:
+            fallback.setdefault((tmdb_id, 1), mal_id)
+        else:
+            explicit.setdefault((tmdb_id, season), mal_id)
+    for key, mal_id in fallback.items():
+        explicit.setdefault(key, mal_id)
+    return explicit
 
 
 def _download():

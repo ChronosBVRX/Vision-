@@ -161,7 +161,12 @@ private fun ColumnScope.TvPlaybackTab() {
     TvActionOption("Siguiente episodio automático: ${if (s.autoPlayNext) "Sí" else "No"}") {
         s.setAutoPlayNext(context, !s.autoPlayNext)
     }
-    Note("Al llegar a los créditos (o al terminar el capítulo), arranca de inmediato con el siguiente.")
+    Note("Al terminar el capítulo, arranca solo con el siguiente. Si el modo rápido está activo, empieza al final de los créditos.")
+
+    TvActionOption("Avanzar en créditos (rápido): ${if (s.nextOnCredits) "Sí" else "No"}") {
+        s.setNextOnCredits(context, !s.nextOnCredits)
+    }
+    Note("Apagado (recomendado): espera al final para no cortar créditos ni escenas post-créditos. Encendido: empieza al terminar los créditos.")
 
     TvActionOption("Reanudar automáticamente: ${if (s.autoResume) "Sí" else "No"}") {
         s.setAutoResume(context, !s.autoResume)

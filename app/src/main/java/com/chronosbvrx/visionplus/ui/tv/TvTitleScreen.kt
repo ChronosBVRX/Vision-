@@ -105,6 +105,7 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
     var watchedTick by remember(film.id) { mutableStateOf(0) }
     val episodes = remember(episodePrograms) { episodePrograms.map { it.contentId } }
     val episodeNames = remember(episodePrograms) { episodePrograms.map { it.name } }
+    val episodeNumbers = remember(episodePrograms) { episodePrograms.map { it.number } }
 
     if (isXtv) {
         LaunchedEffect(film.id, activeId) {
@@ -181,6 +182,7 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
             seriesId = activeId,
             episodeIds = episodes,
             episodeNames = episodeNames,
+            episodeNumbers = episodeNumbers,
             episodeIndex = index,
             seasonIds = seasonIdList,
             seasonNames = seasonNameList,
@@ -385,6 +387,7 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                                         seriesId = activeId,
                                         episodeIds = episodes,
                                         episodeNames = episodeNames,
+                                        episodeNumbers = episodeNumbers,
                                         episodeIndex = targetIdx,
                                         seasonIds = seasonIdList,
                                         seasonNames = seasonNameList,
@@ -532,6 +535,7 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                                 seriesId = activeId,
                                 episodeIds = episodes,
                                 episodeNames = episodeNames,
+                                episodeNumbers = episodeNumbers,
                                 episodeIndex = index,
                                 seasonIds = seasonIdList,
                                 seasonNames = seasonNameList,

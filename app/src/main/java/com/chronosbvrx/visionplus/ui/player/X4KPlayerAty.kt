@@ -49,6 +49,13 @@ import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.LiveTaxonomy
 import com.chronosbvrx.visionplus.data.UserLibrary
+import com.chronosbvrx.visionplus.data.markers.EpisodeMarkers
+import com.chronosbvrx.visionplus.data.markers.autoSkipTarget
+import com.chronosbvrx.visionplus.data.markers.canShowSkipPill
+import com.chronosbvrx.visionplus.data.markers.creditsCardStartMs
+import com.chronosbvrx.visionplus.data.markers.skipIntroWindow
+import com.chronosbvrx.visionplus.data.markers.skipRecapWindow
+import com.chronosbvrx.visionplus.data.markers.validPostCredits
 import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.isFinished
 import com.chronosbvrx.visionplus.data.remote.RemoteBus
@@ -135,14 +142,17 @@ class X4KPlayerAty : ComponentActivity() {
     private var curTitle = ""
     private var curSeries = ""
     private var curEpIndex = 0
+    private var curEpNumber = 0
     private var curSeasonIndex = 0
     private var curAspect = 0
     private var epIds = ArrayList<String>()
+    private var epNumbers = ArrayList<Int>()
     private var seasonIds = ArrayList<String>()
     private var seasonNames = ArrayList<String>()
     private var nextOverlay: View? = null
     private var nextVisible = false
     private var nextDismissed = false
+    private var nextPendingAtEnd = false
     private var endedShown = false
     private var nextCountdown = 0
     private var nextCountdownView: TextView? = null
@@ -151,16 +161,20 @@ class X4KPlayerAty : ComponentActivity() {
     private var nextAutoAdvance = true
     private var nextCreditsMode = false
 
-    // Marcadores de salto (intro / resumen / créditos / post-créditos): el intro se
-    // repite en toda la temporada, así que la misma ventana sirve para los capítulos
-    // siguientes de la misma fila.
+    // Marcadores de salto (intro / resumen / créditos / post-créditos). Cada capítulo
+    // tiene SU plan: nunca se reutiliza la ventana del primero de la temporada.
     private var markIntroStartMs = -1L
     private var markIntroEndMs = -1L
     private var markRecapStartMs = -1L
     private var markRecapEndMs = -1L
     private var markCreditsStartMs = -1L
+    private var markCreditsEndMs = -1L
     private var markPostCreditsStartMs = -1L
-    private var markSeasonRef = ""
+    private var markPostCreditsEndMs = -1L
+    private var markEpisodeRef = ""
+    private var markEpisodeNumber = 0
+    private var markEpisodeLengthSec = 0
+    private var markersFetchGen = 0
     private var introSkipped = false
     private var recapSkipped = false
     private var creditsCardShown = false
@@ -176,9 +190,11 @@ class X4KPlayerAty : ComponentActivity() {
         val displayTitle: String,
         val playerTitle: String,
         val epIndex: Int,
+        val epNumber: Int,
         val seasonIndex: Int,
         val newEpIds: List<String>? = null,
         val newEpNames: List<String>? = null,
+        val newEpNumbers: List<Int>? = null,
     )
 
     /** TV: the controls become D-pad targets, so the remote never gets stuck. */
@@ -450,6 +466,7 @@ class X4KPlayerAty : ComponentActivity() {
                         if (gen != playGen) return@runOnUiThread
                         if (declaredDurationMs <= 0L || (d > declaredDurationMs && declaredDurationMs < 60_000L)) {
                             declaredDurationMs = d
+                            markEpisodeLengthSec = (d / 1000L).toInt().coerceAtLeast(0)
                             timeTotal?.text = fmt(d)
                             val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
                             if (!scrubbing && d > 0) {
@@ -462,6 +479,7 @@ class X4KPlayerAty : ComponentActivity() {
         }
         intent.getStringArrayListExtra("epIds")?.let { epIds = it }
         intent.getStringArrayListExtra("epNames")?.let { epNames = it }
+        intent.getIntegerArrayListExtra("epNumbers")?.let { epNumbers = it }
         curEpIndex = intent.getIntExtra("epIndex", 0)
         intent.getStringArrayListExtra("seasonIds")?.let { seasonIds = it }
         intent.getStringArrayListExtra("seasonNames")?.let { seasonNames = it }
@@ -472,18 +490,28 @@ class X4KPlayerAty : ComponentActivity() {
             curSeries = ""
             epIds.clear()
             epNames.clear()
+            epNumbers.clear()
             seasonIds.clear()
             seasonNames.clear()
             curEpIndex = 0
             curSeasonIndex = 0
         }
+        curEpNumber = epNumbers.getOrNull(curEpIndex)?.takeIf { it > 0 } ?: (curEpIndex + 1)
         resumeMs = intent.getLongExtra("resumeMs", 0L)
         intentPoster = intent.getStringExtra("posterUrl").orEmpty()
         // Marcadores de salto: viajan por el intent (las prefs no cruzan a `:x4k`) y el
         // modo lo lee cada proceso de su archivo (el ajuste pudo cambiar sin reiniciar).
         skipIntroMode = com.chronosbvrx.visionplus.ui.settings.VisionSettings.skipIntroModeOf(this)
-        markSeasonRef = if (curSeries.isNotBlank()) "xtv:$curSeries" else ""
-        applyMarkers(intent.getStringExtra("markersJson").orEmpty())
+        markEpisodeRef = com.chronosbvrx.visionplus.data.markers.normalizeMarkersRef(
+            intent.getStringExtra("markersRef").orEmpty().ifBlank { curSeries },
+        )
+        markEpisodeNumber = intent.getIntExtra("markersEp", 0).takeIf { it > 0 } ?: curEpNumber
+        markEpisodeLengthSec = intent.getIntExtra("markersLengthSec", 0)
+            .takeIf { it > 0 }
+            ?: (declaredDurationMs / 1000L).toInt().coerceAtLeast(0)
+        val intentMarkers = intent.getStringExtra("markersJson").orEmpty()
+        applyMarkers(intentMarkers)
+        if (intentMarkers.isBlank()) fetchMarkersForCurrent(playGen)
         if (!liveMode && curSeries.isNotBlank() && (epIds.isEmpty() || epNames.isEmpty())) {
             val gen = playGen
             Thread {
@@ -502,6 +530,11 @@ class X4KPlayerAty : ComponentActivity() {
                         if (epNames.isEmpty()) {
                             epNames = ArrayList(programs.map { it.name })
                         }
+                        if (epNumbers.isEmpty()) {
+                            epNumbers = ArrayList(programs.map { it.number })
+                        }
+                        curEpNumber = epNumbers.getOrNull(curEpIndex)?.takeIf { it > 0 } ?: (curEpIndex + 1)
+                        if (markEpisodeNumber <= 0) markEpisodeNumber = curEpNumber
                         // Con la lista real ya resuelta, la espera corrige el capítulo si hacía falta.
                         applyLoadingContent(curTitle)
                         updateNextButtonState()
@@ -626,6 +659,7 @@ class X4KPlayerAty : ComponentActivity() {
         // Now the branded wait takes over; controls stay hidden until requested.
         if (!firstFrame && !errorShown) {
             loadingFading = false
+            introPill?.visibility = View.GONE
             loadingOverlay?.alpha = 1f
             loadingOverlay?.visibility = View.VISIBLE
         }
@@ -671,6 +705,7 @@ class X4KPlayerAty : ComponentActivity() {
         lastSkipReportAtMs = 0L
         liveSignalSeen = false
         endedShown = false
+        nextPendingAtEnd = false
         creditsCardShown = false
         postCreditsShown = false
         introSkipped = false
@@ -690,6 +725,7 @@ class X4KPlayerAty : ComponentActivity() {
         curSeasonIndex = 0
         epIds = ArrayList()
         epNames = ArrayList()
+        epNumbers = ArrayList()
         seasonIds = ArrayList()
         seasonNames = ArrayList()
         curMedias = ArrayList()
@@ -714,8 +750,13 @@ class X4KPlayerAty : ComponentActivity() {
         markRecapStartMs = -1L
         markRecapEndMs = -1L
         markCreditsStartMs = -1L
+        markCreditsEndMs = -1L
         markPostCreditsStartMs = -1L
-        markSeasonRef = ""
+        markPostCreditsEndMs = -1L
+        markEpisodeRef = ""
+        markEpisodeNumber = 0
+        markEpisodeLengthSec = 0
+        markersFetchGen += 1
         // Subtítulos del proveedor: el programa siguiente trae su propia lista.
         stopSubsTicker()
         subsEntries = emptyList()
@@ -1237,6 +1278,7 @@ class X4KPlayerAty : ComponentActivity() {
         runCatching { X4KTitan.stop(v) }
         firstFrame = false
         loadingFading = false
+        introPill?.visibility = View.GONE
         loadingOverlay?.alpha = 1f
         loadingOverlay?.visibility = View.VISIBLE
         startedAtMs = System.currentTimeMillis()
@@ -2486,7 +2528,9 @@ class X4KPlayerAty : ComponentActivity() {
         markRecapStartMs = -1L
         markRecapEndMs = -1L
         markCreditsStartMs = -1L
+        markCreditsEndMs = -1L
         markPostCreditsStartMs = -1L
+        markPostCreditsEndMs = -1L
         introSkipped = false
         recapSkipped = false
         creditsCardShown = false
@@ -2504,29 +2548,97 @@ class X4KPlayerAty : ComponentActivity() {
                 }
                 root.optJSONObject("credits")?.let { seg ->
                     markCreditsStartMs = seg.optLong("s", -1L)
+                    markCreditsEndMs = seg.optLong("e", -1L)
                 }
                 root.optJSONObject("postCredits")?.let { seg ->
                     markPostCreditsStartMs = seg.optLong("s", -1L)
+                    markPostCreditsEndMs = seg.optLong("e", -1L)
                 }
             }
         }
         if (markIntroEndMs <= 0L) markIntroStartMs = -1L
         if (markRecapEndMs <= 0L) markRecapStartMs = -1L
-        if (markCreditsStartMs <= 0L) markCreditsStartMs = -1L
-        if (markPostCreditsStartMs <= 0L) markPostCreditsStartMs = -1L
+        if (markCreditsStartMs <= 0L) markCreditsEndMs = -1L
+        if (markPostCreditsStartMs <= 0L) markPostCreditsEndMs = -1L
+        Log.i(
+            TAG,
+            "marcadores cap=$markEpisodeNumber ref=$markEpisodeRef " +
+                "recap=$markRecapStartMs-$markRecapEndMs intro=$markIntroStartMs-$markIntroEndMs " +
+                "credits=$markCreditsStartMs-$markCreditsEndMs post=$markPostCreditsStartMs",
+        )
     }
 
-    /** Al pasar de capítulo: el mismo lote reusa la ventana; otra temporada la limpia. */
-    private fun keepMarkersForSeason(series: String) {
-        if (series.isNotBlank() && "xtv:$series" == markSeasonRef) {
-            introSkipped = false
-            recapSkipped = false
-            creditsCardShown = false
-            postCreditsShown = false
-        } else {
-            markSeasonRef = if (series.isNotBlank()) "xtv:$series" else ""
-            applyMarkers("")
-        }
+    /** El video ya se dibujó y la pantalla de carga (logo/spinner) ya se desvaneció. */
+    private fun videoIsReady(): Boolean =
+        firstFrame && !loadingFading && loadingOverlay?.visibility != View.VISIBLE
+
+    /** Foto de los campos del motor para aplicar la política pura (sin duplicar reglas). */
+    private fun currentMarkers(): EpisodeMarkers = EpisodeMarkers(
+        introStartMs = markIntroStartMs,
+        introEndMs = markIntroEndMs,
+        recapStartMs = markRecapStartMs,
+        recapEndMs = markRecapEndMs,
+        creditsStartMs = markCreditsStartMs,
+        creditsEndMs = markCreditsEndMs,
+        postCreditsStartMs = markPostCreditsStartMs,
+        postCreditsEndMs = markPostCreditsEndMs,
+    )
+
+    /** Pide el plan del capítulo actual en segundo plano y lo aplica si sigue vigente. */
+    private fun fetchMarkersForCurrent(gen: Int = playGen) {
+        val ref = markEpisodeRef
+        val ep = markEpisodeNumber
+        if (ref.isBlank() || ep <= 0) return
+        val token = ++markersFetchGen
+        Thread {
+            val json = runCatching {
+                kotlinx.coroutines.runBlocking {
+                    com.chronosbvrx.visionplus.data.markers.MarkersStore.fetchForPlayer(
+                        context = this@X4KPlayerAty,
+                        ref = ref,
+                        ep = ep,
+                        lengthSeconds = markEpisodeLengthSec,
+                    )
+                }
+            }.getOrDefault("")
+            if (json.isBlank()) return@Thread
+            runOnUiThread {
+                if (gen != playGen || token != markersFetchGen) return@runOnUiThread
+                if (ref != markEpisodeRef || ep != markEpisodeNumber) return@runOnUiThread
+                applyMarkers(json)
+                prefetchNextMarkers(ref, ep)
+            }
+        }.start()
+    }
+
+    /** Deja listos los siguientes capítulos en la caché de disco (maratón sin esperas). */
+    private fun prefetchNextMarkers(ref: String, fromEp: Int) {
+        if (ref.isBlank() || fromEp <= 0) return
+        Thread {
+            runCatching {
+                kotlinx.coroutines.runBlocking {
+                    com.chronosbvrx.visionplus.data.markers.MarkersStore.prefetch(
+                        context = this@X4KPlayerAty,
+                        ref = ref,
+                        episodes = (fromEp + 1)..(fromEp + 2),
+                        lengthSeconds = markEpisodeLengthSec,
+                    )
+                }
+            }
+        }.start()
+    }
+
+    /**
+     * Prepara el plan del capítulo que empieza. Cada episodio tiene SUS tiempos (AoT T2 E1
+     * no es E2); nunca se reutiliza la ventana del primero de la temporada. Mientras llega
+     * el plan nuevo no se auto-salta nada: mejor no saltar que cortar contenido.
+     */
+    private fun beginMarkersForEpisode(series: String, epNumber: Int, lengthSec: Int = 0) {
+        markEpisodeRef = com.chronosbvrx.visionplus.data.markers.normalizeMarkersRef(series)
+        markEpisodeNumber = if (epNumber > 0) epNumber else 1
+        markEpisodeLengthSec = lengthSec.coerceAtLeast(0)
+        applyMarkers("")
+        if (markEpisodeRef.isNotBlank()) fetchMarkersForCurrent()
     }
 
     /** El botón «Omitir intro / resumen» vive sobre los controles, sin taparlos (estilo Netflix). */
@@ -2592,11 +2704,14 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** Qué salto ofrece la píldora ahora: el resumen primero (suele ir antes que el intro). */
     private fun skipTargetNow(pos: Long): Pair<String, Long>? {
-        if (markRecapEndMs > 0L && !recapSkipped && pos in recapWindowRange()) {
-            return "Omitir resumen" to markRecapEndMs
+        val markers = currentMarkers()
+        if (!recapSkipped) {
+            val recap = skipRecapWindow(markers)
+            if (recap != null && pos in recap) return "Omitir resumen" to markers.recapEndMs
         }
-        if (markIntroEndMs > 0L && !introSkipped && pos in introWindowRange()) {
-            return "Omitir intro" to markIntroEndMs
+        if (!introSkipped) {
+            val intro = skipIntroWindow(markers)
+            if (intro != null && pos in intro) return "Omitir intro" to markers.introEndMs
         }
         return null
     }
@@ -2613,9 +2728,16 @@ class X4KPlayerAty : ComponentActivity() {
     private fun updateIntroPill(pos: Long) {
         val pill = introPill ?: return
         val target = skipTargetNow(pos)
-        val show = target != null &&
-            skipIntroMode == com.chronosbvrx.visionplus.ui.settings.VisionSettings.SKIP_INTRO_BUTTON &&
-            !errorShown && !picking && nextOverlay == null && introView == null && resumeOverlay == null
+        // La píldora NO sale durante la pantalla de carga (logo + spinner) ni sobre el
+        // pre-roll: solo cuando el motor ya pintó el video y el overlay se desvaneció.
+        val videoReady = videoIsReady()
+        val blocked = errorShown || picking || nextOverlay != null || introView != null || resumeOverlay != null
+        val show = canShowSkipPill(
+            hasTarget = target != null,
+            buttonMode = skipIntroMode == com.chronosbvrx.visionplus.ui.settings.VisionSettings.SKIP_INTRO_BUTTON,
+            videoReady = videoReady,
+            blocked = blocked,
+        )
         if (target != null) pill.text = target.first
         val focusable = show && isTv && controlsVisible
         val hadFocus = pill.hasFocus()
@@ -2633,42 +2755,44 @@ class X4KPlayerAty : ComponentActivity() {
         }
     }
 
-    private fun introWindowRange(): LongRange {
-        if (markIntroEndMs <= 0L) return LongRange.EMPTY
-        val start = if (markIntroStartMs >= 0L) markIntroStartMs else 0L
-        return start..(markIntroEndMs - 2000L)
-    }
-
-    private fun recapWindowRange(): LongRange {
-        if (markRecapEndMs <= 0L) return LongRange.EMPTY
-        val start = if (markRecapStartMs >= 0L) markRecapStartMs else 0L
-        return start..(markRecapEndMs - 2000L)
-    }
-
-    /** Modo «Automático»: salta en cuanto la posición entra a la ventana (intro o resumen). */
-    private fun maybeAutoSkipIntro(pos: Long) {
+    /**
+     * Modo «Automático»: salta en cuanto la posición entra a la ventana, pero solo si el
+     * video está reproduciendo (no pausado/buffering) y el plan tiene un inicio conocido.
+     * Si el plan llegó tarde, la política pura evita cortar contenido.
+     */
+    private fun maybeAutoSkipIntro(pos: Long, playingNow: Boolean) {
         if (skipIntroMode != com.chronosbvrx.visionplus.ui.settings.VisionSettings.SKIP_INTRO_AUTO) return
-        if (!firstFrame || scrubbing) return
+        if (!videoIsReady() || scrubbing || !playingNow) return
         if (errorShown || picking || nextOverlay != null || introView != null || resumeOverlay != null) return
-        val start = if (markRecapStartMs >= 0L) markRecapStartMs else 0L
-        if (!recapSkipped && markRecapEndMs > 0L && pos in start until markRecapEndMs) {
-            recapSkipped = true
-            performSeekBy(markRecapEndMs - pos)
+        val duration = resolveStableTotalDuration(declaredDurationMs, durationMs, pos, liveMode)
+        val target = autoSkipTarget(
+            markers = currentMarkers(),
+            positionMs = pos,
+            durationMs = duration,
+            playing = playingNow,
+        ) ?: return
+        if (!com.chronosbvrx.visionplus.data.markers.shouldApplyAutoSkip(
+                target.kind, recapSkipped, introSkipped,
+            )
+        ) {
             return
         }
-        if (introSkipped || markIntroEndMs <= 0L) return
-        val introStart = if (markIntroStartMs >= 0L) markIntroStartMs else 0L
-        if (pos in introStart until markIntroEndMs) {
-            introSkipped = true
-            performSeekBy(markIntroEndMs - pos)
-        }
+        if (target.kind == "recap") recapSkipped = true else introSkipped = true
+        // +1 s: el seek cae en el keyframe anterior y, sin este margen, el siguiente tic
+        // volvía a ver la posición dentro del intro y repetía el salto cada 500 ms.
+        val destination = target.endMs + 1_000L
+        Log.i(TAG, "auto-skip ${target.kind}: pos=$pos -> $destination")
+        performSeekBy(destination - pos)
     }
 
     /** Aviso de post-créditos: unos segundos al entrar a los créditos (películas y series). */
     private fun maybeShowPostCredits(pos: Long) {
         val notice = postCreditsNotice ?: return
-        if (markPostCreditsStartMs <= 0L || postCreditsShown || !firstFrame) return
-        if (pos < markPostCreditsStartMs) return
+        if (postCreditsShown || !videoIsReady()) return
+        val duration = resolveStableTotalDuration(declaredDurationMs, durationMs, pos, liveMode)
+        val markers = currentMarkers()
+        if (!validPostCredits(markers, duration)) return
+        if (pos < markers.postCreditsStartMs) return
         postCreditsShown = true
         notice.visibility = View.VISIBLE
         handler.postDelayed({ notice.visibility = View.GONE }, 9_000L)
@@ -2676,9 +2800,11 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** Con marcador de créditos, la tarjeta de «siguiente capítulo» sale al empezar el cierre. */
     private fun maybeShowCreditsCard(pos: Long) {
-        if (markCreditsStartMs <= 0L || creditsCardShown || !firstFrame || scrubbing) return
+        if (creditsCardShown || !videoIsReady() || scrubbing) return
         if (errorShown || picking || nextOverlay != null || endedShown || resumeOverlay != null) return
-        if (pos < markCreditsStartMs || !hasNextEpisode()) return
+        val duration = resolveStableTotalDuration(declaredDurationMs, durationMs, pos, liveMode)
+        val start = creditsCardStartMs(currentMarkers(), duration) ?: return
+        if (pos < start || !hasNextEpisode()) return
         creditsCardShown = true
         showNextCard(creditsMode = true)
     }
@@ -2693,6 +2819,17 @@ class X4KPlayerAty : ComponentActivity() {
         }
         if (curCode.isNotBlank()) {
             PlaybackHistory.delete(this, curCode)
+        }
+        // Si la tarjeta ya estaba esperando al final, ahora sí arranca la cuenta regresiva.
+        if (nextVisible && nextTarget != null && nextPendingAtEnd) {
+            nextPendingAtEnd = false
+            if (nextAutoAdvance) {
+                nextCountdown = 5
+                tickNext()
+            } else {
+                nextCountdownView?.text = "Elige qué sigue"
+            }
+            return
         }
         showNextCard()
     }
@@ -2710,6 +2847,18 @@ class X4KPlayerAty : ComponentActivity() {
         if (!hasEp && !hasSeason) return
         nextCreditsMode = creditsMode
         nextAutoAdvance = com.chronosbvrx.visionplus.ui.settings.VisionSettings.autoPlayNextOf(this)
+        val duration = resolveStableTotalDuration(declaredDurationMs, durationMs, 0L, liveMode)
+        val postCredits = validPostCredits(currentMarkers(), duration)
+        val fastCredits = com.chronosbvrx.visionplus.ui.settings.VisionSettings.nextOnCreditsOf(this)
+        // Seguro: la tarjeta sale en créditos pero el siguiente espera al final (no corta
+        // escenas post-créditos ni endings). Rápido: empieza al terminar los créditos.
+        nextPendingAtEnd = creditsMode && (!fastCredits || postCredits)
+        nextCountdown = when {
+            !nextAutoAdvance -> 0
+            nextPendingAtEnd -> 0
+            creditsMode -> 10
+            else -> 5
+        }
         val dim = ModalDimLayout(this).apply {
             setBackgroundColor(0xB304070D.toInt())
             isFocusable = false
@@ -2872,10 +3021,10 @@ class X4KPlayerAty : ComponentActivity() {
                 displayTitle = displayLabel,
                 playerTitle = playerTitle,
                 epIndex = nextIdx,
+                epNumber = epNumbers.getOrNull(nextIdx)?.takeIf { it > 0 } ?: (nextIdx + 1),
                 seasonIndex = curSeasonIndex,
             )
             epTitle.text = displayLabel
-            nextCountdown = if (creditsMode) 10 else 5
             tickNext()
         } else {
             val nextSeasonIdx = curSeasonIndex + 1
@@ -2904,12 +3053,13 @@ class X4KPlayerAty : ComponentActivity() {
                         displayTitle = displayLabel,
                         playerTitle = playerTitle,
                         epIndex = 0,
+                        epNumber = first.number.takeIf { it > 0 } ?: 1,
                         seasonIndex = nextSeasonIdx,
                         newEpIds = programs.map { it.contentId },
                         newEpNames = programs.map { it.name },
+                        newEpNumbers = programs.map { it.number },
                     )
                     epTitle.text = displayLabel
-                    nextCountdown = if (creditsMode) 10 else 5
                     tickNext()
                 }
             }.start()
@@ -2922,6 +3072,10 @@ class X4KPlayerAty : ComponentActivity() {
         if (!nextVisible || nextDismissed || target == null) return
         if (!nextAutoAdvance) {
             nextCountdownView?.text = "Elige qué sigue"
+            return
+        }
+        if (nextPendingAtEnd) {
+            nextCountdownView?.text = "Siguiente capítulo al terminar"
             return
         }
         nextCountdownView?.text = if (nextCreditsMode) {
@@ -2943,12 +3097,14 @@ class X4KPlayerAty : ComponentActivity() {
         val target = nextTarget ?: return
         target.newEpIds?.let { epIds = ArrayList(it) }
         target.newEpNames?.let { epNames = ArrayList(it) }
+        target.newEpNumbers?.let { epNumbers = ArrayList(it) }
         playEpisode(
             code = target.code,
             series = target.seriesId,
             title = target.playerTitle,
             epIdx = target.epIndex,
             seasonIdx = target.seasonIndex,
+            epNumber = target.epNumber,
             auto = auto,
         )
     }
@@ -2958,6 +3114,7 @@ class X4KPlayerAty : ComponentActivity() {
         nextOverlay?.let { root().removeView(it) }
         nextOverlay = null
         nextVisible = false
+        nextPendingAtEnd = false
         nextCountdownView = null
         nextTarget = null
         nextPlayBtn = null
@@ -3007,6 +3164,7 @@ class X4KPlayerAty : ComponentActivity() {
                 title = playerTitle,
                 epIdx = nextIdx,
                 seasonIdx = curSeasonIndex,
+                epNumber = epNumbers.getOrNull(nextIdx)?.takeIf { it > 0 } ?: (nextIdx + 1),
                 auto = false,
             )
         } else {
@@ -3027,6 +3185,7 @@ class X4KPlayerAty : ComponentActivity() {
                         }
                         epIds = ArrayList(programs.map { it.contentId })
                         epNames = ArrayList(programs.map { it.name })
+                        epNumbers = ArrayList(programs.map { it.number })
                         val playerTitle = "${curBaseTitle.ifBlank { curTitle }} · $sLabel · C1"
                         playEpisode(
                             code = first.contentId,
@@ -3034,6 +3193,7 @@ class X4KPlayerAty : ComponentActivity() {
                             title = playerTitle,
                             epIdx = 0,
                             seasonIdx = nextSeasonIdx,
+                            epNumber = first.number.takeIf { it > 0 } ?: 1,
                             auto = false,
                         )
                     }
@@ -3043,7 +3203,15 @@ class X4KPlayerAty : ComponentActivity() {
     }
 
     /** Reproduce otro capítulo en el mismo motor/vista: la serie nunca sale del reproductor. */
-    private fun playEpisode(code: String, series: String, title: String, epIdx: Int, seasonIdx: Int, auto: Boolean = false) {
+    private fun playEpisode(
+        code: String,
+        series: String,
+        title: String,
+        epIdx: Int,
+        seasonIdx: Int,
+        epNumber: Int = 0,
+        auto: Boolean = false,
+    ) {
         val v = playerView ?: return
         hideNext()
         hideResumeDialog()
@@ -3063,12 +3231,15 @@ class X4KPlayerAty : ComponentActivity() {
         curTitle = title
         curSeries = series
         curEpIndex = epIdx
+        curEpNumber = if (epNumber > 0) epNumber
+        else epNumbers.getOrNull(epIdx)?.takeIf { it > 0 } ?: (epIdx + 1)
         curSeasonIndex = seasonIdx
         topTitle?.text = title
         // La espera muestra el capítulo que de verdad se abre (no el primero de la sesión).
         applyLoadingContent(title)
-        // Marcadores: el mismo lote de temporada reusa la ventana del intro; otra, la limpia.
-        keepMarkersForSeason(series)
+        // Marcadores del capítulo NUEVO (no los del anterior de la temporada). La
+        // duración real del nuevo aún no se conoce aquí; el servidor usa su fallback.
+        beginMarkersForEpisode(series, curEpNumber, 0)
         // Subtítulos: el capítulo nuevo es otro programId en el servicio — soltar los previos
         // (la lista y la elección se recuperan al arrancar el nuevo, más abajo).
         disableSubs(save = false)
@@ -3091,6 +3262,7 @@ class X4KPlayerAty : ComponentActivity() {
         PlaybackHistory.delete(this, code)
 
         loadingFading = false
+        introPill?.visibility = View.GONE
         loadingOverlay?.alpha = 1f
         loadingOverlay?.visibility = View.VISIBLE
         firstFrame = false
@@ -3489,6 +3661,7 @@ class X4KPlayerAty : ComponentActivity() {
         handler.removeCallbacks(hideRunnable)
         showControlsBriefly()
         loadingFading = false
+        introPill?.visibility = View.GONE
         loadingOverlay?.alpha = 1f
         loadingOverlay?.visibility = View.VISIBLE
         firstFrame = false
@@ -4211,6 +4384,7 @@ class X4KPlayerAty : ComponentActivity() {
                         "${curBaseTitle.ifBlank { curTitle }}$seasonPrefix · C${position + 1}",
                         position,
                         curSeasonIndex,
+                        epNumber = epNumbers.getOrNull(position)?.takeIf { it > 0 } ?: (position + 1),
                     )
                 }
                 // Mantener presionado alterna visto/no-visto sin reproducir (maratón y control).
@@ -4621,7 +4795,7 @@ class X4KPlayerAty : ComponentActivity() {
                     // Marcadores de salto: auto-omitir (si está activado), botón del intro o
                     // resumen, tarjeta de créditos y aviso de post-créditos — todo nace de la
                     // misma posición del tic.
-                    maybeAutoSkipIntro(pos)
+                    maybeAutoSkipIntro(pos, playingNow)
                     updateIntroPill(pos)
                     maybeShowCreditsCard(pos)
                     maybeShowPostCredits(pos)
@@ -4996,6 +5170,11 @@ class X4KPlayerAty : ComponentActivity() {
     private fun parkPlaybackInBackground() {
         android.util.Log.i(TAG, "reproductor al fondo con reproducción activa: se suelta el motor")
         exiting = true
+        // El contador de «siguiente capítulo» no puede seguir vivo con el reproductor
+        // detrás: jamás debe arrancar un episodio invisible en segundo plano.
+        handler.removeCallbacks(nextTick)
+        nextCountdown = 0
+        nextPendingAtEnd = nextPendingAtEnd && nextVisible
         stopSubsTicker()
         saveHistory(immediate = true)
         playerView?.let { runCatching { X4KTitan.stop(it) } }

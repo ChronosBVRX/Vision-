@@ -21,6 +21,7 @@ object VisionSettings {
     private const val PREFS_NAME = "vision_settings"
     private const val KEY_DEFAULT_QUALITY = "default_quality"
     private const val KEY_AUTO_PLAY_NEXT = "auto_play_next"
+    private const val KEY_NEXT_ON_CREDITS = "next_on_credits"
     private const val KEY_AUTO_RESUME = "auto_resume"
     private const val KEY_DEFAULT_ASPECT = "default_aspect"
     private const val KEY_LIVE_BUFFER = "live_buffer"
@@ -43,11 +44,13 @@ object VisionSettings {
 
     var defaultQuality by mutableStateOf("Auto")
     var autoPlayNext by mutableStateOf(true)
+    /** Modo rápido: empieza el siguiente en créditos. Apagado = espera al final (seguro). */
+    var nextOnCredits by mutableStateOf(false)
     var autoResume by mutableStateOf(true)
     var defaultAspect by mutableStateOf(0) // 0: Fit (16:9 original), 1: Fill / Zoom
     var liveBuffer by mutableStateOf("Rápido (0.5s)")
     var diagnosticsEnabled by mutableStateOf(true)
-    var skipIntroMode by mutableStateOf(SKIP_INTRO_BUTTON)
+    var skipIntroMode by mutableStateOf(SKIP_INTRO_AUTO)
     /** Subtítulos: tamaño y posición reales (ahora los pinta la app, no el motor). */
     const val SUB_SIZE_SMALL = "small"
     const val SUB_SIZE_NORMAL = "normal"
@@ -74,11 +77,12 @@ object VisionSettings {
         val p = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         defaultQuality = p.getString(KEY_DEFAULT_QUALITY, "Auto") ?: "Auto"
         autoPlayNext = p.getBoolean(KEY_AUTO_PLAY_NEXT, true)
+        nextOnCredits = p.getBoolean(KEY_NEXT_ON_CREDITS, false)
         autoResume = p.getBoolean(KEY_AUTO_RESUME, true)
         defaultAspect = p.getInt(KEY_DEFAULT_ASPECT, 0)
         liveBuffer = p.getString(KEY_LIVE_BUFFER, "Rápido (0.5s)") ?: "Rápido (0.5s)"
         diagnosticsEnabled = p.getBoolean(KEY_DIAGNOSTICS, true)
-        skipIntroMode = p.getString(KEY_SKIP_INTRO_MODE, SKIP_INTRO_BUTTON) ?: SKIP_INTRO_BUTTON
+        skipIntroMode = p.getString(KEY_SKIP_INTRO_MODE, SKIP_INTRO_AUTO) ?: SKIP_INTRO_AUTO
         subSize = p.getString(KEY_SUB_SIZE, SUB_SIZE_NORMAL) ?: SUB_SIZE_NORMAL
         subPosition = p.getString(KEY_SUB_POSITION, SUB_POS_BOTTOM) ?: SUB_POS_BOTTOM
         subOffsetMs = p.getInt(KEY_SUB_OFFSET_MS, 0)
@@ -90,12 +94,17 @@ object VisionSettings {
     /** Lectura directa (sin depender de [init]) para el proceso del reproductor `:x4k`. */
     fun skipIntroModeOf(context: Context): String =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_SKIP_INTRO_MODE, SKIP_INTRO_BUTTON) ?: SKIP_INTRO_BUTTON
+            .getString(KEY_SKIP_INTRO_MODE, SKIP_INTRO_AUTO) ?: SKIP_INTRO_AUTO
 
     /** Lectura directa del auto-avance (el reproductor nativo lo honra de verdad). */
     fun autoPlayNextOf(context: Context): Boolean =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(KEY_AUTO_PLAY_NEXT, true)
+
+    /** Modo rápido: el siguiente arranca en créditos; apagado espera al final. */
+    fun nextOnCreditsOf(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_NEXT_ON_CREDITS, false)
 
     /** Lectura directa de «reanudar automáticamente» (el búnker también lo honra). */
     fun autoResumeOf(context: Context): Boolean =
@@ -228,6 +237,12 @@ object VisionSettings {
         autoPlayNext = enabled
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_AUTO_PLAY_NEXT, enabled).apply()
+    }
+
+    fun setNextOnCredits(context: Context, enabled: Boolean) {
+        nextOnCredits = enabled
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_NEXT_ON_CREDITS, enabled).apply()
     }
 
     fun setAutoResume(context: Context, enabled: Boolean) {

@@ -121,6 +121,7 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
     var castPicker by remember(film.id) { mutableStateOf(false) }
     val episodes = remember(episodePrograms) { episodePrograms.map { it.contentId } }
     val episodeNames = remember(episodePrograms) { episodePrograms.map { it.name } }
+    val episodeNumbers = remember(episodePrograms) { episodePrograms.map { it.number } }
 
     if (isXtv) {
         LaunchedEffect(film.id, activeId) {
@@ -187,6 +188,7 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
             seriesId = activeId,
             episodeIds = episodes,
             episodeNames = episodeNames,
+            episodeNumbers = episodeNumbers,
             episodeIndex = index,
             seasonIds = seasonIdList,
             seasonNames = seasonNameList,
@@ -291,6 +293,7 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                                 seriesId = activeId,
                                                 episodeIds = episodes,
                                                 episodeNames = episodeNames,
+                                                episodeNumbers = episodeNumbers,
                                                 episodeIndex = targetIdx,
                                                 seasonIds = seasonIdList,
                                                 seasonNames = seasonNameList,
@@ -509,6 +512,7 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                             seriesId = activeId,
                                             episodeIds = episodes,
                                             episodeNames = episodeNames,
+                                            episodeNumbers = episodeNumbers,
                                             episodeIndex = index,
                                             seasonIds = seasonIdList,
                                             seasonNames = seasonNameList,

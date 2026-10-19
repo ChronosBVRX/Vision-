@@ -17,6 +17,7 @@ Fuentes:
   `themoviedb_id.tv` + `season.tmdb` → `mal_id`), que el worker refresca semanal.
 """
 
+import concurrent.futures
 import json
 import re
 import urllib.parse
@@ -30,6 +31,10 @@ IDB_URL = "https://api.introdb.app/segments?imdb_id={imdb}&season={season}&episo
 ANISKIP_URL = "https://api.aniskip.com/v2/skip-times/{mal}/{episode}?types=op&types=ed&types=recap&episodeLength={length}"
 # Duración supuesta cuando la ficha no trae (anime estándar de 24 min).
 ANISKIP_DEFAULT_LENGTH_S = 1440
+# AniSkip devuelve 404 si la longitud no coincide con la guardada. Se prueban las
+# longitudes estándar: 24 min (1440 s) y 12 min (720 s). El corte de 12 min es el
+# caso de los anime cortos; sin este fallback se quedaban sin AniSkip.
+ANISKIP_FALLBACK_LENGTHS = (1440, 720)
 # Dataset Fribb anime-lists (mini basta: mal_id + themoviedb_id.tv + season.tmdb).
 ANIME_LIST_URL = "https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-mini.json"
 
@@ -235,11 +240,14 @@ def parse_anime_list(entries) -> dict:
     """Dataset Fribb anime-lists → {(tmdb_id, tmdb_season): mal_id}.
 
     Cada entrada trae `mal_id`, `themoviedb_id: {tv: …}` y `season: {tmdb: N}`.
-    Solo sirven las que tienen los tres datos; el resto se ignora.
+    Muchas series largas (One Piece, Naruto…) vienen SIN bloque `season`: antes se
+    descartaban y AniSkip nunca se usaba. Ahora esas entradas caen a temporada 1,
+    pero un mapeo explícito siempre gana (no se pisa con el fallback).
     """
-    out = {}
+    explicit = {}
+    fallback = {}
     if not isinstance(entries, list):
-        return out
+        return explicit
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -256,10 +264,15 @@ def parse_anime_list(entries) -> dict:
             season = int(season_block.get("tmdb") or 0)
         except (TypeError, ValueError, AttributeError):
             continue
-        if tmdb_id <= 0 or season <= 0:
+        if tmdb_id <= 0:
             continue
-        out.setdefault((tmdb_id, season), mal_id)
-    return out
+        if season <= 0:
+            fallback.setdefault((tmdb_id, 1), mal_id)
+        else:
+            explicit.setdefault((tmdb_id, season), mal_id)
+    for key, mal_id in fallback.items():
+        explicit.setdefault(key, mal_id)
+    return explicit
 
 
 # ---------------------------------------------------------------- saneo y fusión
@@ -385,13 +398,49 @@ def _get_json(url: str, timeout: float):
         return json.loads(response.read().decode("utf-8", "replace"))
 
 
-def fetch_global(tmdb_id=None, imdb_id: str = "", season: int = 1, episode: int = 1, mal_id=None, episode_length: int = 0, timeout: float = 8.0) -> dict:
-    """Consulta las tres bases y devuelve los marcadores fusionados ({} si no hay nada).
+def _aniskip_json(mal: int, episode: int, length: int, timeout: float):
+    """AniSkip con longitudes de respaldo (24/12 min) cuando la real no coincide."""
+    lengths = []
+    if length and length > 0:
+        lengths.append(int(length))
+    for value in ANISKIP_FALLBACK_LENGTHS:
+        if value not in lengths:
+            lengths.append(value)
+    last_error = None
+    responded = False
+    for seconds in lengths:
+        try:
+            url = ANISKIP_URL.format(mal=mal, episode=episode, length=seconds)
+            payload = _get_json(url, min(timeout, 5.0))
+        except Exception as exc:  # noqa: BLE001 — se prueba la siguiente longitud
+            last_error = exc
+            continue
+        responded = True
+        if isinstance(payload, dict) and (payload.get("found") or payload.get("results")):
+            return payload
+        # `found: false` significa que esa longitud no era la guardada: seguir probando.
+    if responded:
+        return {"found": False, "results": []}
+    if last_error is not None:
+        raise last_error
+    return {"found": False, "results": []}
 
-    Cada base es independiente: si una falla o no conoce el episodio, las demás mandan.
-    `mal_id` solo se usa para anime (AniSkip); sin él no se toca esa red.
-    `episode_length` son segundos aproximados (de la ficha; 1440 si no se sabe):
-    AniSkip lo exige y lo usa para validar el capítulo.
+
+def fetch_global_status(
+    tmdb_id=None,
+    imdb_id: str = "",
+    season: int = 1,
+    episode: int = 1,
+    mal_id=None,
+    episode_length: int = 0,
+    timeout: float = 8.0,
+):
+    """Como `fetch_global`, pero devuelve `(segmentos, todas_las_fuentes_respondieron)`.
+
+    El segundo valor distingue «no hay datos» de «una fuente se cayó»: el API usa esa
+    diferencia para no congelar una caché negativa de 2 días cuando en realidad fue un
+    fallo temporal. Las tres fuentes se consultan EN PARALELO (antes eran secuenciales:
+    una fuente lenta retrasaba a las demás y el cliente se quedaba sin marcadores).
     """
     season = max(1, int(season or 1))
     episode = max(1, int(episode or 1))
@@ -399,30 +448,40 @@ def fetch_global(tmdb_id=None, imdb_id: str = "", season: int = 1, episode: int 
         length = int(episode_length or 0)
     except (TypeError, ValueError):
         length = 0
-    if length <= 0:
-        length = ANISKIP_DEFAULT_LENGTH_S
-    tidb, idb, askip = {}, {}, {}
-    if tmdb_id:
-        try:
-            url = TIDB_URL.format(tmdb=int(tmdb_id), season=season, episode=episode)
-            tidb = parse_tidb(_get_json(url, timeout))
-        except Exception:  # noqa: BLE001 — una fuente caída no tumba a las demás
-            tidb = {}
-    if imdb_id:
-        try:
-            imdb = urllib.parse.quote(str(imdb_id).strip(), safe="")
-            url = IDB_URL.format(imdb=imdb, season=season, episode=episode)
-            idb = parse_idb(_get_json(url, timeout))
-        except Exception:  # noqa: BLE001
-            idb = {}
     try:
         mal = int(mal_id or 0)
     except (TypeError, ValueError):
         mal = 0
-    if mal > 0:
-        try:
-            url = ANISKIP_URL.format(mal=mal, episode=episode, length=length)
-            askip = parse_aniskip(_get_json(url, timeout))
-        except Exception:  # noqa: BLE001
-            askip = {}
-    return merge(tidb, idb, askip)
+
+    futures = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        if tmdb_id:
+            url = TIDB_URL.format(tmdb=int(tmdb_id), season=season, episode=episode)
+            futures["tidb"] = pool.submit(_get_json, url, timeout)
+        if imdb_id:
+            imdb = urllib.parse.quote(str(imdb_id).strip(), safe="")
+            url = IDB_URL.format(imdb=imdb, season=season, episode=episode)
+            futures["idb"] = pool.submit(_get_json, url, timeout)
+        if mal > 0:
+            futures["aniskip"] = pool.submit(_aniskip_json, mal, episode, length, timeout)
+
+        payloads = {}
+        for name, future in futures.items():
+            try:
+                payloads[name] = future.result(timeout=timeout * 2 + 2)
+            except Exception:  # noqa: BLE001 — una fuente caída no tumba a las demás
+                payloads[name] = None
+
+    tidb = parse_tidb(payloads.get("tidb")) if payloads.get("tidb") else {}
+    idb = parse_idb(payloads.get("idb")) if payloads.get("idb") else {}
+    askip = parse_aniskip(payloads.get("aniskip")) if payloads.get("aniskip") else {}
+    all_ok = all(payloads.get(name) is not None for name in futures)
+    return merge(tidb, idb, askip), all_ok
+
+
+def fetch_global(tmdb_id=None, imdb_id: str = "", season: int = 1, episode: int = 1, mal_id=None, episode_length: int = 0, timeout: float = 8.0) -> dict:
+    """Compatibilidad: solo los segmentos fusionados ({} si no hay nada)."""
+    segments, _ = fetch_global_status(
+        tmdb_id, imdb_id, season, episode, mal_id, episode_length, timeout,
+    )
+    return segments

@@ -124,6 +124,107 @@ class SkipMarkersTest {
         assertEquals("xtv:ABC", normalizeMarkersRef("ABC"))
         assertEquals("xtv:ABC", normalizeMarkersRef(" xtv:ABC "))
         assertEquals("magis:ABC", normalizeMarkersRef("magis:ABC"))
+        assertEquals("xtv:ABC", normalizeMarkersRef("xtv:xtv:ABC"))
         assertEquals("", normalizeMarkersRef("   "))
+    }
+
+    // ------------------------------------------------------------ modo automático
+
+    @Test
+    fun autoSkipNeverInventsAnIntroStart() {
+        val onlyEnd = EpisodeMarkers(introStartMs = -1L, introEndMs = 90_000L)
+        assertNull(autoIntroWindow(onlyEnd, 44 * 60_000L))
+        assertNull(autoSkipTarget(onlyEnd, 10_000L, 44 * 60_000L, playing = true))
+
+        val known = EpisodeMarkers(introStartMs = 60_000L, introEndMs = 90_000L)
+        assertEquals(60_000L..89_999L, autoIntroWindow(known, 44 * 60_000L))
+    }
+
+    @Test
+    fun automaticSkipUsesEachEpisodesOwnWindow() {
+        // AoT T2: E1 3:29-4:59 y E2 1:26-2:56. Reutilizar E1 cortaba 90 s de E2.
+        val e1 = EpisodeMarkers(introStartMs = 209_391L, introEndMs = 299_391L)
+        val e2 = EpisodeMarkers(introStartMs = 86_061L, introEndMs = 176_061L)
+        val duration = 24 * 60_000L
+        assertEquals("intro", autoSkipTarget(e1, 210_000L, duration, true)?.kind)
+        assertNull(autoSkipTarget(e1, 90_000L, duration, true))
+        assertEquals("intro", autoSkipTarget(e2, 90_000L, duration, true)?.kind)
+        assertNull(autoSkipTarget(e2, 210_000L, duration, true))
+    }
+
+    @Test
+    fun lateMarkersDoNotCutContent() {
+        val markers = EpisodeMarkers(introStartMs = 60_000L, introEndMs = 150_000L)
+        // Llegó el plan cuando el usuario ya llevaba 40 s dentro del intro: no cortar.
+        assertNull(autoSkipTarget(markers, 100_000L, 44 * 60_000L, playing = true, lateGraceMs = 15_000L))
+        // Recién entrando (5 s): sí.
+        assertEquals("intro", autoSkipTarget(markers, 65_000L, 44 * 60_000L, true)?.kind)
+    }
+
+    @Test
+    fun automaticSkipWaitsWhilePaused() {
+        val markers = EpisodeMarkers(introStartMs = 60_000L, introEndMs = 150_000L)
+        assertNull(autoSkipTarget(markers, 65_000L, 44 * 60_000L, playing = false))
+    }
+
+    @Test
+    fun eachKindIsAutoSkippedOnlyOnce() {
+        assertTrue(shouldApplyAutoSkip("recap", recapSkipped = false, introSkipped = false))
+        assertFalse(shouldApplyAutoSkip("recap", recapSkipped = true, introSkipped = false))
+        assertTrue(shouldApplyAutoSkip("intro", recapSkipped = true, introSkipped = false))
+        assertFalse(shouldApplyAutoSkip("intro", recapSkipped = false, introSkipped = true))
+        assertFalse(shouldApplyAutoSkip("otro", recapSkipped = false, introSkipped = false))
+    }
+
+    @Test
+    fun creditsMustFitTheRealDuration() {
+        val early = EpisodeMarkers(creditsStartMs = 300_000L)
+        assertNull(creditsCardStartMs(early, 44 * 60_000L))
+        val good = EpisodeMarkers(creditsStartMs = 2_289_000L, creditsEndMs = 2_582_000L)
+        assertEquals(2_289_000L, creditsCardStartMs(good, 44 * 60_000L))
+        assertEquals(2_582_000L, creditsAutoAtMs(good, 44 * 60_000L))
+    }
+
+    @Test
+    fun postCreditsAreRecognizedAndBlockTheFastAdvance() {
+        val markers = EpisodeMarkers(
+            creditsStartMs = 2_289_000L,
+            creditsEndMs = 2_582_000L,
+            postCreditsStartMs = 2_600_000L,
+            postCreditsEndMs = 2_655_000L,
+        )
+        assertTrue(validPostCredits(markers, 44 * 60_000L))
+        // La tarjeta puede salir, pero el avance rápido debe esperar: la política
+        // del reproductor lo consulta antes de arrancar.
+        assertTrue(markers.hasPostCredits)
+    }
+
+    @Test
+    fun skipPillWaitsForTheVideoToBeDrawn() {
+        assertFalse(canShowSkipPill(true, true, videoReady = false, blocked = false))
+        assertTrue(canShowSkipPill(true, true, videoReady = true, blocked = false))
+        assertFalse(canShowSkipPill(true, false, videoReady = true, blocked = false))
+        assertFalse(canShowSkipPill(true, true, videoReady = true, blocked = true))
+    }
+
+    @Test
+    fun serverEndsSurviveThePlayerContract() {
+        val markers = parseMarkers(
+            """{"credits":{"s":2289000,"e":2582000,"src":"introdb"},""" +
+                """"postCredits":{"s":2600000,"e":2655000,"src":"theintrodb"}}""",
+        )
+        assertEquals(2_582_000L, markers.creditsEndMs)
+        assertEquals(2_655_000L, markers.postCreditsEndMs)
+        assertEquals("introdb", markers.creditsSource)
+        val json = toPlayerJson(markers)
+        assertEquals(2_582_000L, parseMarkers(json).creditsEndMs)
+    }
+
+    @Test
+    fun cacheNamesAreStableAndDifferentPerEpisode() {
+        val first = markersCacheName("xtv:ABC", 1)
+        assertEquals(first, markersCacheName("xtv:ABC", 1))
+        assertFalse(first == markersCacheName("xtv:ABC", 2))
+        assertTrue(first.endsWith(".json"))
     }
 }

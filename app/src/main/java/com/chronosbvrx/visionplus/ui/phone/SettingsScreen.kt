@@ -226,7 +226,13 @@ private fun PlaybackTab() {
             title = "Reproducir siguiente episodio automáticamente",
             checked = s.autoPlayNext,
             onCheckedChange = { s.setAutoPlayNext(context, it) },
-            supporting = "Al llegar a los créditos (o al terminar el capítulo), arranca de inmediato con el siguiente.",
+            supporting = "Al terminar el capítulo, arranca solo con el siguiente. Si el modo rápido está activo, empieza al final de los créditos.",
+        )
+        SettingsSwitchRow(
+            title = "Avanzar en créditos (rápido)",
+            checked = s.nextOnCredits,
+            onCheckedChange = { s.setNextOnCredits(context, it) },
+            supporting = "Apagado (recomendado): espera al final para no cortar créditos ni escenas post-créditos. Encendido: empieza al terminar los créditos.",
         )
         SettingsSwitchRow(
             title = "Reanudar automáticamente",
