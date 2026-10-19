@@ -65,15 +65,32 @@ REST_OFFSET = 1000
 # el «Top 10» del Inicio). Manda TMDB (popularidad + votos), no la fecha: un clásico
 # que hoy está en boca de todos le gana a un estreno oscuro. Solo entra lo que tiene
 # ficha visible (póster) y reproducción; el nicho descartado por TMDB queda fuera.
+#
+# UNA entrada por obra: el portal tiene la misma serie repartida en temporadas
+# («Link Click» T1..T4, «Os Simpsons»/«Los Simpson», «Reacher» T1..T4) y todas
+# comparten el tmdb_id. `distinct on` deja una sola —la mejor copia: más popular,
+# más votada; el año más viejo para que la serie abra por su primera temporada—.
+# Sin tmdb_id el título queda suelto (clave por su id) para no perder nada.
 TENDENCIAS_SQL = (
     "insert into title_categories (title_id, category_id, position) "
-    "select t.id, $1, row_number() over (order by coalesce(t.popularity, 0) desc, "
-    "t.vote_count desc nulls last, t.score desc nulls last, t.year desc nulls last, t.title) "
-    "from titles t "
-    "where t.source != 'magis' and {not_unmatched} "
-    "and coalesce(t.popularity, 0) > 0 "
-    "and coalesce(t.poster_url, '') <> '' "
-    "and coalesce(t.play_ref, '') <> '' "
+    "select id, $1, row_number() over (order by popularity desc nulls last, "
+    "vote_count desc nulls last, score desc nulls last, year asc nulls last, title) "
+    "from ( "
+    "  select distinct on (coalesce(e.tmdb_id, 0), "
+    "                      case when e.tmdb_id is null then t.id else '' end) "
+    "         t.id, t.popularity, t.vote_count, t.score, t.year, t.title "
+    "  from titles t "
+    "  left join enrichment e on e.title_id = t.id "
+    "       and coalesce(e.match_confidence, 0) >= 0.5 "
+    "  where t.source != 'magis' and {not_unmatched} "
+    "  and coalesce(t.popularity, 0) > 0 "
+    "  and coalesce(t.poster_url, '') <> '' "
+    "  and coalesce(t.play_ref, '') <> '' "
+    "  order by coalesce(e.tmdb_id, 0), "
+    "           case when e.tmdb_id is null then t.id else '' end, "
+    "           t.popularity desc nulls last, t.vote_count desc nulls last, "
+    "           t.score desc nulls last, t.year asc nulls last, t.title "
+    ") as one_per_work "
     "on conflict do nothing"
 )
 

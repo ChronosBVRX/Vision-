@@ -307,22 +307,36 @@ fun TvHomeScreen(
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { trendingFilms = visible }
         }
     }
+    // «Populares de la semana» no repite lo que ya muestran el Top 10 y Novedades:
+    // una tarjeta por obra y sin traslape con las filas de arriba (con catálogo chico
+    // se conserva la hilera para no dejarla vacía).
+    val weeklyFilms = remember(trendingFilms, top10Films, estrenosFilms) {
+        Popularity.withoutRepeats(trendingFilms, top10Films + estrenosFilms)
+    }
+    // Las filas por tipo tampoco repiten lo que ya salió en el Top 10, Novedades o
+    // «Populares de la semana» (esa hilera llega después del curado, por eso se filtra aquí).
+    val kindRowsForHome = remember(ownKindRows, weeklyFilms, top10Films, estrenosFilms) {
+        val shown = top10Films + estrenosFilms + weeklyFilms
+        ownKindRows.map { row ->
+            row.copy(films = Popularity.withoutRepeats(row.films, shown, minKeep = 4))
+        }
+    }
     // Regreso a la tarjeta exacta con revelado vertical de su fila: el curado llega tarde
     // y con otra estructura, así que primero se desplaza la columna hasta la fila (sin eso
     // la tarjeta ni se compone) y luego se pide el foco; al terminar se limpia el regreso.
     // Las filas salen de [homeRowSlots] — la MISMA lista que pinta el LazyColumn —, así que
     // el índice no puede correrse al agregar una fila.
     val homeSlots = remember(
-        featured, top10Films, estrenosFilms, trendingFilms, continueCards, ownKindRows, otherRows,
+        featured, top10Films, estrenosFilms, weeklyFilms, continueCards, kindRowsForHome, otherRows,
         rows.isEmpty(), catalog.loading,
     ) {
         homeRowSlots(
             heroFilmId = featured?.film?.id,
             top10 = top10Films,
             premieres = estrenosFilms,
-            trending = trendingFilms,
+            trending = weeklyFilms,
             continueCards = continueCards,
-            ownKindRows = ownKindRows,
+            ownKindRows = kindRowsForHome,
             otherRows = otherRows,
             showPlaceholders = rows.isEmpty() && catalog.loading,
             showNoRows = noCatalogMessage != null,
@@ -517,7 +531,7 @@ fun TvHomeScreen(
                     is HomeRowSlot.Trending -> item(key = slot.key) {
                         HomePosterRow(
                             title = "Populares de la semana",
-                            films = trendingFilms,
+                            films = weeklyFilms,
                             icon = VisionIcons.WeeklyTrending,
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
@@ -1025,7 +1039,7 @@ private fun HomePosterRow(
     onFocusFilm: (Film) -> Unit,
     onOpenFilm: (Film) -> Unit,
 ) {
-    val safeFilms = remember(films) { films.distinctBy { it.id }.take(15) }
+    val safeFilms = remember(films) { Popularity.dedupe(films).take(15) }
     if (safeFilms.isEmpty()) return
 
     // Al volver de una ficha, la fila se desplaza sola hasta la tarjeta abierta: así el foco

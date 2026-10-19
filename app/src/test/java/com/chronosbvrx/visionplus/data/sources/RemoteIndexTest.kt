@@ -167,6 +167,26 @@ class RemoteIndexTest {
     }
 
     @Test
+    fun tmdbIdSurvivesTheParseAndDefaultsZero() {
+        // El Inicio colapsa las copias de una misma obra (Link Click T1..T4) por su
+        // tmdbId; un payload viejo sin el campo sigue funcionando (0 = sin match).
+        val withTmdb = JSONArray(
+            """[{"id":"ok","title":"Buena","films":[
+                  {"id":"xtv:LC1","title":"Link Click","year":2021,"durationMin":24,"synopsis":"s",
+                   "posterUrl":"p","videoUrl":"xtv:LC1","sourceUrl":"xtv","score":8.1,"tmdbId":123542}
+                ]}]""",
+        )
+        assertEquals(123542, RemoteIndexSource.parseRows(withTmdb).single().films.single().tmdbId)
+        val oldPayload = JSONArray(
+            """[{"id":"ok2","title":"Otra","films":[
+                  {"id":"xtv:LC2","title":"Link Click","year":2021,"durationMin":24,"synopsis":"s",
+                   "posterUrl":"p","videoUrl":"xtv:LC2","sourceUrl":"xtv"}
+                ]}]""",
+        )
+        assertEquals(0, RemoteIndexSource.parseRows(oldPayload).single().films.single().tmdbId)
+    }
+
+    @Test
     fun magisvodNormalizesToXtvAndDedupes() {        val categories = JSONArray(
             """[{"id":"estrenos","title":"Estrenos","films":[
                   {"id":"magis:E019F33B862F","title":"Pequeños calvarios","year":2025,"durationMin":92,"synopsis":"s",

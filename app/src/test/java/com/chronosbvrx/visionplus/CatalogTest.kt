@@ -130,6 +130,10 @@ class CatalogTest {
         // Sin guiones bajos el texto queda intacto (el caso común no cambia).
         assertEquals("Spider-Man 2", normalizeDisplayName(" Spider-Man 2 "))
         assertEquals("", normalizeDisplayName("   "))
+        // El sufijo de doblaje del portal no es parte del nombre que ve la persona.
+        assertEquals("Los Simpson", normalizeDisplayName("Los Simpson - Español Latino"))
+        assertEquals("Los Simpson", normalizeDisplayName("Los Simpson (Español Latino)"))
+        assertEquals("Una película", normalizeDisplayName("Una película - Castellano"))
     }
 
     @Test

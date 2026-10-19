@@ -98,6 +98,7 @@ def film(record: asyncpg.Record, enr=None) -> dict:
             votes = int(record["vote_count"] or 0)
     except (TypeError, ValueError, KeyError):
         votes = 0
+    tmdb_id = 0
     if enr is not None:
         if enr["rating"] is not None:
             rating = enr["rating"]
@@ -116,6 +117,11 @@ def film(record: asyncpg.Record, enr=None) -> dict:
                 votes = int(enr["vote_count"] or 0)
         except (TypeError, ValueError, KeyError, AttributeError):
             pass
+        try:
+            if "tmdb_id" in enr.keys() and enr["tmdb_id"] is not None:
+                tmdb_id = int(enr["tmdb_id"])
+        except (TypeError, ValueError, KeyError, AttributeError):
+            tmdb_id = 0
     video_url = record["play_ref"]
     source_url = record["source"]
     film_id = record["id"]
@@ -137,6 +143,7 @@ def film(record: asyncpg.Record, enr=None) -> dict:
         "score": float(rating or 0),
         "popularity": popularity,
         "voteCount": votes,
+        "tmdbId": tmdb_id,
         "kind": record["kind"] or "",
     }
 
@@ -147,7 +154,8 @@ async def _enrichment_map(ids) -> dict:
     if not unique:
         return {}
     rows = await db().fetch(
-        """select title_id, rating, year, overview, popularity, vote_count, original_title
+        """select title_id, rating, year, overview, popularity, vote_count, original_title,
+                  tmdb_id
            from enrichment
            where title_id = any($1::text[]) and coalesce(match_confidence, 0) >= 0.5""",
         unique,
@@ -280,6 +288,13 @@ async def healthz():
     return {"status": "ok"}
 
 
+# El índice completo pesa (~10 MB con 100 títulos por categoría) y se pide en cada
+# arranque: recalcularlo desde cero en cada llamada costaba decenas de segundos. Se
+# cachea por versión + límite (el worker sube la versión cuando cambia algo).
+_INDEX_CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
+_INDEX_CACHE_TTL = 300.0
+
+
 @app.get("/v1/index")
 async def index(
     since: int = Query(default=0, ge=0),
@@ -287,24 +302,47 @@ async def index(
     x_api_key: str | None = Header(default=None),
 ):
     """Índice completo. Con `since` al día responde {upToDate: true} sin reenviar nada.
-    `limitFilms` recorta los títulos por categoría (para la app móvil); `total` queda real."""
+    `limitFilms` recorta los títulos por categoría EN SQL (para la app móvil); `total`
+    sigue siendo el real de la categoría."""
     require_key(x_api_key)
     version = await index_version()
     if since and since >= version:
         return {"version": version, "upToDate": True, "categories": []}
+    cache_key = (version, limitFilms)
+    cached = _INDEX_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < _INDEX_CACHE_TTL:
+        return cached[1]
+    # Se piden hasta 2× por categoría: al colapsar las temporadas de un grupo quedan
+    # suficientes tarjetas únicas para el límite pedido.
+    fetch_limit = limitFilms * 2 if limitFilms else 0
     rows = await db().fetch(
         f"""
-        select {FILM_COLUMNS}, tc.category_id, tc.position,
-               c.title as category_title, c.kind as category_kind
-        from title_categories tc
-        join titles t on t.id = tc.title_id
-        join categories c on c.id = tc.category_id
-        where c.kind != 'section'
-        order by c.position, c.title, tc.position
-        """
+        with ranked as (
+            select {FILM_COLUMNS}, tc.category_id, tc.position,
+                   c.title as category_title, c.kind as category_kind,
+                   c.position as category_position,
+                   row_number() over (
+                       partition by tc.category_id order by tc.position, t.title
+                   ) as rn
+            from title_categories tc
+            join titles t on t.id = tc.title_id
+            join categories c on c.id = tc.category_id
+            where c.kind != 'section'
+        )
+        select * from ranked
+        where ($1::int = 0 or rn <= $1::int)
+        order by category_position, category_title, position
+        """,
+        fetch_limit,
     )
     member_of, seasons_by_group, base_of_group = await _group_maps()
     enr = await _enrichment_map([r["id"] for r in rows])
+    count_rows = await db().fetch(
+        "select tc.category_id, count(*) as n from title_categories tc "
+        "join categories c on c.id = tc.category_id where c.kind != 'section' "
+        "group by 1"
+    )
+    counts = {r["category_id"]: r["n"] for r in count_rows}
 
     cats: dict[str, dict] = {}
     seen_groups: dict[str, set] = {}
@@ -326,16 +364,22 @@ async def index(
             seen.add(group_id)
         category["films"].append(entry)
     for category in cats.values():
-        category["total"] = len(category["films"])
+        category["total"] = counts.get(category["id"], len(category["films"]))
         if limitFilms:
             category["films"] = category["films"][:limitFilms]
     updated = await db().fetchval("select updated_at from sync_state where id = 1")
-    return {
+    result = {
         "version": version,
         "upToDate": False,
         "updatedAt": updated.isoformat() if updated else None,
         "categories": list(cats.values()),
     }
+    _INDEX_CACHE[cache_key] = (time.time(), result)
+    # Poda de versiones viejas: la caché es por versión y límite; no debe crecer sin fin.
+    if len(_INDEX_CACHE) > 8:
+        for key in list(_INDEX_CACHE)[:-8]:
+            _INDEX_CACHE.pop(key, None)
+    return result
 
 
 @app.get("/v1/categories")
@@ -413,6 +457,40 @@ async def section(
     return result
 
 
+def order_trending(films: list) -> list:
+    """«Populares de la semana» se lee por popularidad, no por el puesto editorial de
+    TMDB: el ranking semanal mezcla cine y TV y podía abrir con una serie de nicho
+    («Link Click» era el n.º 1). El conjunto sigue siendo el trending de la semana,
+    pero el orden es el impacto real (popularidad, votos, rating)."""
+    return sorted(
+        films,
+        key=lambda f: (f.get("popularity", 0), f.get("voteCount", 0), f.get("score", 0)),
+        reverse=True,
+    )
+
+
+def dedupe_trending(rows) -> list:
+    """Una sola tarjeta por obra en «Populares de la semana».
+
+    El join de `weekly_trending` con `enrichment` devuelve una fila por CADA copia
+    del catálogo que comparte el tmdb_id (temporadas T1..T4, doblajes, portales):
+    la fila repetía la misma tarjeta («Link Click» ×4, «Tulsa King» ×5, «Los
+    Simpson» ×26). Se conserva la primera copia —las filas llegan ordenadas por la
+    confianza del match— y, cuando no hay tmdb_id, se deduplica por título+año.
+    """
+    out: list = []
+    seen: set = set()
+    for row in rows:
+        tmdb = int(row["tmdb_id"]) if row["tmdb_id"] else 0
+        media = row["media"] or ""
+        key = (tmdb, media) if tmdb else (_fold(row["title"] or ""), row["year"] or 0)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(row)
+    return out
+
+
 @app.get("/v1/trending")
 async def trending(
     limit: int = Query(default=20, ge=1, le=40),
@@ -420,26 +498,33 @@ async def trending(
 ):
     """«Populares de la semana» (TMDB /trending): la foto semanal casada con el catálogo.
 
-    Solo entran títulos que tenemos con ficha (póster) y reproducción; orden de la semana.
+    Solo entran títulos que tenemos con ficha (póster) y reproducción; orden de la semana
+    y UNA entrada por obra (sin las copias de temporada/doblaje del mismo tmdb_id).
     """
     require_key(x_api_key)
     week = await db().fetchval("select max(week) from weekly_trending")
     if not week:
         return {"week": None, "films": []}
     rows = await db().fetch(
-        f"""select {FILM_COLUMNS} from weekly_trending w
+        f"""select {FILM_COLUMNS}, w.tmdb_id, w.media, w.rank from weekly_trending w
             join enrichment e on e.tmdb_id = w.tmdb_id and coalesce(e.match_confidence, 0) >= 0.5
             join titles t on t.id = e.title_id
             where w.week = $1 and coalesce(t.poster_url, '') <> ''
               and coalesce(t.play_ref, '') <> ''
-            order by w.rank limit $2""",
+            order by w.rank,
+                     coalesce(e.match_confidence, 0) desc,
+                     t.popularity desc nulls last,
+                     t.vote_count desc nulls last,
+                     t.year asc nulls last
+            limit 400""",
         week,
-        limit,
     )
+    rows = dedupe_trending(rows)
     enr = await _enrichment_map([r["id"] for r in rows])
+    films = order_trending([film(r, enr.get(r["id"])) for r in rows])[:limit]
     return {
         "week": week,
-        "films": [film(r, enr.get(r["id"])) for r in rows],
+        "films": films,
     }
 
 

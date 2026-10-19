@@ -19,6 +19,12 @@ data class Film(
     val popularity: Double = 0.0,
     /** Votos TMDB (0 = desconocido): ponderan la confianza del rating. */
     val voteCount: Int = 0,
+    /**
+     * Identificador TMDB de la obra (0 = sin match): dos fichas del portal que son el
+     * MISMO show (temporadas, doblajes) comparten este id. El Inicio lo usa para no
+     * pintar la misma tarjeta dos veces («Link Click» ×4, «Os Simpsons»/«Los Simpson»).
+     */
+    val tmdbId: Int = 0,
     /** Grupo de temporadas del servidor («La Casa de Papel T1/T2…» = una sola entrada). */
     val groupId: String = "",
     /** Las temporadas del grupo (vacío cuando no hay varias). */
@@ -41,15 +47,23 @@ data class CatalogRow(val id: String, val title: String, val films: List<Film>)
 
 private val WHITESPACE_RUN = Regex("\\s+")
 
+/** Sufijos de doblaje del portal («… - Español Latino»): se ocultan al pintar. */
+private val DUB_SUFFIX = Regex(
+    "\\s*[-–—(]\\s*(?:espa[nñ]ol\\s+latino|espa[nñ]ol|latino|castellano)\\s*\\)?\\s*$",
+    RegexOption.IGNORE_CASE,
+)
+
 /**
  * Nombre listo para pintar. El portal y algunas fuentes usan guiones bajos como separador
  * («Rebbeca_ Un documental», «Ghost in the Shell SAC_2045», «…Especiales T1_11»): la UI
- * muestra siempre espacios simples. Sin guiones bajos el texto queda igual que antes
- * (el caso común no cambia ni un byte).
+ * muestra siempre espacios simples. También se retira el sufijo de doblaje
+ * («Los Simpson - Español Latino» → «Los Simpson»), que solo servía para distinguir
+ * copias del portal. Sin esos adornos el texto queda igual que antes.
  */
 fun normalizeDisplayName(raw: String): String {
-    if (raw.indexOf('_') < 0) return raw.trim()
-    return raw.replace('_', ' ').replace(WHITESPACE_RUN, " ").trim()
+    val spaced = if (raw.indexOf('_') < 0) raw.trim()
+    else raw.replace('_', ' ').replace(WHITESPACE_RUN, " ").trim()
+    return DUB_SUFFIX.replace(spaced, "").trim()
 }
 
 /** "1940 · 1 h 32 min": the year and the running time, omitting what is unknown. */

@@ -186,6 +186,20 @@ fun HomeScreen(
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { trendingFilms = visible }
         }
     }
+    // «Populares de la semana» no repite lo que ya muestran el Top 10 y Novedades:
+    // una tarjeta por obra y sin traslape con las filas de arriba (con catálogo chico
+    // se conserva la hilera para no dejarla vacía).
+    val weeklyFilms = remember(trendingFilms, top10Films, estrenosFilms) {
+        Popularity.withoutRepeats(trendingFilms, top10Films + estrenosFilms)
+    }
+    // Las filas por tipo tampoco repiten lo que ya salió en el Top 10, Novedades o
+    // «Populares de la semana» (esa hilera llega después del curado, por eso se filtra aquí).
+    val kindRowsForHome = remember(ownKindRows, weeklyFilms, top10Films, estrenosFilms) {
+        val shown = top10Films + estrenosFilms + weeklyFilms
+        ownKindRows.map { row ->
+            row.copy(films = Popularity.withoutRepeats(row.films, shown, minKeep = 4))
+        }
+    }
     val homeLifecycle = LocalLifecycleOwner.current
     DisposableEffect(homeLifecycle) {
         val observer = LifecycleEventObserver { _, event ->
@@ -249,17 +263,17 @@ fun HomeScreen(
         if (continueCards.isNotEmpty()) {
             item(key = "continue") { ContinueRow(cards = continueCards, onResume = onResume) }
         }
-        if (trendingFilms.isNotEmpty()) {
+        if (weeklyFilms.isNotEmpty()) {
             item(key = "home_trending_week") {
                 FilmRow(
-                    row = CatalogRow("home-trending", "Populares de la semana", trendingFilms),
+                    row = CatalogRow("home-trending", "Populares de la semana", weeklyFilms),
                     posterWidth = sizes.posterWidth,
                     onOpen = onOpenFilm,
                     onSeeAll = { onGoSection(Route.Section("movies", "Películas")) },
                 )
             }
         }
-        items(ownKindRows, key = { it.id }) { row ->
+        items(kindRowsForHome, key = { it.id }) { row ->
             FilmRow(
                 row = row,
                 posterWidth = sizes.posterWidth,
@@ -508,9 +522,9 @@ private fun FilmRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // distinctBy: la clave "row.id-film.id" exige unicidad; defensa extra ante datos
-            // duplicados (el Inicio se cayó una vez por una hilera repetida del servidor).
-            itemsIndexed(row.films.distinctBy { it.id }.take(15), key = { _, film -> "${row.id}-${film.id}" }) { index, film ->
+            // dedupe: una tarjeta por obra (mismo TMDB/contentId) y clave única para la
+            // LazyRow; sin esto, una hilera repetida del servidor tumbaba el Inicio.
+            itemsIndexed(Popularity.dedupe(row.films).take(15), key = { _, film -> "${row.id}-${film.id}" }) { index, film ->
                 val rank = if (isTopRow && index in 0..9) index + 1 else null
                 PosterCard(
                     title = film.title,

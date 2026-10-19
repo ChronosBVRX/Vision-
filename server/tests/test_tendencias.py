@@ -21,13 +21,25 @@ def _sql() -> str:
 def test_tendencias_ranks_by_real_popularity_not_year():
     sql = _sql()
     # La popularidad manda; los votos desempatan (confianza en el rating).
-    assert "coalesce(t.popularity, 0) desc" in sql
+    assert "t.popularity desc nulls last" in sql
     assert "t.vote_count desc nulls last" in sql
-    assert "order by coalesce(t.popularity, 0) desc, t.vote_count desc" in sql
+    assert "row_number() over (order by popularity desc" in sql
     # El año no filtra la hilera: un clásico popular entra igual que un estreno.
-    before_order = sql.split("order by")[0]
+    before_order = sql.split("distinct on")[0]
     assert "t.year >=" not in before_order
     assert "current_year" not in sql
+
+
+def test_tendencias_leaves_one_entry_per_work():
+    # El portal reparte la misma serie en temporadas/doblajes (Link Click T1..T4,
+    # Os Simpsons/Los Simpson) y todas comparten tmdb_id: la hilera del Top 10 no
+    # puede pintar la misma tarjeta varias veces.
+    sql = _sql()
+    assert "distinct on (coalesce(e.tmdb_id, 0)" in sql
+    assert "case when e.tmdb_id is null then t.id else '' end" in sql
+    assert "left join enrichment e" in sql
+    # La copia que se queda es la mejor: popular, votada y estrenada primero.
+    assert "t.year asc nulls last" in sql
 
 
 def test_tendencias_only_watchable_cards_with_art():

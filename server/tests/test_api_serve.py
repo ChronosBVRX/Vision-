@@ -118,10 +118,55 @@ def test_film_carries_kind_for_home_rows():
 
 def test_film_prefers_enrichment_popularity():
     enr = {"rating": 7.7, "year": 2025, "overview": "",
-           "popularity": 180.5, "vote_count": 200000}
+           "popularity": 180.5, "vote_count": 200000,
+           "tmdb_id": 123542}
     out = app.film(_record(), enr)
     assert out["popularity"] == 180.5
     assert out["voteCount"] == 200000
+    assert out["tmdbId"] == 123542
+
+
+def test_film_defaults_tmdb_id_without_enrichment():
+    assert app.film(_record())["tmdbId"] == 0
+    assert app.film(_record(), {"rating": 7.0, "year": 2025, "overview": ""})["tmdbId"] == 0
+
+
+def _trend_row(tmdb, media="tv", title="Link Click", year=2021, rank=1):
+    return {"tmdb_id": tmdb, "media": media, "title": title, "year": year, "rank": rank}
+
+
+def test_trending_keeps_one_card_per_work():
+    # El join devuelve una fila por temporada/doblaje del mismo tmdb_id: la fila
+    # «Populares de la semana» pintaba Link Click ×4 (y Tulsa King ×5).
+    rows = [
+        _trend_row(123542, title="Link Click", year=2021),
+        _trend_row(123542, title="Link Click", year=2023),
+        _trend_row(123542, title="Link Click", year=2024),
+        _trend_row(99, title="Tulsa King", year=2022),
+    ]
+    out = app.dedupe_trending(rows)
+    assert [r["tmdb_id"] for r in out] == [123542, 99]
+
+
+def test_trending_keeps_movie_and_tv_apart():
+    rows = [_trend_row(42, media="movie"), _trend_row(42, media="tv")]
+    assert len(app.dedupe_trending(rows)) == 2
+
+
+def test_trending_dedupes_by_title_and_year_without_tmdb():
+    rows = [
+        _trend_row(None, title="Moana", year=2016),
+        _trend_row(None, title="Moana", year=2016),
+        _trend_row(None, title="Moana 2", year=2024),
+    ]
+    assert len(app.dedupe_trending(rows)) == 2
+
+
+def test_trending_leads_with_broad_popularity_not_editorial_rank():
+    # Un n.º 1 de nicho no abre la hilera: manda la popularidad real del catálogo.
+    niche = {"title": "Link Click", "popularity": 59.0, "voteCount": 136, "score": 8.1}
+    broad = {"title": "Tulsa King", "popularity": 116.0, "voteCount": 2822, "score": 8.2}
+    assert [f["title"] for f in app.order_trending([niche, broad])] == ["Tulsa King", "Link Click"]
 
 
 class _FakeDb:

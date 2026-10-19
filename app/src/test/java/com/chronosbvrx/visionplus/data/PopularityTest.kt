@@ -18,10 +18,13 @@ class PopularityTest {
         votes: Int = 0,
         poster: String = "p",
         video: String = "xtv:$id",
+        tmdb: Int = 0,
+        title: String = "T $id",
     ) = Film(
-        id = id, title = "T $id", year = year, durationMin = 90,
+        id = id, title = title, year = year, durationMin = 90,
         synopsis = "s", posterUrl = poster, videoUrl = video,
         sourceUrl = "xtv", score = score, popularity = popularity, voteCount = votes,
+        tmdbId = tmdb,
     )
 
     @Test
@@ -185,6 +188,74 @@ class PopularityTest {
         val pooled = CatalogRow("genero-drama", "Drama", listOf(rated))
         val curated = Popularity.homeCurated(emptyList(), listOf(pooled), yearNow = 2026)
         assertEquals(listOf("rated"), curated.top10.map { it.id })
+    }
+
+    @Test
+    fun dedupeCollapsesSeasonsOfTheSameShowByTmdbId() {
+        // El portal reparte «Link Click» en T1..T4: mismo tmdb_id, distinta copia.
+        val t1 = film("lc1", tmdb = 123542, title = "Link Click", year = 2021)
+        val t2 = film("lc2", tmdb = 123542, title = "Link Click", year = 2023)
+        val other = film("other", tmdb = 99, title = "Otra serie", year = 2022)
+        assertEquals(listOf("lc1", "other"), Popularity.dedupe(listOf(t1, t2, other)).map { it.id })
+    }
+
+    @Test
+    fun dedupeDoesNotMergeDifferentShowsFromABadTmdbMatch() {
+        // Un match TMDB equivocado no puede borrar una tarjeta que es otra obra.
+        val movie = film("movie", tmdb = 1433, title = "El espinazo del diablo")
+        val show = film("show", tmdb = 1433, title = "Agente de Familia")
+        assertEquals(2, Popularity.dedupe(listOf(movie, show)).size)
+    }
+
+    @Test
+    fun topPopularCollapsesDubVariantsWithSameTmdbId() {
+        // «Los Simpson» (Latino) y «Os Simpsons» (Portugués) son la misma obra.
+        val latino = film("lat", popularity = 346.0, votes = 11_069, year = 1989, tmdb = 456, title = "Los Simpson - Español Latino")
+        val portugues = film("pt", popularity = 340.0, votes = 11_069, year = 1989, tmdb = 456, title = "Os Simpsons")
+        val list = Popularity.topPopular(emptyList(), listOf(portugues, latino))
+        assertEquals(1, list.size)
+        // Aunque la copia portuguesa tenga más popularidad, se pinta la doblada al español.
+        assertEquals("lat", list.first().id)
+    }
+
+    @Test
+    fun realPremieresIgnoresAnOrphanPerfectScore() {
+        // Un «10.0» con 4 votos y popularidad 2 no puede colarse entre las novedades
+        // populares: manda la popularidad y el rating solo pesa con votos.
+        val orphan = film("orphan", score = 10.0, year = 2026, popularity = 2.0, votes = 4)
+        val hit = film("hit", score = 7.6, year = 2026, popularity = 500.0, votes = 900)
+        val list = Popularity.realPremieres(listOf(orphan, hit), yearNow = 2026)
+        assertEquals("hit", list.first().id)
+        assertTrue(Popularity.noveltyScore(hit, 2026) > Popularity.noveltyScore(orphan, 2026) * 2)
+    }
+
+    @Test
+    fun realPremieresDropsAnyTitleWithoutPopularityOrVotes() {
+        val filler = film("filler", score = 9.9, year = 2026)
+        assertTrue(Popularity.realPremieres(listOf(filler), yearNow = 2026).isEmpty())
+    }
+
+    @Test
+    fun homeCuratedKindRowsDoNotRepeatTheRowsAbove() {
+        // 30 películas populares: el Top 10 y Novedades se llevan las primeras y la
+        // fila «Películas populares» no debe volver a pintar las mismas tarjetas.
+        val movies = (1..30).map { i ->
+            film("m$i", score = 7.0, year = 2026, popularity = 400.0 - i, votes = 5_000)
+                .copy(kind = "movie", title = "Película $i")
+        }
+        val genre = CatalogRow("genero-accion", "Acción", movies)
+        val curated = Popularity.homeCurated(emptyList(), listOf(genre), yearNow = 2026)
+        val shownAbove = (curated.top10 + curated.premieres).map { it.id }.toSet()
+        val kindFilms = curated.kindRows.first { it.id == "home-kind-movie" }.films
+        assertTrue(kindFilms.isNotEmpty())
+        assertTrue(kindFilms.none { it.id in shownAbove })
+    }
+
+    @Test
+    fun withoutRepeatsKeepsTheRowAliveWhenEverythingRepeats() {
+        val a = film("a", tmdb = 1, title = "A")
+        val row = listOf(a)
+        assertEquals(listOf("a"), Popularity.withoutRepeats(row, listOf(a)).map { it.id })
     }
 
     @Test

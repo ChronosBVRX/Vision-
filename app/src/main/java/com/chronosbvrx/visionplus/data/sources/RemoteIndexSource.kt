@@ -212,6 +212,7 @@ object RemoteIndexSource {
                     score = f.optDouble("score", 0.0),
                     popularity = f.optDouble("popularity", 0.0),
                     voteCount = f.optInt("voteCount", 0),
+                    tmdbId = f.optInt("tmdbId", 0),
                     groupId = f.optString("groupId"),
                     seasons = parseSeasons(f.optJSONArray("seasons")),
                     kind = f.optString("kind"),
@@ -391,6 +392,7 @@ object RemoteIndexSource {
             score = f.optDouble("score", 0.0),
             popularity = f.optDouble("popularity", 0.0),
             voteCount = f.optInt("voteCount", 0),
+            tmdbId = f.optInt("tmdbId", 0),
             groupId = f.optString("groupId"),
             seasons = parseSeasons(f.optJSONArray("seasons")),
             kind = f.optString("kind"),
@@ -509,6 +511,7 @@ object RemoteIndexSource {
                 put("score", f.score)
                 put("popularity", f.popularity)
                 put("voteCount", f.voteCount)
+                if (f.tmdbId > 0) put("tmdbId", f.tmdbId)
                 if (f.kind.isNotBlank()) put("kind", f.kind)
                 if (f.originalTitle.isNotBlank()) put("originalTitle", f.originalTitle)
                 if (f.groupId.isNotBlank()) put("groupId", f.groupId)
