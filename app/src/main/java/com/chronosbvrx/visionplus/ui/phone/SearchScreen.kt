@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.akaLine
 import com.chronosbvrx.visionplus.data.allFilms
 import com.chronosbvrx.visionplus.data.searchFilms
 import com.chronosbvrx.visionplus.data.metaLine
@@ -211,6 +212,7 @@ fun SearchScreen(rows: List<CatalogRow>, onBack: () -> Unit, onOpenFilm: (Film) 
                     meta = film.metaLine(),
                     score = film.score,
                     badge = if (film.year >= 2025) "NUEVO" else null,
+                    altTitle = film.akaLine().ifBlank { null },
                     onClick = { onOpenFilm(film) },
                 )
             }

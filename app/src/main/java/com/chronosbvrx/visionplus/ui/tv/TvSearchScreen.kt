@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.tv.material3.Icon
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.akaLine
 import com.chronosbvrx.visionplus.data.allFilms
 import com.chronosbvrx.visionplus.data.searchFilms
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
@@ -358,6 +359,16 @@ fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFil
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(top = 6.dp),
                             )
+                            film.akaLine().takeIf { it.isNotBlank() }?.let { aka ->
+                                Text(
+                                    aka,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = VisionTextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
                         }
                     }
                 }

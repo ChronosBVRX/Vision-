@@ -5,6 +5,7 @@ import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.PLUGIN_PACKAGE
 import com.chronosbvrx.visionplus.data.allFilms
+import com.chronosbvrx.visionplus.data.akaLine
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import com.chronosbvrx.visionplus.data.searchFilms
@@ -129,5 +130,19 @@ class CatalogTest {
         // Sin guiones bajos el texto queda intacto (el caso común no cambia).
         assertEquals("Spider-Man 2", normalizeDisplayName(" Spider-Man 2 "))
         assertEquals("", normalizeDisplayName("   "))
+    }
+
+    @Test
+    fun akaLineShowsTheOriginalNameOnlyWhenItDiffers() {
+        // «vaiana» → Moana: el buscador del servidor encuentra por el nombre regional y
+        // manda originalTitle; sin la línea el resultado parecía de otro título.
+        val film = film("xtv:1", "Moana").copy(originalTitle = "Moana")
+        assertEquals("", film.akaLine())
+        assertEquals("También: Finding Nemo", film("xtv:2", "Buscando a Nemo").copy(originalTitle = "Finding Nemo").akaLine())
+        assertEquals("También: Daddy's Home", film("xtv:3", "Guerra de Papás").copy(originalTitle = "Daddy's Home").akaLine())
+        // Los guiones bajos del portal no se filtran a la línea.
+        assertEquals("También: Rápidos y furiosos", film("xtv:4", "Rápidos y furiosos_").copy(originalTitle = "Rápidos y furiosos").akaLine())
+        // Sin dato (payload viejo) no inventa nada.
+        assertEquals("", film("xtv:5", "Guerra de Papás").akaLine())
     }
 }

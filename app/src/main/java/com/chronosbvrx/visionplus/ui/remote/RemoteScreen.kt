@@ -72,6 +72,7 @@ import com.chronosbvrx.visionplus.data.remote.RemoteStatus
 import com.chronosbvrx.visionplus.data.remote.RemoteTv
 import com.chronosbvrx.visionplus.data.remote.tvRowLabel
 import com.chronosbvrx.visionplus.data.searchFilms
+import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
@@ -82,6 +83,9 @@ import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionSuccess
 import com.chronosbvrx.visionplus.ui.theme.VisionTextPrimary
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * El control remoto del teléfono: encuentra la tele de la misma red, se empareja una vez con el
@@ -402,9 +406,26 @@ private fun CastPanel(catalog: XuperCatalog) {
     var pickingFilm by remember { mutableStateOf<Film?>(null) }
     val rows = catalog.indexRows.ifEmpty { catalog.rows }
     val channels = remember { runCatching { X4KApi.cachedLiveChannels(context) }.getOrDefault(emptyList()) }
-    val results = remember(query, rows, channels) {
-        val films = if (query.trim().length >= 2) searchFilms(rows, query) else emptyList()
-        buildCastResults(films, channels, query)
+    var results by remember { mutableStateOf<List<CastItem>>(emptyList()) }
+    // 1) El catálogo local responde al instante (todo el índice en memoria). 2) En paralelo (con
+    // debounce) se pregunta al servidor: es el mismo buscador del Inicio y cubre el catálogo
+    // completo, así que encontrar aquí es tan seguro como buscar en la app de la tele.
+    LaunchedEffect(query, rows, channels) {
+        val q = query.trim()
+        if (q.length < 2) {
+            results = emptyList()
+            return@LaunchedEffect
+        }
+        val localFilms = withContext(Dispatchers.Default) { searchFilms(rows, q) }
+        results = withContext(Dispatchers.Default) { buildCastResults(localFilms, channels, q) }
+        delay(250)
+        val serverFilms = runCatching { RemoteIndexSource.search(q, limit = 60) }.getOrDefault(emptyList())
+        if (serverFilms.isNotEmpty()) {
+            val merged = withContext(Dispatchers.Default) {
+                buildCastResults(serverFilms + localFilms, channels, q)
+            }
+            if (merged.isNotEmpty()) results = merged
+        }
     }
 
     Column(Modifier.fillMaxWidth()) {

@@ -25,6 +25,12 @@ data class Film(
     val seasons: List<SeasonRef> = emptyList(),
     /** Tipo del catálogo en el servidor: movie/series/anime/kids (vacío si no lo trae). */
     val kind: String = "",
+    /**
+     * Nombre original del título («también conocida como…»): el servidor lo manda cuando el
+     * buscador encontró la ficha por otro nombre («buscando a nemo» → «Finding Nemo»). Vacío
+     * cuando no aplica o el servidor no lo trae (compatible con payloads viejos).
+     */
+    val originalTitle: String = "",
 )
 
 /** Una temporada dentro de un grupo: su número (0 = serie completa) y su ref de reproducción. */
@@ -55,6 +61,20 @@ fun Film.metaLine(): String {
         else -> "${durationMin / 60} h ${durationMin % 60} min"
     }
     return listOf(if (year > 0) year.toString() else "", duration).filter { it.isNotBlank() }.joinToString(" · ")
+}
+
+/**
+ * «También: …» para los resultados de búsqueda: el nombre original cuando difiere del
+ * mostrado. El índice del servidor guarda los nombres es-MX/regionales y el buscador
+ * encuentra por ellos («vaiana» → «Moana», «buscando a nemo» → «Finding Nemo»): sin esta
+ * línea, el resultado parecía de otro título. Vacío cuando no hay nada que contar
+ * (mismo nombre o payload viejo sin el campo).
+ */
+fun Film.akaLine(): String {
+    val original = normalizeDisplayName(originalTitle)
+    if (original.isBlank()) return ""
+    if (original.equals(title.trim(), ignoreCase = true)) return ""
+    return "También: $original"
 }
 
 /** Every film of the catalog once, in row order (a film can sit in several rows). */

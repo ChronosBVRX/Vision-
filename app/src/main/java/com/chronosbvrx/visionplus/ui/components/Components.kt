@@ -62,6 +62,8 @@ fun PosterCard(
     score: Double = 0.0,
     badge: String? = null,
     rank: Int? = null,
+    /** «También: …» bajo la ficha (nombre original del buscador). */
+    altTitle: String? = null,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -217,6 +219,15 @@ fun PosterCard(
             Text(
                 text = meta,
                 style = MaterialTheme.typography.bodySmall,
+                color = VisionTextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (!altTitle.isNullOrBlank()) {
+            Text(
+                text = altTitle,
+                style = MaterialTheme.typography.labelSmall,
                 color = VisionTextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

@@ -143,6 +143,30 @@ class RemoteIndexTest {
     }
 
     @Test
+    fun originalTitleSurvivesTheParseAndDefaultsBlank() {
+        // El servidor manda originalTitle cuando el buscador encontró por otro nombre
+        // («buscando a nemo» → originalTitle «Finding Nemo»): viaja hasta la tarjeta.
+        val withOriginal = JSONArray(
+            """[{"id":"ok","title":"Buena","films":[
+                  {"id":"f1","title":"Buscando a Nemo","year":2003,"durationMin":100,"synopsis":"s",
+                   "posterUrl":"p","videoUrl":"xtv:f1","sourceUrl":"xtv","score":8.1,
+                   "originalTitle":"Finding Nemo"}
+                ]}]""",
+        )
+        assertEquals(
+            "Finding Nemo",
+            RemoteIndexSource.parseRows(withOriginal).single().films.single().originalTitle,
+        )
+        val oldPayload = JSONArray(
+            """[{"id":"ok2","title":"Otra","films":[
+                  {"id":"f2","title":"Otra","year":0,"durationMin":0,"synopsis":"s",
+                   "posterUrl":"p","videoUrl":"xtv:f2","sourceUrl":"xtv"}
+                ]}]""",
+        )
+        assertEquals("", RemoteIndexSource.parseRows(oldPayload).single().films.single().originalTitle)
+    }
+
+    @Test
     fun magisvodNormalizesToXtvAndDedupes() {        val categories = JSONArray(
             """[{"id":"estrenos","title":"Estrenos","films":[
                   {"id":"magis:E019F33B862F","title":"Pequeños calvarios","year":2025,"durationMin":92,"synopsis":"s",
