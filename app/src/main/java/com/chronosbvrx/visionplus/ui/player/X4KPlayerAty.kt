@@ -81,6 +81,8 @@ class X4KPlayerAty : ComponentActivity() {
     private var playerView: View? = null
 
     private var playPauseBtn: View? = null
+    private var playIconBtn: View? = null
+    private var playIconState: Boolean? = null
     private var seekBar: SeekBar? = null
     private var timeNow: TextView? = null
     private var timeTotal: TextView? = null
@@ -91,6 +93,7 @@ class X4KPlayerAty : ComponentActivity() {
             previewSeekMs = -1L
             scrubbing = false
             playerView?.let { com.chronosbvrx.visionplus.data.xuper.X4KTitan.seekTo(it, target) }
+            noteAppSeek()
         }
     }
     private var controls: View? = null
@@ -247,6 +250,13 @@ class X4KPlayerAty : ComponentActivity() {
     private var startedAtMs = 0L
     /** Re-arranques internos del motor por falta de primer cuadro (sin mostrar error). */
     private var softRestarts = 0
+
+    // Detector de saltos de contenido (telemetría «PLAYER_FRAME_SKIP»): la posición no puede
+    // avanzar más que el reloj de pared. Es el caso reportado «no es pausa, es un salto».
+    private var skipProbePosMs = -1L
+    private var skipProbeAtMs = 0L
+    private var skipProbeMuteUntilMs = 0L
+    private var lastSkipReportAtMs = 0L
 
     /** El motor en vivo dio señal real (posición o decodificador) al menos una vez. */
     private var liveSignalSeen = false
@@ -655,6 +665,10 @@ class X4KPlayerAty : ComponentActivity() {
         errorShown = false
         loadingFading = false
         softRestarts = 0
+        skipProbePosMs = -1L
+        skipProbeAtMs = 0L
+        skipProbeMuteUntilMs = 0L
+        lastSkipReportAtMs = 0L
         liveSignalSeen = false
         endedShown = false
         creditsCardShown = false
@@ -918,13 +932,16 @@ class X4KPlayerAty : ComponentActivity() {
         } else {
             aspect
         }
-        curMedias = ArrayList(medias)
-        val preferredQ = com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality
-        val initialMedia = if (preferredQ != "Auto") {
-            medias.firstOrNull { it.quality.contains(preferredQ, ignoreCase = true) } ?: medias.firstOrNull()
-        } else {
-            medias.firstOrNull()
-        }
+        // La «Calidad preferida» manda desde el PRIMER cuadro: `X4KTitan.play` arranca con la
+        // primera media de la lista, así que la elegida se coloca al frente (antes solo se
+        // pintaba la etiqueta y el motor seguía en la calidad del portal).
+        val orderedMedias = orderMediasByQuality(
+            medias,
+            { it.quality },
+            com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality,
+        )
+        curMedias = ArrayList(orderedMedias)
+        val initialMedia = orderedMedias.firstOrNull()
         currentMediaName = initialMedia?.name.orEmpty()
         curQuality = initialMedia?.quality.orEmpty()
         X4KTitan.bindView(v)
@@ -980,7 +997,7 @@ class X4KPlayerAty : ComponentActivity() {
         val startPlayback: () -> Unit = {
             fun attemptPlay(retriesLeft: Int) {
                 startedAtMs = System.currentTimeMillis()
-                if (X4KTitan.play(v, mode, code, title, medias)) {
+                if (X4KTitan.play(v, mode, code, title, orderedMedias)) {
                     if (!liveMode) {
                         // El cuadro entra con un fundido: pre-roll → película se sienten una sola secuencia.
                         v.alpha = 0f
@@ -1358,6 +1375,7 @@ class X4KPlayerAty : ComponentActivity() {
                     val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
                     val targetMs = if (total > 0 && sb != null) (sb.progress.toLong() * total) / 1000L else 0L
                     playerView?.let { com.chronosbvrx.visionplus.data.xuper.X4KTitan.seekTo(it, targetMs) }
+                    noteAppSeek()
                     scrubbing = false
                     scheduleHide()
                 }
@@ -2448,6 +2466,7 @@ class X4KPlayerAty : ComponentActivity() {
             reordered.addAll(curMedias.filter { it.name != target.name })
             curMedias = reordered
             X4KTitan.play(v, "vod", curCode, curTitle, reordered)
+            noteAppSeek()
             if (curPos > 0L) {
                 handler.postDelayed({ playerView?.let { X4KTitan.seekTo(it, curPos) } }, 250L)
             }
@@ -3096,10 +3115,23 @@ class X4KPlayerAty : ComponentActivity() {
                     return@runOnUiThread
                 }
                 var medias = runCatching { parseMedias(prep.mediasJson) }.getOrDefault(ArrayList())
+                medias = ArrayList(
+                    orderMediasByQuality(
+                        medias,
+                        { it.quality },
+                        com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality,
+                    ),
+                )
                 var played = medias.isNotEmpty() && X4KTitan.play(v, "vod", code, title, medias)
                 if (!played) {
                     // Segundo intento si el primer cuadro falló
-                    medias = runCatching { parseMedias(prep.mediasJson) }.getOrDefault(ArrayList())
+                    medias = ArrayList(
+                        orderMediasByQuality(
+                            runCatching { parseMedias(prep.mediasJson) }.getOrDefault(ArrayList()),
+                            { it.quality },
+                            com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality,
+                        ),
+                    )
                     played = medias.isNotEmpty() && X4KTitan.play(v, "vod", code, title, medias)
                 }
                 if (!played) {
@@ -3107,12 +3139,7 @@ class X4KPlayerAty : ComponentActivity() {
                     return@runOnUiThread
                 }
                 curMedias = ArrayList(medias)
-                val preferredQ = com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality
-                val chosenMedia = if (preferredQ != "Auto") {
-                    medias.firstOrNull { it.quality.contains(preferredQ, ignoreCase = true) } ?: medias.firstOrNull()
-                } else {
-                    medias.firstOrNull()
-                }
+                val chosenMedia = medias.firstOrNull()
                 currentMediaName = chosenMedia?.name.orEmpty()
                 curQuality = chosenMedia?.quality.orEmpty()
                 qualityBtn?.text = formatQualityShort(curQuality)
@@ -3238,6 +3265,7 @@ class X4KPlayerAty : ComponentActivity() {
             resumeAsked = true
             resumeMs = 0
             playerView?.let { X4KTitan.seekTo(it, at) }
+            noteAppSeek()
             Toast.makeText(this, "Continuando en " + formatResume(at), Toast.LENGTH_SHORT).show()
             return
         }
@@ -3247,6 +3275,7 @@ class X4KPlayerAty : ComponentActivity() {
             val entry = PlaybackHistory.get(this, curCode)
             if (entry != null && shouldKeep(entry.positionMs, entry.durationMs)) {
                 playerView?.let { X4KTitan.seekTo(it, entry.positionMs) }
+                noteAppSeek()
                 Toast.makeText(this, "Continuando en " + formatResume(entry.positionMs), Toast.LENGTH_SHORT).show()
             }
             return
@@ -3267,6 +3296,7 @@ class X4KPlayerAty : ComponentActivity() {
                     resumeMs = entry.positionMs
                     resumeApplied = true
                     playerView?.let { X4KTitan.seekTo(it, entry.positionMs) }
+                    noteAppSeek()
                     Toast.makeText(this, "Continuando en " + formatResume(entry.positionMs), Toast.LENGTH_SHORT).show()
                 } else {
                     pendingResumeEntry = entry
@@ -3373,6 +3403,7 @@ class X4KPlayerAty : ComponentActivity() {
             if (entry != null) X4KTitan.seekTo(it, entry.positionMs)
             X4KTitan.resume(it)
         }
+        noteAppSeek()
         scheduleHide()
     }
 
@@ -3382,6 +3413,7 @@ class X4KPlayerAty : ComponentActivity() {
             X4KTitan.seekTo(it, 0)
             X4KTitan.resume(it)
         }
+        noteAppSeek()
         scheduleHide()
     }
 
@@ -4444,12 +4476,36 @@ class X4KPlayerAty : ComponentActivity() {
 
     private fun refreshPlayIcon() {
         val playing = playerView?.let { X4KTitan.isPlaying(it) } ?: false
+        renderPlayIcon(playing)
+    }
+
+    private fun refreshPlayIcon(playing: Boolean) = renderPlayIcon(playing)
+
+    /**
+     * Reconstruir el botón (removeAllViews + addView) dos veces por segundo es basura para el
+     * proceso del reproductor: solo se rehace cuando el estado o la instancia del botón cambian.
+     */
+    private fun renderPlayIcon(playing: Boolean) {
         val button = playPauseBtn as? FrameLayout ?: return
+        if (playIconBtn === button && playIconState == playing) return
+        playIconBtn = button
+        playIconState = playing
         button.removeAllViews()
         button.addView(
             icon(if (playing) MODE_PAUSE else MODE_PLAY),
             FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER),
         )
+    }
+
+    /**
+     * Un seek (del usuario o de la app) no es un salto de contenido: reinicia la línea base
+     * del detector y lo silencia 3 s — el motor tarda un instante en reflejar la posición
+     * pedida, y ese salto es legítimo.
+     */
+    private fun noteAppSeek() {
+        skipProbePosMs = -1L
+        skipProbeAtMs = 0L
+        skipProbeMuteUntilMs = android.os.SystemClock.elapsedRealtime() + 3_000L
     }
 
     private val poller = object : Runnable {
@@ -4461,22 +4517,22 @@ class X4KPlayerAty : ComponentActivity() {
             val v = playerView
             if (v != null) {
                 val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
-                if (!liveMode) {
+                if (!liveMode && declaredDurationMs <= 0L) {
+                    // La duración del motor solo hace falta mientras el catálogo no la declaró:
+                    // ya estable, preguntarla cada 500 ms es trabajo (y cerrojos del motor) de más.
                     val engineDur = com.chronosbvrx.visionplus.data.xuper.X4KTitan.durationMs(v)
                     if (!isBufferWindowDuration(engineDur, pos, declaredDurationMs, liveMode)) {
                         if (engineDur > 0L) {
-                            if (engineDur != durationMs) {
-                                durationMs = engineDur
-                            }
-                            if (declaredDurationMs <= 0L) {
-                                declaredDurationMs = engineDur
-                            }
+                            durationMs = engineDur
+                            declaredDurationMs = engineDur
                         }
                     }
                 }
                 val total = resolveStableTotalDuration(declaredDurationMs, durationMs, pos, liveMode)
+                // Un solo sondeo de estado por tic: `isPlaying` también va al motor por reflexión.
+                val playingNow = com.chronosbvrx.visionplus.data.xuper.X4KTitan.isPlaying(v)
                 // Señal real del motor: posición avanzando o decodificador encendido.
-                val engineSignal = pos > 0 || X4KTitan.isPlaying(v)
+                val engineSignal = pos > 0 || playingNow
                 if (engineSignal) liveSignalSeen = true
                 // En vivo, el temporizador solo libera la espera (algunos canales no
                 // reportan posición); el ERROR no se guía por él, sino por la señal real.
@@ -4531,14 +4587,36 @@ class X4KPlayerAty : ComponentActivity() {
                         showError("sin-primer-cuadro")
                     }
                 }
+                // Salto de contenido (cuadros que nunca se mostraron): la posición avanza más
+                // que el reloj de pared. Se mide y se reporta al diagnóstico; los seeks de la
+                // app reinician la base para no confundir un salto pedido con uno del motor.
+                if (!liveMode && firstFrame && !scrubbing && !errorShown) {
+                    val probeAt = android.os.SystemClock.elapsedRealtime()
+                    if (probeAt >= skipProbeMuteUntilMs) {
+                        val excess = positionSkipExcessMs(skipProbePosMs, skipProbeAtMs, pos, probeAt)
+                        if (excess > 0L && probeAt - lastSkipReportAtMs > 30_000L) {
+                            lastSkipReportAtMs = probeAt
+                            Log.w(TAG, "salto de contenido: ${excess}ms (pos=$pos)")
+                            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                                "PLAYER_FRAME_SKIP",
+                                "modo=vod exceso=${excess}ms",
+                            )
+                        }
+                    }
+                    skipProbePosMs = pos
+                    skipProbeAtMs = probeAt
+                }
                 if (!scrubbing) {
                     if (total > 0) {
-                        seekBar?.progress = ((pos * 1000) / total).toInt().coerceIn(0, 1000)
+                        val target = ((pos * 1000) / total).toInt().coerceIn(0, 1000)
+                        if (seekBar?.progress != target) seekBar?.progress = target
                     }
-                    timeNow?.text = fmt(pos)
+                    val nowText = fmt(pos)
+                    if (timeNow?.text?.toString() != nowText) timeNow?.text = nowText
                 }
-                timeTotal?.text = if (total > 0) fmt(total) else "--:--"
-                refreshPlayIcon()
+                val totalText = if (total > 0) fmt(total) else "--:--"
+                if (timeTotal?.text?.toString() != totalText) timeTotal?.text = totalText
+                refreshPlayIcon(playingNow)
                 if (!liveMode) {
                     // Marcadores de salto: auto-omitir (si está activado), botón del intro o
                     // resumen, tarjeta de créditos y aviso de post-créditos — todo nace de la
@@ -4568,6 +4646,7 @@ class X4KPlayerAty : ComponentActivity() {
         val total = resolveStableTotalDuration(declaredDurationMs, durationMs, currentPos, liveMode)
         val targetPos = if (total > 0) (currentPos + deltaMs).coerceIn(0L, total) else (currentPos + deltaMs).coerceAtLeast(0L)
         X4KTitan.seekTo(v, targetPos)
+        noteAppSeek()
         if (total > 0) {
             seekBar?.progress = ((targetPos * 1000) / total).toInt().coerceIn(0, 1000)
         }

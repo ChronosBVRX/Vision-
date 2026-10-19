@@ -521,6 +521,55 @@ internal fun formatQualityLabel(raw: String): String {
     }
 }
 
+/**
+ * El motor nativo arranca con la PRIMERA media de la lista (`X4KTitan.play` usa
+ * `medias.first().name`). Aquí se coloca al frente la «Calidad preferida» de Ajustes
+ * cuando el portal la trae — el resto conserva su orden. «Auto» (o una calidad que el
+ * título no tiene) deja la lista del portal intacta: la primera suele ser la mejor.
+ *
+ * Sin esto el ajuste solo pintaba la etiqueta de la píldora y el arranque seguía en la
+ * calidad del portal (normalmente la más pesada): en equipos modestos eso se nota como
+ * tirones/saltos en las escenas de mucho movimiento, y bajar la calidad no aliviaba
+ * hasta cambiarla a mano en cada reproducción.
+ */
+internal fun <T> orderMediasByQuality(
+    medias: List<T>,
+    qualityOf: (T) -> String,
+    preferred: String,
+): List<T> {
+    if (medias.size < 2) return medias
+    val wanted = preferred.trim()
+    if (wanted.isEmpty() || wanted.equals("Auto", ignoreCase = true)) return medias
+    val index = medias.indexOfFirst { qualityOf(it).contains(wanted, ignoreCase = true) }
+    if (index <= 0) return medias
+    return ArrayList<T>(medias.size).apply {
+        add(medias[index])
+        medias.forEachIndexed { i, media -> if (i != index) add(media) }
+    }
+}
+
+/**
+ * Exceso de avance de la posición frente al reloj de pared: cuando el motor descarta
+ * cuadros o se salta un tramo del contenido, la posición avanza más de lo que transcurrió
+ * (el caso «no es pausa, es un salto»). Devuelve el exceso en ms; 0 = normal.
+ *
+ * Un hueco de sondeo (>5 s, app en pausa o proceso dormido) no es salto: es un tic perdido.
+ * Los seeks de la app no pasan por aquí (el reproductor reinicia la línea base antes).
+ */
+internal fun positionSkipExcessMs(
+    lastPosMs: Long,
+    lastAtMs: Long,
+    posMs: Long,
+    nowMs: Long,
+    toleranceMs: Long = 900L,
+): Long {
+    if (lastAtMs <= 0L || lastPosMs < 0L || posMs <= lastPosMs) return 0L
+    val wallMs = nowMs - lastAtMs
+    if (wallMs <= 0L || wallMs > 5_000L) return 0L
+    val excess = posMs - (lastPosMs + wallMs)
+    return if (excess > toleranceMs) excess else 0L
+}
+
 @Composable
 internal fun rememberControlsState(): ControlsState = remember { ControlsState() }
 
