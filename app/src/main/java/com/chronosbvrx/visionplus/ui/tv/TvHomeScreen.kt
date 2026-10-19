@@ -1027,7 +1027,7 @@ private fun HeroBillboard(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun HomePosterRow(
+internal fun HomePosterRow(
     title: String,
     films: List<Film>,
     isTop10: Boolean = false,
@@ -1042,6 +1042,10 @@ private fun HomePosterRow(
     val safeFilms = remember(films) { Popularity.dedupe(films).take(15) }
     if (safeFilms.isEmpty()) return
 
+    // Medidas calculadas desde la altura real de la tele: en 540 dp entran 3 filas completas
+    // (antes, con pósteres fijos de 140×210, solo cabían 2).
+    val metrics = rememberTvRowMetrics()
+
     // Al volver de una ficha, la fila se desplaza sola hasta la tarjeta abierta: así el foco
     // encuentra algo ya dibujado aunque el scroll restaurado no la dejara en la ventana.
     val rowState = rememberLazyListState()
@@ -1050,8 +1054,8 @@ private fun HomePosterRow(
     }
     LaunchedEffect(returnIndex, safeFilms) { rowState.revealReturnIndex(returnIndex) }
 
-    Column(modifier = Modifier.padding(top = 18.dp)) {
-        TvRowLabel(title, 26.dp, icon = icon, topTen = isTop10)
+    Column(modifier = Modifier.padding(top = metrics.topPadding)) {
+        TvRowLabel(title, metrics.labelHeight, icon = icon, topTen = isTop10)
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
                 state = rowState,
@@ -1066,13 +1070,14 @@ private fun HomePosterRow(
                         else -> null
                     }
                     val isReturn = returnRequester != null && film.id == returnFilmId
-                    Column(Modifier.width(140.dp)) {
+                    Column(Modifier.width(metrics.cardWidth)) {
                         TvPosterCard(
                             title = film.title,
                             imageUrl = film.posterUrl,
                             score = film.score,
                             badge = badge,
                             rank = rank,
+                            cardWidth = metrics.cardWidth,
                             modifier = when {
                                 isReturn -> Modifier.focusRequester(returnRequester)
                                 idx == 0 && entryRequester != null -> Modifier.focusRequester(entryRequester)
@@ -1081,19 +1086,23 @@ private fun HomePosterRow(
                             onFocus = { onFocusFilm(film) },
                             onClick = { onOpenFilm(film) },
                         )
-                        Text(
-                            text = film.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
+                        // El título vive en una caja de alto fijo: aunque la tele tenga la letra
+                        // escalada, no empuja la fila y las 3 siguen entrando.
+                        Box(Modifier.padding(top = metrics.titleGap).height(metrics.titleHeight)) {
+                            Text(
+                                text = film.title,
+                                style = if (metrics.compact) MaterialTheme.typography.bodySmall
+                                else MaterialTheme.typography.bodyMedium,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(metrics.bottomGap))
     }
 }
 
@@ -1123,8 +1132,9 @@ private fun ContinueRow(
         }
     }
     LaunchedEffect(returnIndex, cards) { rowState.revealReturnIndex(returnIndex) }
-    Column(modifier = Modifier.padding(top = 18.dp)) {
-        TvRowLabel("Seguir viendo", 26.dp, icon = VisionIcons.ContinueWatching)
+    val metrics = rememberTvRowMetrics()
+    Column(modifier = Modifier.padding(top = metrics.topPadding)) {
+        TvRowLabel("Seguir viendo", metrics.labelHeight, icon = VisionIcons.ContinueWatching)
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
                 state = rowState,
@@ -1177,6 +1187,6 @@ private fun ContinueRow(
                 }
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(metrics.bottomGap))
     }
 }

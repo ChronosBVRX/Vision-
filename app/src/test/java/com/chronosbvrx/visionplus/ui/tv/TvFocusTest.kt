@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
@@ -86,6 +87,24 @@ class TvFocusTest {
     }
 
     private fun focusedCount() = compose.onAllNodes(focused, useUnmergedTree = true).fetchSemanticsNodes().size
+
+    private fun focusedLabel(): String? {
+        fun labelOf(node: androidx.compose.ui.semantics.SemanticsNode): String? {
+            node.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()?.let { return it }
+            node.config.getOrNull(SemanticsProperties.Text)?.joinToString { it.text }?.let { return it }
+            node.children.forEach { child -> labelOf(child)?.let { return it } }
+            return null
+        }
+        return compose.onAllNodes(focused, useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()
+            ?.let(::labelOf)
+    }
+
+    /** La etiqueta de fila inmediatamente arriba de [y], si esa fila sigue compuesta. */
+    private fun rowLabelAbove(y: Float, labels: List<String>): String? =
+        labels.mapNotNull { label ->
+            compose.onAllNodesWithText(label).fetchSemanticsNodes().firstOrNull()
+                ?.boundsInRoot?.top?.let { label to it }
+        }.filter { it.second < y }.maxByOrNull { it.second }?.first
 
     /** Centro del nodo enfocado (para confirmar que el foco vuelve a la MISMA tarjeta). */
     private fun focusedCenter(): androidx.compose.ui.geometry.Offset? =
@@ -365,6 +384,7 @@ class TvFocusTest {
         val top = labelTop
         assertTrue("Debe existir la fila «Recomendado para ti»", top != null)
         val before = focusedCenter()
+        val beforeLabel = focusedLabel()
         assertTrue("Debe haber una tarjeta enfocada en «Recomendado para ti»", before != null && top != null && before.y > top)
         press(Key.DirectionCenter)
         assertTrue("Debe abrir la ficha de la serie", nav.current is Route.Title)
@@ -374,7 +394,7 @@ class TvFocusTest {
         assertLanded("Series tras volver de la serie")
         val after = focusedCenter()
         assertTrue(
-            "El foco debe volver a la MISMA tarjeta (antes=$before, después=$after)",
+            "El foco debe volver a la MISMA tarjeta (antes=$before, $beforeLabel, después=$after, etiqueta=${focusedLabel()})",
             after != null && before != null && (after - before).getDistance() < 8f,
         )
         press(Key.DirectionRight)
@@ -415,7 +435,7 @@ class TvFocusTest {
         assertLanded("Series tras volver")
         val after = focusedCenter()
         assertTrue(
-            "El foco debe volver a la MISMA tarjeta (antes=$before, después=$after)",
+            "El foco debe volver a la MISMA tarjeta (antes=$before, después=$after, etiqueta=${focusedLabel()})",
             after != null && before != null && (after - before).getDistance() < 8f,
         )
     }
@@ -463,6 +483,12 @@ class TvFocusTest {
         assertTrue("Debe verse la fila «Destacadas»", labelTop != null)
         press(Key.DirectionRight)
         val before = focusedCenter()
+        val beforeLabel = focusedLabel()
+        val rowLabels = listOf(
+            "Top 10 en Vision+ Hoy", "Novedades y Estrenos", "Populares de la semana",
+            "Seguir viendo", "Destacadas", "Series",
+        )
+        val beforeRow = before?.let { rowLabelAbove(it.y, rowLabels) }
         assertTrue("Debe haber una tarjeta enfocada antes de abrir", before != null)
         press(Key.DirectionCenter)
         assertTrue("Debe abrir la ficha de la serie", nav.current is Route.Title)
@@ -471,13 +497,20 @@ class TvFocusTest {
         compose.runOnIdle { catalog.seed(emptyList()) }
         back()
         assertEquals("Al volver debe regresar a Home", Route.Home, nav.current)
-        // Llegan las filas tarde: el foco debe caer solo en LA MISMA tarjeta.
+        // Llegan las filas tarde: el foco debe caer solo en LA MISMA tarjeta. La fila puede
+        // quedar revelada en otra posición vertical (antes 2 filas, ahora 3), así que la
+        // identidad se comprueba por título —y por fila cuando su etiqueta sigue compuesta—,
+        // no por el píxel exacto.
         compose.runOnIdle { catalog.seed(seriesRows) }
         compose.waitUntil(timeoutMillis = 5_000) { focusedCount() >= 1 }
         val after = focusedCenter()
+        val afterLabel = focusedLabel()
+        val afterRow = after?.let { rowLabelAbove(it.y, rowLabels) }
         assertTrue(
-            "El foco debe volver a la MISMA tarjeta (antes=$before, después=$after)",
-            after != null && before != null && (after - before).getDistance() < 8f,
+            "El foco debe volver a la MISMA tarjeta (antes=$before/$beforeLabel/$beforeRow, " +
+                "después=$after/$afterLabel/$afterRow)",
+            after != null && beforeLabel != null && afterLabel == beforeLabel &&
+                (beforeRow == null || afterRow == null || beforeRow == afterRow),
         )
         press(Key.DirectionDown)
         assertTrue("Inicio: el foco se perdió al bajar", focusedCount() >= 1)

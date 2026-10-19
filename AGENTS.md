@@ -5,6 +5,12 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Lote 2.5.113: el Inicio de Smart TV ya muestra 3 filas del catálogo — pósteres adaptados a la altura real de la pantalla, «Seguir viendo» compacto y regreso al foco por identidad — OTA publicada** (2026-10-19; 675 tests Android):
+  - *Pedido del usuario*: «en el modo smartv se pudieran ver por lo menos 3 filas del catalogo, ahorita por el tamaño se ven 2».
+  - *Causa medida*: las filas del Inicio usaban pósteres fijos de 140×210 dp; con etiqueta, título y márgenes cada fila medía ~290 dp. En un panel 1080p de TV (Compose reporta 960×540 dp a 320 dpi) solo caben 2 filas (en la vista previa del emulador, 1.8).
+  - *Fix (app)*: nuevo `ui/tv/TvLayout.kt` (`tvRowMetrics`/`rememberTvRowMetrics`) que calcula el póster 2:3, la etiqueta, los márgenes y el alto del título desde `screenHeightDp`; en 540 dp la fila mide 177.5 dp (3 = 532.5 dp contra los 870 dp de antes) y en pantallas ≥700 dp conserva el póster grande de siempre (140 dp). `TvPosterCard` acepta `cardWidth` y escala el número del Top 10; `HomePosterRow` y `ContinueRow` usan las medidas; el sello TOP 10 se ajusta a la altura de la etiqueta (antes un badge de 34 dp invadía el póster y chocaba con su nota).
+  - *Accesibilidad y guardianes*: la tarjeta enfocable anuncia el título (`contentDescription` en el Card; la imagen ya no lo duplica). `TvLayoutTest` (4) fija 3 filas para 480/540/600/720/800/1080 dp y la proporción 2:3; `TvHomeRowsFitTest` compone 3 filas reales en 540 dp y verifica que la tercera queda dentro de la pantalla; `TvFocusTest.homeBackRestoresSameCardAfterLateContent` comprueba la MISMA tarjeta por título (y por fila cuando su etiqueta sigue compuesta), aceptando que el regreso re-alinee la fila al centro; las pruebas de sección conservan el retorno por tarjeta exacta sin cambios.
+  - *Verificado*: suite Android **675/675** en verde; release R8 vc349 (101.1 MB) con la firma histórica `9593cb0d…`; **OTA v2.5.113 publicada** (`VisionPlus.apk`, release https://github.com/ChronosBVRX/Vision-/releases/tag/v2.5.113). *Pendiente*: prueba física en la tele (Inicio desplazado: 3 filas completas, D-pad y regreso a ficha).
 - **Lote marcadores de salto automáticos: cada capítulo pide SU plan, la caché cruza a `:x4k`, el «Omitir intro» espera a que el video esté dibujado y el siguiente capítulo ya no corta créditos/post-créditos — servidor desplegado y OTA v2.5.112 PUBLICADA** (2026-10-19; 670 tests Android + 252 backend):
   - *Pedido del usuario*: aplicar todas las mejoras del análisis de omitir intro / siguiente capítulo en series y anime, y corregir que el botón «Omitir intro» aparecía sobre la pantalla de carga con el logo.
   - *Causa raíz medida*: `X4KPlayerAty.playEpisode()` reutilizaba la ventana de marcadores del primer capítulo de la temporada (`keepMarkersForSeason`) y **nunca pedía el plan del capítulo nuevo**. AoT T2 E1 tiene intro 3:29–4:59 y E2 1:26–2:56: con la ventana de E1 el auto-skip cortaba 90 s de E2 y no omitía su intro real. Jujutsu T1 E1 0:55–2:25 vs E2 5:45–7:15 era el mismo fallo. Cambiar de temporada borraba los marcadores y no los volvía a pedir.
@@ -1161,10 +1167,13 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.112**
-  (versionCode **348**, release OTA v2.5.112 — marcadores de salto por episodio, caché en disco compartida
-  con `:x4k`, auto-skip con duración real y una sola aplicación, siguiente capítulo que no corta
-  post-créditos y «Omitir intro» oculto hasta que el video se dibuja; la v2.5.111 el Inicio con novedades
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.113**
+  (versionCode **349**, release OTA v2.5.113 — el Inicio de Smart TV calcula el tamaño de sus filas desde
+  la altura real de la pantalla (3 filas completas en 540 dp, póster 2:3 de ~81 dp; 140 dp en pantallas
+  altas), «Seguir viendo» compacto y tarjetas que se anuncian por título; la v2.5.112 los marcadores de
+  salto por episodio, caché en disco compartida con `:x4k`, auto-skip con duración real y una sola
+  aplicación, siguiente capítulo que no corta post-créditos y «Omitir intro» oculto hasta que el video
+  se dibuja; la v2.5.111 el Inicio con novedades
   populares reales y sin tarjetas repetidas: dedupe por tmdbId, trending una vez por obra, filas sin
   traslape y el índice recortado en SQL (47 s → 2.5 s); la v2.5.110 el arreglo de los saltos de
   reproducción: la «Calidad

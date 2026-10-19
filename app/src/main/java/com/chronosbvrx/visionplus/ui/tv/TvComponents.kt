@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -133,6 +135,8 @@ fun TvPosterCard(
     score: Double = 0.0,
     badge: String? = null,
     rank: Int? = null,
+    /** Ancho del póster. El Inicio lo calcula con [tvRowMetrics] para que quepan 3 filas. */
+    cardWidth: Dp = 140.dp,
     onFocus: () -> Unit = {},
     onClick: () -> Unit,
 ) {
@@ -142,8 +146,11 @@ fun TvPosterCard(
     Card(
         onClick = onClick,
         modifier = modifier
-            .width(140.dp)
+            .width(cardWidth)
             .aspectRatio(2f / 3f)
+            // La tarjeta se anuncia con el nombre del título (lector de pantalla y guardianes
+            // del regreso): antes el nodo enfocable no llevaba identidad propia.
+            .semantics { contentDescription = title }
             .onFocusChanged { if (it.isFocused) onFocus() },
         scale = cardFocusScale(reduced),
         colors = CardDefaults.colors(containerColor = VisionSurfaceHigh),
@@ -164,7 +171,8 @@ fun TvPosterCard(
                         .crossfade(if (reduced) 0 else 150)
                         .size(320, 480)
                         .build(),
-                    contentDescription = title,
+                    // La tarjeta ya se anuncia con el título: la imagen no repite el nombre.
+                    contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -240,8 +248,10 @@ fun TvPosterCard(
                 }
             }
 
-            // Variante Top 10 con Número (Rank)
+            // Variante Top 10 con Número (Rank). La cifra acompaña el tamaño del póster: en las
+            // filas compactas (3 visibles) 44 sp se comerían media tarjeta.
             if (rank != null && rank in 1..10) {
+                val rankSize = (cardWidth.value * 0.31f).sp
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -250,7 +260,7 @@ fun TvPosterCard(
                     Text(
                         text = rank.toString(),
                         style = TextStyle(
-                            fontSize = 44.sp,
+                            fontSize = rankSize,
                             fontWeight = FontWeight.Black,
                             drawStyle = Stroke(width = 4f, join = StrokeJoin.Round),
                             color = VisionBlueBright,
@@ -259,7 +269,7 @@ fun TvPosterCard(
                     Text(
                         text = rank.toString(),
                         style = TextStyle(
-                            fontSize = 44.sp,
+                            fontSize = rankSize,
                             fontWeight = FontWeight.Black,
                             brush = Brush.verticalGradient(
                                 listOf(Color.White, VisionBlueBright, VisionSurfaceHigh),
@@ -345,7 +355,12 @@ fun TvRowLabel(text: String, height: Dp, icon: ImageVector? = null, topTen: Bool
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (topTen) {
-                TvTopTenBadge(modifier = Modifier.padding(end = 10.dp))
+                // El sello vive DENTRO de la altura de la etiqueta: con filas compactas un
+                // badge de 34 dp se metía sobre el póster (y chocaba con su nota).
+                TvTopTenBadge(
+                    modifier = Modifier.padding(end = 10.dp),
+                    size = height.coerceIn(20.dp, 34.dp),
+                )
             } else if (icon != null) {
                 Icon(icon, contentDescription = null, tint = VisionBlueBright, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
@@ -365,6 +380,9 @@ fun TvRowLabel(text: String, height: Dp, icon: ImageVector? = null, topTen: Bool
 @Composable
 fun TvTopTenBadge(modifier: Modifier = Modifier, size: Dp = 34.dp) {
     val shape = RoundedCornerShape(size * 0.24f)
+    // La tipografía acompaña al tamaño del sello (34 dp = el de siempre; 24 dp en filas compactas).
+    val labelSize = (size.value * 0.206f).sp
+    val numberSize = (size.value * 0.441f).sp
     Box(
         modifier = modifier
             .size(size)
@@ -377,19 +395,19 @@ fun TvTopTenBadge(modifier: Modifier = Modifier, size: Dp = 34.dp) {
                 "TOP",
                 style = TextStyle(
                     color = Color.White.copy(alpha = 0.92f),
-                    fontSize = 7.sp,
+                    fontSize = labelSize,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 0.5.sp,
-                    lineHeight = 8.sp,
+                    lineHeight = labelSize,
                 ),
             )
             Text(
                 "10",
                 style = TextStyle(
                     color = Color.White,
-                    fontSize = 15.sp,
+                    fontSize = numberSize,
                     fontWeight = FontWeight.Black,
-                    lineHeight = 15.sp,
+                    lineHeight = numberSize,
                 ),
             )
         }
