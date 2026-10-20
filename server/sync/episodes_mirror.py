@@ -57,6 +57,14 @@ META_MAX_ATTEMPTS = int(os.environ.get("EPISODES_META_MAX_ATTEMPTS", "4") or "4"
 META_DELAY_SECONDS = float(os.environ.get("EPISODES_META_DELAY_SECONDS", "0.15") or "0.15")
 TMDB_STILL_BASE = "https://image.tmdb.org/t/p/w780"
 
+# Pre-calentamiento: además de las temporadas que alguien abre (espejo), se
+# enriquecen las de los grupos MÁS POPULARES del catálogo para que la primera
+# vez también salga instantáneo. El resto sigue bajo demanda.
+META_PREWARM_ENABLED = os.environ.get("EPISODES_META_PREWARM", "1") == "1"
+META_PREWARM_GROUPS = int(os.environ.get("EPISODES_META_PREWARM_GROUPS", "500") or "500")
+META_PREWARM_SINGLES = int(os.environ.get("EPISODES_META_PREWARM_SINGLES", "500") or "500")
+META_PREWARM_PER_CYCLE = int(os.environ.get("EPISODES_META_PREWARM_MAX_PER_CYCLE", "120") or "120")
+
 # Códigos del portal que significan «esta sesión ya no sirve» (los mismos que la
 # app trata en SESSION_CODE_RX + la patada clásica aaa100083). Con uno de estos
 # la cola entera se re-agenda: renovar NO es cosa de este loop.
@@ -420,12 +428,75 @@ async def _store_meta_failure(pool: asyncpg.Pool, tmdb_id: int, season: int, err
     )
 
 
-async def enrich_pass(pool: asyncpg.Pool) -> int:
-    """Rellena nombre/sinopsis de hasta `META_MAX_PER_CYCLE` temporadas.
+# Pre-calentamiento (popular primero): temporadas de los grupos con más impacto
+# del catálogo + las series sueltas más populares. Solo se piden las que NUNCA se
+# consultaron (las fallidas no se martillan; si la serie se abre, la pasada del
+# espejo sí las reintenta). El `tmdb_id` va con el mismo voto mayoritario del grupo.
+_META_PREWARM_SQL = """
+with pop as (
+    select gm.group_id, max(coalesce(t.popularity, 0)) as popularity
+    from title_groups g
+    join group_members gm on gm.group_id = g.id
+    join titles t on t.id = gm.title_id
+    group by 1
+), ranked as (
+    select group_id, popularity,
+           row_number() over (order by popularity desc, group_id) as rn
+    from pop
+), seasons as (
+    select gm.title_id as ref,
+           coalesce((
+               select e2.tmdb_id
+               from group_members gm0
+               join group_members gm2 on gm2.group_id = gm0.group_id
+               join enrichment e2 on e2.title_id = gm2.title_id
+               where gm0.title_id = gm.title_id and e2.tmdb_id is not null and e2.tmdb_id > 0
+               group by e2.tmdb_id
+               order by count(*) desc, avg(coalesce(e2.match_confidence, 0)) desc, e2.tmdb_id
+               limit 1
+           ), e.tmdb_id) as tmdb_id,
+           greatest(gm.season, 1) as season,
+           r.popularity
+    from ranked r
+    join group_members gm on gm.group_id = r.group_id
+    join enrichment e on e.title_id = gm.title_id
+    where r.rn <= $1 and gm.season >= 1 and e.tmdb_id is not null and e.tmdb_id > 0
+    union all
+    select t.id, e.tmdb_id, 1, coalesce(t.popularity, 0)
+    from titles t
+    join enrichment e on e.title_id = t.id
+    where t.kind in ('series', 'anime', 'kids')
+      and e.tmdb_id is not null and e.tmdb_id > 0
+      and not exists (select 1 from group_members gm
+                      where gm.title_id = t.id and gm.season >= 1)
+      and t.id in (
+          select t2.id from titles t2
+          where t2.kind in ('series', 'anime', 'kids')
+          order by coalesce(t2.popularity, 0) desc
+          limit $2
+      )
+)
+select q.ref, q.tmdb_id, q.season
+from (
+    select s.ref, s.tmdb_id, s.season, max(s.popularity) as popularity
+    from seasons s
+    left join episode_meta_season m
+           on m.tmdb_id = s.tmdb_id and m.season = s.season
+    where m.tmdb_id is null
+    group by 1, 2, 3
+) q
+order by q.popularity desc, q.tmdb_id, q.season
+limit $3
+"""
 
+
+async def enrich_pass(pool: asyncpg.Pool) -> int:
+    """Rellena nombre/sinopsis de las temporadas pedidas y de las populares.
     Barato y acotado: UNA petición por temporada (no por capítulo), guardada en
     Postgres. Un fallo de TMDB no tumba la pasada; las películas (sin lista) ni
-    aparecen como candidatas.
+    aparecen como candidatas. Dos fuentes, en este orden:
+    1) temporadas espejadas (alguien abrió la serie) con su refresco/reintento;
+    2) pre-calentamiento de las MÁS POPULARES del catálogo (primera vez instantánea).
     """
     if not META_ENABLED:
         return 0
@@ -436,6 +507,22 @@ async def enrich_pass(pool: asyncpg.Pool) -> int:
         META_RETRY_HOURS * 3600.0,
         META_MAX_PER_CYCLE,
     )
+    done = await _enrich_rows(pool, rows)
+    if META_PREWARM_ENABLED:
+        warm = await pool.fetch(
+            _META_PREWARM_SQL,
+            META_PREWARM_GROUPS,
+            META_PREWARM_SINGLES,
+            META_PREWARM_PER_CYCLE,
+        )
+        done += await _enrich_rows(pool, warm)
+    if done:
+        log.info("episodios: metadatos TMDB de %s temporadas", done)
+    return done
+
+
+async def _enrich_rows(pool: asyncpg.Pool, rows) -> int:
+    """Baja y guarda los metadatos de cada temporada. Un fallo no tumba la pasada."""
     done = 0
     for row in rows:
         tmdb_id = int(row["tmdb_id"])
@@ -457,8 +544,6 @@ async def enrich_pass(pool: asyncpg.Pool) -> int:
             await _store_meta_failure(pool, tmdb_id, season, str(exc))
         if META_DELAY_SECONDS > 0:
             await asyncio.sleep(META_DELAY_SECONDS)
-    if done:
-        log.info("episodios: metadatos TMDB de %s temporadas", done)
     return done
 
 

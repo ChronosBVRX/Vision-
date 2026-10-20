@@ -392,6 +392,20 @@ def test_worker_and_api_resolve_tmdb_id_with_the_same_group_consensus():
     assert marker in api_src and "group_members gm0" in api_src
 
 
+def test_prewarm_enriches_popular_seasons_without_hammering_failures():
+    # Pre-calentamiento (popular primero): top de grupos + series sueltas populares,
+    # UNA petición por temporada, solo las nunca consultadas.
+    src = open(Path(__file__).parent.parent / "sync" / "episodes_mirror.py", encoding="utf-8").read()
+    assert "_META_PREWARM_SQL" in src
+    assert "row_number() over (order by popularity desc, group_id)" in src
+    assert "limit $2" in src and "limit $3" in src
+    # las fallidas no se martillan en el pre-calentamiento
+    assert "where m.tmdb_id is null" in src
+    # dos fuentes en la pasada: espejo (refresco/reintento) y populares
+    assert "done = await _enrich_rows(pool, rows)" in src
+    assert "done += await _enrich_rows(pool, warm)" in src
+
+
 def test_schema_has_episode_meta_tables():
     sql = open(Path(__file__).parent.parent / "sync" / "schema.sql", encoding="utf-8").read()
     assert "create table if not exists episode_meta (" in sql

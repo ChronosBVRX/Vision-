@@ -117,6 +117,12 @@ services:
       EPISODES_META_TTL_HOURS: "${EPISODES_META_TTL_HOURS:-336}"
       EPISODES_META_RETRY_HOURS: "${EPISODES_META_RETRY_HOURS:-24}"
       EPISODES_META_MAX_ATTEMPTS: "${EPISODES_META_MAX_ATTEMPTS:-4}"
+      # Pre-calentamiento popular: temporadas de los grupos con más impacto +
+      # series sueltas más populares, para que la primera vez también sea instantánea.
+      EPISODES_META_PREWARM: "${EPISODES_META_PREWARM:-1}"
+      EPISODES_META_PREWARM_GROUPS: "${EPISODES_META_PREWARM_GROUPS:-500}"
+      EPISODES_META_PREWARM_SINGLES: "${EPISODES_META_PREWARM_SINGLES:-500}"
+      EPISODES_META_PREWARM_MAX_PER_CYCLE: "${EPISODES_META_PREWARM_MAX_PER_CYCLE:-120}"
       DIAG_INTERVAL_SECONDS: "${DIAG_INTERVAL_SECONDS:-300}"
       DIAG_RESOLVE_HOURS: "${DIAG_RESOLVE_HOURS:-48}"
       # Salud del catálogo: avisa si el ciclo de sync (6 h) o la pasada profunda
