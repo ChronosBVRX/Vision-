@@ -304,3 +304,86 @@ def test_schema_has_mirror_table():
     sql = open(Path(__file__).parent.parent / "sync" / "schema.sql", encoding="utf-8").read()
     assert "create table if not exists episode_mirror" in sql
     assert "episode_mirror_pending_idx" in sql
+
+
+# ----- metadatos por episodio (nombre real + sinopsis, TMDB → Postgres) -----
+
+
+def test_parse_tmdb_season_takes_name_overview_and_still():
+    payload = {
+        "episodes": [
+            {"episode_number": 1, "name": "El comienzo", "overview": "Un inicio.",
+             "still_path": "/abc.jpg"},
+            {"episode_number": 2, "name": "La duda", "overview": "", "still_path": None},
+            {"episode_number": 0, "name": "sin número"},
+            {"episode_number": 3, "name": None, "overview": None, "still_path": "https://x/y.jpg"},
+        ]
+    }
+    rows = episodes_mirror.parse_tmdb_season(payload)
+    assert [r["episode"] for r in rows] == [1, 2, 3]
+    assert rows[0]["still"].endswith("/w780/abc.jpg")
+    assert rows[1]["still"] == ""
+    # una URL completa NO se vuelve a prefijar; solo la ruta relativa de TMDB
+    assert rows[2]["still"] == ""
+
+
+def test_merge_season_meta_uses_english_only_to_fill_gaps():
+    primary = [
+        {"episode": 1, "name": "El comienzo", "overview": "", "still": ""},
+        {"episode": 2, "name": "", "overview": "Algo", "still": ""},
+    ]
+    fallback = [
+        {"episode": 1, "name": "The Beginning", "overview": "A start.", "still": "s1"},
+        {"episode": 2, "name": "The Doubt", "overview": "B", "still": "s2"},
+    ]
+    rows = episodes_mirror.merge_season_meta(primary, fallback)
+    # el es-MX nunca se pisa; el inglés solo rellena lo vacío
+    assert rows[0] == {"episode": 1, "name": "El comienzo", "overview": "A start.", "still": "s1"}
+    assert rows[1]["name"] == "The Doubt" and rows[1]["overview"] == "Algo"
+
+
+def test_meta_due_respects_ttl_retry_and_attempt_ceiling():
+    now = 1_000_000_000.0
+    # sin fila → toca
+    assert episodes_mirror.meta_due(None, 0, None, now) is True
+    # ok dentro del TTL → no; vencida → sí
+    ttl = episodes_mirror.META_TTL_HOURS * 3600.0
+    assert episodes_mirror.meta_due("ok", 0, now - ttl + 60, now) is False
+    assert episodes_mirror.meta_due("ok", 0, now - ttl - 60, now) is True
+    # failed: respeta el enfriamiento y el techo de intentos
+    retry = episodes_mirror.META_RETRY_HOURS * 3600.0
+    assert episodes_mirror.meta_due("failed", 1, now - retry + 60, now) is False
+    assert episodes_mirror.meta_due("failed", 1, now - retry - 60, now) is True
+    assert episodes_mirror.meta_due(
+        "failed", episodes_mirror.META_MAX_ATTEMPTS, now - retry * 10, now,
+    ) is False
+
+
+def test_api_enrich_glues_meta_by_episode_number():
+    episodes = [
+        {"contentId": "a", "name": "Serie T2_01", "seriesNumber": 1, "episodeNumber": 0},
+        {"contentId": "b", "name": "Serie T2_02", "seriesNumber": 2, "episodeNumber": 0},
+    ]
+    meta = [{"episode": 1, "name": "El comienzo", "overview": "Un inicio.", "still": "s1"}]
+    out = api_episodes.enrich(episodes, meta)
+    assert out[0]["title"] == "El comienzo" and out[0]["overview"] == "Un inicio."
+    # sin fila para ese capítulo: campos vacíos, jamás basura
+    assert out[1]["title"] == "" and out[1]["overview"] == "" and out[1]["still"] == ""
+    # el nombre crudo del portal NO se toca (compatibilidad del parser de la app)
+    assert out[0]["name"] == "Serie T2_01"
+
+
+def test_endpoint_serves_episode_meta_only_for_known_seasons():
+    src = open(Path(__file__).parent.parent / "api" / "app.py", encoding="utf-8").read()
+    assert "from episode_meta m" in src
+    assert "episodes_mirror.enrich(" in src
+    # la temporada del ref sale de group_members (misma fuente que el índice)
+    assert "select gm.season from group_members gm" in src
+
+
+def test_schema_has_episode_meta_tables():
+    sql = open(Path(__file__).parent.parent / "sync" / "schema.sql", encoding="utf-8").read()
+    assert "create table if not exists episode_meta (" in sql
+    assert "create table if not exists episode_meta_season" in sql
+    # una temporada se pide UNA vez: la llave es (tmdb_id, season)
+    assert "primary key (tmdb_id, season)" in sql

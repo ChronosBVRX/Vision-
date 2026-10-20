@@ -110,6 +110,13 @@ services:
       EPISODES_DELAY_SECONDS: "${EPISODES_DELAY_SECONDS:-0.25}"
       EPISODES_RETRY_HOURS: "${EPISODES_RETRY_HOURS:-6}"
       EPISODES_MAX_ATTEMPTS: "${EPISODES_MAX_ATTEMPTS:-6}"
+      # Nombre real y sinopsis por capítulo (TMDB): una petición por temporada,
+      # guardada en `episode_meta`. Presupuesto y TTL del refresco.
+      EPISODES_META_SYNC: "${EPISODES_META_SYNC:-1}"
+      EPISODES_META_MAX_PER_CYCLE: "${EPISODES_META_MAX_PER_CYCLE:-20}"
+      EPISODES_META_TTL_HOURS: "${EPISODES_META_TTL_HOURS:-336}"
+      EPISODES_META_RETRY_HOURS: "${EPISODES_META_RETRY_HOURS:-24}"
+      EPISODES_META_MAX_ATTEMPTS: "${EPISODES_META_MAX_ATTEMPTS:-4}"
       DIAG_INTERVAL_SECONDS: "${DIAG_INTERVAL_SECONDS:-300}"
       DIAG_RESOLVE_HOURS: "${DIAG_RESOLVE_HOURS:-48}"
       # Salud del catálogo: avisa si el ciclo de sync (6 h) o la pasada profunda

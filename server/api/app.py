@@ -2603,7 +2603,24 @@ async def episodes_get(
             """,
             key,
         )
-    return episodes_mirror.payload(key, row, now_ts)
+    body = episodes_mirror.payload(key, row, now_ts)
+    if body.get("status") == "ok" and body.get("episodes"):
+        # Nombre real y sinopsis (TMDB) guardados por el worker: cruce por número
+        # de capítulo. Si aún no hay metadatos, la respuesta sale como siempre.
+        meta_rows = await db().fetch(
+            """
+            select m.episode, m.name, m.overview, m.still
+            from episode_meta m
+            join enrichment e on e.tmdb_id = m.tmdb_id
+            where e.title_id = $1
+              and m.season = greatest(coalesce((
+                  select gm.season from group_members gm
+                  where gm.title_id = $1 order by gm.season limit 1), 0), 1)
+            """,
+            key,
+        )
+        body["episodes"] = episodes_mirror.enrich(body["episodes"], [dict(r) for r in meta_rows])
+    return body
 
 
 # ----- estado del índice (/v1/stats) -----

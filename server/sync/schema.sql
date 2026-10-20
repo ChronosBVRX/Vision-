@@ -363,3 +363,30 @@ create table if not exists episode_mirror (
 create index if not exists episode_mirror_pending_idx
     on episode_mirror (next_try_at) where status = 'pending';
 
+-- Nombre real y sinopsis de cada capítulo (TMDB es-MX), para la tarjeta
+-- «Siguiente capítulo»: el portal bautiza sus capítulos con una marca técnica
+-- («Serie T2_05») que no dice nada. Se guarda UNA vez por temporada y se sirve
+-- en `/v1/episodes` sin tocar TMDB en cada reproducción.
+create table if not exists episode_meta (
+    tmdb_id integer not null,
+    season integer not null,
+    episode integer not null,
+    name text not null default '',
+    overview text not null default '',
+    still text not null default '',
+    fetched_at timestamptz not null default now(),
+    primary key (tmdb_id, season, episode)
+);
+
+-- Una fila por temporada consultada (también las que no trajeron nada): evita
+-- volver a pedirla, espacia los fallos y acota los intentos.
+create table if not exists episode_meta_season (
+    tmdb_id integer not null,
+    season integer not null,
+    status text not null default 'ok',        -- ok | failed
+    attempts integer not null default 0,
+    last_error text not null default '',
+    fetched_at timestamptz not null default now(),
+    primary key (tmdb_id, season)
+);
+

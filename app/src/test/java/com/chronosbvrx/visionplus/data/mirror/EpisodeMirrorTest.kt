@@ -101,6 +101,61 @@ class EpisodeMirrorTest {
         }
     }
 
+    // ----- metadatos del capítulo (nombre real + sinopsis) -----
+
+    @Test
+    fun infoFromReadsTitleOverviewAndStillOfThatEpisode() {
+        val array = JSONArray()
+            .put(JSONObject().put("contentId", "a").put("title", "El comienzo").put("overview", "Un inicio.").put("still", "https://img/1.jpg"))
+            .put(JSONObject().put("contentId", "b").put("title", "").put("overview", "").put("still", ""))
+            .put(JSONObject().put("contentId", "c").put("title", "La duda").put("overview", "Dos caminos."))
+        val first = EpisodeMirror.infoFrom(array, "a")
+        assertEquals("El comienzo", first?.title)
+        assertEquals("Un inicio.", first?.overview)
+        assertEquals("https://img/1.jpg", first?.still)
+        // sin metadatos para ESE capítulo → null (la tarjeta se queda como está)
+        assertNull(EpisodeMirror.infoFrom(array, "b"))
+        assertNull(EpisodeMirror.infoFrom(array, "zzz"))
+        assertNull(EpisodeMirror.infoFrom(null, "a"))
+        assertNull(EpisodeMirror.infoFrom(array, ""))
+        // una fila con solo la miniatura también sirve
+        val onlyStill = JSONArray().put(JSONObject().put("contentId", "d").put("still", "https://img/d.jpg"))
+        assertEquals("https://img/d.jpg", EpisodeMirror.infoFrom(onlyStill, "d")?.still)
+    }
+
+    @Test
+    fun freshCacheFeedsTheNextCardMetadataWithoutNetwork() {
+        EpisodeMirror.cacheClearForTests()
+        try {
+            val array = JSONArray().put(
+                JSONObject().put("contentId", "n1")
+                    .put("title", "El titán de la segunda temporada")
+                    .put("overview", "Eren despierta en un mundo que ya no reconoce.")
+                    .put("still", "https://img/still.jpg"),
+            )
+            EpisodeMirror.cachePutForTests("xtv:SEASON9", System.currentTimeMillis(), array)
+            val info = kotlinx.coroutines.runBlocking { EpisodeMirror.info("xtv:SEASON9", "n1") }
+            assertEquals("El titán de la segunda temporada", info?.title)
+            assertTrue(info?.overview?.isNotBlank() == true)
+            assertNull(kotlinx.coroutines.runBlocking { EpisodeMirror.info("xtv:SEASON9", "otro") })
+        } finally {
+            EpisodeMirror.cacheClearForTests()
+        }
+    }
+
+    @Test
+    fun thePlayerCardWiresTheEpisodeMetadata() {
+        val player = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
+        assertTrue(
+            "la tarjeta «Siguiente capítulo» pide nombre/sinopsis al espejo",
+            player.contains("EpisodeMirror.info(seasonRef, code)"),
+        )
+        assertTrue("pinta una sinopsis corta", player.contains("val synopsis = TextView("))
+        assertTrue("la sinopsis usa el overview del servidor", player.contains("synopsis.text = info.overview"))
+        assertTrue("el nombre real reemplaza la marca técnica", player.contains("epTitle.text = \"\$label · \${info.title}\""))
+        assertTrue("sin póster usa la miniatura del capítulo", player.contains("loadArt(info.still)"))
+    }
+
     // ----- cableado en X4KApi -----
 
     @Test

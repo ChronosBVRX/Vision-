@@ -2901,29 +2901,6 @@ class X4KPlayerAty : ComponentActivity() {
             })
         }
         card.addView(badgeRow)
-        // Arte del siguiente capítulo (póster de la serie): la tarjeta ya no es solo texto.
-        if (intentPoster.isNotBlank()) {
-            val art = android.widget.ImageView(this).apply {
-                adjustViewBounds = true
-                setPadding(0, 0, 0, dp(10))
-            }
-            card.addView(
-                art,
-                LinearLayout.LayoutParams(dp(120), ViewGroup.LayoutParams.WRAP_CONTENT),
-            )
-            runCatching {
-                val loader = coil.Coil.imageLoader(this)
-                val req = coil.request.ImageRequest.Builder(this)
-                    .data(intentPoster)
-                    .size(240)
-                    .target(
-                        onSuccess = { art.setImageDrawable(it) },
-                        onError = { art.visibility = View.GONE },
-                    )
-                    .build()
-                loader.enqueue(req)
-            }
-        }
         if (markPostCreditsStartMs > 0L) {
             card.addView(TextView(this).apply {
                 text = "Hay escena después de los créditos"
@@ -2934,20 +2911,92 @@ class X4KPlayerAty : ComponentActivity() {
                 withIcon(R.drawable.ic_vp_movie, blueBright)
             })
         }
+        // Cuerpo: arte del capítulo a la izquierda y el texto a la derecha (nombre
+        // real + sinopsis + cuenta). Antes el póster iba arriba y la tarjeta se veía
+        // vacía: el portal solo nombra «Serie T2_05» y ese texto se limpiaba a "".
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.TOP
+        }
+        // La miniatura al lado del texto solo en la tele (en el teléfono la tarjeta
+        // es angosta: el nombre y la sinopsis llenan el ancho).
+        val showArt = isTv
+        val art = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            visibility = View.GONE
+        }
+        fun loadArt(url: String) {
+            if (url.isBlank() || !showArt) return
+            runCatching {
+                val req = coil.request.ImageRequest.Builder(this)
+                    .data(url)
+                    .size(360)
+                    .target(
+                        onSuccess = { art.setImageDrawable(it); art.visibility = View.VISIBLE },
+                        onError = { if (art.drawable == null) art.visibility = View.GONE },
+                    )
+                    .build()
+                coil.Coil.imageLoader(this).enqueue(req)
+            }
+        }
+        if (showArt) {
+            body.addView(art, LinearLayout.LayoutParams(dp(110), dp(165)).apply { rightMargin = dp(18) })
+            if (intentPoster.isNotBlank()) loadArt(intentPoster)
+        }
+        val textCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
         val epTitle = TextView(this).apply {
             setTextColor(Color.WHITE)
             textSize = 20f
             typeface = Typeface.DEFAULT_BOLD
             setPadding(0, 0, 0, dp(6))
         }
-        card.addView(epTitle)
+        textCol.addView(epTitle)
+        // Sinopsis corta (TMDB es-MX, guardada en el VPS): oculta hasta que llega.
+        val synopsis = TextView(this).apply {
+            setTextColor(0xFF9BA8BD.toInt())
+            textSize = 13.5f
+            maxLines = 3
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(0, 0, 0, dp(8))
+            visibility = View.GONE
+        }
+        textCol.addView(synopsis)
         val countdown = TextView(this).apply {
             setTextColor(0xFF9BA8BD.toInt())
             textSize = 14f
             setPadding(0, 0, 0, dp(18))
         }
-        card.addView(countdown)
+        textCol.addView(countdown)
+        body.addView(textCol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        card.addView(body)
         nextCountdownView = countdown
+        // Nombre real y sinopsis del capítulo: una petición servida por el VPS
+        // (copia en RAM del espejo); si no hay metadatos, la tarjeta queda como
+        // siempre — el enriquecimiento nunca puede empeorar lo que ya se ve.
+        fun enrichNext(code: String, seasonRef: String, label: String) {
+            if (code.isBlank() || seasonRef.isBlank()) return
+            Thread {
+                val info = kotlinx.coroutines.runBlocking {
+                    com.chronosbvrx.visionplus.data.mirror.EpisodeMirror.info(seasonRef, code)
+                } ?: return@Thread
+                runOnUiThread {
+                    if (!nextVisible || nextTarget?.code != code) return@runOnUiThread
+                    if (info.title.isNotBlank()) epTitle.text = "$label · ${info.title}"
+                    if (info.overview.isNotBlank()) {
+                        synopsis.text = info.overview
+                        synopsis.visibility = View.VISIBLE
+                    }
+                    if (showArt && intentPoster.isBlank() && info.still.isNotBlank()) {
+                        // Sin póster de serie: la miniatura real del capítulo (16:9).
+                        art.layoutParams = LinearLayout.LayoutParams(dp(110), dp(62))
+                            .apply { rightMargin = dp(18) }
+                        loadArt(info.still)
+                    }
+                }
+            }.start()
+        }
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -2991,7 +3040,7 @@ class X4KPlayerAty : ComponentActivity() {
         dim.addView(
             card,
             FrameLayout.LayoutParams(
-                (resources.displayMetrics.widthPixels * 0.72f).toInt(),
+                (resources.displayMetrics.widthPixels * (if (isTv) 0.72f else 0.9f)).toInt(),
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 Gravity.CENTER,
             ),
@@ -3026,6 +3075,11 @@ class X4KPlayerAty : ComponentActivity() {
             )
             epTitle.text = displayLabel
             tickNext()
+            enrichNext(
+                epIds[nextIdx],
+                seasonIds.getOrNull(curSeasonIndex)?.takeIf { it.isNotBlank() } ?: curSeries,
+                "Capítulo ${nextIdx + 1}",
+            )
         } else {
             val nextSeasonIdx = curSeasonIndex + 1
             val sLabel = seasonLabel(nextSeasonIdx)
@@ -3061,6 +3115,7 @@ class X4KPlayerAty : ComponentActivity() {
                     )
                     epTitle.text = displayLabel
                     tickNext()
+                    enrichNext(first.contentId, seasonId, "$sLabel · Capítulo 1")
                 }
             }.start()
         }

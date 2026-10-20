@@ -44,6 +44,19 @@ MAX_ATTEMPTS = int(os.environ.get("EPISODES_MAX_ATTEMPTS", "6") or "6")
 SESSION_BACKOFF_S = float(os.environ.get("EPISODES_SESSION_BACKOFF_SECONDS", "900") or "900")
 NET_BACKOFF_S = float(os.environ.get("EPISODES_NET_BACKOFF_SECONDS", "300") or "300")
 
+# ----- metadatos por episodio (nombre real + sinopsis es-MX, TMDB) -----
+# El portal bautiza sus capítulos con una marca técnica («Serie T2_05»): la tarjeta
+# «Siguiente capítulo» se veía vacía. TMDB da el nombre real y la sinopsis; se baja
+# UNA vez por temporada (una sola petición trae todos los capítulos) y se guarda en
+# `episode_meta`, así el API la sirve sin volver a tocar TMDB.
+META_ENABLED = os.environ.get("EPISODES_META_SYNC", "1") == "1"
+META_MAX_PER_CYCLE = int(os.environ.get("EPISODES_META_MAX_PER_CYCLE", "20") or "20")
+META_TTL_HOURS = float(os.environ.get("EPISODES_META_TTL_HOURS", "336") or "336")
+META_RETRY_HOURS = float(os.environ.get("EPISODES_META_RETRY_HOURS", "24") or "24")
+META_MAX_ATTEMPTS = int(os.environ.get("EPISODES_META_MAX_ATTEMPTS", "4") or "4")
+META_DELAY_SECONDS = float(os.environ.get("EPISODES_META_DELAY_SECONDS", "0.15") or "0.15")
+TMDB_STILL_BASE = "https://image.tmdb.org/t/p/w780"
+
 # Códigos del portal que significan «esta sesión ya no sirve» (los mismos que la
 # app trata en SESSION_CODE_RX + la patada clásica aaa100083). Con uno de estos
 # la cola entera se re-agenda: renovar NO es cosa de este loop.
@@ -100,6 +113,81 @@ def _item_data(client: XtvClient, cid: str, asset_type: str) -> dict:
         "userToken": client.user_token, "userId": client.user_id, "portalCode": "masnew",
         "contentId": cid, "type": asset_type, "sortType": "", "language": "es",
     })
+
+
+# ----- metadatos TMDB por episodio (puro, testeable sin red ni DB) -----
+
+
+def parse_tmdb_season(payload: dict) -> list[dict]:
+    """Episodios de `/tv/{id}/season/{n}` → [{episode, name, overview, still}].
+
+    TMDB devuelve `episode_number`, `name`, `overview` y `still_path`; la imagen
+    se guarda ya armada (`w780`, buen tamaño para la tarjeta de la tele). Sin
+    número de episodio no sirve para cruzar con el portal: se descarta.
+    """
+    out: list[dict] = []
+    for item in (payload or {}).get("episodes") or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            number = int(item.get("episode_number") or 0)
+        except (TypeError, ValueError):
+            continue
+        if number <= 0:
+            continue
+        still = str(item.get("still_path") or "").strip()
+        out.append({
+            "episode": number,
+            "name": str(item.get("name") or "").strip(),
+            "overview": str(item.get("overview") or "").strip(),
+            "still": f"{TMDB_STILL_BASE}{still}" if still.startswith("/") else "",
+        })
+    return out
+
+
+def merge_season_meta(primary: list[dict], fallback: list[dict]) -> list[dict]:
+    """es-MX manda; el inglés SOLO rellena lo que vino vacío (nombre/sinopsis/imagen)."""
+    by_ep = {row["episode"]: row for row in fallback or []}
+    out: list[dict] = []
+    for row in primary or []:
+        alt = by_ep.get(row["episode"]) or {}
+        out.append({
+            "episode": row["episode"],
+            "name": row.get("name") or alt.get("name", ""),
+            "overview": row.get("overview") or alt.get("overview", ""),
+            "still": row.get("still") or alt.get("still", ""),
+        })
+    return out
+
+
+def _age_seconds(stamp: Any, now_ts: float) -> float:
+    """Edad de una marca (datetime, epoch o None). Desconocida = infinito (ya toca)."""
+    if stamp is None:
+        return float("inf")
+    if hasattr(stamp, "timestamp"):
+        try:
+            return now_ts - float(stamp.timestamp())
+        except (TypeError, ValueError, OSError):
+            return float("inf")
+    try:
+        return now_ts - float(stamp)
+    except (TypeError, ValueError):
+        return float("inf")
+
+
+def meta_due(status: str | None, attempts: int, fetched_at: Any, now_ts: float) -> bool:
+    """¿Toca (re)pedir esta temporada a TMDB? Puro, para tests.
+
+    - sin fila → sí (primera vez);
+    - `ok` → solo al vencer el TTL (14 días por defecto);
+    - `failed` → tras el enfriamiento y con intentos disponibles.
+    """
+    if status is None:
+        return True
+    age = _age_seconds(fetched_at, now_ts)
+    if status == "ok":
+        return age > META_TTL_HOURS * 3600.0
+    return int(attempts or 0) < META_MAX_ATTEMPTS and age > META_RETRY_HOURS * 3600.0
 
 
 def fetch_programs(client: Any, cid: str) -> tuple[str, list[dict]]:
@@ -247,6 +335,119 @@ async def drain(pool: asyncpg.Pool) -> int:
     return ok + failed
 
 
+# ----- enriquecimiento TMDB de cada temporada espejada -----
+
+# Temporadas a consultar: las que ya tienen su lista espejada, con ficha TMDB.
+# La temporada sale de `group_members` (misma fuente que el índice); sin grupo = 1.
+_META_CANDIDATES_SQL = """
+select r.ref, r.tmdb_id, r.season, s.status, s.attempts, s.fetched_at
+from (
+    select distinct m.ref, e.tmdb_id,
+           greatest(coalesce((
+               select gm.season from group_members gm
+               where gm.title_id = m.ref order by gm.season limit 1), 0), 1) as season
+    from episode_mirror m
+    join enrichment e on e.title_id = m.ref
+    where m.status = 'ok' and e.tmdb_id is not null and e.tmdb_id > 0
+) r
+left join episode_meta_season s
+       on s.tmdb_id = r.tmdb_id and s.season = r.season
+where s.tmdb_id is null
+   or (s.status = 'ok' and s.fetched_at < now() - make_interval(secs => $1))
+   or (s.status = 'failed' and s.attempts < $2
+       and s.fetched_at < now() - make_interval(secs => $3))
+order by coalesce(s.fetched_at, to_timestamp(0)) asc, r.ref
+limit $4
+"""
+
+
+def _tmdb_season(tmdb_id: int, season: int, language: str) -> list[dict]:
+    """Una sola petición por temporada trae TODOS los capítulos (nombre/sinopsis/imagen)."""
+    from tmdb import _get  # local: comparte llave y ritmo del worker
+
+    payload = _get(f"/tv/{tmdb_id}/season/{season}", language=language)
+    return parse_tmdb_season(payload)
+
+
+async def _store_meta(pool: asyncpg.Pool, tmdb_id: int, season: int, episodes: list[dict]) -> None:
+    """Reemplaza la temporada completa y marca la fila como buena (con o sin capítulos)."""
+    async with pool.acquire() as con:
+        async with con.transaction():
+            await con.execute(
+                "delete from episode_meta where tmdb_id = $1 and season = $2", tmdb_id, season)
+            if episodes:
+                await con.executemany(
+                    "insert into episode_meta (tmdb_id, season, episode, name, overview, still, fetched_at) "
+                    "values ($1, $2, $3, $4, $5, $6, now())",
+                    [(tmdb_id, season, e["episode"], e["name"], e["overview"], e["still"])
+                     for e in episodes],
+                )
+            await con.execute(
+                """
+                insert into episode_meta_season (tmdb_id, season, status, attempts, last_error, fetched_at)
+                values ($1, $2, 'ok', 0, '', now())
+                on conflict (tmdb_id, season) do update set
+                    status = 'ok', attempts = 0, last_error = '', fetched_at = now()
+                """,
+                tmdb_id, season,
+            )
+
+
+async def _store_meta_failure(pool: asyncpg.Pool, tmdb_id: int, season: int, error: str) -> None:
+    await pool.execute(
+        """
+        insert into episode_meta_season (tmdb_id, season, status, attempts, last_error, fetched_at)
+        values ($1, $2, 'failed', 1, $3, now())
+        on conflict (tmdb_id, season) do update set
+            status = 'failed', attempts = episode_meta_season.attempts + 1,
+            last_error = excluded.last_error, fetched_at = now()
+        """,
+        tmdb_id, season, (error or "")[:160],
+    )
+
+
+async def enrich_pass(pool: asyncpg.Pool) -> int:
+    """Rellena nombre/sinopsis de hasta `META_MAX_PER_CYCLE` temporadas.
+
+    Barato y acotado: UNA petición por temporada (no por capítulo), guardada en
+    Postgres. Un fallo de TMDB no tumba la pasada; las películas (sin lista) ni
+    aparecen como candidatas.
+    """
+    if not META_ENABLED:
+        return 0
+    rows = await pool.fetch(
+        _META_CANDIDATES_SQL,
+        META_TTL_HOURS * 3600.0,
+        META_MAX_ATTEMPTS,
+        META_RETRY_HOURS * 3600.0,
+        META_MAX_PER_CYCLE,
+    )
+    done = 0
+    for row in rows:
+        tmdb_id = int(row["tmdb_id"])
+        season = max(int(row["season"] or 0), 1)
+        try:
+            primary = await asyncio.to_thread(_tmdb_season, tmdb_id, season, "es-MX")
+            merged = primary
+            if not any(e["overview"] for e in primary):
+                # El es-MX suele venir sin sinopsis en series nuevas: el inglés
+                # rellena lo vacío (nunca pisa un texto es-MX existente).
+                try:
+                    fallback = await asyncio.to_thread(_tmdb_season, tmdb_id, season, "en-US")
+                except Exception:  # noqa: BLE001 - sin respaldo igual sirve el es-MX
+                    fallback = []
+                merged = merge_season_meta(primary, fallback)
+            await _store_meta(pool, tmdb_id, season, merged)
+            done += 1
+        except Exception as exc:  # noqa: BLE001
+            await _store_meta_failure(pool, tmdb_id, season, str(exc))
+        if META_DELAY_SECONDS > 0:
+            await asyncio.sleep(META_DELAY_SECONDS)
+    if done:
+        log.info("episodios: metadatos TMDB de %s temporadas", done)
+    return done
+
+
 async def loop(pool: asyncpg.Pool) -> None:
     """Loop propio (cada `EPISODES_INTERVAL_SECONDS`, default 90 s), independiente
     del ciclo mayor del worker (6 h): una serie nueva debe quedar espejada en
@@ -255,6 +456,7 @@ async def loop(pool: asyncpg.Pool) -> None:
         try:
             if ENABLED:
                 await drain(pool)
+            await enrich_pass(pool)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001
@@ -272,6 +474,10 @@ async def run_once(pool: asyncpg.Pool) -> None:
         total += done
     if total:
         log.info("episodios: pasada manual completada (%s refs)", total)
+    # Metadatos: pasadas hasta vaciar candidatos (operación, no régimen).
+    for _ in range(200):
+        if await enrich_pass(pool) == 0:
+            break
 
 
 if __name__ == "__main__":  # operación a mano: `docker compose exec sync python episodes_mirror.py`

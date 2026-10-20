@@ -99,3 +99,37 @@ def payload(ref: str, row, now_ts: float | None = None) -> dict:
         "fetchedAt": fetched,
         "ttlHours": EPISODES_TTL_HOURS,
     }
+
+
+def enrich(episodes: list[dict], meta_rows) -> list[dict]:
+    """Pega nombre real, sinopsis y miniatura de TMDB a cada capítulo (por número).
+
+    El portal solo trae un nombre técnico («Serie T2_05»): la tarjeta «Siguiente
+    capítulo» se veía vacía. TMDB da el nombre de verdad y una sinopsis corta; se
+    guarda en `episode_meta` y aquí solo se cruza. Sin fila para ese capítulo, los
+    campos van vacíos y la app enseña lo que el portal sí trae (nunca empeora).
+    Puro: la DB la consulta el endpoint.
+    """
+    if not episodes:
+        return []
+    by_ep: dict[int, dict] = {}
+    for row in meta_rows or []:
+        try:
+            number = int(row.get("episode") or 0)
+        except (TypeError, ValueError):
+            continue
+        if number > 0:
+            by_ep[number] = row
+    out: list[dict] = []
+    for ep in episodes:
+        item = dict(ep)
+        try:
+            number = int(item.get("seriesNumber") or 0)
+        except (TypeError, ValueError):
+            number = 0
+        meta = by_ep.get(number) or {}
+        item["title"] = str(meta.get("name") or "")
+        item["overview"] = str(meta.get("overview") or "")
+        item["still"] = str(meta.get("still") or "")
+        out.append(item)
+    return out

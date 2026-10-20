@@ -65,13 +65,43 @@ object EpisodeMirror {
         }.getOrNull()?.takeIf { it.length() > 0 }
     }
 
+    /** Nombre real y sinopsis corta del capítulo (TMDB, guardados en el VPS). */
+    data class EpisodeInfo(val title: String, val overview: String, val still: String)
+
+    /**
+     * Extrae `title/overview/still` de la fila del capítulo (puro). El espejo los
+     * manda ya cruzados por número; si esa temporada aún no tiene metadatos, son
+     * cadenas vacías y la tarjeta se queda como siempre (nunca empeora).
+     */
+    internal fun infoFrom(array: JSONArray?, contentId: String): EpisodeInfo? {
+        if (array == null || contentId.isBlank()) return null
+        for (i in 0 until array.length()) {
+            val o = array.optJSONObject(i) ?: continue
+            if (o.optString("contentId").trim() != contentId.trim()) continue
+            val info = EpisodeInfo(
+                title = o.optString("title").trim(),
+                overview = o.optString("overview").trim(),
+                still = o.optString("still").trim(),
+            )
+            return info.takeIf { it.title.isNotBlank() || it.overview.isNotBlank() || it.still.isNotBlank() }
+        }
+        return null
+    }
+
+    /**
+     * Metadatos del capítulo `contentId` de esa temporada (`xtv:<cid>` de la fila).
+     * Usa la copia en RAM del espejo; si está fría, la red una vez (~50 ms servida
+     * por el VPS) y `null` ante cualquier fallo.
+     */
+    suspend fun info(seasonId: String, contentId: String): EpisodeInfo? =
+        runCatching { episodes(seasonId) }.getOrNull()?.let { infoFrom(it, contentId) }
+
     /**
      * La lista cruda de capítulos del espejo, o `null` si no hay copia servible
      * (falla de red, ref fuera del catálogo, ficha sin capítulos, TTL vencido…).
      * Jamás lanza: el caller cae al portal sin historias.
      */
-    suspend fun episodes(seriesId: String): JSONArray? = withContext(Dispatchers.IO) {
-        val ref = mirrorRef(seriesId)
+    suspend fun episodes(seriesId: String): JSONArray? = withContext(Dispatchers.IO) {        val ref = mirrorRef(seriesId)
         val now = System.currentTimeMillis()
         synchronized(cache) {
             val hit = cache[ref]
