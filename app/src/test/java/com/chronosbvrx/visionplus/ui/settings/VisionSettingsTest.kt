@@ -31,10 +31,41 @@ class VisionSettingsTest {
         assertEquals("Auto", VisionSettings.defaultQuality)
         assertTrue(VisionSettings.autoPlayNext)
         assertTrue(VisionSettings.autoResume)
-        assertEquals("Automático", VisionSettings.skipIntroModeLabel(VisionSettings.skipIntroMode))
+        assertEquals("Botón", VisionSettings.skipIntroModeLabel(VisionSettings.skipIntroMode))
         assertFalse(VisionSettings.nextOnCredits)
         assertEquals(0, VisionSettings.defaultAspect)
         assertEquals("Rápido (0.5s)", VisionSettings.liveBuffer)
+    }
+
+    @Test
+    fun skipIntroOnlyLeapsWhenTheUserPressesByDefault() {
+        // Pedido del usuario: el capítulo NO se mueve solo hasta que pulse «Omitir intro».
+        // El ajuste se persiste únicamente al tocarlo, así que el default manda en toda
+        // instalación que nunca lo cambió (el caso reportado).
+        assertEquals(VisionSettings.SKIP_INTRO_BUTTON, VisionSettings.skipIntroMode)
+        assertEquals(VisionSettings.SKIP_INTRO_BUTTON, VisionSettings.skipIntroModeOf(context))
+        assertEquals("Botón", VisionSettings.skipIntroModeLabel(VisionSettings.skipIntroModeOf(context)))
+    }
+
+    @Test
+    fun automaticSkipIsAnExplicitChoiceAndPersists() {
+        VisionSettings.setSkipIntroMode(context, VisionSettings.SKIP_INTRO_AUTO)
+        assertEquals("Automático", VisionSettings.skipIntroModeLabel(VisionSettings.skipIntroMode))
+        assertEquals(VisionSettings.SKIP_INTRO_AUTO, VisionSettings.skipIntroModeOf(context))
+        VisionSettings.init(context)
+        assertEquals(VisionSettings.SKIP_INTRO_AUTO, VisionSettings.skipIntroMode)
+        // Y regresar a Botón también se recuerda.
+        VisionSettings.setSkipIntroMode(context, VisionSettings.SKIP_INTRO_BUTTON)
+        VisionSettings.init(context)
+        assertEquals(VisionSettings.SKIP_INTRO_BUTTON, VisionSettings.skipIntroMode)
+        assertEquals(VisionSettings.SKIP_INTRO_BUTTON, VisionSettings.skipIntroModeOf(context))
+    }
+
+    @Test
+    fun theModeCycleTouchesEveryOption() {
+        assertEquals(VisionSettings.SKIP_INTRO_AUTO, VisionSettings.nextSkipIntroMode(VisionSettings.SKIP_INTRO_BUTTON))
+        assertEquals(VisionSettings.SKIP_INTRO_NEVER, VisionSettings.nextSkipIntroMode(VisionSettings.SKIP_INTRO_AUTO))
+        assertEquals(VisionSettings.SKIP_INTRO_BUTTON, VisionSettings.nextSkipIntroMode(VisionSettings.SKIP_INTRO_NEVER))
     }
 
     @Test

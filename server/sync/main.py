@@ -18,6 +18,7 @@ import archive_ia
 import aniskip
 import diag
 import epg
+import episodes_mirror
 import gee38
 import grouping
 import index_build
@@ -176,6 +177,9 @@ async def main() -> None:
         epg_task = asyncio.create_task(epg.loop(pool))
         diag_task = asyncio.create_task(diag.loop(pool))
         gee38_task = asyncio.create_task(gee38.loop(pool))
+        # Espejo de capítulos: drena la cola de `/v1/episodes` cada 90 s con la
+        # sesión del worker (jamás acuña). Comentar si algún día molesta.
+        episodes_task = asyncio.create_task(episodes_mirror.loop(pool))
         try:
             while True:
                 changed = await run_connectors(pool)
@@ -244,6 +248,7 @@ async def main() -> None:
             epg_task.cancel()
             diag_task.cancel()
             gee38_task.cancel()
+            episodes_task.cancel()
             try:
                 await sports_task
             except asyncio.CancelledError:
@@ -258,6 +263,10 @@ async def main() -> None:
                 pass
             try:
                 await gee38_task
+            except asyncio.CancelledError:
+                pass
+            try:
+                await episodes_task
             except asyncio.CancelledError:
                 pass
     finally:

@@ -341,3 +341,25 @@ create table if not exists gee38_meta (
     updated_at timestamptz not null default now()
 );
 
+-- Espejo de capítulos/temporadas: la app pregunta al API (`/v1/episodes`) y NO va
+-- al portal. El worker baja la lista UNA vez con SU sesión (jamás acuña) y la
+-- guarda aquí: la ficha pinta el selector al instante (~30 ms) y el portal solo
+-- se toca al reproducir. `ref` es la fila de temporada como la app la conoce
+-- (`xtv:<contentId>`). El payload guarda los campos crudos que el parser de la
+-- app consume (contentId/name/seriesNumber/episodeNumber): desduplicar, ordenar
+-- y normalizar el nombre queda en la app (una sola implementación).
+create table if not exists episode_mirror (
+    ref text primary key,
+    payload jsonb not null default '[]'::jsonb,
+    episodes integer not null default 0,
+    status text not null default 'pending',   -- pending | ok | failed
+    requested_at timestamptz not null default now(),
+    fetched_at timestamptz,
+    attempts integer not null default 0,
+    last_error text not null default '',
+    next_try_at timestamptz,
+    updated_at timestamptz not null default now()
+);
+create index if not exists episode_mirror_pending_idx
+    on episode_mirror (next_try_at) where status = 'pending';
+

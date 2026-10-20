@@ -40,6 +40,12 @@ object VisionSettings {
     const val SKIP_INTRO_BUTTON = "button"
     const val SKIP_INTRO_AUTO = "auto"
     const val SKIP_INTRO_NEVER = "never"
+    /**
+     * Por defecto se PREGUNTA: el capítulo no se mueve solo. El ajuste se guarda solo al
+     * tocarlo, así que este default manda en toda instalación que nunca lo cambió — y
+     * «Automático» queda como elección explícita de quien lo activa.
+     */
+    const val SKIP_INTRO_DEFAULT = SKIP_INTRO_BUTTON
     val skipIntroModeOptions = listOf(SKIP_INTRO_BUTTON, SKIP_INTRO_AUTO, SKIP_INTRO_NEVER)
 
     var defaultQuality by mutableStateOf("Auto")
@@ -50,7 +56,7 @@ object VisionSettings {
     var defaultAspect by mutableStateOf(0) // 0: Fit (16:9 original), 1: Fill / Zoom
     var liveBuffer by mutableStateOf("Rápido (0.5s)")
     var diagnosticsEnabled by mutableStateOf(true)
-    var skipIntroMode by mutableStateOf(SKIP_INTRO_AUTO)
+    var skipIntroMode by mutableStateOf(SKIP_INTRO_DEFAULT)
     /** Subtítulos: tamaño y posición reales (ahora los pinta la app, no el motor). */
     const val SUB_SIZE_SMALL = "small"
     const val SUB_SIZE_NORMAL = "normal"
@@ -82,7 +88,7 @@ object VisionSettings {
         defaultAspect = p.getInt(KEY_DEFAULT_ASPECT, 0)
         liveBuffer = p.getString(KEY_LIVE_BUFFER, "Rápido (0.5s)") ?: "Rápido (0.5s)"
         diagnosticsEnabled = p.getBoolean(KEY_DIAGNOSTICS, true)
-        skipIntroMode = p.getString(KEY_SKIP_INTRO_MODE, SKIP_INTRO_AUTO) ?: SKIP_INTRO_AUTO
+        skipIntroMode = p.getString(KEY_SKIP_INTRO_MODE, SKIP_INTRO_DEFAULT) ?: SKIP_INTRO_DEFAULT
         subSize = p.getString(KEY_SUB_SIZE, SUB_SIZE_NORMAL) ?: SUB_SIZE_NORMAL
         subPosition = p.getString(KEY_SUB_POSITION, SUB_POS_BOTTOM) ?: SUB_POS_BOTTOM
         subOffsetMs = p.getInt(KEY_SUB_OFFSET_MS, 0)
@@ -94,7 +100,7 @@ object VisionSettings {
     /** Lectura directa (sin depender de [init]) para el proceso del reproductor `:x4k`. */
     fun skipIntroModeOf(context: Context): String =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_SKIP_INTRO_MODE, SKIP_INTRO_AUTO) ?: SKIP_INTRO_AUTO
+            .getString(KEY_SKIP_INTRO_MODE, SKIP_INTRO_DEFAULT) ?: SKIP_INTRO_DEFAULT
 
     /** Lectura directa del auto-avance (el reproductor nativo lo honra de verdad). */
     fun autoPlayNextOf(context: Context): Boolean =

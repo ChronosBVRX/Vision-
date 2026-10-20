@@ -7,6 +7,7 @@ import android.util.Log
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.PlaybackHistory
+import com.chronosbvrx.visionplus.data.mirror.EpisodeMirror
 import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import kotlinx.coroutines.CoroutineScope
@@ -985,6 +986,11 @@ object X4KApi {
     suspend fun episodeProgramsFor(context: Context, seriesId: String): List<EpisodeProgram> = withContext(Dispatchers.IO) {
         guarded {
             val cid = xtvPortalId(seriesId)
+            // Espejo primero: la copia del servidor tarda ~ms y NO gasta la sesión del
+            // equipo. Cualquier ausencia/fallo → null → el portal EXACTO de siempre
+            // (el espejo solo puede mejorar, jamás empeorar).
+            val mirrored = EpisodeMirror.episodes(seriesId)?.let { parseEpisodePrograms(it) }
+            if (!mirrored.isNullOrEmpty()) return@guarded mirrored
             for (type in listOf("0", "1")) {
                 val asset = runCatching {
                     callWithSession(context, "/api/portalCore/v4/getItemData") { token ->

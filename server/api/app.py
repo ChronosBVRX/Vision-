@@ -24,6 +24,7 @@ from starlette.middleware.gzip import GZipMiddleware
 import markers as skip_markers
 import portal as portal_search
 import slots as device_slots
+import episodes as episodes_mirror
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 API_KEY = os.environ["API_KEY"]
@@ -2560,6 +2561,49 @@ async def markers_save(request: Request, x_api_key: str | None = Header(default=
         key, ep, season, json.dumps(segments, ensure_ascii=False), clear,
     )
     return {"ok": True, "ref": key, "episode": ep, "kind": kind, "cleared": clear}
+
+
+# ----- espejo de capítulos/temporadas (/v1/episodes) -----
+# La lista de temporadas/capítulos que la app usa para los selectores vive en el
+# portal: pedirla en cada apertura de ficha cuesta 0.2–0.7 s por aparato (y usa
+# la sesión del equipo). El worker la baja UNA vez y el API sirve la copia: la
+# ficha pinta al instante y el portal solo se toca al reproducir. Copia vencida
+# o ausente → respuesta vacía + encolar la baja (la app cae al portal como
+# siempre: el espejo solo puede mejorar, jamás empeorar).
+
+
+@app.get("/v1/episodes")
+async def episodes_get(
+    ref: str = Query(min_length=1, max_length=80),
+    x_api_key: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    key = episodes_mirror.valid_ref(ref)
+    if key is None:
+        raise HTTPException(status_code=400, detail="referencia inválida")
+    # Guardia dura: solo refs que el catálogo conoce (la fila de temporada existe
+    # en `titles`). Sin esto, cualquier cid arbitrario ponía al worker a pedir.
+    known = await db().fetchval("select exists(select 1 from titles where id = $1)", key)
+    if not known:
+        raise HTTPException(status_code=404, detail="título fuera del catálogo")
+    now_ts = time.time()
+    row = await db().fetchrow(
+        """select status, payload, fetched_at, requested_at, updated_at, attempts
+           from episode_mirror where ref = $1""",
+        key,
+    )
+    if episodes_mirror.needs_enqueue(row, now_ts):
+        await db().execute(
+            """
+            insert into episode_mirror (ref, requested_at, updated_at)
+            values ($1, now(), now())
+            on conflict (ref) do update set
+                status = 'pending', requested_at = now(), updated_at = now(),
+                next_try_at = null
+            """,
+            key,
+        )
+    return episodes_mirror.payload(key, row, now_ts)
 
 
 # ----- estado del índice (/v1/stats) -----

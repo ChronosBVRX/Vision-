@@ -50,6 +50,29 @@ class MarkersPlayerWiringTest {
         assertFalse("el lanzamiento ya no espera al job de marcadores", api.contains("markersJob?.await()"))
     }
 
+    @Test
+    fun autoSkipOnlyRunsWhenTheUserChoseAutomatic() {
+        // Pedido del usuario (post 2.5.113): «el omitir intro está funcionando solo sin
+        // que lo presione». El default volvió a Botón y el salto automático SOLO puede
+        // dispararse cuando el ajuste dice Automático — en los dos reproductores.
+        val player = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
+        val nativeGate = player.indexOf("private fun maybeAutoSkipIntro(")
+        assertTrue("maybeAutoSkipIntro existe", nativeGate >= 0)
+        val nativeBody = player.substring(nativeGate, minOf(player.length, nativeGate + 400))
+        assertTrue(
+            "el nativo se detiene si el modo no es Automático",
+            nativeBody.contains("skipIntroMode != com.chronosbvrx.visionplus.ui.settings.VisionSettings.SKIP_INTRO_AUTO) return"),
+        )
+        val compose = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
+        val composeGate = compose.indexOf("val skipMode =")
+        assertTrue("el Compose lee el ajuste", composeGate >= 0)
+        val composeBody = compose.substring(composeGate, minOf(compose.length, composeGate + 2_400))
+        assertTrue(
+            "el Compose se detiene si el modo no es Automático",
+            composeBody.contains("VisionSettings.SKIP_INTRO_AUTO) return@LaunchedEffect"),
+        )
+    }
+
     private fun requireSource(path: String): String {
         val file = File(path)
         assertTrue("no existe $path (cwd=${File(".").absolutePath})", file.isFile)

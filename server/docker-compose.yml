@@ -46,6 +46,11 @@ services:
       DATABASE_URL: "postgresql://${POSTGRES_USER:-catalog_user}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-catalog_db}"
       API_KEY: "${API_KEY:?define API_KEY en server/.env}"
       CONFIG_ADMIN_KEY: "${CONFIG_ADMIN_KEY:-}"
+      # Espejo de capítulos: TTL de la copia (vencida → se encarga el refresco y
+      # la app cae al portal) y cooldown anti-martillo de la cola.
+      EPISODES_TTL_HOURS: "${EPISODES_TTL_HOURS:-48}"
+      EPISODES_REQUEST_COOLDOWN_MINUTES: "${EPISODES_REQUEST_COOLDOWN_MINUTES:-10}"
+      EPISODES_FAILED_RETRY_HOURS: "${EPISODES_FAILED_RETRY_HOURS:-24}"
       TZ: "${TZ:-America/Mexico_City}"
     ports:
       - "127.0.0.1:8100:8000"
@@ -97,6 +102,14 @@ services:
       GEE38_SYNC: "${GEE38_SYNC:-1}"
       GEE38_INTERVAL_SECONDS: "${GEE38_INTERVAL_SECONDS:-1800}"
       GEE38_KEY: "${GEE38_KEY:-}"
+      # Espejo de capítulos/temporadas (`/v1/episodes`): drena la cola pedida por
+      # el API con la sesión del worker (jamás acuña). Tope/ritmo conservadores.
+      EPISODES_SYNC: "${EPISODES_SYNC:-1}"
+      EPISODES_INTERVAL_SECONDS: "${EPISODES_INTERVAL_SECONDS:-90}"
+      EPISODES_MAX_PER_CYCLE: "${EPISODES_MAX_PER_CYCLE:-30}"
+      EPISODES_DELAY_SECONDS: "${EPISODES_DELAY_SECONDS:-0.25}"
+      EPISODES_RETRY_HOURS: "${EPISODES_RETRY_HOURS:-6}"
+      EPISODES_MAX_ATTEMPTS: "${EPISODES_MAX_ATTEMPTS:-6}"
       DIAG_INTERVAL_SECONDS: "${DIAG_INTERVAL_SECONDS:-300}"
       DIAG_RESOLVE_HOURS: "${DIAG_RESOLVE_HOURS:-48}"
       # Salud del catálogo: avisa si el ciclo de sync (6 h) o la pasada profunda

@@ -209,7 +209,7 @@ private fun PlaybackTab() {
         SettingsBlock {
             Text("Omitir intro y créditos", style = MaterialTheme.typography.bodyLarge)
             Text(
-                "Con los tiempos de la comunidad, el botón aparece durante la entrada de series, novelas y anime; al llegar a los créditos, la tarjeta de siguiente capítulo sale antes del final.",
+                "Botón (recomendado): aparece «Omitir intro» durante la entrada y el capítulo NO se mueve hasta que lo pulses. Automático: salta solo al entrar. Nunca: sin botón. Al llegar a los créditos, la tarjeta del siguiente capítulo sale antes del final.",
                 style = MaterialTheme.typography.bodySmall,
                 color = VisionTextSecondary,
                 modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
