@@ -124,6 +124,23 @@ class EpisodeMirrorTest {
     }
 
     @Test
+    fun hasMetaTellsACopyWithoutTmdbDataFromOneThatHasIt() {
+        // Copia ANTES del enriquecimiento: ninguna fila trae metadatos → se refresca.
+        val plain = JSONArray()
+            .put(JSONObject().put("contentId", "a").put("name", "Serie T1_01"))
+            .put(JSONObject().put("contentId", "b").put("name", "Serie T1_02"))
+        assertFalse(EpisodeMirror.hasMeta(plain))
+        assertFalse(EpisodeMirror.hasMeta(null))
+        assertFalse(EpisodeMirror.hasMeta(JSONArray()))
+        // Con metadatos: un capítulo sin ficha NO vuelve a pedir la temporada.
+        val enriched = JSONArray()
+            .put(JSONObject().put("contentId", "a").put("title", "El comienzo"))
+            .put(JSONObject().put("contentId", "b"))
+        assertTrue(EpisodeMirror.hasMeta(enriched))
+        assertTrue(EpisodeMirror.hasMeta(JSONArray().put(JSONObject().put("contentId", "c").put("still", "x.jpg"))))
+    }
+
+    @Test
     fun freshCacheFeedsTheNextCardMetadataWithoutNetwork() {
         EpisodeMirror.cacheClearForTests()
         try {

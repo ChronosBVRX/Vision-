@@ -381,6 +381,17 @@ def test_endpoint_serves_episode_meta_only_for_known_seasons():
     assert "select gm.season from group_members gm" in src
 
 
+def test_worker_and_api_resolve_tmdb_id_with_the_same_group_consensus():
+    # Fichas de temporada mal emparejadas (Yellowstone T4/T5, Los Simpson T17) rompían
+    # el cruce con un 404: el tmdb_id sale del VOTO MAYORITARIO del grupo. El worker y
+    # el API DEBEN usar exactamente la misma regla o los metadatos no se encuentran.
+    marker = "order by count(*) desc, avg(coalesce("
+    sync_src = open(Path(__file__).parent.parent / "sync" / "episodes_mirror.py", encoding="utf-8").read()
+    api_src = open(Path(__file__).parent.parent / "api" / "app.py", encoding="utf-8").read()
+    assert marker in sync_src and "group_members gm0" in sync_src
+    assert marker in api_src and "group_members gm0" in api_src
+
+
 def test_schema_has_episode_meta_tables():
     sql = open(Path(__file__).parent.parent / "sync" / "schema.sql", encoding="utf-8").read()
     assert "create table if not exists episode_meta (" in sql

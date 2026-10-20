@@ -339,10 +339,24 @@ async def drain(pool: asyncpg.Pool) -> int:
 
 # Temporadas a consultar: las que ya tienen su lista espejada, con ficha TMDB.
 # La temporada sale de `group_members` (misma fuente que el índice); sin grupo = 1.
+# El `tmdb_id` NO se toma de la ficha de ESA temporada: hay títulos de temporada
+# mal emparejados (Yellowstone T4/T5 → 214951; Los Simpson T17 → 383887) mientras
+# el resto del grupo sí tiene el bueno. Manda el voto mayoritario del grupo
+# (desempate por confianza del match), con la ficha propia solo de respaldo.
 _META_CANDIDATES_SQL = """
 select r.ref, r.tmdb_id, r.season, s.status, s.attempts, s.fetched_at
 from (
-    select distinct m.ref, e.tmdb_id,
+    select distinct m.ref,
+           coalesce((
+               select e2.tmdb_id
+               from group_members gm0
+               join group_members gm2 on gm2.group_id = gm0.group_id
+               join enrichment e2 on e2.title_id = gm2.title_id
+               where gm0.title_id = m.ref and e2.tmdb_id is not null and e2.tmdb_id > 0
+               group by e2.tmdb_id
+               order by count(*) desc, avg(coalesce(e2.match_confidence, 0)) desc, e2.tmdb_id
+               limit 1
+           ), e.tmdb_id) as tmdb_id,
            greatest(coalesce((
                select gm.season from group_members gm
                where gm.title_id = m.ref order by gm.season limit 1), 0), 1) as season

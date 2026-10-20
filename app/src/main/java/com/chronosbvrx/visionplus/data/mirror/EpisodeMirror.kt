@@ -89,21 +89,48 @@ object EpisodeMirror {
     }
 
     /**
-     * Metadatos del capítulo `contentId` de esa temporada (`xtv:<cid>` de la fila).
-     * Usa la copia en RAM del espejo; si está fría, la red una vez (~50 ms servida
-     * por el VPS) y `null` ante cualquier fallo.
+     * ¿La copia trae metadatos de TMDB? Si NINGUNA fila tiene nombre/sinopsis/imagen,
+     * es una copia anterior al enriquecimiento (o de una temporada sin ficha) y vale
+     * la pena refrescarla una vez; si ya hay metadatos, la ausencia en un capítulo es
+     * real (TMDB no lo tiene) y no se vuelve a pedir. Puro, para tests.
      */
-    suspend fun info(seasonId: String, contentId: String): EpisodeInfo? =
-        runCatching { episodes(seasonId) }.getOrNull()?.let { infoFrom(it, contentId) }
+    internal fun hasMeta(array: JSONArray?): Boolean {
+        if (array == null) return false
+        for (i in 0 until array.length()) {
+            val o = array.optJSONObject(i) ?: continue
+            if (o.optString("title").isNotBlank() ||
+                o.optString("overview").isNotBlank() ||
+                o.optString("still").isNotBlank()
+            ) return true
+        }
+        return false
+    }
+
+    /**
+     * Metadatos del capítulo `contentId` de esa temporada (`xtv:<cid>` de la fila).
+     * Usa la copia en RAM del espejo; si está fría —o se cacheó ANTES de que el
+     * worker bajara los metadatos— una consulta fresca al VPS (~50 ms) y `null`
+     * ante cualquier fallo: la tarjeta se queda como siempre.
+     */
+    suspend fun info(seasonId: String, contentId: String): EpisodeInfo? {
+        val cached = runCatching { episodes(seasonId) }.getOrNull()
+        infoFrom(cached, contentId)?.let { return it }
+        // La temporada ya trae metadatos: este capítulo simplemente no tiene ficha.
+        if (hasMeta(cached)) return null
+        val fresh = runCatching { episodes(seasonId, force = true) }.getOrNull()
+        return infoFrom(fresh, contentId)
+    }
 
     /**
      * La lista cruda de capítulos del espejo, o `null` si no hay copia servible
      * (falla de red, ref fuera del catálogo, ficha sin capítulos, TTL vencido…).
-     * Jamás lanza: el caller cae al portal sin historias.
+     * Jamás lanza: el caller cae al portal sin historias. `force` salta la copia
+     * en RAM (la vuelve a pedir y la refresca).
      */
-    suspend fun episodes(seriesId: String): JSONArray? = withContext(Dispatchers.IO) {        val ref = mirrorRef(seriesId)
+    suspend fun episodes(seriesId: String, force: Boolean = false): JSONArray? = withContext(Dispatchers.IO) {
+        val ref = mirrorRef(seriesId)
         val now = System.currentTimeMillis()
-        synchronized(cache) {
+        if (!force) synchronized(cache) {
             val hit = cache[ref]
             if (hit != null && cacheFresh(hit.first, now)) return@withContext hit.second
         }

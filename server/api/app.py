@@ -2606,13 +2606,23 @@ async def episodes_get(
     body = episodes_mirror.payload(key, row, now_ts)
     if body.get("status") == "ok" and body.get("episodes"):
         # Nombre real y sinopsis (TMDB) guardados por el worker: cruce por número
-        # de capítulo. Si aún no hay metadatos, la respuesta sale como siempre.
+        # de capítulo. El `tmdb_id` sale del VOTO MAYORITARIO del grupo (una ficha
+        # de temporada puede estar mal emparejada; el resto del grupo no) con la
+        # ficha propia de respaldo — la MISMA regla que usa el worker.
         meta_rows = await db().fetch(
             """
             select m.episode, m.name, m.overview, m.still
             from episode_meta m
-            join enrichment e on e.tmdb_id = m.tmdb_id
-            where e.title_id = $1
+            where m.tmdb_id = coalesce((
+                      select e2.tmdb_id
+                      from group_members gm0
+                      join group_members gm2 on gm2.group_id = gm0.group_id
+                      join enrichment e2 on e2.title_id = gm2.title_id
+                      where gm0.title_id = $1 and e2.tmdb_id is not null and e2.tmdb_id > 0
+                      group by e2.tmdb_id
+                      order by count(*) desc, avg(coalesce(e2.match_confidence, 0)) desc, e2.tmdb_id
+                      limit 1
+                  ), (select tmdb_id from enrichment where title_id = $1))
               and m.season = greatest(coalesce((
                   select gm.season from group_members gm
                   where gm.title_id = $1 order by gm.season limit 1), 0), 1)
