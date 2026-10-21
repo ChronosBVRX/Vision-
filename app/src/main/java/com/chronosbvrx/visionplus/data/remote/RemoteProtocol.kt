@@ -45,6 +45,13 @@ data class RemoteMsg(
     val seasonIndex: Int? = null,
     val seasonIds: List<String>? = null,
     val seasonNames: List<String>? = null,
+    /**
+     * Minuto exacto que el teléfono está viendo (0/ausente = desde el principio). Viaja en
+     * `open` para que la tele continúe donde se quedó el teléfono, no donde se quedó ella.
+     */
+    val pos: Long? = null,
+    /** Código de sincronización que el teléfono le entrega a la tele (mensaje `sync`). */
+    val syncCode: String? = null,
     /** Qué está viendo la tele (para el teléfono). */
     val screen: String? = null,
     val reason: String? = null,
@@ -75,6 +82,8 @@ object RemoteProto {
     const val NOW = "now"
     const val BYE = "bye"
     const val ERR = "err"
+    const val SYNC = "sync"
+    const val SYNC_OK = "syncok"
 
     const val ACTION_TAP = "tap"
     const val ACTION_DOWN = "down"

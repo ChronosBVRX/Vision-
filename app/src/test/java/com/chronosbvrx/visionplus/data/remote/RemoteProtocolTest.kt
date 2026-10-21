@@ -69,10 +69,23 @@ class RemoteProtocolTest {
     }
 
     @Test
+    fun thePhoneMinuteTravelsOnTheWire() {
+        val msg = RemoteMsg(t = RemoteProto.OPEN, ref = "xtv:ABC", pos = 754_000L)
+        assertEquals(754_000L, RemoteProto.decode(RemoteProto.encode(msg))?.pos)
+    }
+
+    @Test
+    fun theSyncCodeTravelsOnTheWire() {
+        val msg = RemoteMsg(t = RemoteProto.SYNC, syncCode = "ABCD-EFGH")
+        assertEquals("ABCD-EFGH", RemoteProto.decode(RemoteProto.encode(msg))?.syncCode)
+    }
+
+    @Test
     fun aMovieOpenStaysShortOnTheWire() {
         val line = RemoteProto.encode(RemoteMsg(t = RemoteProto.OPEN, ref = "xtv:M1", title = "Moana"))
         assertFalse("una película no arrastra contexto de serie", line.contains("series"))
         assertFalse(line.contains("seasonIds"))
+        assertFalse("sin minuto no viaja un pos vacío", line.contains("pos"))
     }
 
     @Test

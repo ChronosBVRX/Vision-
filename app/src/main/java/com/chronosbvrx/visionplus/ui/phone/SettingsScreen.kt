@@ -59,6 +59,7 @@ import com.chronosbvrx.visionplus.ui.settings.SettingsRow
 import com.chronosbvrx.visionplus.ui.settings.SettingsSection
 import com.chronosbvrx.visionplus.ui.settings.SettingsSwitchRow
 import com.chronosbvrx.visionplus.ui.settings.SettingsValueRow
+import com.chronosbvrx.visionplus.ui.settings.SyncSettingsSection
 import com.chronosbvrx.visionplus.ui.settings.VisionSettings
 import com.chronosbvrx.visionplus.ui.settings.rememberUpdateCheck
 import com.chronosbvrx.visionplus.ui.kids.ActivitySettingsBlock
@@ -360,6 +361,7 @@ private fun SystemTab() {
             supporting = "Elimina todos los títulos de la fila «Seguir viendo»",
             onClick = {
                 s.clearPlaybackHistory(context)
+                com.chronosbvrx.visionplus.data.sync.SyncStore.syncAsync(context, force = true)
                 Toast.makeText(context, "Historial de reproducción vaciado", Toast.LENGTH_SHORT).show()
             },
         )
@@ -368,6 +370,8 @@ private fun SystemTab() {
     SettingsSection("Modo niños") {
         KidsSettingsBlock()
     }
+
+    SyncSettingsSection()
 
     SettingsSection("Mi actividad") {
         ActivitySettingsBlock()

@@ -6,6 +6,7 @@ import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.ResumeCard
 import com.chronosbvrx.visionplus.data.launcher.LauncherLinks
+import com.chronosbvrx.visionplus.data.launcher.WatchLink
 
 /**
  * El deep link del launcher de TV (`visionplus://watch/<clave>`) → la ruta que reanuda la
@@ -18,8 +19,17 @@ import com.chronosbvrx.visionplus.data.launcher.LauncherLinks
  */
 internal fun launcherRouteFor(context: Context, uri: Uri?): Route? {
     val link = LauncherLinks.parse(uri) ?: return null
+    // La orden del teléfono trae su propio minuto: manda sobre el historial de ESTA tele (el
+    // usuario acaba de pedir «continuar aquí» desde el otro equipo). Sin minuto, el historial
+    // local sigue teniendo la primera palabra, como siempre.
+    if (link.resumeMs > 0) routeFromLink(link, link.resumeMs)?.let { return it }
     val entry = PlaybackHistory.get(context, link.key)
     if (entry != null) return resumeRoute(ResumeCard(entry, film = null, progress = 0f))
+    return routeFromLink(link, 0)
+}
+
+/** La ruta que pide el enlace, sin consultar el historial: película, capítulo o URL directa. */
+private fun routeFromLink(link: WatchLink, resumeMs: Long): Route? {
     val title = link.title.ifBlank { "Vision+" }
     if (link.code.isNotBlank()) {
         val film = Film(
@@ -35,10 +45,11 @@ internal fun launcherRouteFor(context: Context, uri: Uri?): Route? {
                     seasonIds = link.seasonIds,
                     seasonNames = link.seasonNames,
                     seasonIndex = link.seasonIndex,
+                    resumeMs = resumeMs,
                 ),
             )
         }
-        return Route.Player(film)
+        return Route.Player(film, resumeMs = resumeMs)
     }
     if (link.videoUrl.isNotBlank()) {
         return Route.Player(
@@ -46,6 +57,7 @@ internal fun launcherRouteFor(context: Context, uri: Uri?): Route? {
                 id = link.key, title = title, year = 0, durationMin = 0, synopsis = "",
                 posterUrl = link.posterUrl, videoUrl = link.videoUrl, sourceUrl = "",
             ),
+            resumeMs = resumeMs,
         )
     }
     return null

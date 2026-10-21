@@ -22,6 +22,8 @@ internal data class WatchLink(
     val seasonIndex: Int = 0,
     val seasonIds: List<String> = emptyList(),
     val seasonNames: List<String> = emptyList(),
+    /** Minuto exacto del teléfono cuando la orden es «continuar en la tele» (0 = sin minuto). */
+    val resumeMs: Long = 0,
 )
 
 internal object LauncherLinks {
@@ -42,6 +44,7 @@ internal object LauncherLinks {
             if (link.seasonIndex > 0) appendQueryParameter("sx", link.seasonIndex.toString())
             if (link.seasonIds.isNotEmpty()) appendQueryParameter("sl", link.seasonIds.joinToString(SEP))
             if (link.seasonNames.isNotEmpty()) appendQueryParameter("sn", link.seasonNames.joinToString(SEP))
+            if (link.resumeMs > 0) appendQueryParameter("r", link.resumeMs.toString())
         }
         .build()
 
@@ -62,6 +65,7 @@ internal object LauncherLinks {
             seasonIndex = uri.getQueryParameter("sx")?.trim()?.toIntOrNull() ?: 0,
             seasonIds = splitList(uri.getQueryParameter("sl")),
             seasonNames = splitList(uri.getQueryParameter("sn")),
+            resumeMs = uri.getQueryParameter("r")?.trim()?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L,
         )
     }
 

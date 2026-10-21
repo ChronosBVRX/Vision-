@@ -236,6 +236,34 @@ class GeePickDialogDuplicateTest {
         assertAbsent("Desactivados")
     }
 
+    // ----- reloj del menú (lote «reloj discreto») ---------------------------------------------
+
+    @Test
+    fun thePhoneClockIsBareTextWithoutTheZoneTag() {
+        // En el móvil la hora va como texto pequeño dentro de la barra: sin la etiqueta «CDMX»
+        // (viaja en la descripción accesible) y sin la píldora de la tele.
+        val now = com.chronosbvrx.visionplus.ui.VisionClock.timeText()
+        compose.setContent {
+            VisionTheme { com.chronosbvrx.visionplus.ui.VisionClockText() }
+        }
+        compose.mainClock.advanceTimeBy(300)
+        compose.waitForIdle()
+        assertText(now)
+        assertAbsent("CDMX")
+    }
+
+    @Test
+    fun theTvBadgeKeepsNamingTheZone() {
+        val now = com.chronosbvrx.visionplus.ui.VisionClock.timeText()
+        compose.setContent {
+            VisionTheme { com.chronosbvrx.visionplus.ui.VisionClockBadge() }
+        }
+        compose.mainClock.advanceTimeBy(300)
+        compose.waitForIdle()
+        assertText(now)
+        assertText("CDMX")
+    }
+
     // ----- respaldo automático ---------------------------------------------------------------
 
     private val telemundo = LiveChannel(name = "TELEMUNDO EAST HD", url = "xtvlive:tm-east")

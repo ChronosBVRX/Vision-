@@ -290,6 +290,8 @@ fun TvHomeScreen(
         }
     }
     LaunchedEffect(Unit) { reloadContinue() }
+    val syncAt = com.chronosbvrx.visionplus.data.sync.SyncStore.state.value.lastSyncAt
+    LaunchedEffect(syncAt) { if (syncAt > 0) reloadContinue() }
     // Avisos de capítulos nuevos de series seguidas (una vez al día como máximo).
     LaunchedEffect(Unit) {
         homeScope.launch(kotlinx.coroutines.Dispatchers.IO) {

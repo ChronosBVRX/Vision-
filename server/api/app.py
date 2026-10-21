@@ -25,6 +25,7 @@ import markers as skip_markers
 import portal as portal_search
 import slots as device_slots
 import episodes as episodes_mirror
+import sync as device_sync
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 API_KEY = os.environ["API_KEY"]
@@ -299,7 +300,9 @@ _INDEX_CACHE_TTL = 300.0
 @app.get("/v1/index")
 async def index(
     since: int = Query(default=0, ge=0),
-    limitFilms: int = Query(default=0, ge=0, le=500),
+    # El índice completo (sin tope) materializa 157 MB en memoria y tumbaba el contenedor
+    # por OOM: la app pide 100 por categoría. El tope es obligatorio para cualquier cliente.
+    limitFilms: int = Query(default=100, ge=1, le=500),
     x_api_key: str | None = Header(default=None),
 ):
     """Índice completo. Con `since` al día responde {upToDate: true} sin reenviar nada.
@@ -2685,3 +2688,129 @@ async def stats(x_api_key: str | None = Header(default=None)):
         },
     }
 
+
+
+# ----- continuidad entre equipos (/v1/sync) -----
+# El código compartido (8 caracteres) identifica al grupo; se guarda HASHEADO
+# (SHA-256) y viaja en el header X-Sync-Code. Cada elemento es last-write-wins
+# por clave: el pull es incremental por server_seq, así no depende del reloj.
+
+SYNC_RATE_LIMIT = 120
+_sync_bucket: dict[str, list[float]] = {}
+
+
+def _sync_id_or_401(code: str | None) -> str:
+    clean = device_sync.normalize_code(code)
+    if not clean:
+        raise HTTPException(status_code=401, detail="código de sincronización inválido")
+    return device_sync.code_id(clean)
+
+
+@app.post("/v1/sync")
+async def sync_push(
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+    x_sync_code: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    sync_id = _sync_id_or_401(x_sync_code)
+    raw = await request.body()
+    if len(raw) > device_sync.MAX_BODY:
+        raise HTTPException(status_code=413, detail="sincronización demasiado grande")
+    try:
+        body = json.loads(raw.decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="JSON inválido")
+
+    ip = request.client.host if request.client else "?"
+    if not _diag_rate_ok(_sync_bucket, f"{sync_id}|{ip}", time.time(), limit=SYNC_RATE_LIMIT, window=60):
+        raise HTTPException(status_code=429, detail="demasiadas sincronizaciones")
+
+    try:
+        since = int(body.get("since") or 0)
+    except (TypeError, ValueError):
+        since = 0
+    since = max(0, min(since, 2**63 - 1))
+    device = device_sync.clean_text(body.get("device"), 64)
+
+    raw_items = body.get("items") or []
+    if not isinstance(raw_items, list):
+        raise HTTPException(status_code=400, detail="items inválidos")
+    if len(raw_items) > device_sync.MAX_ITEMS:
+        raise HTTPException(status_code=413, detail="demasiados elementos")
+    items = device_sync.clean_items(raw_items, device_sync.now_ms())
+
+    pool = db()
+    async with pool.acquire() as conn:
+        if items:
+            await conn.executemany(
+                """
+                insert into sync_items (sync_id, kind, item_key, payload, deleted, client_at, device_id)
+                values ($1, $2, $3, $4::jsonb, $5, to_timestamp($6::double precision / 1000.0), $7)
+                on conflict (sync_id, kind, item_key) do update
+                set payload = case when excluded.client_at > sync_items.client_at
+                                   then excluded.payload else sync_items.payload end,
+                    deleted = case when excluded.client_at > sync_items.client_at
+                                   then excluded.deleted else sync_items.deleted end,
+                    client_at = greatest(sync_items.client_at, excluded.client_at),
+                    device_id = case when excluded.client_at > sync_items.client_at
+                                     then excluded.device_id else sync_items.device_id end,
+                    -- El seq avanza SIEMPRE: si un item viejo pierde, su fila vuelve en el
+                    -- pull y el equipo que lo intentó ve al ganador (no se queda divergente).
+                    server_seq = nextval('sync_items_seq')
+                """,
+                [
+                    (
+                        sync_id,
+                        item["k"],
+                        item["key"],
+                        json.dumps(item["data"], ensure_ascii=False) if item["data"] is not None else None,
+                        item["d"],
+                        item["at"],
+                        device,
+                    )
+                    for item in items
+                ],
+            )
+        # Tope por grupo: si un cliente empuja más de 500 elementos, se conservan los más
+        # recientes (el cliente normal manda decenas; esto evita que la tabla crezca sin fin).
+        await conn.execute(
+            """
+            delete from sync_items
+            where (sync_id, kind, item_key) in (
+                select sync_id, kind, item_key
+                from sync_items
+                where sync_id = $1
+                order by client_at desc
+                offset 500
+            )
+            """,
+            sync_id,
+        )
+        rows = await conn.fetch(
+            """
+            select kind, item_key, payload, deleted, client_at, server_seq
+            from sync_items
+            where sync_id = $1 and server_seq > $2
+            order by server_seq asc
+            limit 500
+            """,
+            sync_id,
+            since,
+        )
+
+    seq = max((int(row["server_seq"]) for row in rows), default=since)
+    return {"seq": seq, "items": device_sync.response_items(rows)}
+
+
+@app.post("/v1/sync/forget")
+async def sync_forget(
+    x_api_key: str | None = Header(default=None),
+    x_sync_code: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    sync_id = _sync_id_or_401(x_sync_code)
+    await db().execute("delete from sync_items where sync_id = $1", sync_id)
+    return {"ok": True}

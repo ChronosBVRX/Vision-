@@ -202,6 +202,8 @@ private fun ColumnScope.TvSystemTab() {
     }
     var showNotices by rememberSaveable { mutableStateOf(false) }
     if (showNotices) TvOssNoticesDialog(onDismiss = { showNotices = false })
+    var showSync by rememberSaveable { mutableStateOf(false) }
+    if (showSync) TvSyncDialog(onDismiss = { showSync = false })
 
     TvSectionTitle("Rendimiento y Pantalla")
     val mode = s.effectsMode
@@ -278,6 +280,10 @@ private fun ColumnScope.TvSystemTab() {
         }
         Note("Los teléfonos tendrán que emparejar de nuevo con el PIN que muestre la tele.")
     }
+
+    TvSectionTitle("Continuidad entre equipos")
+    TvActionOption("Sincronizar con mi teléfono") { showSync = true }
+    Note("Comparte el minuto donde te quedaste y Mi lista. La tele muestra un código; se escribe una vez en el teléfono.")
 
     TvSectionTitle("Modo niños")
     TvKidsSettingsRows()

@@ -20,8 +20,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -55,11 +58,22 @@ internal object VisionClock {
 }
 
 /**
- * La píldora del reloj para toda la navegación (menú móvil y TV): hora del centro de
- * México, sin foco y sin toques — jamás se roba el D-pad ni estorba a los controles.
+ * Dónde vive el reloj flotante: SOLO en la Smart TV (píldora arriba al centro, sin foco, para
+ * que el D-pad nunca caiga en él). En el móvil estorba: ahí la hora va como texto pequeño
+ * dentro de la barra superior (`VisionClockText`), nunca encima de ella.
+ *
+ * Apagado en los reproductores (ahí manda el contenido) y en el buscador (el campo ocupa
+ * la parte superior).
  */
+internal fun showsFloatingClock(isTv: Boolean, route: Route): Boolean =
+    isTv &&
+        route !is Route.Player &&
+        route !is Route.LivePlayer &&
+        route !is Route.Search
+
+/** El tic de la hora mostrada: despierta justo al cambiar el minuto, nunca cada segundo. */
 @Composable
-fun VisionClockBadge(isTv: Boolean = false, modifier: Modifier = Modifier) {
+private fun rememberClockText(): String {
     var text by remember { mutableStateOf(VisionClock.timeText()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -67,28 +81,55 @@ fun VisionClockBadge(isTv: Boolean = false, modifier: Modifier = Modifier) {
             text = VisionClock.timeText()
         }
     }
+    return text
+}
+
+/**
+ * La píldora del reloj para la navegación de Smart TV: hora del centro de México, sin foco
+ * y sin toques — jamás se roba el D-pad ni estorba a los controles.
+ */
+@Composable
+fun VisionClockBadge(modifier: Modifier = Modifier) {
+    val text = rememberClockText()
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(50))
             .background(Color.Black.copy(alpha = 0.55f))
             .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)), RoundedCornerShape(50))
-            .padding(
-                horizontal = if (isTv) 14.dp else 12.dp,
-                vertical = if (isTv) 6.dp else 5.dp,
-            ),
+            .padding(horizontal = 14.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text,
-            style = if (isTv) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = Color.White,
         )
         Spacer(Modifier.width(6.dp))
         Text(
             "CDMX",
-            style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelMedium,
             color = VisionTextSecondary,
         )
     }
+}
+
+/**
+ * La hora del menú del móvil: texto plano y pequeño dentro de la barra superior (junto al
+ * logo), sin fondo, borde ni etiqueta — se lee como un dato de la barra, no como un objeto
+ * flotante encima de las pantallas. La zona horaria viaja en la descripción accesible para
+ * no ensuciar la barra.
+ */
+@Composable
+fun VisionClockText(modifier: Modifier = Modifier) {
+    val text = rememberClockText()
+    Text(
+        text = text,
+        modifier = modifier.semantics { contentDescription = "$text, hora del centro de México" },
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Medium,
+        color = Color.White.copy(alpha = 0.62f),
+        letterSpacing = 0.6.sp,
+        maxLines = 1,
+    )
 }

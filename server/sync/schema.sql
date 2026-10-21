@@ -390,3 +390,24 @@ create table if not exists episode_meta_season (
     primary key (tmdb_id, season)
 );
 
+
+-- Continuidad entre equipos (Fase B): "Seguir viendo", favoritos y vistos.
+-- El `sync_id` es el SHA-256 del código compartido: el código NUNCA se guarda en
+-- claro. Cada elemento es LWW por (sync_id, kind, item_key) con el reloj del
+-- cliente; `server_seq` da el pull incremental sin depender de ese reloj.
+create sequence if not exists sync_items_seq;
+
+create table if not exists sync_items (
+    sync_id    text not null,
+    kind       text not null,                 -- resume | fav | later | watched
+    item_key   text not null,
+    payload    jsonb,
+    deleted    boolean not null default false,
+    client_at  timestamptz not null default now(),
+    server_seq bigint not null default nextval('sync_items_seq'),
+    device_id  text not null default '',
+    primary key (sync_id, kind, item_key)
+);
+
+create index if not exists sync_items_pull
+    on sync_items (sync_id, server_seq);

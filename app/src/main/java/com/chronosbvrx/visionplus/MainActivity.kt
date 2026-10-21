@@ -60,6 +60,7 @@ import com.chronosbvrx.visionplus.ui.Route
 import com.chronosbvrx.visionplus.ui.TvApp
 import com.chronosbvrx.visionplus.ui.brand.VisionSplash
 import com.chronosbvrx.visionplus.ui.launcherRouteFor
+import com.chronosbvrx.visionplus.ui.showsFloatingClock
 import com.chronosbvrx.visionplus.ui.systemAnimationsOff
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionTheme
@@ -140,6 +141,8 @@ class MainActivity : ComponentActivity() {
         com.chronosbvrx.visionplus.data.offline.NetworkMonitor.refresh(this)
         // Google TV: al volver a la app, «Continuar viendo» se sincroniza con el historial.
         LauncherWatchNext.syncAsync(this, delayMs = 3_000L)
+        // Continuidad entre equipos: empuja el minuto/favoritos y trae lo del otro equipo.
+        com.chronosbvrx.visionplus.data.sync.SyncStore.syncAsync(this)
     }
 
     override fun onPause() {
@@ -194,14 +197,11 @@ class MainActivity : ComponentActivity() {
                     val catalog = remember { XuperCatalog(this@MainActivity) }
                     val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
 
-                    // El reloj del menú (móvil y TV): hora del centro de México en toda la
-                    // navegación. Se apaga en los reproductores (ahí manda el contenido) y en
-                    // el buscador (el teclado ocupa la parte superior).
+                    // El reloj del menú: la tele lo lleva como píldora flotante arriba al
+                    // centro; el móvil lo lleva como texto pequeño dentro de su barra superior
+                    // (`PhoneApp`), para que no estorbe ni se monte sobre la navegación.
                     val clockRoute = navigator.current
-                    val showClock = !needsActivation &&
-                        clockRoute !is Route.Player &&
-                        clockRoute !is Route.LivePlayer &&
-                        clockRoute !is Route.Search
+                    val showClock = !needsActivation && showsFloatingClock(isTv, clockRoute)
 
                     // Salida con confirmación desde la pantalla principal: el primer Atrás
                     // avisa («presiona de nuevo»), el segundo dentro de la ventana cierra la
@@ -328,14 +328,14 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
-                        // El reloj de la casa, arriba al centro de TODO el menú: hora del
-                        // centro de México, sin foco (el D-pad nunca cae en él).
+                        // La píldora del reloj de la Smart TV, arriba al centro: hora del
+                        // centro de México, sin foco (el D-pad nunca cae en él). En el móvil
+                        // la hora vive dentro de la barra superior, no flotando encima.
                         if (showClock) {
                             com.chronosbvrx.visionplus.ui.VisionClockBadge(
-                                isTv = isTv,
                                 modifier = Modifier
                                     .align(Alignment.TopCenter)
-                                    .padding(top = if (isTv) 14.dp else 56.dp),
+                                    .padding(top = 14.dp),
                             )
                         }
                         // Lo que la tele muestra, para que el control remoto lo refleje.

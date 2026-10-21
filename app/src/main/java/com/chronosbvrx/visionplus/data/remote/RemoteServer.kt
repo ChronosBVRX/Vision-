@@ -8,6 +8,7 @@ import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.util.Log
+import com.chronosbvrx.visionplus.data.sync.SyncStore
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.InputStreamReader
@@ -266,6 +267,16 @@ class RemoteServer(private val context: Context) {
                     launchOpen(msg)
                 }
 
+                RemoteProto.SYNC -> {
+                    if (!authorized) return
+                    if (SyncStore.setCode(app, msg.syncCode.orEmpty())) {
+                        SyncStore.syncAsync(app, force = true)
+                        send(RemoteMsg(t = RemoteProto.SYNC_OK, msg = "ok"))
+                    } else {
+                        send(RemoteMsg(t = RemoteProto.ERR, msg = "código de sincronización inválido"))
+                    }
+                }
+
                 RemoteProto.PING -> send(RemoteMsg(t = RemoteProto.PONG))
                 RemoteProto.BYE -> close()
                 else -> send(RemoteMsg(t = RemoteProto.ERR, msg = "desconocido: ${msg.t.take(24)}"))
@@ -282,6 +293,7 @@ class RemoteServer(private val context: Context) {
             seasonIndex = msg.seasonIndex ?: 0,
             seasonIds = msg.seasonIds.orEmpty(),
             seasonNames = msg.seasonNames.orEmpty(),
+            resumeMs = msg.pos ?: 0,
         ) ?: return
         runCatching {
             app.startActivity(

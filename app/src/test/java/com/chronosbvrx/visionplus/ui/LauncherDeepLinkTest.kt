@@ -82,6 +82,60 @@ class LauncherDeepLinkTest {
     }
 
     @Test
+    fun watchLinkRoundTripCarriesThePhoneMinute() {
+        val link = WatchLink(
+            key = "xtv:ep5", title = "La Casa de Papel · T2 · C5", code = "ep5",
+            seriesId = "t2ref", resumeMs = 754_000,
+        )
+        assertEquals(754_000L, LauncherLinks.parse(LauncherLinks.uriFor(link))?.resumeMs)
+    }
+
+    @Test
+    fun thePhoneMinuteWinsOverTheTvHistoryForAMovie() {
+        PlaybackHistory.save(
+            context,
+            ResumeEntry(
+                key = "m1", title = "Película", xtvCode = "m1",
+                positionMs = 60_000, durationMs = 600_000,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
+        val route = launcherRouteFor(
+            context,
+            LauncherLinks.uriFor(
+                WatchLink(key = "xtv:m1", title = "Película", code = "m1", resumeMs = 300_000),
+            ),
+        ) as Route.Player
+        assertEquals("el minuto del teléfono manda", 300_000L, route.resumeMs)
+    }
+
+    @Test
+    fun thePhoneMinuteWinsOverTheTvHistoryForAnEpisode() {
+        PlaybackHistory.save(
+            context,
+            ResumeEntry(
+                key = "ep5", title = "La Casa de Papel · T2 · C5", xtvCode = "ep5", seriesId = "t2ref",
+                episodeIds = listOf("ep4", "ep5"), seasonIds = listOf("t1ref", "t2ref"),
+                positionMs = 60_000, durationMs = 600_000, updatedAt = System.currentTimeMillis(),
+            ),
+        )
+        val route = launcherRouteFor(
+            context,
+            LauncherLinks.uriFor(
+                WatchLink(
+                    key = "xtv:ep5", title = "La Casa de Papel · T2 · C5", code = "ep5",
+                    seriesId = "t2ref", seasonIndex = 1,
+                    seasonIds = listOf("t1ref", "t2ref"), seasonNames = listOf("T1", "T2"),
+                    resumeMs = 420_000,
+                ),
+            ),
+        ) as Route.Player
+        assertEquals("el minuto del teléfono manda", 420_000L, route.episode?.resumeMs)
+        assertEquals("ep5", route.episode?.code)
+        assertEquals("t2ref", route.episode?.seriesId)
+    }
+
+    @Test
     fun episodeContextSurvivesTheLinkRoundTrip() {
         val link = WatchLink(
             key = "xtv:ep5", title = "La Casa de Papel · T2 · C5", posterUrl = "p", code = "ep5",

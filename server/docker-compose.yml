@@ -65,7 +65,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
-    mem_limit: 512m
+    # El índice completo se materializa en memoria al servir /v1/index (52k títulos):
+    # con 512 MB el OOM killer tumbaba el contenedor a media respuesta. 1 GB deja aire
+    # para el payload y la caché por versión (el host tiene 22 GB).
+    mem_limit: 1g
     logging:
       driver: json-file
       options:

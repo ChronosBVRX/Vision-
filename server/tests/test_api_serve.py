@@ -102,6 +102,13 @@ def test_api_hardening_docs_disabled():
     assert app.app.openapi_url is None
 
 
+def test_index_is_bounded_by_default():
+    # Pedir el índice sin tope materializaba 157 MB y tumbaba la API por OOM; la app
+    # pide 100 por categoría y ese es el default seguro.
+    source = open(app.__file__, encoding="utf-8").read()
+    assert "limitFilms: int = Query(default=100, ge=1, le=500)" in source
+
+
 def test_search_fold_normalization():
     assert app._fold("La vida es bella!") == "la vida es bella"
     assert app._fold("¿Canción del Ángel?") == "cancion del angel"

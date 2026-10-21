@@ -65,6 +65,18 @@ class RemoteClientWireTest {
     }
 
     @Test
+    fun openingFromTheFichaCarriesThePhoneMinute() {
+        RemoteClient.wireWriterForTest(fake)
+
+        RemoteClient.sendOpen("xtv:ABC", "Moana", positionMs = 754_000L)
+
+        val line = awaitLine { it.contains("\"pos\":754000") }
+            ?: error("el minuto del teléfono nunca llegó al cable")
+        assertEquals("remote-send", line.first)
+        assertTrue(line.second.contains("\"ref\":\"xtv:ABC\""))
+    }
+
+    @Test
     fun thePinFromTheDialogIsWrittenOnItsOwnThread() {
         RemoteClient.wireWriterForTest(fake)
 

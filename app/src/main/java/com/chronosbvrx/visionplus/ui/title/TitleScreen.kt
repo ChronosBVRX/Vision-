@@ -91,6 +91,7 @@ import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.data.remote.RemoteClient
 import com.chronosbvrx.visionplus.data.remote.RemoteStatus
+import com.chronosbvrx.visionplus.data.remote.resumePositionFor
 import com.chronosbvrx.visionplus.ui.remote.castableRef
 
 /**
@@ -341,6 +342,7 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                             TextButton(onClick = {
                                 UserLibrary.toggleWatchLater(context, film)
                                 inLater.value = !inLater.value
+                                com.chronosbvrx.visionplus.data.sync.SyncStore.syncAsync(context)
                             }) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Icon(
@@ -356,6 +358,7 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                             TextButton(onClick = {
                                 UserLibrary.toggleFavorite(context, film)
                                 inFavorites.value = !inFavorites.value
+                                com.chronosbvrx.visionplus.data.sync.SyncStore.syncAsync(context)
                             }) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Icon(
@@ -377,7 +380,12 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                     if (isSeriesTitle) {
                                         castPicker = true
                                     } else {
-                                        RemoteClient.sendOpen(film.videoUrl, film.title, film.posterUrl)
+                                        RemoteClient.sendOpen(
+                                            film.videoUrl,
+                                            film.title,
+                                            film.posterUrl,
+                                            positionMs = resumePositionFor(context, film.videoUrl),
+                                        )
                                         Toast.makeText(context, "Abriendo en la tele…", Toast.LENGTH_SHORT).show()
                                     }
                                 }) {
@@ -552,12 +560,18 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                         seasonIndex = ep.seasonIndex,
                         seasonIds = ep.seasonIds,
                         seasonNames = ep.seasonNames,
+                        positionMs = resumePositionFor(context, ep.ref),
                     )
                     Toast.makeText(context, "Abriendo ${ep.title} en la tele…", Toast.LENGTH_SHORT).show()
                     castPicker = false
                 },
                 onSendTitle = {
-                    RemoteClient.sendOpen(film.videoUrl, film.title, film.posterUrl)
+                    RemoteClient.sendOpen(
+                        film.videoUrl,
+                        film.title,
+                        film.posterUrl,
+                        positionMs = resumePositionFor(context, film.videoUrl),
+                    )
                     Toast.makeText(context, "Abriendo en la tele…", Toast.LENGTH_SHORT).show()
                     castPicker = false
                 },

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 /**
  * Lo guardado y lo aprendido: «Ver más tarde», «Favoritos» y el historial de lo reproducido.
@@ -63,31 +64,74 @@ object UserLibrary {
     private fun read(p: SharedPreferences, key: String): List<Film> = runCatching {
         val arr = JSONArray(p.getString(key, "[]"))
         (0 until arr.length()).mapNotNull { i ->
-            val o = arr.optJSONObject(i) ?: return@mapNotNull null
-            Film(
-                id = o.optString("id"),
-                title = normalizeDisplayName(o.optString("t")),
-                year = o.optInt("y"),
-                durationMin = o.optInt("d"),
-                synopsis = o.optString("s"),
-                posterUrl = o.optString("p"),
-                videoUrl = o.optString("v"),
-                sourceUrl = o.optString("src"),
-            )
+            arr.optJSONObject(i)?.let(::filmFromJson)
         }
     }.getOrDefault(emptyList())
 
     private fun write(p: SharedPreferences, key: String, films: List<Film>) {
         val arr = JSONArray()
-        films.forEach { f ->
-            arr.put(
-                JSONObject()
-                    .put("id", f.id).put("t", f.title).put("y", f.year).put("d", f.durationMin)
-                    .put("s", f.synopsis).put("p", f.posterUrl).put("v", f.videoUrl).put("src", f.sourceUrl),
-            )
-        }
+        films.forEach { arr.put(filmToJson(it)) }
         p.edit().putString(key, arr.toString()).apply()
     }
+
+    /** La ficha tal como la guarda la biblioteca (y la sincronización). */
+    internal fun filmToJson(f: Film): JSONObject = JSONObject()
+        .put("id", f.id).put("t", f.title).put("y", f.year).put("d", f.durationMin)
+        .put("s", f.synopsis).put("p", f.posterUrl).put("v", f.videoUrl).put("src", f.sourceUrl)
+
+    /** Inverso de [filmToJson]; los campos ausentes quedan en sus defaults. */
+    internal fun filmFromJson(o: JSONObject): Film = Film(
+        id = o.optString("id"),
+        title = normalizeDisplayName(o.optString("t")),
+        year = o.optInt("y"),
+        durationMin = o.optInt("d"),
+        synopsis = o.optString("s"),
+        posterUrl = o.optString("p"),
+        videoUrl = o.optString("v"),
+        sourceUrl = o.optString("src"),
+    )
+
+    /** Reemplaza la lista entera (la usa la sincronización tras fusionar). */
+    internal fun replaceFavorites(context: Context, films: List<Film>) {
+        write(prefs(context), K_FAVORITES, films.distinctBy { it.id })
+    }
+
+    internal fun replaceWatchLater(context: Context, films: List<Film>) {
+        write(prefs(context), K_WATCH, films.distinctBy { it.id })
+    }
+
+    internal fun replaceWatched(context: Context, episodes: Set<String>) {
+        prefs(context).edit().putStringSet(K_WATCHED_EPS, episodes.toSet()).apply()
+    }
+
+    /**
+     * La copia FRESCA del XML: el reproductor vive en `:x4k` y sus marcas de visto no se ven
+     * en la copia en memoria del proceso principal. Se lee el archivo directo, como hace
+     * `PlaybackHistory.listFresh`; si no se puede, se cae a la copia normal.
+     */
+    internal fun watchedEpisodesFresh(context: Context): Set<String> {
+        val xml = runCatching {
+            File(File(context.applicationContext.dataDir, "shared_prefs"), "vision_user.xml").readText()
+        }.getOrNull() ?: return watchedEpisodes(context)
+        val open = "<set name=\"$K_WATCHED_EPS\">"
+        val start = xml.indexOf(open)
+        if (start < 0) return watchedEpisodes(context)
+        val end = xml.indexOf("</set>", start)
+        if (end < 0) return watchedEpisodes(context)
+        val body = xml.substring(start + open.length, end)
+        val values = Regex("<string>(.*?)</string>").findAll(body)
+            .map { unescapeXml(it.groupValues[1]) }
+            .filter { it.isNotBlank() }
+            .toSet()
+        return values
+    }
+
+    private fun unescapeXml(text: String): String = text
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
 
     /**
      * Recomendado para ti: cuenta en qué categorías del índice vive lo ya visto y propone títulos

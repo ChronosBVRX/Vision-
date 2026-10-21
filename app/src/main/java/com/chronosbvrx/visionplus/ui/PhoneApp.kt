@@ -298,13 +298,20 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
                             }
                         },
                         title = {
-                            // Off Inicio the logo is the quick way home.
-                            Box(
-                                modifier = Modifier
-                                    .heightIn(min = 48.dp)
-                                    .clickable(enabled = route != Route.Home, onClickLabel = "Ir al inicio") { nav.goTab(Route.Home) },
-                                contentAlignment = Alignment.CenterStart,
-                            ) { VisionWordmark(height = 24.dp) }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Off Inicio the logo is the quick way home.
+                                Box(
+                                    modifier = Modifier
+                                        .heightIn(min = 48.dp)
+                                        .clickable(enabled = route != Route.Home, onClickLabel = "Ir al inicio") { nav.goTab(Route.Home) },
+                                    contentAlignment = Alignment.CenterStart,
+                                ) { VisionWordmark(height = 24.dp) }
+                                Spacer(Modifier.weight(1f))
+                                // La hora del centro de México, discreta y dentro de la barra:
+                                // texto pequeño junto a las acciones (antes era una píldora
+                                // flotante encima de todo y tapaba la propia barra).
+                                VisionClockText(Modifier.padding(start = 8.dp))
+                            }
                         },
                         actions = {
                             if (route == Route.Home) {

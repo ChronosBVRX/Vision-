@@ -113,7 +113,7 @@ object RemoteBus {
  * - `xtv:<playCode>` → película/serie del portal (por su playCode). Cuando es un capítulo, el
  *   contexto de su serie viaja en los parámetros `s` (temporada activa), `sx` (índice de
  *   temporada) y `sl`/`sn` (las temporadas del grupo): la tele abre ESE capítulo y puede
- *   seguir con el siguiente.
+ *   seguir con el siguiente. `r` lleva el minuto exacto del teléfono (0 = sin minuto).
  * - cualquier otra cosa (una URL suelta) → se abre tal cual.
  */
 internal fun remoteOpenUriString(
@@ -124,6 +124,7 @@ internal fun remoteOpenUriString(
     seasonIndex: Int = 0,
     seasonIds: List<String> = emptyList(),
     seasonNames: List<String> = emptyList(),
+    resumeMs: Long = 0,
 ): String? {
     val clean = ref.trim()
     if (clean.isEmpty()) return null
@@ -139,13 +140,18 @@ internal fun remoteOpenUriString(
             val code = clean.removePrefix("xtv:").trim()
             if (code.isEmpty()) return null
             "visionplus://watch/${enc(clean)}?t=$t&p=$p&c=${enc(code)}" +
-                seriesQuery(seriesId, seasonIndex, seasonIds, seasonNames)
+                seriesQuery(seriesId, seasonIndex, seasonIds, seasonNames) +
+                minuteQuery(resumeMs)
         }
         clean.startsWith("http://") || clean.startsWith("https://") ->
-            "visionplus://watch/${enc(clean)}?t=$t&p=$p&u=${enc(clean)}"
+            "visionplus://watch/${enc(clean)}?t=$t&p=$p&u=${enc(clean)}" + minuteQuery(resumeMs)
         else -> null
     }
 }
+
+/** El minuto del teléfono como parámetro del enlace (vacío cuando no hay nada que reanudar). */
+private fun minuteQuery(resumeMs: Long): String =
+    if (resumeMs > 0) "&r=$resumeMs" else ""
 
 /**
  * El contexto del capítulo como parámetros del enlace (vacío para una película). Solo viaja

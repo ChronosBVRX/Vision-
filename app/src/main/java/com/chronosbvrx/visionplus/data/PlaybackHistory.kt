@@ -112,6 +112,15 @@ object PlaybackHistory {
         p.edit().remove(K_ENTRIES).apply()
     }
 
+    /**
+     * Reemplaza el historial entero con la lista ya fusionada (la sincronización). Se escribe
+     * con `commit` para que el proceso `:x4k` lo vea en su siguiente lectura del XML.
+     */
+    internal fun replaceAll(context: Context, entries: List<ResumeEntry>) {
+        val clean = prune(entries.filter { it.key.isNotBlank() && it.positionMs > 0 }, System.currentTimeMillis())
+        write(prefs(context), clean, immediate = true)
+    }
+
     /** Entradas + fichas del catálogo como tarjetas, recientes primero y una sola por serie. */
     fun continueCards(context: Context, films: List<Film>, limit: Int = 10): List<ResumeCard> =
         matchCards(latestBySeries(list(context)), films).take(limit)

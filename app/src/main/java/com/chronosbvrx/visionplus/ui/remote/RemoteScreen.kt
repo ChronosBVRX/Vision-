@@ -70,6 +70,7 @@ import com.chronosbvrx.visionplus.data.remote.RemoteClient
 import com.chronosbvrx.visionplus.data.remote.RemoteKeys
 import com.chronosbvrx.visionplus.data.remote.RemoteStatus
 import com.chronosbvrx.visionplus.data.remote.RemoteTv
+import com.chronosbvrx.visionplus.data.remote.resumePositionFor
 import com.chronosbvrx.visionplus.data.remote.tvRowLabel
 import com.chronosbvrx.visionplus.data.searchFilms
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
@@ -460,7 +461,12 @@ private fun CastPanel(catalog: XuperCatalog) {
                 if (vod != null && isCastSeries(vod.film)) {
                     pickingFilm = vod.film
                 } else {
-                    RemoteClient.sendOpen(item.ref, item.title, item.art.orEmpty())
+                    RemoteClient.sendOpen(
+                        item.ref,
+                        item.title,
+                        item.art.orEmpty(),
+                        positionMs = resumePositionFor(context, item.ref),
+                    )
                 }
             }
         }
@@ -483,12 +489,18 @@ private fun CastPanel(catalog: XuperCatalog) {
                     seasonIndex = ep.seasonIndex,
                     seasonIds = ep.seasonIds,
                     seasonNames = ep.seasonNames,
+                    positionMs = resumePositionFor(context, ep.ref),
                 )
                 Toast.makeText(context, "Abriendo ${ep.title} en la tele…", Toast.LENGTH_SHORT).show()
                 pickingFilm = null
             },
             onSendTitle = {
-                RemoteClient.sendOpen(film.videoUrl, film.title, film.posterUrl)
+                RemoteClient.sendOpen(
+                    film.videoUrl,
+                    film.title,
+                    film.posterUrl,
+                    positionMs = resumePositionFor(context, film.videoUrl),
+                )
                 Toast.makeText(context, "Abriendo en la tele…", Toast.LENGTH_SHORT).show()
                 pickingFilm = null
             },

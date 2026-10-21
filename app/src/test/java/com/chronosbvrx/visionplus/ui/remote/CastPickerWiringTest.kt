@@ -36,6 +36,15 @@ class CastPickerWiringTest {
         val text = requireSource("src/main/java/com/chronosbvrx/visionplus/data/remote/RemoteServer.kt")
         assertTrue(text.contains("seriesId = msg.series.orEmpty()"))
         assertTrue(text.contains("seasonIds = msg.seasonIds.orEmpty()"))
+        assertTrue("el minuto del teléfono viaja al enlace", text.contains("resumeMs = msg.pos ?: 0"))
+    }
+
+    @Test
+    fun thePickerSendsThePhoneMinuteOfTheChosenEpisode() {
+        val remote = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/remote/RemoteScreen.kt")
+        assertTrue(remote.contains("positionMs = resumePositionFor(context, ep.ref)"))
+        val title = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/title/TitleScreen.kt")
+        assertTrue(title.contains("positionMs = resumePositionFor(context, ep.ref)"))
     }
 
     private fun requireSource(rel: String): String {

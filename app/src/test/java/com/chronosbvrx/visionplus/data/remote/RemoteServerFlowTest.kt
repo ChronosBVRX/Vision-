@@ -49,6 +49,7 @@ class RemoteServerFlowTest {
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         context.getSharedPreferences("remote_pairing", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("sync_state", Context.MODE_PRIVATE).edit().clear().commit()
         RemoteBus.publishScreen("")
         RemoteBus.pairingPin.value = null
         RemoteBus.clients.value = 0
@@ -248,6 +249,50 @@ class RemoteServerFlowTest {
             assertTrue(uri.contains("sx=1"))
             assertTrue("las temporadas del grupo viajan separadas por |", uri.contains("sl=t1ref%7Ct2ref"))
             assertTrue(uri.contains("sn=T1%7CT2"))
+        }
+    }
+
+    @Test
+    fun aPhoneMinuteTravelsInTheDeepLink() {
+        val token = pair(Phone())
+        Phone().use { phone ->
+            phone.send(RemoteMsg(t = RemoteProto.HELLO, token = token))
+            phone.read(); phone.read()
+            phone.send(
+                RemoteMsg(
+                    t = RemoteProto.OPEN,
+                    ref = "xtv:EP5",
+                    title = "La Casa de Papel · T2 · C5",
+                    poster = "p",
+                    series = "t2ref",
+                    seasonIndex = 1,
+                    seasonIds = listOf("t1ref", "t2ref"),
+                    seasonNames = listOf("T1", "T2"),
+                    pos = 754_000L,
+                ),
+            )
+            val deadline = System.currentTimeMillis() + 3_000
+            var started: Intent? = null
+            while (started == null && System.currentTimeMillis() < deadline) {
+                started = shadowOf(context as android.app.Application).nextStartedActivity
+                if (started == null) Thread.sleep(30)
+            }
+            assertNotNull("la tele debe abrir el capítulo exacto", started)
+            val uri = started?.data.toString().orEmpty()
+            assertTrue("el minuto del teléfono viaja en r", uri.contains("r=754000"))
+        }
+    }
+
+    @Test
+    fun thePhoneCanHandItsSyncCodeToTheTv() {
+        val token = pair(Phone())
+        Phone().use { phone ->
+            phone.send(RemoteMsg(t = RemoteProto.HELLO, token = token))
+            phone.read(); phone.read()
+            phone.send(RemoteMsg(t = RemoteProto.SYNC, syncCode = "ABCD-EFGH"))
+            val reply = phone.read()
+            assertEquals(RemoteProto.SYNC_OK, reply.t)
+            assertEquals("ABCDEFGH", com.chronosbvrx.visionplus.data.sync.SyncStore.code(context))
         }
     }
 

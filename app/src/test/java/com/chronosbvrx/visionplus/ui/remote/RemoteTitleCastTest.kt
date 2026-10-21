@@ -20,6 +20,7 @@ class RemoteTitleCastTest {
         assertTrue("la orden viaja por el control remoto", text.contains("RemoteClient.sendOpen("))
         assertTrue("solo con una referencia que sepamos abrir", text.contains("castableRef(film.videoUrl)"))
         assertTrue("solo con la conexión viva", text.contains("RemoteStatus.CONNECTED"))
+        assertTrue("manda el minuto exacto del teléfono", text.contains("resumePositionFor(context"))
     }
 
     private fun requireSource(rel: String): String {

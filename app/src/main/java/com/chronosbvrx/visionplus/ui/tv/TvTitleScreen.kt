@@ -445,6 +445,7 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                 ) {
                     UserLibrary.toggleWatchLater(context, film)
                     inLater.value = !inLater.value
+                    com.chronosbvrx.visionplus.data.sync.SyncStore.syncAsync(context)
                 }
                 TvCompactAction(
                     label = "Favorito",
@@ -452,6 +453,7 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                 ) {
                     UserLibrary.toggleFavorite(context, film)
                     inFavorites.value = !inFavorites.value
+                    com.chronosbvrx.visionplus.data.sync.SyncStore.syncAsync(context)
                 }
                 if (isSeriesTitle) {
                     val following = remember(film.id) {

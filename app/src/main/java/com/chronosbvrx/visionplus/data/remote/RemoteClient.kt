@@ -212,10 +212,20 @@ object RemoteClient {
         send(RemoteMsg(t = RemoteProto.KEY, code = code, action = action))
     }
 
+    /** Le entrega el código de sincronización a la tele (ella lo adopta y empieza a sincronizar). */
+    fun sendSyncCode(code: String) {
+        val clean = code.trim()
+        if (clean.isEmpty()) return
+        send(RemoteMsg(t = RemoteProto.SYNC, syncCode = clean))
+    }
+
     /**
      * Pide abrir contenido en la tele. Cuando es un capítulo de serie viaja también su contexto
      * ([seriesId] = la temporada activa y sus vecinas) para que la tele reproduzca ESE capítulo
      * y pueda seguir con el siguiente, en vez de mandar la serie a medias.
+     *
+     * [positionMs] es el minuto exacto que el teléfono está viendo (0 = desde el principio): la
+     * tele reanuda ahí aunque su propio historial diga otra cosa. La orden explícita manda.
      */
     fun sendOpen(
         ref: String,
@@ -225,6 +235,7 @@ object RemoteClient {
         seasonIndex: Int = 0,
         seasonIds: List<String> = emptyList(),
         seasonNames: List<String> = emptyList(),
+        positionMs: Long = 0,
     ) {
         send(
             RemoteMsg(
@@ -236,6 +247,7 @@ object RemoteClient {
                 seasonIndex = seasonIndex.takeIf { it > 0 },
                 seasonIds = seasonIds.takeIf { it.isNotEmpty() },
                 seasonNames = seasonNames.takeIf { it.isNotEmpty() },
+                pos = positionMs.takeIf { it > 0 },
             ),
         )
     }
