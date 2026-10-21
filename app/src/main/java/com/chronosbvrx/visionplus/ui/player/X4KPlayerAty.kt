@@ -113,6 +113,13 @@ class X4KPlayerAty : ComponentActivity() {
     private var audioBtn: TextView? = null
     private var subsBtn: TextView? = null
     private var qualityBtn: TextView? = null
+    // Píldoras de opciones reales (siguiente/capítulos/audio/subtítulos/calidad): solo se
+    // muestra la que tiene algo que elegir y la cadena de foco del mando se re-cablea para
+    // que las ocultas no dejen un destino muerto.
+    private var optionPillChain = ArrayList<View>()
+    private var forwardNavView: View? = null
+    private var seekNavView: SeekBar? = null
+    private var playPauseNavView: View? = null
     private var curMedias = ArrayList<X4KTitan.MediaSpec>()
     private var currentMediaName = ""
     private var curQuality = ""
@@ -803,6 +810,10 @@ class X4KPlayerAty : ComponentActivity() {
         audioBtn = null
         subsBtn = null
         qualityBtn = null
+        optionPillChain.clear()
+        forwardNavView = null
+        seekNavView = null
+        playPauseNavView = null
         channelsBtn = null
         episodesBtn = null
         nextEpBtn = null
@@ -1655,20 +1666,30 @@ class X4KPlayerAty : ComponentActivity() {
             })
             buttons.addView(forward)
             buttons.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+            // Píldoras de opciones: se crean siempre (la visibilidad se decide con lo que el
+            // título REALMENTE trae) y el espacio entre ellas va en el margen, para que una
+            // oculta no deje un hueco.
+            fun addPill(v: View) {
+                buttons.addView(
+                    v,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).apply { marginStart = dp(8) },
+                )
+            }
             if (isSeriesContent(epIds.size, seasonIds.size)) {
                 val nextEp = pill("Sig. episodio", R.drawable.ic_vp_skip_next) {
                     if (canExecuteControlAction()) playNextEpisodeFromControls()
                 }
                 nextEp.tvControl()
                 nextEpBtn = nextEp
-                buttons.addView(nextEp)
-                buttons.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
+                addPill(nextEp)
 
                 val episodes = pill("Capítulos", R.drawable.ic_vp_playlist) { showEpisodePicker() }
                 episodes.tvControl()
                 episodesBtn = episodes
-                buttons.addView(episodes)
-                buttons.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
+                addPill(episodes)
                 updateNextButtonState()
             }
             val firstAudio = declaredLanguages.firstOrNull().orEmpty()
@@ -1683,15 +1704,22 @@ class X4KPlayerAty : ComponentActivity() {
             val qDisplay = formatQualityShort(curQuality)
             val quality = pill(qDisplay, R.drawable.ic_vp_tune) { showQualityPicker() }
             quality.tvControl()
-            buttons.addView(audio)
-            buttons.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
-            buttons.addView(subs)
-            buttons.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
-            buttons.addView(quality)
+            addPill(audio)
+            addPill(subs)
+            addPill(quality)
             playPauseBtn = playPause
             audioBtn = audio
             subsBtn = subs
             qualityBtn = quality
+            playPauseNavView = playPause
+            forwardNavView = forward
+            optionPillChain = ArrayList<View>().apply {
+                nextEpBtn?.let { add(it) }
+                episodesBtn?.let { add(it) }
+                add(audio)
+                add(subs)
+                add(quality)
+            }
         }
 
         // En pantallas angostas (móvil vertical) la fila rueda a los lados; en TV y en
@@ -1747,16 +1775,10 @@ class X4KPlayerAty : ComponentActivity() {
                 val rewind = rewindBtn
                 val playPause = playPauseBtn
                 val forward = fwdBtn
-                val audio = audioBtn
-                val subs = subsBtn
-                val quality = qualityBtn
-                if (rewind != null && playPause != null && forward != null && audio != null && subs != null) {
+                if (rewind != null && playPause != null && forward != null) {
                     val rewindId = View.generateViewId().also { rewind.id = it }
                     val playId = View.generateViewId().also { playPause.id = it }
                     val forwardId = View.generateViewId().also { forward.id = it }
-                    val audioId = View.generateViewId().also { audio.id = it }
-                    val subsId = View.generateViewId().also { subs.id = it }
-                    val qualityId = if (quality != null) View.generateViewId().also { quality.id = it } else -1
                     seek.isFocusable = true
                     seek.isFocusableInTouchMode = false
                     playerControls.add(seek)
@@ -1824,16 +1846,10 @@ class X4KPlayerAty : ComponentActivity() {
                         }
                     }
                     val seekId = View.generateViewId().also { seek.id = it }
-                    val nextView = nextEpBtn
-                    val nextId = if (nextView != null) View.generateViewId().also { nextView.id = it } else -1
-                    val epsView = episodesBtn
-                    val epsId = if (epsView != null) View.generateViewId().also { epsView.id = it } else -1
-                    val firstPillId = when {
-                        nextId != -1 -> nextId
-                        epsId != -1 -> epsId
-                        else -> audioId
-                    }
                     val upId = seekId
+                    seekNavView = seek
+                    playPauseNavView = playPause
+                    forwardNavView = forward
 
                     rewind.nextFocusUpId = upId
                     rewind.nextFocusRightId = playId
@@ -1845,44 +1861,14 @@ class X4KPlayerAty : ComponentActivity() {
                     playPause.nextFocusDownId = playId
 
                     forward.nextFocusLeftId = playId
-                    forward.nextFocusRightId = firstPillId
+                    forward.nextFocusRightId = forwardId
                     forward.nextFocusUpId = upId
                     forward.nextFocusDownId = forwardId
 
-                    if (nextId != -1) {
-                        nextView?.nextFocusLeftId = forwardId
-                        nextView?.nextFocusRightId = if (epsId != -1) epsId else audioId
-                        nextView?.nextFocusUpId = upId
-                        nextView?.nextFocusDownId = nextId
-                    }
-
-                    if (epsId != -1) {
-                        epsView?.nextFocusLeftId = if (nextId != -1) nextId else forwardId
-                        epsView?.nextFocusRightId = audioId
-                        epsView?.nextFocusUpId = upId
-                        epsView?.nextFocusDownId = epsId
-                    }
-                    val pillLeftId = when {
-                        epsId != -1 -> epsId
-                        nextId != -1 -> nextId
-                        else -> forwardId
-                    }
-                    audio.nextFocusLeftId = pillLeftId
-                    audio.nextFocusRightId = subsId
-                    audio.nextFocusUpId = upId
-                    audio.nextFocusDownId = audioId
-
-                    subs.nextFocusLeftId = audioId
-                    subs.nextFocusRightId = if (qualityId != -1) qualityId else subsId
-                    subs.nextFocusUpId = upId
-                    subs.nextFocusDownId = subsId
-
-                    if (qualityId != -1) {
-                        quality?.nextFocusLeftId = subsId
-                        quality?.nextFocusRightId = qualityId
-                        quality?.nextFocusUpId = upId
-                        quality?.nextFocusDownId = qualityId
-                    }
+                    // La cadena siguiente/capítulos/audio/subtítulos/calidad se arma con las
+                    // píldoras que SÍ tienen opciones: una oculta no deja un destino muerto
+                    // y el mando nunca se queda atorado.
+                    rewireOptionPillFocus()
                     // La píldora «Omitir intro» enlaza su foco en buildIntroPill/updateIntroPill:
                     // aquí todavía no existe (se crea al final de buildControls) y un enlace
                     // tardío apuntaba a un id muerto: el mando jamás podía llegar a ella.
@@ -1911,6 +1897,52 @@ class X4KPlayerAty : ComponentActivity() {
             seekBar = seek
             timeNow = now
             timeTotal = total
+            // Audio/subtítulos/calidad: solo las píldoras que tienen algo que elegir.
+            applyOptionPillVisibility()
+        }
+    }
+
+    /**
+     * Muestra solo las píldoras con opciones REALES del título: audio si hay más de un idioma,
+     * subtítulos si el programa trae al menos uno y calidad si hay más de una resolución. Con
+     * una sola opción el botón se oculta: un menú de una sola entrada (o vacío) es una promesa
+     * falsa. Se re-evalúa al abrir, al llegar la lista de subtítulos y en el primer cuadro (el
+     * motor ya conoce sus pistas).
+     */
+    private fun applyOptionPillVisibility() {
+        if (liveMode || playerView == null) return
+        val engineAudio = X4KTitan.tracks().count { it.first == "audio" }
+        audioBtn?.visibility = if (shouldShowAudioPicker(declaredLanguages, engineAudio)) View.VISIBLE else View.GONE
+        val subsCount = if (subsLoaded) distinctLanguages(subsEntries).size else 0
+        subsBtn?.visibility = if (shouldShowSubtitlePicker(subsLoaded, subsCount)) View.VISIBLE else View.GONE
+        val qualities = distinctQualityChoices(curMedias, { it.quality }, { it.name }).size
+        qualityBtn?.visibility = if (shouldShowQualityPicker(qualities)) View.VISIBLE else View.GONE
+        // Si el foco estaba en una píldora que acaba de ocultarse (p. ej. la lista de
+        // subtítulos llegó vacía con los controles abiertos), vuelve al play/pausa.
+        val focused = currentFocus
+        if (controlsVisible && (focused === audioBtn || focused === subsBtn || focused === qualityBtn)) {
+            playPauseNavView?.requestFocus()
+        }
+        rewireOptionPillFocus()
+    }
+
+    /**
+     * Re-cablea la fila de píldoras del mando para que salte solo entre las VISIBLES. Las
+     * píldoras ocultas (sin opciones) no pueden quedar como destino: el D-pad se tragaría
+     * la tecla en el salto y el mando parecería muerto.
+     */
+    private fun rewireOptionPillFocus() {
+        val forward = forwardNavView ?: return
+        if (forward.id == View.NO_ID) forward.id = View.generateViewId()
+        val upId = seekNavView?.id ?: -1
+        val visible = optionPillChain.filter { it.visibility == View.VISIBLE }
+        visible.forEach { pill -> if (pill.id == View.NO_ID) pill.id = View.generateViewId() }
+        forward.nextFocusRightId = visible.firstOrNull()?.id ?: forward.id
+        visible.forEachIndexed { index, pill ->
+            pill.nextFocusLeftId = if (index == 0) forward.id else visible[index - 1].id
+            pill.nextFocusRightId = if (index == visible.lastIndex) pill.id else visible[index + 1].id
+            pill.nextFocusUpId = upId
+            pill.nextFocusDownId = pill.id
         }
     }
 
@@ -1961,7 +1993,7 @@ class X4KPlayerAty : ComponentActivity() {
     private fun audioOptions(options: MutableList<Pair<String, () -> Unit>>) {
         val v = playerView ?: return
         val engineTracks = X4KTitan.tracks().filter { it.first == "audio" }
-        if (engineTracks.isNotEmpty()) {
+        if (engineTracks.size > 1) {
             // El motor a veces da el códec ("aac") en vez del idioma: se empareja con lo
             // declarado por el portal cuando los conteos coinciden; si no, cada pista usa
             // lo suyo y las etiquetas repetidas se distinguen por su id.
@@ -2256,6 +2288,8 @@ class X4KPlayerAty : ComponentActivity() {
                 subsEntries = list
                 subsLoaded = true
                 Log.i(TAG, "subs list cid=$cid n=${list.size}")
+                // La píldora de subtítulos aparece solo si el programa trae alguno.
+                applyOptionPillVisibility()
                 if (subsPickerWaiting && picking) {
                     subsPickerWaiting = false
                     dismissPicker()
@@ -2378,7 +2412,7 @@ class X4KPlayerAty : ComponentActivity() {
         if (liveMode) return
         lastPickerSourceBtn = qualityBtn
         val v = playerView ?: return
-        val distinctQualities = curMedias.distinctBy { it.quality.ifBlank { it.name } }
+        val distinctQualities = distinctQualityChoices(curMedias, { it.quality }, { it.name })
 
         val dim = ModalDimLayout(this).apply {
             setBackgroundColor(0xCC000000.toInt())
@@ -3300,6 +3334,9 @@ class X4KPlayerAty : ComponentActivity() {
         disableSubs(save = false)
         subsEntries = emptyList()
         subsLoaded = false
+        // El capítulo nuevo aún no tiene su lista: la píldora de subtítulos se oculta hasta
+        // saber si este programa trae alguno.
+        applyOptionPillVisibility()
 
         // Reiniciar duración del capítulo previo para que el nuevo episodio tome su duración exacta.
         durationMs = -1L
@@ -3372,6 +3409,7 @@ class X4KPlayerAty : ComponentActivity() {
                 qualityBtn?.text = formatQualityShort(curQuality)
                 declaredLanguages = medias.first().audio
                     .split(',').map { it.trim() }.filter { it.isNotBlank() }
+                applyOptionPillVisibility()
                 maybeRestoreAudioLang()
                 // Subtítulos del capítulo nuevo: lista propia del servicio para este programa.
                 loadSubs(code)
@@ -3486,6 +3524,10 @@ class X4KPlayerAty : ComponentActivity() {
         // El motor pintó: la racha de fallos silenciosos vuelve a cero (auto-reparado).
         com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.noteSuccess(this)
         if (liveMode) return
+        // El motor ya expone sus pistas reales: la píldora de audio se queda solo si hay
+        // más de una (y los subtítulos, si el servicio los dio).
+        applyOptionPillVisibility()
+        handler.postDelayed({ applyOptionPillVisibility() }, 1_500L)
         if (resumeMs > 0 && !resumeApplied) {
             val at = resumeMs
             resumeApplied = true

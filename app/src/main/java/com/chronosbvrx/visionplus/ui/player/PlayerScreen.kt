@@ -104,8 +104,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
@@ -1170,6 +1173,99 @@ private fun PlayerCore(
         }
     }
 
+    /** Etiqueta humana de una pista del motor: el nombre del proveedor o, si falta, su idioma. */
+    fun trackLabel(format: androidx.media3.common.Format, ordinal: Int): String {
+        format.label?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        val lang = format.language?.trim().orEmpty()
+        if (lang.isNotBlank() && !lang.equals("und", ignoreCase = true) &&
+            !lang.equals("unknown", ignoreCase = true)
+        ) {
+            val known = com.chronosbvrx.visionplus.data.subs.languageName(lang)
+            return known.ifBlank { lang.uppercase() }
+        }
+        return "Pista ${ordinal + 1}"
+    }
+
+    /**
+     * Reúne SOLO las opciones reales que reporta ExoPlayer para este video: pistas de audio,
+     * subtítulos y las resoluciones distintas. Es lo que alimenta el menú «honesto»: con un
+     * único idioma no hay sección de audio; sin pistas de texto, no hay sección de subtítulos;
+     * con una sola resolución, no hay selector de calidad (ni botón que abra nada vacío).
+     */
+    fun refreshTrackChoices(tracks: Tracks) {
+        val audio = ArrayList<PlayerTrackChoice>()
+        val subs = ArrayList<PlayerTrackChoice>()
+        val heights = LinkedHashSet<Int>()
+        var currentAudio: String? = null
+        var currentSubtitle: String? = null
+        tracks.groups.forEachIndexed { groupIndex, group ->
+            when (group.type) {
+                C.TRACK_TYPE_AUDIO -> for (i in 0 until group.length) {
+                    if (!group.isTrackSupported(i)) continue
+                    val key = "$groupIndex:$i"
+                    audio += PlayerTrackChoice(key, trackLabel(group.getTrackFormat(i), audio.size))
+                    if (group.isSelected && group.isTrackSelected(i)) currentAudio = key
+                }
+                C.TRACK_TYPE_TEXT -> for (i in 0 until group.length) {
+                    if (!group.isTrackSupported(i)) continue
+                    val key = "$groupIndex:$i"
+                    subs += PlayerTrackChoice(key, trackLabel(group.getTrackFormat(i), subs.size))
+                    if (group.isSelected && group.isTrackSelected(i)) currentSubtitle = key
+                }
+                C.TRACK_TYPE_VIDEO -> for (i in 0 until group.length) {
+                    if (!group.isTrackSupported(i)) continue
+                    val height = group.getTrackFormat(i).height
+                    if (height > 0) heights += height
+                }
+            }
+        }
+        menu.audioChoices = audio
+        menu.subtitleChoices = subs
+        menu.videoHeights = heights.sortedDescending()
+        menu.selectedAudioKey = when {
+            currentAudio != null -> currentAudio
+            audio.any { it.key == menu.selectedAudioKey } -> menu.selectedAudioKey
+            else -> null
+        }
+        menu.selectedSubtitleKey = currentSubtitle
+        // Si Ajustes prefiere una resolución que este título no tiene, no se deja el filtro
+        // sin pista (video en negro): se cae a Auto, que es lo honesto.
+        if (menu.quality != "Auto" && menu.videoHeights.none { videoQualityKey(it) == menu.quality }) {
+            menu.quality = "Auto"
+        }
+        if (!menu.hasAnyChoices && showTracks) showTracks = false
+    }
+
+    fun applyAudioChoice(choice: PlayerTrackChoice) {
+        val groupIndex = choice.key.substringBefore(':').toIntOrNull() ?: return
+        val trackIndex = choice.key.substringAfter(':').toIntOrNull() ?: return
+        val group = player.currentTracks.groups.getOrNull(groupIndex) ?: return
+        if (group.type != C.TRACK_TYPE_AUDIO) return
+        val builder = player.trackSelectionParameters.buildUpon()
+        builder.setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+        builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
+        player.trackSelectionParameters = builder.build()
+        menu.selectedAudioKey = choice.key
+    }
+
+    fun applySubtitleChoice(choice: PlayerTrackChoice?) {
+        val builder = player.trackSelectionParameters.buildUpon()
+        if (choice == null) {
+            builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            menu.selectedSubtitleKey = null
+        } else {
+            val groupIndex = choice.key.substringBefore(':').toIntOrNull() ?: return
+            val trackIndex = choice.key.substringAfter(':').toIntOrNull() ?: return
+            val group = player.currentTracks.groups.getOrNull(groupIndex) ?: return
+            if (group.type != C.TRACK_TYPE_TEXT) return
+            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
+            menu.selectedSubtitleKey = choice.key
+        }
+        player.trackSelectionParameters = builder.build()
+    }
+
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -1205,6 +1301,10 @@ private fun PlayerCore(
                 if (state == Player.STATE_ENDED && introPlaying) startMainItem() else if (state == Player.STATE_ENDED) controls.bump()
             }
 
+            override fun onTracksChanged(tracks: Tracks) {
+                refreshTrackChoices(tracks)
+            }
+
             override fun onPlayerError(e: PlaybackException) {
                 val status = e.cause?.let { it as? HttpDataSource.InvalidResponseCodeException }?.responseCode ?: -1
                 val detail = "code=${e.errorCode} http=${if (status > 0) status else -1}"
@@ -1224,16 +1324,24 @@ private fun PlayerCore(
             }
         }
         player.addListener(listener)
+        // El player se prepara antes de registrar el listener: se hidrata con lo que ya
+        // exponga (y `onTracksChanged` completa el resto cuando llegan las pistas).
+        refreshTrackChoices(player.currentTracks)
         onDispose {
             player.removeListener(listener)
             player.release()
         }
     }
 
-    // Dynamic video quality constraint on ExoPlayer
-    LaunchedEffect(menu.quality, player) {
+    // Dynamic video quality constraint on ExoPlayer. Solo se aplica cuando la resolución
+    // pedida EXISTE en la transmisión: con un título 480p y «1080p» en Ajustes, el filtro
+    // anterior (mín. 1280x720) dejaba al reproductor sin pista (pantalla en negro).
+    LaunchedEffect(menu.quality, menu.videoHeights, player) {
+        val wanted = menu.quality
+        val applies = wanted != "Auto" && menu.videoHeights.any { videoQualityKey(it) == wanted }
         val builder = player.trackSelectionParameters.buildUpon()
-        when (menu.quality) {
+        when (if (applies) wanted else "Auto") {
+            "2160p" -> builder.setMaxVideoSize(3840, 2160).setMinVideoSize(1920, 1080)
             "1080p" -> builder.setMaxVideoSize(1920, 1080).setMinVideoSize(1280, 720)
             "720p" -> builder.setMaxVideoSize(1280, 720).setMinVideoSize(854, 480)
             "480p" -> builder.setMaxVideoSize(854, 480).setMinVideoSize(0, 0)
@@ -1416,6 +1524,15 @@ private fun PlayerCore(
     var liveInfoFocused by remember { mutableStateOf(false) }
     val hasControlFocus = barFocused || rewindFocused || playPauseFocused || forwardFocused ||
         tracksFocused || skipFocused || zapListFocused || liveInfoFocused
+
+    // Si el botón de audio/subtítulos deja de existir (el video no tiene opciones), el foco
+    // no puede quedar huérfano: vuelve a play/pausa para que el mando siga respondiendo.
+    LaunchedEffect(menu.hasAnyChoices) {
+        if (!menu.hasAnyChoices && tracksFocused) {
+            tracksFocused = false
+            if (controls.visible) runCatching { playPauseFocus.requestFocus() }
+        }
+    }
 
     fun skipTargetNow(pos: Long): Pair<String, Long>? {
         if (!recapUsed) {
@@ -1996,25 +2113,27 @@ private fun PlayerCore(
                                     .onFocusChanged { playPauseFocused = it.isFocused }
                                     .focusProperties {
                                         left = liveInfoFocus
-                                        right = tracksFocus
+                                        right = if (menu.hasAnyChoices) tracksFocus else playPauseFocus
                                         up = playPauseFocus
                                         down = playPauseFocus
                                     },
                             )
-                            PlayerPill(
-                                icon = Icons.Default.Subtitles,
-                                label = "Audio y subtítulos",
-                                onClick = { if (canExecuteControlAction()) { showTracks = true; controls.bump() } },
-                                modifier = if (!isTv) Modifier else Modifier
-                                    .focusRequester(tracksFocus)
-                                    .onFocusChanged { tracksFocused = it.isFocused }
-                                    .focusProperties {
-                                        left = playPauseFocus
-                                        right = if (canZap) zapListFocus else playPauseFocus
-                                        up = playPauseFocus
-                                        down = tracksFocus
-                                    },
-                            )
+                            if (menu.hasAnyChoices) {
+                                PlayerPill(
+                                    icon = Icons.Default.Subtitles,
+                                    label = "Audio y subtítulos",
+                                    onClick = { if (canExecuteControlAction()) { showTracks = true; controls.bump() } },
+                                    modifier = if (!isTv) Modifier else Modifier
+                                        .focusRequester(tracksFocus)
+                                        .onFocusChanged { tracksFocused = it.isFocused }
+                                        .focusProperties {
+                                            left = playPauseFocus
+                                            right = if (canZap) zapListFocus else playPauseFocus
+                                            up = playPauseFocus
+                                            down = tracksFocus
+                                        },
+                                )
+                            }
                             if (!isTv) {
                                 val activity = context.findActivity()
                                 PlayerPill(
@@ -2058,7 +2177,7 @@ private fun PlayerCore(
                                     .onFocusChanged { playPauseFocused = it.isFocused }
                                     .focusProperties {
                                         left = if (isLive) playPauseFocus else rewindFocus
-                                        right = if (isLive) tracksFocus else forwardFocus
+                                        right = if (isLive) (if (menu.hasAnyChoices) tracksFocus else playPauseFocus) else forwardFocus
                                         up = if (isLive) playPauseFocus else barFocus
                                         down = playPauseFocus
                                     },
@@ -2072,10 +2191,10 @@ private fun PlayerCore(
                                 modifier = if (!isTv) Modifier else Modifier
                                     .focusRequester(forwardFocus)
                                     .onFocusChanged { forwardFocused = it.isFocused }
-                                    .focusProperties { left = playPauseFocus; right = tracksFocus; up = barFocus; down = forwardFocus },
+                                    .focusProperties { left = playPauseFocus; right = if (menu.hasAnyChoices) tracksFocus else forwardFocus; up = barFocus; down = forwardFocus },
                             )
                         }
-                        if (!introPlaying) {
+                        if (!introPlaying && menu.hasAnyChoices) {
                             TransportButton(
                                 icon = Icons.Default.Subtitles,
                                 contentDescription = "Audio, subtítulos y calidad",
@@ -2102,7 +2221,7 @@ private fun PlayerCore(
                                     .focusRequester(zapListFocus)
                                     .onFocusChanged { zapListFocused = it.isFocused }
                                     .focusProperties {
-                                        left = tracksFocus
+                                        left = if (menu.hasAnyChoices) tracksFocus else playPauseFocus
                                         right = zapListFocus
                                         up = playPauseFocus
                                         down = zapListFocus
@@ -2231,7 +2350,14 @@ private fun PlayerCore(
         }
     }
 
-    if (showTracks) AudioAndSubtitlesDialog(menu, onDismiss = { showTracks = false })
+    if (showTracks) {
+        AudioAndSubtitlesDialog(
+            state = menu,
+            onPickAudio = { applyAudioChoice(it) },
+            onPickSubtitle = { applySubtitleChoice(it) },
+            onDismiss = { showTracks = false },
+        )
+    }
     if (showZapList) {
         ZapListDialog(
             targets = zapTargets,
@@ -2258,7 +2384,7 @@ private fun PlayerCore(
         )
     }
     LaunchedEffect(showTracks) {
-        if (!showTracks && isTv && controls.visible) {
+        if (!showTracks && isTv && controls.visible && menu.hasAnyChoices) {
             delay(100)
             runCatching { tracksFocus.requestFocus() }
         }

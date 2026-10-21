@@ -56,6 +56,14 @@ data class EpisodePlay(
     val durationMs: Long = 0L,
 )
 
+/**
+ * ¿Toca enseñar la Interfaz Especial Sin Conexión? Solo mientras NO hay internet y la
+ * persona está en el menú: un reproductor abierto (VOD o vivo) no se interrumpe por una
+ * caída momentánea de la red — el propio reproductor la maneja con sus reintentos.
+ */
+internal fun shouldShowOfflineMode(isOnline: Boolean, route: Route): Boolean =
+    !isOnline && route !is Route.Player && route !is Route.LivePlayer
+
 /** A tiny back stack: the app has no deep links or process restore to care about. */
 class Navigator(start: List<Route>) {
     val stack = mutableStateListOf<Route>().apply { addAll(start) }

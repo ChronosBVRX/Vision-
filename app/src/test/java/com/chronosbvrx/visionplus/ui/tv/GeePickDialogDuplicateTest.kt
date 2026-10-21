@@ -14,6 +14,9 @@ import com.chronosbvrx.visionplus.data.gee.GeeGuide
 import com.chronosbvrx.visionplus.data.gee.GeeHealth
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.ui.sports.GeeLinkPickDialog
+import com.chronosbvrx.visionplus.ui.player.AudioAndSubtitlesDialog
+import com.chronosbvrx.visionplus.ui.player.PlayerMenuState
+import com.chronosbvrx.visionplus.ui.player.PlayerTrackChoice
 import com.chronosbvrx.visionplus.ui.theme.VisionTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -166,6 +169,71 @@ class GeePickDialogDuplicateTest {
         val matches = compose.onAllNodes(hasText(text, substring = true), useUnmergedTree = true)
             .fetchSemanticsNodes().size
         assertTrue("no debía aparecer «$text»", matches == 0)
+    }
+
+    /** Texto EXACTO: distingue la sección «Audio» del título «Audio, subtítulos y calidad». */
+    private fun assertExactAbsent(text: String) {
+        val matches = compose.onAllNodes(hasText(text, substring = false), useUnmergedTree = true)
+            .fetchSemanticsNodes().size
+        assertTrue("no debía aparecer la sección «$text»", matches == 0)
+    }
+
+    // ----- menú honesto de audio/subtítulos/calidad ------------------------------------------
+
+    private fun trackMenu(audio: Int, subs: Int, heights: List<Int>) = PlayerMenuState().apply {
+        audioChoices = (1..audio).map { PlayerTrackChoice("a$it", "Audio pista $it") }
+        subtitleChoices = (1..subs).map { PlayerTrackChoice("s$it", "Subtítulo pista $it") }
+        videoHeights = heights
+    }
+
+    @Test
+    fun aVideoWithoutRealTrackOptionsShowsNoSections() {
+        compose.setContent {
+            VisionTheme {
+                AudioAndSubtitlesDialog(trackMenu(0, 0, emptyList()), {}, {}, {})
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertExactAbsent("Calidad de video")
+        assertExactAbsent("Audio")
+        assertExactAbsent("Subtítulos")
+        assertAbsent("Desactivados")
+        assertText("Esta transmisión se reproduce con un solo audio, sin subtítulos y en su resolución nativa.")
+    }
+
+    @Test
+    fun theTrackMenuShowsTheRealAudioSubtitlesAndResolutions() {
+        compose.setContent {
+            VisionTheme {
+                AudioAndSubtitlesDialog(trackMenu(2, 1, listOf(1080, 720)), {}, {}, {})
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertText("Calidad de video")
+        assertText("1080p FHD")
+        assertText("720p HD")
+        assertText("Audio pista 2")
+        assertText("Subtítulos")
+        assertText("Desactivados")
+        assertText("Subtítulo pista 1")
+    }
+
+    @Test
+    fun oneAudioAndOneResolutionAreNotOffered() {
+        compose.setContent {
+            VisionTheme {
+                AudioAndSubtitlesDialog(trackMenu(1, 0, listOf(1080)), {}, {}, {})
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertExactAbsent("Calidad de video")
+        assertExactAbsent("Audio")
+        assertExactAbsent("Subtítulos")
+        assertAbsent("1080p FHD")
+        assertAbsent("Desactivados")
     }
 
     // ----- respaldo automático ---------------------------------------------------------------

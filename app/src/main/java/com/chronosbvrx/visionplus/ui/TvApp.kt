@@ -185,7 +185,7 @@ private fun TvRoute(
         modifier = if (label == railReturn && railLanding != null) Modifier.landingFocus(railLanding) else Modifier,
     )
 
-    if (route !is Route.Player && !isOnline) {
+    if (shouldShowOfflineMode(isOnline, route)) {
         TvDownloadsScreen(
             isOfflineMode = true,
             onRetryConnection = {
@@ -193,6 +193,12 @@ private fun TvRoute(
                     scope.launch {
                         catalog.load()
                     }
+                } else {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Aún no hay conexión a internet",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
                 }
             },
             onPlayFilm = { nav.push(Route.Player(it)) },

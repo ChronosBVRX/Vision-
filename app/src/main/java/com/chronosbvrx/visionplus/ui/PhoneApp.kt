@@ -120,19 +120,25 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
     val rows = catalog.rows
     val isTab = TABS.any { it.route == route }
     val isWide = isLandscapeTablet()
+    val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
     var showPluginUpdates by rememberSaveable { mutableStateOf(false) }
     val updatesBadge = appUpdateBadgeCount()
     // The manager speaks up by itself once per version: if this release was not skipped, the
     // sheet opens so the update can be taken without leaving the app. La versión mínima
     // forzada (kill-switch remoto) ignora el "skip": la oferta vuelve en cada apertura.
-    LaunchedEffect(updatesBadge) {
+    // Sin conexión no se ofrece nada: el Modo Sin Conexión es la única pantalla.
+    LaunchedEffect(updatesBadge, isOnline) {
+        if (!isOnline) {
+            showPluginUpdates = false
+            return@LaunchedEffect
+        }
         if (updatesBadge > 0) {
             val latest = AppUpdate.latest?.version.orEmpty()
             val skipped = context.getSharedPreferences("updates", 0).getString("skipped", "")
             if (latest.isNotBlank() && (AppUpdate.forced(context) || skipped != latest)) showPluginUpdates = true
         }
     }
-    if (showPluginUpdates) {
+    if (showPluginUpdates && isOnline) {
         AppUpdatesDialog(
             release = AppUpdate.latest,
             onDismiss = {
@@ -147,7 +153,6 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
         )
     }
 
-    val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
     // Modo niños: las secciones sensibles piden el PIN (pase de 15 min, sin desbloquear).
     var pinRoute by remember { mutableStateOf<Route?>(null) }
     fun goTabGuarded(route: Route) {
@@ -188,12 +193,18 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
         else -> Unit
     }
 
-    if (!isOnline) {
+    if (shouldShowOfflineMode(isOnline, route)) {
         DownloadsScreen(
             isOfflineMode = true,
             onRetryConnection = {
                 if (com.chronosbvrx.visionplus.data.offline.NetworkMonitor.refresh(context)) {
                     scope.launch { catalog.load() }
+                } else {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Aún no hay conexión a internet",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
                 }
             },
             onOpenFilm = { nav.push(Route.Player(it)) },

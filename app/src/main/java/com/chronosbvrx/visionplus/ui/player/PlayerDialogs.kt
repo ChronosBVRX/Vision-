@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,26 +38,54 @@ import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.delay
-import kotlin.math.abs
 
-/** The copies of a video the "Servidor" section lists. */
-internal val SERVERS = listOf("Opción 1", "Opción 2", "Opción 3")
+/**
+ * Una pista REAL del video (audio o subtítulos) tal como la expone el motor. La clave
+ * identifica la pista dentro de `currentTracks` (grupo:índice) para aplicarla después.
+ */
+internal data class PlayerTrackChoice(val key: String, val label: String)
 
-/** One step of "Sincronizar subtítulos", and the bigger one. */
-internal const val SUBTITLE_STEP_MS = 100
-internal const val SUBTITLE_BIG_STEP_MS = 500
+/** «4K Ultra HD», «1080p FHD»… a partir del alto real de la resolución del motor. */
+internal fun videoQualityLabel(height: Int): String = when {
+    height >= 2160 -> "4K Ultra HD"
+    height >= 1080 -> "1080p FHD"
+    height >= 720 -> "720p HD"
+    height >= 480 -> "480p SD"
+    height > 0 -> "${height}p"
+    else -> "Automática"
+}
 
-internal val QUALITIES = listOf("Auto", "1080p", "720p", "480p")
+/** La misma resolución en la clave corta que usan Ajustes y las etiquetas ("1080p"). */
+internal fun videoQualityKey(height: Int): String = when {
+    height >= 2160 -> "2160p"
+    height >= 1080 -> "1080p"
+    height >= 720 -> "720p"
+    height >= 480 -> "480p"
+    height > 0 -> "${height}p"
+    else -> "Auto"
+}
 
-/** What the "Audio y subtítulos" menu shows for this video: the subtitle offset, copy and video quality. */
+/**
+ * Lo que el menú «Audio, subtítulos y calidad» puede enseñar de VERDAD para este video:
+ * las pistas que reportó ExoPlayer (audio/subtítulos) y las resoluciones reales. Las
+ * secciones sin opciones no se dibujan: nada de menús de una sola entrada ni de relleno.
+ */
 @Stable
 internal class PlayerMenuState {
-    var subtitleDelayMs by mutableIntStateOf(0)
-    var server by mutableIntStateOf(0)
     var quality by mutableStateOf("Auto")
+    var audioChoices by mutableStateOf<List<PlayerTrackChoice>>(emptyList())
+    var subtitleChoices by mutableStateOf<List<PlayerTrackChoice>>(emptyList())
+    var videoHeights by mutableStateOf<List<Int>>(emptyList())
+    var selectedAudioKey by mutableStateOf<String?>(null)
+    var selectedSubtitleKey by mutableStateOf<String?>(null)
 
-    /** The copy being opened after a pick, while its note shows; null when none is. */
-    var trying by mutableStateOf<Int?>(null)
+    /** Con un solo idioma no hay nada que elegir en audio: la sección/píldora no existe. */
+    val hasAudioChoices: Boolean get() = audioChoices.size > 1
+    val hasSubtitleChoices: Boolean get() = subtitleChoices.isNotEmpty()
+    val hasQualityChoices: Boolean get() = videoHeights.size > 1
+
+    /** ¿Vale la pena abrir el menú? Si no hay nada real, el botón se oculta. */
+    val hasAnyChoices: Boolean get() = hasAudioChoices || hasSubtitleChoices || hasQualityChoices
 }
 
 @Composable
@@ -66,27 +93,22 @@ internal fun rememberPlayerMenuState(
     initialQuality: String = com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality,
 ): PlayerMenuState = remember { PlayerMenuState().apply { quality = initialQuality } }
 
-/** "+0,5 s", "−1,2 s", "0 s". */
-internal fun subtitleDelayLabel(ms: Int): String {
-    if (ms == 0) return "0 s"
-    val sign = if (ms > 0) "+" else "−"
-    val tenths = abs(ms) / 100
-    return "$sign${tenths / 10},${tenths % 10} s"
-}
-
-/** The note while another copy opens, as the automatic fallback words it. */
-internal fun tryingServerNote(index: Int): String = "Probando otro servidor: ${SERVERS[index]} (${index + 1} de ${SERVERS.size})…"
-
-/** "Audio y subtítulos": the copy (Servidor), video quality, the audio and subtitle tracks, and subtitle sync. */
+/**
+ * «Audio, subtítulos y calidad»: SOLO las opciones que la transmisión tiene. Audio con más
+ * de un idioma, subtítulos cuando los hay y las resoluciones reales cuando hay más de una.
+ * Las secciones sin opciones no se dibujan (ni el botón que las abre).
+ */
 @Composable
-internal fun AudioAndSubtitlesDialog(state: PlayerMenuState, onDismiss: () -> Unit) {
+internal fun AudioAndSubtitlesDialog(
+    state: PlayerMenuState,
+    onPickAudio: (PlayerTrackChoice) -> Unit,
+    onPickSubtitle: (PlayerTrackChoice?) -> Unit,
+    onDismiss: () -> Unit,
+) {
     val first = rememberDialogLanding()
-    LaunchedEffect(state.trying) {
-        val next = state.trying ?: return@LaunchedEffect
-        delay(1_500)
-        state.server = next
-        state.trying = null
-    }
+    val firstIsQuality = state.hasQualityChoices
+    val firstIsAudio = !firstIsQuality && state.hasAudioChoices
+    val firstIsSubtitle = !firstIsQuality && !firstIsAudio && state.hasSubtitleChoices
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = VisionSurface,
@@ -97,51 +119,52 @@ internal fun AudioAndSubtitlesDialog(state: PlayerMenuState, onDismiss: () -> Un
                     .heightIn(max = 440.dp)
                     .verticalScroll(rememberScrollState()),
             ) {
-                MenuSectionTitle("Servidor", first = true)
-                SERVERS.forEachIndexed { i, label ->
+                if (state.hasQualityChoices) {
+                    MenuSectionTitle("Calidad de video", first = true)
                     MenuOption(
-                        label + (if (i == state.trying) " (abriendo)" else ""),
-                        modifier = if (i == 0) first else Modifier,
-                        selected = i == state.server,
-                    ) { if (i != state.server && state.trying == null) state.trying = i }
-                }
-                state.trying?.let { MenuNote(tryingServerNote(it)) }
-
-                MenuSectionTitle("Calidad de video")
-                QUALITIES.forEach { q ->
-                    val isSelected = (q == state.quality)
-                    val label = when (q) {
-                        "Auto" -> "Auto (Automática según red)"
-                        "1080p" -> "1080p FHD"
-                        "720p" -> "720p HD"
-                        "480p" -> "480p SD"
-                        else -> q
-                    }
-                    MenuOption(label, selected = isSelected) {
-                        state.quality = q
+                        "Auto (la mejor según la red)",
+                        modifier = if (firstIsQuality) first else Modifier,
+                        selected = state.quality == "Auto",
+                    ) { state.quality = "Auto" }
+                    state.videoHeights.forEach { height ->
+                        val key = videoQualityKey(height)
+                        MenuOption(videoQualityLabel(height), selected = state.quality == key) {
+                            state.quality = key
+                        }
                     }
                 }
 
-                MenuSectionTitle("Audio")
-                MenuOption("Original", selected = true) {}
-
-                MenuSectionTitle("Subtítulos del archivo")
-                MenuNote("Este archivo no trae subtítulos embebidos.")
-                MenuOption("Desactivar", selected = true) {}
-
-                MenuSectionTitle("Sincronizar subtítulos: ${subtitleDelayLabel(state.subtitleDelayMs)}")
-                MenuNote("Si el texto sale antes que la voz, súmale tiempo; si sale después, réstale.")
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf(
-                        -SUBTITLE_BIG_STEP_MS to "−0,5 s",
-                        -SUBTITLE_STEP_MS to "−0,1 s",
-                        SUBTITLE_STEP_MS to "+0,1 s",
-                        SUBTITLE_BIG_STEP_MS to "+0,5 s",
-                    ).forEach { (delta, label) ->
-                        MenuOption(label, fill = false) { state.subtitleDelayMs += delta }
+                if (state.hasAudioChoices) {
+                    MenuSectionTitle("Audio", first = !state.hasQualityChoices)
+                    state.audioChoices.forEachIndexed { index, choice ->
+                        MenuOption(
+                            choice.label,
+                            modifier = if (firstIsAudio && index == 0) first else Modifier,
+                            selected = choice.key == state.selectedAudioKey,
+                        ) { onPickAudio(choice) }
                     }
                 }
-                if (state.subtitleDelayMs != 0) MenuOption("Quitar el ajuste") { state.subtitleDelayMs = 0 }
+
+                if (state.hasSubtitleChoices) {
+                    MenuSectionTitle(
+                        "Subtítulos",
+                        first = !state.hasQualityChoices && !state.hasAudioChoices,
+                    )
+                    MenuOption(
+                        "Desactivados",
+                        modifier = if (firstIsSubtitle) first else Modifier,
+                        selected = state.selectedSubtitleKey == null,
+                    ) { onPickSubtitle(null) }
+                    state.subtitleChoices.forEach { choice ->
+                        MenuOption(choice.label, selected = choice.key == state.selectedSubtitleKey) {
+                            onPickSubtitle(choice)
+                        }
+                    }
+                }
+
+                if (!state.hasAnyChoices) {
+                    MenuNote("Esta transmisión se reproduce con un solo audio, sin subtítulos y en su resolución nativa.")
+                }
             }
         },
         confirmButton = { MenuOption("Cerrar", fill = false, onClick = onDismiss) },

@@ -134,6 +134,10 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         RemoteBus.attach(remoteSink)
+        // Al volver del sistema (otra app, pantalla apagada) la red pudo cambiar sin que el
+        // callback lo alcance: se revalida antes de pintar, para entrar/salir del Modo Sin
+        // Conexión sin un frame de catálogo condenado a fallar.
+        com.chronosbvrx.visionplus.data.offline.NetworkMonitor.refresh(this)
         // Google TV: al volver a la app, «Continuar viendo» se sincroniza con el historial.
         LauncherWatchNext.syncAsync(this, delayMs = 3_000L)
     }
@@ -226,7 +230,13 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(Unit) {
                         val minSplash = launch { delay(600L) }
                         var hitCap = false
-                        if (com.chronosbvrx.visionplus.data.offline.NetworkMonitor.refresh(this@MainActivity)) {
+                        // La sonda de salida corre en IO (nunca frena el hilo principal): con una
+                        // red que dice «internet» pero no llega a ningún lado, se abre directo el
+                        // Modo Sin Conexión en vez de un Inicio vacío.
+                        val onlineAtBoot = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.chronosbvrx.visionplus.data.offline.NetworkMonitor.verify(this@MainActivity)
+                        }
+                        if (onlineAtBoot) {
                             if (deepLinked) {
                                 // La tarjeta del launcher manda: el catálogo carga detrás, sin
                                 // hacer esperar a la película que la persona ya eligió.

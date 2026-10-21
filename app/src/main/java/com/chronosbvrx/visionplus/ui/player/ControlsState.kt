@@ -549,6 +549,51 @@ internal fun <T> orderMediasByQuality(
 }
 
 /**
+ * Las calidades REALES de la lista de medias: una entrada por resolución distinta.
+ *
+ * El portal suele mandar varias copias de la misma resolución (licencias/espejos) y a veces
+ * `quality` viene vacío: en ese caso la identidad es el nombre del stream, igual que hacía
+ * el selector. Sirve para decidir si la píldora de calidad tiene algo que ofrecer: con una
+ * sola resolución no se enseña (el video ya está en su máxima calidad nativa).
+ */
+internal fun <T> distinctQualityChoices(
+    medias: List<T>,
+    qualityOf: (T) -> String,
+    nameOf: (T) -> String,
+): List<T> {
+    val seen = HashSet<String>(medias.size)
+    val out = ArrayList<T>(medias.size)
+    for (media in medias) {
+        val quality = qualityOf(media).trim().lowercase()
+        val name = nameOf(media).trim().lowercase()
+        val key = quality.ifBlank { name }
+        if (seen.add(key)) out += media
+    }
+    return out
+}
+
+/**
+ * ¿Hay algo honesto que elegir en audio? Solo con más de una pista real: lo que declara el
+ * portal (`audioInfo`, a veces «Español,Inglés») o lo que expone el motor. Con un único
+ * idioma la píldora se oculta: un botón que abre un menú de una sola opción es mentira.
+ */
+internal fun shouldShowAudioPicker(declaredLanguages: List<String>, engineAudioTracks: Int): Boolean {
+    val declared = declaredLanguages
+        .map { it.trim().lowercase() }
+        .filter { it.isNotBlank() }
+        .distinct()
+        .size
+    return maxOf(declared, engineAudioTracks.coerceAtLeast(0)) > 1
+}
+
+/** La píldora de subtítulos solo existe si el programa trae al menos un idioma disponible. */
+internal fun shouldShowSubtitlePicker(loaded: Boolean, subtitleEntries: Int): Boolean =
+    loaded && subtitleEntries > 0
+
+/** La píldora de calidad solo existe si el título ofrece más de una resolución. */
+internal fun shouldShowQualityPicker(distinctQualities: Int): Boolean = distinctQualities > 1
+
+/**
  * Exceso de avance de la posición frente al reloj de pared: cuando el motor descarta
  * cuadros o se salta un tramo del contenido, la posición avanza más de lo que transcurrió
  * (el caso «no es pausa, es un salto»). Devuelve el exceso en ms; 0 = normal.
