@@ -25,14 +25,29 @@
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
 
+# --- AISLAMIENTO DEL ESPACIO DE NOMBRES DEL MOTOR (causa raiz del crash `k4.x`) ---
+# El motor X4K vive en assets/x4k/x4k-sdk-*.dex (16,395 clases, FUERA de R8) y se
+# carga con DexClassLoader(parent = nuestro classloader), que resuelve PARENT-FIRST:
+# cualquier nombre de clase que exista en nuestro APK ENSOMBRECE a la del motor.
+# Su ofuscacion usa TODO el espacio de 1-2 letras (a..z, a0..z9, aa..zf) — lo medimos
+# hoy: 719 de nuestras clases caian en un nombre del motor. La colision que dolia era
+# `k4.x`: en la OTA v2.5.117 R8 puso ahi `kotlin.collections.IndexedValue` y el
+# `onPrepared` del motor (yc.e$h -> zc.c.d -> Observable.interval -> RxJava
+# SchedulerPoolFactory) moria con
+#   NoSuchMethodError: No static method a(AtomicReference,Object,Object)Z in class Lk4/x
+# en el proceso :x4k => NADA reproducia (9 crashs en tele + telefono, 2026-10-22).
+# En v2.5.78 el mismo bug fue con Tink (`AesGcmKey` -> `k4.x`); blindar solo esa clase
+# fue jugar a los topos porque R8 reasigna nombres en CADA build.
+# Fix estructural: TODO lo renombrado por R8 vive bajo `visionplus.` (el motor no tiene
+# NI UNA clase en ese paquete: medido sobre los 3 DEX). Asi ninguna clase generada
+# puede volver a llamarse `k4.x` ni ningun otro nombre del motor.
+# Guardian: la tarea `verifyEngineNamespace` (app/build.gradle.kts) corre tras R8 y
+# rompe el build si alguna clase renombrada sale de `visionplus.` — ver REGRESSIONS.md.
+-repackageclasses 'visionplus'
+
 # --- Tink (AndroidX security-crypto) SIN ofuscacion ---
-# El DEX del motor X4K (assets, fuera de R8) trae su propio okhttp ofuscado por el
-# proveedor (`k4.x` con el `a(AtomicReference,...)` que RxJava usa en onPrepared) y
-# lo resuelve con parent-first contra NUESTRO classloader: si R8 renombra una clase
-# propia a `k4.x` (p. ej. `com.google.crypto.tink.proto.AesGcmKey`), la del motor
-# queda ensombrecida y el onPrepared muere con NoSuchMethodError en `k4/x` (crash
-# del `:x4k` en release; en debug no hay ofuscacion y carga la suya: por eso el
-# debug reproducia y el release no). Verificado con el stack en campo (A32 + TV).
+# Se conserva de v2.5.78 (ahi el nombre que choco fue `AesGcmKey`). Con el repackage
+# de arriba ya no hace falta para evitar colisiones, pero no estorba y ahorra sorpresas.
 -keep class com.google.crypto.tink.** { *; }
 -dontwarn com.google.api.client.**
 -dontwarn org.joda.**

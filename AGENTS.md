@@ -5,6 +5,14 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **HOTFIX 2.5.118 PUBLICADA: «no me deja reproducir nada» — R8 volvió a bautizar una clase nuestra (`kotlin.collections.IndexedValue`) como `k4.x`, ensombreció al motor XTV y el `onPrepared` moría en `:x4k` (no reproducía NADA en la 2.5.117); se cerró la puerta completa con `-repackageclasses 'visionplus'` + guardián de build — 746 Android + 294 backend** (2026-10-22):
+  - *Reporte del usuario*: «Analiza los errores, creo que hay un problema que no me está dejando reproducir nada».
+  - *Diagnóstico (telemetría del VPS, no adivinado)*: 9 crashes `NoSuchMethodError` en `:x4k` hoy 08:04–08:18 MX, **solo en 2.5.117** (Google Chromecast HD + Xiaomi 25053PC47G = tele y teléfono del usuario); 2.5.116 con 0 crashes. Stack: `yc.e$h.onPrepared` → `zc.c.d` → `Observable.interval` → RxJava `Schedulers.<clinit>` → `SchedulerPoolFactory.tryStart` → `No static method a(AtomicReference,Object,Object)Z in class Lk4/x` («declaration of 'k4.x' appears in …/base.apk»).
+  - *Causa raíz (medida sobre los binarios publicados)*: el motor vive en `assets/x4k` (16,395 clases; su ofuscación ocupa TODO el espacio de 1-2 letras `a..z`, `a0..z9`, `aa..zf`) y se carga con `DexClassLoader(parent = app)` → **parent-first**: cualquier nombre nuestro ensombrece al suyo. En vc353 R8 asignó `k4.x` a `kotlin.collections.IndexedValue` (confirmado en el `mapping.txt`). Un parser propio de DEX dio la prueba: **2.5.116 definía 696 nombres del motor (sin `k4.x`) y reproducía; 2.5.117 definía 719 (con `k4.x`) y no reproducía**. Blindar Tink en 2.5.78 fue jugar a los topos: R8 reasigna nombres en CADA build.
+  - *Fix estructural*: `-repackageclasses 'visionplus'` en `app/proguard-rules.pro` (el motor no tiene NI UNA clase en `visionplus.*`, medido) → el APK nuevo define 7,037 clases y solo **14** nombres compartidos con el motor (todos clases de librería con `-keep` que YA compartía 2.5.116, ninguna interviene al reproducir): `k4.x` queda libre y **682 nombres liberados, 0 ensombrecimientos nuevos** vs la versión que funcionaba.
+  - *Guardián nuevo (`verifyEngineNamespace` en `app/build.gradle.kts`)*: corre tras `minifyNormalReleaseWithR8`, parsea los 3 DEX de `assets/x4k` + el `mapping.txt` y **rompe el build** si una clase renombrada cae en un nombre del motor (ignora los marcadores `R8$$REMOVED$$CLASS$$N`). Salida verificada: `motor=16395, nuestras renombradas=5288, nombres reales compartidos=14, colisiones generadas=0`. Documentado en `docs/REGRESSIONS.md`.
+  - *Verificación*: el emulador **no discrimina** este bug (el motor ARM-traducido aborta en `libc++_shared` al hacer `play`, idéntico con el APK roto y con el nuevo: limitación del entorno), así que la prueba es a nivel bytecode: el asset publicado se descargó y se escaneó → **vc354 / 2.5.118, firma histórica `9593cb0d…`, `k4.x` ausente**. Suite **746 Android + 294 backend** en verde.
+  - *Pendiente*: confirmar en los equipos del usuario (teléfono + Chromecast HD) que reproducen y vigilar la telemetría por si reapareciera `NoSuchMethodError`.
 - **OTA v2.5.117 PUBLICADA: continuidad real entre el teléfono y la tele (minuto exacto + «Seguir viendo»/favoritos/vistos sincronizados) y el reloj móvil discreto — 746 Android + 294 backend** (2026-10-21):
   - *Publicada*: `tools/publish_ota.ps1 -Version 2.5.117 -NotesFile ota_notes_2.5.117.md` (vc353, 101.1 MB, firma histórica `9593cb0d…`, asset `VisionPlus.apk`, release https://github.com/ChronosBVRX/Vision-/releases/tag/v2.5.117). Asset descargado y verificado: `versionCode='353' versionName='2.5.117'`, firma histórica OK.
   - *Contenido*: Fase A (ficha/control remoto → «Ver en la TV» reanuda en el minuto exacto; el vivo no), Fase B (Ajustes → «Continuidad entre equipos»: código de 8 caracteres, sync de «Seguir viendo»/Favoritos/Ver más tarde/Vistos por el VPS, tombstones, una fila por serie, refresco del Inicio) y el reloj móvil como texto pequeño en la barra (la tele conserva su píldora). Servidor ya desplegado: `POST /v1/sync`, tabla `sync_items` con código hasheado, índice acotado a 100 por categoría y API con 1 GB de tope.
@@ -1219,8 +1227,11 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.117**
-  (versionCode **353**, release OTA v2.5.117 — continuidad real entre el teléfono y la tele: «Ver en la TV»
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.118**
+  (versionCode **354**, hotfix OTA v2.5.118 — R8 volvía a ensombrecer clases del motor XTV con nombres
+  generados; en la 2.5.117 `kotlin.collections.IndexedValue` cayó en `k4.x` y el `onPrepared` moría con
+  `NoSuchMethodError` en `:x4k`, así que NADA reproducía; ahora todo lo renombrado vive en `visionplus.*`
+  y un guardián de build lo impone; la v2.5.117 continuidad real entre el teléfono y la tele: «Ver en la TV»
   reanuda en el minuto exacto (el vivo no) y «Seguir viendo»/Favoritos/Ver más tarde/Vistos se sincronizan
   con un código compartido por el VPS (tombstones, una fila por serie, refresco del Inicio); el reloj del
   móvil pasa a texto pequeño en la barra superior y la tele conserva su píldora; la v2.5.116 el Modo Sin Conexión se abre solo, incluso con el

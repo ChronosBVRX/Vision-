@@ -1,3 +1,5 @@
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.Properties
 
 plugins {
@@ -33,8 +35,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = 353
-        versionName = "2.5.117"
+        versionCode = 354
+        versionName = "2.5.118"
         ndk {
             // Solo ARM: el APK no empaqueta libs x86/x86_64 (los AAR traían credentials/
             // graphics.path de x86_64). En dispositivos x86_64 con traducción ARM (emulador
@@ -110,6 +112,89 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+}
+
+// --- Guardián del espacio de nombres del motor X4K (ver proguard-rules.pro) ---
+// El DEX del motor (assets/x4k, ~16k clases) se resuelve PARENT-FIRST contra nuestro APK y su
+// ofuscación ocupa todo el espacio de 1-2 letras (a..z, a0..z9, aa..zf). Si R8 le pone a una
+// clase NUESTRA el mismo nombre que una del motor, la del motor queda ensombrecida y el
+// reproductor muere (OTA 2.5.117: `kotlin.collections.IndexedValue -> k4.x` mató `onPrepared`
+// con NoSuchMethodError; NADA reproducía). Esta tarea lee los DEX del motor y el mapping de R8
+// y rompe el build si vuelve a pasar.
+fun dexClassNames(dex: File): Set<String> {
+    val bytes = dex.readBytes()
+    val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+    fun u32(off: Int): Int = buf.getInt(off)
+    val nStr = u32(0x38); val offStr = u32(0x3C)
+    val nType = u32(0x40); val offType = u32(0x44)
+    val nCls = u32(0x60); val offCls = u32(0x64)
+    val strings = Array(nStr) { i ->
+        var p = u32(offStr + 4 * i)
+        var len = 0
+        var shift = 0
+        while (true) {
+            val b = bytes[p].toInt() and 0xFF
+            p++
+            len = len or ((b and 0x7F) shl shift)
+            if (b and 0x80 == 0) break
+            shift += 7
+        }
+        String(bytes, p, len, Charsets.UTF_8)
+    }
+    val types = Array(nType) { i -> strings[u32(offType + 4 * i)] }
+    return (0 until nCls).mapNotNull { i ->
+        val d = types[u32(offCls + 32 * i)]
+        if (d.startsWith("L") && d.endsWith(";")) d.substring(1, d.length - 1).replace('/', '.') else null
+    }.toSet()
+}
+
+val verifyEngineNamespace = tasks.register("verifyEngineNamespace") {
+    group = "verification"
+    description = "Falla si R8 le da a una clase nuestra el nombre de una clase del motor X4K."
+    val mapping = layout.buildDirectory.file("outputs/mapping/normalRelease/mapping.txt")
+    val engineDex = fileTree("src/main/assets/x4k") { include("*.dex") }
+    outputs.upToDateWhen { false }
+    doLast {
+        val file = mapping.get().asFile
+        if (!file.exists() || file.length() == 0L) {
+            logger.lifecycle("verifyEngineNamespace: sin mapping (build sin R8), se omite.")
+            return@doLast
+        }
+        val engine = HashSet<String>(20000)
+        engineDex.files.filter { it.extension == "dex" }.forEach { engine += dexClassNames(it) }
+        val offenders = ArrayList<String>()
+        var renamed = 0
+        var shared = 0
+        file.forEachLine { line ->
+            if (line.isEmpty() || line[0].isWhitespace() || line.startsWith("#")) return@forEachLine
+            val arrow = line.indexOf(" -> ")
+            if (arrow <= 0 || !line.endsWith(":")) return@forEachLine
+            val orig = line.substring(0, arrow)
+            val plain = line.substring(arrow + 4, line.length - 1)
+            if (plain == orig) {
+                if (plain in engine) shared++
+                return@forEachLine
+            }
+            // R8 anota las clases que ELIMINÓ con `R8$$REMOVED$$CLASS$$N`: no existen en el APK.
+            if (plain.startsWith("R8\$\$REMOVED\$\$")) return@forEachLine
+            renamed++
+            if (plain in engine) offenders += "$orig -> $plain"
+        }
+        logger.lifecycle(
+            "verifyEngineNamespace: motor=${engine.size} clases, nuestras renombradas=$renamed, " +
+                "nombres reales compartidos=$shared, colisiones generadas=${offenders.size}.",
+        )
+        if (offenders.isNotEmpty()) {
+            throw GradleException(
+                "R8 generó ${offenders.size} nombre(s) que ENSOMBRECEN clases del motor X4K (crash " +
+                    "NoSuchMethodError en :x4k: no se reproduce nada). Revisa -repackageclasses en " +
+                    "proguard-rules.pro.\n" + offenders.take(20).joinToString("\n"),
+            )
+        }
+    }
+}
+tasks.matching { it.name == "minifyNormalReleaseWithR8" }.configureEach {
+    finalizedBy(verifyEngineNamespace)
 }
 
 dependencies {
