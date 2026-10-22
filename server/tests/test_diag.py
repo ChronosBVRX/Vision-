@@ -246,3 +246,167 @@ def test_health_alert_text_says_what_happened_and_what_to_check():
     assert "pasada profunda" in deep
     assert "hace 9 días" in deep
     assert "df -h /var/oled" in deep
+
+
+# ----- canario de builds nuevos (frena la oferta solo si un build sale roto) -----
+
+
+def test_only_player_breakage_counts_for_the_canary():
+    # Crash en la pantalla del reproductor: cuenta.
+    assert diag.is_player_breakage("crash", "NoSuchMethodError", {"screen": "Player"}) is True
+    assert diag.is_player_breakage("crash", "X", {"phase": "reproductor-vod"}) is True
+    # Codigos que ya sabemos letales para el motor: cuentan aunque el screen venga vacio.
+    assert diag.is_player_breakage("anomaly", "PLAYER_ERROR", {}) is True
+    assert diag.is_player_breakage("anomaly", "PLAYER_RECONNECT_FAIL", {}) is True
+    assert diag.is_player_breakage("anomaly", "ENGINE_NAMESPACE_LEAK", {}) is True
+    assert diag.is_player_breakage("anomaly", "ENGINE_LOAD_FAIL", {}) is True
+    # Ruido que NO debe frenar una version: crash en el menu, ANR de la tele suspendida y
+    # avisos de recuperacion que tambien salen en equipos sanos.
+    assert diag.is_player_breakage("crash", "IllegalArgumentException", {"screen": "Home"}) is False
+    assert diag.is_player_breakage("anr", "MAIN_BLOCKED_64858s", {"screen": "Player"}) is False
+    assert diag.is_player_breakage("anomaly", "PORTAL_SLOW", {"screen": "Player"}) is False
+    assert diag.is_player_breakage("anomaly", "PLAYER_FRAME_SKIP", {"detail": "exceso 1200 ms"}) is False
+    assert diag.is_player_breakage("anomaly", "PLAYER_SOFT_RESTART", {"phase": "reproductor-vod"}) is False
+    assert diag.is_player_breakage("anomaly", "PLAYER_FAILOVER", {}) is False
+
+
+def test_canary_pauses_a_fresh_build_with_repeated_player_failures():
+    assert diag.canary_decision(
+        fresh_hours=6, player_reports=3, player_devices=2,
+        latest_code=354, paused_code=0, paused_hours=None,
+    ) == "pause"
+    # Un solo equipo no basta (puede ser su equipo, no el build).
+    assert diag.canary_decision(
+        fresh_hours=6, player_reports=9, player_devices=1,
+        latest_code=354, paused_code=0, paused_hours=None,
+    ) == "none"
+    # Pocos reportes tampoco.
+    assert diag.canary_decision(
+        fresh_hours=6, player_reports=2, player_devices=2,
+        latest_code=354, paused_code=0, paused_hours=None,
+    ) == "none"
+    # Un build viejo ya no se frena solo (seria ruido de cola larga).
+    assert diag.canary_decision(
+        fresh_hours=72, player_reports=20, player_devices=5,
+        latest_code=340, paused_code=0, paused_hours=None,
+    ) == "none"
+
+
+def test_canary_rearms_itself_and_never_leaves_the_offer_off_forever():
+    # Mientras siga frenado y no caduque, no hace nada mas.
+    assert diag.canary_decision(
+        fresh_hours=2, player_reports=10, player_devices=4,
+        latest_code=354, paused_code=354, paused_hours=1,
+    ) == "none"
+    # Una version mas nueva en la telemetria rearma el freno.
+    assert diag.canary_decision(
+        fresh_hours=1, player_reports=0, player_devices=0,
+        latest_code=355, paused_code=354, paused_hours=1,
+    ) == "clear"
+    # Y si nadie publica nada, el freno caduca solo.
+    assert diag.canary_decision(
+        fresh_hours=30, player_reports=10, player_devices=4,
+        latest_code=354, paused_code=354, paused_hours=13,
+    ) == "clear"
+
+
+def test_canary_texts_say_the_verdict_and_how_to_get_out():
+    pause = diag.canary_alert_text(
+        "2.5.117", 353, 9, 2, "22/10/2026 08:04", ["NoSuchMethodError"], ["Chromecast HD", "Xiaomi"]
+    )
+    assert "2.5.117" in pause and "vc353" in pause
+    assert "ota_paused=true" in pause
+    assert "min_version_code" in pause
+    assert "Chromecast HD" in pause
+    clear = diag.canary_clear_text(353, "newer")
+    assert "reactivada" in clear and "vc353" in clear
+
+
+class _FakeConn:
+    """Conexion falsa: devuelve filas preparadas y anota lo que el canario escribe."""
+
+    def __init__(self, latest, rows, state):
+        self.latest = latest
+        self.rows = rows
+        self.state = state
+        self.executed = []
+
+    async def fetchrow(self, sql, *args):
+        return self.latest
+
+    async def fetch(self, sql, *args):
+        return self.state if "sync_meta" in sql else self.rows
+
+    async def execute(self, sql, *args):
+        self.executed.append((sql, args))
+
+
+class _FakeCtx:
+    def __init__(self, conn):
+        self.conn = conn
+
+    async def __aenter__(self):
+        return self.conn
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakePool:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def acquire(self):
+        return _FakeCtx(self.conn)
+
+
+def test_canary_wiring_pauses_a_broken_fresh_build(monkeypatch):
+    import asyncio
+    import datetime as dt
+
+    latest = {
+        "version_code": 354,
+        "app_version": "2.5.118",
+        "first_seen": dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=3),
+    }
+    rows = [
+        {"kind": "crash", "code": "NoSuchMethodError", "device": "Chromecast HD", "payload": {"screen": "Player"}},
+        {"kind": "crash", "code": "NoSuchMethodError", "device": "Xiaomi", "payload": {"screen": "Player"}},
+        {"kind": "crash", "code": "NoSuchMethodError", "device": "Xiaomi", "payload": {"screen": "Player"}},
+        {"kind": "anr", "code": "MAIN_BLOCKED_64858s", "device": "ZTE", "payload": {"screen": "Home"}},
+    ]
+    conn = _FakeConn(latest, rows, [])
+    alerts = []
+    monkeypatch.setattr(diag, "send_alert", lambda text: alerts.append(text))
+
+    assert asyncio.run(diag.build_canary(_FakePool(conn))) == 1
+    paused = [sql for sql, _ in conn.executed if "ota_paused" in sql and "'true'" in sql]
+    assert paused, "tiene que escribir ota_paused=true"
+    stamped = [args for sql, args in conn.executed if "sync_meta" in sql]
+    assert any(a and str(a[0]) == diag.CANARY_VERSION_KEY for a in stamped)
+    assert alerts and "Build roto" in alerts[0]
+    assert "2.5.118" in alerts[0]
+
+
+def test_canary_wiring_rearms_when_a_newer_version_appears(monkeypatch):
+    import asyncio
+    import datetime as dt
+
+    latest = {
+        "version_code": 355,
+        "app_version": "2.5.119",
+        "first_seen": dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=20),
+    }
+    refused_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1)
+    state = [
+        {"key": diag.CANARY_VERSION_KEY, "value": "354", "updated_at": refused_at},
+        {"key": diag.CANARY_AT_KEY, "value": "", "updated_at": refused_at},
+    ]
+    conn = _FakeConn(latest, [], state)
+    alerts = []
+    monkeypatch.setattr(diag, "send_alert", lambda text: alerts.append(text))
+
+    assert asyncio.run(diag.build_canary(_FakePool(conn))) == 1
+    assert any("ota_paused" in sql and "'false'" in sql for sql, _ in conn.executed)
+    assert any("delete from sync_meta" in sql for sql, _ in conn.executed)
+    assert alerts and "reactivada" in alerts[0]

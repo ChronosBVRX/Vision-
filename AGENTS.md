@@ -5,6 +5,14 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **OTA 2.5.119 PUBLICADA: blindaje definitivo del motor (cargador aislado + autocomprobación de nombres) y canario que frena solo un build roto — 753 Android + 300 backend** (2026-10-22):
+  - *Motivo*: tras el hotfix 2.5.118 (que quitó el síntoma), cerrar la clase de bug y que un build roto no llegue a más equipos sin que nadie mire.
+  - *App — cargador aislado (`data/xuper/EngineLoader.kt`)*: `EngineClassLoader : DexClassLoader` que, para los nombres del espacio ofuscado del motor (raíz de 1–2 letras: `k4`, `yc`, `ed`, `bd`, `a1`…), pregunta PRIMERO al DEX del motor y, si el nombre no está ahí, delega al padre. El resto del mundo queda igual que siempre (androidx/okhttp/kotlin los sigue sirviendo la app). Kill-switch remoto **`engine_child_first`** (default `true`): `{"engine_child_first": false}` devuelve el parent-first sin OTA.
+  - *Autocomprobación*: `leakedEngineNames(cl)` sobre `k4.x`, `ed.e`, `yc.h`, `bd.a`, `uc.c`; si alguno lo sirve nuestro APK se reporta `ENGINE_NAMESPACE_LEAK` (con `childFirst=` y el listado) y se loguea `motor ensombrecido`. El log de arranque del motor ahora dice `SDK X4K cargado: … childFirst=true fugas=0`.
+  - *Servidor — canario (`sync/diag.py::build_canary`, desplegado en el VPS)*: mira SOLO la versión más nueva de la telemetría (7 días). Si salió hace <`DIAG_CANARY_FRESH_HOURS` (48 h) y acumula ≥`DIAG_CANARY_MIN_REPORTS` (3) fallos de reproductor en ≥`DIAG_CANARY_MIN_DEVICES` (2) equipos → escribe `ota_paused=true` en `remote_config` (deja de ofrecerse la actualización; el forzado `min_version_code` sigue mandando porque en la app `forced` gana sobre `paused`) y avisa por Telegram con el veredicto. Se **rearma solo**: al ver una versión más nueva en la telemetría o al cumplirse `DIAG_CANARY_PAUSE_HOURS` (12 h). Estado en `sync_meta` (`canary_paused_version`/`canary_paused_at`).
+  - *Refinamiento del canario (evita falsos positivos)*: `is_player_breakage` cuenta crash con `screen=Player`/fase `reproductor-*` y los códigos `PLAYER_ERROR`, `PLAYER_RECONNECT_FAIL`, `ENGINE_LOAD_FAIL`, `ENGINE_NAMESPACE_LEAK`. **NO** cuentan `PLAYER_FRAME_SKIP`, `PLAYER_SOFT_RESTART`, `PLAYER_FAILOVER`/`_XTV`, `PLAYER_SELF_HEAL`/`PLAYER_HEAL_APPLIED` ni `PLAYER_RESIDENT_IDLE`: salen en equipos sanos y frenarían builds buenos.
+  - *Verificado*: **753 Android + 300 backend** en verde; guardian R8 `motor=16395, renombradas=5290, reales compartidas=14, colisiones generadas=0`; APK **publicado** (vc355, firma histórica, `k4.x` ausente) instalado en el emulador → `childFirst=true fugas=0`. Con el build de debug **el video reproduce de verdad en el emulador** (logo de Columbia de Spider-Man, `FFP_MSG_VIDEO_RENDERING_START`); el aborto nativo del *release* en el emulador es idéntico antes y después del cambio (limitación del ARM traducido, no del cargador).
+  - *Pendiente*: telemetría de 2.5.119 en los equipos reales (que no aparezca `ENGINE_NAMESPACE_LEAK` ni `NoSuchMethodError`) y confirmar que el canario no frena la versión (es sana).
 - **HOTFIX 2.5.118 PUBLICADA: «no me deja reproducir nada» — R8 volvió a bautizar una clase nuestra (`kotlin.collections.IndexedValue`) como `k4.x`, ensombreció al motor XTV y el `onPrepared` moría en `:x4k` (no reproducía NADA en la 2.5.117); se cerró la puerta completa con `-repackageclasses 'visionplus'` + guardián de build — 746 Android + 294 backend** (2026-10-22):
   - *Reporte del usuario*: «Analiza los errores, creo que hay un problema que no me está dejando reproducir nada».
   - *Diagnóstico (telemetría del VPS, no adivinado)*: 9 crashes `NoSuchMethodError` en `:x4k` hoy 08:04–08:18 MX, **solo en 2.5.117** (Google Chromecast HD + Xiaomi 25053PC47G = tele y teléfono del usuario); 2.5.116 con 0 crashes. Stack: `yc.e$h.onPrepared` → `zc.c.d` → `Observable.interval` → RxJava `Schedulers.<clinit>` → `SchedulerPoolFactory.tryStart` → `No static method a(AtomicReference,Object,Object)Z in class Lk4/x` («declaration of 'k4.x' appears in …/base.apk»).
@@ -1228,11 +1236,13 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.118**
-  (versionCode **354**, hotfix OTA v2.5.118 — R8 volvía a ensombrecer clases del motor XTV con nombres
-  generados; en la 2.5.117 `kotlin.collections.IndexedValue` cayó en `k4.x` y el `onPrepared` moría con
-  `NoSuchMethodError` en `:x4k`, así que NADA reproducía; ahora todo lo renombrado vive en `visionplus.*`
-  y un guardián de build lo impone; la v2.5.117 continuidad real entre el teléfono y la tele: «Ver en la TV»
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.119**
+  (versionCode **355**, OTA v2.5.119 — blindaje definitivo del motor: `EngineClassLoader` pregunta
+  primero al DEX del motor por sus nombres ofuscados (con kill-switch remoto `engine_child_first`) y
+  `leakedEngineNames` reporta `ENGINE_NAMESPACE_LEAK` si una clase del motor la sirviera el APK; el
+  worker gana un canario que frena solo la oferta si un build nuevo no reproduce; la v2.5.118 el
+  hotfix del apagón (R8 volvía a ensombrecer clases del motor XTV con nombres generados); la v2.5.117
+  continuidad real entre el teléfono y la tele: «Ver en la TV»
   reanuda en el minuto exacto (el vivo no) y «Seguir viendo»/Favoritos/Ver más tarde/Vistos se sincronizan
   con un código compartido por el VPS (tombstones, una fila por serie, refresco del Inicio); el reloj del
   móvil pasa a texto pequeño en la barra superior y la tele conserva su píldora; la v2.5.116 el Modo Sin Conexión se abre solo, incluso con el

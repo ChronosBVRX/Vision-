@@ -46,6 +46,27 @@ CATALOG_STALE_HOURS = int(os.environ.get("DIAG_CATALOG_STALE_HOURS", "10"))
 DEEP_STALE_DAYS = int(os.environ.get("DIAG_DEEP_STALE_DAYS", "8"))
 HEALTH_COOLDOWN_HOURS = int(os.environ.get("DIAG_HEALTH_COOLDOWN_HOURS", "12"))
 
+# --- Canario de builds nuevos: si una versión recién publicada rompe el reproductor, se frena
+# sola la oferta de actualizaciones (`ota_paused`) para que no se la lleven más equipos. El
+# forzado (`min_version_code`) sigue vigente porque `forced` gana sobre `paused` en la app.
+CANARY_FRESH_HOURS = float(os.environ.get("DIAG_CANARY_FRESH_HOURS", "48"))
+CANARY_MIN_REPORTS = int(os.environ.get("DIAG_CANARY_MIN_REPORTS", "3"))
+CANARY_MIN_DEVICES = int(os.environ.get("DIAG_CANARY_MIN_DEVICES", "2"))
+CANARY_PAUSE_HOURS = float(os.environ.get("DIAG_CANARY_PAUSE_HOURS", "12"))
+CANARY_VERSION_KEY = "canary_paused_version"
+CANARY_AT_KEY = "canary_paused_at"
+
+# Códigos que ya sabemos que dejan el reproductor sin arrancar. OJO: NO todo `PLAYER_*` cuenta —
+# `PLAYER_FRAME_SKIP`, `PLAYER_SOFT_RESTART`, `PLAYER_FAILOVER*`, `PLAYER_SELF_HEAL` y
+# `PLAYER_RESIDENT_IDLE` son recuperaciones o avisos que también salen en equipos sanos, y
+# contarlos frenaría builds buenos por ruido.
+PLAYER_BREAKAGE_CODES = {
+    "PLAYER_ERROR",
+    "PLAYER_RECONNECT_FAIL",
+    "ENGINE_LOAD_FAIL",
+    "ENGINE_NAMESPACE_LEAK",
+}
+
 _REPEAT_TITLE = {
     "regreso": "🔁 Regresó: un problema que ya se había cerrado volvió a reportarse",
     "reincidencia": "🔁 Reincidencia: un problema conocido volvió a aparecer en otra versión",
@@ -397,6 +418,96 @@ def repeat_alert_reason(resolved_at, alert_version, latest_version, hours_since_
     return None
 
 
+def is_player_breakage(kind: str, code: str, payload) -> bool:
+    """¿Este reporte dice que el reproductor no arranca? (puro, testeable).
+
+    Cuenta un crash ocurrido en la pantalla del reproductor (`screen=Player` o una fase
+    `reproductor-*`) y los códigos que ya sabemos letales para el motor (`PLAYER_ERROR`,
+    `PLAYER_RECONNECT_FAIL`, `ENGINE_LOAD_FAIL`, `ENGINE_NAMESPACE_LEAK`). Un ANR de la tele
+    suspendida —o un aviso de recuperación tipo `PLAYER_SOFT_RESTART` / `PLAYER_FRAME_SKIP`— NO
+    cuenta: es ruido de equipo, no un build roto.
+    """
+    clean = (code or "").strip()
+    if clean in PLAYER_BREAKAGE_CODES:
+        return True
+    if kind != "crash":
+        return False
+    if not isinstance(payload, dict):
+        return False
+    screen = str(payload.get("screen") or "")
+    phase = str(payload.get("phase") or "")
+    return screen == "Player" or phase.startswith("reproductor")
+
+
+def canary_decision(
+    *,
+    fresh_hours: float | None,
+    player_reports: int,
+    player_devices: int,
+    latest_code: int,
+    paused_code: int,
+    paused_hours: float | None,
+    min_reports: int = CANARY_MIN_REPORTS,
+    min_devices: int = CANARY_MIN_DEVICES,
+    fresh_limit: float = CANARY_FRESH_HOURS,
+    pause_limit: float = CANARY_PAUSE_HOURS,
+) -> str:
+    """Qué hace el canario con el build más nuevo (puro, testeable).
+
+    - `pause`: el build salió hace poco y ya acumula suficientes fallos de reproductor en
+      varios equipos → se frena la oferta de actualizaciones.
+    - `clear`: el que habíamos frenado ya no es el más nuevo, o el freno caducó → se rearma
+      solo (nunca deja la oferta apagada para siempre).
+    - `none`: nada que hacer.
+    """
+    if paused_code:
+        if latest_code > paused_code:
+            return "clear"
+        if paused_hours is not None and paused_hours >= pause_limit:
+            return "clear"
+        return "none"
+    if latest_code <= 0 or fresh_hours is None:
+        return "none"
+    if fresh_hours <= fresh_limit and player_reports >= min_reports and player_devices >= min_devices:
+        return "pause"
+    return "none"
+
+
+def canary_alert_text(
+    version: str, version_code: int, reports: int, devices: int,
+    first_seen_mx: str, codes: list[str], device_names: list[str],
+) -> str:
+    """Aviso humano + técnico del canario (cuando frena un build roto)."""
+    example = ", ".join(codes[:3]) if codes else "sin código"
+    who = ", ".join(device_names[:3]) if device_names else "varios equipos"
+    return (
+        f"🛑 Build roto: frené la oferta de la {version} (vc{version_code})\n\n"
+        f"Salió hace poco ({first_seen_mx}, hora de México) y ya hay {reports} reportes de "
+        f"reproductor en {devices} equipos distintos ({who}).\n"
+        f"Códigos: {example}\n\n"
+        "👉 Qué hice: puse `ota_paused=true`, así que ningún equipo más se llevará esta "
+        "versión. El forzado (`min_version_code`) sigue vigente: quien tenga una versión por "
+        "debajo del mínimo se actualiza igual.\n"
+        "👉 Qué revisar: la telemetría de esa versión y, en cuanto publiques el arreglo, "
+        "frenar y publicar. El freno se rearma solo a las "
+        f"{int(CANARY_PAUSE_HOURS)} h o cuando se vea una versión más nueva.\n\n"
+        f"Aviso automático del canario de Vision+ · vc{version_code}"
+    )
+
+
+def canary_clear_text(version_code: int, reason: str) -> str:
+    """Aviso de que el freno se rearma solo."""
+    why = {
+        "newer": "ya se vio una versión más nueva en la telemetría",
+        "expired": f"caducó el freno de {int(CANARY_PAUSE_HOURS)} h",
+    }.get(reason, reason)
+    return (
+        f"✅ Oferta de actualizaciones reactivada (el freno era por vc{version_code})\n\n"
+        f"Motivo: {why}. Ya se les puede ofrecer la versión publicada.\n\n"
+        "Aviso automático del canario de Vision+"
+    )
+
+
 def alert_text(row, headline: str | None = None) -> str:
     """Mensaje legible de una huella nueva (pura, testeable).
 
@@ -689,6 +800,129 @@ async def _stamp_health_alert(conn, key: str, now: dt.datetime) -> None:
     )
 
 
+async def _stamp_meta(conn, key: str, value: str, now: dt.datetime) -> None:
+    await conn.execute(
+        """
+        insert into sync_meta (key, value, updated_at) values ($1, $2, $3)
+        on conflict (key) do update set value = excluded.value, updated_at = excluded.updated_at
+        """,
+        key, value, now,
+    )
+
+
+async def build_canary(pool) -> int:
+    """Canario de builds nuevos: si una versión recién publicada no reproduce, frena la oferta.
+
+    Mira SOLO la versión más nueva que aparece en la telemetría (7 días). Si salió hace menos de
+    `CANARY_FRESH_HOURS` y ya acumula `CANARY_MIN_REPORTS` fallos de reproductor en
+    `CANARY_MIN_DEVICES` equipos distintos, escribe `ota_paused=true` en `remote_config`: la app
+    deja de ofrecer la actualización, así que el resto de los equipos no se lleva el build roto.
+    El forzado (`min_version_code`) sigue mandando (`forced` gana sobre `paused` en la app).
+
+    El estado vive en `sync_meta` y se rearma solo cuando aparece una versión más nueva o al
+    pasar `CANARY_PAUSE_HOURS`, para que un freno no deje la oferta apagada para siempre.
+    """
+    now = dt.datetime.now(dt.timezone.utc)
+    try:
+        async with pool.acquire() as conn:
+            latest = await conn.fetchrow(
+                """
+                select version_code,
+                       (array_agg(app_version order by created_at desc))[1] as app_version,
+                       min(created_at) as first_seen
+                from diag_reports
+                where version_code > 0 and created_at > now() - interval '7 days'
+                group by version_code
+                order by version_code desc
+                limit 1
+                """
+            )
+            if latest is None:
+                return 0
+            state_rows = await conn.fetch(
+                "select key, value, updated_at from sync_meta where key in ($1, $2)",
+                CANARY_VERSION_KEY, CANARY_AT_KEY,
+            )
+            state = {row["key"]: row for row in state_rows}
+            paused_row = state.get(CANARY_VERSION_KEY)
+            paused_code = _as_int(paused_row["value"]) if paused_row else 0
+            paused_at = state[CANARY_AT_KEY]["updated_at"] if CANARY_AT_KEY in state else None
+            paused_hours = (now - paused_at).total_seconds() / 3600 if paused_at else None
+
+            rows = await conn.fetch(
+                """
+                select kind, code, device, payload
+                from diag_reports
+                where version_code = $1 and created_at > now() - interval '7 days'
+                order by created_at desc
+                limit 500
+                """,
+                latest["version_code"],
+            )
+            breakages = [r for r in rows if is_player_breakage(r["kind"], r["code"], _payload_of(r))]
+            reports = len(breakages)
+            devices = len({r["device"] for r in breakages if r["device"]})
+            codes = sorted({r["code"] for r in breakages if r["code"]})
+            device_names = sorted({r["device"] for r in breakages if r["device"]})
+            first_seen = latest["first_seen"]
+            fresh_hours = (now - first_seen).total_seconds() / 3600 if first_seen else None
+
+            action = canary_decision(
+                fresh_hours=fresh_hours,
+                player_reports=reports,
+                player_devices=devices,
+                latest_code=latest["version_code"],
+                paused_code=paused_code,
+                paused_hours=paused_hours,
+            )
+            if action == "none":
+                return 0
+
+            if action == "pause":
+                await conn.execute(
+                    """
+                    insert into remote_config (key, value, updated_at)
+                    values ('ota_paused', 'true', now())
+                    on conflict (key) do update set value = excluded.value, updated_at = now()
+                    """
+                )
+                await _stamp_meta(conn, CANARY_VERSION_KEY, str(latest["version_code"]), now)
+                await _stamp_meta(conn, CANARY_AT_KEY, "", now)
+                await asyncio.to_thread(
+                    send_alert,
+                    canary_alert_text(
+                        str(latest["app_version"] or "?"),
+                        latest["version_code"],
+                        reports,
+                        devices,
+                        _mx_stamp(first_seen) if first_seen else "hace minutos",
+                        codes,
+                        device_names,
+                    ),
+                )
+                log.warning("canario: frené la oferta de vc%s (%s fallos en %s equipos)",
+                            latest["version_code"], reports, devices)
+                return 1
+
+            await conn.execute(
+                """
+                insert into remote_config (key, value, updated_at)
+                values ('ota_paused', 'false', now())
+                on conflict (key) do update set value = excluded.value, updated_at = now()
+                """
+            )
+            await conn.execute(
+                "delete from sync_meta where key in ($1, $2)", CANARY_VERSION_KEY, CANARY_AT_KEY
+            )
+            reason = "newer" if latest["version_code"] > paused_code else "expired"
+            await asyncio.to_thread(send_alert, canary_clear_text(paused_code, reason))
+            log.info("canario: oferta reactivada (%s) tras frenar vc%s", reason, paused_code)
+            return 1
+    except Exception:  # noqa: BLE001 - el canario no tumba el worker
+        log.exception("el canario de builds no se pudo revisar")
+        return 0
+
+
 async def catalog_health(pool) -> int:
     """Avisa si el catálogo dejó de refrescarse o si la pasada profunda no corre.
 
@@ -742,4 +976,8 @@ async def loop(pool) -> None:
             await catalog_health(pool)
         except Exception:  # noqa: BLE001 - la salud del catálogo no tumba el worker
             log.exception("salud del catálogo falló")
+        try:
+            await build_canary(pool)
+        except Exception:  # noqa: BLE001 - el canario no tumba el worker
+            log.exception("canario de builds falló")
         await asyncio.sleep(INTERVAL)

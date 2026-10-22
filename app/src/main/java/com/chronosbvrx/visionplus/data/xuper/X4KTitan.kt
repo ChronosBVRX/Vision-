@@ -162,13 +162,28 @@ object X4KTitan {
                 }
                 val outDir = File(app.codeCacheDir, "x4k").apply { mkdirs() }
                 val libDir = extractNativeLibs(app)
+                // Kill-switch remoto `engine_child_first`: si algún equipo se portara raro,
+                // `{"engine_child_first": false}` devuelve el cargador parent-first sin OTA.
+                val childFirst = runCatching {
+                    com.chronosbvrx.visionplus.data.config.RemoteConfig
+                        .flag(app, "engine_child_first", true)
+                }.getOrDefault(true)
                 val cl = runCatching {
-                    DexClassLoader(
-                        paths.joinToString(File.pathSeparator),
-                        outDir.absolutePath,
-                        libDir.absolutePath,
-                        javaClass.classLoader,
-                    )
+                    if (childFirst) {
+                        EngineClassLoader(
+                            paths.joinToString(File.pathSeparator),
+                            outDir.absolutePath,
+                            libDir.absolutePath,
+                            javaClass.classLoader,
+                        )
+                    } else {
+                        DexClassLoader(
+                            paths.joinToString(File.pathSeparator),
+                            outDir.absolutePath,
+                            libDir.absolutePath,
+                            javaClass.classLoader,
+                        )
+                    }
                 }.getOrElse {
                     Log.w(TAG, "DexClassLoader rechazado (${it.message}); cargando en memoria")
                     val buffers = DEX_ASSETS.map { asset ->
@@ -186,10 +201,21 @@ object X4KTitan {
                 entryClass = runCatching { cl.loadClass("com.titan.ranger.bean.Entry") }.getOrNull()
                 viewClass = runCatching { cl.loadClass("ed.e") }.getOrNull()
                 loader = cl
+                // Autocomprobación del espacio de nombres: si una clase del motor la sirve
+                // nuestro APK, se reporta AQUÍ (antes del crash del reproductor).
+                val leaks = leakedEngineNames(cl)
+                if (leaks.isNotEmpty()) {
+                    Log.e(TAG, "motor ensombrecido por el APK: ${leaks.joinToString()}")
+                    com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                        "ENGINE_NAMESPACE_LEAK",
+                        "childFirst=$childFirst motor=${leaks.joinToString()}",
+                    )
+                }
                 Log.i(
                     TAG,
                     "SDK X4K cargado: env=${envClass != null} program=${programClass != null} " +
-                        "media=${mediaClass != null} entry=${entryClass != null} view=${viewClass != null}",
+                        "media=${mediaClass != null} entry=${entryClass != null} view=${viewClass != null} " +
+                        "childFirst=$childFirst fugas=${leaks.size}",
                 )
                 com.chronosbvrx.visionplus.data.diag.Diagnostics.engine("cargado")
                 true
