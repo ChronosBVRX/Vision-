@@ -5,6 +5,13 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **OTA 2.5.120 PUBLICADA: los logos de TV en vivo dejan de estirarse — tamaño natural (tope 2.5×) en móvil y tele — 758 Android + 300 backend** (2026-10-22):
+  - *Pedido del usuario*: «los canales en vivo actualmente se fuerzan los iconos a verse en toda la tarjeta y se ven mal; me gustaría que se vieran legibles en su tamaño original aunque la tarjeta sea más pequeña».
+  - *Causa medida (no adivinada)*: los logos del portal son de **90×60 px** (descargados del catálogo real y medidos) y la app los pedía a Coil como 480×270 / 640×360 y los dibujaba con `fillMaxSize` + `ContentScale.Fit`: 3–4× de aumento → borrosos y "gigantes"; los que el proveedor ya entrega recortados (A3S, A&E) parecían rotos.
+  - *Fix*: pieza compartida `ui/live/ChannelLogo.kt` — `logoDisplaySize` (puro) = tamaño nativo con tope `LOGO_MAX_UPSCALE` (2.5×; preview de la tele 3×), nunca mayor que la caja y conservando proporción; `ChannelLogo` lo pinta centrado, decodifica a 256 px y deja las iniciales **solo de respaldo** (mientras carga o si el canal no tiene logo). Aplicado en la rejilla móvil (`LiveScreen`), la fila de la tele (`TvChannelTile`) y el preview de la tele.
+  - *Bug cazado durante la verificación*: `Size.width` lanza `IllegalStateException: Size is unspecified` cuando el painter aún no tiene drawable; hay que preguntar `isSpecified` antes de leerlo (se reprodujo el crash en el emulador y se corrigió antes de publicar).
+  - *Verificado*: **758 Android + 300 backend** en verde (incluye `ChannelLogoTest`: no se pasa de 2.5× ni de la caja, conserva proporción, cae a la caja si el tamaño es desconocido, y las dos pantallas usan la pieza compartida); capturas antes/después en el emulador (`Vision_Phone`); APK **publicado** (vc356, 101.2 MB, firma histórica) instalado y con la rejilla ya correcta.
+  - *Nota*: si se quiere más discreto o con más presencia, es una sola constante (`LOGO_MAX_UPSCALE`).
 - **OTA 2.5.119 PUBLICADA: blindaje definitivo del motor (cargador aislado + autocomprobación de nombres) y canario que frena solo un build roto — 753 Android + 300 backend** (2026-10-22):
   - *Motivo*: tras el hotfix 2.5.118 (que quitó el síntoma), cerrar la clase de bug y que un build roto no llegue a más equipos sin que nadie mire.
   - *App — cargador aislado (`data/xuper/EngineLoader.kt`)*: `EngineClassLoader : DexClassLoader` que, para los nombres del espacio ofuscado del motor (raíz de 1–2 letras: `k4`, `yc`, `ed`, `bd`, `a1`…), pregunta PRIMERO al DEX del motor y, si el nombre no está ahí, delega al padre. El resto del mundo queda igual que siempre (androidx/okhttp/kotlin los sigue sirviendo la app). Kill-switch remoto **`engine_child_first`** (default `true`): `{"engine_child_first": false}` devuelve el parent-first sin OTA.
@@ -1236,8 +1243,10 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.119**
-  (versionCode **355**, OTA v2.5.119 — blindaje definitivo del motor: `EngineClassLoader` pregunta
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.120**
+  (versionCode **356**, OTA v2.5.120 — los logos de TV en vivo se pintan a su tamaño natural (tope 2.5×,
+  pieza compartida `ui/live/ChannelLogo.kt`) en vez de estirarse a toda la tarjeta; la v2.5.119 blindaje
+  definitivo del motor: `EngineClassLoader` pregunta
   primero al DEX del motor por sus nombres ofuscados (con kill-switch remoto `engine_child_first`) y
   `leakedEngineNames` reporta `ENGINE_NAMESPACE_LEAK` si una clase del motor la sirviera el APK; el
   worker gana un canario que frena solo la oferta si un build nuevo no reproduce; la v2.5.118 el

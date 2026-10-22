@@ -26,7 +26,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,11 +35,11 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
 import com.chronosbvrx.visionplus.data.LiveChannel
-import com.chronosbvrx.visionplus.ui.live.channelInitials
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionLiveRed
+import com.chronosbvrx.visionplus.ui.live.ChannelLogo
+import com.chronosbvrx.visionplus.ui.live.LOGO_PREVIEW_UPSCALE
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
@@ -160,20 +159,12 @@ internal fun TvChannelTile(channel: LiveChannel, modifier: Modifier = Modifier) 
             .background(Brush.linearGradient(listOf(VisionBlue.copy(alpha = 0.35f), Color(0xFF10161F)))),
         contentAlignment = Alignment.Center,
     ) {
-        Text(channelInitials(channel.name), style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.6f))
-        val logo = channel.logo
-        if (logo != null) {
-            AsyncImage(
-                model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                    .data(logo)
-                    .crossfade(0)
-                    .size(96, 96)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize().padding(4.dp),
-            )
-        }
+        // TamaÃ±o nativo del logo (mÃ¡x. 2Ã—): los del proveedor son de 90Ã—60 px.
+        ChannelLogo(
+            url = channel.logo,
+            name = channel.name,
+            modifier = Modifier.fillMaxSize().padding(3.dp),
+        )
     }
 }
 
@@ -211,7 +202,7 @@ internal fun TvChannelRow(
     }
 }
 
-/** The preview panel: the channel's logo over a 16:9 tile with "● EN VIVO", its name and group. */
+/** The preview panel: the channel's logo over a 16:9 tile with "â— EN VIVO", its name and group. */
 @Composable
 internal fun TvLivePreview(channel: LiveChannel?, modifier: Modifier = Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -226,20 +217,15 @@ internal fun TvLivePreview(channel: LiveChannel?, modifier: Modifier = Modifier)
             if (channel == null) {
                 Text("Elige un canal de la lista", style = MaterialTheme.typography.bodyMedium, color = VisionTextSecondary)
             } else {
-                Text(channelInitials(channel.name), style = MaterialTheme.typography.headlineLarge, color = Color.White.copy(alpha = 0.4f))
-                val logo = channel.logo
-                if (logo != null) {
-                    AsyncImage(
-                        model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                            .data(logo)
-                            .crossfade(0)
-                            .size(640, 360)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().padding(24.dp),
-                    )
-                }
+                // El preview es grande: se permite 3Ã— para que el logo tenga presencia sin
+                // inventar pÃ­xeles (los del proveedor son de 90Ã—60).
+                ChannelLogo(
+                    url = channel.logo,
+                    name = channel.name,
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    maxUpscale = LOGO_PREVIEW_UPSCALE,
+                    initialsStyle = MaterialTheme.typography.headlineLarge,
+                )
             }
         }
         if (channel == null) return@Column

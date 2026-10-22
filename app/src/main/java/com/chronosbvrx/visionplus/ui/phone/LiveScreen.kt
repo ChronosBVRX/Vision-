@@ -48,19 +48,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.LiveTaxonomy
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.isLandscapeTablet
+import com.chronosbvrx.visionplus.ui.live.ChannelLogo
 import com.chronosbvrx.visionplus.ui.live.LiveCopy
-import com.chronosbvrx.visionplus.ui.live.channelInitials
 import com.chronosbvrx.visionplus.ui.live.rememberLiveState
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
-import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 
 /**
@@ -123,8 +120,8 @@ fun LiveScreen(
         }
 
         val searching = state.query.isNotBlank()
-        // Memoizado: con 1,000+ canales, recalcular géneros/países/filtros en cada
-        // recomposición (teclear, cambiar chip) congelaba el hilo de UI.
+        // Memoizado: con 1,000+ canales, recalcular gÃ©neros/paÃ­ses/filtros en cada
+        // recomposiciÃ³n (teclear, cambiar chip) congelaba el hilo de UI.
         val baseChannels = remember(state.channels, state.query, state.group) {
             if (searching) {
                 state.channels.filter { it.name.contains(state.query.trim(), ignoreCase = true) }
@@ -135,7 +132,7 @@ fun LiveScreen(
         val genres = remember(baseChannels) { LiveTaxonomy.genresOf(baseChannels.map { it.name }) }
         val countries = remember(baseChannels) { LiveTaxonomy.countriesOf(baseChannels.map { it.name }) }
 
-        // País: chips horizontales
+        // PaÃ­s: chips horizontales
         if (countries.size > 1) {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -150,7 +147,7 @@ fun LiveScreen(
             }
         }
 
-        // Género: chips horizontales (orden TV)
+        // GÃ©nero: chips horizontales (orden TV)
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -197,8 +194,8 @@ fun LiveScreen(
         }
         val shown = channels
         val activeScopeTitle = when {
-            searching -> "Búsqueda: ${state.query.trim()}"
-            selectedCountry != null && selectedGenre != null -> "$selectedCountry · $selectedGenre"
+            searching -> "BÃºsqueda: ${state.query.trim()}"
+            selectedCountry != null && selectedGenre != null -> "$selectedCountry Â· $selectedGenre"
             selectedCountry != null -> selectedCountry
             selectedGenre != null -> selectedGenre
             else -> null
@@ -241,7 +238,7 @@ fun LiveScreen(
         AlertDialog(
             onDismissRequest = { confirmingDelete = false },
             title = { Text(LiveCopy.DELETE_LIST) },
-            text = { Text("Se va a quitar «${state.selected?.name}» del teléfono. La lista en internet no se toca.") },
+            text = { Text("Se va a quitar Â«${state.selected?.name}Â» del telÃ©fono. La lista en internet no se toca.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmingDelete = false
@@ -268,7 +265,7 @@ private fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit) 
     )
 }
 
-/** Chip de país (estilo móvil: surface, seleccionado en azul). */
+/** Chip de paÃ­s (estilo mÃ³vil: surface, seleccionado en azul). */
 @Composable
 private fun CountryChip(label: String, selected: Boolean, onClick: () -> Unit) {
     FilterChip(
@@ -291,30 +288,16 @@ private fun ChannelCard(channel: LiveChannel, onClick: () -> Unit) {
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(8.dp))
-                .background(VisionSurfaceHigh),
+                .background(Brush.linearGradient(listOf(VisionBlue.copy(alpha = 0.25f), Color(0xFF10161F)))),
             contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Brush.linearGradient(listOf(VisionBlue.copy(alpha = 0.25f), Color(0xFF10161F)))),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(channelInitials(channel.name), style = MaterialTheme.typography.headlineMedium, color = Color.White.copy(alpha = 0.5f))
-            }
-            val logo = channel.logo
-            if (logo != null) {
-                AsyncImage(
-                    model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                        .data(logo)
-                        .crossfade(0)
-                        .size(480, 270)
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().padding(12.dp),
-                )
-            }
+            // El logo se dibuja a su tamaÃ±o nativo (nunca mÃ¡s de 2Ã—): los del proveedor son de
+            // 90Ã—60 px y estirarlos a la tarjeta los dejaba borrosos y gigantes.
+            ChannelLogo(
+                url = channel.logo,
+                name = channel.name,
+                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp),
+            )
         }
         Text(
             channel.name,
@@ -356,8 +339,8 @@ private fun AddPlaylistDialog(onDismiss: () -> Unit, onAdd: (String, String) -> 
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
-                    label = { Text("Dirección de la lista") },
-                    placeholder = { Text("https://…/lista.m3u") },
+                    label = { Text("DirecciÃ³n de la lista") },
+                    placeholder = { Text("https://â€¦/lista.m3u") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
