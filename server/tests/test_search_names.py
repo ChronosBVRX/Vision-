@@ -16,6 +16,7 @@ columna materializada (índice GIN de trigramas).
 import asyncio
 import inspect
 import urllib.error
+from pathlib import Path
 
 import app
 import search_text
@@ -475,17 +476,64 @@ def test_credits_backfill_marks_tmdb_deleted_ids_without_writing_names(monkeypat
     assert len(pool.writes) == 1  # solo la marca de credits_at
 
 
-def test_should_run_deep_when_names_are_few():
-    assert app.should_run_deep([]) is True
-    assert app.should_run_deep([{}]) is True
-    assert app.should_run_deep([{}, {}]) is True
-    assert app.should_run_deep([{}, {}, {}]) is False
-    assert app.should_run_deep([{}, {}], limit=2) is False
+def test_should_try_people_when_names_are_few():
+    assert app.should_try_people([]) is True
+    assert app.should_try_people([{}]) is True
+    assert app.should_try_people([{}, {}]) is True
+    assert app.should_try_people([{}, {}, {}]) is False
+    assert app.should_try_people([{}, {}], limit=2) is False
+
+
+def test_full_deep_only_when_names_are_empty():
+    assert app.should_run_full_deep([]) is True
+    assert app.should_run_full_deep([{}]) is False
+    assert app.should_run_full_deep([{}, {}]) is False
+
+
+def test_people_match_uses_the_indexed_expression():
+    title_sql, enrich_sql, params = app.build_people_matches(["tarantino"])
+    assert params == ["%tarantino%"]
+    for field in ("vp_fold(t.director)", "vp_fold(t.cast_list)"):
+        assert field in title_sql
+    for field in ("vp_fold(e.director_names)", "vp_fold(e.cast_names)"):
+        assert field in enrich_sql
+    _, _, phrase = app.build_people_matches(["pedro", "pascal"])
+    assert phrase == ["%pedro pascal%"]
+
+
+def test_people_search_orders_by_popularity(monkeypatch):
+    fake = _CaptureDb()
+    monkeypatch.setattr(app, "db", lambda: fake)
+    asyncio.run(app._search_people(
+        "vp_fold(t.director) like $1", ["%tarantino%"],
+        "vp_fold(e.director_names) like $1", ["%tarantino%"], "tarantino", 10,
+    ))
+    assert len(fake.calls) == 2
+    assert any("from enrichment e join titles t" in sql for sql, _ in fake.calls)
+    for sql, params in fake.calls:
+        assert params == ("%tarantino%", 10)
+        assert "limit $2" in sql
+        assert "t.popularity desc nulls last" in sql
+        assert "t.director" in sql and "e.director_names" in sql
+
+
+def test_schema_has_the_people_indexes():
+    schema = (Path(__file__).resolve().parents[1] / "sync" / "schema.sql").read_text(encoding="utf-8")
+    assert "vp_fold" in schema
+    for index in (
+        "idx_titles_director_trgm", "idx_titles_cast_trgm",
+        "idx_enrichment_director_trgm", "idx_enrichment_cast_trgm",
+    ):
+        assert index in schema
 
 
 def test_search_endpoint_uses_the_deep_stage_for_few_names():
     source = inspect.getsource(app.search)
-    assert "should_run_deep" in source
+    assert "should_try_people" in source
+    assert "should_run_full_deep" in source
+    assert "build_people_matches" in source
+    assert "_search_people" in source
+    assert "people_hit" in source
     assert "rows = deep_rows" in source
 
 

@@ -136,6 +136,29 @@ exception when others then
     raise notice 'indice trgm no creado: se buscara sin aceleracion';
 end $$;
 
+-- Pliegue inmutable para los índices de personas (director/reparto). El buscador de
+-- personas usa la MISMA expresión; sin el índice, cada consulta recorre 52k fichas
+-- (~2.6 s medidos con «tarantino»). Si la extensión no está, el buscador sigue
+-- funcionando con el recorrido normal.
+create extension if not exists unaccent;
+create or replace function vp_fold(value text) returns text
+    language sql immutable parallel safe
+    as $$ select btrim(regexp_replace(unaccent(lower(coalesce(value, ''))), '[^a-z0-9]+', ' ', 'g')) $$;
+
+do $$
+begin
+    create index if not exists idx_titles_director_trgm
+        on titles using gin (vp_fold(director) gin_trgm_ops);
+    create index if not exists idx_titles_cast_trgm
+        on titles using gin (vp_fold(cast_list) gin_trgm_ops);
+    create index if not exists idx_enrichment_director_trgm
+        on enrichment using gin (vp_fold(director_names) gin_trgm_ops);
+    create index if not exists idx_enrichment_cast_trgm
+        on enrichment using gin (vp_fold(cast_names) gin_trgm_ops);
+exception when others then
+    raise notice 'indices de credito no creados: la busqueda de personas seguira sin atajo';
+end $$;
+
 -- Agenda de fútbol (GET /v1/sports): partidos que baja el conector sports.py.
 -- Fuera del índice de catálogo y de su versión: tiene su propio ciclo rápido.
 create table if not exists sports_matches (

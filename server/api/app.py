@@ -763,6 +763,24 @@ def build_deep_match(words: list[str], offset: int = 0) -> tuple[str, list[str]]
     return " and ".join(clauses), params
 
 
+def build_people_matches(words: list[str], offset: int = 0) -> tuple[str, str, list[str]]:
+    """Dos cláusulas para la etapa de personas: créditos del portal y de TMDB.
+
+    La consulta viaja como FRASE («martin scorsese», no «martin» + «scorsese» por
+    separado): el AND por palabras hacía que una ficha con un «Martin» y un
+    «Scorsese» distintos apareciera como si fuera del director. Se consultan los dos
+    bloques por separado para que Postgres use los índices GIN de trigramas.
+    """
+    phrase = " ".join(words)
+    params = [f"%{phrase}%"]
+    n = offset + 1
+    title_sql = f"(vp_fold(t.director) like ${n} or vp_fold(t.cast_list) like ${n})"
+    enrich_sql = (
+        f"(vp_fold(e.director_names) like ${n} or vp_fold(e.cast_names) like ${n})"
+    )
+    return title_sql, enrich_sql, params
+
+
 async def _search_page(match_sql: str, match_params: list[str], clean_q: str, limit: int):
     """Una página de resultados con el orden de relevancia de nombres."""
     rank_sql, rank_params = build_rank(clean_q)
@@ -781,17 +799,87 @@ async def _search_page(match_sql: str, match_params: list[str], clean_q: str, li
     return await db().fetch(sql, *params)
 
 
+async def _search_people(
+    title_sql: str,
+    title_params: list[str],
+    enrich_sql: str,
+    enrich_params: list[str],
+    phrase: str,
+    limit: int,
+):
+    """Personas por rol y popularidad, consultando los dos bloques por separado.
+
+    Cada bloque usa su índice GIN (títulos del portal / créditos TMDB); luego se
+    unen por id. Quien dirigió la obra va antes que un cameo en el reparto: si no,
+    una aparición de Scorsese en «The Mandalorian» le ganaba a sus propias películas.
+    """
+    rows: list = []
+    for clause, params, from_sql in (
+        (title_sql, title_params, _SEARCH_FROM),
+        # El bloque de TMDB arranca por `enrichment`: así usa SU índice GIN. Con el
+        # `from titles` el plan recorría las 52k fichas y una consulta sin resultados
+        # costaba ~0.7 s («guerra de papas»).
+        (enrich_sql, enrich_params, "from enrichment e join titles t on t.id = e.title_id"),
+    ):
+        if not clause:
+            continue
+        try:
+            rows.extend(await db().fetch(
+                f"""
+                select {_SEARCH_COLUMNS}, t.director, e.director_names
+                {from_sql}
+                where {clause}
+                order by case when t.kind = 'live' then 1 else 0 end,
+                         t.popularity desc nulls last,
+                         t.score desc nulls last
+                limit ${len(params) + 1}
+                """,
+                *params,
+                limit,
+            ))
+        except Exception:
+            continue
+    seen: set[str] = set()
+    merged = []
+    for row in rows:
+        if row["id"] in seen:
+            continue
+        seen.add(row["id"])
+        merged.append(row)
+    scored = []
+    for row in merged:
+        directed = _fold(row["director"] or "") + " " + _fold(row["director_names"] or "")
+        role = 0 if phrase and phrase in directed else 1
+        scored.append((role, row))
+    scored.sort(key=lambda pair: (
+        pair[0],
+        -(float(pair[1]["popularity"] or 0)),
+        -(float(pair[1]["score"] or 0)),
+        -(int(pair[1]["year"] or 0)),
+    ))
+    return [row for _, row in scored[:limit]]
+
+
 MIN_NAME_RESULTS = 3
 
 
-def should_run_deep(rows, limit: int = 50) -> bool:
-    """¿La etapa de nombres necesita el respaldo profundo?
+def should_try_people(rows, limit: int = 50) -> bool:
+    """¿La etapa de nombres es corta y conviene probar personas?
 
-    Con pocos resultados, la coincidencia de nombre puede ser incidental (un alias
-    con «Tarantino» devolvía solo Death Proof): se prueba también director/reparto/
-    sinopsis y se prioriza esa lista. Con 3+ nombres no se paga el costo.
+    Con 1-2 nombres la coincidencia puede ser incidental (un alias con «Tarantino»
+    devolvía solo Death Proof). La consulta de personas está indexada y es barata;
+    la profunda completa (sinopsis) NO se corre aquí: solo cuando no hay nombres.
     """
     return len(rows) < min(MIN_NAME_RESULTS, limit)
+
+
+def should_run_full_deep(rows) -> bool:
+    """La profunda completa solo cuando la etapa de nombres no dio NADA.
+
+    Correrla con 1-2 resultados era el costo de 3.5 s en «guerra de papas»; la
+    etapa de personas ya cubre el caso de directores/actores.
+    """
+    return not rows
 
 
 def fuzzy_probe(clean_q: str) -> str:
@@ -993,16 +1081,31 @@ async def search(
 
     rows: list = []
     deep_failed = False
+    people_hit = False
     try:
         # 1) Nombres (título/alias/es-MX/original/regionales): vía rápida y precisa.
         rows = await _search_page(name_sql, name_params, clean_q, limit)
     except Exception:
         rows = []
-    if should_run_deep(rows, limit):
+    if should_try_people(rows, limit):
+        # 2a) Personas (director/reparto) con los índices de trigramas: es la lectura
+        #     correcta de «tarantino» o «pedro pascal» y no recorre 52k fichas.
+        title_sql, enrich_sql, people_params = build_people_matches(words)
         try:
-            # 2) Búsqueda clásica profunda (reparto/dirección/sinopsis) de respaldo.
-            #    Con pocos nombres, esta lista es la buena: «tarantino» vivía con un
-            #    solo resultado porque un alias incidental frenaba esta etapa.
+            people_rows = await _search_people(
+                title_sql, people_params, enrich_sql, people_params,
+                " ".join(words), limit,
+            )
+        except Exception:
+            people_rows = []
+        if people_rows:
+            rows = people_rows
+            people_hit = True
+    if should_run_full_deep(rows):
+        try:
+            # 2b) Búsqueda clásica profunda (sinopsis/reparto no indexado): solo si
+            #     los nombres no dieron nada. Con 1-2 resultados NO se corre (costaba
+            #     3.5 s en «guerra de papas»).
             deep_rows = await _search_page(deep_sql, deep_params, clean_q, limit)
             if deep_rows:
                 rows = deep_rows
@@ -1041,14 +1144,15 @@ async def search(
 
     portal_rows: list = []
     if portal_task is not None:
-        if should_wait_for_portal(rows, clean_q):
+        if people_hit or not should_wait_for_portal(rows, clean_q):
+            # Personas: la lista local ya es la buena, no se espera al portal.
+            # Nombres: el índice local ya tiene el nombre; igual.
+            portal_task.cancel()
+        else:
             try:
                 portal_rows = await portal_task
             except Exception:  # noqa: BLE001 - el portal jamás tumba la búsqueda
                 portal_rows = []
-        else:
-            # El índice ya tiene el nombre: no se espera al portal (latencia).
-            portal_task.cancel()
     rows = merge_search_rows(rows, portal_rows, clean_q, limit)
 
     member_of, seasons_by_group, base_of_group = await _group_maps()
