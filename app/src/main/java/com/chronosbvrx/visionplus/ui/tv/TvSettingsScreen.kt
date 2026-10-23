@@ -204,6 +204,8 @@ private fun ColumnScope.TvSystemTab() {
     if (showNotices) TvOssNoticesDialog(onDismiss = { showNotices = false })
     var showSync by rememberSaveable { mutableStateOf(false) }
     if (showSync) TvSyncDialog(onDismiss = { showSync = false })
+    var showProfiles by rememberSaveable { mutableStateOf(false) }
+    if (showProfiles) TvProfilesDialog(onDismiss = { showProfiles = false })
 
     TvSectionTitle("Rendimiento y Pantalla")
     val mode = s.effectsMode
@@ -280,6 +282,12 @@ private fun ColumnScope.TvSystemTab() {
         }
         Note("Los teléfonos tendrán que emparejar de nuevo con el PIN que muestre la tele.")
     }
+
+    TvSectionTitle("Perfiles")
+    TvActionOption(
+        "Cambiar de perfil (${com.chronosbvrx.visionplus.data.profile.ProfileStore.active(context).name})",
+    ) { showProfiles = true }
+    Note("Cada perfil tiene su «Seguir viendo», historial y Mi lista. Los ajustes y las descargas son del equipo.")
 
     TvSectionTitle("Continuidad entre equipos")
     TvActionOption("Sincronizar con mi teléfono") { showSync = true }

@@ -5,6 +5,15 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **OTA 2.5.125 PUBLICADA: PERFILES — hasta 5 personas por equipo, cada una con su «Seguir viendo», historial, Mi lista y series seguidas — 829 Android + 333 backend** (2026-10-23):
+  - *Pedido del usuario*: «Haz todo para subir a 9… pública la OTA directo». Lo que faltaba era perfiles (la otra sesión ya había publicado «Mi lista» en la 2.5.123).
+  - *Diseño (nombres de archivo, no copias)*: `data/profile/ProfileStore.kt` resuelve el nombre de las preferencias según el perfil: el **Principal conserva los nombres legados** (`vision_user`, `playback_history`, `sync_state`, `vision_follow` y el XML `playback_history.xml`) → actualizar no migra ni pierde nada; los demás viven en `base__p1`, `base__p2`… El perfil activo se guarda en `files/active_profile` (escritura atómica) y **se lee en cada acceso**, así el proceso `:x4k` (reproductor residente) escribe el historial en el perfil correcto aunque se cambie mientras el player vive.
+  - *Alcance*: Mi lista (favoritos/ver más tarde/vistos), historial, series seguidas y el código de continuidad son por persona. Ajustes, descargas, modo niños, emparejamiento del control remoto y la caché de catálogo/canales son del equipo (lo dice la tarjeta).
+  - *UI*: móvil `ProfilesSettingsSection` (Ajustes → Sistema: lista, crear con nombre, renombrar y borrar con confirmación; el Principal no se borra) y tele `TvProfilesDialog` (Ajustes → Perfiles; crear con nombre automático y borrar en dos pasos). Al cambiar se **recrea la actividad** (ninguna fila se queda con datos viejos), se refresca «Continuar viendo» del launcher (`LauncherWatchNext.syncAsync(force=true)`) y se avisa con un toast.
+  - *Guardianes*: `ProfileStoreTest` (9: nombres legados, saneo, ids, lista corrupta, aislamiento real de favoritos e historial con su XML, borrado que cae al Principal, tope de 5, renombrado y `active_profile` con basura), `ProfileWiringTest` (3: los 4 almacenes resuelven por perfil, ambas interfaces ofrecen perfiles y recargan, el diálogo TV pasa por `TvDialog`) y 1 caso de composición de la tarjeta en el sandbox existente (`GeePickDialogDuplicateTest`, lección repetida: una clase Compose nueva con su propio sandbox tumba la suite). **829 Android + 333 backend**.
+  - *Verificado en equipo limpio (emulador, APK publicado)*: Ajustes → Sistema → Perfiles → «Crear perfil» (nombre precargado «Perfil 2») → aparece en la lista → tocarlo cambia y recrea (Inicio sano, proceso vivo, cero cierres) → «Perfil 2 · 2 de 5 en este equipo» → volver al Principal sin cierres.
+  - *Publicado*: 2.5.124 (vc360) y **2.5.125 (vc361)** con el rótulo corregido: 101.2 MB, firma histórica `9593cb0d…`, asset verificado (`versionCode='361' versionName='2.5.125'`) y cadenas de perfiles en el DEX.
+  - *Pendiente*: prueba física en teléfono/tele del usuario (crear «Sala», ver que «Seguir viendo» y Mi lista cambian, y que cada perfil tiene su código de continuidad). **Siguiente deuda**: localización (strings fuera del código) y partir el módulo Gradle, ambas en `docs/ARQUITECTURA.md`.
 - **HOTFIX 2.5.123 PUBLICADA: el motor se auto-repara si su DEX no verifica, la sesión deja de reacuñar en bucle y la app ya mide su % de aperturas sin crash — 816 Android + 333 backend** (2026-10-23):
   - *Pedido del usuario*: «Haz todo para subir a 9… hay otro agente trabajando en mi lista, no entorpezcas… íntegrense sin regresiones ni errores».
   - *Diagnóstico EN VIVO (telemetría del VPS, no adivinado)*: (1) **5 crashes ese día en la tele ZTE B866V2 con 2.5.122**: `VerifyError: Verifier rejected class yc.h … can't resolve java.lang.String` y `NoClassDefFoundError: yc.h` en `X4KTitan.boot`; la declaración venía de `files/x4k/sdk-*.dex` → copia truncada del DEX del motor (la copia era `copyTo` sin verificar: una interrupción deja el archivo a medias para siempre). (2) **121 `SESSION_RENEW_FAIL` en 5 min** en un OnePlus 8 Pro: `portal100024 所在区域为黑名单` (rechazo permanente) y `ensureSession` reacuñaba en cada llamada porque el fallo no dejaba marca. (3) `PLAYER_SOFT_RESTART` 47 en 8 equipos (red, no build).
@@ -1296,8 +1305,10 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.123**
-  (versionCode **359**, OTA v2.5.123 — hotfix de estabilidad: el motor se re-extrae solo si su DEX no
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.125**
+  (versionCode **361**, OTA v2.5.125 — **perfiles**: hasta 5 personas por equipo, cada una con su
+  «Seguir viendo», historial, Mi lista, series seguidas y código de continuidad; el perfil Principal
+  conserva los datos heredados; móvil y tele (Ajustes → Perfiles), y antes la v2.5.123 — hotfix de estabilidad: el motor se re-extrae solo si su DEX no
   verifica (cierra el `VerifyError` que dejó una tele sin reproducir), la sesión del portal deja de
   reacuñar en bucle cuando la rechaza y la app mide su **% de aperturas sin crash**; incluye la pestaña
   «Historial» de «Mi lista»), y antes la v2.5.122 — «Porque viste X» en el Inicio (PlaybackHistory + Related + géneros,

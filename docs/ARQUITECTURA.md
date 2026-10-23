@@ -61,6 +61,11 @@ cuando importa, comprueban el **cableado** leyendo el fuente (patrón `WiringTes
 6. **Dos shells, una lógica**: móvil (`PhoneApp`) y tele (`TvApp`) comparten `data/`.
    Toda función con D-pad tiene su guardián en `ui/tv/*Test`.
 7. **Nada de emojis en la UI** (`UiNoEmojiTest`) y los iconos salen de `VisionIcons`.
+8. **Los datos personales se resuelven por perfil**: Mi lista, historial, series seguidas y
+   el código de continuidad piden su archivo a `ProfileStore.prefsName` (el perfil
+   `principal` conserva los nombres legados; los demás usan `base__p1`). El perfil activo
+   vive en `files/active_profile` y se lee en cada acceso, porque `:x4k` también escribe.
+   Ajustes, descargas, modo niños y emparejamiento son del equipo.
 
 ## 4. Calidad medible
 
@@ -78,9 +83,9 @@ cuando importa, comprueban el **cableado** leyendo el fuente (patrón `WiringTes
 
 | Tema | Estado | Nota |
 |---|---|---|
-| Perfiles por persona | **pendiente** | Requiere prefijar `UserLibrary`/`PlaybackHistory`/sync por perfil. No se hizo mientras otro agente trabajaba en «Mi lista». |
+| Perfiles por persona | **hecho (2.5.125)** | Hasta 5, aislados por archivo; el Principal conserva los datos heredados. Falta sinergia fina con el modo niños (perfil infantil). |
 | Localización (es/en) | pendiente | Hoy todo el texto está en español dentro del código; extraer a `strings.xml` es un barrido grande. |
-| Módulos Gradle | pendiente | `app` es un solo módulo (~49k líneas Kotlin). Partir `:core:data`, `:feature:player`, `:feature:catalog` sin mover modelos compartidos de golpe. |
+| Módulos Gradle | pendiente | `app` es un solo módulo (~50k líneas Kotlin). Partir `:core:data`, `:feature:player`, `:feature:catalog` sin mover modelos compartidos de golpe. |
 | APK de 101 MB | aceptado | 45 MB son libs ARM (dos ABI), 34 MB el DEX del motor, 11 MB el motor Magis. Publicar por ABI rompería el enlace estable de la OTA. |
 | Firma histórica de debug | aceptado | La base instalada manda: `keystore.properties` apunta a la llave histórica respaldada. |
 | Catálogo/motor de terceros | riesgo estructural | Fuera del alcance técnico del repo. |

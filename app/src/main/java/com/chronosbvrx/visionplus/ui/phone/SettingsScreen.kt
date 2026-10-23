@@ -51,6 +51,7 @@ import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.ui.components.VisionChip
 import com.chronosbvrx.visionplus.ui.plugins.AppUpdatesDialog
 import com.chronosbvrx.visionplus.ui.settings.OssNoticesDialog
+import com.chronosbvrx.visionplus.ui.settings.ProfilesSettingsSection
 import com.chronosbvrx.visionplus.ui.settings.SETTINGS_MARGIN
 import com.chronosbvrx.visionplus.ui.settings.SettingsBlock
 import com.chronosbvrx.visionplus.ui.settings.SettingsDestructiveRow
@@ -370,6 +371,8 @@ private fun SystemTab() {
     SettingsSection("Modo niños") {
         KidsSettingsBlock()
     }
+
+    ProfilesSettingsSection()
 
     SyncSettingsSection()
 

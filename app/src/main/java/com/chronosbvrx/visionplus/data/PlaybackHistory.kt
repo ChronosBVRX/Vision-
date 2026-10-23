@@ -67,7 +67,10 @@ object PlaybackHistory {
     internal const val PREFS_XML_FILE = "playback_history.xml"
 
     private fun prefs(context: Context) =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        context.applicationContext.getSharedPreferences(
+            com.chronosbvrx.visionplus.data.profile.ProfileStore.prefsName(context, PREFS),
+            Context.MODE_PRIVATE,
+        )
 
     fun list(context: Context): List<ResumeEntry> =
         prune(listFresh(context), System.currentTimeMillis())
@@ -211,8 +214,13 @@ object PlaybackHistory {
         }.getOrNull()
     }
 
-    private fun prefsFile(context: Context): File =
-        File(File(context.applicationContext.dataDir, "shared_prefs"), PREFS_XML_FILE)
+    private fun prefsFile(context: Context): File = File(
+        File(context.applicationContext.dataDir, "shared_prefs"),
+        com.chronosbvrx.visionplus.data.profile.ProfileStore.xmlFileNameFor(
+            PREFS,
+            com.chronosbvrx.visionplus.data.profile.ProfileStore.activeId(context),
+        ),
+    )
 }
 
 /** Vale la pena recordarla: arrancada y lejos del final. */

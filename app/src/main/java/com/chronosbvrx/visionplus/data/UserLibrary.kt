@@ -18,7 +18,10 @@ object UserLibrary {
     private const val K_PLAYED = "played"
 
     private fun prefs(context: Context): SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        context.applicationContext.getSharedPreferences(
+            com.chronosbvrx.visionplus.data.profile.ProfileStore.prefsName(context, PREFS),
+            Context.MODE_PRIVATE,
+        )
 
     fun watchLater(context: Context): List<Film> = read(prefs(context), K_WATCH)
     fun favorites(context: Context): List<Film> = read(prefs(context), K_FAVORITES)

@@ -159,6 +159,25 @@ class GeePickDialogDuplicateTest {
         assertAbsent("Canales posibles:")
     }
 
+    /**
+     * La tarjeta de Perfiles (Ajustes móvil) se compone sin truenos y ofrece sus acciones.
+     * Se prueba aquí para reusar este sandbox de Compose: una clase nueva con su propio
+     * sandbox ha tumbado la suite completa en este proyecto.
+     */
+    @Test
+    fun theProfilesCardComposesWithItsActions() {
+        compose.setContent {
+            VisionTheme {
+                com.chronosbvrx.visionplus.ui.settings.ProfilesSettingsSection()
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertText("PERFILES")
+        assertText("Crear perfil")
+        assertText("Principal")
+    }
+
     private fun assertText(text: String) {
         val matches = compose.onAllNodes(hasText(text, substring = true), useUnmergedTree = true)
             .fetchSemanticsNodes().size

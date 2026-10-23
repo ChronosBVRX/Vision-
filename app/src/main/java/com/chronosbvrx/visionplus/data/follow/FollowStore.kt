@@ -12,8 +12,13 @@ object FollowStore {
     private const val KEY = "followed_json"
     private const val MAX_FOLLOWS = 200
 
+    private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(
+        com.chronosbvrx.visionplus.data.profile.ProfileStore.prefsName(context, PREFS),
+        Context.MODE_PRIVATE,
+    )
+
     fun followed(context: Context): Map<String, String> {
-        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)
+        val raw = prefs(context).getString(KEY, null)
         return parseFollows(raw)
     }
 
@@ -35,7 +40,10 @@ object FollowStore {
             current[id] = title.trim().take(120)
             true
         }
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        context.getSharedPreferences(
+            com.chronosbvrx.visionplus.data.profile.ProfileStore.prefsName(context, PREFS),
+            Context.MODE_PRIVATE,
+        )
             .edit().putString(KEY, JSONObject(current as Map<*, *>).toString()).apply()
         return now
     }
@@ -59,7 +67,7 @@ object FollowStore {
      */
     suspend fun checkNewEpisodes(context: Context) {
         val app = context.applicationContext
-        val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val prefs = prefs(app)
         val last = prefs.getLong("last_check", 0L)
         if (System.currentTimeMillis() - last < 20L * 60 * 60 * 1000) return
         prefs.edit().putLong("last_check", System.currentTimeMillis()).apply()
