@@ -106,6 +106,11 @@ alter table enrichment add column if not exists aliases_at timestamptz;
 -- para quien escribe en otro idioma. Se guardan aparte y entran a `search_text`.
 alter table enrichment add column if not exists translated_titles text[] not null default '{}';
 alter table enrichment add column if not exists translations_at timestamptz;
+-- Créditos normalizados de TMDB (director/reparto): el buscador profundo los usa
+-- además de los del portal. Viven aparte para que el sync del portal no los pise.
+alter table enrichment add column if not exists director_names text not null default '';
+alter table enrichment add column if not exists cast_names text not null default '';
+alter table enrichment add column if not exists credits_at timestamptz;
 
 -- Texto de búsqueda materializado de cada título (nombres plegados + compactos):
 -- el buscador matchea aquí primero (índice GIN) y solo cae a la búsqueda profunda

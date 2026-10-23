@@ -71,6 +71,12 @@ TRANSLATION_PRIORITY = {
     "el-gr": 43, "he-il": 44, "th-th": 45, "vi-vn": 46, "id-id": 47, "uk-ua": 48,
 }
 TRANSLATIONS_LIMIT = 40
+# Créditos de TMDB (director/reparto): una llamada por título ya casado, con su
+# marcador propio (`credits_at`). El portal ya trae créditos en muchos títulos; esto
+# rellena los huecos y normaliza nombres (inglés/acentos) para el buscador profundo.
+CREDITS_BATCH = int(os.environ.get("TMDB_CREDITS_BATCH", "1500"))
+CREDITS_GAP = float(os.environ.get("TMDB_CREDITS_GAP", "0.12"))
+CREDITS_CAST_LIMIT = 12
 
 
 def _norm(text: str) -> str:
@@ -186,6 +192,65 @@ def parse_translations(payload, limit: int = TRANSLATIONS_LIMIT) -> list[str]:
         if len(out) >= limit:
             break
     return out
+
+
+def parse_credits(payload, media: str) -> dict[str, str]:
+    """Director/reparto de una ficha TMDB (película: `credits`; serie: `aggregate_credits`).
+
+    Devuelve `director_names` y `cast_names` listos para `enrichment`. En series usa
+    los créditos agregados de toda la serie (no los de la última temporada) y añade
+    `created_by`. El reparto se corta a [CREDITS_CAST_LIMIT] por orden de importancia.
+    """
+    if not isinstance(payload, dict):
+        return {"director_names": "", "cast_names": ""}
+    block = payload.get("aggregate_credits") if media == "tv" else payload.get("credits")
+    if not isinstance(block, dict):
+        fallback = payload.get("credits")
+        block = fallback if isinstance(fallback, dict) else {}
+    cast = block.get("cast") if isinstance(block.get("cast"), list) else []
+    ordered = sorted(
+        (person for person in cast if isinstance(person, dict)),
+        key=lambda person: (
+            person.get("order") if isinstance(person.get("order"), int) else 999,
+            -(float(person.get("popularity") or 0)),
+        ),
+    )
+    cast_names: list[str] = []
+    seen_cast: set[str] = set()
+    for person in ordered:
+        name = (person.get("name") or "").strip()
+        key = name.casefold()
+        if name and key not in seen_cast:
+            seen_cast.add(key)
+            cast_names.append(name)
+        if len(cast_names) >= CREDITS_CAST_LIMIT:
+            break
+
+    directors: list[str] = []
+    seen_directors: set[str] = set()
+
+    def add_director(name: str) -> None:
+        clean = (name or "").strip()
+        key = clean.casefold()
+        if clean and key not in seen_directors:
+            seen_directors.add(key)
+            directors.append(clean)
+
+    for person in block.get("crew") or []:
+        if not isinstance(person, dict):
+            continue
+        jobs = person.get("jobs") if isinstance(person.get("jobs"), list) else []
+        job_names = {str(job.get("job") or "") for job in jobs if isinstance(job, dict)}
+        job_names.add(str(person.get("job") or ""))
+        if job_names & {"Director", "Creator"}:
+            add_director(person.get("name"))
+    for person in payload.get("created_by") or []:
+        if isinstance(person, dict):
+            add_director(person.get("name"))
+    return {
+        "director_names": ", ".join(directors[:4]),
+        "cast_names": ", ".join(cast_names),
+    }
 
 
 def current_week() -> str:
@@ -328,9 +393,10 @@ def _match(kind: str, title: str, original: str | None, year: int | None) -> tup
     try:
         # alternative_titles: los nombres regionales/alternativos viajan en la MISMA
         # llamada que la ficha: sin ellos, «vaiana» no encuentra «Moana».
+        credits_key = "aggregate_credits" if media == "tv" else "credits"
         details = _get(
             detail_path, language="es-MX",
-            append_to_response="external_ids,alternative_titles,translations",
+            append_to_response=f"external_ids,alternative_titles,translations,{credits_key}",
         )
     except Exception:  # noqa: BLE001
         return None, True
@@ -340,6 +406,7 @@ def _match(kind: str, title: str, original: str | None, year: int | None) -> tup
     imdb_id = (details.get("external_ids") or {}).get("imdb_id")
     rating = details.get("vote_average")
     popularity, votes = _impact_of(details)
+    credits = parse_credits(details, media)
     return {
         "tmdb_id": int(tmdb_id),
         "imdb_id": imdb_id,
@@ -355,6 +422,8 @@ def _match(kind: str, title: str, original: str | None, year: int | None) -> tup
         "localized_title": (details.get("title") or details.get("name") or "").strip(),
         "alt_titles": parse_alt_titles(details.get("alternative_titles")),
         "translated_titles": parse_translations(details.get("translations")),
+        "director_names": credits["director_names"],
+        "cast_names": credits["cast_names"],
     }, False
 
 
@@ -387,8 +456,9 @@ async def _store_match(pool, title_id: str, match: dict) -> None:
             insert into enrichment (title_id, imdb_id, tmdb_id, match_confidence, rating, year,
                                     genres, overview, popularity, vote_count, match_algo,
                                     original_title, localized_title, alt_titles,
-                                    translated_titles, translations_at, aliases_at, updated_at)
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now(), now(), now())
+                                    translated_titles, director_names, cast_names,
+                                    translations_at, credits_at, aliases_at, updated_at)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, now(), now(), now(), now())
             on conflict (title_id) do update set
                 imdb_id = excluded.imdb_id, tmdb_id = excluded.tmdb_id,
                 match_confidence = excluded.match_confidence, rating = excluded.rating,
@@ -399,7 +469,10 @@ async def _store_match(pool, title_id: str, match: dict) -> None:
                 localized_title = excluded.localized_title,
                 alt_titles = excluded.alt_titles,
                 translated_titles = excluded.translated_titles,
+                director_names = excluded.director_names,
+                cast_names = excluded.cast_names,
                 translations_at = now(),
+                credits_at = now(),
                 aliases_at = now(),
                 updated_at = now()
             """,
@@ -409,6 +482,8 @@ async def _store_match(pool, title_id: str, match: dict) -> None:
             match.get("original_title", ""), match.get("localized_title", ""),
             list(match.get("alt_titles") or []),
             list(match.get("translated_titles") or []),
+            match.get("director_names", "") or "",
+            match.get("cast_names", "") or "",
         )
         # Propaga el impacto a titles para que el índice ordene por popularidad
         # sin joins por fila (estrenos/géneros profesionales).
@@ -759,6 +834,90 @@ async def backfill_translations(pool, workers: int = 1) -> int:
     return done
 
 
+def _fetch_credits_bundle(tmdb_id: int, kind: str) -> dict[str, str] | None:
+    """Créditos (director/reparto) de un id ya casado en TMDB.
+
+    Películas: `credits`; series: `aggregate_credits` (toda la serie). Prueba el tipo
+    probable y cae al otro. None solo si TMDB ya no tiene el id en ninguno (404).
+    """
+    order = ("tv", "movie") if _media_for(kind) == "tv" else ("movie", "tv")
+    for media in order:
+        key = "aggregate_credits" if media == "tv" else "credits"
+        try:
+            payload = _get(
+                f"/{media}/{tmdb_id}", language="es-MX",
+                append_to_response=key, gap=CREDITS_GAP,
+            )
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                continue
+            if exc.code == 429:  # límite de la API: se le da aire y se reintenta otro ciclo
+                time.sleep(3.0)
+            raise
+        return parse_credits(payload, media)
+    return None
+
+
+async def backfill_credits(pool, workers: int = 1) -> int:
+    """Director/reparto de TMDB para los matches existentes.
+
+    El portal ya trae créditos en 39,834 directores y 45,127 repartos (medido
+    2026-10-23), pero tiene huecos y nombres en español; TMDB rellena y normaliza
+    (inglés/acentos) para que el buscador profundo encuentre «tarantino» o
+    «pedro pascal». No toca `search_text` ni `updated_at`: solo escribe las columnas
+    de créditos, sin rehacer textos.
+    """
+    if not KEY:
+        return 0
+    async with pool.acquire() as conn:
+        pending = await conn.fetch(
+            """
+            select e.title_id, e.tmdb_id, t.kind, t.title
+            from enrichment e
+            join titles t on t.id = e.title_id
+            where e.tmdb_id is not null and coalesce(e.match_confidence, 0) >= 0.5
+              and e.credits_at is null
+            order by t.popularity desc nulls last, t.score desc nulls last
+            limit $1
+            """,
+            CREDITS_BATCH,
+        )
+    if not pending:
+        return 0
+    done, gone = 0, 0
+    wave_size = max(1, workers)
+    for start in range(0, len(pending), wave_size):
+        wave = pending[start:start + wave_size]
+        results = await asyncio.gather(
+            *(asyncio.to_thread(_fetch_credits_bundle, row["tmdb_id"], row["kind"]) for row in wave),
+            return_exceptions=True,
+        )
+        for row, result in zip(wave, results):
+            if isinstance(result, BaseException):  # noqa: BLE001 - se reintenta otro ciclo
+                log.warning("TMDB créditos: %s no se pudo consultar (%s)", row["title"], result)
+                continue
+            async with pool.acquire() as conn:
+                if result is None:
+                    # TMDB ya no tiene ese id: se marca para no reintentarlo para siempre.
+                    await conn.execute(
+                        "update enrichment set credits_at = now() where title_id = $1",
+                        row["title_id"],
+                    )
+                    gone += 1
+                    continue
+                await conn.execute(
+                    """
+                    update enrichment set director_names = $2, cast_names = $3,
+                           credits_at = now()
+                    where title_id = $1
+                    """,
+                    row["title_id"], result["director_names"], result["cast_names"],
+                )
+            done += 1
+    log.info("TMDB créditos: %s/%s títulos (ids perdidos en TMDB: %s)", done, len(pending), gone)
+    return done
+
+
 async def coverage(pool) -> list[dict]:
     """Cobertura de fichas por tipo (total, con match y sin intentar) — el medidor del ciclo."""
     if not KEY:
@@ -795,21 +954,23 @@ if __name__ == "__main__":
     import asyncpg
 
     async def _cli() -> None:
-        """Catch-up manual: `--aliases [workers]` o `--translations [workers]`."""
-        mode = next((m for m in ("--translations", "--aliases") if m in sys.argv), "")
+        """Catch-up manual: `--aliases`, `--translations` o `--credits` [workers]."""
+        mode = next((m for m in ("--credits", "--translations", "--aliases") if m in sys.argv), "")
         if not mode:
-            print("uso: python tmdb.py --aliases [workers] | --translations [workers]")
+            print("uso: python tmdb.py --aliases [workers] | --translations [workers] | --credits [workers]")
             return
         workers = 1
         idx = sys.argv.index(mode) + 1
         if idx < len(sys.argv) and sys.argv[idx].isdigit():
             workers = max(1, int(sys.argv[idx]))
-        label = "traducciones" if mode == "--translations" else "alias"
+        label = {"--credits": "créditos", "--translations": "traducciones"}.get(mode, "alias")
         pool = await asyncpg.create_pool(os.environ["DATABASE_URL"], min_size=1, max_size=2)
         try:
             total = 0
             while True:
-                if mode == "--translations":
+                if mode == "--credits":
+                    n = await backfill_credits(pool, workers=workers)
+                elif mode == "--translations":
                     n = await backfill_translations(pool, workers=workers)
                 else:
                     n = await backfill_aliases(pool, workers=workers)

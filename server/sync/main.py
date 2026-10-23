@@ -216,6 +216,12 @@ async def main() -> None:
                 except Exception:  # noqa: BLE001
                     log.exception("el backfill de traducciones TMDB falló")
                 try:
+                    # Director/reparto normalizados de TMDB para el buscador profundo
+                    # («tarantino», «pedro pascal»): rellena los huecos del portal.
+                    await tmdb.backfill_credits(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el backfill de créditos TMDB falló")
+                try:
                     # Mantenimiento del texto de búsqueda: títulos nuevos o con
                     # enriquecimiento más nuevo que su texto (no toca la versión).
                     await search_text.rebuild(pool)

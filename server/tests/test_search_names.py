@@ -181,6 +181,13 @@ def test_match_keeps_the_names_tmdb_knows(monkeypatch):
             "translations": {"translations": [
                 {"iso_639_1": "de", "iso_3166_1": "DE", "data": {"title": "Findet Nemo"}},
             ]},
+            "credits": {
+                "crew": [{"job": "Director", "name": "Andrew Stanton"}],
+                "cast": [
+                    {"name": "Albert Brooks", "order": 0},
+                    {"name": "Ellen DeGeneres", "order": 1},
+                ],
+            },
         }
 
     monkeypatch.setattr(tmdb, "_get", fake_get)
@@ -190,10 +197,13 @@ def test_match_keeps_the_names_tmdb_knows(monkeypatch):
     assert match["original_title"] == "Finding Nemo"
     assert match["alt_titles"] == ["Procurando Nemo"]
     assert match["translated_titles"] == ["Findet Nemo"]
+    assert match["director_names"] == "Andrew Stanton"
+    assert match["cast_names"] == "Albert Brooks, Ellen DeGeneres"
     # Los nombres viajan en la MISMA llamada de la ficha (sin request extra).
     detail_calls = [c for c in calls if c[0].startswith("/movie/")]
     assert detail_calls and "alternative_titles" in detail_calls[0][1]["append_to_response"]
     assert "translations" in detail_calls[0][1]["append_to_response"]
+    assert "credits" in detail_calls[0][1]["append_to_response"]
 
 
 def test_fetch_alias_bundle_falls_back_to_the_other_media(monkeypatch):
@@ -395,6 +405,90 @@ def test_translation_backfill_marks_tmdb_deleted_ids_without_rebuild(monkeypatch
     assert len(pool.writes) == 1  # solo la marca de translations_at
 
 
+# ----- créditos (director/reparto) -----
+
+
+def test_parse_credits_movie_and_tv():
+    movie = {"credits": {
+        "crew": [
+            {"job": "Director", "name": "Quentin Tarantino"},
+            {"job": "Producer", "name": "Lawrence Bender"},
+        ],
+        "cast": [
+            {"name": "John Travolta", "order": 0},
+            {"name": "Uma Thurman", "order": 1},
+        ],
+    }}
+    out = tmdb.parse_credits(movie, "movie")
+    assert out["director_names"] == "Quentin Tarantino"
+    assert out["cast_names"] == "John Travolta, Uma Thurman"
+
+    tv = {
+        "created_by": [{"name": "Vince Gilligan"}],
+        "aggregate_credits": {
+            "crew": [{"jobs": [{"job": "Director"}], "name": "Michelle MacLaren"}],
+            "cast": [{"name": "Bryan Cranston", "order": 0}],
+        },
+    }
+    out = tmdb.parse_credits(tv, "tv")
+    assert "Vince Gilligan" in out["director_names"]
+    assert "Michelle MacLaren" in out["director_names"]
+    assert out["cast_names"] == "Bryan Cranston"
+    assert tmdb.parse_credits(None, "movie") == {"director_names": "", "cast_names": ""}
+
+
+def test_credits_backfill_marks_rows_and_does_not_rebuild_search_text():
+    source = inspect.getsource(tmdb.backfill_credits)
+    assert "credits_at is null" in source
+    assert "credits_at = now()" in source
+    assert "director_names = $2" in source
+    assert "search_text.rebuild" not in source
+    assert "_rebuild_ids" not in source
+
+
+def test_credits_backfill_writes_director_and_cast(monkeypatch):
+    monkeypatch.setattr(tmdb, "KEY", "test-key")
+    rows = [
+        {"title_id": "xtv:1", "tmdb_id": 11, "kind": "movie", "title": "A"},
+        {"title_id": "xtv:2", "tmdb_id": 22, "kind": "series", "title": "B"},
+    ]
+    seen = []
+
+    def fake_bundle(tmdb_id, kind):
+        seen.append(tmdb_id)
+        return {"director_names": "D", "cast_names": "C"}
+
+    monkeypatch.setattr(tmdb, "_fetch_credits_bundle", fake_bundle)
+    pool = _WritesPool(rows)
+    assert asyncio.run(tmdb.backfill_credits(pool, workers=2)) == 2
+    assert sorted(seen) == [11, 22]
+    assert len(pool.writes) == 2
+    assert all(write[1] == "D" and write[2] == "C" for write in pool.writes)
+
+
+def test_credits_backfill_marks_tmdb_deleted_ids_without_writing_names(monkeypatch):
+    monkeypatch.setattr(tmdb, "KEY", "test-key")
+    rows = [{"title_id": "xtv:9", "tmdb_id": 99, "kind": "movie", "title": "Z"}]
+    monkeypatch.setattr(tmdb, "_fetch_credits_bundle", lambda tmdb_id, kind: None)
+    pool = _WritesPool(rows)
+    assert asyncio.run(tmdb.backfill_credits(pool)) == 0
+    assert len(pool.writes) == 1  # solo la marca de credits_at
+
+
+def test_should_run_deep_when_names_are_few():
+    assert app.should_run_deep([]) is True
+    assert app.should_run_deep([{}]) is True
+    assert app.should_run_deep([{}, {}]) is True
+    assert app.should_run_deep([{}, {}, {}]) is False
+    assert app.should_run_deep([{}, {}], limit=2) is False
+
+
+def test_search_endpoint_uses_the_deep_stage_for_few_names():
+    source = inspect.getsource(app.search)
+    assert "should_run_deep" in source
+    assert "rows = deep_rows" in source
+
+
 # ----- etapas del endpoint -----
 
 
@@ -410,7 +504,7 @@ def test_deep_match_covers_cast_synopsis_and_tmdb_names():
     assert "$4" in sql
     for field in (
         "cast_list", "synopsis", "localized_title", "original_title", "alt_titles",
-        "translated_titles",
+        "translated_titles", "director_names", "cast_names",
     ):
         assert field in sql
 

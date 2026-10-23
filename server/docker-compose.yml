@@ -152,6 +152,10 @@ services:
       # conocido, con su propio marcador y presupuesto.
       TMDB_TRANSLATIONS_BATCH: "${TMDB_TRANSLATIONS_BATCH:-1500}"
       TMDB_TRANSLATIONS_GAP: "${TMDB_TRANSLATIONS_GAP:-0.12}"
+      # Créditos de TMDB (director/reparto) para el buscador profundo: otra llamada
+      # por título conocido, con marcador (`credits_at`) y presupuesto propios.
+      TMDB_CREDITS_BATCH: "${TMDB_CREDITS_BATCH:-1500}"
+      TMDB_CREDITS_GAP: "${TMDB_CREDITS_GAP:-0.12}"
       # Texto de búsqueda materializado: títulos por ciclo que se rehacen de más.
       SEARCH_TEXT_BATCH: "${SEARCH_TEXT_BATCH:-20000}"
       TZ: "${TZ:-America/Mexico_City}"

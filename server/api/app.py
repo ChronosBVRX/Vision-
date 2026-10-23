@@ -746,6 +746,8 @@ def build_deep_match(words: list[str], offset: int = 0) -> tuple[str, list[str]]
             parts += [
                 f"unaccent(lower(t.director)) like ${n}",
                 f"unaccent(lower(t.cast_list)) like ${n}",
+                f"unaccent(lower(coalesce(e.director_names, ''))) like ${n}",
+                f"unaccent(lower(coalesce(e.cast_names, ''))) like ${n}",
                 f"unaccent(lower(t.synopsis)) like ${n}",
                 f"unaccent(lower(coalesce(e.overview, ''))) like ${n}",
             ]
@@ -777,6 +779,19 @@ async def _search_page(match_sql: str, match_params: list[str], clean_q: str, li
         limit ${len(params)}
     """
     return await db().fetch(sql, *params)
+
+
+MIN_NAME_RESULTS = 3
+
+
+def should_run_deep(rows, limit: int = 50) -> bool:
+    """¿La etapa de nombres necesita el respaldo profundo?
+
+    Con pocos resultados, la coincidencia de nombre puede ser incidental (un alias
+    con «Tarantino» devolvía solo Death Proof): se prueba también director/reparto/
+    sinopsis y se prioriza esa lista. Con 3+ nombres no se paga el costo.
+    """
+    return len(rows) < min(MIN_NAME_RESULTS, limit)
 
 
 def fuzzy_probe(clean_q: str) -> str:
@@ -983,13 +998,16 @@ async def search(
         rows = await _search_page(name_sql, name_params, clean_q, limit)
     except Exception:
         rows = []
-    if not rows:
+    if should_run_deep(rows, limit):
         try:
             # 2) Búsqueda clásica profunda (reparto/dirección/sinopsis) de respaldo.
-            rows = await _search_page(deep_sql, deep_params, clean_q, limit)
+            #    Con pocos nombres, esta lista es la buena: «tarantino» vivía con un
+            #    solo resultado porque un alias incidental frenaba esta etapa.
+            deep_rows = await _search_page(deep_sql, deep_params, clean_q, limit)
+            if deep_rows:
+                rows = deep_rows
         except Exception:
-            deep_failed = True
-            rows = []
+            deep_failed = not rows
     if not rows:
         try:
             # 3) Difusa por trigramas: perdona errores de escritura («termintor»).
@@ -2767,6 +2785,7 @@ async def stats(x_api_key: str | None = Header(default=None)):
                count(*) filter (where e.tmdb_id is not null) as matched,
                count(*) filter (where coalesce(array_length(e.alt_titles, 1), 0) > 0) as with_alt,
                count(*) filter (where coalesce(array_length(e.translated_titles, 1), 0) > 0) as with_translations,
+               count(*) filter (where coalesce(e.director_names, '') <> '' or coalesce(e.cast_names, '') <> '') as with_credits,
                max(t.search_text_at) as last_text_at
         from titles t
         left join enrichment e on e.title_id = t.id
@@ -2797,6 +2816,7 @@ async def stats(x_api_key: str | None = Header(default=None)):
             "matched": int(search["matched"] or 0),
             "withAlt": int(search["with_alt"] or 0),
             "withTranslations": int(search["with_translations"] or 0),
+            "withCredits": int(search["with_credits"] or 0),
             "lastTextAt": search["last_text_at"].isoformat() if search["last_text_at"] else None,
         },
         "catalog": {
