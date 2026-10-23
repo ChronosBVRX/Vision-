@@ -91,6 +91,8 @@ object VisionIcons {
 fun homeRowIcon(rowId: String): ImageVector? = when (rowId) {
     "home-estrenos" -> VisionIcons.Novelties
     "home-trending" -> VisionIcons.WeeklyTrending
+    "home-because" -> VisionIcons.ContinueWatching
+    "home-follow" -> VisionIcons.Following
     "home-kind-movie" -> VisionIcons.Movies
     "home-kind-series" -> VisionIcons.Series
     "home-kind-anime" -> VisionIcons.Anime

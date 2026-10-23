@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.HomePersonal
 import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import kotlinx.coroutines.Dispatchers
@@ -538,9 +539,27 @@ object RemoteIndexSource {
         return out
     }
 
-    /** Agenda de estrenos (TVMaze): sin caché larga, la agenda cambia cada día. */
+    // La agenda la piden el Inicio («Tus series · Esta semana») y el aviso diario de
+    // FollowStore; sin esta caché cada apertura del Inicio repetía la descarga.
+    private var memorySchedule: List<Airing>? = null
+    private var memoryScheduleAt = 0L
+    private var memoryScheduleDays = 0
+
+    /**
+     * Agenda de estrenos (TVMaze) con caché de 6 h. Una copia más ancha sirve a una
+     * petición más corta (el aviso diario pide 2 días y reusa la de 7).
+     */
     suspend fun schedule(days: Int = 7): List<Airing> = withContext(Dispatchers.IO) {
-        val connection = (URL("$BASE_URL/v1/schedule?days=${days.coerceIn(1, 14)}")
+        val window = days.coerceIn(1, 14)
+        val now = System.currentTimeMillis()
+        val cached = memorySchedule
+        if (cached != null &&
+            memoryScheduleDays >= window &&
+            now - memoryScheduleAt < HomePersonal.SCHEDULE_TTL_MS
+        ) {
+            return@withContext cached
+        }
+        val connection = (URL("$BASE_URL/v1/schedule?days=$window")
             .openConnection() as HttpURLConnection).apply {
             connectTimeout = 5_000
             readTimeout = 8_000
@@ -548,11 +567,17 @@ object RemoteIndexSource {
             setRequestProperty("Accept", "application/json")
         }
         try {
-            if (connection.responseCode !in 200..299) return@withContext emptyList()
+            if (connection.responseCode !in 200..299) return@withContext cached ?: emptyList()
             val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            parseAirings(JSONObject(text).optJSONArray("airings"))
+            val parsed = parseAirings(JSONObject(text).optJSONArray("airings"))
+            if (parsed.isNotEmpty()) {
+                memorySchedule = parsed
+                memoryScheduleAt = now
+                memoryScheduleDays = window
+            }
+            parsed.ifEmpty { cached ?: emptyList() }
         } catch (_: Exception) {
-            emptyList()
+            cached ?: emptyList()
         } finally {
             connection.disconnect()
         }

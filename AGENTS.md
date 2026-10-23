@@ -5,6 +5,13 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **OTA 2.5.122 PUBLICADA: «Porque viste X» y «Tus series · Esta semana» en el Inicio, móvil y tele — 795 Android** (2026-10-22/23):
+  - *Publicada*: `tools/publish_ota.ps1 -Version 2.5.122 -NotesFile ota_notes_2.5.122.md` (vc358, 101.2 MB, firma histórica `9593cb0d…`, asset `VisionPlus.apk`, release https://github.com/ChronosBVRX/Vision-/releases/tag/v2.5.122). Asset descargado y verificado: `versionCode='358' versionName='2.5.122'`, firma histórica OK.
+  - *Pedido del usuario*: implementar «Porque viste X» (PlaybackHistory + Related + géneros) y «Nuevos episodios» (una fila «Esta semana» con `/v1/schedule` y el seguimiento de series). Decisión del usuario: **sin tráilers**, **sin «Lo más visto»** y conservar «Populares de la semana».
+  - *«Porque viste X»* (`data/HomePersonal.kt`, puro): usa el último recuerdo de `PlaybackHistory` (si es capítulo, el nombre base de la serie), encuentra su ficha en el catálogo (con respaldo por nombre exacto si el id ya no está), reusa `Related.pickRelated` con los géneros de la ficha o los inferidos de las hileras y **no mezcla cine con series**. Excluye lo que ya vive en «Seguir viendo» (id y tmdbId) y lo que salió en Top 10/Estrenos/Populares mientras queden ≥6 tarjetas; con menos de 6 la fila no se pinta. Sin red nueva (usa las filas ya cargadas) y en modo niños solo `kind == kids`.
+  - *«Tus series · Esta semana»*: cruza `/v1/schedule?days=7` con `FollowStore.followed` (por `titleId`/imdb), resuelve la ficha del catálogo, deja una tarjeta por serie, ordena por fecha y rotula «T2 · C5 · Hoy 20:00» / «Mañana» / «Dom 25» en hora de México. Descarta lo que no tiene ficha (no inventa tarjetas) y oculta la fila si no queda nada. `RemoteIndexSource.schedule` gana caché en memoria de 6 h (una copia de 7 días sirve al aviso diario de 2) para no pedir la agenda en cada apertura del Inicio.
+  - *UI*: móvil (`HomeScreen` + `FollowRow`) y TV (`HomeRowSlot.Because`/`FollowWeek`, `HomeAiringRow`, `homeRowSlots` + `homeRowIndexOf`) después de «Seguir viendo». El índice del regreso del D-pad cuenta las dos filas nuevas (guardian en `TvRescueTest`); `HomePersonalWiringTest` vigila el cableado de ambas pantallas y la caché de la agenda.
+  - *Verificado*: **795 tests Android** en verde (11 nuevos: 9 puros de `HomePersonalTest` + 2 de cableado); release R8 **101.2 MB** con `verifyEngineNamespace: motor=16395, nuestras renombradas=5342, nombres reales compartidos=14, colisiones generadas=0`; asset publicado verificado (`vc358`, firma histórica). La agenda real del VPS casa sus `titleId` con el índice (comprobado en vivo: «Sabor a ti» y «Tierra de Amor y Coraje» con sus temporadas). *Pendiente*: prueba visual (historial + seguir una serie → las dos filas en el Inicio).
 - **OTA 2.5.121 PUBLICADA: «Relacionadas» en la ficha, sugerencias al terminar una película, una sola sinopsis en español, selector de temporadas compacto y «Ver más» real por género — 784 Android + 302 backend** (2026-10-22/23):
   - *Publicada*: `tools/publish_ota.ps1 -Version 2.5.121 -NotesFile ota_notes_2.5.121.md` (vc357, 101.2 MB, firma histórica `9593cb0d…`, asset `VisionPlus.apk`, release https://github.com/ChronosBVRX/Vision-/releases/tag/v2.5.121). Asset descargado y verificado: `versionCode='357' versionName='2.5.121'`, firma histórica OK.
   - *Pedido del usuario*: al terminar una película, un modal con sugerencias del mismo género/estilo; en la ficha, «Relacionadas»; una sinopsis coherente (no una al inicio y otra en inglés); y los botones de temporadas/capítulos más compactos.
@@ -1255,10 +1262,13 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.121**
-  (versionCode **357**, OTA v2.5.121 — «Relacionadas» en la ficha, modal de sugerencias al terminar una
-  película, una sola sinopsis es-MX estable, selector de temporadas/capítulos compacto y «Ver más» real
-  por género (páginas de `/v1/category`, 24/180 en equipos modestos y 48/480 en grandes); la v2.5.120
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.122**
+  (versionCode **358**, OTA v2.5.122 — «Porque viste X» en el Inicio (PlaybackHistory + Related + géneros,
+  sin repetir la semilla ni «Seguir viendo», sin mezclar cine con series y con filtro infantil) y
+  «Tus series · Esta semana» (agenda de `/v1/schedule` cruzada con las series seguidas, una tarjeta por
+  serie y caché de 6 h), en móvil y tele; la v2.5.121 «Relacionadas» en la ficha, modal de sugerencias al
+  terminar una película, una sola sinopsis es-MX estable, selector de temporadas/capítulos compacto y
+  «Ver más» real por género (páginas de `/v1/category`, 24/180 en equipos modestos y 48/480 en grandes); la v2.5.120
   los logos de TV en vivo se pintan a su tamaño natural (tope 2.5×,
   pieza compartida `ui/live/ChannelLogo.kt`) en vez de estirarse a toda la tarjeta; la v2.5.119 blindaje
   definitivo del motor: `EngineClassLoader` pregunta

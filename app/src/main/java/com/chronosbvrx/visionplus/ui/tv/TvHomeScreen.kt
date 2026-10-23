@@ -77,13 +77,18 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.chronosbvrx.visionplus.data.BecauseRow
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.FollowAiring
 import com.chronosbvrx.visionplus.data.HomeCurated
+import com.chronosbvrx.visionplus.data.HomePersonal
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.ResumeCard
+import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.UserLibrary
+import com.chronosbvrx.visionplus.data.allFilms
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.data.XuperStatus
 import com.chronosbvrx.visionplus.data.formatResume
@@ -265,31 +270,28 @@ fun TvHomeScreen(
 
     // «Seguir viendo»: se recarga al volver del reproductor
     var continueCards by remember { mutableStateOf<List<ResumeCard>>(emptyList()) }
+    // Semilla de «Porque viste X» y el catálogo ya cruzado de las filas personales.
+    var lastSeen by remember { mutableStateOf<ResumeEntry?>(null) }
+    var homeFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
     val homeScope = rememberCoroutineScope()
     fun reloadContinue() {
         homeScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val history = PlaybackHistory.list(context)
-            if (history.isEmpty()) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { continueCards = emptyList() }
-                return@launch
-            }
-            val localFilms = (rows).flatMap { it.films }
-            val matched = PlaybackHistory.continueCards(context, localFilms)
-            val finalCards = if (matched.all { it.film != null } || indexForHome.isEmpty()) {
-                matched
-            } else {
-                val all = (rows + indexForHome).flatMap { it.films }
-                PlaybackHistory.continueCards(context, all)
-            }
+            val films = allFilms(rows + indexForHome)
+            val matched = PlaybackHistory.continueCards(context, films)
             val visible = if (locked) {
-                finalCards.filter { it.film != null && it.film.kind == "kids" }
+                matched.filter { it.film != null && it.film.kind == "kids" }
             } else {
-                finalCards
+                matched
             }
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { continueCards = visible }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                continueCards = visible
+                lastSeen = history.firstOrNull()
+                homeFilms = films
+            }
         }
     }
-    LaunchedEffect(Unit) { reloadContinue() }
+    LaunchedEffect(rows, indexForHome) { reloadContinue() }
     val syncAt = com.chronosbvrx.visionplus.data.sync.SyncStore.state.value.lastSyncAt
     LaunchedEffect(syncAt) { if (syncAt > 0) reloadContinue() }
     // Avisos de capítulos nuevos de series seguidas (una vez al día como máximo).
@@ -323,14 +325,67 @@ fun TvHomeScreen(
             row.copy(films = Popularity.withoutRepeats(row.films, shown, minKeep = 4))
         }
     }
+    // «Porque viste X»: última obra vista + «Relacionadas» sobre el índice que ya está en
+    // memoria. «Tus series · Esta semana»: agenda cacheada cruzada con las series seguidas.
+    // Las dos se calculan fuera del hilo de composición (miles de títulos en el índice).
+    val becauseRow by androidx.compose.runtime.produceState<BecauseRow?>(
+        null, lastSeen, homeFilms, top10Films, estrenosFilms, weeklyFilms, continueCards, locked,
+    ) {
+        val seed = lastSeen
+        if (seed == null || homeFilms.isEmpty()) {
+            value = null
+            return@produceState
+        }
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val continueIds = continueCards.mapNotNull { it.film?.id }.toHashSet()
+            val continueTmdb = continueCards.mapNotNull { it.film?.tmdbId?.takeIf { id -> id > 0 } }.toHashSet()
+            val base = HomePersonal.becauseYouWatched(
+                seed = seed,
+                films = homeFilms,
+                rows = indexForHome + rows,
+                excludeIds = continueIds,
+                excludeTmdb = continueTmdb,
+                kidsOnly = locked,
+            ) ?: return@withContext null
+            val fresh = Popularity.withoutRepeats(
+                base.films,
+                top10Films + estrenosFilms + weeklyFilms,
+                minKeep = HomePersonal.MIN_CARDS,
+            )
+            if (fresh.size >= HomePersonal.MIN_CARDS) base.copy(films = fresh) else null
+        }
+    }
+    var followCards by remember { mutableStateOf<List<FollowAiring>>(emptyList()) }
+    LaunchedEffect(homeFilms, locked) {
+        val followed = runCatching {
+            com.chronosbvrx.visionplus.data.follow.FollowStore.followed(context)
+        }.getOrDefault(emptyMap())
+        if (followed.isEmpty() || homeFilms.isEmpty()) {
+            followCards = emptyList()
+            return@LaunchedEffect
+        }
+        homeScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val airings = runCatching {
+                com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.schedule(7)
+            }.getOrDefault(emptyList())
+            val cards = HomePersonal.weeklyFollowed(
+                followed = followed.keys,
+                airings = airings,
+                films = homeFilms,
+                nowMs = System.currentTimeMillis(),
+            )
+            val visible = if (locked) cards.filter { it.film.kind == "kids" } else cards
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { followCards = visible }
+        }
+    }
     // Regreso a la tarjeta exacta con revelado vertical de su fila: el curado llega tarde
     // y con otra estructura, así que primero se desplaza la columna hasta la fila (sin eso
     // la tarjeta ni se compone) y luego se pide el foco; al terminar se limpia el regreso.
     // Las filas salen de [homeRowSlots] — la MISMA lista que pinta el LazyColumn —, así que
     // el índice no puede correrse al agregar una fila.
     val homeSlots = remember(
-        featured, top10Films, estrenosFilms, weeklyFilms, continueCards, kindRowsForHome, otherRows,
-        rows.isEmpty(), catalog.loading,
+        featured, top10Films, estrenosFilms, weeklyFilms, continueCards, becauseRow, followCards,
+        kindRowsForHome, otherRows, rows.isEmpty(), catalog.loading,
     ) {
         homeRowSlots(
             heroFilmId = featured?.film?.id,
@@ -338,6 +393,9 @@ fun TvHomeScreen(
             premieres = estrenosFilms,
             trending = weeklyFilms,
             continueCards = continueCards,
+            becauseTitle = becauseRow?.title.orEmpty(),
+            becauseFilms = becauseRow?.films.orEmpty(),
+            followCards = followCards,
             ownKindRows = kindRowsForHome,
             otherRows = otherRows,
             showPlaceholders = rows.isEmpty() && catalog.loading,
@@ -552,6 +610,34 @@ fun TvHomeScreen(
                             entryRequester = rowEntry,
                             onFocusFilm = { focusFilm = it },
                             onResume = onResume,
+                        )
+                    }
+
+                    // 5b. PORQUE VISTE X (personalizada con el último título visto)
+                    is HomeRowSlot.Because -> item(key = slot.key) {
+                        HomePosterRow(
+                            title = HomePersonal.becauseRowTitle(slot.title),
+                            films = slot.films,
+                            icon = VisionIcons.ContinueWatching,
+                            returnRequester = returnRequester,
+                            returnFilmId = returnFilmId,
+                            entryRequester = rowEntry,
+                            onFocusFilm = { focusFilm = it },
+                            onOpenFilm = onOpenFilm,
+                        )
+                    }
+
+                    // 5c. TUS SERIES · ESTA SEMANA (agenda de las series seguidas)
+                    is HomeRowSlot.FollowWeek -> item(key = slot.key) {
+                        HomeAiringRow(
+                            title = HomePersonal.FOLLOW_ROW_TITLE,
+                            cards = slot.cards,
+                            icon = VisionIcons.Following,
+                            returnRequester = returnRequester,
+                            returnFilmId = returnFilmId,
+                            entryRequester = rowEntry,
+                            onFocusFilm = { focusFilm = it },
+                            onOpenFilm = onOpenFilm,
                         )
                     }
 
@@ -822,6 +908,18 @@ internal sealed interface HomeRowSlot {
             cards.any { it.film?.id == filmId || it.entry.key == filmId || it.entry.xtvCode == filmId }
     }
 
+    /** «Porque viste X»: una fila de recomendación ligada al último título visto. */
+    data class Because(val title: String, val films: List<Film>) : HomeRowSlot {
+        override val key: String get() = "home_because"
+        override fun containsFilm(filmId: String) = films.any { it.id == filmId }
+    }
+
+    /** «Tus series · Esta semana»: emisiones de las series que el usuario sigue. */
+    data class FollowWeek(val cards: List<FollowAiring>) : HomeRowSlot {
+        override val key: String get() = "home_follow"
+        override fun containsFilm(filmId: String) = cards.any { it.film.id == filmId }
+    }
+
     /** Una fila propia por tipo (home-kind-*): su clave es el id de la fila, como al pintar. */
     data class Kind(val row: CatalogRow) : HomeRowSlot {
         override val key: String get() = row.id
@@ -856,6 +954,9 @@ internal fun homeRowSlots(
     otherRows: List<CatalogRow>,
     showPlaceholders: Boolean,
     showNoRows: Boolean,
+    becauseTitle: String = "",
+    becauseFilms: List<Film> = emptyList(),
+    followCards: List<FollowAiring> = emptyList(),
 ): List<HomeRowSlot> = buildList {
     add(HomeRowSlot.Billboard(heroFilmId))
     add(HomeRowSlot.Hubs)
@@ -864,6 +965,10 @@ internal fun homeRowSlots(
     if (premieres.isNotEmpty()) add(HomeRowSlot.Premieres(premieres))
     if (trending.isNotEmpty()) add(HomeRowSlot.Trending(trending))
     if (continueCards.isNotEmpty()) add(HomeRowSlot.Continue(continueCards))
+    if (becauseFilms.isNotEmpty() && becauseTitle.isNotBlank()) {
+        add(HomeRowSlot.Because(becauseTitle, becauseFilms))
+    }
+    if (followCards.isNotEmpty()) add(HomeRowSlot.FollowWeek(followCards))
     ownKindRows.forEach { add(HomeRowSlot.Kind(it)) }
     otherRows.forEach { add(HomeRowSlot.Other(it)) }
     add(HomeRowSlot.End)
@@ -890,6 +995,9 @@ internal fun homeReturnRowIndex(
     otherRows: List<CatalogRow>,
     showPlaceholders: Boolean,
     showNoRows: Boolean,
+    becauseTitle: String = "",
+    becauseFilms: List<Film> = emptyList(),
+    followCards: List<FollowAiring> = emptyList(),
 ): Int = homeRowIndexOf(
     homeRowSlots(
         heroFilmId = heroFilmId,
@@ -901,6 +1009,9 @@ internal fun homeReturnRowIndex(
         otherRows = otherRows,
         showPlaceholders = showPlaceholders,
         showNoRows = showNoRows,
+        becauseTitle = becauseTitle,
+        becauseFilms = becauseFilms,
+        followCards = followCards,
     ),
     returnFilmId,
 )
@@ -1100,6 +1211,79 @@ internal fun HomePosterRow(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(metrics.bottomGap))
+    }
+}
+
+/**
+ * «Tus series · Esta semana»: póster de la serie, su nombre y el capítulo que viene.
+ * Comparte las medidas de [HomePosterRow] para no romper las 3 filas del Inicio.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HomeAiringRow(
+    title: String,
+    cards: List<FollowAiring>,
+    icon: ImageVector? = null,
+    returnRequester: FocusRequester? = null,
+    returnFilmId: String? = null,
+    entryRequester: FocusRequester? = null,
+    onFocusFilm: (Film) -> Unit,
+    onOpenFilm: (Film) -> Unit,
+) {
+    if (cards.isEmpty()) return
+    val metrics = rememberTvRowMetrics()
+    val rowState = rememberLazyListState()
+    val returnIndex = remember(cards, returnFilmId) {
+        if (returnFilmId == null) -1 else cards.indexOfFirst { it.film.id == returnFilmId }
+    }
+    LaunchedEffect(returnIndex, cards) { rowState.revealReturnIndex(returnIndex) }
+    Column(modifier = Modifier.padding(top = metrics.topPadding)) {
+        TvRowLabel(title, metrics.labelHeight, icon = icon)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
+            LazyRow(
+                state = rowState,
+                contentPadding = PaddingValues(horizontal = 48.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                itemsIndexed(cards, key = { _, card -> card.key }) { idx, card ->
+                    val isReturn = returnRequester != null && card.film.id == returnFilmId
+                    Column(Modifier.width(metrics.cardWidth)) {
+                        TvPosterCard(
+                            title = card.film.title,
+                            imageUrl = card.film.posterUrl,
+                            score = card.film.score,
+                            badge = if (card.today) "HOY" else null,
+                            cardWidth = metrics.cardWidth,
+                            modifier = when {
+                                isReturn -> Modifier.focusRequester(returnRequester)
+                                idx == 0 && entryRequester != null -> Modifier.focusRequester(entryRequester)
+                                else -> Modifier
+                            },
+                            onFocus = { onFocusFilm(card.film) },
+                            onClick = { onOpenFilm(card.film) },
+                        )
+                        Box(Modifier.padding(top = metrics.titleGap).height(metrics.titleHeight)) {
+                            Text(
+                                text = card.film.title,
+                                style = if (metrics.compact) MaterialTheme.typography.bodySmall
+                                else MaterialTheme.typography.bodyMedium,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(
+                            text = card.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = VisionTextSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }

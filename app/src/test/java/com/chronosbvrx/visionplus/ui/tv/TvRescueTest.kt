@@ -2,8 +2,10 @@ package com.chronosbvrx.visionplus.ui.tv
 
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.FollowAiring
 import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.ResumeCard
+import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.Airing
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -28,6 +30,16 @@ class TvRescueTest {
         ),
         film = film(id),
         progress = 0f,
+    )
+
+    private fun follow(id: String) = FollowAiring(
+        film = film(id),
+        airing = Airing(
+            show = id, season = 1, episode = 1, title = "",
+            airtimeMs = 0L, imdb = "", titleId = id,
+        ),
+        label = "T1 · C1",
+        today = false,
     )
 
     // ---------------------------------------------------------- decisión de rescate
@@ -170,6 +182,8 @@ class TvRescueTest {
         val premieres = listOf(film("e1"))
         val trending = listOf(film("w1"))
         val cards = listOf(card("c1"))
+        val because = listOf(film("b1"))
+        val followed = listOf(follow("f1"))
         val own = listOf(CatalogRow("home-kind-series", "Series", listOf(film("s1"))))
         val other = listOf(CatalogRow("portal", "Portal", listOf(film("p1"))))
         val slots = homeRowSlots(
@@ -178,6 +192,9 @@ class TvRescueTest {
             premieres = premieres,
             trending = trending,
             continueCards = cards,
+            becauseTitle = "Porque viste algo",
+            becauseFilms = because,
+            followCards = followed,
             ownKindRows = own,
             otherRows = other,
             showPlaceholders = false,
@@ -186,7 +203,7 @@ class TvRescueTest {
         assertEquals(
             listOf(
                 "billboard", "home_quick_hubs", "home_top10", "home_estrenos", "home_trending_week",
-                "continue", "home-kind-series", "portal", "end_spacer",
+                "continue", "home_because", "home_follow", "home-kind-series", "portal", "end_spacer",
             ),
             slots.map { it.key },
         )
@@ -195,8 +212,10 @@ class TvRescueTest {
         assertEquals(3, homeRowIndexOf(slots, "e1"))
         assertEquals(4, homeRowIndexOf(slots, "w1"))
         assertEquals(5, homeRowIndexOf(slots, "c1"))
-        assertEquals(6, homeRowIndexOf(slots, "s1"))
-        assertEquals(7, homeRowIndexOf(slots, "p1"))
+        assertEquals("la fila nueva se cuenta para el regreso", 6, homeRowIndexOf(slots, "b1"))
+        assertEquals("la agenda también", 7, homeRowIndexOf(slots, "f1"))
+        assertEquals(8, homeRowIndexOf(slots, "s1"))
+        assertEquals(9, homeRowIndexOf(slots, "p1"))
         assertEquals(-1, homeRowIndexOf(slots, "fantasma"))
         assertEquals(-1, homeRowIndexOf(slots, null))
 
