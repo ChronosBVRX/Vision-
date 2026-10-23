@@ -31,6 +31,8 @@ data class Film(
     val seasons: List<SeasonRef> = emptyList(),
     /** Tipo del catálogo en el servidor: movie/series/anime/kids (vacío si no lo trae). */
     val kind: String = "",
+    /** Géneros TMDB/portal («Acción», «Drama»…): alimentan «Relacionadas» y el final. */
+    val genres: List<String> = emptyList(),
     /**
      * Nombre original del título («también conocida como…»): el servidor lo manda cuando el
      * buscador encontró la ficha por otro nombre («buscando a nemo» → «Finding Nemo»). Vacío
@@ -42,8 +44,13 @@ data class Film(
 /** Una temporada dentro de un grupo: su número (0 = serie completa) y su ref de reproducción. */
 data class SeasonRef(val n: Int, val titleId: String, val videoUrl: String)
 
-/** A titled row of films on Home. */
-data class CatalogRow(val id: String, val title: String, val films: List<Film>)
+/** A titled row of films on Home. [total] es el total del servidor (> [films].size cuando hay más). */
+data class CatalogRow(
+    val id: String,
+    val title: String,
+    val films: List<Film>,
+    val total: Int = 0,
+)
 
 private val WHITESPACE_RUN = Regex("\\s+")
 
@@ -64,6 +71,42 @@ fun normalizeDisplayName(raw: String): String {
     val spaced = if (raw.indexOf('_') < 0) raw.trim()
     else raw.replace('_', ' ').replace(WHITESPACE_RUN, " ").trim()
     return DUB_SUFFIX.replace(spaced, "").trim()
+}
+
+/**
+ * Una sola sinopsis por ficha: la del índice (TMDB es-MX) manda y el portal solo
+ * rellena cuando la ficha no trae ninguna. Antes la ficha se pintaba con la del
+ * índice y, al llegar `getItemData`, saltaba a la del portal (a menudo en inglés):
+ * el texto cambiaba a media carga y mezclaba dos fuentes.
+ */
+internal fun resolveSynopsis(indexSynopsis: String, portalSynopsis: String): String {
+    val index = indexSynopsis.trim()
+    val portal = portalSynopsis.trim()
+    if (index.isBlank()) return portal
+    if (portal.isBlank()) return index
+    // La del índice (TMDB es-MX) manda cuando ya está en español: no se cambia a media
+    // carga. Si la del índice viniera en inglés y la del portal en español, se prefiere
+    // la española (una sola vez) para que la ficha nunca se quede en inglés.
+    if (looksSpanish(index)) return index
+    if (looksSpanish(portal)) return portal
+    return index
+}
+
+private val SPANISH_WORDS = setOf(
+    "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "que", "y",
+    "en", "con", "por", "para", "como", "mas", "pero", "sus", "se", "al", "lo", "es",
+    "son", "esta", "estan", "cuando", "donde", "mientras", "tras", "sobre", "entre",
+    "desde", "hasta", "sin", "tambien", "todo", "todos", "este", "estos", "estas",
+)
+
+/** Heurística de idioma para elegir la sinopsis: acentos o palabras funcionales. */
+private fun looksSpanish(text: String): Boolean {
+    val lower = text.lowercase(java.util.Locale.ROOT)
+    if (lower.any { it in "áéíóúñü¿¡" }) return true
+    val words = lower.split(Regex("[^a-záéíóúñü]+")).filter { it.length >= 2 }
+    if (words.isEmpty()) return false
+    val hits = words.count { it in SPANISH_WORDS }
+    return hits >= 3 || (words.size <= 12 && hits >= 2)
 }
 
 /** "1940 · 1 h 32 min": the year and the running time, omitting what is unknown. */

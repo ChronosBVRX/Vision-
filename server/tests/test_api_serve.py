@@ -52,6 +52,16 @@ def test_film_keeps_portal_without_enrichment():
     assert out["synopsis"] == "portal"
 
 
+def test_film_carries_genres_from_enrichment():
+    enr = {"rating": 7.0, "year": 2025, "overview": "", "genres": ["Acción", "Aventura"]}
+    assert app.film(_record(), enr)["genres"] == ["Acción", "Aventura"]
+
+
+def test_film_defaults_genres_without_enrichment():
+    assert app.film(_record())["genres"] == []
+    assert app.film(_record(), {"rating": 7.0, "year": 2025, "overview": ""})["genres"] == []
+
+
 def test_grouped_entry_prefers_xtv_member():
     row = _record(id="magis:X", play_ref="magisvod:X", source="magis")
     member_of = {"magis:X": {"group_id": "g", "title_id": "magis:X", "season": 4}}

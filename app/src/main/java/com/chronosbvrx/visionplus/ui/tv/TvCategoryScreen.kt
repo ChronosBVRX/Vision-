@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.ui.tv
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
@@ -18,11 +20,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -30,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,20 +48,28 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Border
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
+import com.chronosbvrx.visionplus.DevicePerformance
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.Popularity
+import com.chronosbvrx.visionplus.data.SectionPaging
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
+import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionRatingGold
+import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.Normalizer
 
 private const val CHIP_ALL = "Todo / Destacados"
@@ -89,6 +102,10 @@ fun TvCategoryScreen(
     val context = LocalContext.current
     val landing = rememberLandingFocus(section ?: key)
     val returnRequester = remember { FocusRequester() }
+    // La MISMA película puede vivir en varias filas (Estrenos y «Recomendado para ti»).
+    // Se recuerda la fila que tenía el foco al abrir la ficha para que el regreso use
+    // un único `FocusRequester` (dos tarjetas con el mismo lo dejaban sin aterrizar).
+    var returnRow by rememberSaveable(section ?: key) { mutableStateOf<String?>(null) }
     // Primera tarjeta visible de cada fila compuesta: rescate del regreso cuando la tarjeta
     // exacta no existe o el héroe ya no está compuesto (el usuario venía con scroll abajo).
     val rowEntry = remember { FocusRequester() }
@@ -230,6 +247,9 @@ fun TvCategoryScreen(
                                 returnRequester = returnRequester,
                                 returnFilmId = returnFilmId,
                                 entryRequester = rowEntry,
+                                isReturnRow = returnRow == premiereRow.title,
+                                onRowFocus = { returnRow = premiereRow.title },
+                                total = premiereRow.total,
                             )
                         }
                     }
@@ -243,6 +263,9 @@ fun TvCategoryScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
+                            isReturnRow = returnRow == "Recomendado para ti",
+                            onRowFocus = { returnRow = "Recomendado para ti" },
+                            total = 0,
                         )
                     }
                     itemsIndexed(otherRows, key = { _, row -> row.id }) { index, row ->
@@ -256,6 +279,9 @@ fun TvCategoryScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
+                            isReturnRow = returnRow == row.title,
+                            onRowFocus = { returnRow = row.title },
+                            total = row.total,
                         )
                     }
                 }
@@ -270,6 +296,9 @@ fun TvCategoryScreen(
                         returnRequester = returnRequester,
                         returnFilmId = returnFilmId,
                         entryRequester = rowEntry,
+                        isReturnRow = returnRow == "Mejor valoradas",
+                        onRowFocus = { returnRow = "Mejor valoradas" },
+                        total = 0,
                     )
                 }
                 item(key = "new") {
@@ -282,6 +311,9 @@ fun TvCategoryScreen(
                         returnRequester = returnRequester,
                         returnFilmId = returnFilmId,
                         entryRequester = rowEntry,
+                        isReturnRow = returnRow == "Novedades",
+                        onRowFocus = { returnRow = "Novedades" },
+                        total = 0,
                     )
                 }
                 item(key = "foryou") {
@@ -294,6 +326,9 @@ fun TvCategoryScreen(
                         returnRequester = returnRequester,
                         returnFilmId = returnFilmId,
                         entryRequester = rowEntry,
+                        isReturnRow = returnRow == "Recomendado para ti",
+                        onRowFocus = { returnRow = "Recomendado para ti" },
+                        total = 0,
                     )
                 }
                 item(key = "all") {
@@ -306,6 +341,9 @@ fun TvCategoryScreen(
                         returnRequester = returnRequester,
                         returnFilmId = returnFilmId,
                         entryRequester = rowEntry,
+                        isReturnRow = returnRow == "Todo · $title",
+                        onRowFocus = { returnRow = "Todo · $title" },
+                        total = 0,
                     )
                 }
             }
@@ -332,10 +370,15 @@ fun TvCategoryScreen(
             Popularity.reorderRow(raw)
         }
 
+        val activeRow = remember(loaded, activeCategory) {
+            loaded?.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
+        }
         TvCategoryGrid(
             categoryName = activeCategory,
             categoryChips = categoryChips,
             films = categoryFilms,
+            categoryId = activeRow?.id ?: "",
+            initialTotal = activeRow?.total ?: categoryFilms.size,
             onSelectChip = { chip ->
                 selectedCategory = if (chip == CHIP_ALL) null else chip
             },
@@ -376,6 +419,8 @@ private fun TvCategoryGrid(
     categoryName: String,
     categoryChips: List<String>,
     films: List<Film>,
+    categoryId: String,
+    initialTotal: Int,
     onSelectChip: (String) -> Unit,
     onBackToAll: () -> Unit,
     onOpenFilm: (Film) -> Unit,
@@ -384,8 +429,23 @@ private fun TvCategoryGrid(
     entryRequester: FocusRequester? = null,
     landing: LandingFocus? = null,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val lowEnd = remember { DevicePerformance.isLowEndDevice(context) }
+    val batch = remember { SectionPaging.batch(lowEnd) }
+    val cap = remember { SectionPaging.cap(lowEnd) }
+    var extra by remember(categoryName) { mutableStateOf<List<Film>>(emptyList()) }
+    var total by remember(categoryName) {
+        mutableIntStateOf(initialTotal.coerceAtLeast(films.size))
+    }
+    var loadingMore by remember(categoryName) { mutableStateOf(false) }
+    var exhausted by remember(categoryName) { mutableStateOf(false) }
+    // El servidor manda el primer tope (40); «Ver más» pide páginas y respeta el
+    // techo del equipo (180 en una TV de 2 GB, 480 en equipos grandes).
+    val allFilms = remember(films, extra) { (films + extra).distinctBy { it.id } }
+
     var visibleCount by remember(categoryName) { mutableIntStateOf(GRID_BATCH_SIZE) }
-    val displayedFilms = remember(films, visibleCount) { films.take(visibleCount) }
+    val displayedFilms = remember(allFilms, visibleCount) { allFilms.take(visibleCount) }
     val gridState = rememberLazyGridState()
 
     // Al volver de una ficha, la cuadrícula se desplaza sola hasta la tarjeta abierta.
@@ -394,15 +454,45 @@ private fun TvCategoryGrid(
     }
     LaunchedEffect(returnIndex, displayedFilms) { gridState.revealReturnIndex(returnIndex) }
 
-    val shouldLoadMore by remember {
+    val shouldLoadMore by remember(allFilms.size, displayedFilms.size) {
         derivedStateOf {
             val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            lastVisibleIndex >= displayedFilms.size - 8 && displayedFilms.size < films.size
+            lastVisibleIndex >= displayedFilms.size - 8 && displayedFilms.size < allFilms.size
         }
     }
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) {
-            visibleCount = (visibleCount + GRID_BATCH_SIZE).coerceAtMost(films.size)
+            visibleCount = (visibleCount + GRID_BATCH_SIZE).coerceAtMost(allFilms.size)
+        }
+    }
+
+    fun loadMore() {
+        if (loadingMore) return
+        if (visibleCount < allFilms.size) {
+            visibleCount = (visibleCount + batch).coerceAtMost(allFilms.size)
+            return
+        }
+        if (exhausted || categoryId.isBlank() ||
+            !SectionPaging.canLoadMore(allFilms.size, total, cap)
+        ) {
+            return
+        }
+        val page = SectionPaging.nextPage(allFilms.size, batch)
+        val loadedBefore = allFilms.size
+        loadingMore = true
+        scope.launch {
+            val result = RemoteIndexSource.categoryPage(context, categoryId, page, batch)
+            if (result.films.isNotEmpty()) {
+                extra = (extra + result.films).distinctBy { it.id }
+            }
+            if (result.total > 0) total = result.total
+            if (result.films.isEmpty()) exhausted = true
+            val loadedAfter = (films + extra).distinctBy { it.id }.size
+            if (loadedAfter >= cap || (result.films.isEmpty() && loadedAfter <= loadedBefore)) {
+                exhausted = true
+            }
+            visibleCount = (visibleCount + batch).coerceAtMost(loadedAfter)
+            loadingMore = false
         }
     }
 
@@ -435,7 +525,7 @@ private fun TvCategoryGrid(
             )
             Spacer(Modifier.width(12.dp))
             Text(
-                text = "(${films.size} títulos)",
+                text = "(${maxOf(total, allFilms.size)} títulos)",
                 style = MaterialTheme.typography.bodyMedium,
                 color = VisionTextSecondary,
             )
@@ -500,6 +590,39 @@ private fun TvCategoryGrid(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 6.dp),
                         )
+                    }
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            "Mostrando ${displayedFilms.size} de ${maxOf(total, allFilms.size)}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = VisionTextSecondary,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        when {
+                            loadingMore -> TvCompactAction(label = "Cargando…") {}
+                            visibleCount < allFilms.size ||
+                                (categoryId.isNotBlank() && !exhausted &&
+                                    SectionPaging.canLoadMore(allFilms.size, total, cap)) ->
+                                TvCompactAction(
+                                    label = "Ver más",
+                                    icon = VisionIcons.SeeAll,
+                                ) { loadMore() }
+                            allFilms.size >= cap && total > allFilms.size -> Text(
+                                "Límite de este equipo · ${allFilms.size} de $total",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = VisionTextSecondary,
+                            )
+                            else -> Text(
+                                "No hay más títulos",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = VisionTextSecondary,
+                            )
+                        }
                     }
                 }
             }
@@ -602,6 +725,9 @@ private fun SectionRow(
     returnRequester: FocusRequester? = null,
     returnFilmId: String? = null,
     entryRequester: FocusRequester? = null,
+    isReturnRow: Boolean = true,
+    onRowFocus: () -> Unit = {},
+    total: Int = 0,
 ) {
     val safeFilms = remember(films) { Popularity.reorderRow(films.distinctBy { it.id }).take(CAROUSEL_LIMIT) }
     if (safeFilms.isEmpty()) return
@@ -642,7 +768,7 @@ private fun SectionRow(
     ) {
         itemsIndexed(safeFilms, key = { _, film -> "${label}-${film.id}" }) { idx, film ->
             val rank = if (isTopRow && idx in 0..9) idx + 1 else null
-            val isReturn = returnRequester != null && film.id == returnFilmId
+            val isReturn = isReturnRow && returnRequester != null && film.id == returnFilmId
             Column(Modifier.width(140.dp)) {
                 TvPosterCard(
                     title = film.title,
@@ -650,6 +776,7 @@ private fun SectionRow(
                     score = film.score,
                     badge = if (film.year >= 2025) "NUEVO" else null,
                     rank = rank,
+                    onFocus = onRowFocus,
                     modifier = when {
                         isReturn -> Modifier.focusRequester(returnRequester)
                         idx == 0 && entryRequester != null -> Modifier.focusRequester(entryRequester)
@@ -667,8 +794,56 @@ private fun SectionRow(
                 )
             }
         }
+        if (onSeeAll != null && (total > safeFilms.size || total <= 0)) {
+            item(key = "more_$label") {
+                TvSeeMoreCard(
+                    count = total.coerceAtLeast(safeFilms.size),
+                    onClick = onSeeAll,
+                )
+            }
+        }
     }
     Spacer(Modifier.height(10.dp))
+}
+
+/** Tarjeta de cierre de una hilera de la tele: cuántos títulos hay y abre la cuadrícula. */
+@Composable
+private fun TvSeeMoreCard(count: Int, onClick: () -> Unit) {
+    Column(Modifier.width(140.dp)) {
+        Card(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
+            colors = CardDefaults.colors(containerColor = VisionSurfaceHigh),
+            border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color.White))),
+            shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    VisionIcons.SeeAll,
+                    contentDescription = null,
+                    tint = VisionBlueBright,
+                    modifier = Modifier.size(32.dp),
+                )
+                Text(
+                    "Ver más",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (count > 0) {
+                    Text(
+                        "$count títulos",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VisionTextSecondary,
+                    )
+                }
+            }
+        }
+    }
 }
 
 private val DIACRITICS = Regex("\\p{Mn}+")

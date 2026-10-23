@@ -90,6 +90,7 @@ def film(record: asyncpg.Record, enr=None) -> dict:
     title = strip_season_mark(record["title"], record["kind"])
     popularity = 0.0
     votes = 0
+    genres = []
     try:
         if "popularity" in record.keys():
             popularity = float(record["popularity"] or 0)
@@ -124,6 +125,11 @@ def film(record: asyncpg.Record, enr=None) -> dict:
                 tmdb_id = int(enr["tmdb_id"])
         except (TypeError, ValueError, KeyError, AttributeError):
             tmdb_id = 0
+        try:
+            if "genres" in enr.keys() and enr["genres"] is not None:
+                genres = [str(g).strip() for g in enr["genres"] if str(g).strip()]
+        except (TypeError, KeyError, AttributeError):
+            genres = []
     video_url = record["play_ref"]
     source_url = record["source"]
     film_id = record["id"]
@@ -147,6 +153,7 @@ def film(record: asyncpg.Record, enr=None) -> dict:
         "voteCount": votes,
         "tmdbId": tmdb_id,
         "kind": record["kind"] or "",
+        "genres": genres,
     }
 
 
@@ -157,7 +164,7 @@ async def _enrichment_map(ids) -> dict:
         return {}
     rows = await db().fetch(
         """select title_id, rating, year, overview, popularity, vote_count, original_title,
-                  tmdb_id
+                  tmdb_id, genres
            from enrichment
            where title_id = any($1::text[]) and coalesce(match_confidence, 0) >= 0.5""",
         unique,

@@ -443,7 +443,7 @@ fun TvSeeAllButton(
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 Text(
-                    text = "Ver todo",
+                    text = "Ver más",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = if (hasFocus) Color.White else VisionBlue,

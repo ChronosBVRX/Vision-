@@ -28,6 +28,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.chronosbvrx.visionplus.data.CatalogRow
@@ -96,7 +99,17 @@ fun TvApp(catalog: XuperCatalog, nav: Navigator) {
         }
     }
 
-    Box(Modifier.fillMaxSize().onFocusChanged { FocusRescue.screenHasFocus = it.hasFocus }) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onFocusChanged { FocusRescue.screenHasFocus = it.hasFocus }
+            // El regreso de una ficha distingue una tecla real del `screenHasFocus` viejo
+            // que deja la pantalla anterior al cerrarse (ver `rememberReturnFocus`).
+            .onPreviewKeyEvent {
+                if (it.type == KeyEventType.KeyDown) FocusRescue.noteUserKey()
+                false
+            },
+    ) {
         saved.SaveableStateProvider(route.toString()) {
             TvRoute(
                 catalog = catalog,
@@ -240,7 +253,11 @@ private fun TvRoute(
             // caza). La invalidación buena es por navegación: guardedGo (riel y hubs) y las
             // salidas de arriba (En vivo, Categorías, Continuar).
         )
-        is Route.Title -> TvTitleScreen(route.film, onPlay = { ep -> nav.push(Route.Player(route.film, ep)) })
+        is Route.Title -> TvTitleScreen(
+            route.film,
+            onPlay = { ep -> nav.push(Route.Player(route.film, ep)) },
+            onOpenFilm = { nav.push(Route.Title(it)) },
+        )
         is Route.Player -> PlayerScreen(route.film, isTv = true, onBack = { nav.close(route) }, episode = route.episode, resumeMs = route.resumeMs)
         is Route.LivePlayer -> LivePlayerScreen(
             channel = route.channel,

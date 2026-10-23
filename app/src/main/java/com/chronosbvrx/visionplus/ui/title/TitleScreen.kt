@@ -81,7 +81,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import com.chronosbvrx.visionplus.ui.components.PosterCard
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionRatingGold
@@ -99,13 +101,25 @@ import com.chronosbvrx.visionplus.ui.remote.castableRef
  * (score, genres, cast, languages) when the source carries it, and the synopsis.
  */
 @Composable
-fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) {
+fun TitleScreen(
+    film: Film,
+    onBack: () -> Unit,
+    onPlay: (EpisodePlay?) -> Unit,
+    onOpenFilm: (Film) -> Unit = {},
+) {
     val context = LocalContext.current
     val isXtv = film.videoUrl.startsWith("xtv:")
     val meta = remember(film.id) { if (isXtv) X4KApi.metaFor(context, film.id) else null }
+    val genreHint = remember(film.id) {
+        (film.genres + meta?.optString("gen").orEmpty().split(',').map { it.trim() })
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString(", ")
+    }
     var languages by remember(film.id) { mutableStateOf<List<String>>(emptyList()) }
     var qualities by remember(film.id) { mutableStateOf<List<String>>(emptyList()) }
     var itemLine by remember(film.id) { mutableStateOf("") }
+    var related by remember(film.id) { mutableStateOf<List<Film>>(emptyList()) }
     var selectedSeason by remember(film.id) { mutableStateOf(film.seasons.firstOrNull()) }
     val activeId = selectedSeason?.titleId ?: film.id
     val seasonIdx = film.seasons.indexOfFirst { it.titleId == activeId }.coerceAtLeast(0)
@@ -155,8 +169,23 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                 subs.takeIf { it.isNotEmpty() }
                     ?.let { list -> "Subtítulos: " + list.joinToString(" · ") { audioLabel(it) } },
             ).joinToString("   ·   ")
-            item.optString("description").takeIf { it.isNotBlank() }?.let { description = it }
+            // Una sola sinopsis: la del índice (TMDB es-MX) manda; el portal solo
+            // rellena huecos. Así la ficha no cambia de texto a media carga ni cae
+            // en una sinopsis en inglés.
+            description = com.chronosbvrx.visionplus.data.resolveSynopsis(
+                film.synopsis,
+                item.optString("description"),
+            )
         }
+    }
+
+    LaunchedEffect(film.id) {
+        related = com.chronosbvrx.visionplus.data.Related.forFilm(
+            context = context,
+            film = film,
+            genreHint = genreHint,
+            limit = 12,
+        )
     }
 
     val watchedCount = remember(watchedTick, activeId, episodes) {
@@ -494,6 +523,10 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                 }
                             }
                         }
+                        Synopsis(description)
+                        if (related.isNotEmpty()) {
+                            RelatedSection(related, onOpenFilm)
+                        }
                         if (episodes.size > 1 || film.seasons.size > 1) {
                             MobileSeriesSelectorSection(
                                 seasons = film.seasons,
@@ -538,7 +571,6 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
                                 filmId = film.id,
                             )
                         }
-                        Synopsis(description)
                     }
                 }
                 item(key = "end") { Spacer(Modifier.height(32.dp)) }
@@ -580,6 +612,43 @@ fun TitleScreen(film: Film, onBack: () -> Unit, onPlay: (EpisodePlay?) -> Unit) 
     }
 }
 
+/**
+ * «Relacionadas»: misma obra nunca, mismo género primero y el resto por afinidad.
+ * La tarjeta abre su propia ficha (no reproduce de golpe).
+ */
+@Composable
+private fun RelatedSection(films: List<Film>, onOpenFilm: (Film) -> Unit) {
+    Column(Modifier.padding(top = 18.dp)) {
+        Text(
+            "Relacionadas",
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            "Del mismo género o estilo",
+            style = MaterialTheme.typography.labelMedium,
+            color = VisionTextSecondary,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        LazyRow(
+            contentPadding = PaddingValues(top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(films, key = { it.id }) { film ->
+                PosterCard(
+                    title = film.title,
+                    imageUrl = film.posterUrl,
+                    modifier = Modifier.width(118.dp),
+                    meta = film.metaLine(),
+                    score = film.score,
+                    onClick = { onOpenFilm(film) },
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun MobileSeriesSelectorSection(
     seasons: List<com.chronosbvrx.visionplus.data.SeasonRef>,
@@ -604,11 +673,11 @@ private fun MobileSeriesSelectorSection(
     val context = LocalContext.current
     Column(
         modifier = Modifier
-            .padding(top = 14.dp)
+            .padding(top = 10.dp)
             .fillMaxWidth()
             .background(VisionSurface, RoundedCornerShape(18.dp))
             .border(1.dp, VisionBlue.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
-            .padding(vertical = 14.dp),
+            .padding(vertical = 10.dp),
     ) {
         Row(
             modifier = Modifier
@@ -636,7 +705,7 @@ private fun MobileSeriesSelectorSection(
                 }
                 Text(
                     "Temporadas y capítulos",
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.labelLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                 )
@@ -653,7 +722,7 @@ private fun MobileSeriesSelectorSection(
 
         // Descargar la temporada completa: la cola del motor va bajando un capítulo por uno.
         if (downloadsOn && episodePrograms.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(7.dp))
             val actionable = seasonDownloadActionable(seasonSummary)
             Row(
                 modifier = Modifier
@@ -667,7 +736,7 @@ private fun MobileSeriesSelectorSection(
                         RoundedCornerShape(12.dp),
                     )
                     .clickable(enabled = actionable) { onSeasonDownload() }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -687,7 +756,7 @@ private fun MobileSeriesSelectorSection(
                 }
                 Text(
                     seasonDownloadLabel(seasonSummary),
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelMedium,
                     color = if (actionable || seasonSummary.active > 0 || seasonSummary.allDone) Color.White else VisionTextSecondary,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
@@ -704,10 +773,10 @@ private fun MobileSeriesSelectorSection(
         }
 
         if (seasons.size > 1) {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 itemsIndexed(seasons, key = { _, s -> "se_${s.titleId}" }) { _, season ->
                     val selected = season.titleId == activeId
@@ -716,19 +785,19 @@ private fun MobileSeriesSelectorSection(
                         modifier = Modifier
                             .background(
                                 if (selected) VisionBlue else VisionSurfaceHigh,
-                                RoundedCornerShape(12.dp),
+                                RoundedCornerShape(10.dp),
                             )
                             .border(
                                 width = 1.dp,
                                 color = if (selected) VisionBlueBright else Color.White.copy(alpha = 0.12f),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(10.dp),
                             )
                             .clickable { onSelectSeason(season) }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
                     ) {
                         Text(
                             text = label,
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelMedium,
                             color = if (selected) Color.White else Color.White.copy(alpha = 0.78f),
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         )
@@ -738,25 +807,25 @@ private fun MobileSeriesSelectorSection(
         }
 
         if (episodePrograms.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             // Barra de avance de la temporada: cuánto llevas visto, de un vistazo.
             if (watchedCount > 0) {
                 Box(
                     Modifier
                         .padding(horizontal = 14.dp)
                         .fillMaxWidth()
-                        .height(3.dp)
+                        .height(2.dp)
                         .clip(RoundedCornerShape(2.dp))
                         .background(Color.White.copy(alpha = 0.12f)),
                 ) {
                     Box(
                         Modifier
                             .fillMaxWidth((watchedCount.toFloat() / episodePrograms.size).coerceIn(0.02f, 1f))
-                            .height(3.dp)
+                            .height(2.dp)
                             .background(VisionBlueBright),
                     )
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
             }
             Column(Modifier.padding(horizontal = 8.dp)) {
                 episodePrograms.forEachIndexed { index, ep ->
@@ -768,36 +837,36 @@ private fun MobileSeriesSelectorSection(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 2.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .padding(vertical = 1.dp)
+                            .clip(RoundedCornerShape(10.dp))
                             .background(if (isNext) VisionBlue.copy(alpha = 0.14f) else Color.Transparent)
                             .clickable { onSelectEpisode(index, ep) }
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                            .padding(horizontal = 6.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (isNext) {
                             Box(
                                 Modifier
                                     .width(3.dp)
-                                    .height(44.dp)
+                                    .height(38.dp)
                                     .clip(RoundedCornerShape(2.dp))
                                     .background(VisionBlueBright),
                             )
-                            Spacer(Modifier.width(7.dp))
+                            Spacer(Modifier.width(6.dp))
                         }
                         // Miniatura con la portada de la serie (el portal no trae stills por
                         // episodio): la cifra del capítulo vive sobre el arte, como en los
                         // productos grandes.
                         Box(
                             Modifier
-                                .width(46.dp)
-                                .height(66.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .width(40.dp)
+                                .height(58.dp)
+                                .clip(RoundedCornerShape(7.dp))
                                 .background(VisionSurfaceHigh),
                         ) {
                             if (posterUrl.isNotBlank()) {
                                 AsyncImage(
-                                    model = ImageRequest.Builder(context).data(posterUrl).size(92, 132).build(),
+                                    model = ImageRequest.Builder(context).data(posterUrl).size(80, 116).build(),
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize(),
@@ -817,11 +886,11 @@ private fun MobileSeriesSelectorSection(
                                 )
                             }
                         }
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(9.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
                                 text = epTitle,
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = Color.White,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
@@ -875,8 +944,8 @@ private fun MobileSeriesSelectorSection(
                             }
                             Box(
                                 Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(20.dp))
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(17.dp))
                                     .clickable(
                                         indication = null,
                                         interactionSource = remember { MutableInteractionSource() },
@@ -895,7 +964,7 @@ private fun MobileSeriesSelectorSection(
                                         VisionIcons.Download,
                                         contentDescription = "Descargar capítulo",
                                         tint = VisionBlue.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(20.dp),
+                                        modifier = Modifier.size(18.dp),
                                     )
                                     dl.state == DownloadState.DOWNLOADING -> CircularProgressIndicator(
                                         progress = { dl.progressFraction },
@@ -907,25 +976,25 @@ private fun MobileSeriesSelectorSection(
                                         VisionIcons.Downloaded,
                                         contentDescription = "Reproducir descarga",
                                         tint = VisionBlue,
-                                        modifier = Modifier.size(20.dp),
+                                        modifier = Modifier.size(18.dp),
                                     )
                                     dl.state == DownloadState.QUEUED -> Icon(
                                         VisionIcons.Download,
                                         contentDescription = "En cola de descarga",
                                         tint = VisionTextSecondary,
-                                        modifier = Modifier.size(20.dp),
+                                        modifier = Modifier.size(18.dp),
                                     )
                                     dl.state == DownloadState.PAUSED || dl.state == DownloadState.ERROR -> Icon(
                                         VisionIcons.Replay,
                                         contentDescription = "Reanudar descarga",
                                         tint = VisionBlue,
-                                        modifier = Modifier.size(20.dp),
+                                        modifier = Modifier.size(18.dp),
                                     )
                                     else -> Icon(
                                         VisionIcons.Download,
                                         contentDescription = "Descargar capítulo",
                                         tint = VisionBlue.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(20.dp),
+                                        modifier = Modifier.size(18.dp),
                                     )
                                 }
                             }
@@ -933,8 +1002,8 @@ private fun MobileSeriesSelectorSection(
                         // Alternar visto / no visto sin reproducir.
                         Box(
                             Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(20.dp))
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(17.dp))
                                 .clickable(
                                     indication = null,
                                     interactionSource = remember { MutableInteractionSource() },
@@ -945,7 +1014,7 @@ private fun MobileSeriesSelectorSection(
                                 if (watched) VisionIcons.CheckCircle else VisionIcons.Unwatched,
                                 contentDescription = if (watched) "Marcar como no visto" else "Marcar como visto",
                                 tint = if (watched) VisionSuccess else VisionTextSecondary,
-                                modifier = Modifier.size(22.dp),
+                                modifier = Modifier.size(20.dp),
                             )
                         }
                     }

@@ -224,7 +224,12 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
             return
         }
         is Route.Title -> {
-            TitleScreen(route.film, onBack = { nav.pop() }, onPlay = { ep -> nav.push(Route.Player(route.film, ep)) })
+            TitleScreen(
+                route.film,
+                onBack = { nav.pop() },
+                onPlay = { ep -> nav.push(Route.Player(route.film, ep)) },
+                onOpenFilm = { nav.push(Route.Title(it)) },
+            )
             return
         }
         Route.Search -> {

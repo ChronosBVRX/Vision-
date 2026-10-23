@@ -1,9 +1,12 @@
 package com.chronosbvrx.visionplus.ui.phone
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,19 +15,24 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,18 +45,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.chronosbvrx.visionplus.DevicePerformance
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.Popularity
+import com.chronosbvrx.visionplus.data.SectionPaging
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.ui.components.CategoryPill
@@ -60,7 +72,9 @@ import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
+import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
+import kotlinx.coroutines.launch
 
 private const val CHIP_ALL = "Todo / Destacados"
 private const val CAROUSEL_LIMIT = 15
@@ -223,6 +237,8 @@ fun SectionScreen(
                     CategoryGridFeed(
                         categoryName = activeCategory,
                         films = films,
+                        categoryId = categoryRow?.id ?: "",
+                        initialTotal = categoryRow?.total ?: films.size,
                         columns = gridColumns,
                         contentPadding = contentPadding,
                         onClearFilter = { selectedCategory = null },
@@ -276,7 +292,7 @@ private fun CuratedSectionModule(
                     .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
             ) {
                 Text(
-                    text = "Ver todo",
+                    text = "Ver más",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = VisionBlue,
@@ -310,6 +326,56 @@ private fun CuratedSectionModule(
                     onClick = { onOpenFilm(film) },
                 )
             }
+            // «Ver más» al final de la hilera: el género no se siente cortado en 15.
+            if (row.total > limitedFilms.size || row.total <= 0) {
+                item(key = "more_${row.id}") {
+                    SeeMoreCard(
+                        count = row.total.coerceAtLeast(row.films.size),
+                        onClick = onSeeAll,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Tarjeta de cierre de una hilera: dice cuántos títulos hay y abre la cuadrícula. */
+@Composable
+private fun SeeMoreCard(count: Int, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier.width(132.dp).clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(VisionSurface)
+                .border(1.dp, VisionBlue.copy(alpha = 0.45f), RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    VisionIcons.SeeAll,
+                    contentDescription = null,
+                    tint = VisionBlueBright,
+                    modifier = Modifier.size(30.dp),
+                )
+                Text(
+                    "Ver más",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (count > 0) {
+                    Text(
+                        "$count títulos",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VisionTextSecondary,
+                    )
+                }
+            }
         }
     }
 }
@@ -322,6 +388,8 @@ private fun CuratedSectionModule(
 private fun CategoryGridFeed(
     categoryName: String,
     films: List<Film>,
+    categoryId: String,
+    initialTotal: Int,
     columns: Int,
     contentPadding: PaddingValues,
     onClearFilter: () -> Unit,
@@ -345,23 +413,67 @@ private fun CategoryGridFeed(
         return
     }
 
-    // Paginación infinita: arranca con GRID_BATCH_SIZE (24) elementos
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val lowEnd = remember { DevicePerformance.isLowEndDevice(context) }
+    val batch = remember { SectionPaging.batch(lowEnd) }
+    val cap = remember { SectionPaging.cap(lowEnd) }
+    // La sección trae el primer tope (40); «Ver más» pide páginas al servidor y
+    // nunca pasa del techo del equipo (180 en TV de 2 GB, 480 en equipos grandes).
+    var extra by remember(categoryName) { mutableStateOf<List<Film>>(emptyList()) }
+    var total by remember(categoryName) {
+        mutableIntStateOf(initialTotal.coerceAtLeast(films.size))
+    }
+    var loadingMore by remember(categoryName) { mutableStateOf(false) }
+    var exhausted by remember(categoryName) { mutableStateOf(false) }
+    val allFilms = remember(films, extra) { (films + extra).distinctBy { it.id } }
+
     var batchLimit by rememberSaveable(categoryName) { mutableIntStateOf(GRID_BATCH_SIZE) }
-    val displayedFilms = remember(films, batchLimit) { films.take(batchLimit) }
+    val displayedFilms = remember(allFilms, batchLimit) { allFilms.take(batchLimit) }
 
     val gridState = rememberLazyGridState()
 
-    // Detección reactiva para paginar cuando el scroll se aproxime al final
-    val shouldLoadMore by remember(films.size, displayedFilms.size) {
+    val shouldLoadMore by remember(allFilms.size, displayedFilms.size) {
         derivedStateOf {
             val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            lastVisible >= (displayedFilms.size - 6) && displayedFilms.size < films.size
+            lastVisible >= (displayedFilms.size - 6) && displayedFilms.size < allFilms.size
         }
     }
 
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) {
-            batchLimit = (batchLimit + GRID_BATCH_SIZE).coerceAtMost(films.size)
+            batchLimit = (batchLimit + GRID_BATCH_SIZE).coerceAtMost(allFilms.size)
+        }
+    }
+
+    fun loadMore() {
+        if (loadingMore) return
+        // Primero se revela lo que ya está en memoria; solo al agotarlo se pide red.
+        if (batchLimit < allFilms.size) {
+            batchLimit = (batchLimit + batch).coerceAtMost(allFilms.size)
+            return
+        }
+        if (exhausted || categoryId.isBlank() ||
+            !SectionPaging.canLoadMore(allFilms.size, total, cap)
+        ) {
+            return
+        }
+        val page = SectionPaging.nextPage(allFilms.size, batch)
+        val loadedBefore = allFilms.size
+        loadingMore = true
+        scope.launch {
+            val result = RemoteIndexSource.categoryPage(context, categoryId, page, batch)
+            if (result.films.isNotEmpty()) {
+                extra = (extra + result.films).distinctBy { it.id }
+            }
+            if (result.total > 0) total = result.total
+            if (result.films.isEmpty()) exhausted = true
+            val loadedAfter = (films + extra).distinctBy { it.id }.size
+            if (loadedAfter >= cap || (result.films.isEmpty() && loadedAfter <= loadedBefore)) {
+                exhausted = true
+            }
+            batchLimit = (batchLimit + batch).coerceAtMost(loadedAfter)
+            loadingMore = false
         }
     }
 
@@ -380,7 +492,7 @@ private fun CategoryGridFeed(
                 color = Color.White,
             )
             Text(
-                text = " (${films.size})",
+                text = " (${maxOf(total, allFilms.size)})",
                 style = MaterialTheme.typography.bodySmall,
                 color = VisionTextSecondary,
             )
@@ -405,7 +517,6 @@ private fun CategoryGridFeed(
             }
         }
 
-        // Cuadrícula paginada
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = gridState,
@@ -432,6 +543,40 @@ private fun CategoryGridFeed(
                     badge = if (film.year >= 2025) "NUEVO" else null,
                     onClick = { onOpenFilm(film) },
                 )
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        "Mostrando ${displayedFilms.size} de ${maxOf(total, allFilms.size)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = VisionTextSecondary,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    when {
+                        loadingMore -> CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = VisionBlue,
+                            strokeWidth = 2.dp,
+                        )
+                        batchLimit < allFilms.size ||
+                            (categoryId.isNotBlank() && !exhausted &&
+                                SectionPaging.canLoadMore(allFilms.size, total, cap)) ->
+                            Button(onClick = ::loadMore) { Text("Ver más") }
+                        allFilms.size >= cap && total > allFilms.size -> Text(
+                            "Límite de este equipo · ${allFilms.size} de $total",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = VisionTextSecondary,
+                        )
+                        else -> Text(
+                            "No hay más títulos",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = VisionTextSecondary,
+                        )
+                    }
+                }
             }
         }
     }

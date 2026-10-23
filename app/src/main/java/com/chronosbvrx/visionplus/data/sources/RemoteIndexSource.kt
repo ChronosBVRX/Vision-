@@ -216,10 +216,16 @@ object RemoteIndexSource {
                     groupId = f.optString("groupId"),
                     seasons = parseSeasons(f.optJSONArray("seasons")),
                     kind = f.optString("kind"),
+                    genres = parseGenres(f.optJSONArray("genres")),
                     originalTitle = normalizeDisplayName(f.optString("originalTitle")),
                 )
             }
-            rows += CatalogRow(id, category.optString("title"), films)
+            rows += CatalogRow(
+                id = id,
+                title = category.optString("title"),
+                films = films,
+                total = category.optInt("total", films.size),
+            )
         }
         return rows
     }
@@ -296,6 +302,50 @@ object RemoteIndexSource {
         cached ?: emptyList()
     }
 
+    internal data class CategoryPage(val films: List<Film>, val total: Int)
+
+    /** Página de una categoría del servidor (`/v1/category`), para el «Ver más» del género. */
+    internal suspend fun categoryPage(
+        context: Context,
+        categoryId: String,
+        page: Int,
+        pageSize: Int,
+    ): CategoryPage = withContext(Dispatchers.IO) {
+        if (categoryId.isBlank() || page < 1 || pageSize < 1) {
+            return@withContext CategoryPage(emptyList(), 0)
+        }
+        val encoded = java.net.URLEncoder.encode(categoryId, "UTF-8")
+        val connection = (URL("$BASE_URL/v1/category/$encoded?page=$page&pageSize=$pageSize")
+            .openConnection() as HttpURLConnection).apply {
+            connectTimeout = 8_000
+            readTimeout = 15_000
+            setRequestProperty("X-Api-Key", API_KEY)
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            if (connection.responseCode !in 200..299) {
+                return@withContext CategoryPage(emptyList(), 0)
+            }
+            val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            parseCategoryPage(text)
+        } catch (_: Exception) {
+            CategoryPage(emptyList(), 0)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    internal fun parseCategoryPage(text: String): CategoryPage = runCatching {
+        val json = JSONObject(text)
+        val arr = json.optJSONArray("films") ?: JSONArray()
+        val films = ArrayList<Film>(arr.length())
+        for (i in 0 until arr.length()) {
+            val f = arr.optJSONObject(i) ?: continue
+            parseFilmObject(f)?.let { films += it }
+        }
+        CategoryPage(films, json.optInt("total", films.size))
+    }.getOrDefault(CategoryPage(emptyList(), 0))
+
     /** Búsqueda en el servidor VPS (rápida, indexada en Postgres): busca en segundos 80,000+ títulos sin saturar la CPU de la TV. */
     suspend fun search(query: String, limit: Int = 60): List<Film> = withContext(Dispatchers.IO) {
         val q = query.trim()
@@ -364,6 +414,17 @@ object RemoteIndexSource {
 
     internal fun isXtvRef(id: String): Boolean = id.startsWith("xtv:")
 
+    /** Géneros del servidor (`["Acción","Aventura"]`): se ignoran vacíos y repetidos. */
+    internal fun parseGenres(arr: JSONArray?): List<String> {
+        if (arr == null) return emptyList()
+        val out = ArrayList<String>(arr.length())
+        for (i in 0 until arr.length()) {
+            val g = arr.optString(i).trim()
+            if (g.isNotBlank() && !out.contains(g)) out += g
+        }
+        return out
+    }
+
     /** Un objeto `film` del servidor → [Film] (normaliza refs magis→xtv). Puro, testeable. */
     internal fun parseFilmObject(f: JSONObject): Film? {
         val rawFilmId = f.optString("id")
@@ -396,6 +457,7 @@ object RemoteIndexSource {
             groupId = f.optString("groupId"),
             seasons = parseSeasons(f.optJSONArray("seasons")),
             kind = f.optString("kind"),
+            genres = parseGenres(f.optJSONArray("genres")),
             originalTitle = normalizeDisplayName(f.optString("originalTitle")),
         )
     }
@@ -513,6 +575,7 @@ object RemoteIndexSource {
                 put("voteCount", f.voteCount)
                 if (f.tmdbId > 0) put("tmdbId", f.tmdbId)
                 if (f.kind.isNotBlank()) put("kind", f.kind)
+                if (f.genres.isNotEmpty()) put("genres", JSONArray(f.genres))
                 if (f.originalTitle.isNotBlank()) put("originalTitle", f.originalTitle)
                 if (f.groupId.isNotBlank()) put("groupId", f.groupId)
                 if (f.seasons.isNotEmpty()) {
@@ -529,7 +592,8 @@ object RemoteIndexSource {
                 }
             })
         }
-        return JSONObject().put("id", row.id).put("title", row.title).put("films", films)
+        return JSONObject().put("id", row.id).put("title", row.title)
+            .put("total", row.total).put("films", films)
     }
 
     private fun rowsToJson(rows: List<CatalogRow>): JSONArray =

@@ -3,12 +3,16 @@ package com.chronosbvrx.visionplus.ui.tv
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,6 +66,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.draw.clip
 import androidx.tv.material3.Border
@@ -81,11 +86,21 @@ import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
  * and "Reproducir", all reachable with the remote.
  */
 @Composable
-fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
+fun TvTitleScreen(
+    film: Film,
+    onPlay: (EpisodePlay?) -> Unit,
+    onOpenFilm: (Film) -> Unit = {},
+) {
     val landing = rememberLandingFocus()
     val context = LocalContext.current
     val isXtv = film.videoUrl.startsWith("xtv:")
     val meta = remember(film.id) { if (isXtv) X4KApi.metaFor(context, film.id) else null }
+    val genreHint = remember(film.id) {
+        (film.genres + meta?.optString("gen").orEmpty().split(',').map { it.trim() })
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString(", ")
+    }
 
     var backdrop by remember(film.id) { mutableStateOf(film.posterUrl) }
     var languages by remember(film.id) { mutableStateOf<List<String>>(emptyList()) }
@@ -101,6 +116,7 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
         mutableStateOf(if (film.durationMin > 0) film.durationMin * 60_000L else 0L)
     }
     var description by remember(film.id) { mutableStateOf(film.synopsis) }
+    var related by remember(film.id) { mutableStateOf<List<Film>>(emptyList()) }
     var episodePrograms by remember(film.id) { mutableStateOf<List<X4KApi.EpisodeProgram>>(emptyList()) }
     var watchedTick by remember(film.id) { mutableStateOf(0) }
     val episodes = remember(episodePrograms) { episodePrograms.map { it.contentId } }
@@ -147,8 +163,22 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                 subs.takeIf { it.isNotEmpty() }
                     ?.let { list -> "Subtítulos: " + list.joinToString(" · ") { audioLabel(it) } },
             ).joinToString("   ·   ")
-            item.optString("description").takeIf { it.isNotBlank() }?.let { description = it }
+            // Una sola sinopsis: la del índice (TMDB es-MX) manda; el portal solo
+            // rellena huecos (antes la ficha saltaba a la del portal, a menudo en inglés).
+            description = com.chronosbvrx.visionplus.data.resolveSynopsis(
+                film.synopsis,
+                item.optString("description"),
+            )
         }
+    }
+
+    LaunchedEffect(film.id) {
+        related = com.chronosbvrx.visionplus.data.Related.forFilm(
+            context = context,
+            film = film,
+            genreHint = genreHint,
+            limit = 12,
+        )
     }
 
     val watchedCount = remember(watchedTick, activeId, episodes) {
@@ -261,10 +291,19 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                 Brush.verticalGradient(listOf(Color.Transparent, VisionBlack.copy(alpha = 0.4f), VisionBlack)),
             ),
         )
-        Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.Bottom,
-        ) {
+        // El contenido ya no cabe en una pantalla fija: con el selector compacto y la
+        // hilera de «Relacionadas» se vuelve desplazable, manteniendo el anclaje al
+        // fondo cuando todo sí cabe (el héroe sigue viéndose como siempre).
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val minHeight = maxHeight
+            Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = minHeight)
+                        .padding(horizontal = 48.dp, vertical = 24.dp),
+                    verticalArrangement = Arrangement.Bottom,
+                ) {
             val score = scoreLabel(meta?.optString("sc"), film.score)
             val genres = genreLabels(meta?.optString("gen").orEmpty())
             val director = meta?.optString("dir").orEmpty()
@@ -511,6 +550,9 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
                 }
             }
 
+            if (related.isNotEmpty()) {
+                TvRelatedSection(related, onOpenFilm)
+            }
             if (episodes.size > 1 || film.seasons.size > 1) {
                 TvSeriesSelectorPanel(
                     seasons = film.seasons,
@@ -557,6 +599,50 @@ fun TvTitleScreen(film: Film, onPlay: (EpisodePlay?) -> Unit) {
             } else {
                 Spacer(Modifier.height(16.dp))
             }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvRelatedSection(films: List<Film>, onOpenFilm: (Film) -> Unit) {
+    Column(Modifier.padding(top = 12.dp)) {
+        Text(
+            "Relacionadas",
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            "Del mismo género o estilo",
+            style = MaterialTheme.typography.labelMedium,
+            color = VisionTextSecondary,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        LazyRow(
+            contentPadding = PaddingValues(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(films, key = { it.id }) { film ->
+                Column(Modifier.width(112.dp)) {
+                    TvPosterCard(
+                        title = film.title,
+                        imageUrl = film.posterUrl,
+                        score = film.score,
+                        cardWidth = 112.dp,
+                        onClick = { onOpenFilm(film) },
+                    )
+                    Text(
+                        film.title,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.9f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -585,11 +671,11 @@ private fun TvSeriesSelectorPanel(
     val context = LocalContext.current
     Column(
         modifier = Modifier
-            .padding(top = 14.dp)
+            .padding(top = 10.dp)
             .fillMaxWidth()
             .background(VisionSurface.copy(alpha = 0.92f), RoundedCornerShape(18.dp))
             .border(1.dp, VisionBlue.copy(alpha = 0.38f), RoundedCornerShape(18.dp))
-            .padding(vertical = 12.dp),
+            .padding(vertical = 9.dp),
     ) {
         Row(
             modifier = Modifier
@@ -617,7 +703,7 @@ private fun TvSeriesSelectorPanel(
                 }
                 Text(
                     "Temporadas y capítulos en orden",
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.labelLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                 )
@@ -635,7 +721,7 @@ private fun TvSeriesSelectorPanel(
 
         // Descargar la temporada completa al USB: la cola baja un capítulo por uno.
         if (downloadsOn && episodePrograms.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(7.dp))
             val actionable = seasonDownloadActionable(seasonSummary)
             TvCompactAction(
                 label = seasonDownloadLabel(seasonSummary),
@@ -650,17 +736,17 @@ private fun TvSeriesSelectorPanel(
         }
 
         if (seasons.size > 1) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(7.dp))
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 itemsIndexed(seasons, key = { _, s -> "tv_se_${s.titleId}" }) { _, season ->
                     val selected = season.titleId == activeId
                     val label = if (season.n <= 0) "Completa" else "Temporada ${season.n}"
                     Surface(
                         onClick = { onSelectSeason(season) },
-                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
                         colors = ClickableSurfaceDefaults.colors(
                             containerColor = if (selected) VisionBlue else VisionSurfaceHigh,
                             contentColor = if (selected) Color.White else Color.White.copy(alpha = 0.85f),
@@ -681,9 +767,9 @@ private fun TvSeriesSelectorPanel(
                     ) {
                         Text(
                             text = label,
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
                         )
                     }
                 }
@@ -691,28 +777,28 @@ private fun TvSeriesSelectorPanel(
         }
 
         if (episodePrograms.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(7.dp))
             if (watchedCount > 0) {
                 Box(
                     Modifier
-                        .padding(horizontal = 16.dp)
+                        .padding(horizontal = 14.dp)
                         .fillMaxWidth()
-                        .height(3.dp)
+                        .height(2.dp)
                         .clip(RoundedCornerShape(2.dp))
                         .background(Color.White.copy(alpha = 0.12f)),
                 ) {
                     Box(
                         Modifier
                             .fillMaxWidth((watchedCount.toFloat() / episodePrograms.size).coerceIn(0.02f, 1f))
-                            .height(3.dp)
+                            .height(2.dp)
                             .background(VisionBlueBright),
                     )
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(7.dp))
             }
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 itemsIndexed(episodePrograms, key = { idx, ep -> "tv_ep_${idx}_${ep.contentId}" }) { index, ep ->
                     val watched = remember(watchedTick, activeId, index) {
@@ -726,7 +812,7 @@ private fun TvSeriesSelectorPanel(
                     }
                     val cardFocus = remember { androidx.compose.ui.focus.FocusRequester() }
                     val chipFocus = remember { androidx.compose.ui.focus.FocusRequester() }
-                    Column(Modifier.width(240.dp)) {
+                    Column(Modifier.width(168.dp)) {
                         Surface(
                             onClick = { onSelectEpisode(index, ep) },
                             // Mantener OK alterna visto/no-visto sin reproducir (mando de TV).
@@ -802,10 +888,10 @@ private fun TvSeriesSelectorPanel(
                                         )
                                     }
                                 }
-                                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
                                     Text(
                                         text = epTitle,
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        style = MaterialTheme.typography.labelLarge,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
@@ -814,7 +900,7 @@ private fun TvSeriesSelectorPanel(
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                            modifier = Modifier.padding(top = 3.dp),
+                                            modifier = Modifier.padding(top = 2.dp),
                                         ) {
                                             Icon(
                                                 if (watched) VisionIcons.CheckCircle else VisionIcons.Play,
@@ -859,12 +945,12 @@ private fun TvSeriesSelectorPanel(
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 6.dp)
+                                    .padding(top = 4.dp)
                                     .focusRequester(chipFocus)
                                     .focusProperties { up = cardFocus },
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(

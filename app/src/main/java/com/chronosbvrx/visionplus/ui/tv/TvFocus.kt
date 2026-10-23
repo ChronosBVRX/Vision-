@@ -187,9 +187,14 @@ fun rememberReturnFocus(
         // se puede corregir es el automático de la pantalla ([landing], el héroe): ese no lo
         // eligió nadie, así que seguimos intentando la tarjeta exacta en cuanto componga.
         var tookOver = false
+        val startedAt = android.os.SystemClock.uptimeMillis()
         repeat(RETURN_ATTEMPTS) {
             if (tookOver) return@repeat
-            if (FocusRescue.screenHasFocus && !landing.focused) {
+            // Se respeta al usuario: si ya pulsó el mando desde que empezó el regreso,
+            // se deja de pelear el foco. El `screenHasFocus` viejo de la pantalla que
+            // se acaba de cerrar NO cuenta como elección (dejaba el mando muerto):
+            // solo una tecla real lo demuestra.
+            if (FocusRescue.lastUserKeyAtMs > startedAt) {
                 onDone()
                 tookOver = true
                 return@repeat
@@ -197,11 +202,6 @@ fun rememberReturnFocus(
             attempts++
             val ok = runCatching { requester.requestFocus() }.isSuccess
             if (ok) attached = true
-            if (FocusRescue.screenHasFocus && !landing.focused) {
-                onDone()
-                tookOver = true
-                return@repeat
-            }
             delay(RETURN_RETRY_MS)
         }
         if (!tookOver) {
@@ -345,6 +345,18 @@ object FocusRescue {
 
     /** Whether anything inside the TV interface holds focus; kept by the root's `onFocusChanged`. */
     var screenHasFocus = false
+
+    /**
+     * Última tecla del usuario (`uptimeMillis`). El regreso de una ficha mira esto en vez
+     * de `screenHasFocus`: la pantalla anterior puede dejar ese flag en true al cerrarse y
+     * el regreso se rendía sin enfocar nada (mando muerto). Una tecla real sí es una elección.
+     */
+    @Volatile
+    var lastUserKeyAtMs = 0L
+
+    fun noteUserKey() {
+        lastUserKeyAtMs = android.os.SystemClock.uptimeMillis()
+    }
 
     /** How many TV dialogs are open: while there is one, the keys and the focus belong to it. */
     var dialogsOpen = 0

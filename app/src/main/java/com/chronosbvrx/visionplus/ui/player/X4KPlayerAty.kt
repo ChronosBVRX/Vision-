@@ -45,7 +45,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import com.chronosbvrx.visionplus.DeviceKind
 import com.chronosbvrx.visionplus.R
+import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.PlaybackHistory
+import com.chronosbvrx.visionplus.data.Related
 import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.LiveTaxonomy
 import com.chronosbvrx.visionplus.data.UserLibrary
@@ -158,6 +160,9 @@ class X4KPlayerAty : ComponentActivity() {
     private var seasonNames = ArrayList<String>()
     private var nextOverlay: View? = null
     private var nextVisible = false
+    private var suggestOverlay: View? = null
+    private var suggestVisible = false
+    private var movieSuggestShown = false
     private var nextDismissed = false
     private var nextPendingAtEnd = false
     private var endedShown = false
@@ -210,7 +215,7 @@ class X4KPlayerAty : ComponentActivity() {
     private var lastPickerSourceBtn: View? = null
 
     private val isModalActive: Boolean
-        get() = picking || resumeOverlay != null || nextVisible
+        get() = picking || resumeOverlay != null || nextVisible || suggestVisible
 
     private fun setBackgroundFocusBlocked(blocked: Boolean) {
         val mode = if (blocked) ViewGroup.FOCUS_BLOCK_DESCENDANTS else ViewGroup.FOCUS_AFTER_DESCENDANTS
@@ -689,6 +694,9 @@ class X4KPlayerAty : ComponentActivity() {
         // Diálogos/estados modales de la reproducción previa.
         picking = false
         nextVisible = false
+        suggestVisible = false
+        suggestOverlay = null
+        movieSuggestShown = false
         nextDismissed = false
         nextOverlay = null
         nextCountdownView = null
@@ -831,6 +839,10 @@ class X4KPlayerAty : ComponentActivity() {
                 }
                 if (picking) {
                     dismissPicker()
+                    return
+                }
+                if (suggestVisible) {
+                    hideSuggestions()
                     return
                 }
                 if (nextVisible) {
@@ -2866,6 +2878,9 @@ class X4KPlayerAty : ComponentActivity() {
             return
         }
         showNextCard()
+        // Película suelta: al terminar, un modal con títulos del mismo género/estilo.
+        // Las series conservan su tarjeta de «siguiente capítulo».
+        if (curSeries.isBlank()) showMovieSuggestions()
     }
 
     /**
@@ -3213,6 +3228,235 @@ class X4KPlayerAty : ComponentActivity() {
         }
     }
 
+    // ---------------------------------------------------------------- sugerencias al terminar
+
+    /**
+     * Al terminar una película, «Más como esta»: títulos del mismo género/estilo.
+     * Se calculan en segundo plano (el intent de una película suelta no lleva el
+     * catálogo) y se pintan en un modal con foco D-pad. Sin resultados no se muestra.
+     */
+    private fun showMovieSuggestions() {
+        if (liveMode || suggestVisible || movieSuggestShown) return
+        if (errorShown || introView != null || resumeOverlay != null || picking || nextVisible) return
+        if (isSeriesContent(epIds.size, seasonIds.size)) return
+        val code = curCode
+        val title = curTitle
+        if (code.isBlank() || title.isBlank()) return
+        movieSuggestShown = true
+        val genre = runCatching { X4KApi.metaFor(this, code)?.optString("gen").orEmpty() }
+            .getOrDefault("")
+        val xtvRef = if (code.startsWith("xtv:")) code else "xtv:$code"
+        val current = Film(
+            id = xtvRef,
+            title = title,
+            year = 0,
+            durationMin = (declaredDurationMs / 60_000L).toInt(),
+            synopsis = "",
+            posterUrl = intentPoster,
+            videoUrl = xtvRef,
+            sourceUrl = "xtv",
+            kind = "movie",
+        )
+        handler.postDelayed({
+            Thread {
+                val picks = runCatching {
+                    kotlinx.coroutines.runBlocking {
+                        Related.forFilm(this@X4KPlayerAty, current, genre, limit = 8)
+                    }
+                }.getOrDefault(emptyList())
+                runOnUiThread {
+                    if (picks.isEmpty() || curCode != code || suggestVisible) return@runOnUiThread
+                    // Si el usuario ya rebobinó y está viendo otra cosa, no lo interrumpas.
+                    if (playerView?.let { X4KTitan.isPlaying(it) } == true) return@runOnUiThread
+                    buildSuggestOverlay(picks)
+                }
+            }.start()
+        }, 900L)
+    }
+
+    private fun buildSuggestOverlay(picks: List<Film>) {
+        if (suggestVisible || picks.isEmpty()) return
+        val dim = ModalDimLayout(this).apply {
+            setBackgroundColor(0xB304070D.toInt())
+            isFocusable = false
+        }
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                cornerRadius = dp(22).toFloat()
+                setColor(0xFF0F1626.toInt())
+                setStroke(dp(2), 0x802D7DF6.toInt())
+            }
+            setPadding(dp(26), dp(22), dp(26), dp(18))
+        }
+        card.addView(TextView(this).apply {
+            text = "MÁS COMO ESTA"
+            setTextColor(blueBright)
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            background = GradientDrawable().apply {
+                cornerRadius = dp(8).toFloat()
+                setColor(0x2E2D7DF6)
+                setStroke(dp(1), 0x662D7DF6)
+            }
+            setPadding(dp(10), dp(4), dp(10), dp(4))
+        })
+        card.addView(TextView(this).apply {
+            text = "Películas del mismo género o estilo"
+            setTextColor(0xFF9BA8BD.toInt())
+            textSize = 13f
+            setPadding(0, dp(8), 0, dp(12))
+        })
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val scroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(row)
+        }
+        val cards = ArrayList<View>()
+        for (film in picks) {
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(4), dp(4), dp(4), dp(4))
+            }
+            val art = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setBackgroundColor(0xFF1B2538.toInt())
+            }
+            item.addView(art, LinearLayout.LayoutParams(dp(116), dp(174)))
+            item.addView(TextView(this).apply {
+                text = film.title
+                setTextColor(Color.WHITE)
+                textSize = 12.5f
+                typeface = Typeface.DEFAULT_BOLD
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(0, dp(5), 0, 0)
+            }, LinearLayout.LayoutParams(dp(116), ViewGroup.LayoutParams.WRAP_CONTENT))
+            val meta = listOfNotNull(
+                film.year.takeIf { it > 0 }?.toString(),
+                film.score.takeIf { it > 0.0 }?.let { String.format(java.util.Locale.US, "%.1f", it) },
+            ).joinToString(" · ")
+            if (meta.isNotBlank()) {
+                item.addView(TextView(this).apply {
+                    text = meta
+                    setTextColor(0xFF9BA8BD.toInt())
+                    textSize = 11f
+                    setPadding(0, dp(2), 0, 0)
+                }, LinearLayout.LayoutParams(dp(116), ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+            item.isFocusable = true
+            item.isFocusableInTouchMode = true
+            item.setOnClickListener { playSuggestion(film) }
+            item.tvControl(0x2E2D7DF6, 12)
+            runCatching {
+                val req = coil.request.ImageRequest.Builder(this)
+                    .data(film.posterUrl)
+                    .size(232)
+                    .target(
+                        onSuccess = { art.setImageDrawable(it) },
+                        onError = { art.setImageResource(R.drawable.ic_vision_mark) },
+                    )
+                    .build()
+                coil.Coil.imageLoader(this).enqueue(req)
+            }
+            row.addView(item)
+            if (film !== picks.last()) row.addView(View(this), LinearLayout.LayoutParams(dp(8), 1))
+            cards += item
+        }
+        val close = TextView(this).apply {
+            text = "Cerrar"
+            setTextColor(0xFFF4F7FC.toInt())
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            background = roundBackground(surface, 14)
+            setPadding(dp(20), dp(10), dp(20), dp(10))
+            setOnClickListener { hideSuggestions() }
+        }
+        close.tvControl(surface, 14)
+        close.id = View.generateViewId()
+        for (i in cards.indices) {
+            val v = cards[i]
+            v.id = View.generateViewId()
+            if (i > 0) v.nextFocusLeftId = cards[i - 1].id
+            if (i < cards.lastIndex) v.nextFocusRightId = cards[i + 1].id
+            v.nextFocusDownId = close.id
+        }
+        close.nextFocusUpId = cards.firstOrNull()?.id ?: close.id
+        close.nextFocusLeftId = close.id
+        close.nextFocusRightId = close.id
+        close.nextFocusDownId = close.id
+        card.addView(
+            scroll,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+        )
+        card.addView(
+            close,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.END
+                topMargin = dp(10)
+            },
+        )
+        dim.addView(
+            card,
+            FrameLayout.LayoutParams(
+                (resources.displayMetrics.widthPixels * (if (isTv) 0.82f else 0.92f)).toInt(),
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER,
+            ),
+        )
+        root().addView(
+            dim,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        suggestOverlay = dim
+        suggestVisible = true
+        setBackgroundFocusBlocked(true)
+        if (isTv) {
+            val first = cards.firstOrNull()
+            first?.post { first.requestFocus() }
+        }
+    }
+
+    private fun hideSuggestions() {
+        suggestOverlay?.let { root().removeView(it) }
+        suggestOverlay = null
+        suggestVisible = false
+        setBackgroundFocusBlocked(false)
+        if (isTv && introView == null && !errorShown) {
+            playPauseBtn?.post { playPauseBtn?.requestFocus() }
+        }
+    }
+
+    private fun playSuggestion(film: Film) {
+        hideSuggestions()
+        val ref = film.videoUrl
+        if (!ref.startsWith("xtv:")) return
+        Thread {
+            val ok = runCatching {
+                kotlinx.coroutines.runBlocking {
+                    X4KApi.playVod(
+                        context = this@X4KPlayerAty,
+                        contentId = ref,
+                        title = film.title,
+                        posterUrl = film.posterUrl,
+                        fallbackDurationMs = film.durationMin * 60_000L,
+                    )
+                }
+            }.getOrDefault(false)
+            if (!ok) {
+                runOnUiThread {
+                    Toast.makeText(this@X4KPlayerAty, "No se pudo abrir la sugerencia", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
     private fun hasNextEpisode(): Boolean {
         return hasNextEpisodeAvailable(
             isLive = liveMode,
@@ -3303,7 +3547,9 @@ class X4KPlayerAty : ComponentActivity() {
     ) {
         val v = playerView ?: return
         hideNext()
+        hideSuggestions()
         hideResumeDialog()
+        movieSuggestShown = false
         nextDismissed = false
         endedShown = false
 
@@ -5094,8 +5340,11 @@ class X4KPlayerAty : ComponentActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val onControl = if (isTv) hasFocusedControl() else controlsVisible
         val inModal = isModalActive
-        if (nextVisible && !picking && introView == null && keyCode != KeyEvent.KEYCODE_MEDIA_PLAY && keyCode != KeyEvent.KEYCODE_MEDIA_PAUSE) {
-            // La tarjeta de "siguiente" está al mando: el D-pad la navega y OK la confirma.
+        if ((nextVisible || suggestVisible) && !picking && introView == null &&
+            keyCode != KeyEvent.KEYCODE_MEDIA_PLAY && keyCode != KeyEvent.KEYCODE_MEDIA_PAUSE
+        ) {
+            // La tarjeta de "siguiente" o el modal de sugerencias está al mando:
+            // el D-pad los navega y OK confirma.
             return super.onKeyDown(keyCode, event)
         }
         when (keyCode) {
@@ -5205,7 +5454,7 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** Controls on screen for a moment, whatever hid them before. */
     private fun showControlsBriefly() {
-        if (errorShown || picking || nextVisible) return
+        if (errorShown || picking || nextVisible || suggestVisible) return
         val wasHiddenOrUnfocused = !controlsVisible || (isTv && !hasFocusedControl())
         if (wasHiddenOrUnfocused) {
             lastControlsWakeupMs = android.os.SystemClock.uptimeMillis()

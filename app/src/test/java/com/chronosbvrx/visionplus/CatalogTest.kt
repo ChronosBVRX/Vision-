@@ -8,6 +8,7 @@ import com.chronosbvrx.visionplus.data.allFilms
 import com.chronosbvrx.visionplus.data.akaLine
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.data.normalizeDisplayName
+import com.chronosbvrx.visionplus.data.resolveSynopsis
 import com.chronosbvrx.visionplus.data.searchFilms
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.data.vodLabel
@@ -94,11 +95,35 @@ class CatalogTest {
     }
 
     @Test
+    fun synopsisKeepsTheIndexCopyAndOnlyFallsBackToThePortal() {
+        // La ficha del índice (TMDB es-MX) manda: el portal no puede cambiarla a
+        // media carga ni colar una sinopsis en inglés.
+        assertEquals("Sinopsis es-MX", resolveSynopsis("Sinopsis es-MX", "English synopsis"))
+        assertEquals("Portal", resolveSynopsis("   ", "Portal"))
+        assertEquals("", resolveSynopsis("", ""))
+        assertEquals("Portal", resolveSynopsis("", "  Portal  "))
+        // Índice en inglés y portal en español: se queda la española (una sola vez).
+        assertEquals(
+            "Una historia de ciencia ficción sobre la vida y la familia.",
+            resolveSynopsis(
+                "A science fiction story about life and family.",
+                "Una historia de ciencia ficción sobre la vida y la familia.",
+            ),
+        )
+        // Ambas en inglés: manda la del índice, sin saltos.
+        assertEquals(
+            "A science fiction story.",
+            resolveSynopsis("A science fiction story.", "Another English synopsis."),
+        )
+    }
+
+    @Test
     fun parsesTheRemoteIndex() {
         val json = """{"version": 7, "upToDate": false, "categories": [
             {"id":"estrenos","title":"Estrenos","kind":"special","total":1,"films":[
               {"id":"xtv:1","title":"Una","year":2026,"durationMin":90,"synopsis":"s",
-               "posterUrl":"p","videoUrl":"xtv:1","sourceUrl":"xtv"}
+               "posterUrl":"p","videoUrl":"xtv:1","sourceUrl":"xtv",
+               "genres":["Acción","Aventura"]}
             ]},
             {"id":"genero-accion","title":"Acción","kind":"genre","total":0,"films":[]}
         ]}"""
@@ -107,10 +132,30 @@ class CatalogTest {
         assertEquals(listOf("estrenos", "genero-accion"), payload.rows.map { it.id })
         assertEquals("xtv:1", payload.rows.first().films.single().videoUrl)
         assertEquals(2026, payload.rows.first().films.single().year)
+        assertEquals(
+            listOf("Acción", "Aventura"),
+            payload.rows.first().films.single().genres,
+        )
+        assertEquals(1, payload.rows.first().total)
 
         val upToDate = RemoteIndexSource.parseIndex("""{"version":7,"upToDate":true,"categories":[]}""")
         assertTrue(upToDate.upToDate)
         assertTrue(upToDate.rows.isEmpty())
+    }
+
+    @Test
+    fun parsesACategoryPageForSeeMore() {
+        val json = """{"id":"xtv-movies-genero-accion","page":2,"pageSize":24,"total":500,
+            "films":[
+              {"id":"xtv:1","title":"Una","year":2026,"durationMin":90,"synopsis":"s",
+               "posterUrl":"p","videoUrl":"xtv:1","sourceUrl":"xtv","genres":["Acción"]},
+              {"id":"xtv:2","title":"Dos","year":2025,"durationMin":100,"synopsis":"s",
+               "posterUrl":"p","videoUrl":"xtv:2","sourceUrl":"xtv"}
+            ]}"""
+        val page = RemoteIndexSource.parseCategoryPage(json)
+        assertEquals(500, page.total)
+        assertEquals(listOf("xtv:1", "xtv:2"), page.films.map { it.id })
+        assertEquals(listOf("Acción"), page.films.first().genres)
     }
 
     @Test
