@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,6 +46,7 @@ import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.follow.FollowStore
+import com.chronosbvrx.visionplus.data.homefeed.LauncherInstall
 import com.chronosbvrx.visionplus.data.kids.KidsMode
 import com.chronosbvrx.visionplus.data.remote.RemoteBus
 import com.chronosbvrx.visionplus.data.remote.RemoteServer
@@ -58,6 +60,7 @@ import com.chronosbvrx.visionplus.ui.settings.rememberUpdateCheck
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Pestañas de Ajustes en Smart TV. */
@@ -298,10 +301,77 @@ private fun ColumnScope.TvSystemTab() {
     TvSectionTitle("Mi actividad")
     TvActivityRows()
 
+    TvSectionTitle("Vision+ Home (launcher)")
+    TvLauncherRows()
+
     TvSectionTitle("Actualizaciones y Sistema")
     Note("Versión instalada: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})")
     TvActionOption(if (update.checking) "Buscando…" else "Buscar actualizaciones") { update.run() }
     TvActionOption("Licencias de software libre") { showNotices = true }
+}
+
+/**
+ * Vision+ Home es el launcher (APK aparte): esta tarjeta instala su APK desde el mismo
+ * release que la OTA y abre el selector de Inicio del sistema. Sin tienda ni enlaces.
+ */
+@Composable
+private fun ColumnScope.TvLauncherRows() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf(LauncherInstall.status(context)) }
+    val state = LauncherInstall.state
+    LaunchedEffect(state) {
+        if (state is LauncherInstall.State.Ready) status = LauncherInstall.status(context)
+    }
+    when (state) {
+        is LauncherInstall.State.Checking -> Note("Buscando la última versión de Vision+ Home…")
+        is LauncherInstall.State.Downloading -> Note("Descargando Vision+ Home… ${state.percent} %")
+        is LauncherInstall.State.Ready -> Note("Descarga lista: confirma la instalación en la pantalla del sistema.")
+        is LauncherInstall.State.Failed -> Note("No se pudo instalar: ${state.message}")
+        LauncherInstall.State.Idle -> Unit
+    }
+    if (status.installed) {
+        Note(
+            "Instalado: v${status.versionName}. Es la pantalla de inicio de la tele: TV en vivo, " +
+                "apps, películas y series en un solo lugar.",
+        )
+        TvActionOption("Poner Vision+ Home como Inicio") {
+            val opened = LauncherInstall.openHomeSettings(context)
+            Toast.makeText(
+                context,
+                if (opened) "Elige Vision+ Home en la lista" else "Abre Ajustes → Inicio para elegirlo",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+        TvActionOption("Abrir Vision+ Home") {
+            if (!LauncherInstall.openLauncher(context)) {
+                Toast.makeText(context, "No se encontró Vision+ Home", Toast.LENGTH_SHORT).show()
+            }
+        }
+        TvActionOption("Actualizar Vision+ Home") {
+            scope.launch {
+                LauncherInstall.installLatest(context)
+                status = LauncherInstall.status(context)
+            }
+        }
+    } else {
+        Note(
+            "Una pantalla de inicio propia: hero de cine, «Seguir viendo», TV en vivo con la guía " +
+                "y tus apps instaladas. Es un APK aparte; Vision+ sigue igual.",
+        )
+        TvActionOption(
+            if (state is LauncherInstall.State.Checking || state is LauncherInstall.State.Downloading) {
+                "Instalando Vision+ Home…"
+            } else {
+                "Instalar Vision+ Home"
+            },
+        ) {
+            scope.launch {
+                LauncherInstall.installLatest(context)
+                status = LauncherInstall.status(context)
+            }
+        }
+    }
 }
 
 /** Filas de Modo niños para Ajustes TV: crear PIN, bloquear y cambiar PIN. */

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pantalla de inicio: fondo negro desde el primer frame, sin preview del sistema
+         (un launcher no debe enseñar una tarjeta gris al volver a casa). -->
+    <style name="Theme.VisionHome" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/home_black</item>
+        <item name="android:colorBackground">@color/home_black</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

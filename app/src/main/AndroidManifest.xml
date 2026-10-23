@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+<!-- El feed que lee Vision+ Home (el launcher, APK aparte): nivel `signature`, así que solo
+     un APK firmado con la misma llave histórica puede leerlo. -->
+<permission
+    android:name="com.chronosbvrx.visionplus.permission.HOME_FEED"
+    android:protectionLevel="signature" />
+
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 <!-- Control remoto por LAN: la tele escucha la difusión del teléfono y sostiene el multicast. -->
@@ -16,6 +22,8 @@
     <!-- The one source: Vision+ talks to the XuperPlugin app on the device for its catalog. -->
     <queries>
         <package android:name="com.xuper.plugin" />
+        <!-- Vision+ Home (el launcher): instalado/versión y abrirlo desde Ajustes. -->
+        <package android:name="com.chronosbvrx.visionplus.home" />
     </queries>
 
     <!-- Android TV: no touchscreen required, leanback optional so phones can install it too. -->
@@ -51,14 +59,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
-            <!-- Tarjetas del launcher (canal Watch Next): reanudan la película o el capítulo. -->
+            <!-- Tarjetas del launcher (canal Watch Next) y Vision+ Home: reanudan la
+                 película/capítulo, abren una ficha y los hubs del sistema. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="visionplus" android:host="watch" />
-                <!-- Control remoto: abre un canal en vivo desde el teléfono. -->
+                <!-- Control remoto / launcher: abre un canal en vivo. -->
                 <data android:scheme="visionplus" android:host="live" />
+                <!-- Vision+ Home: ficha de un título. -->
+                <data android:scheme="visionplus" android:host="title" />
+                <!-- Vision+ Home: ajustes, buscador, secciones e Inicio. -->
+                <data android:scheme="visionplus" android:host="open" />
             </intent-filter>
         </activity>
 
@@ -104,6 +117,14 @@
             android:authorities="${applicationId}.launcherart"
             android:exported="true"
             android:grantUriPermissions="false" />
+
+        <!-- El Inicio que pinta Vision+ Home: solo lectura y solo firma. -->
+        <provider
+            android:name=".data.homefeed.HomeFeedProvider"
+            android:authorities="${applicationId}.homefeed"
+            android:exported="true"
+            android:readPermission="com.chronosbvrx.visionplus.permission.HOME_FEED"
+            android:writePermission="com.chronosbvrx.visionplus.permission.HOME_FEED" />
 
         <service
             android:name=".data.offline.X4KDownloadService"

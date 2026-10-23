@@ -137,7 +137,10 @@ internal fun TvKeyboard(text: String, onTextChange: (String) -> Unit, firstKey: 
 @Composable
 fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFilmId: String? = null) {
     val context = LocalContext.current
-    var text by rememberSaveable { mutableStateOf("") }
+    // La consulta que trae Vision+ Home (texto o voz) se toma al abrir; después manda lo que
+    // la persona escriba.
+    val seed = remember { com.chronosbvrx.visionplus.ui.SearchSeed.take() }
+    var text by rememberSaveable { mutableStateOf(seed) }
     // El catálogo inicial se prepara fuera del hilo de UI (el índice completo en
     // composición retrasaba la apertura del buscador en Chromecast/TV boxes).
     val initialFilms by androidx.compose.runtime.produceState(emptyList<Film>(), rows) {

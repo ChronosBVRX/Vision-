@@ -272,6 +272,8 @@ class XuperCatalog(context: Context) {
             }
             val portalMs = android.os.SystemClock.uptimeMillis() - started
             lastLoadTimings = lastLoadTimings.substringBefore(",portalMs=") + ",portalMs=$portalMs"
+            // Los canales ya están en caché: Vision+ Home estrena su fila de TV en vivo.
+            com.chronosbvrx.visionplus.data.homefeed.HomeFeedStore.refreshAsync(app, force = true)
             if (portalMs > PORTAL_SLOW_MS) {
                 com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly("PORTAL_SLOW", lastLoadTimings)
             }

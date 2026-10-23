@@ -21,3 +21,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "Vision+"
 include(":app")
+// El launcher de Smart TV vive en su propio APK (decisión 2026-10-23): si falla, Vision+
+// sigue intacto. Lo único que comparten es el contrato del feed, sin UI ni motor.
+include(":home-contract")
+include(":launcher")

@@ -7,10 +7,19 @@
 
 ```
 app/            Android (Kotlin + Compose) — cliente
+launcher/       Vision+ Home — APK aparte de pantalla de inicio (sin motor ni media3)
+home-contract/  contrato compartido entre los dos APK (DTOs, JSON del feed, deep links)
 server/api/     FastAPI + Postgres — índice, búsqueda, deportes, sync, diagnóstico
 server/sync/    Workers — XTV/ESPN/TMDB/EPG/diagnóstico (loop propio, sin tocar la API)
 tools/          Publicación de OTA, utilidades
 ```
+
+**Vision+ Home** (decisión 2026-10-23): la tele puede tener un Inicio propio sin tocar el
+streaming. `app` expone `content://…homefeed/feed` (permiso `signature`, solo lectura) con un
+JSON v1 de hero/filas/«Seguir viendo»/TV en vivo; `launcher` lo pinta y **dispara deep links**
+(`visionplus://watch|title|live|open/...`). El launcher nunca reproduce: si Vision+ falla o no
+está, el Inicio sigue mostrando apps y ajustes. Regla: el launcher pinta **su caché primero** y
+consulta el provider después (tope 1.5 s), porque leerlo puede arrancar Vision+ en frío.
 
 No hay monorepo compartido entre `app` y `server`: el contrato es el JSON de `/v1/*`.
 La app **nunca** habla con el portal XTV para el catálogo: habla con nuestro VPS
@@ -26,12 +35,18 @@ MainActivity ──► PhoneApp / TvApp (navegación, dos shells distintos)
                     ├── data/*          lógica pura + clientes de red + persistencia
                     │     ├── xuper/    portal XTV, motor nativo (DEX en assets), sesión/slots
                     │     ├── sources/  índice remoto (VPS), caché en archivo
+                    │     ├── homefeed/ feed que lee Vision+ Home + instalador del launcher
                     │     ├── offline/  bóveda cifrada, descargas, progreso
                     │     ├── sync/     continuidad entre equipos (código de 8 caracteres)
                     │     ├── gee/      deportes en vivo (CMS externo espejado en el VPS)
                     │     ├── diag/     telemetría (crash/ANR/anomalía/sesión)
                     │     └── ...
                     └── ui/player/X4KPlayerAty.kt   reproductor nativo (proceso :x4k)
+
+LauncherActivity ──► LauncherScreen (otro APK: barra superior, hero, filas, apps)
+                    │
+                    ├── ui/*            tarjetas, foco, centro de control, buscador
+                    └── data/*          FeedRepository (caché + provider), apps, update
 ```
 
 Regla de oro: **la lógica testeable vive en `data/` como funciones puras** (`internal`),
@@ -85,7 +100,7 @@ cuando importa, comprueban el **cableado** leyendo el fuente (patrón `WiringTes
 |---|---|---|
 | Perfiles por persona | **hecho (2.5.125)** | Hasta 5, aislados por archivo; el Principal conserva los datos heredados. Falta sinergia fina con el modo niños (perfil infantil). |
 | Localización (es/en) | pendiente | Hoy todo el texto está en español dentro del código; extraer a `strings.xml` es un barrido grande. |
-| Módulos Gradle | pendiente | `app` es un solo módulo (~50k líneas Kotlin). Partir `:core:data`, `:feature:player`, `:feature:catalog` sin mover modelos compartidos de golpe. |
+| Módulos Gradle | en curso | `app` sigue siendo el módulo grande, pero `:home-contract` y `:launcher` ya viven separados (launcher de 1.2 MB sin motor). Partir `:core:data`, `:feature:player`, `:feature:catalog` sin mover modelos compartidos de golpe. |
 | APK de 101 MB | aceptado | 45 MB son libs ARM (dos ABI), 34 MB el DEX del motor, 11 MB el motor Magis. Publicar por ABI rompería el enlace estable de la OTA. |
 | Firma histórica de debug | aceptado | La base instalada manda: `keystore.properties` apunta a la llave histórica respaldada. |
 | Catálogo/motor de terceros | riesgo estructural | Fuera del alcance técnico del repo. |

@@ -66,7 +66,9 @@ import java.util.Locale
 @Composable
 fun SearchScreen(rows: List<CatalogRow>, onBack: () -> Unit, onOpenFilm: (Film) -> Unit) {
     val context = LocalContext.current
-    var text by rememberSaveable { mutableStateOf("") }
+    // La consulta que trae Vision+ Home (texto o voz) se toma al abrir.
+    val seed = remember { com.chronosbvrx.visionplus.ui.SearchSeed.take() }
+    var text by rememberSaveable { mutableStateOf(seed) }
     // El catálogo inicial (todos los films) se prepara en segundo plano: con el
     // índice completo en el hilo de UI la pantalla tardaba en abrir en gama baja.
     val initialFilms by androidx.compose.runtime.produceState(emptyList<Film>(), rows) {

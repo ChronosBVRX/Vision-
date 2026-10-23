@@ -43,15 +43,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.chronosbvrx.visionplus.data.AppUpdate
+import com.chronosbvrx.visionplus.data.CatalogSeed
+import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.data.gate.GateClient
+import com.chronosbvrx.visionplus.data.homefeed.HomeFeedStore
 import com.chronosbvrx.visionplus.data.launcher.LauncherWatchNext
 import com.chronosbvrx.visionplus.data.remote.RemoteBus
 import com.chronosbvrx.visionplus.data.remote.RemoteKeys
 import com.chronosbvrx.visionplus.data.remote.RemoteProto
 import com.chronosbvrx.visionplus.data.remote.RemoteServer
 import com.chronosbvrx.visionplus.data.remote.remoteLiveChannel
+import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
+import com.chronosbvrx.visionplus.ui.SearchSeed
 import com.chronosbvrx.visionplus.ui.activation.ActivationScreen
 import com.chronosbvrx.visionplus.ui.LocalReducedEffects
 import com.chronosbvrx.visionplus.ui.Navigator
@@ -141,6 +146,9 @@ class MainActivity : ComponentActivity() {
         com.chronosbvrx.visionplus.data.offline.NetworkMonitor.refresh(this)
         // Google TV: al volver a la app, «Continuar viendo» se sincroniza con el historial.
         LauncherWatchNext.syncAsync(this, delayMs = 3_000L)
+        // Vision+ Home (el launcher): el feed se refresca con lo último visto, el perfil y
+        // el EPG. Con freno propio y en segundo plano; jamás frena este onResume.
+        HomeFeedStore.refreshAsync(this)
         // Continuidad entre equipos: empuja el minuto/favoritos y trae lo del otro equipo.
         com.chronosbvrx.visionplus.data.sync.SyncStore.syncAsync(this)
     }
@@ -248,6 +256,8 @@ class MainActivity : ComponentActivity() {
                                     catalog.load()
                                 } == null
                             }
+                            // Con el índice fresco, Vision+ Home estrena filas reales.
+                            HomeFeedStore.refreshAsync(this@MainActivity)
                         }
                         minSplash.join()
                         bootReady = true
@@ -365,9 +375,67 @@ class MainActivity : ComponentActivity() {
     private fun launcherIntentRoute(intent: Intent?): Route? {
         if (intent == null || intent.action != Intent.ACTION_VIEW) return null
         val uri = intent.data ?: return null
-        // El control remoto abre canales con `visionplus://live/<código>`.
+        // Vision+ Home: destinos del sistema (ajustes, buscador, Inicio) y fichas.
+        if ("open".equals(uri.host, ignoreCase = true)) return openRouteFor(uri)
+        if ("title".equals(uri.host, ignoreCase = true)) return titleRouteFor(uri)
+        // El control remoto y nuestro propio launcher abren canales con `visionplus://live/<código>`.
         if ("live".equals(uri.host, ignoreCase = true)) return liveRouteFor(uri)
         return launcherRouteFor(this, uri)
+    }
+
+    /** `visionplus://open/{home|settings|search|live|library|section/<name>}`: hubs del launcher. */
+    private fun openRouteFor(uri: Uri): Route? = when (uri.pathSegments.firstOrNull()?.lowercase()) {
+        "settings" -> Route.Settings
+        "search" -> {
+            SearchSeed.seed(uri.getQueryParameter("q").orEmpty())
+            Route.Search
+        }
+        "live" -> Route.Live
+        "library" -> Route.Library
+        "section" -> uri.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() }?.let { name ->
+            Route.Section(name, sectionTitle(name))
+        }
+        "home" -> Route.Home
+        else -> null
+    }
+
+    /** El título que la app le da a cada sección del launcher. */
+    private fun sectionTitle(name: String): String = when (name) {
+        "movies" -> "Películas"
+        "series" -> "Series"
+        "anime" -> "Anime"
+        "novelas" -> "Novelas"
+        "kids" -> "Para chicos"
+        else -> name.replaceFirstChar { it.uppercase() }
+    }
+
+    /**
+     * `visionplus://title/<ref>?t=&p=&u=`: la ficha de una tarjeta del launcher. Se resuelve
+     * contra el índice cacheado; si aún no está (arranque en frío), se arma con lo que trae el
+     * enlace y la ficha se hidrata sola al abrir.
+     */
+    private fun titleRouteFor(uri: Uri): Route? {
+        val ref = uri.pathSegments.lastOrNull().orEmpty().trim()
+        if (ref.isBlank()) return null
+        val cached = runCatching { RemoteIndexSource.cached(this) }.getOrDefault(emptyList())
+        val hit = cached.asSequence()
+            .flatMap { it.films.asSequence() }
+            .firstOrNull { it.id == ref || it.videoUrl == ref }
+        if (hit != null) return Route.Title(hit)
+        val title = uri.getQueryParameter("t").orEmpty()
+        if (title.isBlank()) return null
+        val videoUrl = uri.getQueryParameter("u").orEmpty().ifBlank { ref }
+        val film = Film(
+            id = ref,
+            title = title,
+            year = 0,
+            durationMin = 0,
+            synopsis = "",
+            posterUrl = uri.getQueryParameter("p").orEmpty(),
+            videoUrl = videoUrl,
+            sourceUrl = if (videoUrl.startsWith("xtv:")) "xtv" else "",
+        )
+        return Route.Title(film)
     }
 
     /** Un canal que el teléfono mandó a abrir: del catálogo cacheado, o mínimo con su código. */

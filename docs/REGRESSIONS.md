@@ -20,6 +20,7 @@
 | M3U | `data/M3uTest.kt` | nombres/logos/grupos/VLC-opts, duplicados, URLs no-http |
 | Foco TV (D-pad) | `ui/tv/TvFocusTest.kt` (Robolectric) | cada pantalla deja foco, mover el D-pad no lo pierde, Home→Ficha→Player→atrás, rail, tabs de En vivo |
 | Launcher TV (Watch Next) | `data/launcher/WatchNextPlanTest.kt`, `WatchNextValuesTest.kt`, `LauncherWatchNextSyncTest.kt` (Robolectric), `ui/LauncherDeepLinkTest.kt` | specs del historial (una por serie, tope), reconciliación (una escritura atrasada no retrocede tarjetas), XML del historial entre procesos, values del canal (tipo/minuto/intent), deep link → ruta (reanudar o respaldo), ciclo completo contra un TV provider falso (publicar/actualizar/retirar/descartes) |
+| Vision+ Home (launcher propio) | `home-contract/src/test` (14), `launcher/src/test` (17), `data/homefeed/HomeFeedStoreTest.kt`, `ui/HomeFeedWiringTest.kt` | JSON v1 del feed (round-trip, versión desconocida, basura, ítems rotos), deep links (`watch/live/title/open`), métricas por altura de pantalla (3 filas en 540 dp), orden de apps (favoritas/recientes), pestañas sin mezclar cine y series, feed nunca vacío en equipo nuevo, canales HD/FHD colapsados, permiso `signature` + provider de solo lectura, manifiesto con los 4 hosts y los dos APK compartiendo `:home-contract` |
 | Servidor (sync/api) | `server/tests/` (pytest, sin red ni DB) | marcas de temporada, unión por kind/doblaje, aridad de tuplas vs TITLE_SQL, limpieza al servir, preferencia XTV/TMDB |
 
 Comando local (Windows, PowerShell, desde la raíz del repo):

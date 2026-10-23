@@ -35,8 +35,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = 361
-        versionName = "2.5.125"
+        versionCode = 363
+        versionName = "2.5.127"
         ndk {
             // Solo ARM: el APK no empaqueta libs x86/x86_64 (los AAR traían credentials/
             // graphics.path de x86_64). En dispositivos x86_64 con traducción ARM (emulador
@@ -198,6 +198,8 @@ tasks.matching { it.name == "minifyNormalReleaseWithR8" }.configureEach {
 }
 
 dependencies {
+    // El contrato del feed que lee Vision+ Home (launcher): DTOs y deep links compartidos.
+    implementation(project(":home-contract"))
     // Pila okhttp 3.12.12 (el mismo TLS que hydra usa) reubicada a okhttp3legacy — solo del gateway.
     implementation(files("libs/okhttp3legacy.jar"))
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")

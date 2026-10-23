@@ -54,33 +54,39 @@ try {
     }
 
     # --- Build release (R8) ---
-    Write-Host "== Build release (R8) =="
-    & cmd /c ".\gradlew.bat :app:assembleNormalRelease --console=plain 2>&1" | Out-Null
+    Write-Host "== Build release (R8): Vision+ y Vision+ Home =="
+    & cmd /c ".\gradlew.bat :app:assembleNormalRelease :launcher:assembleRelease --console=plain 2>&1" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "El build release fallo" }
     $apk = Join-Path $root "app\build\outputs\apk\normal\release\app-normal-release.apk"
+    $homeApk = Join-Path $root "launcher\build\outputs\apk\release\launcher-release.apk"
     if (-not (Test-Path $apk)) { throw "No hay APK en $apk" }
+    if (-not (Test-Path $homeApk)) { throw "No hay APK del launcher en $homeApk" }
 
-    # --- Verificacion de firma historica ---
+    # --- Verificacion de firma historica (los DOS APK) ---
     $sdk = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { Join-Path $env:LOCALAPPDATA "Android\Sdk" }
     $apksigner = Get-ChildItem (Join-Path $sdk "build-tools") -Recurse -Filter "apksigner.bat" |
         Sort-Object FullName | Select-Object -Last 1
     if (-not $apksigner) { throw "No encontre apksigner en $sdk\build-tools" }
-    $cert = & $apksigner.FullName verify --print-certs $apk | Select-String "SHA-256 digest" | Select-Object -First 1
-    if ("$cert" -notmatch $HISTORIC_SIGNER) {
-        throw "La firma NO es la historica (apksigner dijo: $cert). Se cancela."
+    foreach ($pair in @(@("Vision+", $apk), @("Vision+ Home", $homeApk))) {
+        $cert = & $apksigner.FullName verify --print-certs $pair[1] | Select-String "SHA-256 digest" | Select-Object -First 1
+        if ("$cert" -notmatch $HISTORIC_SIGNER) {
+            throw "La firma de $($pair[0]) NO es la historica (apksigner dijo: $cert). Se cancela."
+        }
     }
     $size = [Math]::Round((Get-Item $apk).Length / 1MB, 1)
-    Write-Host "== Firma historica OK; APK: $size MB =="
+    $homeSize = [Math]::Round((Get-Item $homeApk).Length / 1MB, 1)
+    Write-Host "== Firma historica OK en los dos APK; Vision+: $size MB, Vision+ Home: $homeSize MB =="
 
     # --- Copia y publicacion ---
     Copy-Item $apk (Join-Path $root "VisionPlus.apk") -Force
+    Copy-Item $homeApk (Join-Path $root "VisionPlusHome.apk") -Force
     if (-not $SkipPublish) {
         Write-Host "== Publicando release v$Version =="
-        gh release create "v$Version" VisionPlus.apk -R ChronosBVRX/Vision- --title $Title --notes-file (Join-Path $root $NotesFile)
+        gh release create "v$Version" VisionPlus.apk VisionPlusHome.apk -R ChronosBVRX/Vision- --title $Title --notes-file (Join-Path $root $NotesFile)
         if ($LASTEXITCODE -ne 0) { throw "gh release fallo" }
         Write-Host "== OTA v$Version PUBLICADA: https://github.com/ChronosBVRX/Vision-/releases/tag/v$Version =="
     } else {
-        Write-Host "== Build listo (SkipPublish): VisionPlus.apk actualizado sin publicar =="
+        Write-Host "== Build listo (SkipPublish): VisionPlus.apk y VisionPlusHome.apk actualizados sin publicar =="
     }
     Write-Host "Pendiente manual (una vez): commitear el bump + AGENTS.md."
 } catch {
