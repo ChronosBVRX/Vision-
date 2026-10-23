@@ -363,7 +363,12 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
                             onOpenFilm = { nav.push(Route.Title(it)) },
                         )
                         Route.Sports -> SportsScreen(padding, onPlay = { nav.push(Route.LivePlayer(it)) })
-                        Route.Library -> LibraryScreen(catalog, padding, onOpenFilm = { nav.push(Route.Title(it)) })
+                        Route.Library -> LibraryScreen(
+                            catalog,
+                            padding,
+                            onOpenFilm = { nav.push(Route.Title(it)) },
+                            onResume = { nav.push(resumeRoute(it)) },
+                        )
                         Route.Downloads -> DownloadsScreen(
                             contentPadding = padding,
                             onOpenFilm = { nav.push(Route.Player(it)) },

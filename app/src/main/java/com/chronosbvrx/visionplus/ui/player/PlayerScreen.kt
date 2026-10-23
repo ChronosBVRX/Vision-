@@ -821,6 +821,8 @@ private fun PlayerCore(
     var currentTitle by remember(url) { mutableStateOf(title) }
     var currentSubtitle by remember(url) { mutableStateOf(subtitle) }
     var currentResume by remember(url) { mutableStateOf(resumeInfo) }
+    /** Ya se guardó este título como terminado: un dispose posterior no debe degradarlo. */
+    var finishedSaved by remember(url) { mutableStateOf(false) }
     var vaultDeclaredMs by remember(url) { mutableLongStateOf(declaredDurationMs) }
     var nextVault by remember(url) { mutableStateOf<OfflineDownload?>(null) }
     var nextCountdown by remember(url) { mutableStateOf(0) }
@@ -940,16 +942,20 @@ private fun PlayerCore(
         )
     }
 
-    fun saveHistory() {
+    fun saveHistory(finished: Boolean = false) {
         val info = currentResume ?: return
         if (isLive) return
-        val pos = positionMs
-        val dur = durationMs
-        if (com.chronosbvrx.visionplus.data.isFinished(pos, dur)) {
-            com.chronosbvrx.visionplus.data.PlaybackHistory.delete(context, info.key)
+        if (finished) {
+            finishedSaved = true
+        } else if (finishedSaved) {
             return
         }
-        if (!com.chronosbvrx.visionplus.data.shouldKeep(pos, dur)) return
+        val dur = durationMs
+        val pos = if (finished && dur > 0) dur else positionMs
+        val done = finished || com.chronosbvrx.visionplus.data.isFinished(pos, dur)
+        if (done) finishedSaved = true
+        if (!done && !com.chronosbvrx.visionplus.data.shouldKeep(pos, dur)) return
+        if (pos <= 0L && dur <= 0L) return
         com.chronosbvrx.visionplus.data.PlaybackHistory.save(
             context,
             com.chronosbvrx.visionplus.data.ResumeEntry(
@@ -983,7 +989,7 @@ private fun PlayerCore(
                 context, current.seriesId, current.episodeIndex + 1,
             )
         }
-        com.chronosbvrx.visionplus.data.PlaybackHistory.delete(context, currentVaultUrl)
+        saveHistory(finished = true)
         if (nextVault != null) return
         val next = current?.let {
             com.chronosbvrx.visionplus.data.offline.nextDownloadedEpisode(it, OfflineRegistry.getAll(context))

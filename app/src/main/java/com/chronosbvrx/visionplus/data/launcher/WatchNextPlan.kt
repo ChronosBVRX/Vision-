@@ -2,6 +2,7 @@ package com.chronosbvrx.visionplus.data.launcher
 
 import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.seriesKeyOf
+import com.chronosbvrx.visionplus.data.shouldKeep
 
 /**
  * El canal Watch Next del launcher de TV («Continuar viendo» / «Play Next») es el espejo de
@@ -65,6 +66,9 @@ internal fun watchNextSpecs(entries: List<ResumeEntry>, limit: Int = WATCH_NEXT_
     for (entry in entries.sortedByDescending { it.updatedAt }) {
         if (out.size >= limit) break
         if (entry.key.isBlank() || entry.positionMs <= 0L) continue
+        // El historial ahora conserva los terminados para «Historial»; el launcher solo
+        // debe espejar lo que de verdad se puede continuar.
+        if (!shouldKeep(entry.positionMs, entry.durationMs)) continue
         val dedupeKey = seriesKeyOf(entry) ?: "k:${entry.key}"
         if (!seen.add(dedupeKey)) continue
         out += entry.toSpec()

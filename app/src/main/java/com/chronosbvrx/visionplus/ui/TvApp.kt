@@ -310,6 +310,10 @@ private fun TvRoute(
                 onFilmPick(it.id)
                 nav.push(Route.Title(it))
             },
+            onResume = {
+                onClearFilmReturn()
+                nav.push(resumeRoute(it))
+            },
         )
         Route.Downloads -> TvDownloadsScreen(
             onPlayFilm = { nav.push(Route.Player(it)) },

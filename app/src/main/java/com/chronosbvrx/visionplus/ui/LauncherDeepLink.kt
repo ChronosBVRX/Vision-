@@ -5,6 +5,7 @@ import android.net.Uri
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.ResumeCard
+import com.chronosbvrx.visionplus.data.shouldKeep
 import com.chronosbvrx.visionplus.data.launcher.LauncherLinks
 import com.chronosbvrx.visionplus.data.launcher.WatchLink
 
@@ -24,6 +25,7 @@ internal fun launcherRouteFor(context: Context, uri: Uri?): Route? {
     // local sigue teniendo la primera palabra, como siempre.
     if (link.resumeMs > 0) routeFromLink(link, link.resumeMs)?.let { return it }
     val entry = PlaybackHistory.get(context, link.key)
+        ?.takeIf { shouldKeep(it.positionMs, it.durationMs) }
     if (entry != null) return resumeRoute(ResumeCard(entry, film = null, progress = 0f))
     return routeFromLink(link, 0)
 }

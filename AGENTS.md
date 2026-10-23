@@ -5,6 +5,12 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **Mi lista → Historial con avance y reanudar (app; pendiente OTA) — 801 Android** (2026-10-23):
+  - *Pedido del usuario*: agregar a «Mi lista» el historial de lo visto y registrar el avance de cada elemento para poder reanudar.
+  - *Historial*: `PlaybackHistory` ahora **conserva también los terminados** (tope 60), `historyCards()` devuelve en curso + vistos (una entrada por serie, la más reciente) y `continueCards()` filtra `shouldKeep`, así «Seguir viendo» no se llena de cosas terminadas. `ResumeCard` suma `completed` y el avance real.
+  - *UI*: pestaña **«Historial»** en `LibraryScreen` (móvil) y `TvLibraryScreen` (TV), con barra de avance y «Visto» / «Continuar en mm:ss». En curso reanuda con `resumeRoute`; terminado abre la ficha (o reinicia desde 00:00 si no hay ficha). `onResume` cableado en `PhoneApp` y `TvApp`.
+  - *Reproductores*: el nativo guarda al terminar/créditos (`saveHistory(forceFinished=…)`) y el ExoPlayer/búnker con `saveHistory(finished=true)`; un `finishedSaved` evita que un `onStop`/dispose posterior degrade el terminado a medias. El launcher Watch Next, `RemoteResume` y el deep link filtran `shouldKeep`.
+  - *Verificado*: **801 tests Android** en verde (6 nuevos: 2 de almacén/historial, 1 del launcher y 3 de cableado); compila. *Pendiente*: prueba física en móvil/TV (terminar una película/capítulo → «Visto»; abrir un historial a medias → minuto exacto) y decidir OTA.
 - **Buscador de personas y créditos TMDB (servidor; API desplegada, créditos completos) — 324 tests backend** (2026-10-23):
   - *Pedido*: «Hagámoslo» tras ver que «tarantino» solo devolvía Death Proof.
   - *Causa*: la etapa de nombres se detenía con 1-2 resultados incidentales (un alias con «Tarantino») y la profunda completa se corría igual (3.6 s en «guerra de papas»); no existía una etapa de personas indexada.

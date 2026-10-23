@@ -38,10 +38,11 @@ class PlaybackHistoryTest {
 
     @Test
     fun pruneKeepsRecentUpToMax() {
-        val entries = (1..25).map { entry("c$it", updatedAt = it.toLong()) }
-        val pruned = prune(entries, 50L)
+        val total = PlaybackHistory.MAX_ENTRIES + 5
+        val entries = (1..total).map { entry("c$it", updatedAt = it.toLong()) }
+        val pruned = prune(entries, 100L)
         assertEquals(PlaybackHistory.MAX_ENTRIES, pruned.size)
-        assertEquals("c25", pruned.first().key)
+        assertEquals("c$total", pruned.first().key)
         // Momias de más de 90 días fuera.
         val old = entry("viejo", updatedAt = 0L)
         assertTrue(prune(listOf(old) + entries, 100L * 24 * 60 * 60 * 1000).none { it.key == "viejo" })

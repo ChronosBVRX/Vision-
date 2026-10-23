@@ -2,6 +2,7 @@ package com.chronosbvrx.visionplus.data.remote
 
 import android.content.Context
 import com.chronosbvrx.visionplus.data.PlaybackHistory
+import com.chronosbvrx.visionplus.data.shouldKeep
 
 /**
  * El minuto que el teléfono tiene guardado para la referencia que se va a mandar a la tele.
@@ -20,5 +21,8 @@ internal fun resumeKeyCandidates(ref: String): List<String> {
 
 internal fun resumePositionFor(context: Context, ref: String): Long =
     resumeKeyCandidates(ref).firstNotNullOfOrNull { key ->
-        PlaybackHistory.get(context, key)?.positionMs?.takeIf { it > 0L }
+        PlaybackHistory.get(context, key)
+            ?.takeIf { shouldKeep(it.positionMs, it.durationMs) }
+            ?.positionMs
+            ?.takeIf { it > 0L }
     } ?: 0L

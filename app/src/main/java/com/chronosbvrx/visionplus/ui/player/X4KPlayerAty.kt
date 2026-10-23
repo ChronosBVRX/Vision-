@@ -166,6 +166,8 @@ class X4KPlayerAty : ComponentActivity() {
     private var nextDismissed = false
     private var nextPendingAtEnd = false
     private var endedShown = false
+    /** Ya se guardó este título como terminado: un onStop posterior no debe degradarlo. */
+    private var finishedSaved = false
     private var nextCountdown = 0
     private var nextCountdownView: TextView? = null
     private var nextPlayBtn: View? = null
@@ -720,6 +722,7 @@ class X4KPlayerAty : ComponentActivity() {
         lastSkipReportAtMs = 0L
         liveSignalSeen = false
         endedShown = false
+        finishedSaved = false
         nextPendingAtEnd = false
         creditsCardShown = false
         postCreditsShown = false
@@ -2864,7 +2867,7 @@ class X4KPlayerAty : ComponentActivity() {
             UserLibrary.markEpisodeWatched(this, curSeries, curEpIndex + 1)
         }
         if (curCode.isNotBlank()) {
-            PlaybackHistory.delete(this, curCode)
+            saveHistory(immediate = true, forceFinished = true)
         }
         // Si la tarjeta ya estaba esperando al final, ahora sí arranca la cuenta regresiva.
         if (nextVisible && nextTarget != null && nextPendingAtEnd) {
@@ -3552,6 +3555,7 @@ class X4KPlayerAty : ComponentActivity() {
         movieSuggestShown = false
         nextDismissed = false
         endedShown = false
+        finishedSaved = false
 
         // El capítulo que se deja conserva su minuto exacto: sin este cierre quedaba el último
         // tic (hasta 10 s atrás) y al saltar los créditos con «Sig.» el avance parecía perdido.
@@ -3705,17 +3709,25 @@ class X4KPlayerAty : ComponentActivity() {
     // ---------------------------------------------------------------- historial
 
     /** Guarda el minuto (en vivo no cuenta). Con commit al salir: el proceso muere después. */
-    private fun saveHistory(immediate: Boolean = false) {
+    private fun saveHistory(immediate: Boolean = false, forceFinished: Boolean = false) {
         if (liveMode) return
         val key = curCode
         if (key.isBlank()) return
-        val pos = X4KTitan.positionMs().coerceAtLeast(0L)
         val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
-        if (isFinished(pos, total)) {
-            PlaybackHistory.delete(this, key)
+        val rawPos = X4KTitan.positionMs().coerceAtLeast(0L)
+        // Al llegar a los créditos/terminar no siempre el motor reporta el último ms:
+        // se guarda como terminado con la duración conocida para que «Historial» lo
+        // muestre como Visto, en vez de borrar el recuerdo.
+        val pos = if (forceFinished && total > 0L) total else rawPos
+        val finished = forceFinished || isFinished(pos, total)
+        if (finished) {
+            finishedSaved = true
+        } else if (finishedSaved) {
+            // Ya estaba terminado: el stop/exit posterior no puede devolverlo a «Seguir viendo».
             return
         }
-        if (!shouldKeep(pos, total)) return
+        if (!finished && !shouldKeep(pos, total)) return
+        if (pos <= 0L && total <= 0L) return
         val series = isSeriesContent(epIds.size, seasonIds.size)
         PlaybackHistory.save(
             this,
@@ -3757,12 +3769,7 @@ class X4KPlayerAty : ComponentActivity() {
                 UserLibrary.markEpisodeWatched(this, curSeries, curEpIndex + 1)
             }
         }
-        saveHistory(immediate = true)
-        if (atCredits) {
-            // El guardado recién hecho no debe dejar una tarjeta de «Seguir viendo» de un
-            // capítulo terminado: el marcador de créditos ya probó que acabó.
-            PlaybackHistory.delete(this, curCode)
-        }
+        saveHistory(immediate = true, forceFinished = atCredits)
     }
 
     /** Al primer cuadro: reanuda lo pedido desde Inicio, o pregunta si quedó a medias. */

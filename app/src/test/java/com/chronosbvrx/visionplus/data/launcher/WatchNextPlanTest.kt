@@ -50,6 +50,12 @@ class WatchNextPlanTest {
     }
 
     @Test
+    fun completedEntriesDoNotReachTheLauncher() {
+        val done = entry(key = "m", positionMs = 600_000L, durationMs = 600_000L)
+        assertTrue(watchNextSpecs(listOf(done)).isEmpty())
+    }
+
+    @Test
     fun specsSplitSeriesTitleFromTheEpisodeMark() {
         val spec = watchNextSpecs(
             listOf(

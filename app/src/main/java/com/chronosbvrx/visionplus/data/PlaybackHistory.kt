@@ -30,7 +30,13 @@ data class ResumeEntry(
 )
 
 /** Una entrada lista para pintar: su ficha del catálogo cuando sigue ahí (o null). */
-data class ResumeCard(val entry: ResumeEntry, val film: Film?, val progress: Float)
+data class ResumeCard(
+    val entry: ResumeEntry,
+    val film: Film?,
+    val progress: Float,
+    /** Llegó al final (o a los créditos): el historial lo muestra como «Visto». */
+    val completed: Boolean = false,
+)
 
 /** Lo mínimo para guardar/continuar en el reproductor ExoPlayer (no-XTV). */
 data class ResumeInfo(val key: String, val title: String, val posterUrl: String, val videoUrl: String)
@@ -40,7 +46,7 @@ object PlaybackHistory {
     private const val K_ENTRIES = "entries"
 
     /** Máximo de recuerdos (los viejos se podan solos). */
-    internal const val MAX_ENTRIES = 20
+    internal const val MAX_ENTRIES = 60
 
     /** Se guarda a partir de este avance (menos es "apenas lo abrí"). */
     internal const val MIN_KEEP_MS = 15_000L
@@ -80,24 +86,20 @@ object PlaybackHistory {
         list(context).firstOrNull { it.key == key }
 
     /**
-     * Guarda (o borra si terminó). [immediate] usa commit: para el onDestroy del player.
-     * De una serie vive un solo recuerdo: guardar un capítulo retira los anteriores (así la
-     * fila «Seguir viendo» no se llena de episodios a medias ni el tope de 20 expulsa al resto).
+     * Guarda el recuerdo, también cuando terminó. [immediate] usa commit: para el onDestroy
+     * del player. De una serie vive un solo recuerdo: guardar un capítulo retira los
+     * anteriores (el historial muestra el último estado de la serie; «Seguir viendo» filtra
+     * los terminados).
      */
     fun save(context: Context, entry: ResumeEntry, immediate: Boolean = false) {
         val p = prefs(context)
-        val finished = isFinished(entry.positionMs, entry.durationMs)
-        val series = if (finished) null else seriesKeyOf(entry)
+        val series = seriesKeyOf(entry)
         // Base fresca del disco: reescribir sobre la copia en memoria del proceso tiraría lo
         // que el reproductor (:x4k) acaba de guardar.
         val entries = listFresh(context).filterNot {
             it.key == entry.key || (series != null && seriesKeyOf(it) == series)
         }
-        val next = if (finished) {
-            entries
-        } else {
-            prune(listOf(entry) + entries, entry.updatedAt)
-        }
+        val next = prune(listOf(entry) + entries, entry.updatedAt)
         write(p, next, immediate)
     }
 
@@ -121,8 +123,18 @@ object PlaybackHistory {
         write(prefs(context), clean, immediate = true)
     }
 
-    /** Entradas + fichas del catálogo como tarjetas, recientes primero y una sola por serie. */
+    /** Entradas + fichas del catálogo como tarjetas, solo lo reanudable y una por serie. */
     fun continueCards(context: Context, films: List<Film>, limit: Int = 10): List<ResumeCard> =
+        matchCards(
+            latestBySeries(list(context).filter { shouldKeep(it.positionMs, it.durationMs) }),
+            films,
+        ).take(limit)
+
+    /**
+     * Historial completo (en curso y terminados), recientes primero y una entrada por serie.
+     * Alimenta la pestaña «Historial» de Mi lista; los terminados llevan [ResumeCard.completed].
+     */
+    fun historyCards(context: Context, films: List<Film>, limit: Int = MAX_ENTRIES): List<ResumeCard> =
         matchCards(latestBySeries(list(context)), films).take(limit)
 
     private fun read(p: android.content.SharedPreferences): List<ResumeEntry> {
@@ -285,7 +297,7 @@ internal fun matchCards(entries: List<ResumeEntry>, films: List<Film>): List<Res
         } else {
             0f
         }
-        ResumeCard(entry, film, progress)
+        ResumeCard(entry, film, progress, completed = isFinished(entry.positionMs, entry.durationMs))
     }
 }
 
