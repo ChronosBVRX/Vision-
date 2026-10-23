@@ -635,12 +635,12 @@ def _fold_sql(expr: str) -> str:
 
 
 def build_rank(clean_q: str) -> tuple[str, list[str]]:
-    """Orden por relevancia de nombres: exacto > prefijo > contiene > compacto, en
-    cascada título del portal → alias del portal → es-MX de TMDB → original de TMDB →
-    alternativos por región. Lo demás queda al final (popularidad lo ordena).
+    """Orden por relevancia de nombres, con TODAS las formas del título al mismo nivel.
 
-    El compacto («daddys home» → «daddyshome») cubre a quien teclea sin apóstrofos
-    ni espacios, que es la mitad de las búsquedas de un mando de TV.
+    Un nombre exacto de cualquier fuente (título del portal, alias, es-MX, original,
+    alternativo o traducción) vale lo mismo: así «El conjuro» encuentra primero la
+    película original y no su secuela, y «Squid Game» no deja ganar al spin-off.
+    Después: prefijo > contiene > compacto; el desempate lo pone la popularidad.
     """
     compact = clean_q.replace(" ", "")
 
@@ -650,36 +650,63 @@ def build_rank(clean_q: str) -> tuple[str, list[str]]:
     def compacted(expr: str) -> str:
         return f"replace({folded(expr)}, ' ', '')"
 
+    def in_names(column: str, expr: str) -> str:
+        # `a` es el alias del unnest; `expr` ya viene plegado.
+        return (
+            f"exists (select 1 from unnest(coalesce({column}, '{{}}'::text[])) a "
+            f"where {expr})"
+        )
+
     title = folded("t.title")
     portal_original = folded("coalesce(t.original_title, '')")
     localized = folded("coalesce(e.localized_title, '')")
     original = folded("coalesce(e.original_title, '')")
-    alt = folded("a")
+    alt_exact = (
+        in_names("e.alt_titles", f"{folded('a')} = $1")
+        + " or " + in_names("e.translated_titles", f"{folded('a')} = $1")
+    )
+    alt_prefix = (
+        in_names("e.alt_titles", f"{folded('a')} like $2")
+        + " or " + in_names("e.translated_titles", f"{folded('a')} like $2")
+    )
+    alt_contains = (
+        in_names("e.alt_titles", f"{folded('a')} like $3")
+        + " or " + in_names("e.translated_titles", f"{folded('a')} like $3")
+    )
+    alt_compact = (
+        in_names("e.alt_titles", f"{compacted('a')} = $4")
+        + " or " + in_names("e.translated_titles", f"{compacted('a')} = $4")
+    )
+
+    strong_exact = " or ".join([
+        f"{title} = $1", f"{portal_original} = $1", f"{localized} = $1", f"{original} = $1",
+    ])
+    strong_prefix = " or ".join([
+        f"{title} like $2", f"{portal_original} like $2", f"{localized} like $2", f"{original} like $2",
+    ])
+    strong_contains = " or ".join([
+        f"{title} like $3", f"{portal_original} like $3", f"{localized} like $3", f"{original} like $3",
+    ])
+    title_compact = compacted("t.title")
+    portal_original_compact = compacted("coalesce(t.original_title, '')")
+    localized_compact = compacted("coalesce(e.localized_title, '')")
+    original_compact = compacted("coalesce(e.original_title, '')")
+    strong_compact = " or ".join([
+        f"{title_compact} = $4",
+        f"{portal_original_compact} = $4",
+        f"{localized_compact} = $4",
+        f"{original_compact} = $4",
+    ])
     return (
-        f"""
-        case
-            when {title} = $1 then 1
-            when {title} like $2 then 2
-            when {title} like $3 then 3
-            when {compacted('t.title')} = $4 then 4
-            when {portal_original} = $1 then 5
-            when {portal_original} like $2 then 6
-            when {compacted("coalesce(t.original_title, '')")} = $4 then 7
-            when {localized} = $1 then 8
-            when {localized} like $2 then 9
-            when {compacted("coalesce(e.localized_title, '')")} = $4 then 10
-            when {original} = $1 then 11
-            when {original} like $2 then 12
-            when {compacted("coalesce(e.original_title, '')")} = $4 then 13
-            when exists (select 1 from unnest(coalesce(e.alt_titles, '{{}}'::text[])) a
-                         where {alt} = $1) then 14
-            when exists (select 1 from unnest(coalesce(e.alt_titles, '{{}}'::text[])) a
-                         where {alt} like $2) then 15
-            when exists (select 1 from unnest(coalesce(e.alt_titles, '{{}}'::text[])) a
-                         where {compacted('a')} = $4) then 16
-            else 17
-        end
-        """,
+        f"case when {strong_exact} then 1 "
+        # Un exacto alternativo/traducido vale como un prefijo del título: «El conjuro»
+        # encuentra la original antes que su secuela, sin que una traducción rara
+        # («Nemocnice…» para New Amsterdam) le gane a «Finding Nemo» por popularidad.
+        f"when {strong_prefix} or {alt_exact} then 2 "
+        f"when {strong_contains} then 3 "
+        f"when {alt_prefix} then 4 "
+        f"when {alt_contains} then 5 "
+        f"when {strong_compact} or {alt_compact} then 6 else 9 end",
         [clean_q, f"{clean_q}%", f"%{clean_q}%", compact],
     )
 
@@ -727,6 +754,8 @@ def build_deep_match(words: list[str], offset: int = 0) -> tuple[str, list[str]]
             f"unaccent(lower(coalesce(e.original_title, ''))) like ${n}",
             f"exists (select 1 from unnest(coalesce(e.alt_titles, '{{}}'::text[])) a "
             f"where unaccent(lower(a)) like ${n})",
+            f"exists (select 1 from unnest(coalesce(e.translated_titles, '{{}}'::text[])) a "
+            f"where unaccent(lower(a)) like ${n})",
         ]
         clauses.append("(" + " or ".join(parts) + ")")
     return " and ".join(clauses), params
@@ -741,9 +770,10 @@ async def _search_page(match_sql: str, match_params: list[str], clean_q: str, li
         {_SEARCH_FROM}
         where {match_sql}
         order by {rank_sql},
+            case when t.kind = 'live' then 1 else 0 end,
             t.popularity desc nulls last,
             t.score desc nulls last,
-            t.year desc nulls last
+            t.year asc nulls last
         limit ${len(params)}
     """
     return await db().fetch(sql, *params)
@@ -797,6 +827,7 @@ async def _search_fuzzy(clean_q: str, limit: int):
         {_SEARCH_FROM}
         where {where}
         order by {ordering},
+                 case when t.kind = 'live' then 1 else 0 end,
                  t.popularity desc nulls last,
                  t.score desc nulls last
         limit ${len(probes) + 1}
@@ -829,6 +860,40 @@ def _local_has_the_name(rows, clean_q: str) -> bool:
         if text and all(word in text for word in words):
             return True
     return False
+
+
+def should_wait_for_portal(local_rows, clean_q: str) -> bool:
+    """¿Hace falta esperar al portal? Solo cuando el índice no tiene ya ESE nombre.
+
+    El portal tarda ~100-400 ms; si el índice local ya tiene el nombre en cualquiera
+    de sus formas, su orden (con el ranking nuevo) es el bueno y no se espera. Si el
+    índice no lo tiene, el portal sigue siendo la red de seguridad.
+    """
+    if not local_rows:
+        return True
+    return not _local_has_the_name(local_rows, clean_q)
+
+
+def _tmdb_dedupe_key(entry: dict, enrichment) -> int:
+    """Clave para no repetir la misma obra de TMDB en los resultados.
+
+    «Round 6» y «El juego del calamar» son el mismo show (mismo tmdb_id) con nombres
+    distintos; el buscador mostraba ambos. Solo se deduplica con confianza alta
+    (≥0.75): un match dudoso no puede ocultar un título distinto.
+    """
+    try:
+        tmdb = int(entry.get("tmdbId") or 0)
+    except (TypeError, ValueError):
+        return 0
+    if not tmdb:
+        return 0
+    confidence = 0.0
+    try:
+        if enrichment is not None and "match_confidence" in enrichment.keys():
+            confidence = float(enrichment["match_confidence"] or 0)
+    except (TypeError, ValueError, KeyError, AttributeError):
+        confidence = 0.0
+    return tmdb if confidence >= 0.75 else 0
 
 
 def merge_search_rows(local_rows: list, portal_rows: list, clean_q: str, limit: int) -> list:
@@ -958,16 +1023,21 @@ async def search(
 
     portal_rows: list = []
     if portal_task is not None:
-        try:
-            portal_rows = await portal_task
-        except Exception:  # noqa: BLE001 - el portal jamás tumba la búsqueda
-            portal_rows = []
+        if should_wait_for_portal(rows, clean_q):
+            try:
+                portal_rows = await portal_task
+            except Exception:  # noqa: BLE001 - el portal jamás tumba la búsqueda
+                portal_rows = []
+        else:
+            # El índice ya tiene el nombre: no se espera al portal (latencia).
+            portal_task.cancel()
     rows = merge_search_rows(rows, portal_rows, clean_q, limit)
 
     member_of, seasons_by_group, base_of_group = await _group_maps()
     enr = await _enrichment_map([r["id"] for r in rows])
     seen_groups: set[str] = set()
     seen_cids: set[str] = set()
+    seen_tmdb: set[int] = set()
     out = []
     for r in rows:
         entry, group_id = _grouped_entry(r, member_of, seasons_by_group, base_of_group, enr.get(r["id"]))
@@ -980,7 +1050,13 @@ async def search(
             if group_id in seen_groups:
                 continue
             seen_groups.add(group_id)
-        _attach_original_title(entry, r, enr.get(r["id"]))
+        enrichment = enr.get(r["id"])
+        tmdb_key = _tmdb_dedupe_key(entry, enrichment)
+        if tmdb_key:
+            if tmdb_key in seen_tmdb:
+                continue
+            seen_tmdb.add(tmdb_key)
+        _attach_original_title(entry, r, enrichment)
         out.append(entry)
 
     if len(_SEARCH_CACHE) > 300:
@@ -2684,6 +2760,28 @@ async def stats(x_api_key: str | None = Header(default=None)):
         from skip_markers
         """
     )
+    search = await db().fetchrow(
+        """
+        select count(*) as titles,
+               count(*) filter (where coalesce(t.search_text, '') <> '') as with_text,
+               count(*) filter (where e.tmdb_id is not null) as matched,
+               count(*) filter (where coalesce(array_length(e.alt_titles, 1), 0) > 0) as with_alt,
+               count(*) filter (where coalesce(array_length(e.translated_titles, 1), 0) > 0) as with_translations,
+               max(t.search_text_at) as last_text_at
+        from titles t
+        left join enrichment e on e.title_id = t.id
+        """
+    )
+    catalog = await db().fetchrow(
+        """
+        select count(*) as titles,
+               count(*) filter (where not exists (
+                   select 1 from title_categories tc where tc.title_id = t.id
+               )) as without_category
+        from titles t
+        """
+    )
+    deep_at = await db().fetchval("select updated_at from sync_meta where key = 'xtv_deep_at'")
     version = await db().fetchval("select version from sync_state where id = 1") or 1
     return {
         "indexVersion": int(version),
@@ -2692,6 +2790,19 @@ async def stats(x_api_key: str | None = Header(default=None)):
             "rows": int(markers["rows_total"] or 0),
             "withData": int(markers["with_data"] or 0),
             "lastFetch": markers["last_fetch"].isoformat() if markers["last_fetch"] else None,
+        },
+        "search": {
+            "titles": int(search["titles"] or 0),
+            "withText": int(search["with_text"] or 0),
+            "matched": int(search["matched"] or 0),
+            "withAlt": int(search["with_alt"] or 0),
+            "withTranslations": int(search["with_translations"] or 0),
+            "lastTextAt": search["last_text_at"].isoformat() if search["last_text_at"] else None,
+        },
+        "catalog": {
+            "titles": int(catalog["titles"] or 0),
+            "withoutCategory": int(catalog["without_category"] or 0),
+            "deepAt": deep_at.isoformat() if deep_at else None,
         },
     }
 

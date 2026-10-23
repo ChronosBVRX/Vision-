@@ -38,6 +38,10 @@ SECTIONS = {
 
 SECTION_MIN_TITLES = 5
 
+# La categoría que garantiza que NINGÚN título quede invisible: se llena una vez y
+# luego recibe los nuevos (buscador del portal, repisas sin colección).
+CATALOG_CATEGORY = "catalogo-completo"
+
 # Un título que TMDB descartó (match_confidence 0.0 = no existe en el catálogo mundial)
 # no entra a las filas curadas: el portal le pone score inflado (9.3 a una película de
 # nicho) y antes dominaba géneros y estrenos. Pendientes (sin fila) sí entran y se
@@ -351,6 +355,42 @@ async def build_section_genres(pool) -> int:
     return changed
 
 
+async def ensure_catalog_category(pool) -> int:
+    """Todo título vive en al menos una categoría navegable.
+
+    Los títulos que llegan por el buscador del portal o por repisas sin colección
+    quedaban fuera de toda fila (691 medidos el 2026-10-22): se encontraban por
+    nombre pero eran invisibles para navegar. «Todo el catálogo» se llena una vez y
+    luego solo recibe los nuevos, al final, para no reordenar lo ya visto.
+    """
+    async with pool.acquire() as conn:
+        await conn.execute(CAT_SQL, CATALOG_CATEGORY, "Todo el catálogo", "special", 90)
+        has_rows = await conn.fetchval(
+            "select exists(select 1 from title_categories where category_id = $1)",
+            CATALOG_CATEGORY,
+        )
+        base = 1_000_000 if has_rows else 0
+        tag = await conn.execute(
+            f"""
+            insert into title_categories (title_id, category_id, position)
+            select t.id, $1, {base} + row_number() over (
+                order by coalesce(t.popularity, 0) desc, t.title
+            )
+            from titles t
+            where not exists (
+                select 1 from title_categories tc
+                where tc.category_id = $1 and tc.title_id = t.id
+            )
+            on conflict do nothing
+            """,
+            CATALOG_CATEGORY,
+        )
+    count = _rows(tag)
+    if count:
+        log.info("índice: %s títulos nuevos en «Todo el catálogo»", count)
+    return count
+
+
 async def build(pool) -> int:
     changed = 0
     async with pool.acquire() as conn:
@@ -435,6 +475,7 @@ async def build(pool) -> int:
             )
             changed += _rows(tag)
         changed += await build_section_genres(pool)
+        changed += await ensure_catalog_category(pool)
         # Las categorías sin ningún título ya no sirven (la limpieza general va en normalize()).
     changed += await normalize(pool)
     log.info("índice: estrenos/géneros actualizados (%s cambios)", changed)

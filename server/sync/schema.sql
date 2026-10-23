@@ -101,6 +101,11 @@ alter table enrichment add column if not exists localized_title text not null de
 alter table enrichment add column if not exists alt_titles text[] not null default '{}';
 -- Marca de intento del backfill de nombres (una llamada por título, para no repetir).
 alter table enrichment add column if not exists aliases_at timestamptz;
+-- Traducciones por IDIOMA de TMDB (`/translations`): nombres como «Die Simpsons»,
+-- «Блич» o «死神». Son distintos de los alternativos por región y amplían el buscador
+-- para quien escribe en otro idioma. Se guardan aparte y entran a `search_text`.
+alter table enrichment add column if not exists translated_titles text[] not null default '{}';
+alter table enrichment add column if not exists translations_at timestamptz;
 
 -- Texto de búsqueda materializado de cada título (nombres plegados + compactos):
 -- el buscador matchea aquí primero (índice GIN) y solo cae a la búsqueda profunda

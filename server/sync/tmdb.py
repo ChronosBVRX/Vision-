@@ -50,6 +50,27 @@ ALIAS_GAP = float(os.environ.get("TMDB_ALIAS_GAP_SECONDS", "0.08"))
 # Antes se rehacía todo al final y una muerte a mitad dejó ~3.4k textos viejos ya
 # marcados como hechos — «buscando a nemo» dejó de encontrar «Finding Nemo» (2026-10-18).
 ALIAS_REBUILD_CHUNK = 500
+# Traducciones por idioma de TMDB (`/translations`) para los matches ya hechos: una
+# llamada por título, con su propio marcador (`translations_at`) y presupuesto. Es la
+# otra mitad de los nombres («Die Simpsons», «Блич», «死神»): los alternativos por
+# región no siempre las traen.
+TRANSLATIONS_BATCH = int(os.environ.get("TMDB_TRANSLATIONS_BATCH", "1500"))
+TRANSLATIONS_GAP = float(os.environ.get("TMDB_TRANSLATIONS_GAP", "0.12"))
+# Orden de las traducciones en `search_text`: primero los idiomas que más se buscan
+# aquí (es-MX/es, inglés, portugués, francés, alemán…), luego el resto.
+TRANSLATION_PRIORITY = {
+    "es-mx": 0, "es-es": 1, "es-419": 2, "es-ar": 3, "es": 4,
+    "en-us": 5, "en-gb": 6, "en": 7,
+    "pt-br": 8, "pt-pt": 9, "pt": 10,
+    "fr-fr": 11, "fr": 12, "de-de": 13, "de": 14, "it-it": 15, "it": 16,
+    "ja-jp": 17, "ja": 18, "ko-kr": 19, "ko": 20,
+    "zh-cn": 21, "zh-tw": 22, "zh": 23, "ru-ru": 24, "ru": 25,
+    "hi-in": 26, "hi": 27, "ar-sa": 28, "ar": 29, "tr-tr": 30, "tr": 31,
+    "pl-pl": 32, "pl": 33, "nl-nl": 34, "nl": 35, "sv-se": 36, "da-dk": 37,
+    "fi-fi": 38, "no-no": 39, "cs-cz": 40, "hu-hu": 41, "ro-ro": 42,
+    "el-gr": 43, "he-il": 44, "th-th": 45, "vi-vn": 46, "id-id": 47, "uk-ua": 48,
+}
+TRANSLATIONS_LIMIT = 40
 
 
 def _norm(text: str) -> str:
@@ -120,6 +141,49 @@ def parse_alt_titles(payload) -> list[str]:
         seen.add(key)
         out.append(name)
         if len(out) >= 40:
+            break
+    return out
+
+
+def parse_translations(payload, limit: int = TRANSLATIONS_LIMIT) -> list[str]:
+    """Nombres por IDIOMA de TMDB (`/translations`) → lista priorizada y sin repetir.
+
+    El payload trae {iso_639_1, iso_3166_1, data:{title|name}}. Se ordena por los
+    idiomas que más se buscan en Vision+ (es-MX/es, inglés, portugués, francés,
+    alemán…) y se corta a [limit]: el buscador se queda con los nombres útiles y no
+    con la cola de transliteraciones exóticas. La deduplicación ignora caja/acentos
+    (mismo criterio que `_norm`).
+    """
+    if not isinstance(payload, dict):
+        return []
+    items = payload.get("translations")
+    if not isinstance(items, list):
+        return []
+    ranked: list[tuple[int, int, str]] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        data = item.get("data")
+        if not isinstance(data, dict):
+            continue
+        name = (data.get("title") or data.get("name") or "").strip()
+        if not name:
+            continue
+        language = str(item.get("iso_639_1") or "").strip().lower()
+        region = str(item.get("iso_3166_1") or "").strip().lower()
+        key = f"{language}-{region}" if region else language
+        priority = TRANSLATION_PRIORITY.get(key, TRANSLATION_PRIORITY.get(language, 999))
+        ranked.append((priority, index, name))
+    ranked.sort(key=lambda entry: (entry[0], entry[1]))
+    out: list[str] = []
+    seen: set[str] = set()
+    for _, _, name in ranked:
+        key = _norm(name)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(name)
+        if len(out) >= limit:
             break
     return out
 
@@ -266,7 +330,7 @@ def _match(kind: str, title: str, original: str | None, year: int | None) -> tup
         # llamada que la ficha: sin ellos, «vaiana» no encuentra «Moana».
         details = _get(
             detail_path, language="es-MX",
-            append_to_response="external_ids,alternative_titles",
+            append_to_response="external_ids,alternative_titles,translations",
         )
     except Exception:  # noqa: BLE001
         return None, True
@@ -290,6 +354,7 @@ def _match(kind: str, title: str, original: str | None, year: int | None) -> tup
         "original_title": (details.get("original_title") or details.get("original_name") or "").strip(),
         "localized_title": (details.get("title") or details.get("name") or "").strip(),
         "alt_titles": parse_alt_titles(details.get("alternative_titles")),
+        "translated_titles": parse_translations(details.get("translations")),
     }, False
 
 
@@ -321,8 +386,9 @@ async def _store_match(pool, title_id: str, match: dict) -> None:
             """
             insert into enrichment (title_id, imdb_id, tmdb_id, match_confidence, rating, year,
                                     genres, overview, popularity, vote_count, match_algo,
-                                    original_title, localized_title, alt_titles, aliases_at, updated_at)
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now(), now())
+                                    original_title, localized_title, alt_titles,
+                                    translated_titles, translations_at, aliases_at, updated_at)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now(), now(), now())
             on conflict (title_id) do update set
                 imdb_id = excluded.imdb_id, tmdb_id = excluded.tmdb_id,
                 match_confidence = excluded.match_confidence, rating = excluded.rating,
@@ -332,6 +398,8 @@ async def _store_match(pool, title_id: str, match: dict) -> None:
                 original_title = excluded.original_title,
                 localized_title = excluded.localized_title,
                 alt_titles = excluded.alt_titles,
+                translated_titles = excluded.translated_titles,
+                translations_at = now(),
                 aliases_at = now(),
                 updated_at = now()
             """,
@@ -340,6 +408,7 @@ async def _store_match(pool, title_id: str, match: dict) -> None:
             match.get("popularity", 0.0), match.get("vote_count", 0), ALGO_VERSION,
             match.get("original_title", ""), match.get("localized_title", ""),
             list(match.get("alt_titles") or []),
+            list(match.get("translated_titles") or []),
         )
         # Propaga el impacto a titles para que el índice ordene por popularidad
         # sin joins por fila (estrenos/géneros profesionales).
@@ -603,6 +672,93 @@ async def backfill_aliases(pool, workers: int = 1) -> int:
     return done
 
 
+def _fetch_translation_bundle(tmdb_id: int, kind: str) -> list[str] | None:
+    """Traducciones por idioma de un id ya casado en TMDB.
+
+    Prueba el tipo probable primero (películas: movie; series/anime/kids: tv) y cae al
+    otro, igual que el backfill de nombres. Devuelve None solo si TMDB ya no tiene el
+    id en ninguno de los dos tipos (404): así la fila se marca y no se reintenta para
+    siempre. Los errores de red se propagan para que la fila se reintente otro ciclo.
+    """
+    order = ("tv", "movie") if _media_for(kind) == "tv" else ("movie", "tv")
+    for media in order:
+        try:
+            payload = _get(f"/{media}/{tmdb_id}/translations", gap=TRANSLATIONS_GAP)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                continue
+            if exc.code == 429:  # límite de la API: se le da aire y se reintenta otro ciclo
+                time.sleep(3.0)
+            raise
+        return parse_translations(payload)
+    return None
+
+
+async def backfill_translations(pool, workers: int = 1) -> int:
+    """Traducciones por idioma para los matches ya existentes.
+
+    Los nombres alternativos por región (`alternative_titles`) no siempre traen los
+    nombres por idioma: la muestra real del 2026-10-22 dio nombres nuevos en 25/25
+    títulos sin alternativos y en 10/10 con alternativos («Die Simpsons», «Блич»,
+    «死神»). Aquí se completa esa mitad y se rehace `search_text` por trozos.
+    """
+    if not KEY:
+        return 0
+    async with pool.acquire() as conn:
+        pending = await conn.fetch(
+            """
+            select e.title_id, e.tmdb_id, t.kind, t.title
+            from enrichment e
+            join titles t on t.id = e.title_id
+            where e.tmdb_id is not null and coalesce(e.match_confidence, 0) >= 0.5
+              and e.translations_at is null
+            order by t.popularity desc nulls last, t.score desc nulls last
+            limit $1
+            """,
+            TRANSLATIONS_BATCH,
+        )
+    if not pending:
+        return 0
+    done, ids, gone = 0, [], 0
+    wave_size = max(1, workers)
+    for start in range(0, len(pending), wave_size):
+        wave = pending[start:start + wave_size]
+        results = await asyncio.gather(
+            *(asyncio.to_thread(_fetch_translation_bundle, row["tmdb_id"], row["kind"]) for row in wave),
+            return_exceptions=True,
+        )
+        for row, result in zip(wave, results):
+            if isinstance(result, BaseException):  # noqa: BLE001 - se reintenta otro ciclo
+                log.warning("TMDB traducciones: %s no se pudo consultar (%s)", row["title"], result)
+                continue
+            async with pool.acquire() as conn:
+                if result is None:
+                    # TMDB ya no tiene ese id: se marca para no reintentarlo para siempre.
+                    await conn.execute(
+                        "update enrichment set translations_at = now() where title_id = $1",
+                        row["title_id"],
+                    )
+                    gone += 1
+                    continue
+                await conn.execute(
+                    """
+                    update enrichment set translated_titles = $2,
+                           translations_at = now(), updated_at = now()
+                    where title_id = $1
+                    """,
+                    row["title_id"], result,
+                )
+            ids.append(row["title_id"])
+            done += 1
+        if len(ids) >= ALIAS_REBUILD_CHUNK:
+            await _rebuild_ids(pool, ids)
+            ids = []
+    if ids:
+        await _rebuild_ids(pool, ids)
+    log.info("TMDB traducciones: %s/%s nombres (ids perdidos en TMDB: %s)", done, len(pending), gone)
+    return done
+
+
 async def coverage(pool) -> list[dict]:
     """Cobertura de fichas por tipo (total, con match y sin intentar) — el medidor del ciclo."""
     if not KEY:
@@ -639,27 +795,32 @@ if __name__ == "__main__":
     import asyncpg
 
     async def _cli() -> None:
-        """Catch-up manual del backfill de nombres: `python tmdb.py --aliases [workers]`."""
-        if "--aliases" not in sys.argv:
-            print("uso: python tmdb.py --aliases [workers]   (nombres para buscar de matches ya hechos)")
+        """Catch-up manual: `--aliases [workers]` o `--translations [workers]`."""
+        mode = next((m for m in ("--translations", "--aliases") if m in sys.argv), "")
+        if not mode:
+            print("uso: python tmdb.py --aliases [workers] | --translations [workers]")
             return
         workers = 1
-        idx = sys.argv.index("--aliases") + 1
+        idx = sys.argv.index(mode) + 1
         if idx < len(sys.argv) and sys.argv[idx].isdigit():
             workers = max(1, int(sys.argv[idx]))
+        label = "traducciones" if mode == "--translations" else "alias"
         pool = await asyncpg.create_pool(os.environ["DATABASE_URL"], min_size=1, max_size=2)
         try:
             total = 0
             while True:
-                n = await backfill_aliases(pool, workers=workers)
+                if mode == "--translations":
+                    n = await backfill_translations(pool, workers=workers)
+                else:
+                    n = await backfill_aliases(pool, workers=workers)
                 total += n
                 # Barrido de sanación: cualquier texto viejo (p. ej. de una pasada
                 # interrumpida por un reinicio) se rehace aquí, no en horas.
                 healed = await search_text.rebuild(pool)
-                print(f"alias: {n} (total {total}); textos sanados: {healed}", flush=True)
+                print(f"{label}: {n} (total {total}); textos sanados: {healed}", flush=True)
                 if n == 0 and healed == 0:
                     break
-            print(f"alias completo: {total}")
+            print(f"{label} completo: {total}")
         finally:
             await pool.close()
 

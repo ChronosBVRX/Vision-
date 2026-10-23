@@ -24,8 +24,8 @@ import os
 import unicodedata
 
 # El texto se trunca a este largo (los primeros nombres — los importantes — nunca
-# se pierden; los alternativos de la cola quedan si hay espacio).
-MAX_SEARCH_TEXT = 1200
+# se pierden; los alternativos/traducciones de la cola quedan si hay espacio).
+MAX_SEARCH_TEXT = 2000
 
 # Tope de títulos por pasada de mantenimiento del ciclo (los títulos nuevos y los
 # recién enriquecidos se rehacen solos; esto solo acota el costo por ciclo).
@@ -49,14 +49,16 @@ def build_search_text(
     localized: str = "",
     original: str = "",
     alt_titles=(),
+    translated_titles=(),
 ) -> str:
     """El texto de búsqueda: nombres plegados + compactos, sin repetidos, acotado.
 
     Orden de importancia (el truncado respeta este orden): título del portal, alias
-    del portal, es-MX de TMDB, original de TMDB y por último los alternativos.
+    del portal, es-MX de TMDB, original de TMDB, alternativos por región y, al final,
+    las traducciones por idioma de TMDB.
     """
     parts: list[str] = []
-    for name in (title, portal_original, localized, original, *alt_titles):
+    for name in (title, portal_original, localized, original, *alt_titles, *translated_titles):
         folded = fold(name)
         if not folded:
             continue
@@ -75,7 +77,8 @@ _SELECT_MATCHING = """
            coalesce(t.original_title, '') as portal_original,
            coalesce(e.localized_title, '') as localized,
            coalesce(e.original_title, '') as original,
-           e.alt_titles
+           e.alt_titles,
+           e.translated_titles
     from titles t
     left join enrichment e on e.title_id = t.id
 """
@@ -112,6 +115,7 @@ async def rebuild(pool, ids=None, limit: int | None = None) -> int:
                 row["localized"],
                 row["original"],
                 list(row["alt_titles"] or []),
+                list(row["translated_titles"] or []),
             ),
         )
         for row in rows
@@ -155,6 +159,7 @@ async def rebuild_all(pool, batch: int = 5000) -> int:
                     row["localized"],
                     row["original"],
                     list(row["alt_titles"] or []),
+                    list(row["translated_titles"] or []),
                 ),
             )
             for row in rows

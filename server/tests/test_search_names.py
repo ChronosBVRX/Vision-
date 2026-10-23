@@ -98,11 +98,13 @@ def test_rebuild_composes_the_text_from_the_tmdb_names():
         "localized": "Buscando a Nemo",
         "original": "Finding Nemo",
         "alt_titles": ["Finding Nemo 3D"],
+        "translated_titles": ["Buscando a Nemo", "Die Suche nach Nemo"],
     }])
     assert asyncio.run(search_text.rebuild(pool, ids=["xtv:12"])) == 1
     _, text = pool.updates[0]
     assert "buscando a nemo" in text
     assert "finding nemo" in text
+    assert "die suche nach nemo" in text
 
 
 def test_maintenance_pass_rebuilds_only_pending_texts():
@@ -135,6 +137,31 @@ def test_parse_alt_titles_caps_the_tail():
     assert len(tmdb.parse_alt_titles(payload)) == 40
 
 
+def test_parse_translations_prioritizes_spanish_and_dedupes():
+    payload = {"translations": [
+        {"iso_639_1": "ko", "iso_3166_1": "KR", "data": {"name": "심슨 가족"}},
+        {"iso_639_1": "es", "iso_3166_1": "MX", "data": {"name": "Los Simpson"}},
+        {"iso_639_1": "de", "iso_3166_1": "DE", "data": {"name": "Die Simpsons"}},
+        {"iso_639_1": "es", "iso_3166_1": "ES", "data": {"name": "Los Simpson"}},
+        {"iso_639_1": "ja", "iso_3166_1": "JP", "data": {"name": "ザ・シンプソンズ"}},
+        {"iso_639_1": "en", "iso_3166_1": "US", "data": {"name": "   "}},
+    ]}
+    names = tmdb.parse_translations(payload)
+    assert names[0] == "Los Simpson"
+    assert names[1] == "Die Simpsons"
+    assert names.count("Los Simpson") == 1
+    assert "심슨 가족" in names
+    assert tmdb.parse_translations(None) == []
+    assert tmdb.parse_translations({"translations": "basura"}) == []
+
+
+def test_parse_translations_caps_the_tail():
+    payload = {"translations": [
+        {"iso_639_1": f"x{i}", "data": {"title": f"Nombre {i}"}} for i in range(80)
+    ]}
+    assert len(tmdb.parse_translations(payload)) == 40
+
+
 def test_match_keeps_the_names_tmdb_knows(monkeypatch):
     calls = []
 
@@ -151,6 +178,9 @@ def test_match_keeps_the_names_tmdb_knows(monkeypatch):
             "popularity": 40.0, "genres": [{"name": "Animación"}],
             "overview": "Un pez payaso...", "external_ids": {"imdb_id": "tt0266543"},
             "alternative_titles": {"titles": [{"title": "Procurando Nemo"}]},
+            "translations": {"translations": [
+                {"iso_639_1": "de", "iso_3166_1": "DE", "data": {"title": "Findet Nemo"}},
+            ]},
         }
 
     monkeypatch.setattr(tmdb, "_get", fake_get)
@@ -159,9 +189,11 @@ def test_match_keeps_the_names_tmdb_knows(monkeypatch):
     assert match["localized_title"] == "Buscando a Nemo"
     assert match["original_title"] == "Finding Nemo"
     assert match["alt_titles"] == ["Procurando Nemo"]
+    assert match["translated_titles"] == ["Findet Nemo"]
     # Los nombres viajan en la MISMA llamada de la ficha (sin request extra).
     detail_calls = [c for c in calls if c[0].startswith("/movie/")]
     assert detail_calls and "alternative_titles" in detail_calls[0][1]["append_to_response"]
+    assert "translations" in detail_calls[0][1]["append_to_response"]
 
 
 def test_fetch_alias_bundle_falls_back_to_the_other_media(monkeypatch):
@@ -289,6 +321,80 @@ def test_alias_backfill_marks_tmdb_deleted_ids_without_counting_them(monkeypatch
     assert len(pool.writes) == 1  # solo la marca de aliases_at
 
 
+# ----- traducciones por idioma -----
+
+
+def test_translation_backfill_marks_rows_so_it_never_loops():
+    source = inspect.getsource(tmdb.backfill_translations)
+    assert "translations_at is null" in source
+    assert "translations_at = now()" in source
+    assert "_rebuild_ids" in source
+    assert "ALIAS_REBUILD_CHUNK" in source
+
+
+def test_translation_backfill_saves_names_and_rebuilds_each_title(monkeypatch):
+    monkeypatch.setattr(tmdb, "KEY", "test-key")
+    rows = [
+        {"title_id": "xtv:1", "tmdb_id": 11, "kind": "series", "title": "A"},
+        {"title_id": "xtv:2", "tmdb_id": 22, "kind": "movie", "title": "B"},
+        {"title_id": "xtv:3", "tmdb_id": 33, "kind": "anime", "title": "C"},
+    ]
+    seen = []
+
+    def fake_bundle(tmdb_id, kind):
+        seen.append(tmdb_id)
+        return ["Die Simpsons", "Блич"]
+
+    monkeypatch.setattr(tmdb, "_fetch_translation_bundle", fake_bundle)
+    rebuilt = []
+
+    async def fake_rebuild(pool, ids=None, limit=None):
+        rebuilt.extend(ids or [])
+        return len(ids or [])
+
+    monkeypatch.setattr(tmdb.search_text, "rebuild", fake_rebuild)
+    pool = _WritesPool(rows)
+    assert asyncio.run(tmdb.backfill_translations(pool, workers=2)) == 3
+    assert sorted(seen) == [11, 22, 33]
+    assert sorted(rebuilt) == ["xtv:1", "xtv:2", "xtv:3"]
+    assert len(pool.writes) == 3  # una escritura de traducciones por fila
+
+
+def test_translation_backfill_rebuilds_text_in_chunks(monkeypatch):
+    monkeypatch.setattr(tmdb, "KEY", "test-key")
+    monkeypatch.setattr(tmdb, "ALIAS_REBUILD_CHUNK", 1)
+    rows = [
+        {"title_id": "xtv:1", "tmdb_id": 11, "kind": "movie", "title": "A"},
+        {"title_id": "xtv:2", "tmdb_id": 22, "kind": "movie", "title": "B"},
+    ]
+    monkeypatch.setattr(
+        tmdb, "_fetch_translation_bundle", lambda tmdb_id, kind: ["Die Simpsons"]
+    )
+    calls = []
+
+    async def fake_rebuild(pool, ids=None, limit=None):
+        calls.append(sorted(ids or []))
+        return len(ids or [])
+
+    monkeypatch.setattr(tmdb.search_text, "rebuild", fake_rebuild)
+    assert asyncio.run(tmdb.backfill_translations(_WritesPool(rows), workers=1)) == 2
+    assert calls == [["xtv:1"], ["xtv:2"]]
+
+
+def test_translation_backfill_marks_tmdb_deleted_ids_without_rebuild(monkeypatch):
+    monkeypatch.setattr(tmdb, "KEY", "test-key")
+    rows = [{"title_id": "xtv:9", "tmdb_id": 99, "kind": "movie", "title": "Z"}]
+    monkeypatch.setattr(tmdb, "_fetch_translation_bundle", lambda tmdb_id, kind: None)
+
+    async def fake_rebuild(pool, ids=None, limit=None):
+        raise AssertionError("sin nombres guardados no hay nada que rehacer")
+
+    monkeypatch.setattr(tmdb.search_text, "rebuild", fake_rebuild)
+    pool = _WritesPool(rows)
+    assert asyncio.run(tmdb.backfill_translations(pool)) == 0
+    assert len(pool.writes) == 1  # solo la marca de translations_at
+
+
 # ----- etapas del endpoint -----
 
 
@@ -304,6 +410,7 @@ def test_deep_match_covers_cast_synopsis_and_tmdb_names():
     assert "$4" in sql
     for field in (
         "cast_list", "synopsis", "localized_title", "original_title", "alt_titles",
+        "translated_titles",
     ):
         assert field in sql
 
@@ -333,13 +440,54 @@ def test_fuzzy_skips_short_probes_without_touching_the_db(monkeypatch):
     assert asyncio.run(app._search_fuzzy("abc", 10)) == []
 
 
+def test_search_text_includes_translations():
+    text = search_text.build_search_text(
+        "Moana",
+        translated_titles=["Vaiana", "Oceania", "Moana"],
+    )
+    assert "vaiana" in text
+    assert "oceania" in text
+    assert text.count("moana") == 1
+
+
 def test_rank_prefers_exact_and_covers_every_name():
     sql, params = app.build_rank("buscando a nemo")
     assert params == ["buscando a nemo", "buscando a nemo%", "%buscando a nemo%", "buscandoanemo"]
     for field in (
         "t.title", "t.original_title", "e.localized_title", "e.original_title", "e.alt_titles",
+        "e.translated_titles",
     ):
         assert field in sql
+    exact_branch = sql.split("then 1")[0]
+    assert "alt_titles" not in exact_branch
+    assert "translated_titles" not in exact_branch
+    second_branch = sql.split("then 1")[1].split("then 2")[0]
+    assert "alt_titles" in second_branch
+    assert "translated_titles" in second_branch
+    assert "then 3" in sql and "then 4" in sql and "then 5" in sql and "then 6" in sql
+
+
+def test_search_page_puts_live_channels_after_on_demand(monkeypatch):
+    fake = _CaptureDb()
+    monkeypatch.setattr(app, "db", lambda: fake)
+    asyncio.run(app._search_page(
+        "t.search_text like $5", ["%nemo%"], "nemo", 10))
+    sql, _ = fake.calls[0]
+    assert "case when t.kind = 'live' then 1 else 0 end" in sql
+    assert "t.year asc nulls last" in sql
+
+
+def test_portal_wait_only_when_the_local_index_lacks_the_name():
+    assert app.should_wait_for_portal([], "nemo") is True
+    assert app.should_wait_for_portal([{"search_text": "finding nemo"}], "nemo") is False
+    assert app.should_wait_for_portal([{"search_text": "otra cosa"}], "nemo") is True
+
+
+def test_tmdb_dedupe_only_with_high_confidence():
+    entry = {"tmdbId": 93405}
+    assert app._tmdb_dedupe_key(entry, {"match_confidence": 0.9}) == 93405
+    assert app._tmdb_dedupe_key(entry, {"match_confidence": 0.6}) == 0
+    assert app._tmdb_dedupe_key({"tmdbId": 0}, {"match_confidence": 1.0}) == 0
 
 
 def test_rank_folds_punctuation_like_the_query():

@@ -148,6 +148,10 @@ services:
       # ciclo y ritmo propio (una llamada por título conocido, sin búsqueda).
       TMDB_ALIAS_BATCH: "${TMDB_ALIAS_BATCH:-1500}"
       TMDB_ALIAS_GAP_SECONDS: "${TMDB_ALIAS_GAP_SECONDS:-0.08}"
+      # Traducciones por idioma de TMDB (`/translations`): otra llamada por título
+      # conocido, con su propio marcador y presupuesto.
+      TMDB_TRANSLATIONS_BATCH: "${TMDB_TRANSLATIONS_BATCH:-1500}"
+      TMDB_TRANSLATIONS_GAP: "${TMDB_TRANSLATIONS_GAP:-0.12}"
       # Texto de búsqueda materializado: títulos por ciclo que se rehacen de más.
       SEARCH_TEXT_BATCH: "${SEARCH_TEXT_BATCH:-20000}"
       TZ: "${TZ:-America/Mexico_City}"

@@ -210,6 +210,12 @@ async def main() -> None:
                 except Exception:  # noqa: BLE001
                     log.exception("el backfill de nombres TMDB falló")
                 try:
+                    # Traducciones por idioma («Die Simpsons», «Блич»): la otra mitad de
+                    # los nombres; una llamada por título nuevo o pendiente.
+                    await tmdb.backfill_translations(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el backfill de traducciones TMDB falló")
+                try:
                     # Mantenimiento del texto de búsqueda: títulos nuevos o con
                     # enriquecimiento más nuevo que su texto (no toca la versión).
                     await search_text.rebuild(pool)
