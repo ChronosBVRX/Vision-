@@ -25,7 +25,9 @@ import androidx.compose.foundation.lazy.items as rowItems
 import androidx.compose.foundation.lazy.itemsIndexed as rowItemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SettingsRemote
 import androidx.compose.material.icons.rounded.Wifi
@@ -60,6 +62,7 @@ import com.chronosbvrx.visionplus.home.contract.LiveItem
 import com.chronosbvrx.visionplus.home.contract.MediaKind
 import com.chronosbvrx.visionplus.home.contract.RowKind
 import com.chronosbvrx.visionplus.home.data.AppEntry
+import com.chronosbvrx.visionplus.home.data.HomeUpdate
 
 /**
  * El Inicio: hero + «Seguir viendo» + TV en vivo + apps + las filas del catálogo.
@@ -75,7 +78,6 @@ fun HomeSurface(
     metrics: HomeMetrics,
     reduced: Boolean,
     compact: Boolean,
-    visionInstalled: Boolean,
     landing: FocusRequester,
     onHeroPlay: (HeroItem) -> Unit,
     onHeroOpen: (HeroItem) -> Unit,
@@ -96,15 +98,6 @@ fun HomeSurface(
         contentPadding = PaddingValues(bottom = 36.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        if (!visionInstalled) {
-            item("missing") {
-                MissingVisionBanner(
-                    onRetry = onOpenVision,
-                    onSettings = onSystemSettings,
-                    modifier = Modifier.padding(horizontal = metrics.horizontalPadding),
-                )
-            }
-        }
         item("hero") {
             if (feed?.hero.isNullOrEmpty()) {
                 BrandHero(
@@ -247,13 +240,16 @@ private fun BrandHero(
     }
 }
 
-/** Aviso honesto cuando Vision+ no está instalado: el launcher sigue siendo útil. */
+/** Aviso honesto cuando Vision+ no está instalado: el launcher se pone completo él solo. */
 @Composable
-private fun MissingVisionBanner(
-    onRetry: () -> Unit,
+fun MissingVisionBanner(
+    state: HomeUpdate.State,
+    canInstall: Boolean,
+    onInstall: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val busy = state is HomeUpdate.State.Checking || state is HomeUpdate.State.Downloading
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -271,14 +267,38 @@ private fun MissingVisionBanner(
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                "Instálalo para tener TV en vivo, películas y «Seguir viendo» en este Inicio. Las apps ya funcionan.",
+                when {
+                    !canInstall ->
+                        "Permite «Instalar apps desconocidas» para Vision+ Home (un paso del sistema) y vuelve aquí."
+                    state is HomeUpdate.State.Checking -> "Buscando la última versión en el release oficial…"
+                    state is HomeUpdate.State.Downloading -> "Descargando Vision+… ${state.percent} %"
+                    state is HomeUpdate.State.Ready -> "Descarga lista: confirma la instalación en la pantalla del sistema."
+                    state is HomeUpdate.State.Failed -> "No se pudo: ${state.message}"
+                    else -> "Instálalo desde aquí mismo (se baja del release oficial). Las apps ya funcionan."
+                },
                 color = HomeColors.TextDim,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (state is HomeUpdate.State.Downloading) {
+                Spacer(Modifier.height(6.dp))
+                ThinProgress(state.percent)
+            }
         }
-        HomeButton(label = "Reintentar", onClick = onRetry, icon = null)
+        HomeButton(
+            label = when {
+                !canInstall -> "Permitir instalación"
+                state is HomeUpdate.State.Downloading -> "${state.percent} %"
+                state is HomeUpdate.State.Checking -> "Buscando…"
+                state is HomeUpdate.State.Ready -> "Instalando…"
+                state is HomeUpdate.State.Failed -> "Reintentar"
+                else -> "Instalar Vision+"
+            },
+            onClick = { if (!busy) onInstall() },
+            icon = if (canInstall) Icons.Rounded.Download else Icons.Rounded.Lock,
+            primary = true,
+        )
         HomeButton(label = "Ajustes", onClick = onSettings, icon = Icons.Rounded.Settings, primary = false)
     }
 }

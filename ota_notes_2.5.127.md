@@ -18,6 +18,9 @@ Qué trae:
 - **Tus apps instaladas**, con recientes, favoritas (mantén OK para fijar) y accesos del sistema.
 - **Buscador** con voz o texto, que abre el catálogo completo de Vision+.
 - **Atajos**: ajustes de Vision+, ajustes de la tele, cambiar el Inicio y actualizar el launcher.
+- **Se pone completo él solo**: si en la tele solo está Vision+ Home, su Inicio ofrece
+  **«Instalar Vision+»** (lo baja del release oficial, con progreso) y, si el sistema lo pide,
+  lleva directo a la pantalla de «instalar apps desconocidas» para permitirlo.
 
 El launcher no reproduce nada por su cuenta: abre Vision+ en el título, el canal o la sección
 exactos. Así el motor, los perfiles, las descargas y la continuidad siguen viviendo en un solo

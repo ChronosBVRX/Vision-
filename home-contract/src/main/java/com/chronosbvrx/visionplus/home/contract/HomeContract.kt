@@ -26,9 +26,12 @@ object HomeContract {
     const val LAUNCHER_PACKAGE = "com.chronosbvrx.visionplus.home"
 
     /** Versión del launcher que se publica junto a esta build. */
-    const val LAUNCHER_VERSION_NAME = "1.0.1"
-    const val LAUNCHER_VERSION_CODE = 2
+    const val LAUNCHER_VERSION_NAME = "1.0.3"
+    const val LAUNCHER_VERSION_CODE = 4
 
     /** El asset del release con el APK del launcher. */
     const val LAUNCHER_ASSET = "VisionPlusHome.apk"
+
+    /** El asset del release con la app (lo descarga el launcher si está solo). */
+    const val APP_ASSET = "VisionPlus.apk"
 }

@@ -2,6 +2,9 @@ package com.chronosbvrx.visionplus.home.data
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -15,10 +18,12 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
- * El launcher se actualiza solo desde el MISMO release que Vision+ (`VisionPlusHome.apk`).
+ * Las dos descargas del launcher, desde el MISMO release de GitHub:
+ * - [installLatest]: se actualiza a sí mismo (`VisionPlusHome.apk`).
+ * - [installVisionPlus]: instala la app si el equipo solo tiene el launcher (`VisionPlus.apk`).
  *
- * No hay tienda: se descarga el asset, el instalador del sistema lo confirma y listo. Si el
- * release no trae el asset, se dice y no se toca nada.
+ * No hay tienda: se baja el asset, el instalador del sistema lo confirma y listo. Cada una
+ * tiene su propio estado para que el progreso de una no pise a la otra.
  */
 object HomeUpdate {
     private const val RELEASES_URL = "https://api.github.com/repos/ChronosBVRX/Vision-/releases/latest"
@@ -31,37 +36,85 @@ object HomeUpdate {
         data class Failed(val message: String) : State
     }
 
+    /** Estado de la actualización del launcher. */
     var state: State by mutableStateOf(State.Idle)
+        private set
+
+    /** Estado de la instalación de Vision+ (cuando el launcher está solo). */
+    var visionState: State by mutableStateOf(State.Idle)
         private set
 
     val versionName: String get() = BuildConfig.VERSION_NAME
 
-    /** Descarga el último `VisionPlusHome.apk` y abre el instalador. */
-    suspend fun installLatest(context: Context) {
-        val app = context.applicationContext
-        state = State.Checking
-        try {
-            val link = withContext(Dispatchers.IO) { assetUrl() }
-            if (link.isNullOrBlank()) {
-                state = State.Failed("El release no trae ${HomeContract.LAUNCHER_ASSET}")
-                return
-            }
-            val file = withContext(Dispatchers.IO) { download(app, link) }
-            if (file == null) {
-                state = State.Failed("No se pudo descargar la actualización")
-                return
-            }
-            state = if (install(app, file)) State.Ready else State.Failed("No se pudo abrir el instalador")
-        } catch (t: Throwable) {
-            state = State.Failed(t.message ?: "Error de red")
+    /**
+     * Android 8+ exige que el usuario permita «instalar apps desconocidas» para ESTA app.
+     * Sin esto el instalador se abre y se cierra con un aviso sin salida.
+     */
+    fun canInstall(context: Context): Boolean =
+        Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()
+
+    /** Abre la pantalla exacta de «instalar apps desconocidas» para Vision+ Home. */
+    fun openInstallPermission(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT >= 26) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:${context.packageName}"),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (runCatching { context.startActivity(intent) }.isSuccess) return true
         }
+        val fallback = Intent(Settings.ACTION_SECURITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return runCatching { context.startActivity(fallback) }.isSuccess
     }
+
+    /** Descarga el último `VisionPlusHome.apk` y abre el instalador. */
+    suspend fun installLatest(context: Context) =
+        installAsset(context, HomeContract.LAUNCHER_ASSET) { state = it }
+
+    /** Descarga el último `VisionPlus.apk` y abre el instalador (launcher sin la app). */
+    suspend fun installVisionPlus(context: Context) =
+        installAsset(context, HomeContract.APP_ASSET) { visionState = it }
 
     fun reset() {
         state = State.Idle
     }
 
-    private fun assetUrl(): String? {
+    fun resetVision() {
+        visionState = State.Idle
+    }
+
+    private suspend fun installAsset(
+        context: Context,
+        assetName: String,
+        setState: (State) -> Unit,
+    ) {
+        val app = context.applicationContext
+        if (!canInstall(app)) {
+            // Mejor pedir el permiso ANTES de bajar 101 MB.
+            openInstallPermission(app)
+            setState(State.Failed("Permite «Instalar apps desconocidas» para Vision+ Home y vuelve a intentarlo"))
+            return
+        }
+        setState(State.Checking)
+        try {
+            val link = withContext(Dispatchers.IO) { assetUrl(assetName) }
+            if (link.isNullOrBlank()) {
+                setState(State.Failed("El release no trae $assetName"))
+                return
+            }
+            val file = withContext(Dispatchers.IO) {
+                download(app, link, assetName) { percent -> setState(State.Downloading(percent)) }
+            }
+            if (file == null) {
+                setState(State.Failed("No se pudo descargar $assetName"))
+                return
+            }
+            setState(if (install(app, file)) State.Ready else State.Failed("No se pudo abrir el instalador"))
+        } catch (t: Throwable) {
+            setState(State.Failed(t.message ?: "Error de red"))
+        }
+    }
+
+    private fun assetUrl(assetName: String): String? {
         val connection = (URL(RELEASES_URL).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 20_000
@@ -76,7 +129,7 @@ object HomeUpdate {
             val assets = JSONObject(body).optJSONArray("assets") ?: return null
             for (i in 0 until assets.length()) {
                 val asset = assets.optJSONObject(i) ?: continue
-                if (asset.optString("name").equals(HomeContract.LAUNCHER_ASSET, ignoreCase = true)) {
+                if (asset.optString("name").equals(assetName, ignoreCase = true)) {
                     return asset.optString("browser_download_url").takeIf { it.isNotBlank() }
                 }
             }
@@ -86,10 +139,15 @@ object HomeUpdate {
         }
     }
 
-    private fun download(context: Context, link: String): File? = runCatching {
+    private fun download(
+        context: Context,
+        link: String,
+        assetName: String,
+        onProgress: (Int) -> Unit,
+    ): File? = runCatching {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
-        val target = File(dir, HomeContract.LAUNCHER_ASSET)
+        val target = File(dir, assetName)
         val connection = (URL(link).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 60_000
@@ -112,7 +170,7 @@ object HomeUpdate {
                             val percent = ((done * 100) / total).toInt().coerceIn(0, 100)
                             if (percent != last) {
                                 last = percent
-                                state = State.Downloading(percent)
+                                onProgress(percent)
                             }
                         }
                         read = input.read(buffer)

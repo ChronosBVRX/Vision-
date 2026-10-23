@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +43,7 @@ import com.chronosbvrx.visionplus.home.ui.HomeColors
 import com.chronosbvrx.visionplus.home.ui.HomeTab
 import com.chronosbvrx.visionplus.home.ui.HomeSurface
 import com.chronosbvrx.visionplus.home.ui.LiveSurface
+import com.chronosbvrx.visionplus.home.ui.MissingVisionBanner
 import com.chronosbvrx.visionplus.home.ui.SearchDialog
 import com.chronosbvrx.visionplus.home.ui.TopChrome
 import com.chronosbvrx.visionplus.home.rememberHomeMetrics
@@ -70,7 +72,8 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     var tab by rememberSaveable { mutableStateOf(HomeTab.of(prefs.lastTab)) }
     var commandCenter by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
-    var visionInstalled by remember { mutableStateOf(false) }
+    var visionInstalled by remember { mutableStateOf(appsRepo.visionPlusInstalled()) }
+    var canInstall by remember { mutableStateOf(HomeUpdate.canInstall(context)) }
     var homeKey by remember { mutableIntStateOf(0) }
     var forceLanding by remember { mutableIntStateOf(0) }
     var heroFocused by remember { mutableStateOf(false) }
@@ -98,6 +101,11 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         scope.launch {
             feeds.refresh()?.let { feed = it }
             visionInstalled = appsRepo.visionPlusInstalled()
+            canInstall = HomeUpdate.canInstall(context)
+            // Si el instalador se canceló, el botón vuelve a ofrecer la instalación.
+            if (!visionInstalled && HomeUpdate.visionState is HomeUpdate.State.Ready) {
+                HomeUpdate.resetVision()
+            }
         }
     }
 
@@ -193,6 +201,26 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                 compact = compact,
                 activeTabRequester = tabLanding,
             )
+            if (!visionInstalled) {
+                MissingVisionBanner(
+                    state = HomeUpdate.visionState,
+                    canInstall = canInstall,
+                    onInstall = {
+                        if (HomeUpdate.canInstall(context)) {
+                            scope.launch { HomeUpdate.installVisionPlus(context) }
+                        } else {
+                            HomeUpdate.openInstallPermission(context)
+                        }
+                    },
+                    onSettings = { appsRepo.openSystemSettings() },
+                    modifier = Modifier.padding(
+                        start = metrics.horizontalPadding,
+                        end = metrics.horizontalPadding,
+                        top = 4.dp,
+                        bottom = 8.dp,
+                    ),
+                )
+            }
             Box(Modifier.weight(1f)) {
                 when (tab) {
                     HomeTab.HOME -> key(homeKey) {
@@ -203,7 +231,6 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                             metrics = metrics,
                             reduced = reduced,
                             compact = compact,
-                            visionInstalled = visionInstalled,
                             landing = landing,
                             onHeroPlay = { item -> openLink(item.playLink.ifBlank { item.openLink }) },
                             onHeroOpen = { item -> openLink(item.openLink) },
@@ -215,7 +242,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                             onSeeLive = { tab = HomeTab.LIVE },
                             onSeeApps = { tab = HomeTab.APPS },
                             onOpenHistory = { openLink(VisionLinks.library()) },
-                            onOpenVision = { openVision() },
+                            onOpenVision = { if (visionInstalled) openVision() else scope.launch { HomeUpdate.installVisionPlus(context) } },
                             onSystemSettings = { appsRepo.openSystemSettings() },
                             onPrimaryFocus = { heroFocused = it },
                         )
@@ -273,6 +300,15 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             },
             onUpdate = {
                 scope.launch { HomeUpdate.installLatest(context) }
+            },
+            visionInstalled = visionInstalled,
+            visionInstallState = HomeUpdate.visionState,
+            onInstallVision = {
+                if (HomeUpdate.canInstall(context)) {
+                    scope.launch { HomeUpdate.installVisionPlus(context) }
+                } else {
+                    HomeUpdate.openInstallPermission(context)
+                }
             },
         )
     }

@@ -3,13 +3,14 @@
 > Decisión del usuario (2026-10-23): **APK separado**, no un modo dentro de la app.
 > Este documento fija la arquitectura y las fases. **No hay código de producto todavía.**
 
-## Estado (2026-10-23) — PUBLICADO en la OTA 2.5.126
+## Estado (2026-10-23) — PUBLICADO en la OTA 2.5.127
 
-`VisionPlus.apk` (vc362, 101.2 MB) + `VisionPlusHome.apk` (v1.0.2 / vc3, 1.2 MB), los dos con la
+`VisionPlus.apk` (vc363, 101.2 MB) + `VisionPlusHome.apk` (v1.0.3 / vc4, 1.2 MB), los dos con la
 firma histórica `9593cb0d…`. Fases 1-5 hechas; fase 6 verificada en emulador con el **release R8**
 instalado (permiso `HOME_FEED: granted=true`, hero/filas/TV en vivo/apps reales, ficha y buscador
-por deep link). **Pendiente**: prueba física en la ZTE y el Chromecast (elegir Inicio, reiniciar y
-ver que se queda; abrir un canal y una ficha con el mando).
+por deep link). **El launcher se instala Vision+ él solo** si la tele viene vacía (banner con
+progreso + permiso de «apps desconocidas»). **Pendiente**: prueba física en la ZTE y el Chromecast
+(elegir Inicio, reiniciar y ver que se queda; abrir un canal y una ficha con el mando).
 
 Lecciones que costaron un build:
 - `Modifier.onFocusChanged` va **antes** del `clickable/focusable`; si va después, nunca observa el

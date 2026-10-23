@@ -64,6 +64,9 @@ fun CommandCenterDialog(
     onSystemSettings: () -> Unit,
     onHomeSettings: () -> Unit,
     onUpdate: () -> Unit,
+    visionInstalled: Boolean = true,
+    visionInstallState: HomeUpdate.State = HomeUpdate.State.Idle,
+    onInstallVision: () -> Unit = {},
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -137,6 +140,20 @@ fun CommandCenterDialog(
                     HomeButton(label = "Cambiar", onClick = onOpenVisionSettings, icon = null)
                 }
                 Spacer(Modifier.height(18.dp))
+                if (!visionInstalled) {
+                    PanelAction(
+                        icon = Icons.Rounded.Download,
+                        title = "Instalar Vision+",
+                        detail = when (visionInstallState) {
+                            is HomeUpdate.State.Checking -> "Buscando la última versión…"
+                            is HomeUpdate.State.Downloading -> "Descargando… ${visionInstallState.percent} %"
+                            is HomeUpdate.State.Ready -> "Descarga lista: confirma en la pantalla del sistema"
+                            is HomeUpdate.State.Failed -> "No se pudo: ${visionInstallState.message}"
+                            HomeUpdate.State.Idle -> "El launcher se baja la app del release oficial"
+                        },
+                        onClick = onInstallVision,
+                    )
+                }
                 PanelAction(
                     icon = Icons.Rounded.SettingsRemote,
                     title = "Ajustes de Vision+",
