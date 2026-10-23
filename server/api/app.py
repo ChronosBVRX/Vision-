@@ -2207,6 +2207,57 @@ def _clean_diag_text(value, limit: int) -> str:
     return text[:limit]
 
 
+# `session` = latido por apertura de la app (no es un fallo: es el denominador del SLO).
+DIAG_KINDS = ("crash", "anr", "anomaly", "feedback", "session")
+
+# Objetivo de calidad: % de aperturas sin crash. Bajarlo de aquí es una regresión real.
+DIAG_CRASH_FREE_TARGET = 99.0
+
+
+def crash_free_pct(sessions: int, crashed: int) -> float:
+    """% de sesiones sin crash (puro). Sin sesiones no hay dato: devuelve 100.0."""
+    if sessions <= 0:
+        return 100.0
+    clean = max(0, sessions - max(0, crashed))
+    return round(100.0 * clean / sessions, 2)
+
+
+def diag_health_payload(rows, target: float = DIAG_CRASH_FREE_TARGET) -> dict:
+    """Resumen de salud por versión (puro, testeable sin base de datos).
+
+    `rows`: filas con `app_version`, `version_code`, `sessions`, `crashed`, `anr`.
+    """
+    versions = []
+    total_sessions = total_crashed = total_anr = 0
+    for row in rows:
+        sessions = int(row["sessions"] or 0)
+        crashed = int(row["crashed"] or 0)
+        anrs = int(row["anr"] or 0)
+        total_sessions += sessions
+        total_crashed += crashed
+        total_anr += anrs
+        versions.append({
+            "version": str(row["app_version"] or "?"),
+            "versionCode": int(row["version_code"] or 0),
+            "sessions": sessions,
+            "crashedSessions": crashed,
+            "anrSessions": anrs,
+            "crashFreePct": crash_free_pct(sessions, crashed),
+            "anrFreePct": crash_free_pct(sessions, anrs),
+        })
+    overall = crash_free_pct(total_sessions, total_crashed)
+    return {
+        "sessions": total_sessions,
+        "crashedSessions": total_crashed,
+        "anrSessions": total_anr,
+        "crashFreePct": overall,
+        "anrFreePct": crash_free_pct(total_sessions, total_anr),
+        "target": target,
+        "meetsTarget": overall >= target,
+        "versions": versions,
+    }
+
+
 @app.post("/v1/diag")
 async def diag_report(request: Request, x_api_key: str | None = Header(default=None)):
     require_key(x_api_key)
@@ -2223,7 +2274,7 @@ async def diag_report(request: Request, x_api_key: str | None = Header(default=N
     if not _diag_rate_ok(_diag_bucket, ip, time.time()):
         raise HTTPException(status_code=429, detail="demasiados reportes")
     kind = _clean_diag_text(body.get("kind"), 16).lower() or "anomaly"
-    if kind not in ("crash", "anr", "anomaly", "feedback"):
+    if kind not in DIAG_KINDS:
         kind = "anomaly"
     payload = body.get("payload") if isinstance(body.get("payload"), dict) else {}
     await db().execute(
@@ -2265,6 +2316,7 @@ async def diag_summary(
                (array_agg(payload order by created_at desc))[1] as sample
         from diag_reports
         where created_at > now() - make_interval(days => $1)
+          and kind <> 'session'
         group by fingerprint
         order by max(created_at) desc
         limit $2
@@ -2297,6 +2349,59 @@ async def diag_summary(
             "sample": sample,
         })
     return {"reports": reports}
+
+
+@app.get("/v1/diag/health")
+async def diag_health(
+    days: int = Query(default=7, ge=1, le=90),
+    x_api_key: str | None = Header(default=None),
+):
+    """Salud real de la app: % de aperturas sin crash y sin ANR, por versión.
+
+    El denominador son los latidos `session` que la app manda al abrir (uno por apertura);
+    sin ellos solo se verían los fallos, no la proporción. Un crash del proceso `:x4k`
+    cuenta contra la sesión en la que ocurrió (mismo `payload.session`).
+    """
+    require_key(x_api_key)
+    rows = await db().fetch(
+        """
+        with s as (
+            select app_version, version_code, coalesce(payload->>'session', '') as sid
+            from diag_reports
+            where kind = 'session'
+              and created_at > now() - make_interval(days => $1)
+              and coalesce(payload->>'session', '') <> ''
+        ),
+        c as (
+            select distinct coalesce(payload->>'session', '') as sid
+            from diag_reports
+            where kind = 'crash'
+              and created_at > now() - make_interval(days => $1)
+              and coalesce(payload->>'session', '') <> ''
+        ),
+        a as (
+            select distinct coalesce(payload->>'session', '') as sid
+            from diag_reports
+            where kind = 'anr'
+              and created_at > now() - make_interval(days => $1)
+              and coalesce(payload->>'session', '') <> ''
+        )
+        select s.app_version,
+               max(s.version_code) as version_code,
+               count(distinct s.sid) as sessions,
+               count(distinct case when c.sid is not null then s.sid end) as crashed,
+               count(distinct case when a.sid is not null then s.sid end) as anr
+        from s
+        left join c on c.sid = s.sid
+        left join a on a.sid = s.sid
+        group by s.app_version
+        order by max(s.version_code) desc
+        """,
+        days,
+    )
+    payload = diag_health_payload(rows)
+    payload["days"] = days
+    return payload
 
 
 # ----- configuración remota (Fase 2) -----

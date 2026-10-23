@@ -5,7 +5,17 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
-- **Mi lista → Historial con avance y reanudar (app; pendiente OTA) — 801 Android** (2026-10-23):
+- **HOTFIX 2.5.123 PUBLICADA: el motor se auto-repara si su DEX no verifica, la sesión deja de reacuñar en bucle y la app ya mide su % de aperturas sin crash — 816 Android + 333 backend** (2026-10-23):
+  - *Pedido del usuario*: «Haz todo para subir a 9… hay otro agente trabajando en mi lista, no entorpezcas… íntegrense sin regresiones ni errores».
+  - *Diagnóstico EN VIVO (telemetría del VPS, no adivinado)*: (1) **5 crashes ese día en la tele ZTE B866V2 con 2.5.122**: `VerifyError: Verifier rejected class yc.h … can't resolve java.lang.String` y `NoClassDefFoundError: yc.h` en `X4KTitan.boot`; la declaración venía de `files/x4k/sdk-*.dex` → copia truncada del DEX del motor (la copia era `copyTo` sin verificar: una interrupción deja el archivo a medias para siempre). (2) **121 `SESSION_RENEW_FAIL` en 5 min** en un OnePlus 8 Pro: `portal100024 所在区域为黑名单` (rechazo permanente) y `ensureSession` reacuñaba en cada llamada porque el fallo no dejaba marca. (3) `PLAYER_SOFT_RESTART` 47 en 8 equipos (red, no build).
+  - *App — motor*: `copyAssetAtomically` (`.part` + `fd.sync()` + rename) + manifiesto `engine-manifest.txt` (versión + tamaño por DEX) → un archivo corto o de otra versión se vuelve a copiar; `load()` verifica `yc.h` al cargar; `boot()` captura `LinkageError`, borra `files/x4k` + `x4k-libs` y reintenta UNA vez (`healBudget`), reportando `ENGINE_DEX_REPAIRED`/`ENGINE_CLASS_INVALID`. Las libs también se copian atómicamente y se refrescan al cambiar de versión (antes el DEX viejo sobrevivía a las actualizaciones).
+  - *App — sesión*: `MINT_FAIL_BACKOFF_MS` = 60 s tras un mint fallido (puro `mintBackoffActive`, se limpia al acertar); `isSessionFailure` ya no trata cualquier `http 4` como patada (solo 401/403 + códigos de sesión), así un rechazo de región no dispara renovaciones.
+  - *App — telemetría*: latido `kind=session` por apertura (`MainActivity.onCreate` → `Diagnostics.sessionStart()`, id de 12 hex compartido con `:x4k` por archivo y en `payload.session`), cola propia `diag_sessions` (tope 5) para no desalojar crashes, y freno de anomalías por código (1/min, con `suppressed=N`).
+  - *Servidor (desplegado y verificado EN VIVO)*: `/v1/diag` acepta `session`; `/v1/diag/summary` y el triage la ignoran; **`GET /v1/diag/health`** (sesiones, % sin crash y sin ANR, por versión) + `quality_slo` en `sync/diag.py` que avisa al Telegram si baja del 99 % con ≥20 sesiones y enfriamiento de 24 h. Prueba viva: POST sesión+crash → `crashFreePct 0.0`; fila de QA borrada.
+  - *Infra*: `tools/publish_ota.ps1` ya sobrevive al stderr de Gradle (`cmd /c … 2>&1`): PowerShell 5 lo convertía en error terminante y cancelaba la publicación con la suite en verde.
+  - *Verificado*: **816 Android + 333 backend** en verde (15 nuevos: 8 del motor, 5 de sesión/cola, 2 de la sesión del portal); release R8 **101.2 MB** con firma histórica; asset descargado y comprobado (`versionCode='359' versionName='2.5.123'`, `9593cb0d…`) y las cadenas nuevas presentes en el DEX publicado (`engine-manifest.txt`, `ENGINE_DEX_REPAIRED`, `diag_sessions`, `APP_START`).
+  - *Pendiente*: prueba física en la ZTE/teléfono (reproducir: al instalar 2.5.123 el DEX dañado se re-extrae solo) y vigilar `/v1/diag/health` 24-48 h. **Perfiles** (la mayor deuda de producto) quedan pendientes a propósito: tocan `UserLibrary`/`PlaybackHistory` y otra sesión estaba en «Mi lista»; el mapa de capas y la deuda viven en `docs/ARQUITECTURA.md`.
+- **Mi lista → Historial con avance y reanudar (app; en la OTA 2.5.123) — 801 Android** (2026-10-23):
   - *Pedido del usuario*: agregar a «Mi lista» el historial de lo visto y registrar el avance de cada elemento para poder reanudar.
   - *Historial*: `PlaybackHistory` ahora **conserva también los terminados** (tope 60), `historyCards()` devuelve en curso + vistos (una entrada por serie, la más reciente) y `continueCards()` filtra `shouldKeep`, así «Seguir viendo» no se llena de cosas terminadas. `ResumeCard` suma `completed` y el avance real.
   - *UI*: pestaña **«Historial»** en `LibraryScreen` (móvil) y `TvLibraryScreen` (TV), con barra de avance y «Visto» / «Continuar en mm:ss». En curso reanuda con `resumeRoute`; terminado abre la ficha (o reinicia desde 00:00 si no hay ficha). `onResume` cableado en `PhoneApp` y `TvApp`.
@@ -1286,8 +1296,11 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.122**
-  (versionCode **358**, OTA v2.5.122 — «Porque viste X» en el Inicio (PlaybackHistory + Related + géneros,
+- App Android (Compose) **"Vision+"** — pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.123**
+  (versionCode **359**, OTA v2.5.123 — hotfix de estabilidad: el motor se re-extrae solo si su DEX no
+  verifica (cierra el `VerifyError` que dejó una tele sin reproducir), la sesión del portal deja de
+  reacuñar en bucle cuando la rechaza y la app mide su **% de aperturas sin crash**; incluye la pestaña
+  «Historial» de «Mi lista»), y antes la v2.5.122 — «Porque viste X» en el Inicio (PlaybackHistory + Related + géneros,
   sin repetir la semilla ni «Seguir viendo», sin mezclar cine con series y con filtro infantil) y
   «Tus series · Esta semana» (agenda de `/v1/schedule` cruzada con las series seguidas, una tarjeta por
   serie y caché de 6 h), en móvil y tele; la v2.5.121 «Relacionadas» en la ficha, modal de sugerencias al

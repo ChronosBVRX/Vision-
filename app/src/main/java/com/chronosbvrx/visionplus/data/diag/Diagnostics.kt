@@ -38,20 +38,38 @@ object Diagnostics {
 
     private const val TAG = "Diagnostics"
     private const val QUEUE_DIR = "diag_queue"
+    /** Los latidos de sesión van a su PROPIA cola: nunca deben desalojar un crash. */
+    private const val SESSION_QUEUE_DIR = "diag_sessions"
     private const val MAX_QUEUE = 40
+    private const val MAX_SESSION_QUEUE = 5
     private const val MAX_DETAIL_CHARS = 40_000
     private const val UPLOAD_EVERY_MS = 60_000L
     private const val ANR_PING_MS = 2_000L
     private const val ANR_THRESHOLD_MS = 5_000L
     private const val ANR_COOLDOWN_MS = 60_000L
 
+    /** Una anomalía del mismo código no se repite antes de este silencio (con su conteo). */
+    private const val ANOMALY_MIN_GAP_MS = 60_000L
+
+    /** Archivo que comparte el id de sesión con el proceso `:x4k` (que no ve nuestras prefs). */
+    private const val SESSION_FILE = "diag_session"
+
+    /** Un id de sesión más viejo que esto ya no describe la apertura actual. */
+    private const val SESSION_MAX_AGE_MS = 6L * 60 * 60 * 1000
+
     @Volatile private var enabled = true
     @Volatile private var screen = ""
     @Volatile private var phase = ""
     @Volatile private var engineState = "sin-iniciar"
     @Volatile private var app: Application? = null
+
+    /** Id de la sesión de uso actual (uno por apertura); vacío hasta [init]. */
+    @Volatile private var session = ""
+    private val sessionReported = AtomicBoolean(false)
     private val started = AtomicLong(0L)
     private val flushing = AtomicBoolean(false)
+    private val anomalyLastAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val anomalySkipped = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
     /**
      * La suite de unit tests corre en este mismo proceso y llegaba a subir reportes
@@ -67,6 +85,9 @@ object Diagnostics {
         if (isTestRuntime) return
         if (started.getAndSet(1L) != 0L) return
         app = application
+        // El id de sesión se crea al abrir la app (proceso principal) y viaja a `:x4k` por
+        // archivo: así el crash del reproductor se cuenta contra ESA apertura.
+        session = startSession(application, owner = isMainProcess(application))
         enabled = com.chronosbvrx.visionplus.ui.settings.VisionSettings.isDiagnosticsEnabled(application)
         installCrashGuard()
         startAnrWatchdog()
@@ -74,6 +95,16 @@ object Diagnostics {
             thread(name = "diag-upload", isDaemon = true) { uploadLoop() }
             flush()
         }
+    }
+
+    /**
+     * Un latido por apertura de la app (`MainActivity.onCreate`). Es el denominador del
+     * «% de sesiones sin crash»: sin él solo se ven los fallos y no la proporción real.
+     */
+    fun sessionStart() {
+        if (isTestRuntime) return
+        if (!sessionReported.compareAndSet(false, true)) return
+        enqueue(build(kind = "session", code = "APP_START", detail = ""), SESSION_QUEUE_DIR, MAX_SESSION_QUEUE)
     }
 
     fun setEnabled(value: Boolean) {
@@ -99,7 +130,17 @@ object Diagnostics {
     /** Anomalía no-fatal: código corto y estable + detalle técnico. */
     fun anomaly(code: String, detail: String = "") {
         if (isTestRuntime) return
-        enqueue(build(kind = "anomaly", code = code, detail = detail))
+        // Un bucle (red caída, portal que rechaza la sesión) puede llamar aquí cientos de
+        // veces por minuto: se emite una y se cuentan las demás para el mismo código.
+        val now = SystemClock.elapsedRealtime()
+        val last = anomalyLastAt[code] ?: 0L
+        if (!anomalyGateOpen(now, last)) {
+            anomalySkipped.merge(code, 1, Int::plus)
+            return
+        }
+        val skipped = anomalySkipped.remove(code) ?: 0
+        anomalyLastAt[code] = now
+        enqueue(build(kind = "anomaly", code = code, detail = detail, suppressed = skipped))
     }
 
     /** Reporte manual del usuario desde Ajustes. */
@@ -123,7 +164,14 @@ object Diagnostics {
 
     // ----- internos -----
 
-    private fun build(kind: String, code: String, detail: String, thread: String = "", message: String = ""): JSONObject? {
+    private fun build(
+        kind: String,
+        code: String,
+        detail: String,
+        thread: String = "",
+        message: String = "",
+        suppressed: Int = 0,
+    ): JSONObject? {
         val ctx = app ?: return null
         return runCatching {
             val payload = JSONObject().apply {
@@ -138,6 +186,10 @@ object Diagnostics {
                 put("freeStorageMb", ctx.filesDir.usableSpace / (1024 * 1024))
                 put("uptimeMin", SystemClock.elapsedRealtime() / 60_000)
                 put("deviceId", deviceHash(ctx))
+                // La sesión une el crash con la apertura en la que ocurrió: es lo que permite
+                // calcular «% de sesiones sin crash» en el servidor.
+                if (session.isNotBlank()) put("session", session)
+                if (suppressed > 0) put("suppressed", suppressed)
                 if (message.isNotBlank()) put("message", message.take(400))
                 if (detail.isNotBlank()) put("detail", detail.take(MAX_DETAIL_CHARS))
             }
@@ -169,13 +221,17 @@ object Diagnostics {
         return digest.take(8).joinToString("") { "%02x".format(it) }
     }
 
-    private fun enqueue(report: JSONObject?) {
+    private fun enqueue(
+        report: JSONObject?,
+        dirName: String = QUEUE_DIR,
+        max: Int = MAX_QUEUE,
+    ) {
         if (!enabled || report == null) return
         val ctx = app ?: return
         runCatching {
-            val dir = File(ctx.filesDir, QUEUE_DIR).apply { mkdirs() }
+            val dir = File(ctx.filesDir, dirName).apply { mkdirs() }
             File(dir, "r-${System.currentTimeMillis()}-${(0..9999).random()}.json").writeText(report.toString())
-            trimQueue(dir)
+            trimQueue(dir, max)
         }.onFailure { Log.w(TAG, "no se pudo encolar: ${it.message}") }
         flush()
     }
@@ -201,10 +257,13 @@ object Diagnostics {
         if (!flushing.compareAndSet(false, true)) return
         thread(name = "diag-flush", isDaemon = true) {
             try {
-                val files = File(ctx.filesDir, QUEUE_DIR).listFiles()?.sortedBy { it.name } ?: return@thread
-                for (file in files) {
-                    val sent = runCatching { upload(file.readText()) }.getOrDefault(false)
-                    if (sent) file.delete() else break // sin red: se reintenta en el próximo ciclo
+                // Primero los reportes reales; los latidos de sesión, al final.
+                for (dirName in listOf(QUEUE_DIR, SESSION_QUEUE_DIR)) {
+                    val files = File(ctx.filesDir, dirName).listFiles()?.sortedBy { it.name } ?: continue
+                    for (file in files) {
+                        val sent = runCatching { upload(file.readText()) }.getOrDefault(false)
+                        if (sent) file.delete() else break // sin red: se reintenta en el próximo ciclo
+                    }
                 }
             } finally {
                 flushing.set(false)
@@ -293,4 +352,45 @@ object Diagnostics {
         val id = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
         MessageDigest.getInstance("SHA-256").digest(id.toByteArray()).take(8).joinToString("") { "%02x".format(it) }
     }.getOrDefault("")
+
+    // ----- sesiones y freno de anomalías (puros, con guardián) -----
+
+    /** ¿Toca emitir una anomalía de este código? Tras emitir, el mismo código calla [gapMs]. */
+    internal fun anomalyGateOpen(nowMs: Long, lastAtMs: Long, gapMs: Long = ANOMALY_MIN_GAP_MS): Boolean =
+        lastAtMs <= 0L || nowMs - lastAtMs >= gapMs
+
+    /** Id de sesión nuevo: 12 caracteres hex (corto, sin datos del equipo). */
+    internal fun newSessionId(random: java.util.Random = java.util.Random()): String = buildString(12) {
+        repeat(12) { append("0123456789abcdef"[random.nextInt(16)]) }
+    }
+
+    /** Formato del archivo que comparte la sesión con `:x4k`: `id` y epoch en dos líneas. */
+    internal fun encodeSession(id: String, atMs: Long): String = "$id\n$atMs"
+
+    /**
+     * Lee el id de sesión compartido. Devuelve null si falta, es ilegible o es de una
+     * apertura demasiado vieja (otra sesión de uso).
+     */
+    internal fun decodeSession(text: String, nowMs: Long, maxAgeMs: Long = SESSION_MAX_AGE_MS): String? {
+        val lines = text.trim().lineSequence().filter { it.isNotBlank() }.take(2).toList()
+        if (lines.size < 2) return null
+        val id = lines[0].trim()
+        val at = lines[1].trim().toLongOrNull() ?: return null
+        if (id.length < 6) return null
+        val age = nowMs - at
+        if (age < -300_000L || age > maxAgeMs) return null
+        return id
+    }
+
+    /** Crea la sesión (proceso principal) o adopta la del archivo (`:x4k`). */
+    private fun startSession(ctx: Context, owner: Boolean): String {
+        val file = File(ctx.filesDir, SESSION_FILE)
+        val now = System.currentTimeMillis()
+        if (owner) {
+            val id = newSessionId()
+            runCatching { file.writeText(encodeSession(id, now)) }
+            return id
+        }
+        return runCatching { decodeSession(file.readText(), now) }.getOrNull() ?: newSessionId()
+    }
 }

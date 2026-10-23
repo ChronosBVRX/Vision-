@@ -3,6 +3,7 @@ package com.chronosbvrx.visionplus.data.xuper
 import android.content.Context
 import android.util.Log
 import android.view.View
+import com.chronosbvrx.visionplus.BuildConfig
 import dalvik.system.DexClassLoader
 import java.io.File
 import java.lang.reflect.InvocationHandler
@@ -42,6 +43,76 @@ internal fun dedupeTrackLabels(labels: List<String>, ids: List<Int>): List<Strin
 }
 
 /**
+ * Sello de la extracción del motor: versión de la app + tamaño de cada DEX copiado.
+ *
+ * Sin sello no se puede saber si un `sdk-N.dex` quedó a medias (una copia interrumpida por
+ * el sistema deja el archivo con bytes pero truncado) ni si viene de una versión anterior
+ * del APK. Ese archivo truncado es el que producía el `VerifyError: Verifier rejected
+ * class yc.h … can't resolve java.lang.String` visto en la tele de campo: el DEX abre, pero
+ * una clase al final ya no verifica. El manifiesto permite detectarlo y volver a copiar.
+ */
+internal const val ENGINE_MANIFEST_NAME = "engine-manifest.txt"
+
+/** Texto del manifiesto: `vc=<versionCode>` y una línea `<archivo>=<bytes>` por DEX. */
+internal fun engineManifest(versionCode: Int, sizes: Map<String, Long>): String = buildString {
+    append("vc=").append(versionCode).append('\n')
+    sizes.toSortedMap().forEach { (name, size) -> append(name).append('=').append(size).append('\n') }
+}
+
+/** Lee el manifiesto; texto vacío o ilegible = sin sello (se vuelve a extraer). */
+internal fun parseEngineManifest(text: String): Pair<Int, Map<String, Long>> {
+    var version = 0
+    val sizes = LinkedHashMap<String, Long>()
+    text.lineSequence().forEach { raw ->
+        val line = raw.trim()
+        val eq = line.indexOf('=')
+        if (line.isEmpty() || line.startsWith("#") || eq <= 0) return@forEach
+        val value = line.substring(eq + 1).toLongOrNull() ?: return@forEach
+        val key = line.substring(0, eq)
+        if (key == "vc") version = value.toInt() else sizes[key] = value
+    }
+    return version to sizes
+}
+
+/**
+ * ¿Hay que volver a copiar este archivo del motor desde el APK?
+ *
+ * Sí cuando falta, quedó vacío, no hay sello, el sello es de OTRA versión de la app (el
+ * motor pudo cambiar) o el tamaño no coincide con el que se copió (copia truncada).
+ */
+internal fun engineFileNeedsExtraction(
+    name: String,
+    exists: Boolean,
+    length: Long,
+    manifestVersion: Int,
+    appVersionCode: Int,
+    sizes: Map<String, Long>,
+): Boolean {
+    if (!exists || length <= 0L) return true
+    if (manifestVersion != appVersionCode) return true
+    val expected = sizes[name] ?: return true
+    return expected != length
+}
+
+/**
+ * ¿El archivo que ya estaba era una copia DAÑADA (y no solo de otra versión)? Se usa para
+ * reportar la auto-reparación sin llenar la telemetría en cada actualización de la app.
+ */
+internal fun engineFileWasCorrupt(
+    exists: Boolean,
+    length: Long,
+    manifestVersion: Int,
+    appVersionCode: Int,
+    sizes: Map<String, Long>,
+    name: String,
+): Boolean {
+    if (!exists || length <= 0L) return false
+    if (manifestVersion != appVersionCode) return false
+    val expected = sizes[name] ?: return false
+    return expected != length
+}
+
+/**
  * Xuper's own Titan SDK as shipped inside the X4K app (com.xuper.netxxus): the engine
  * (`com.titan.ranger.*`), its player view (`ed.e`) and the app-side facade (`yc.h`), carried
  * here as DEX assets with its native libraries.
@@ -54,6 +125,12 @@ internal fun dedupeTrackLabels(labels: List<String>, ids: List<Int>): List<Strin
  */
 object X4KTitan {
     private const val TAG = "X4KTitan"
+
+    /** Carpeta de los DEX extraídos (dentro de `filesDir`). */
+    private const val DIR_DEX = "x4k"
+
+    /** Carpeta de las librerías nativas extraídas. */
+    private const val DIR_LIBS = "x4k-libs"
 
     const val COMMUNICATION_KEY = "568e194f-d170-4369-96e8-4a457f641880"
     const val APP_ID = "com.android.msandroid"
@@ -79,6 +156,23 @@ object X4KTitan {
 
     @Volatile
     private var booted = false
+
+    /**
+     * La última carga falló con un error de enlace/verificación (`LinkageError`): el DEX
+     * extraído está dañado o es de otra versión. Habilita la auto-reparación (borrar y
+     * volver a extraer) una sola vez por arranque.
+     */
+    @Volatile
+    private var linkageFailure = false
+
+    /**
+     * Cuántas veces se puede borrar y re-extraer el motor en ESTE proceso. Si tras la
+     * reparación el bytecode sigue sin verificar, el problema no es una copia corta: se
+     * deja de copiar 34 MB en cada intento (el equipo no reproduciría, pero no se castiga
+     * el almacenamiento).
+     */
+    @Volatile
+    private var healBudget = 1
 
     @Volatile
     private var envSent = false
@@ -148,20 +242,45 @@ object X4KTitan {
             loader?.let { return true }
             return try {
                 val app = context.applicationContext
-                val workDir = File(app.filesDir, "x4k").apply { mkdirs() }
+                val workDir = File(app.filesDir, DIR_DEX).apply { mkdirs() }
+                val manifestFile = File(workDir, ENGINE_MANIFEST_NAME)
+                val (sealedVersion, sealedSizes) = parseEngineManifest(
+                    runCatching { manifestFile.readText() }.getOrDefault("")
+                )
+                val appVersion = BuildConfig.VERSION_CODE
+                // Un motor sellado por otra versión de la app pudo cambiar: se re-extrae.
+                val staleEngine = sealedVersion != appVersion
+                val sizes = LinkedHashMap<String, Long>()
                 val paths = ArrayList<String>()
                 DEX_ASSETS.forEachIndexed { index, asset ->
                     val file = File(workDir, "sdk-$index.dex")
-                    if (!file.exists() || file.length() == 0L) {
-                        app.assets.open(asset).use { input ->
-                            file.outputStream().use { output -> input.copyTo(output) }
+                    val wasCorrupt = engineFileWasCorrupt(
+                        file.exists(), file.length(), sealedVersion, appVersion, sealedSizes, file.name,
+                    )
+                    val needs = engineFileNeedsExtraction(
+                        file.name, file.exists(), file.length(), sealedVersion, appVersion, sealedSizes,
+                    )
+                    if (needs) {
+                        if (!copyAssetAtomically(app, asset, file)) {
+                            throw java.io.IOException("no se pudo extraer $asset")
+                        }
+                        if (wasCorrupt) {
+                            Log.w(TAG, "DEX dañado vuelto a extraer: ${file.name} (${file.length()} B)")
+                            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                                "ENGINE_DEX_REPAIRED", "${file.name} re-extraído y medido",
+                            )
                         }
                     }
                     file.setReadOnly()
+                    sizes[file.name] = file.length()
                     paths += file.absolutePath
                 }
+                // El sello se escribe SOLO cuando los tres DEX quedaron copiados y medidos: si
+                // el sistema mata la app a mitad, no queda un manifiesto que dé por bueno un
+                // archivo corto y la siguiente apertura vuelve a copiar todo.
+                runCatching { manifestFile.writeText(engineManifest(appVersion, sizes)) }
                 val outDir = File(app.codeCacheDir, "x4k").apply { mkdirs() }
-                val libDir = extractNativeLibs(app)
+                val libDir = extractNativeLibs(app, force = staleEngine)
                 // Kill-switch remoto `engine_child_first`: si algún equipo se portara raro,
                 // `{"engine_child_first": false}` devuelve el cargador parent-first sin OTA.
                 val childFirst = runCatching {
@@ -200,6 +319,10 @@ object X4KTitan {
                 mediaClass = runCatching { cl.loadClass("com.titan.ranger.bean.Media") }.getOrNull()
                 entryClass = runCatching { cl.loadClass("com.titan.ranger.bean.Entry") }.getOrNull()
                 viewClass = runCatching { cl.loadClass("ed.e") }.getOrNull()
+                // La fachada es la clase que el reproductor más usa: cargarla aquí convierte un
+                // DEX truncado en un fallo controlado (y reparable) ANTES de arrancar el motor,
+                // en vez de un `VerifyError` a media reproducción.
+                cl.loadClass("yc.h")
                 loader = cl
                 // Autocomprobación del espacio de nombres: si una clase del motor la sirve
                 // nuestro APK, se reporta AQUÍ (antes del crash del reproductor).
@@ -219,6 +342,13 @@ object X4KTitan {
                 )
                 com.chronosbvrx.visionplus.data.diag.Diagnostics.engine("cargado")
                 true
+            } catch (e: LinkageError) {
+                // El DEX existe pero una clase no verifica (copia truncada / motor de otra
+                // versión). No se puede seguir con ESTE cargador: `boot` lo re-extrae.
+                Log.e(TAG, "DEX del motor inválido: ${e.javaClass.simpleName}: ${e.message}")
+                linkageFailure = true
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.engine("error")
+                false
             } catch (e: Exception) {
                 Log.e(TAG, "no se pudo cargar el SDK X4K: ${e.message}")
                 com.chronosbvrx.visionplus.data.diag.Diagnostics.engine("error")
@@ -227,6 +357,50 @@ object X4KTitan {
                 )
                 false
             }
+        }
+    }
+
+    /**
+     * Copia un asset a [target] sin dejar nunca un archivo a medias: se escribe en
+     * `name.part`, se fuerza a disco y solo entonces se renombra (atómico en el mismo
+     * sistema de archivos). Una copia interrumpida deja el `.part`, no el archivo bueno.
+     */
+    private fun copyAssetAtomically(app: Context, asset: String, target: File): Boolean {
+        val dir = target.parentFile ?: return false
+        dir.mkdirs()
+        val tmp = File(dir, target.name + ".part")
+        runCatching { tmp.delete() }
+        return try {
+            var copied = 0L
+            app.assets.open(asset).use { input ->
+                tmp.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read <= 0) break
+                        output.write(buffer, 0, read)
+                        copied += read
+                    }
+                    output.flush()
+                    (output as? java.io.FileOutputStream)?.fd?.sync()
+                }
+            }
+            if (copied <= 0L) {
+                runCatching { tmp.delete() }
+                false
+            } else {
+                runCatching { target.delete() }
+                if (tmp.renameTo(target)) {
+                    true
+                } else {
+                    runCatching { tmp.delete() }
+                    false
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "no se pudo extraer $asset: ${e.message}")
+            runCatching { tmp.delete() }
+            false
         }
     }
 
@@ -245,17 +419,18 @@ object X4KTitan {
     }
 
     /** Copies the X4K .so set from assets into a private directory the loader can search. */
-    private fun extractNativeLibs(app: Context): File {
+    private fun extractNativeLibs(app: Context, force: Boolean): File {
         val abi = pickNativeAbi(app)
-        val libDir = File(app.filesDir, "x4k-libs").apply { mkdirs() }
+        val libDir = File(app.filesDir, DIR_LIBS)
+        // Versión nueva del APK: las libs viejas podrían no ser las del motor actual.
+        if (force) runCatching { libDir.deleteRecursively() }
+        libDir.mkdirs()
         LIB_NAMES.forEach { name ->
             val out = File(libDir, name)
             if (!out.exists() || out.length() == 0L) {
-                runCatching {
-                    app.assets.open("x4k/lib/$abi/$name").use { input ->
-                        out.outputStream().use { output -> input.copyTo(output) }
-                    }
-                }.onFailure { Log.w(TAG, "lib $name no disponible: ${it.message}") }
+                if (!copyAssetAtomically(app, "x4k/lib/$abi/$name", out)) {
+                    Log.w(TAG, "lib $name no disponible")
+                }
             }
         }
         return libDir
@@ -352,43 +527,89 @@ object X4KTitan {
 
     /** Boots the engine: `yc.h.m.a().r(workPath, callbacks...)`. */
     fun boot(context: Context): Boolean {
-        if (!load(context)) return false
         if (booted) return true
         synchronized(this) {
             if (booted) return true
-            return try {
-                val cl = loader ?: return false
-                val facadeClass = cl.loadClass("yc.h")
-                val companion = facadeClass.getField("m").get(null)
-                val instance = companion.javaClass.methods.first { it.name == "a" && it.parameterCount == 0 }
-                    .invoke(companion) ?: return false
-                facade = instance
-                val (cb1, cb2) = callbackPair(cl)
-                if (cb1 == null || cb2 == null) {
-                    Log.e(TAG, "sin callbacks, no se puede arrancar")
-                    return false
-                }
-                val procName = runCatching {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                        android.app.Application.getProcessName()
-                    } else ""
-                }.getOrDefault("")
-                // La carpeta de trabajo es el estado persistente del motor: PlayerRecovery la
-                // rota a una generación nueva tras fallos silenciosos repetidos (caja atascada)
-                // para que el arranque limpio no herede el estado envenenado.
-                val mainProcess = !procName.endsWith(":x4k")
-                val dirName = PlayerRecovery.dirNameFor(mainProcess, PlayerRecovery.engineGen(context))
-                val workPath = File(context.applicationContext.filesDir, dirName).apply { mkdirs() }.absolutePath
-                instance.javaClass.methods.first { it.name == "r" && it.parameterCount == 3 }
-                    .invoke(instance, workPath, cb1, cb2)
-                booted = true
-                Log.i(TAG, "motor X4K arrancado en $workPath")
-                true
-            } catch (e: Exception) {
-                Log.e(TAG, "boot X4K falló: ${e.cause ?: e}")
-                false
-            }
+            if (bootOnce(context)) return true
+            if (!linkageFailure) return false
+            // El DEX extraído no verifica en ESTE equipo (copia truncada, motor de otra
+            // versión…). Se borra lo extraído y se vuelve a copiar del APK, UNA vez: la tele
+            // de campo se quedaba con el archivo dañado para siempre y no reproducía nada.
+            linkageFailure = false
+            if (healBudget <= 0) return false
+            healBudget -= 1
+            healExtracted(context)
+            return bootOnce(context)
         }
+    }
+
+    private fun bootOnce(context: Context): Boolean {
+        if (!load(context)) return false
+        return try {
+            val cl = loader ?: return false
+            val facadeClass = cl.loadClass("yc.h")
+            val companion = facadeClass.getField("m").get(null)
+            val instance = companion.javaClass.methods.first { it.name == "a" && it.parameterCount == 0 }
+                .invoke(companion) ?: return false
+            facade = instance
+            val (cb1, cb2) = callbackPair(cl)
+            if (cb1 == null || cb2 == null) {
+                Log.e(TAG, "sin callbacks, no se puede arrancar")
+                return false
+            }
+            val procName = runCatching {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    android.app.Application.getProcessName()
+                } else ""
+            }.getOrDefault("")
+            // La carpeta de trabajo es el estado persistente del motor: PlayerRecovery la
+            // rota a una generación nueva tras fallos silenciosos repetidos (caja atascada)
+            // para que el arranque limpio no herede el estado envenenado.
+            val mainProcess = !procName.endsWith(":x4k")
+            val dirName = PlayerRecovery.dirNameFor(mainProcess, PlayerRecovery.engineGen(context))
+            val workPath = File(context.applicationContext.filesDir, dirName).apply { mkdirs() }.absolutePath
+            instance.javaClass.methods.first { it.name == "r" && it.parameterCount == 3 }
+                .invoke(instance, workPath, cb1, cb2)
+            booted = true
+            Log.i(TAG, "motor X4K arrancado en $workPath")
+            true
+        } catch (e: LinkageError) {
+            // No es un error de datos: el bytecode del motor no verifica en este equipo.
+            linkageFailure = true
+            Log.e(TAG, "clases del motor inválidas: ${e.javaClass.simpleName}: ${e.message}")
+            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                "ENGINE_CLASS_INVALID", "${e.javaClass.simpleName}: ${e.message}",
+            )
+            false
+        } catch (e: Exception) {
+            Log.e(TAG, "boot X4K falló: ${e.cause ?: e}")
+            false
+        }
+    }
+
+    /**
+     * Borra el motor extraído (DEX, sello y libs) para que la siguiente carga lo copie de
+     * nuevo desde el APK. No toca datos del usuario ni la carpeta de trabajo del motor.
+     */
+    private fun healExtracted(context: Context) {
+        loader = null
+        booted = false
+        envSent = false
+        lastSentEntries = ""
+        lastSentParams = ""
+        facade = null
+        envClass = null
+        programClass = null
+        mediaClass = null
+        entryClass = null
+        viewClass = null
+        val app = context.applicationContext
+        runCatching { File(app.filesDir, DIR_DEX).deleteRecursively() }
+        runCatching { File(app.filesDir, DIR_LIBS).deleteRecursively() }
+        Log.w(TAG, "motor re-extraído: DEX/libs borrados tras un error de verificación")
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+            "ENGINE_DEX_REPAIRED", "motor borrado y re-extraído tras clases inválidas",
+        )
     }
 
     /** Hands the engine its session: `yc.h.m.a().B(Env(...))`. */

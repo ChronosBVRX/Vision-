@@ -53,4 +53,26 @@ class X4KApiSessionTest {
         assertFalse(X4KApi.isSessionFailure(IOException("portal portal100006 剧集不存在")))
         assertFalse(X4KApi.isSessionFailure(IOException("portal portal100008 节目不存在")))
     }
+
+    @Test
+    fun regionBlacklistAndGenericClientErrorsAreNotSessionFailures() {
+        // Caso real de campo (OnePlus 8 Pro, v2.5.122): el portal rechaza la región y la app
+        // reacuñaba en cada llamada. No es una patada de sesión: reintentar no la arregla.
+        assertFalse(
+            X4KApi.isSessionFailure(
+                IOException("portal portal100024 所在区域为黑名单，栏目不可见")
+            )
+        )
+        assertFalse(X4KApi.isSessionFailure(IOException("HTTP 404")))
+        assertFalse(X4KApi.isSessionFailure(IOException("HTTP 400")))
+    }
+
+    @Test
+    fun aFailedMintCoolsDownInsteadOfHammeringThePortal() {
+        val now = 1_000_000L
+        assertFalse(X4KApi.mintBackoffActive(now, lastFailAtMs = 0L))
+        assertTrue(X4KApi.mintBackoffActive(now, lastFailAtMs = now - 1_000))
+        assertTrue(X4KApi.mintBackoffActive(now, lastFailAtMs = now - 59_000))
+        assertFalse(X4KApi.mintBackoffActive(now, lastFailAtMs = now - 60_000))
+    }
 }

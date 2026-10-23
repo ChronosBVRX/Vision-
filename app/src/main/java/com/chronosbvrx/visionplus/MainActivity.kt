@@ -172,6 +172,8 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         isTv = DeviceKind.isTelevision(this)
+        // Latido de la apertura: denominador del «% de sesiones sin crash» en la telemetría.
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.sessionStart()
         com.chronosbvrx.visionplus.ui.settings.VisionSettings.init(this)
         com.chronosbvrx.visionplus.data.offline.OfflineRegistry.init(this)
         com.chronosbvrx.visionplus.data.offline.NetworkMonitor.init(this)

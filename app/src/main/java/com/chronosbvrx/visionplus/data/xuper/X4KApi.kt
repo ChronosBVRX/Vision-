@@ -101,11 +101,29 @@ object X4KApi {
      *  este candado corto permite el mint inmediato sin encadenar mints en ráfaga. */
     private const val FORCED_MINT_COOLDOWN_MS = 10_000L
 
+    /**
+     * Tras un mint FALLIDO, este silencio. Un rechazo del portal (región en lista negra,
+     * mantenimiento) no se arregla reintentando: sin este castigo, cada llamada del Inicio
+     * reacuñaba y la telemetría recibió 121 avisos en 5 minutos desde un solo equipo.
+     */
+    private const val MINT_FAIL_BACKOFF_MS = 60_000L
+
     @Volatile
     private var lastMintAt = 0L
 
     @Volatile
     private var lastForcedMintAt = 0L
+
+    /** Momento del último mint fallido (0 = ninguno): activa el castigo de [MINT_FAIL_BACKOFF_MS]. */
+    @Volatile
+    private var lastMintFailAt = 0L
+
+    /** ¿Sigue vigente el castigo tras un mint fallido? (puro, testeable). */
+    internal fun mintBackoffActive(
+        nowMs: Long,
+        lastFailAtMs: Long,
+        backoffMs: Long = MINT_FAIL_BACKOFF_MS,
+    ): Boolean = lastFailAtMs > 0L && nowMs - lastFailAtMs < backoffMs
 
     /** Slot propio del equipo (pool del servidor). Nulo = identidad compartida (legado).
      *  Volátil por proceso: cada proceso (`:x4k` incluido) lo inicializa al arrancar. */
@@ -317,13 +335,20 @@ object X4KApi {
     }
 
     /** Envuelve la acuñación: si falla queda como anomalía (diagnóstico) y se relanza. */
-    private fun renewLocked(context: Context, force: Boolean = false): String = try {
-        renewLockedInner(context, force)
-    } catch (e: Exception) {
-        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-            "SESSION_RENEW_FAIL", "${e.javaClass.simpleName}: ${e.message}",
-        )
-        throw e
+    private fun renewLocked(context: Context, force: Boolean = false): String {
+        // En castigo: ni red ni aviso. El portal ya dijo que no y no se arregla reintentando.
+        if (mintBackoffActive(System.currentTimeMillis(), lastMintFailAt)) {
+            throw java.io.IOException("sesión en espera (el portal rechazó el intento anterior)")
+        }
+        return try {
+            renewLockedInner(context, force)
+        } catch (e: Exception) {
+            lastMintFailAt = System.currentTimeMillis()
+            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                "SESSION_RENEW_FAIL", "${e.javaClass.simpleName}: ${e.message}",
+            )
+            throw e
+        }
     }
 
     private fun renewLockedInner(context: Context, force: Boolean = false): String {
@@ -356,6 +381,7 @@ object X4KApi {
         storeSession(context, sn, userToken)
         // La marca de tiempo solo en ÉXITO: un mint fallido no debe bloquear el siguiente intento.
         lastMintAt = now
+        lastMintFailAt = 0L
         if (force) lastForcedMintAt = now
         // The entries embed the session: a new session means new entries (y licencias de vivo nuevas).
         memoryLiveMedias.clear()
@@ -368,11 +394,12 @@ object X4KApi {
     /** Solo esto significa «la sesión ya no sirve»; detecta los errores de sesión del portal. */
     internal fun isSessionFailure(e: Exception): Boolean {
         val m = e.message.orEmpty().lowercase()
+        // `http 4` a secas metía en el saco a cualquier 400/404 (p. ej. un rechazo de región):
+        // renovar por ellos no arreglaba nada y multiplicaba los mints.
         return m.contains("portal aaa") ||
             SESSION_CODE_RX.containsMatchIn(m) ||
             m.contains("http 401") ||
-            m.contains("http 403") ||
-            m.contains("http 4")
+            m.contains("http 403")
     }
 
     /**

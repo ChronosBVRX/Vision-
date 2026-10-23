@@ -47,13 +47,15 @@ try {
     $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
     if (-not $SkipTests) {
         Write-Host "== Tests unitarios =="
-        & .\gradlew.bat :app:testNormalDebugUnitTest --console=plain | Out-Null
+        # `cmd /c ... 2>&1`: Gradle escribe progreso por stderr y PowerShell 5 lo convertía
+        # en un error terminante (la publicación se caía con la suite en verde).
+        & cmd /c ".\gradlew.bat :app:testNormalDebugUnitTest --console=plain 2>&1" | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Tests en ROJO: se cancela la publicacion" }
     }
 
     # --- Build release (R8) ---
     Write-Host "== Build release (R8) =="
-    & .\gradlew.bat :app:assembleNormalRelease --console=plain | Out-Null
+    & cmd /c ".\gradlew.bat :app:assembleNormalRelease --console=plain 2>&1" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "El build release fallo" }
     $apk = Join-Path $root "app\build\outputs\apk\normal\release\app-normal-release.apk"
     if (-not (Test-Path $apk)) { throw "No hay APK en $apk" }

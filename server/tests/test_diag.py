@@ -410,3 +410,124 @@ def test_canary_wiring_rearms_when_a_newer_version_appears(monkeypatch):
     assert any("ota_paused" in sql and "'false'" in sql for sql, _ in conn.executed)
     assert any("delete from sync_meta" in sql for sql, _ in conn.executed)
     assert alerts and "reactivada" in alerts[0]
+
+
+# ----- SLO de calidad: % de aperturas sin crash -----
+
+
+def test_crash_free_pct_math():
+    assert diag.crash_free_pct(0, 0) == 100.0
+    assert diag.crash_free_pct(100, 0) == 100.0
+    assert diag.crash_free_pct(100, 1) == 99.0
+    assert diag.crash_free_pct(100, 2) == 98.0
+    assert diag.crash_free_pct(3, 1) == 66.67
+    # Datos imposibles (más crashes que sesiones) no rompen el cálculo.
+    assert diag.crash_free_pct(2, 5) == 0.0
+
+
+def test_quality_only_alerts_below_target_with_enough_sample_and_no_cooldown():
+    # Muestra suficiente, por debajo del objetivo, sin aviso previo: avisa.
+    assert diag.quality_should_alert(sessions=100, crashed=3, hours_since_alert=None) is True
+    # Igual o por encima del objetivo: no.
+    assert diag.quality_should_alert(sessions=100, crashed=1, hours_since_alert=None) is False
+    assert diag.quality_should_alert(sessions=100, crashed=0, hours_since_alert=None) is False
+    # Pocas aperturas no son una regresión (2 de 3 no justifica despertar a nadie).
+    assert diag.quality_should_alert(sessions=3, crashed=2, hours_since_alert=None) is False
+    # Enfriamiento: el aviso no se repite cada 5 minutos.
+    assert diag.quality_should_alert(sessions=100, crashed=3, hours_since_alert=2.0) is False
+    assert diag.quality_should_alert(sessions=100, crashed=3, hours_since_alert=25.0) is True
+
+
+def test_quality_alert_text_says_the_number_and_what_to_check():
+    text = diag.quality_alert_text(100, 4, "2.5.122", 96.0)
+    assert "96.00% sin crash" in text
+    assert "objetivo 99%" in text
+    assert "v2.5.122" in text
+    assert "/v1/diag/summary" in text
+    assert "sesiones=100" in text and "con_crash=4" in text
+
+
+def test_health_payload_summarises_per_version_and_overall():
+    rows = [
+        {"app_version": "2.5.122", "version_code": 358, "sessions": 100, "crashed": 1, "anr": 2},
+        {"app_version": "2.5.121", "version_code": 357, "sessions": 50, "crashed": 1, "anr": 0},
+    ]
+    payload = app.diag_health_payload(rows)
+    assert payload["sessions"] == 150
+    assert payload["crashedSessions"] == 2
+    assert payload["crashFreePct"] == 98.67
+    assert payload["meetsTarget"] is False
+    assert [v["version"] for v in payload["versions"]] == ["2.5.122", "2.5.121"]
+    assert payload["versions"][0]["crashFreePct"] == 99.0
+    assert payload["versions"][1]["anrFreePct"] == 100.0
+
+
+def test_health_payload_without_sessions_does_not_alarm():
+    payload = app.diag_health_payload([])
+    assert payload["sessions"] == 0
+    assert payload["crashFreePct"] == 100.0
+    assert payload["meetsTarget"] is True
+
+
+def test_health_endpoint_is_registered_and_session_is_a_valid_kind():
+    paths = {r.path for r in app.app.routes}
+    assert "/v1/diag/health" in paths
+    assert "session" in app.DIAG_KINDS
+
+
+def test_triage_ignores_session_heartbeats():
+    # Un latido por apertura NUNCA puede generar una alerta ni mantener viva una huella.
+    import inspect
+
+    source = inspect.getsource(diag.triage)
+    assert source.count("kind <> 'session'") >= 3
+    # Tampoco debe ocupar los primeros puestos del resumen (taparía crashes reales).
+    assert "kind <> 'session'" in inspect.getsource(app.diag_summary)
+
+
+class _QualityConn:
+    """Conexión falsa: sirve las estadísticas y el estado del enfriamiento."""
+
+    def __init__(self, stats, state):
+        self.stats = stats
+        self.state = state
+        self.executed = []
+
+    async def fetchrow(self, sql, *args):
+        return self.state if "sync_meta" in sql else self.stats
+
+    async def execute(self, sql, *args):
+        self.executed.append((sql, args))
+
+
+def test_quality_slo_alerts_a_real_regression(monkeypatch):
+    import asyncio
+
+    conn = _QualityConn(
+        {"sessions": 100, "crashed": 4, "app_version": "2.5.122", "version_code": 358},
+        None,
+    )
+    alerts = []
+    monkeypatch.setattr(diag, "send_alert", lambda text: alerts.append(text))
+
+    assert asyncio.run(diag.quality_slo(_FakePool(conn))) == 1
+    assert alerts and "96.00% sin crash" in alerts[0]
+    assert any(a and str(a[0]) == diag.QUALITY_ALERT_KEY for _, a in conn.executed)
+
+
+def test_quality_slo_respects_the_cooldown(monkeypatch):
+    import asyncio
+    import datetime as dt
+
+    recent = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1)
+    conn = _QualityConn(
+        {"sessions": 100, "crashed": 4, "app_version": "2.5.122", "version_code": 358},
+        {"updated_at": recent},
+    )
+    alerts = []
+    monkeypatch.setattr(diag, "send_alert", lambda text: alerts.append(text))
+
+    assert asyncio.run(diag.quality_slo(_FakePool(conn))) == 0
+    assert alerts == []
+    assert conn.executed == []
+

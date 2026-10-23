@@ -56,6 +56,15 @@ CANARY_PAUSE_HOURS = float(os.environ.get("DIAG_CANARY_PAUSE_HOURS", "12"))
 CANARY_VERSION_KEY = "canary_paused_version"
 CANARY_AT_KEY = "canary_paused_at"
 
+# --- SLO de calidad: % de aperturas sin crash. El denominador son los latidos `session`
+# que la app manda al abrir (uno por apertura). Sin este aviso, una regresión que solo
+# afecta a 1 de cada 100 aperturas se ve como "pocos crashes" en el triage por huella.
+QUALITY_TARGET_PCT = float(os.environ.get("DIAG_QUALITY_TARGET_PCT", "99"))
+QUALITY_MIN_SESSIONS = int(os.environ.get("DIAG_QUALITY_MIN_SESSIONS", "20"))
+QUALITY_COOLDOWN_HOURS = float(os.environ.get("DIAG_QUALITY_COOLDOWN_HOURS", "24"))
+QUALITY_ALERT_KEY = "quality_alert_at"
+QUALITY_WINDOW_DAYS = 7
+
 # Códigos que ya sabemos que dejan el reproductor sin arrancar. OJO: NO todo `PLAYER_*` cuenta —
 # `PLAYER_FRAME_SKIP`, `PLAYER_SOFT_RESTART`, `PLAYER_FAILOVER*`, `PLAYER_SELF_HEAL` y
 # `PLAYER_RESIDENT_IDLE` son recuperaciones o avisos que también salen en equipos sanos, y
@@ -656,6 +665,7 @@ async def triage(pool) -> int:
             from diag_reports r
             left join diag_alert_state s on s.fingerprint = r.fingerprint
             where s.fingerprint is null
+              and r.kind <> 'session'
             group by r.fingerprint
             order by max(r.created_at) desc
             """
@@ -691,6 +701,7 @@ async def triage(pool) -> int:
             from diag_reports r
             join diag_alert_state s on s.fingerprint = r.fingerprint
             where r.created_at > s.alerted_at
+              and r.kind <> 'session'
             group by r.fingerprint, s.alert_version, s.resolved_at, s.alerted_at
             order by max(r.created_at) desc
             """
@@ -731,6 +742,7 @@ async def triage(pool) -> int:
                   and not exists (
                       select 1 from diag_reports r
                       where r.fingerprint = s.fingerprint
+                        and r.kind <> 'session'
                         and r.created_at > now() - make_interval(hours => $1)
                   )
                 returning s.fingerprint
@@ -966,6 +978,112 @@ async def catalog_health(pool) -> int:
         return 0
 
 
+def crash_free_pct(sessions: int, crashed: int) -> float:
+    """% de aperturas sin crash (puro). Sin sesiones no hay dato: 100.0 (no se alarma)."""
+    if sessions <= 0:
+        return 100.0
+    clean = max(0, sessions - max(0, crashed))
+    return round(100.0 * clean / sessions, 2)
+
+
+def quality_should_alert(
+    *,
+    sessions: int,
+    crashed: int,
+    hours_since_alert: float | None,
+    target: float = QUALITY_TARGET_PCT,
+    min_sessions: int = QUALITY_MIN_SESSIONS,
+    cooldown_hours: float = QUALITY_COOLDOWN_HOURS,
+) -> bool:
+    """¿Toca avisar del SLO de calidad? (puro, testeable).
+
+    Solo con muestra suficiente (unas pocas aperturas no son una regresión), por debajo
+    del objetivo y fuera del enfriamiento (para no repetir el aviso cada 5 minutos).
+    """
+    if sessions < min_sessions:
+        return False
+    if crash_free_pct(sessions, crashed) >= target:
+        return False
+    if hours_since_alert is not None and hours_since_alert < cooldown_hours:
+        return False
+    return True
+
+
+def quality_alert_text(sessions: int, crashed: int, version: str, pct: float) -> str:
+    """Aviso humano + técnico del SLO (dos capas, como el resto del bot)."""
+    return (
+        "🟠 La app está fallando más de lo aceptable\n\n"
+        f"En los últimos {QUALITY_WINDOW_DAYS} días se abrió {sessions} "
+        f"{_plural(sessions, 'vez', 'veces')} y en {crashed} de esas aperturas la app se "
+        f"cerró sola: {pct:.2f}% sin crash (objetivo {QUALITY_TARGET_PCT:g}%).\n"
+        f"Versión más nueva vista: v{version or '?'}.\n\n"
+        "👉 Qué revisar: el resumen por huella (`/v1/diag/summary`) para ver qué crash "
+        "pesa más; si es una sola huella y ya salió un fix, el número se recupera solo.\n\n"
+        "— Detalles técnicos —\n"
+        f"sesiones={sessions} · con_crash={crashed} · objetivo={QUALITY_TARGET_PCT:g}% · "
+        f"ventana={QUALITY_WINDOW_DAYS} días\n\n"
+        "Aviso automático de Vision+ · calidad"
+    )
+
+
+async def quality_slo(pool) -> int:
+    """Vigila el % de aperturas sin crash y avisa si cae por debajo del objetivo.
+
+    Corre en el mismo loop del triage. El estado del aviso vive en `sync_meta` para que
+    reiniciar el worker no lo repita.
+    """
+    now = dt.datetime.now(dt.timezone.utc)
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                with s as (
+                    select app_version, version_code, coalesce(payload->>'session', '') as sid
+                    from diag_reports
+                    where kind = 'session'
+                      and created_at > now() - make_interval(days => $1)
+                      and coalesce(payload->>'session', '') <> ''
+                ),
+                c as (
+                    select distinct coalesce(payload->>'session', '') as sid
+                    from diag_reports
+                    where kind = 'crash'
+                      and created_at > now() - make_interval(days => $1)
+                      and coalesce(payload->>'session', '') <> ''
+                )
+                select (select count(distinct sid) from s) as sessions,
+                       (select count(distinct s.sid) from s join c on c.sid = s.sid) as crashed,
+                       (select app_version from s order by version_code desc limit 1) as app_version,
+                       (select max(version_code) from s) as version_code
+                """,
+                QUALITY_WINDOW_DAYS,
+            )
+            if row is None:
+                return 0
+            sessions = _as_int(row["sessions"])
+            crashed = _as_int(row["crashed"])
+            state = await conn.fetchrow(
+                "select updated_at from sync_meta where key = $1", QUALITY_ALERT_KEY
+            )
+            hours = (now - state["updated_at"]).total_seconds() / 3600 if state else None
+            if not quality_should_alert(
+                sessions=sessions, crashed=crashed, hours_since_alert=hours
+            ):
+                return 0
+            pct = crash_free_pct(sessions, crashed)
+            await asyncio.to_thread(
+                send_alert,
+                quality_alert_text(sessions, crashed, str(row["app_version"] or ""), pct),
+            )
+            await _stamp_health_alert(conn, QUALITY_ALERT_KEY, now)
+            log.warning("SLO de calidad por debajo del objetivo: %s%% (%s/%s sesiones)",
+                        pct, crashed, sessions)
+            return 1
+    except Exception:  # noqa: BLE001 - el SLO no tumba el worker
+        log.exception("el SLO de calidad no se pudo revisar")
+        return 0
+
+
 async def loop(pool) -> None:
     while True:
         try:
@@ -980,4 +1098,8 @@ async def loop(pool) -> None:
             await build_canary(pool)
         except Exception:  # noqa: BLE001 - el canario no tumba el worker
             log.exception("canario de builds falló")
+        try:
+            await quality_slo(pool)
+        except Exception:  # noqa: BLE001 - el SLO de calidad no tumba el worker
+            log.exception("SLO de calidad falló")
         await asyncio.sleep(INTERVAL)
