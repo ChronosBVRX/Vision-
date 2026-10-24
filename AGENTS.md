@@ -5,6 +5,14 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **OTA 2.5.140 PUBLICADA: el re-arranque del reproductor salta a los 10 s cuando el motor NO recibió nada (antes 25 s) — medido en la TCL: 26.9 s sin datos y el reintento pintó en 3 s — 873 Android** (2026-10-24):
+  - *Dato del usuario*: «Ya reprodujo [la TCL, con 2.5.139] pero ve los logs».
+  - *Logs medidos (TCL, 2.5.139)*: **VOD** → `PLAYER_SOFT_RESTART modo=vod intento=1 esperaMs=26892 pos=-1ms dur=-1ms playing=false engineBoot=0ms` y `PLAYER_START firstFrameMs=30425 bootMs=0 intentos=2`; **vivo** → `PLAYER_START firstFrameMs=3218 bootMs=0 intentos=1 live=true`. Sin `PLAYBACK_LICENSE_FAIL` (el reintento de licencia de la 2.5.139 funcionó) y `bootMs=0` (motor ya caliente, sin extracción).
+  - *Lectura*: el VOD no estaba «buffereando»: el motor **no tenía ni duración** (`dur=-1`) durante 27 s, o sea que no llegó nada y el re-arranque lo rescató (3 s después). El vivo, en cambio, abrió en 3.2 s al primer intento.
+  - *Fix (`X4KPlayerAty`)*: política de espera consciente de datos — `engineHasNoData` (VOD + sin señal + `durationMs(v) <= 0`) ⇒ **10 s** en el primer intento y **15 s** en los reintentos; con datos se mantienen 25/35 s para no cortar un buffering legítimo. La gracia de 1.5 s de la 2.5.134 sigue antes de tocar el motor.
+  - *Verificado*: **873 Android** en verde (nuevo caso en `PlaybackSpeedWiringTest` con los cuatro topes); release R8 **70.7 MB** con firma histórica; publicado v2.5.140 (vc376), notas en `ota_notes_2.5.140.md`.
+  - *Pendiente*: medir en la TCL (el VOD debería quedar en ~13 s y verse `esperaMs≈10000` en `PLAYER_SOFT_RESTART`); si el primer intento sigue sin datos, el problema es la conexión inicial del motor en esa tele (DNS/ruta al CDN), no la espera.
+
 - **OTA 2.5.139 PUBLICADA: la licencia ya no se rinde con el portal lento — último intento con 25 s/60 s y `PLAYBACK_LICENSE_FAIL` con el motivo exacto — 872 Android** (2026-10-24):
   - *Reporte*: «La tv TCL sigue fallando y no reproduce». Telemetría de la TCL en **2.5.138**: `PLAYBACK_HANDOFF_FAIL sin-medios (prepare=null)` + `PORTAL_SLOW semillaMs=1, cacheMs=16436, portalMs=47107`. El empaquetado/motor ya está bien (el Chromecast reproduce con el mismo APK); lo que falla es la **licencia**: `startPlayVOD` no devuelve medios.
   - *Causa probable (medida parcialmente)*: el portal de esa tele tarda ~47 s en la fase del portal y `post()` corta a **15 s connect / 25 s read**; tras dos intentos (normal + sesión nueva) `prepareVod` devolvía `null` y el handoff moría sin motivo. No se pudo confirmar con logcat: la tele es Android 9 sin ADB por red y el barrido de `:5555` en la LAN no encontró nada (la depuración USB necesita cable a este PC).

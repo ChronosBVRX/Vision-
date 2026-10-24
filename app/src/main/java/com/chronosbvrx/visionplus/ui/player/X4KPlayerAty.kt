@@ -5140,7 +5140,19 @@ class X4KPlayerAty : ComponentActivity() {
                 // cajas rápidas sí funciona); si tampoco, error + auto-reparado.
                 val stalled = if (liveMode) !liveSignalSeen else !firstFrame
                 val stalledFor = System.currentTimeMillis() - startedAtMs
-                val stallLimit = if (softRestarts == 0) 25_000L else 35_000L
+                // «Sin NADA de datos» no es lo mismo que «va lento»: si el motor no tiene ni
+                // duración (dur=-1), no está buffereando, está atascado y un re-arranque lo
+                // rescata. Medido en una TCL: el primer intento pasó 26.9 s con pos=-1 dur=-1
+                // playing=false y el reintento pintó en 3 s. Se reintenta a los 10 s.
+                val engineHasNoData = !liveMode && !engineSignal && runCatching {
+                    com.chronosbvrx.visionplus.data.xuper.X4KTitan.durationMs(v)
+                }.getOrDefault(-1L) <= 0L
+                val stallLimit = when {
+                    engineHasNoData && softRestarts == 0 -> 10_000L
+                    engineHasNoData -> 15_000L
+                    softRestarts == 0 -> 25_000L
+                    else -> 35_000L
+                }
                 if (stalled && !errorShown && stalledFor > stallLimit) {
                     if (softRestarts == 0) {
                         softRestartPlayback()

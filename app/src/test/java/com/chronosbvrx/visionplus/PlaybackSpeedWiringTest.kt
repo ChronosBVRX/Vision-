@@ -65,8 +65,7 @@ class PlaybackSpeedWiringTest {
     }
 
     @Test
-    fun theLicenseGetsASlowNetworkRetry() {
-        val text = File("src/main/java/com/chronosbvrx/visionplus/data/xuper/X4KApi.kt").readText()
+    fun theLicenseGetsASlowNetworkRetry() {        val text = File("src/main/java/com/chronosbvrx/visionplus/data/xuper/X4KApi.kt").readText()
         val prepare = text.substringAfter("suspend fun prepareVod(").substringBefore("suspend fun playVod(")
         // La TCL (2.5.138) fallaba con «sin-medios» y el portal a 47 s: el tope de 25 s cortaba
         // la licencia. Ahora hay un último intento con más paciencia y el motivo en telemetría.
@@ -105,5 +104,20 @@ class PlaybackSpeedWiringTest {
         val titan = source("data/xuper/X4KTitan.kt")
         assertTrue("el motor no reporta su arranque", titan.contains("var lastBootMs: Long = 0L"))
         assertTrue(titan.contains("lastBootMs = android.os.SystemClock.uptimeMillis() - started"))
+    }
+
+    @Test
+    fun thePlayerRetriesFastWhenNothingArrivedAtAll() {
+        val player = source("ui/player/X4KPlayerAty.kt")
+        // TCL: primer intento 26.9 s con pos=-1 dur=-1 playing=false (el motor no recibió nada)
+        // y el reintento pintó en 3 s. Sin datos no se espera el tope largo.
+        assertTrue("falta la detección de «sin datos»", player.contains("val engineHasNoData = !liveMode && !engineSignal"))
+        assertTrue(
+            "no se reintenta rápido",
+            player.contains("engineHasNoData && softRestarts == 0 -> 10_000L"),
+        )
+        assertTrue("sin tope corto en reintentos", player.contains("engineHasNoData -> 15_000L"))
+        // Con datos sí se respeta la ventana larga (buffering legítimo).
+        assertTrue(player.contains("softRestarts == 0 -> 25_000L"))
     }
 }
