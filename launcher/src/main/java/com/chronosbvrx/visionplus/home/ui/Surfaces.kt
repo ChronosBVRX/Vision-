@@ -1,6 +1,10 @@
+@file:OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
+
 package com.chronosbvrx.visionplus.home.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +21,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -38,6 +44,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +57,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -88,6 +96,8 @@ fun HomeSurface(
     reduced: Boolean,
     compact: Boolean,
     landing: FocusRequester,
+    listState: LazyListState,
+    tabLanding: FocusRequester? = null,
     onHeroPlay: (HeroItem) -> Unit,
     onHeroOpen: (HeroItem) -> Unit,
     onItem: (FeedItem) -> Unit,
@@ -102,74 +112,79 @@ fun HomeSurface(
     onSystemSettings: () -> Unit,
     onPrimaryFocus: (Boolean) -> Unit = {},
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 36.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        item("hero") {
-            if (feed?.hero.isNullOrEmpty()) {
-                BrandHero(
-                    metrics = metrics,
-                    landing = landing,
-                    onOpenVision = onOpenVision,
-                    onSystemSettings = onSystemSettings,
-                    onPrimaryFocus = onPrimaryFocus,
-                )
-            } else {
-                HeroStage(
-                    items = feed.hero,
-                    metrics = metrics,
-                    reduced = reduced,
-                    landing = landing,
-                    onPlay = onHeroPlay,
-                    onOpen = onHeroOpen,
-                    onPrimaryFocus = onPrimaryFocus,
-                )
-            }
-        }
-        val continueItems = feed?.continueWatching.orEmpty()
-        if (continueItems.isNotEmpty()) {
-            item("continue") {
-                ContinueRow(
-                    items = continueItems,
-                    metrics = metrics,
-                    onOpen = onContinue,
-                    onSeeAll = onOpenHistory,
-                )
-            }
-        }
-        val liveItems = feed?.live.orEmpty().take(12)
-        if (liveItems.isNotEmpty()) {
-            item("live") {
-                LiveRow(
-                    items = liveItems,
-                    metrics = metrics,
-                    onOpen = onLive,
-                    onSeeAll = onSeeLive,
-                )
-            }
-        }
-        if (apps.isNotEmpty()) {
-            item("apps") {
-                AppsRow(
-                    apps = orderedApps(apps, favorites, emptyList()).take(if (compact) 8 else 10),
-                    metrics = metrics,
-                    onOpen = onApp,
-                    onLongClick = onAppFavorite,
-                    onSeeAll = onSeeApps,
-                )
-            }
-        }
-        feed?.rows?.forEach { row ->
-            if (row.items.isNotEmpty()) {
-                item("row-${row.id}") {
-                    PosterRow(
-                        row = row,
+    CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollBringIntoView) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            item("hero") {
+                if (feed?.hero.isNullOrEmpty()) {
+                    BrandHero(
                         metrics = metrics,
-                        onOpen = onItem,
-                        onSeeAll = null,
+                        landing = landing,
+                        upTarget = tabLanding,
+                        onOpenVision = onOpenVision,
+                        onSystemSettings = onSystemSettings,
+                        onPrimaryFocus = onPrimaryFocus,
                     )
+                } else {
+                    HeroStage(
+                        items = feed.hero,
+                        metrics = metrics,
+                        reduced = reduced,
+                        landing = landing,
+                        upTarget = tabLanding,
+                        onPlay = onHeroPlay,
+                        onOpen = onHeroOpen,
+                        onPrimaryFocus = onPrimaryFocus,
+                    )
+                }
+            }
+            val continueItems = feed?.continueWatching.orEmpty()
+            if (continueItems.isNotEmpty()) {
+                item("continue") {
+                    ContinueRow(
+                        items = continueItems,
+                        metrics = metrics,
+                        onOpen = onContinue,
+                        onSeeAll = onOpenHistory,
+                    )
+                }
+            }
+            val liveItems = feed?.live.orEmpty().take(12)
+            if (liveItems.isNotEmpty()) {
+                item("live") {
+                    LiveRow(
+                        items = liveItems,
+                        metrics = metrics,
+                        onOpen = onLive,
+                        onSeeAll = onSeeLive,
+                    )
+                }
+            }
+            if (apps.isNotEmpty()) {
+                item("apps") {
+                    AppsRow(
+                        apps = orderedApps(apps, favorites, emptyList()).take(if (compact) 8 else 10),
+                        metrics = metrics,
+                        onOpen = onApp,
+                        onLongClick = onAppFavorite,
+                        onSeeAll = onSeeApps,
+                    )
+                }
+            }
+            feed?.rows?.forEach { row ->
+                if (row.items.isNotEmpty()) {
+                    item("row-${row.id}") {
+                        PosterRow(
+                            row = row,
+                            metrics = metrics,
+                            onOpen = onItem,
+                            onSeeAll = null,
+                        )
+                    }
                 }
             }
         }
@@ -184,6 +199,7 @@ fun HomeSurface(
 private fun BrandHero(
     metrics: HomeMetrics,
     landing: FocusRequester,
+    upTarget: FocusRequester? = null,
     onOpenVision: () -> Unit,
     onSystemSettings: () -> Unit,
     onPrimaryFocus: (Boolean) -> Unit,
@@ -236,13 +252,16 @@ private fun BrandHero(
                     label = "Abrir Vision+",
                     onClick = onOpenVision,
                     primary = true,
-                    modifier = Modifier.focusRequester(landing),
+                    modifier = Modifier
+                        .focusRequester(landing)
+                        .then(if (upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier),
                     onFocusChanged = onPrimaryFocus,
                 )
                 HomeButton(
                     label = "Ajustes de la tele",
                     onClick = onSystemSettings,
                     icon = Icons.Rounded.Settings,
+                    modifier = if (upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier,
                 )
             }
         }
@@ -396,6 +415,7 @@ private fun PosterRow(
         )
         Spacer(Modifier.height(10.dp))
         LazyRow(
+            modifier = Modifier.focusGroup().focusRestorer(),
             contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
             verticalAlignment = Alignment.Top,
@@ -430,6 +450,7 @@ private fun ContinueRow(
         )
         Spacer(Modifier.height(10.dp))
         LazyRow(
+            modifier = Modifier.focusGroup().focusRestorer(),
             contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
             verticalAlignment = Alignment.Top,
@@ -453,6 +474,7 @@ private fun LiveRow(
     onOpen: (LiveItem) -> Unit,
     onSeeAll: () -> Unit,
 ) {
+    val nowMs = rememberNowMs()
     Column(Modifier.fillMaxWidth()) {
         SectionHeader(
             title = "TV en vivo",
@@ -463,6 +485,7 @@ private fun LiveRow(
         )
         Spacer(Modifier.height(10.dp))
         LazyRow(
+            modifier = Modifier.focusGroup().focusRestorer(),
             contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
             verticalAlignment = Alignment.Top,
@@ -472,6 +495,7 @@ private fun LiveRow(
                     item = item,
                     height = metrics.channelHeight,
                     modifier = Modifier.width(metrics.channelWidth),
+                    nowMs = nowMs,
                     onClick = { onOpen(item) },
                 )
             }
@@ -497,6 +521,7 @@ private fun AppsRow(
         )
         Spacer(Modifier.height(10.dp))
         LazyRow(
+            modifier = Modifier.focusGroup().focusRestorer(),
             contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
         ) {
@@ -512,8 +537,7 @@ private fun AppsRow(
     }
 }
 
-/** La pestaña TV en vivo: la rejilla completa de canales del feed (México primero). */
-@OptIn(ExperimentalComposeUiApi::class)
+/** La pestaña TV en vivo: mosaico con nombre y guía AHORA de cada canal. */
 @Composable
 fun LiveSurface(
     items: List<LiveItem>,
@@ -521,70 +545,102 @@ fun LiveSurface(
     onOpen: (LiveItem) -> Unit,
     onOpenFull: () -> Unit,
     upTarget: FocusRequester? = null,
+    landing: FocusRequester? = null,
 ) {
     var onlyMexico by remember { mutableStateOf(false) }
     val visible = if (onlyMexico) items.filter { it.mexico } else items
-    BoxWithConstraints(Modifier.fillMaxSize().padding(top = 8.dp)) {
-        val columns = when {
-            maxWidth >= 1200.dp -> 6
-            maxWidth >= 960.dp -> 5
-            maxWidth >= 720.dp -> 4
-            else -> 3
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
-            contentPadding = PaddingValues(
-                start = metrics.horizontalPadding,
-                end = metrics.horizontalPadding,
-                top = 8.dp,
-                bottom = 32.dp,
-            ),
-            horizontalArrangement = Arrangement.spacedBy(metrics.gap),
-            verticalArrangement = Arrangement.spacedBy(if (metrics.channelHeight < 90.dp) 12.dp else 16.dp),
-        ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SectionHeader(
-                    title = "TV en vivo",
-                    subtitle = "${visible.size} canales · México primero, luego los populares",
-                    actionLabel = "Abrir en Vision+",
-                    actionModifier = upTarget?.let { Modifier.focusProperties { up = it } } ?: Modifier,
-                    onAction = onOpenFull,
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LiveFilterChip("Todos", selected = !onlyMexico) { onlyMexico = false }
-                    LiveFilterChip("México", selected = onlyMexico) { onlyMexico = true }
-                }
-                Spacer(Modifier.height(8.dp))
+    val nowMs = rememberNowMs()
+    val entry = remember { FocusRequester() }
+    val firstCode = visible.firstOrNull()?.code
+    CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollBringIntoView) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 8.dp)) {
+            val columns = when {
+                maxWidth >= 1200.dp -> 6
+                maxWidth >= 960.dp -> 5
+                maxWidth >= 720.dp -> 4
+                else -> 3
             }
-            if (visible.isEmpty()) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                modifier = Modifier.fillMaxSize().focusGroup(),
+                contentPadding = PaddingValues(
+                    start = metrics.horizontalPadding,
+                    end = metrics.horizontalPadding,
+                    top = 8.dp,
+                    bottom = 32.dp,
+                ),
+                horizontalArrangement = Arrangement.spacedBy(metrics.gap),
+                verticalArrangement = Arrangement.spacedBy(if (metrics.channelHeight < 110.dp) 12.dp else 16.dp),
+            ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    EmptyHint(
-                        title = if (onlyMexico) "No hay canales de México en la lista" else "Aún no hay canales en el Inicio",
-                        body = "Abre TV en vivo en Vision+ una vez: en cuanto cargue la lista, aparece aquí.",
-                        action = "Abrir TV en vivo",
-                        onAction = onOpenFull,
+                    Column(Modifier.fillMaxWidth()) {
+                        SectionHeader(
+                            title = "TV en vivo",
+                            subtitle = "${visible.size} canales · nombre y guía AHORA",
+                            actionLabel = "Abrir en Vision+",
+                            actionModifier = upTarget?.let { Modifier.focusProperties { up = it } } ?: Modifier,
+                            onAction = onOpenFull,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.focusGroup(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            LiveFilterChip(
+                                label = "Todos",
+                                selected = !onlyMexico,
+                                onClick = { onlyMexico = false },
+                                modifier = Modifier
+                                    .then(if (landing != null) Modifier.focusRequester(landing) else Modifier)
+                                    .softFocusDown(entry),
+                            )
+                            LiveFilterChip(
+                                label = "México",
+                                selected = onlyMexico,
+                                onClick = { onlyMexico = true },
+                                modifier = Modifier.softFocusDown(entry),
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+                if (visible.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        EmptyHint(
+                            title = if (onlyMexico) "No hay canales de México en la lista" else "Aún no hay canales en el Inicio",
+                            body = "Abre TV en vivo en Vision+ una vez: en cuanto cargue la lista, aparece aquí.",
+                            action = "Abrir TV en vivo",
+                            onAction = onOpenFull,
+                        )
+                    }
+                }
+                gridItems(visible, key = { it.code }) { item ->
+                    ChannelCard(
+                        item = item,
+                        height = metrics.channelHeight,
+                        nowMs = nowMs,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (item.code == firstCode) Modifier.focusRequester(entry) else Modifier),
+                        onClick = { onOpen(item) },
                     )
                 }
-            }
-            gridItems(visible, key = { it.code }) { item ->
-                ChannelCard(
-                    item = item,
-                    height = metrics.channelHeight,
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { onOpen(item) },
-                )
             }
         }
     }
 }
 
 @Composable
-private fun LiveFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun LiveFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     FocusableSurface(
         onClick = onClick,
         shape = HomeShapes.pill,
-        modifier = Modifier.height(34.dp),
+        modifier = modifier.height(34.dp),
         focusedScale = 1.05f,
     ) {
         Box(
@@ -611,17 +667,28 @@ fun EventsSurface(
     metrics: HomeMetrics,
     onOpen: (SportsItem) -> Unit,
     onOpenFull: () -> Unit,
+    upTarget: FocusRequester? = null,
+    landing: FocusRequester? = null,
 ) {
-    val today = remember { todayIsoMx() }
+    val nowMs = rememberNowMs()
+    val today = todayIsoMx(nowMs)
     val days = remember(events, today) { eventDays(events, today) }
-    var day by remember(events) { mutableStateOf(days.firstOrNull()?.first ?: today) }
+    var day by remember { mutableStateOf("") }
     var category by remember { mutableStateOf<String?>(null) }
     var league by remember { mutableStateOf<String?>(null) }
 
     val categories = remember(events) { eventCategories(events) }
     val leagues = remember(events, day, category) { eventLeagues(events, day, category) }
     LaunchedEffect(days) {
-        if (days.isNotEmpty() && days.none { it.first == day }) day = days.first().first
+        if (day.isBlank() || days.none { it.first == day }) {
+            val liveToday = events.any {
+                (it.dateIso.ifBlank { today } == today) && sportsPhase(it, nowMs) == SportsPhase.Live
+            }
+            day = if (liveToday) today else days.firstOrNull()?.first ?: today
+        }
+    }
+    LaunchedEffect(categories) {
+        if (category != null && category !in categories) category = null
     }
     LaunchedEffect(leagues) {
         if (league != null && league !in leagues) league = null
@@ -635,6 +702,12 @@ fun EventsSurface(
                 (league == null || event.league == league)
         }
     }
+    val phased = remember(visible, nowMs) { visible.map { it to sportsPhase(it, nowMs) } }
+    val live = remember(phased) { phased.filter { it.second == SportsPhase.Live }.map { it.first } }
+    val soon = remember(phased) { phased.filter { it.second == SportsPhase.Soon }.map { it.first } }
+    val done = remember(phased) { phased.filter { it.second == SportsPhase.Done }.map { it.first } }
+    val entry = remember { FocusRequester() }
+    val firstId = live.firstOrNull()?.id ?: soon.firstOrNull()?.id ?: done.firstOrNull()?.id
 
     Column(Modifier.fillMaxSize().padding(top = 8.dp)) {
         // Encabezado y filtros FUERA de la rejilla: así no se superponen al hacer scroll.
@@ -644,9 +717,10 @@ fun EventsSurface(
                 subtitle = if (events.isEmpty()) {
                     "La agenda de Vision+ aparecerá aquí"
                 } else {
-                    "${visible.size} eventos · ${visible.count { it.live }} en vivo"
+                    "${visible.size} eventos · ${live.size} en vivo"
                 },
                 actionLabel = "Abrir en Vision+",
+                actionModifier = upTarget?.let { Modifier.focusProperties { up = it } } ?: Modifier,
                 onAction = onOpenFull,
             )
             Spacer(Modifier.height(10.dp))
@@ -655,6 +729,8 @@ fun EventsSurface(
                 options = categories.map { it to sportLabel(it) },
                 selected = category,
                 onSelect = { category = it },
+                landing = landing,
+                upTarget = upTarget,
             )
             Spacer(Modifier.height(8.dp))
             FilterRow(
@@ -662,6 +738,7 @@ fun EventsSurface(
                 options = days,
                 selected = day,
                 onSelect = { day = it ?: today },
+                downTarget = if (leagues.isEmpty()) entry else null,
             )
             if (leagues.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
@@ -670,53 +747,115 @@ fun EventsSurface(
                     options = leagues.map { it to it },
                     selected = league,
                     onSelect = { league = it },
+                    downTarget = entry,
                 )
             }
             Spacer(Modifier.height(10.dp))
         }
-        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-            val columns = when {
-                maxWidth >= 1200.dp -> 3
-                maxWidth >= 860.dp -> 2
-                else -> 1
-            }
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(columns),
-                contentPadding = PaddingValues(
-                    start = metrics.horizontalPadding,
-                    end = metrics.horizontalPadding,
-                    bottom = 32.dp,
-                ),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                if (events.isEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        EmptyHint(
-                            title = "No hay eventos ahora",
-                            body = "Abre Deportes en vivo en Vision+ para cargar la agenda; en cuanto llegue, se pinta aquí.",
-                            action = "Abrir Deportes",
-                            onAction = onOpenFull,
-                        )
-                    }
-                } else if (visible.isEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        EmptyHint(
-                            title = "Sin eventos con esos filtros",
-                            body = "Prueba con otro deporte, otra liga u otro día de la agenda.",
-                            action = "Quitar filtros",
-                            onAction = {
-                                category = null
-                                league = null
-                            },
-                        )
-                    }
+        CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollBringIntoView) {
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                val columns = when {
+                    maxWidth >= 1200.dp -> 3
+                    maxWidth >= 860.dp -> 2
+                    else -> 1
                 }
-                gridItems(visible, key = { it.id }) { event ->
-                    EventCard(event = event, onClick = { onOpen(event) })
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(columns),
+                    modifier = Modifier.fillMaxSize().focusGroup(),
+                    contentPadding = PaddingValues(
+                        start = metrics.horizontalPadding,
+                        end = metrics.horizontalPadding,
+                        bottom = 32.dp,
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    if (events.isEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            EmptyHint(
+                                title = "No hay eventos ahora",
+                                body = "Abre Deportes en vivo en Vision+ para cargar la agenda; en cuanto llegue, se pinta aquí.",
+                                action = "Abrir Deportes",
+                                onAction = onOpenFull,
+                            )
+                        }
+                    } else if (visible.isEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            EmptyHint(
+                                title = "Sin eventos con esos filtros",
+                                body = "Prueba con otro deporte, otra liga u otro día de la agenda.",
+                                action = "Quitar filtros",
+                                onAction = {
+                                    category = null
+                                    league = null
+                                },
+                            )
+                        }
+                    } else {
+                        if (live.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                SportsGroupHeader(SportsPhase.Live, live.size, metrics)
+                            }
+                            gridItems(live, key = { it.id }) { event ->
+                                EventCard(
+                                    event = event,
+                                    phase = SportsPhase.Live,
+                                    modifier = if (event.id == firstId) Modifier.focusRequester(entry) else Modifier,
+                                    onClick = { onOpen(event) },
+                                )
+                            }
+                        }
+                        if (soon.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                SportsGroupHeader(SportsPhase.Soon, soon.size, metrics)
+                            }
+                            gridItems(soon, key = { it.id }) { event ->
+                                EventCard(
+                                    event = event,
+                                    phase = SportsPhase.Soon,
+                                    modifier = if (event.id == firstId) Modifier.focusRequester(entry) else Modifier,
+                                    onClick = { onOpen(event) },
+                                )
+                            }
+                        }
+                        if (done.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                SportsGroupHeader(SportsPhase.Done, done.size, metrics)
+                            }
+                            gridItems(done, key = { it.id }) { event ->
+                                EventCard(
+                                    event = event,
+                                    phase = SportsPhase.Done,
+                                    modifier = if (event.id == firstId) Modifier.focusRequester(entry) else Modifier,
+                                    onClick = { onOpen(event) },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SportsGroupHeader(phase: SportsPhase, count: Int, metrics: HomeMetrics) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = if (phase == SportsPhase.Live) 4.dp else 8.dp, bottom = 2.dp),
+    ) {
+        Text(
+            sportsPhaseTitle(phase),
+            color = if (phase == SportsPhase.Live) HomeColors.Live else HomeColors.Text,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            sportsPhaseSubtitle(phase, count),
+            color = HomeColors.TextFaint,
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 
@@ -727,30 +866,64 @@ private fun FilterRow(
     options: List<Pair<String, String>>,
     selected: String?,
     onSelect: (String?) -> Unit,
+    landing: FocusRequester? = null,
+    downTarget: FocusRequester? = null,
+    upTarget: FocusRequester? = null,
 ) {
+    var first = true
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+            .horizontalScroll(rememberScrollState())
+            .focusGroup()
+            .focusRestorer(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (allLabel != null) {
-            FilterPill(label = allLabel, selected = selected == null) { onSelect(null) }
+            FilterPill(
+                label = allLabel,
+                selected = selected == null,
+                modifier = chipModifier(first, landing, downTarget, upTarget),
+            ) { onSelect(null) }
+            first = false
         }
         options.forEach { option ->
-            FilterPill(label = option.second, selected = selected == option.first) {
+            FilterPill(
+                label = option.second,
+                selected = selected == option.first,
+                modifier = chipModifier(first, landing, downTarget, upTarget),
+            ) {
                 onSelect(if (selected == option.first && allLabel != null) null else option.first)
             }
+            first = false
         }
     }
 }
 
+private fun chipModifier(
+    first: Boolean,
+    landing: FocusRequester?,
+    downTarget: FocusRequester?,
+    upTarget: FocusRequester?,
+): Modifier {
+    var modifier: Modifier = Modifier
+    if (first && landing != null) modifier = modifier.focusRequester(landing)
+    if (first && upTarget != null) modifier = modifier.focusProperties { up = upTarget }
+    if (downTarget != null) modifier = modifier.softFocusDown(downTarget)
+    return modifier
+}
+
 @Composable
-private fun FilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun FilterPill(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     FocusableSurface(
         onClick = onClick,
         shape = HomeShapes.pill,
-        modifier = Modifier.height(34.dp),
+        modifier = modifier.height(34.dp),
         focusedScale = 1.05f,
     ) {
         Box(
@@ -794,15 +967,16 @@ internal fun dayLabelMx(dateIso: String, todayIso: String): String {
     return label.replaceFirstChar { it.uppercase() }
 }
 
-/** Los días de la agenda (iso → etiqueta), del más cercano al más lejano. */
-internal fun eventDays(events: List<SportsItem>, todayIso: String): List<Pair<String, String>> =
-    events.asSequence()
+/** Los días de la agenda (iso → etiqueta), del más cercano al más lejano. «Hoy» siempre está. */
+internal fun eventDays(events: List<SportsItem>, todayIso: String): List<Pair<String, String>> {
+    val dates = events.asSequence()
         .map { it.dateIso }
         .filter { it.isNotBlank() && it >= todayIso }
         .distinct()
-        .sorted()
-        .map { it to dayLabelMx(it, todayIso) }
-        .toList()
+        .toMutableSet()
+    dates.add(todayIso)
+    return dates.sorted().map { it to dayLabelMx(it, todayIso) }
+}
 
 /** Los deportes presentes, con Fútbol primero y luego por cantidad. */
 internal fun eventCategories(events: List<SportsItem>): List<String> =
@@ -857,8 +1031,17 @@ internal fun sportLabel(category: String): String = when (category.trim().lowerc
 }
 
 @Composable
-private fun EventCard(event: SportsItem, onClick: () -> Unit) {
-    FocusableSurface(onClick = onClick, shape = HomeShapes.card, modifier = Modifier.fillMaxWidth()) {
+private fun EventCard(
+    event: SportsItem,
+    phase: SportsPhase,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    FocusableSurface(
+        onClick = onClick,
+        shape = HomeShapes.card,
+        modifier = modifier.fillMaxWidth(),
+    ) {
         Column(Modifier.fillMaxWidth().background(HomeColors.Surface).padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (event.leagueLogo.isNotBlank()) {
@@ -877,11 +1060,11 @@ private fun EventCard(event: SportsItem, onClick: () -> Unit) {
                     maxLines = 1,
                     modifier = Modifier.weight(1f),
                 )
-                if (event.live) {
+                if (phase == SportsPhase.Live) {
                     Badge(text = "EN VIVO", dot = true, color = HomeColors.Live)
                 } else {
                     Text(
-                        event.detail.ifBlank { event.time },
+                        sportsDetailLabel(event, phase),
                         color = HomeColors.TextDim,
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
@@ -896,7 +1079,7 @@ private fun EventCard(event: SportsItem, onClick: () -> Unit) {
                     TeamSide(event.homeName, event.homeLogo, Modifier.weight(1f))
                     Text(
                         scoreLabel(event),
-                        color = if (event.live) HomeColors.Text else HomeColors.BlueBright,
+                        color = if (phase == SportsPhase.Live) HomeColors.Text else HomeColors.BlueBright,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Black,
                         modifier = Modifier.padding(horizontal = 10.dp),
@@ -914,7 +1097,7 @@ private fun EventCard(event: SportsItem, onClick: () -> Unit) {
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    footerLabel(event),
+                    sportsFooterLabel(event, phase),
                     color = HomeColors.TextDim,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.weight(1f),
@@ -975,13 +1158,6 @@ internal fun displayName(event: SportsItem): String {
     }
 }
 
-/** En vivo con minuto → el minuto; en vivo sin minuto → la fecha; si no → la hora. */
-internal fun footerLabel(event: SportsItem): String = when {
-    event.live && event.detail.isNotBlank() && !event.detail.equals("EN VIVO", ignoreCase = true) -> event.detail
-    event.live -> event.dateText.ifBlank { event.time }
-    else -> event.time.ifBlank { event.dateText }
-}
-
 /** La pestaña Películas / Series: la selección del feed, en rejilla. */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -992,59 +1168,71 @@ fun CatalogSurface(
     onOpen: (FeedItem) -> Unit,
     onOpenFull: () -> Unit,
     upTarget: FocusRequester? = null,
+    landing: FocusRequester? = null,
 ) {
     val items = catalogItems(feed, tab)
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val columns = when {
-            maxWidth >= 1200.dp -> 7
-            maxWidth >= 960.dp -> 6
-            maxWidth >= 720.dp -> 5
-            else -> 4
-        }
-        val usable = maxWidth - metrics.horizontalPadding * 2 - metrics.gap * (columns - 1)
-        val cellWidth = usable / columns
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
-            contentPadding = PaddingValues(
-                start = metrics.horizontalPadding,
-                end = metrics.horizontalPadding,
-                top = 8.dp,
-                bottom = 32.dp,
-            ),
-            horizontalArrangement = Arrangement.spacedBy(metrics.gap),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SectionHeader(
-                    title = tab.label,
-                    subtitle = if (items.isEmpty()) {
-                        "El catálogo completo se explora en Vision+"
-                    } else {
-                        "Selección de Vision+ · ${items.size} títulos"
-                    },
-                    actionLabel = "Ver todo en Vision+",
-                    actionModifier = upTarget?.let { Modifier.focusProperties { up = it } } ?: Modifier,
-                    onAction = onOpenFull,
-                )
-                Spacer(Modifier.height(6.dp))
+    val firstRef = items.firstOrNull()?.ref
+    CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollBringIntoView) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val columns = when {
+                maxWidth >= 1200.dp -> 7
+                maxWidth >= 960.dp -> 6
+                maxWidth >= 720.dp -> 5
+                else -> 4
             }
-            if (items.isEmpty()) {
+            val usable = maxWidth - metrics.horizontalPadding * 2 - metrics.gap * (columns - 1)
+            val cellWidth = usable / columns
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                modifier = Modifier.fillMaxSize().focusGroup(),
+                contentPadding = PaddingValues(
+                    start = metrics.horizontalPadding,
+                    end = metrics.horizontalPadding,
+                    top = 8.dp,
+                    bottom = 32.dp,
+                ),
+                horizontalArrangement = Arrangement.spacedBy(metrics.gap),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    EmptyHint(
-                        title = "Aún no hay títulos aquí",
-                        body = "Abre Vision+ para explorar el catálogo completo; en cuanto veas algo, aparece en este Inicio.",
-                        action = "Abrir Vision+",
-                        onAction = onOpenFull,
+                    Column(Modifier.fillMaxWidth()) {
+                        SectionHeader(
+                            title = tab.label,
+                            subtitle = if (items.isEmpty()) {
+                                "El catálogo completo se explora en Vision+"
+                            } else {
+                                "Selección de Vision+ · ${items.size} títulos"
+                            },
+                            actionLabel = "Ver todo en Vision+",
+                            actionModifier = upTarget?.let { Modifier.focusProperties { up = it } } ?: Modifier,
+                            onAction = onOpenFull,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                    }
+                }
+                if (items.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        EmptyHint(
+                            title = "Aún no hay títulos aquí",
+                            body = "Abre Vision+ para explorar el catálogo completo; en cuanto veas algo, aparece en este Inicio.",
+                            action = "Abrir Vision+",
+                            onAction = onOpenFull,
+                        )
+                    }
+                }
+                gridItems(items, key = { it.ref }) { item ->
+                    PosterCard(
+                        item = item,
+                        width = cellWidth,
+                        height = cellWidth * 1.5f,
+                        modifier = if (item.ref == firstRef && landing != null) {
+                            Modifier.focusRequester(landing)
+                        } else {
+                            Modifier
+                        },
+                        onClick = { onOpen(item) },
                     )
                 }
-            }
-            gridItems(items, key = { it.ref }) { item ->
-                PosterCard(
-                    item = item,
-                    width = cellWidth,
-                    height = cellWidth * 1.5f,
-                    onClick = { onOpen(item) },
-                )
             }
         }
     }
@@ -1060,62 +1248,75 @@ fun AppsSurface(
     onSystemSettings: () -> Unit,
     onWifi: () -> Unit,
     onHomeSettings: () -> Unit,
+    landing: FocusRequester? = null,
+    upTarget: FocusRequester? = null,
 ) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val columns = when {
-            maxWidth >= 1200.dp -> 8
-            maxWidth >= 960.dp -> 7
-            maxWidth >= 720.dp -> 6
-            else -> 5
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
-            contentPadding = PaddingValues(
-                start = metrics.horizontalPadding,
-                end = metrics.horizontalPadding,
-                top = 8.dp,
-                bottom = 32.dp,
-            ),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SectionHeader(
-                    title = "Apps",
-                    subtitle = "${apps.size} instaladas · mantén OK para fijar en el Inicio",
-                )
-                Spacer(Modifier.height(6.dp))
+    val firstPackage = apps.firstOrNull()?.packageName
+    CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollBringIntoView) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val columns = when {
+                maxWidth >= 1200.dp -> 8
+                maxWidth >= 960.dp -> 7
+                maxWidth >= 720.dp -> 6
+                else -> 5
             }
-            gridItems(apps, key = { it.packageName }) { app ->
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    AppTile(
-                        app = app,
-                        tile = metrics.appTile,
-                        onClick = { onOpen(app) },
-                        onLongClick = { onLongClick(app) },
-                    )
-                }
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Spacer(Modifier.height(10.dp))
-                SectionHeader(title = "Sistema")
-                Spacer(Modifier.height(2.dp))
-            }
-            gridItems(
-                listOf(
-                    SystemAction("settings", "Ajustes de la tele", Icons.Rounded.Settings, onSystemSettings),
-                    SystemAction("wifi", "Wi-Fi y red", Icons.Rounded.Wifi, onWifi),
-                    SystemAction("home", "Cambiar el Inicio", Icons.Rounded.Home, onHomeSettings),
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                modifier = Modifier.fillMaxSize().focusGroup(),
+                contentPadding = PaddingValues(
+                    start = metrics.horizontalPadding,
+                    end = metrics.horizontalPadding,
+                    top = 8.dp,
+                    bottom = 32.dp,
                 ),
-                key = { it.id },
-            ) { action ->
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    ActionTile(
-                        icon = action.icon,
-                        label = action.label,
-                        tile = metrics.appTile,
-                        onClick = action.onClick,
-                    )
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column(Modifier.fillMaxWidth()) {
+                        SectionHeader(
+                            title = "Apps",
+                            subtitle = "${apps.size} instaladas · mantén OK para fijar en el Inicio",
+                        )
+                        Spacer(Modifier.height(6.dp))
+                    }
+                }
+                gridItems(apps, key = { it.packageName }) { app ->
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        AppTile(
+                            app = app,
+                            tile = metrics.appTile,
+                            modifier = Modifier
+                                .then(if (app.packageName == firstPackage && landing != null) Modifier.focusRequester(landing) else Modifier)
+                                .then(if (app.packageName == firstPackage && upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier),
+                            onClick = { onOpen(app) },
+                            onLongClick = { onLongClick(app) },
+                        )
+                    }
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column(Modifier.fillMaxWidth()) {
+                        Spacer(Modifier.height(10.dp))
+                        SectionHeader(title = "Sistema")
+                        Spacer(Modifier.height(2.dp))
+                    }
+                }
+                gridItems(
+                    listOf(
+                        SystemAction("settings", "Ajustes de la tele", Icons.Rounded.Settings, onSystemSettings),
+                        SystemAction("wifi", "Wi-Fi y red", Icons.Rounded.Wifi, onWifi),
+                        SystemAction("home", "Cambiar el Inicio", Icons.Rounded.Home, onHomeSettings),
+                    ),
+                    key = { it.id },
+                ) { action ->
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        ActionTile(
+                            icon = action.icon,
+                            label = action.label,
+                            tile = metrics.appTile,
+                            onClick = action.onClick,
+                        )
+                    }
                 }
             }
         }

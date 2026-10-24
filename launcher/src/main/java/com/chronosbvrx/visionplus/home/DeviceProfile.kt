@@ -48,8 +48,8 @@ internal fun homeMetrics(screenHeightDp: Int): HomeMetrics {
         posterHeight = posterWidth * 1.5f,
         continueWidth = if (compact) 196.dp else 248.dp,
         continueHeight = if (compact) 110.dp else 140.dp,
-        channelWidth = if (compact) 150.dp else 190.dp,
-        channelHeight = if (compact) 84.dp else 107.dp,
+        channelWidth = if (compact) 156.dp else 196.dp,
+        channelHeight = if (compact) 104.dp else 128.dp,
         appTile = if (compact) 76.dp else 96.dp,
         gap = if (compact) 12.dp else 16.dp,
         horizontalPadding = if (compact) 36.dp else 52.dp,
@@ -70,8 +70,16 @@ class DeviceProfile(context: Context) {
         am.isLowRamDevice
     }.getOrDefault(false)
 
-    /** Sin animaciones infinitas ni escalados en equipos de 1.5-2 GB (Chromecast HD). */
-    val reducedEffects: Boolean = lowRam || !isTv
+    /** RAM total: muchas teles de 2 GB no se declaran low-RAM y aun así sufren las animaciones. */
+    private val totalRamMb: Long = runCatching {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val info = ActivityManager.MemoryInfo()
+        am.getMemoryInfo(info)
+        info.totalMem / (1024L * 1024L)
+    }.getOrDefault(Long.MAX_VALUE)
+
+    /** Sin animaciones caras en equipos de 1.5-2 GB (Chromecast HD y teles modestas). */
+    val reducedEffects: Boolean = lowRam || !isTv || totalRamMb <= 2_200L
 }
 
 @Composable

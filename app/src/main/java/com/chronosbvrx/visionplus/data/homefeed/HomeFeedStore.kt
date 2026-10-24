@@ -9,6 +9,7 @@ import com.chronosbvrx.visionplus.data.HomeCurated
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.ResumeEntry
+import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.isEpisodeEntry
 import com.chronosbvrx.visionplus.data.offline.NetworkMonitor
@@ -33,7 +34,12 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -56,7 +62,14 @@ object HomeFeedStore {
     private const val REFRESH_THROTTLE_MS = 20_000L
 
     private const val LIVE_LIMIT = 400
-    private const val EPG_CHANNELS = 16
+
+    /**
+     * La guía se pide en paralelo para la primera pantalla y varias más: el mosaico del
+     * launcher enseña ~30 canales a la vez y antes solo los primeros 16 tenían AHORA.
+     */
+    private const val EPG_CHANNELS = 120
+    private const val EPG_PARALLEL = 8
+    private const val EPG_TIMEOUT_MS = 15_000L
     private const val SPORTS_LIMIT = 250
     private const val ROW_LIMIT = 18
 
@@ -139,7 +152,7 @@ object HomeFeedStore {
                 write(app, diskOnly)
                 notifyChange(app)
             }
-            val epg = runCatching { withTimeoutOrNull(8_000L) { fetchEpg(app) } }.getOrNull()
+            val epg = runCatching { withTimeoutOrNull(EPG_TIMEOUT_MS) { fetchEpg(app) } }.getOrNull()
             // La agenda deportiva se refresca aquí (el launcher no tiene red propia).
             runCatching { withTimeoutOrNull(6_000L) { GeeSportsSource.refreshEvents(app) } }
             runCatching {
@@ -345,6 +358,8 @@ object HomeFeedStore {
                     now = guide?.now.orEmpty(),
                     next = guide?.next.orEmpty(),
                     progress = guide?.progressAt(now) ?: 0,
+                    startMs = guide?.startMs ?: 0L,
+                    endMs = guide?.endMs ?: 0L,
                     mexico = isMexico(channel.name),
                     playLink = VisionLinks.live(code, channel.name, channel.logo.orEmpty()),
                 )
@@ -371,24 +386,37 @@ object HomeFeedStore {
 
     /** La agenda de Deportes en vivo que ya espeja el VPS (en vivo primero, luego por hora). */
     private fun sportsItems(context: Context): List<SportsItem> = runCatching {
+        val now = System.currentTimeMillis()
+        val today = com.chronosbvrx.visionplus.data.sports.SportsSource.todayIso()
         GeeSportsSource.cachedEvents(context)
             .asSequence()
             .filter { it.id.isNotBlank() }
             // La agenda vencida (caché vieja) no debe aparecer como si fuera de hoy.
-            .filter {
-                it.dateIso.isBlank() ||
-                    it.dateIso >= com.chronosbvrx.visionplus.data.sports.SportsSource.todayIso()
-            }
+            .filter { it.dateIso.isBlank() || it.dateIso >= today }
+            .map { event -> event to GeeAgenda.phaseOf(event, now) }
             .sortedWith(
-                compareBy<GeeSportsSource.GeeEvent> { it.dateIso }
-                    .thenByDescending { it.live || it.alive > 0 || it.status == "in" }
-                    .thenBy { it.time },
+                compareBy<Pair<GeeSportsSource.GeeEvent, GeeAgenda.Phase>> {
+                    when (it.second) {
+                        GeeAgenda.Phase.Live -> 0
+                        GeeAgenda.Phase.Soon -> 1
+                        GeeAgenda.Phase.Done -> 2
+                    }
+                }
+                    .thenBy { it.first.dateIso }
+                    .thenBy { it.first.time },
             )
             .take(SPORTS_LIMIT)
-            .map { event ->
+            .map { (event, phase) ->
                 val home = event.homeName.ifBlank { event.teamA }
                 val away = event.awayName.ifBlank { event.teamB }
-                val live = event.live || event.alive > 0 || event.status == "in"
+                // `alive` es el número de enlaces que responden, NO si el partido se juega.
+                // La fase la decide la misma agenda que usa la app (estado + reloj de 3 h).
+                val live = phase == GeeAgenda.Phase.Live
+                val detail = when (phase) {
+                    GeeAgenda.Phase.Live -> event.detail.ifBlank { "EN VIVO" }
+                    GeeAgenda.Phase.Done -> event.detail.ifBlank { "Final" }
+                    GeeAgenda.Phase.Soon -> event.time.take(5)
+                }
                 SportsItem(
                     id = event.id,
                     name = when {
@@ -407,12 +435,14 @@ object HomeFeedStore {
                     awayLogo = event.awayLogo,
                     homeScore = event.scoreHome,
                     awayScore = event.scoreAway,
-                    detail = event.detail.ifBlank { if (live) "EN VIVO" else event.time },
+                    detail = detail,
                     live = live,
+                    status = event.status,
+                    startMs = GeeAgenda.startMs(event) ?: 0L,
                     alive = event.alive,
                     total = event.total,
                     dateText = event.dateText,
-                    time = event.time,
+                    time = event.time.take(5),
                     openLink = VisionLinks.sports(event.id),
                 )
             }
@@ -445,30 +475,40 @@ object HomeFeedStore {
     }
 
     /**
-     * El EPG del VPS, solo para los primeros canales y con presupuesto. El feed sin guía ya es
-     * útil; la guía llega unos segundos después y se reescribe.
+     * El EPG del VPS, para la primera pantalla del mosaico y varias más, en paralelo. El feed
+     * sin guía ya es útil; la guía llega unos segundos después y se reescribe. Con 8 consultas
+     * simultáneas, 120 canales no bloquean el arranque del launcher.
      */
-    private suspend fun fetchEpg(context: Context): Map<String, EpgWindow> {
+    private suspend fun fetchEpg(context: Context): Map<String, EpgWindow> = coroutineScope {
         val channels = uniqueChannels(context).take(EPG_CHANNELS)
-        if (channels.isEmpty()) return emptyMap()
+        if (channels.isEmpty()) return@coroutineScope emptyMap()
         val now = System.currentTimeMillis()
-        val out = HashMap<String, EpgWindow>(channels.size * 2)
-        for (channel in channels) {
-            val code = channel.url.removePrefix("xtvlive:")
-            val items = runCatching { X4KApi.epgFor(context, code, channel.name) }.getOrDefault(emptyList())
-            if (items.isEmpty()) continue
-            val current = items.firstOrNull { now in it.startMs until it.endMs }
-            val next = current?.let { cur -> items.firstOrNull { it.startMs == cur.endMs } }
-                ?: items.firstOrNull { it.startMs > now }
-            out[code] = EpgWindow(
-                now = current?.name.orEmpty(),
-                next = next?.name.orEmpty(),
-                startMs = current?.startMs ?: 0L,
-                endMs = current?.endMs ?: 0L,
-            )
-        }
+        val gate = Semaphore(EPG_PARALLEL)
+        val wanted = channels.map { channel ->
+            async(Dispatchers.IO) {
+                gate.withPermit {
+                    val code = channel.url.removePrefix("xtvlive:")
+                    val items = runCatching { X4KApi.epgFor(context, code, channel.name) }
+                        .getOrDefault(emptyList())
+                    if (items.isEmpty()) {
+                        null
+                    } else {
+                        val current = items.firstOrNull { now in it.startMs until it.endMs }
+                        val next = current?.let { cur -> items.firstOrNull { it.startMs == cur.endMs } }
+                            ?: items.firstOrNull { it.startMs > now }
+                        code to EpgWindow(
+                            now = current?.name.orEmpty(),
+                            next = next?.name.orEmpty(),
+                            startMs = current?.startMs ?: 0L,
+                            endMs = current?.endMs ?: 0L,
+                        )
+                    }
+                }
+            }
+        }.awaitAll().filterNotNull()
+        val out = wanted.toMap()
         writeEpgCache(context, out)
-        return out
+        out
     }
 
     // --- Caché de la guía (sobrevive a la muerte del proceso) ---

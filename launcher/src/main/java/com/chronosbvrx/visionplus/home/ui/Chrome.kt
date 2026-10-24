@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -100,6 +101,7 @@ fun TopChrome(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     activeTabRequester: FocusRequester? = null,
+    downTarget: FocusRequester? = null,
 ) {
     val clock = rememberClockText()
     Row(
@@ -137,7 +139,7 @@ fun TopChrome(
         }
         Spacer(Modifier.width(if (compact) 18.dp else 30.dp))
         LazyRow(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).focusGroup(),
             horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -147,6 +149,7 @@ fun TopChrome(
                     selected = item == tab,
                     onClick = { onTab(item) },
                     compact = compact,
+                    downTarget = downTarget,
                     modifier = if (item == tab && activeTabRequester != null) {
                         Modifier.focusRequester(activeTabRequester)
                     } else {
@@ -179,6 +182,7 @@ private fun TabPill(
     selected: Boolean,
     onClick: () -> Unit,
     compact: Boolean,
+    downTarget: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -193,6 +197,13 @@ private fun TabPill(
             .clip(HomeShapes.pill)
             .background(background)
             .then(if (focused) Modifier.border(1.dp, Color.White.copy(alpha = 0.7f), HomeShapes.pill) else Modifier)
+            .then(
+                if (downTarget != null) {
+                    Modifier.softFocusDown(downTarget)
+                } else {
+                    Modifier
+                },
+            )
             .onFocusChanged { focused = it.isFocused }
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },

@@ -34,6 +34,12 @@ class HomeMetricsTest {
     }
 
     @Test
+    fun theLiveCardReservesRoomForNameAndGuide() {
+        assertTrue("la tarjeta compacta necesita nombre + AHORA", homeMetrics(540).channelHeight >= 100.dp)
+        assertTrue("la tarjeta grande también", homeMetrics(900).channelHeight >= 120.dp)
+    }
+
+    @Test
     fun absurdHeightsAreClampedInsteadOfOverflowing() {
         val tiny = homeMetrics(120)
         assertEquals(tiny, homeMetrics(360))

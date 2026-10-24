@@ -9,11 +9,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,6 +26,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -48,6 +53,7 @@ import com.chronosbvrx.visionplus.home.ui.MissingVisionBanner
 import com.chronosbvrx.visionplus.home.ui.OutdatedVisionBanner
 import com.chronosbvrx.visionplus.home.ui.SearchSurface
 import com.chronosbvrx.visionplus.home.ui.TopChrome
+import com.chronosbvrx.visionplus.home.ui.requestFocusSafely
 import com.chronosbvrx.visionplus.home.rememberHomeMetrics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -66,7 +72,6 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     val metrics = rememberHomeMetrics()
     val reduced = profile.reducedEffects
     val compact = metrics.posterWidth < 110.dp
-    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
     var feed by remember { mutableStateOf<HomeFeed?>(null) }
     var apps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
@@ -79,11 +84,15 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     var canInstall by remember { mutableStateOf(HomeUpdate.canInstall(context)) }
     var latestApp by remember { mutableStateOf<String?>(null) }
     var feedAttempted by remember { mutableStateOf(false) }
-    var homeKey by remember { mutableIntStateOf(0) }
-    var forceLanding by remember { mutableIntStateOf(0) }
     var heroFocused by remember { mutableStateOf(false) }
+    var screenHasFocus by remember { mutableStateOf(false) }
+    var userHasMoved by remember { mutableStateOf(false) }
+    var landingRequest by remember { mutableIntStateOf(0) }
+    var handledLandingRequest by remember { mutableIntStateOf(0) }
     val landing = remember { FocusRequester() }
     val tabLanding = remember { FocusRequester() }
+    val sectionLanding = remember { FocusRequester() }
+    val homeListState = rememberLazyListState()
 
     // Primer frame: caché propia y apps del sistema. Nada de red esperando.
     LaunchedEffect(Unit) {
@@ -117,29 +126,53 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         }
     }
 
-    // El botón Home ya estando en el launcher: vuelve al Inicio y cierra paneles.
+    // TV en vivo y Deportes cambian con el reloj aunque nadie toque el mando: se vuelve a
+    // pedir el feed (y con él la guía EPG y la fase de cada partido) cada dos minutos.
+    LaunchedEffect(tab) {
+        if (tab != HomeTab.LIVE && tab != HomeTab.EVENTS) return@LaunchedEffect
+        while (true) {
+            delay(120_000L)
+            feeds.refresh()?.let { feed = it }
+        }
+    }
+
+    // El botón Home ya estando en el launcher: vuelve al Inicio, cierra paneles y sube al hero.
     LaunchedEffect(homeSignal) {
         if (homeSignal == 0) return@LaunchedEffect
         tab = HomeTab.HOME
         commandCenter = false
         searchOpen = false
-        homeKey++
-        forceLanding++
+        userHasMoved = false
+        landingRequest++
+        runCatching { homeListState.scrollToItem(0) }
     }
 
-    // El foco inicial: el botón principal del hero. Reintenta hasta que el hero REAL está
-    // compuesto y enfocado (el primer frame puede traer el hero de marca). El estado se
-    // reinicia cuando cambia el feed, porque al sustituir el hero el nodo enfocado se
-    // destruye sin avisar y el foco se quedaría en ninguna parte.
-    LaunchedEffect(feed?.meta?.generatedAt) { heroFocused = false }
-    LaunchedEffect(tab, forceLanding, feed?.meta?.generatedAt, apps.size, visionInstalled) {
-        if (tab != HomeTab.HOME) return@LaunchedEffect
-        repeat(10) {
-            if (heroFocused && forceLanding == 0) return@LaunchedEffect
-            delay(180)
-            // La misma búsqueda geométrica del D-pad: desde la barra baja al hero. El
-            // requestFocus directo no aterriza mientras el hero se está recomponiendo.
-            if (!heroFocused) runCatching { focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) }
+    // Un SOLO aterrizaje verificado. Ya no se simulan diez «Abajo»: el foco se pide al héroe
+    // (o al primer control de la pestaña) y se reintenta mientras el contenido termina de
+    // componerse. Si el usuario ya movió el mando, no se vuelve a robar el foco.
+    LaunchedEffect(
+        tab,
+        landingRequest,
+        feed?.hero?.firstOrNull()?.ref,
+        feed?.live?.size,
+        feed?.sports?.size,
+        feed?.rows?.size,
+        apps.size,
+    ) {
+        val forced = landingRequest != handledLandingRequest
+        if (forced) {
+            handledLandingRequest = landingRequest
+            userHasMoved = false
+        } else if (userHasMoved) {
+            return@LaunchedEffect
+        }
+        if (tab == HomeTab.HOME && heroFocused) return@LaunchedEffect
+        val target = if (tab == HomeTab.HOME) landing else sectionLanding
+        repeat(6) {
+            delay(120)
+            if (tab == HomeTab.HOME && heroFocused) return@LaunchedEffect
+            if (userHasMoved) return@LaunchedEffect
+            requestFocusSafely(target)
         }
     }
 
@@ -148,7 +181,11 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         when {
             commandCenter -> commandCenter = false
             searchOpen -> searchOpen = false
-            tab != HomeTab.HOME -> tab = HomeTab.HOME
+            tab != HomeTab.HOME -> {
+                tab = HomeTab.HOME
+                userHasMoved = false
+                landingRequest++
+            }
             else -> Unit
         }
     }
@@ -191,7 +228,20 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(HomeColors.Black),
+            .background(HomeColors.Black)
+            .onFocusChanged { screenHasFocus = it.hasFocus }
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    userHasMoved = true
+                    // Si el foco quedó huérfano, la primera tecla lo devuelve a un control
+                    // real en vez de perderse en silencio.
+                    if (!screenHasFocus) {
+                        val target = if (tab == HomeTab.HOME) landing else sectionLanding
+                        if (requestFocusSafely(target)) return@onPreviewKeyEvent true
+                    }
+                }
+                false
+            },
     ) {
         // Luz ambiental de la casa (sin animación infinita: es un degradado fijo).
         Box(
@@ -208,11 +258,18 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             TopChrome(
                 tab = tab,
                 profile = feed?.meta?.profile.orEmpty(),
-                onTab = { tab = it },
+                onTab = {
+                    if (it != tab) {
+                        tab = it
+                        userHasMoved = false
+                        landingRequest++
+                    }
+                },
                 onSearch = { searchOpen = true },
                 onCommandCenter = { commandCenter = true },
                 compact = compact,
                 activeTabRequester = tabLanding,
+                downTarget = if (tab == HomeTab.HOME) landing else sectionLanding,
             )
             if (!visionInstalled) {
                 MissingVisionBanner(
@@ -257,30 +314,38 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             }
             Box(Modifier.weight(1f)) {
                 when (tab) {
-                    HomeTab.HOME -> key(homeKey) {
-                        HomeSurface(
-                            feed = feed,
-                            apps = apps,
-                            favorites = favorites,
-                            metrics = metrics,
-                            reduced = reduced,
-                            compact = compact,
-                            landing = landing,
-                            onHeroPlay = { item -> openLink(item.playLink.ifBlank { item.openLink }) },
-                            onHeroOpen = { item -> openLink(item.openLink) },
-                            onItem = { item -> openLink(item.openLink) },
-                            onContinue = { item -> openLink(item.playLink) },
-                            onLive = { item -> openLink(item.playLink) },
-                            onApp = { app -> launchApp(app) },
-                            onAppFavorite = { app -> toggleFavorite(app) },
-                            onSeeLive = { tab = HomeTab.LIVE },
-                            onSeeApps = { tab = HomeTab.APPS },
-                            onOpenHistory = { openLink(VisionLinks.library()) },
-                            onOpenVision = { if (visionInstalled) openVision() else scope.launch { HomeUpdate.installVisionPlus(context) } },
-                            onSystemSettings = { appsRepo.openSystemSettings() },
-                            onPrimaryFocus = { heroFocused = it },
-                        )
-                    }
+                    HomeTab.HOME -> HomeSurface(
+                        feed = feed,
+                        apps = apps,
+                        favorites = favorites,
+                        metrics = metrics,
+                        reduced = reduced,
+                        compact = compact,
+                        landing = landing,
+                        listState = homeListState,
+                        tabLanding = tabLanding,
+                        onHeroPlay = { item -> openLink(item.playLink.ifBlank { item.openLink }) },
+                        onHeroOpen = { item -> openLink(item.openLink) },
+                        onItem = { item -> openLink(item.openLink) },
+                        onContinue = { item -> openLink(item.playLink) },
+                        onLive = { item -> openLink(item.playLink) },
+                        onApp = { app -> launchApp(app) },
+                        onAppFavorite = { app -> toggleFavorite(app) },
+                        onSeeLive = {
+                            tab = HomeTab.LIVE
+                            userHasMoved = false
+                            landingRequest++
+                        },
+                        onSeeApps = {
+                            tab = HomeTab.APPS
+                            userHasMoved = false
+                            landingRequest++
+                        },
+                        onOpenHistory = { openLink(VisionLinks.library()) },
+                        onOpenVision = { if (visionInstalled) openVision() else scope.launch { HomeUpdate.installVisionPlus(context) } },
+                        onSystemSettings = { appsRepo.openSystemSettings() },
+                        onPrimaryFocus = { heroFocused = it },
+                    )
 
                     HomeTab.LIVE -> LiveSurface(
                         items = feed?.live.orEmpty(),
@@ -288,6 +353,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         onOpen = { item -> openLink(item.playLink) },
                         onOpenFull = { openLink(VisionLinks.liveHub()) },
                         upTarget = tabLanding,
+                        landing = sectionLanding,
                     )
 
                     HomeTab.EVENTS -> EventsSurface(
@@ -295,6 +361,8 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         metrics = metrics,
                         onOpen = { event -> openLink(event.openLink) },
                         onOpenFull = { openLink(VisionLinks.sports()) },
+                        upTarget = tabLanding,
+                        landing = sectionLanding,
                     )
 
                     HomeTab.MOVIES, HomeTab.SERIES -> CatalogSurface(
@@ -306,6 +374,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                             openLink(VisionLinks.section(if (tab == HomeTab.MOVIES) "movies" else "series"))
                         },
                         upTarget = tabLanding,
+                        landing = sectionLanding,
                     )
 
                     HomeTab.APPS -> AppsSurface(
@@ -316,6 +385,8 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         onSystemSettings = { appsRepo.openSystemSettings() },
                         onWifi = { appsRepo.openWifiSettings() },
                         onHomeSettings = { appsRepo.openHomeSettings() },
+                        landing = sectionLanding,
+                        upTarget = tabLanding,
                     )
                 }
             }

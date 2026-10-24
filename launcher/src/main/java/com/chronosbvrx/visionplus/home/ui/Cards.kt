@@ -194,14 +194,16 @@ fun ContinueCard(
     }
 }
 
-/** Canal en vivo: logo a su tamaño, nombre y la guía de ahora. */
+/** Canal en vivo: logo, nombre y la guía de AHORA con su avance. */
 @Composable
 fun ChannelCard(
     item: LiveItem,
     height: Dp,
     modifier: Modifier = Modifier,
+    nowMs: Long = System.currentTimeMillis(),
     onClick: () -> Unit,
 ) {
+    val current = currentProgram(item, nowMs)
     FocusableSurface(
         onClick = onClick,
         modifier = modifier.height(height),
@@ -209,11 +211,11 @@ fun ChannelCard(
     ) {
         Box(Modifier.fillMaxSize().background(HomeColors.Surface)) {
             // El logo nunca se estira: entra centrado y con aire (la app hace lo mismo en la
-            // rejilla de TV en vivo).
+            // rejilla de TV en vivo). El pie tiene nombre + AHORA + avance.
             Box(
                 Modifier
                     .fillMaxSize()
-                    .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 34.dp),
+                    .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 54.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Monogram(item.name, Modifier.fillMaxSize(), size = 22)
@@ -226,15 +228,23 @@ fun ChannelCard(
                     )
                 }
             }
-            if (item.now.isNotBlank()) {
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.62f))
-                        .padding(horizontal = 9.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.72f))
+                    .padding(horizontal = 9.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    item.name,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "AHORA",
                         color = HomeColors.BlueBright,
@@ -244,13 +254,16 @@ fun ChannelCard(
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        item.now,
-                        color = Color.White.copy(alpha = 0.86f),
+                        current.ifBlank { "Guía no disponible" },
+                        color = if (current.isBlank()) HomeColors.TextFaint else Color.White.copy(alpha = 0.88f),
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
                 }
+                Spacer(Modifier.height(4.dp))
+                ThinProgress(liveProgress(item, nowMs))
             }
             Badge(
                 text = "EN VIVO",

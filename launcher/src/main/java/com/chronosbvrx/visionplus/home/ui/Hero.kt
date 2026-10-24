@@ -60,6 +60,7 @@ fun HeroStage(
     metrics: HomeMetrics,
     reduced: Boolean,
     landing: FocusRequester,
+    upTarget: FocusRequester? = null,
     onPlay: (HeroItem) -> Unit,
     onOpen: (HeroItem) -> Unit,
     modifier: Modifier = Modifier,
@@ -165,14 +166,17 @@ fun HeroStage(
                         .focusRequester(landing)
                         // A la izquierda del primer botón no hay nada: el foco no debe
                         // saltar a la barra superior por geometría.
-                        .focusProperties { left = FocusRequester.Cancel },
+                        .focusProperties { left = FocusRequester.Cancel }
+                        .then(if (upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier),
                     onFocusChanged = onPrimaryFocus,
                 )
                 HomeButton(
                     label = "Más información",
                     onClick = { onOpen(current) },
                     icon = Icons.Rounded.Info,
-                    modifier = Modifier.focusProperties { right = FocusRequester.Cancel },
+                    modifier = Modifier
+                        .focusProperties { right = FocusRequester.Cancel }
+                        .then(if (upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier),
                 )
             }
         }

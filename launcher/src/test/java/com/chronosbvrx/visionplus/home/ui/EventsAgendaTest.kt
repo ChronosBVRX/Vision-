@@ -88,4 +88,86 @@ class EventsAgendaTest {
     fun aDayWithoutEventsHasNoLeagues() {
         assertTrue(eventLeagues(listOf(event("1")), "2026-10-30", null).isEmpty())
     }
+
+    @Test
+    fun theDayStripAlwaysOffersToday() {
+        val days = eventDays(listOf(event("a", dateIso = "2026-10-25")), "2026-10-23")
+        assertEquals(listOf("2026-10-23", "2026-10-25"), days.map { it.first })
+        assertEquals("Hoy", days.first().second)
+    }
+
+    @Test
+    fun thePhaseUsesTheClockAndNotTheAliveSignalCount() {
+        val start = 1_760_000_000_000L
+        val future = SportsItem(
+            id = "future",
+            name = "A vs B",
+            dateIso = "2026-10-24",
+            live = true, // feed viejo: `live` venía de las señales, no del partido
+            alive = 5,
+            startMs = start + 4 * 60 * 60_000L,
+        )
+        assertEquals(SportsPhase.Soon, sportsPhase(future, start))
+    }
+
+    @Test
+    fun aStartedMatchOpensByClockEvenIfTheAgendaSaysPre() {
+        val start = 1_760_000_000_000L
+        val lagging = SportsItem(
+            id = "lag",
+            name = "A vs B",
+            dateIso = "2026-10-24",
+            status = "pre",
+            startMs = start - 60 * 60_000L,
+        )
+        assertEquals(SportsPhase.Live, sportsPhase(lagging, start))
+    }
+
+    @Test
+    fun aFinishedMatchStaysFinishedEvenWithLiveSignals() {
+        val start = 1_760_000_000_000L
+        val finished = SportsItem(
+            id = "done",
+            name = "A vs B",
+            dateIso = "2026-10-24",
+            status = "post",
+            live = true,
+            alive = 3,
+            startMs = start - 60 * 60_000L,
+        )
+        assertEquals(SportsPhase.Done, sportsPhase(finished, start))
+        assertEquals("Final", sportsDetailLabel(finished.copy(detail = ""), SportsPhase.Done))
+    }
+
+    @Test
+    fun theAgendaStatusWinsWhenItExists() {
+        val start = 1_760_000_000_000L
+        val inPlay = SportsItem(
+            id = "in",
+            name = "A vs B",
+            dateIso = "2026-10-24",
+            status = "in",
+            startMs = start - 6 * 60 * 60_000L,
+        )
+        assertEquals(SportsPhase.Live, sportsPhase(inPlay, start))
+    }
+
+    @Test
+    fun aClockOlderThanTheWindowIsFinished() {
+        val start = 1_760_000_000_000L
+        val old = SportsItem(
+            id = "old",
+            name = "A vs B",
+            dateIso = "2026-10-24",
+            startMs = start - 4 * 60 * 60_000L,
+        )
+        assertEquals(SportsPhase.Done, sportsPhase(old, start))
+    }
+
+    @Test
+    fun theMexicanClockIsFormattedWithoutSeconds() {
+        assertEquals("14:00", sportsClock("14:00:00"))
+        assertEquals("14:00", sportsClock("14:00"))
+        assertEquals("", sportsClock(""))
+    }
 }

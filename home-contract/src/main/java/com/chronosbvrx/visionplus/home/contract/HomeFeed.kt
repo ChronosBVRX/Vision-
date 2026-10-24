@@ -71,6 +71,9 @@ data class LiveItem(
     val next: String = "",
     /** 0..100 del programa en curso. */
     val progress: Int = 0,
+    /** Ventana del programa en curso: el launcher recalcula el avance sin esperar al feed. */
+    val startMs: Long = 0L,
+    val endMs: Long = 0L,
     /** Señal mexicana: el launcher la pone primero y la puede filtrar. */
     val mexico: Boolean = false,
     val playLink: String = "",
@@ -96,6 +99,10 @@ data class SportsItem(
     /** «45'», «FT», «Hoy 20:00»… */
     val detail: String = "",
     val live: Boolean = false,
+    /** Estado de la agenda: pre | in | post (vacío si la fuente no lo trae). */
+    val status: String = "",
+    /** Inicio real en epoch ms (0 si no se pudo resolver): la fase se calcula con el reloj. */
+    val startMs: Long = 0L,
     val alive: Int = 0,
     val total: Int = 0,
     val dateText: String = "",

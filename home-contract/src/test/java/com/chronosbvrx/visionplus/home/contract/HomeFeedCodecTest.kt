@@ -11,7 +11,14 @@ class HomeFeedCodecTest {
     fun sportsAndMexicanChannelsSurviveTheRoundTrip() {
         val feed = HomeFeed(
             live = listOf(
-                LiveItem(code = "c5", name = "Canal 5", mexico = true, now = "Ana de nadie"),
+                LiveItem(
+                    code = "c5",
+                    name = "Canal 5",
+                    mexico = true,
+                    now = "Ana de nadie",
+                    startMs = 1_760_000_000_000L,
+                    endMs = 1_760_003_600_000L,
+                ),
                 LiveItem(code = "axn", name = "AXN", mexico = false),
             ),
             sports = listOf(
@@ -27,6 +34,8 @@ class HomeFeedCodecTest {
                     awayScore = 0,
                     detail = "45'",
                     live = true,
+                    status = "in",
+                    startMs = 1_760_000_000_000L,
                     alive = 3,
                     total = 3,
                     openLink = VisionLinks.sports("event:1"),

@@ -61,6 +61,8 @@ object HomeFeedCodec {
                     put("now", item.now)
                     put("next", item.next)
                     put("progress", item.progress)
+                    put("startMs", item.startMs)
+                    put("endMs", item.endMs)
                     put("mexico", item.mexico)
                     put("playLink", item.playLink)
                 })
@@ -108,6 +110,8 @@ object HomeFeedCodec {
                     put("awayScore", item.awayScore ?: JSONObject.NULL)
                     put("detail", item.detail)
                     put("live", item.live)
+                    put("status", item.status)
+                    put("startMs", item.startMs)
                     put("alive", item.alive)
                     put("total", item.total)
                     put("dateText", item.dateText)
@@ -172,6 +176,8 @@ object HomeFeedCodec {
                         now = o.optString("now"),
                         next = o.optString("next"),
                         progress = o.optInt("progress").coerceIn(0, 100),
+                        startMs = o.optLong("startMs"),
+                        endMs = o.optLong("endMs"),
                         mexico = o.optBoolean("mexico", false),
                         playLink = o.optString("playLink"),
                     )
@@ -192,6 +198,8 @@ object HomeFeedCodec {
                         awayScore = if (o.isNull("awayScore")) null else o.optInt("awayScore"),
                         detail = o.optString("detail"),
                         live = o.optBoolean("live", false),
+                        status = o.optString("status"),
+                        startMs = o.optLong("startMs"),
                         alive = o.optInt("alive"),
                         total = o.optInt("total"),
                         dateText = o.optString("dateText"),

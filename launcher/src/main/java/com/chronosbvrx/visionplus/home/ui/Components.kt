@@ -64,7 +64,7 @@ fun FocusableSurface(
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused && !reduced) focusedScale else 1f,
-        animationSpec = tween(durationMillis = 170),
+        animationSpec = tween(durationMillis = 120),
         label = "focusScale",
     )
     val interaction = remember { MutableInteractionSource() }
@@ -110,7 +110,7 @@ fun HomeButton(
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused && !reduced) 1.06f else 1f,
-        animationSpec = tween(150),
+        animationSpec = tween(120),
         label = "buttonScale",
     )
     val background = when {

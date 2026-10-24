@@ -58,6 +58,9 @@ class HomeFeedProvider : ContentProvider() {
         val json = if (context == null) {
             emptyFeedJson()
         } else {
+            // El launcher es quien pide el feed: aprovechar para refrescar la guía y la agenda
+            // en segundo plano (con freno propio), sin bloquear esta respuesta.
+            runCatching { HomeFeedStore.refreshAsync(context) }
             runCatching { HomeFeedStore.readOrBuild(context) }.getOrElse { emptyFeedJson() }
         }
         return oneRow(json)

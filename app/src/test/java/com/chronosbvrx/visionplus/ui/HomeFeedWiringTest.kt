@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.ui
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -54,6 +55,27 @@ class HomeFeedWiringTest {
         assertTrue("usa el buscador de la app", provider.contains("HomeFeedStore.searchItems("))
         val store = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedStore.kt")
         assertTrue("el buscador es el del servidor", store.contains("RemoteIndexSource.search("))
+    }
+
+    @Test
+    fun theSportsFeedUsesTheRealMatchPhaseAndNotTheSignalCount() {
+        val store = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedStore.kt")
+        assertTrue("usa la misma agenda que la app", store.contains("GeeAgenda.phaseOf(event, now)"))
+        assertTrue("manda el estado de la agenda", store.contains("status = event.status"))
+        assertTrue("manda el inicio resuelto", store.contains("startMs = GeeAgenda.startMs(event)"))
+        assertFalse("`alive` no puede decidir si el partido está en vivo", store.contains("event.alive > 0"))
+        assertTrue("el terminado se rotula Final", store.contains("\"Final\""))
+    }
+
+    @Test
+    fun theGuideCoversTheLiveMosaicAndRefreshesFromTheProvider() {
+        val store = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedStore.kt")
+        assertTrue("la guía cubre varias pantallas", store.contains("EPG_CHANNELS = 120"))
+        assertTrue("se pide en paralelo", store.contains("EPG_PARALLEL"))
+        assertTrue("la ventana viaja al launcher", store.contains("startMs = guide?.startMs"))
+        assertTrue("y también el fin", store.contains("endMs = guide?.endMs"))
+        val provider = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedProvider.kt")
+        assertTrue("el provider mantiene la guía caliente", provider.contains("HomeFeedStore.refreshAsync(context)"))
     }
 
     @Test

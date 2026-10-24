@@ -57,8 +57,54 @@ class LauncherSearchTest {
             "src/main/java/com/chronosbvrx/visionplus/home/ui/Surfaces.kt",
             "launcher/src/main/java/com/chronosbvrx/visionplus/home/ui/Surfaces.kt",
         )
-        assertTrue("filtro México", surfaces.contains("LiveFilterChip(\"México\""))
+        assertTrue("filtro México", surfaces.contains("label = \"México\""))
         assertTrue("el canal sabe si es mexicano", surfaces.contains("it.mexico"))
+    }
+
+    @Test
+    fun theLiveMosaicShowsTheChannelNameAndItsNowGuide() {
+        val cards = require(
+            "src/main/java/com/chronosbvrx/visionplus/home/ui/Cards.kt",
+            "launcher/src/main/java/com/chronosbvrx/visionplus/home/ui/Cards.kt",
+        )
+        assertTrue("pinta el nombre del canal", cards.contains("item.name"))
+        assertTrue("pinta la guía AHORA", cards.contains("currentProgram(item, nowMs)"))
+        assertTrue("pinta el avance real", cards.contains("liveProgress(item, nowMs)"))
+    }
+
+    @Test
+    fun sportsUseTheClockAndNotTheAliveSignalCount() {
+        val phase = require(
+            "src/main/java/com/chronosbvrx/visionplus/home/ui/SportsPhase.kt",
+            "launcher/src/main/java/com/chronosbvrx/visionplus/home/ui/SportsPhase.kt",
+        )
+        assertTrue("estado post cierra el partido", phase.contains("event.status.equals(\"post\""))
+        assertTrue("estado in lo abre", phase.contains("event.status.equals(\"in\""))
+        assertTrue("ventana de 3 h", phase.contains("SPORTS_LIVE_WINDOW_MS"))
+        assertTrue("alive no decide la fase", !phase.contains("event.alive"))
+    }
+
+    @Test
+    fun theLauncherNoLongerSimulatesTenDownPresses() {
+        val screen = require(
+            "src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt",
+            "launcher/src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt",
+        )
+        assertTrue("sin el bucle de Abajo", !screen.contains("moveFocus(FocusDirection.Down)"))
+        assertTrue("un solo aterrizaje", screen.contains("landingRequest"))
+        assertTrue("rescate de foco", screen.contains("requestFocusSafely"))
+        val focus = require(
+            "src/main/java/com/chronosbvrx/visionplus/home/ui/TvFocus.kt",
+            "launcher/src/main/java/com/chronosbvrx/visionplus/home/ui/TvFocus.kt",
+        )
+        assertTrue("scroll mínimo", focus.contains("MinimalScrollBringIntoView"))
+        assertTrue("abajo dirigido", focus.contains("softFocusDown"))
+        val surfaces = require(
+            "src/main/java/com/chronosbvrx/visionplus/home/ui/Surfaces.kt",
+            "launcher/src/main/java/com/chronosbvrx/visionplus/home/ui/Surfaces.kt",
+        )
+        assertTrue("filas agrupadas", surfaces.contains("focusGroup"))
+        assertTrue("scroll mínimo aplicado", surfaces.contains("LocalBringIntoViewSpec provides MinimalScrollBringIntoView"))
     }
 
     private fun require(vararg candidates: String): String {
