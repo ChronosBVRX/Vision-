@@ -278,6 +278,10 @@ class X4KPlayerAty : ComponentActivity() {
 
     private var firstFrame = false
     private var startedAtMs = 0L
+    /** Toque del usuario: NO se reinicia en un re-arranque interno (métrica honesta). */
+    private var playRequestedAtMs = 0L
+    /** Hay un re-arranque interno esperando su ventana de gracia. */
+    private var softRestartPending = false
     /** Re-arranques internos del motor por falta de primer cuadro (sin mostrar error). */
     private var softRestarts = 0
 
@@ -380,7 +384,11 @@ class X4KPlayerAty : ComponentActivity() {
     private fun handleLaunchIntent(intent: Intent) {
         isPlayerActive = true
         exiting = false
-        startedAtMs = System.currentTimeMillis()
+        // Instante del TOQUE (lo que siente el usuario). No se reinicia en un re-arranque
+        // interno: el `PLAYER_START` de una tele llegó a medir 3.9 s cuando en realidad
+        // habían pasado ~25 s con un reinicio de por medio.
+        playRequestedAtMs = System.currentTimeMillis()
+        startedAtMs = playRequestedAtMs
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
         applyImmersiveMode()
         playGen += 1
@@ -1294,12 +1302,36 @@ class X4KPlayerAty : ComponentActivity() {
      * más; no se pinta error ni se pierde el estado del reproductor.
      */
     private fun softRestartPlayback() {
+        if (playerView == null) return
+        if (curMedias.isEmpty()) return
+        if (softRestartPending) return
+        // Ventana de gracia: en la TCL el primer cuadro llegó **31 ms después** del disparo y
+        // el `stop` del re-arranque mataba la reproducción que ya estaba entrando. Ahora se
+        // re-comprueba antes de tocar el motor.
+        softRestartPending = true
+        handler.postDelayed({
+            softRestartPending = false
+            if (isFinishing || isDestroyed || !isPlayerActive || firstFrame) return@postDelayed
+            performSoftRestart()
+        }, SOFT_RESTART_GRACE_MS)
+    }
+
+    private fun performSoftRestart() {
         val v = playerView ?: return
         if (curMedias.isEmpty()) return
         softRestarts++
         Log.w(TAG, "sin primer cuadro: re-arranque interno #$softRestarts (${if (liveMode) "live" else "vod"} $curCode)")
+        // Estado REAL del motor al rendirse: distingue "no llegó nada" (P2P/red) de "llegó y
+        // no pintó" (decodificador). Sin esto, los 25 s de una tele son indistinguibles.
+        val stalledPos = runCatching { com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs() }.getOrDefault(0L)
+        val stalledDur = runCatching { com.chronosbvrx.visionplus.data.xuper.X4KTitan.durationMs(v) }.getOrDefault(0L)
+        val stalledPlaying = runCatching { com.chronosbvrx.visionplus.data.xuper.X4KTitan.isPlaying(v) }.getOrDefault(false)
         com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-            "PLAYER_SOFT_RESTART", "modo=${if (liveMode) "live" else "vod"} intento=$softRestarts",
+            "PLAYER_SOFT_RESTART",
+            "modo=${if (liveMode) "live" else "vod"} intento=$softRestarts " +
+                "esperaMs=${System.currentTimeMillis() - playRequestedAtMs} " +
+                "pos=${stalledPos}ms dur=${stalledDur}ms playing=$stalledPlaying " +
+                "engineBoot=${com.chronosbvrx.visionplus.data.xuper.X4KTitan.lastBootMs}ms",
         )
         runCatching { X4KTitan.stop(v) }
         firstFrame = false
@@ -1314,6 +1346,9 @@ class X4KPlayerAty : ComponentActivity() {
             Log.i(TAG, "re-arranque interno #$softRestarts ok=$ok")
         }, 700L)
     }
+
+    /** Gracia antes de tocar el motor: un cuadro que entra no se mata. */
+    private val SOFT_RESTART_GRACE_MS = 1_500L
 
     private fun showError(stage: String = "") {
         com.chronosbvrx.visionplus.data.diag.Diagnostics.engine("error")
@@ -3549,6 +3584,8 @@ class X4KPlayerAty : ComponentActivity() {
         auto: Boolean = false,
     ) {
         val v = playerView ?: return
+        // Cambio de capítulo = reproducción nueva para la métrica (pero no para el proceso).
+        playRequestedAtMs = System.currentTimeMillis()
         hideNext()
         hideSuggestions()
         hideResumeDialog()
@@ -3778,11 +3815,15 @@ class X4KPlayerAty : ComponentActivity() {
         // caja de TV es el dato que dice si el costo está en el portal, en el arranque del
         // motor o en la señal. Solo se reporta lo lento (>3 s) para no llenar la telemetría.
         runCatching {
-            val firstFrameMs = System.currentTimeMillis() - startedAtMs
-            if (startedAtMs > 0L && firstFrameMs > 3_000L) {
+            // Desde el TOQUE del usuario, no desde el último re-arranque: antes una tele
+            // reportó `firstFrameMs=3969` cuando en realidad habían pasado ~25 s.
+            val from = if (playRequestedAtMs > 0L) playRequestedAtMs else startedAtMs
+            val firstFrameMs = System.currentTimeMillis() - from
+            if (from > 0L && firstFrameMs > 3_000L) {
                 com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
                     "PLAYER_START",
-                    "firstFrameMs=$firstFrameMs bootMs=${com.chronosbvrx.visionplus.data.xuper.X4KTitan.lastBootMs} live=$liveMode",
+                    "firstFrameMs=$firstFrameMs bootMs=${com.chronosbvrx.visionplus.data.xuper.X4KTitan.lastBootMs} " +
+                        "intentos=${softRestarts + 1} live=$liveMode",
                 )
             }
         }
