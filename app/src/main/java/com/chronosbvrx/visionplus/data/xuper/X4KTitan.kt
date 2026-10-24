@@ -43,42 +43,107 @@ internal fun dedupeTrackLabels(labels: List<String>, ids: List<Int>): List<Strin
 }
 
 /**
- * Sello de la extracción del motor: versión de la app + tamaño de cada DEX copiado.
+ * Sello de la extracción del motor: versión de la app, tamaño y sha256 de cada DEX copiado.
  *
  * Sin sello no se puede saber si un `sdk-N.dex` quedó a medias (una copia interrumpida por
  * el sistema deja el archivo con bytes pero truncado) ni si viene de una versión anterior
  * del APK. Ese archivo truncado es el que producía el `VerifyError: Verifier rejected
  * class yc.h … can't resolve java.lang.String` visto en la tele de campo: el DEX abre, pero
  * una clase al final ya no verifica. El manifiesto permite detectarlo y volver a copiar.
+ *
+ * El sha256 cubre el hueco que dejaba el tamaño: una copia corrompida que mide lo mismo
+ * (bytes cambiados en el sitio) pasaba el sello y la tele se quedaba sin reproducir para
+ * siempre. Y distingue las dos causas cuando ART rechaza una clase: copia dañada
+ * (`ENGINE_DEX_MISMATCH`) o bytes idénticos al APK (`ENGINE_VERIFY_FAIL`).
  */
 internal const val ENGINE_MANIFEST_NAME = "engine-manifest.txt"
 
-/** Texto del manifiesto: `vc=<versionCode>` y una línea `<archivo>=<bytes>` por DEX. */
-internal fun engineManifest(versionCode: Int, sizes: Map<String, Long>): String = buildString {
+/** Archivo con la generación extraída: una RUTA de DEX nueva fuerza artefactos ART nuevos. */
+internal const val ENGINE_REVISION_FILE = "x4k-rev"
+
+/** Tope de generaciones; al llegar aquí se vuelve a 0 (la carpeta vieja se borra igual). */
+internal const val ENGINE_REVISION_MAX = 20
+
+/** Sello leído del manifiesto (versión + tamaño/sha por DEX). */
+internal data class EngineSeal(
+    val version: Int,
+    val sizes: Map<String, Long>,
+    val hashes: Map<String, String>,
+)
+
+/** Texto del manifiesto: `vc=<versionCode>`, `<archivo>=<bytes>` y `sha:<archivo>=<hex>`. */
+internal fun engineManifest(
+    versionCode: Int,
+    sizes: Map<String, Long>,
+    hashes: Map<String, String> = emptyMap(),
+): String = buildString {
     append("vc=").append(versionCode).append('\n')
     sizes.toSortedMap().forEach { (name, size) -> append(name).append('=').append(size).append('\n') }
+    hashes.toSortedMap().forEach { (name, sha) -> append("sha:").append(name).append('=').append(sha).append('\n') }
 }
 
 /** Lee el manifiesto; texto vacío o ilegible = sin sello (se vuelve a extraer). */
-internal fun parseEngineManifest(text: String): Pair<Int, Map<String, Long>> {
+internal fun parseEngineSeal(text: String): EngineSeal {
     var version = 0
     val sizes = LinkedHashMap<String, Long>()
+    val hashes = LinkedHashMap<String, String>()
     text.lineSequence().forEach { raw ->
         val line = raw.trim()
+        if (line.isEmpty() || line.startsWith("#")) return@forEach
         val eq = line.indexOf('=')
-        if (line.isEmpty() || line.startsWith("#") || eq <= 0) return@forEach
-        val value = line.substring(eq + 1).toLongOrNull() ?: return@forEach
+        if (eq <= 0) return@forEach
         val key = line.substring(0, eq)
-        if (key == "vc") version = value.toInt() else sizes[key] = value
+        val value = line.substring(eq + 1)
+        when {
+            key == "vc" -> version = value.toIntOrNull() ?: 0
+            key.startsWith("sha:") -> {
+                val name = key.removePrefix("sha:")
+                if (value.length == 64) hashes[name] = value.lowercase()
+            }
+            else -> value.toLongOrNull()?.let { sizes[key] = it }
+        }
     }
-    return version to sizes
+    return EngineSeal(version, sizes, hashes)
 }
+
+/** Compatibilidad con el lector viejo (versión + tamaños). */
+internal fun parseEngineManifest(text: String): Pair<Int, Map<String, Long>> {
+    val seal = parseEngineSeal(text)
+    return seal.version to seal.sizes
+}
+
+/** sha256 en hexadecimal de un bloque de bytes (minúsculas, 64 caracteres). */
+internal fun sha256Of(bytes: ByteArray): String = sha256Hex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes))
+
+/** sha256 en hexadecimal de un archivo; `null` si no se pudo leer. */
+internal fun sha256Of(file: File): String? = runCatching {
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            val read = input.read(buffer)
+            if (read <= 0) break
+            digest.update(buffer, 0, read)
+        }
+    }
+    sha256Hex(digest.digest())
+}.getOrNull()
+
+private fun sha256Hex(bytes: ByteArray): String = buildString(bytes.size * 2) {
+    bytes.forEach { byte ->
+        val value = byte.toInt() and 0xFF
+        append(HEX[value ushr 4]).append(HEX[value and 0x0F])
+    }
+}
+
+private const val HEX = "0123456789abcdef"
 
 /**
  * ¿Hay que volver a copiar este archivo del motor desde el APK?
  *
  * Sí cuando falta, quedó vacío, no hay sello, el sello es de OTRA versión de la app (el
- * motor pudo cambiar) o el tamaño no coincide con el que se copió (copia truncada).
+ * motor pudo cambiar), el tamaño no coincide con el que se copió (copia truncada) o el
+ * sha256 no coincide con el del archivo que se selló (copia corrompida del mismo tamaño).
  */
 internal fun engineFileNeedsExtraction(
     name: String,
@@ -87,11 +152,14 @@ internal fun engineFileNeedsExtraction(
     manifestVersion: Int,
     appVersionCode: Int,
     sizes: Map<String, Long>,
+    expectedSha: String? = null,
+    actualSha: String? = null,
 ): Boolean {
     if (!exists || length <= 0L) return true
     if (manifestVersion != appVersionCode) return true
     val expected = sizes[name] ?: return true
-    return expected != length
+    if (expected != length) return true
+    return expectedSha != null && actualSha != null && expectedSha != actualSha
 }
 
 /**
@@ -105,12 +173,22 @@ internal fun engineFileWasCorrupt(
     appVersionCode: Int,
     sizes: Map<String, Long>,
     name: String,
+    expectedSha: String? = null,
+    actualSha: String? = null,
 ): Boolean {
     if (!exists || length <= 0L) return false
     if (manifestVersion != appVersionCode) return false
     val expected = sizes[name] ?: return false
-    return expected != length
+    if (expected != length) return true
+    return expectedSha != null && actualSha != null && expectedSha != actualSha
 }
+
+/** Generación de la extracción leída del archivo (basura → 0). */
+internal fun engineRevisionFrom(text: String): Int =
+    text.trim().toIntOrNull()?.coerceIn(0, ENGINE_REVISION_MAX) ?: 0
+
+/** Nombre de la carpeta de la generación (`x4k-r0`, `x4k-r1`…): cambia la ruta de los DEX. */
+internal fun engineDirName(revision: Int): String = "x4k-r${revision.coerceIn(0, ENGINE_REVISION_MAX)}"
 
 /**
  * Xuper's own Titan SDK as shipped inside the X4K app (com.xuper.netxxus): the engine
@@ -242,51 +320,69 @@ object X4KTitan {
             loader?.let { return true }
             return try {
                 val app = context.applicationContext
-                val workDir = File(app.filesDir, DIR_DEX).apply { mkdirs() }
+                val revision = readRevision(app)
+                // Carpeta legada (`files/x4k`): el motor vive ahora en generaciones `x4k-rN`.
+                // Se libera en la primera apertura (17 MB en una tele con poco espacio).
+                runCatching { File(app.filesDir, DIR_DEX).takeIf { it.exists() }?.deleteRecursively() }
+                val workDir = File(app.filesDir, engineDirName(revision)).apply { mkdirs() }
                 val manifestFile = File(workDir, ENGINE_MANIFEST_NAME)
-                val (sealedVersion, sealedSizes) = parseEngineManifest(
+                val seal = parseEngineSeal(
                     runCatching { manifestFile.readText() }.getOrDefault("")
                 )
                 val appVersion = BuildConfig.VERSION_CODE
                 // Un motor sellado por otra versión de la app pudo cambiar: se re-extrae.
-                val staleEngine = sealedVersion != appVersion
+                val staleEngine = seal.version != appVersion
                 val sizes = LinkedHashMap<String, Long>()
+                val hashes = LinkedHashMap<String, String>()
                 val paths = ArrayList<String>()
+                var copyMismatch = false
                 DEX_ASSETS.forEachIndexed { index, asset ->
                     val file = File(workDir, "sdk-$index.dex")
+                    val expectedSha = seal.hashes[file.name]
+                    // Se hashea SOLO si el sello trae huella (motor sellado por esta versión):
+                    // 17 MB en el arranque del proceso `:x4k`, nunca en cada reproducción.
+                    val actualSha = if (file.exists() && expectedSha != null) sha256Of(file) else null
                     val wasCorrupt = engineFileWasCorrupt(
-                        file.exists(), file.length(), sealedVersion, appVersion, sealedSizes, file.name,
+                        file.exists(), file.length(), seal.version, appVersion, seal.sizes, file.name,
+                        expectedSha, actualSha,
                     )
                     val needs = engineFileNeedsExtraction(
-                        file.name, file.exists(), file.length(), sealedVersion, appVersion, sealedSizes,
+                        file.name, file.exists(), file.length(), seal.version, appVersion, seal.sizes,
+                        expectedSha, actualSha,
                     )
                     if (needs) {
+                        if (expectedSha != null && actualSha != null && expectedSha != actualSha) {
+                            copyMismatch = true
+                        }
                         if (!copyAssetAtomically(app, asset, file)) {
                             throw java.io.IOException("no se pudo extraer $asset")
                         }
                         if (wasCorrupt) {
-                            Log.w(TAG, "DEX dañado vuelto a extraer: ${file.name} (${file.length()} B)")
+                            val why = if (expectedSha != null && actualSha != null && expectedSha != actualSha) {
+                                "contenido distinto"
+                            } else {
+                                "tamaño distinto"
+                            }
+                            Log.w(TAG, "DEX dañado vuelto a extraer: ${file.name} ($why, ${file.length()} B)")
                             com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-                                "ENGINE_DEX_REPAIRED", "${file.name} re-extraído y medido",
+                                "ENGINE_DEX_MISMATCH", "${file.name} $why (${file.length()} B)",
                             )
                         }
                     }
                     file.setReadOnly()
                     sizes[file.name] = file.length()
+                    hashes[file.name] = actualSha ?: sha256Of(file) ?: ""
                     paths += file.absolutePath
                 }
                 // El sello se escribe SOLO cuando los tres DEX quedaron copiados y medidos: si
                 // el sistema mata la app a mitad, no queda un manifiesto que dé por bueno un
                 // archivo corto y la siguiente apertura vuelve a copiar todo.
-                runCatching { manifestFile.writeText(engineManifest(appVersion, sizes)) }
-                val outDir = File(app.codeCacheDir, "x4k").apply { mkdirs() }
+                runCatching { manifestFile.writeText(engineManifest(appVersion, sizes, hashes)) }
+                val outDir = File(app.codeCacheDir, engineDirName(revision)).apply { mkdirs() }
                 val libDir = extractNativeLibs(app, force = staleEngine)
                 // Kill-switch remoto `engine_child_first`: si algún equipo se portara raro,
                 // `{"engine_child_first": false}` devuelve el cargador parent-first sin OTA.
-                val childFirst = runCatching {
-                    com.chronosbvrx.visionplus.data.config.RemoteConfig
-                        .flag(app, "engine_child_first", true)
-                }.getOrDefault(true)
+                val childFirst = engineChildFirst(app)
                 val cl = runCatching {
                     if (childFirst) {
                         EngineClassLoader(
@@ -305,25 +401,9 @@ object X4KTitan {
                     }
                 }.getOrElse {
                     Log.w(TAG, "DexClassLoader rechazado (${it.message}); cargando en memoria")
-                    val buffers = DEX_ASSETS.map { asset ->
-                        val bytes = app.assets.open(asset).use { input -> input.readBytes() }
-                        java.nio.ByteBuffer.allocateDirect(bytes.size).apply {
-                            put(bytes)
-                            position(0)
-                        }
-                    }
-                    dalvik.system.InMemoryDexClassLoader(buffers.toTypedArray(), javaClass.classLoader)
+                    memoryLoader(app) ?: throw it
                 }
-                envClass = cl.loadClass("com.titan.ranger.bean.Env")
-                programClass = runCatching { cl.loadClass("com.titan.ranger.bean.Program") }.getOrNull()
-                mediaClass = runCatching { cl.loadClass("com.titan.ranger.bean.Media") }.getOrNull()
-                entryClass = runCatching { cl.loadClass("com.titan.ranger.bean.Entry") }.getOrNull()
-                viewClass = runCatching { cl.loadClass("ed.e") }.getOrNull()
-                // La fachada es la clase que el reproductor más usa: cargarla aquí convierte un
-                // DEX truncado en un fallo controlado (y reparable) ANTES de arrancar el motor,
-                // en vez de un `VerifyError` a media reproducción.
-                cl.loadClass("yc.h")
-                loader = cl
+                adoptLoader(cl)
                 // Autocomprobación del espacio de nombres: si una clase del motor la sirve
                 // nuestro APK, se reporta AQUÍ (antes del crash del reproductor).
                 val leaks = leakedEngineNames(cl)
@@ -336,18 +416,21 @@ object X4KTitan {
                 }
                 Log.i(
                     TAG,
-                    "SDK X4K cargado: env=${envClass != null} program=${programClass != null} " +
-                        "media=${mediaClass != null} entry=${entryClass != null} view=${viewClass != null} " +
-                        "childFirst=$childFirst fugas=${leaks.size}",
+                    "SDK X4K cargado: gen=${engineDirName(revision)} env=${envClass != null} " +
+                        "program=${programClass != null} media=${mediaClass != null} " +
+                        "entry=${entryClass != null} view=${viewClass != null} " +
+                        "childFirst=$childFirst copiaDistinta=$copyMismatch fugas=${leaks.size}",
                 )
                 com.chronosbvrx.visionplus.data.diag.Diagnostics.engine("cargado")
                 true
             } catch (e: LinkageError) {
-                // El DEX existe pero una clase no verifica (copia truncada / motor de otra
-                // versión). No se puede seguir con ESTE cargador: `boot` lo re-extrae.
+                // El DEX existe pero una clase no verifica. Si la copia es idéntica al APK, el
+                // problema NO es la extracción (el verificador de ART del equipo rechaza esos
+                // bytes): se distingue en la telemetría para no reparar en bucle algo sano.
                 Log.e(TAG, "DEX del motor inválido: ${e.javaClass.simpleName}: ${e.message}")
                 linkageFailure = true
                 com.chronosbvrx.visionplus.data.diag.Diagnostics.engine("error")
+                reportVerificationFailure(context, e)
                 false
             } catch (e: Exception) {
                 Log.e(TAG, "no se pudo cargar el SDK X4K: ${e.message}")
@@ -361,6 +444,92 @@ object X4KTitan {
     }
 
     /**
+     * Carga las MISMAS clases con los DEX en memoria: sin archivos, sin vdex y sin los
+     * artefactos que ART deja en `code_cache`. Es la última palanca cuando el verificador del
+     * equipo rechaza un DEX que en el APK está intacto (`ENGINE_VERIFY_FAIL`).
+     */
+    private fun memoryLoader(app: Context): ClassLoader? = runCatching {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return null
+        val buffers = DEX_ASSETS.map { asset ->
+            val bytes = app.assets.open(asset).use { input -> input.readBytes() }
+            java.nio.ByteBuffer.allocateDirect(bytes.size).apply {
+                put(bytes)
+                position(0)
+            }
+        }
+        val libDir = extractNativeLibs(app, force = false)
+        dalvik.system.InMemoryDexClassLoader(
+            buffers.toTypedArray(),
+            libDir.absolutePath,
+            javaClass.classLoader,
+        )
+    }.getOrNull()
+
+    /** Carga las clases que el reproductor toca seguro y adopta el cargador. */
+    private fun adoptLoader(cl: ClassLoader) {
+        envClass = cl.loadClass("com.titan.ranger.bean.Env")
+        programClass = runCatching { cl.loadClass("com.titan.ranger.bean.Program") }.getOrNull()
+        mediaClass = runCatching { cl.loadClass("com.titan.ranger.bean.Media") }.getOrNull()
+        entryClass = runCatching { cl.loadClass("com.titan.ranger.bean.Entry") }.getOrNull()
+        // La vista (`ed.e`) y su compañera (`yc.e`) son las que tumbaban la reproducción en la
+        // tele de campo. `ed.e` es obligatoria (`viewClass!!`); `yc.e` se comprueba porque es la
+        // que ART rechazaba a media reproducción.
+        viewClass = probeEngineClass(cl, "ed.e", required = true)
+        // La fachada es la clase que el reproductor más usa: cargarla aquí convierte un DEX
+        // truncado en un fallo controlado (y reparable) ANTES de arrancar el motor.
+        cl.loadClass("yc.h")
+        probeEngineClass(cl, "yc.e", required = false)
+        loader = cl
+    }
+
+    /**
+     * `loadClass` que NO se traga un `LinkageError`: un bytecode que no verifica debe abortar
+     * la carga (y disparar la reparación), no reventar luego en el reproductor.
+     */
+    private fun probeEngineClass(cl: ClassLoader, name: String, required: Boolean): Class<*>? = try {
+        cl.loadClass(name)
+    } catch (e: LinkageError) {
+        throw e
+    } catch (e: ClassNotFoundException) {
+        if (required) throw e else null
+    }
+
+    /** Distingue en la telemetría "la copia está dañada" de "ART rechaza bytes idénticos al APK". */
+    private fun reportVerificationFailure(context: Context, e: LinkageError) {
+        runCatching {
+            val app = context.applicationContext
+            val revision = readRevision(app)
+            val workDir = File(app.filesDir, engineDirName(revision))
+            val seal = parseEngineSeal(
+                runCatching { File(workDir, ENGINE_MANIFEST_NAME).readText() }.getOrDefault("")
+            )
+            val mismatched = DEX_ASSETS.mapIndexed { index, _ -> File(workDir, "sdk-$index.dex") }
+                .filter { it.exists() }
+                .mapNotNull { file ->
+                    val expected = seal.hashes[file.name] ?: return@mapNotNull null
+                    val actual = sha256Of(file) ?: return@mapNotNull null
+                    if (expected == actual) null else file.name
+                }
+            val code = if (mismatched.isEmpty()) "ENGINE_VERIFY_FAIL" else "ENGINE_DEX_MISMATCH"
+            val detail = buildString {
+                append(e.javaClass.simpleName).append(": ").append(e.message)
+                append(" | gen=").append(engineDirName(revision))
+                val copy = if (mismatched.isEmpty()) "idéntica-al-apk" else "distinta:${mismatched.joinToString()}"
+                append(" copia=").append(copy)
+            }
+            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(code, detail)
+        }
+    }
+
+    private fun readRevision(app: Context): Int = engineRevisionFrom(
+        runCatching { File(app.filesDir, ENGINE_REVISION_FILE).readText() }.getOrDefault("")
+    )
+
+    private fun writeRevision(app: Context, revision: Int) {
+        runCatching { File(app.filesDir, ENGINE_REVISION_FILE).writeText(revision.toString()) }
+    }
+
+    /**
      * Copia un asset a [target] sin dejar nunca un archivo a medias: se escribe en
      * `name.part`, se fuerza a disco y solo entonces se renombra (atómico en el mismo
      * sistema de archivos). Una copia interrumpida deja el `.part`, no el archivo bueno.
@@ -368,7 +537,8 @@ object X4KTitan {
     private fun copyAssetAtomically(app: Context, asset: String, target: File): Boolean {
         val dir = target.parentFile ?: return false
         dir.mkdirs()
-        val tmp = File(dir, target.name + ".part")
+        // El sufijo con el pid evita que dos procesos del mismo UID escriban el mismo `.part`.
+        val tmp = File(dir, target.name + ".part" + android.os.Process.myPid())
         runCatching { tmp.delete() }
         return try {
             var copied = 0L
@@ -532,16 +702,37 @@ object X4KTitan {
             if (booted) return true
             if (bootOnce(context)) return true
             if (!linkageFailure) return false
-            // El DEX extraído no verifica en ESTE equipo (copia truncada, motor de otra
-            // versión…). Se borra lo extraído y se vuelve a copiar del APK, UNA vez: la tele
-            // de campo se quedaba con el archivo dañado para siempre y no reproducía nada.
+            // El DEX extraído no verifica en ESTE equipo. Se repara en dos pasos, de lo más
+            // barato a lo más radical:
+            //  1. re-extraer en una GENERACIÓN nueva (ruta de DEX nueva ⇒ ART no reutiliza su
+            //     vdex/oat) y limpiar los artefactos de ART del equipo;
+            //  2. cargar los DEX en memoria (sin archivos ni artefactos: la última palanca).
             linkageFailure = false
             if (healBudget <= 0) return false
             healBudget -= 1
             healExtracted(context)
+            if (bootOnce(context)) return true
+            if (!linkageFailure) return false
+            linkageFailure = false
+            Log.w(TAG, "motor: reintento final con los DEX en memoria")
+            val memory = memoryLoader(context.applicationContext) ?: return false
+            runCatching { adoptLoader(memory) }.getOrElse {
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "ENGINE_VERIFY_FAIL", "memoria: ${it.javaClass.simpleName}: ${it.message}",
+                )
+                return false
+            }
+            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                "ENGINE_MEMORY_OK", "motor cargado con los DEX en memoria",
+            )
             return bootOnce(context)
         }
     }
+
+    /** Kill-switch remoto `engine_child_first` (por defecto encendido). */
+    private fun engineChildFirst(app: Context): Boolean = runCatching {
+        com.chronosbvrx.visionplus.data.config.RemoteConfig.flag(app, "engine_child_first", true)
+    }.getOrDefault(true)
 
     private fun bootOnce(context: Context): Boolean {
         if (!load(context)) return false
@@ -588,8 +779,10 @@ object X4KTitan {
     }
 
     /**
-     * Borra el motor extraído (DEX, sello y libs) para que la siguiente carga lo copie de
-     * nuevo desde el APK. No toca datos del usuario ni la carpeta de trabajo del motor.
+     * Borra el motor extraído (DEX, sello y libs) y los artefactos que ART dejó de él, y
+     * estrena una GENERACIÓN nueva (`x4k-rN`): con otra ruta de DEX, ART no puede reutilizar
+     * el vdex/oat que ya tenía (una tele de campo rechazaba `yc.h`/`yc.e` en bucle aunque el
+     * DEX fuera idéntico al del APK). No toca datos del usuario ni la carpeta de trabajo.
      */
     private fun healExtracted(context: Context) {
         loader = null
@@ -604,11 +797,23 @@ object X4KTitan {
         entryClass = null
         viewClass = null
         val app = context.applicationContext
-        runCatching { File(app.filesDir, DIR_DEX).deleteRecursively() }
+        // Todas las generaciones (y la carpeta legada `x4k`): el motor se estrena de cero.
+        // OJO: solo directorios — `x4k-rev` es el archivo de la generación y no se borra.
+        app.filesDir?.listFiles()?.forEach { dir ->
+            if (dir.isDirectory && (dir.name == DIR_DEX || dir.name.startsWith("x4k-r"))) {
+                runCatching { dir.deleteRecursively() }
+            }
+        }
         runCatching { File(app.filesDir, DIR_LIBS).deleteRecursively() }
-        Log.w(TAG, "motor re-extraído: DEX/libs borrados tras un error de verificación")
+        // vdex/oat se indexan por ruta + contenido: si quedaron dañados, reutilizarlos vuelve
+        // a rechazar las mismas clases. `codeCacheDir` es caché: se puede tirar completa.
+        runCatching { app.codeCacheDir?.listFiles()?.forEach { it.deleteRecursively() } }
+        val next = if (readRevision(app) >= ENGINE_REVISION_MAX) 0 else readRevision(app) + 1
+        writeRevision(app, next)
+        Log.w(TAG, "motor re-extraído: generación ${engineDirName(next)}, artefactos ART limpios")
         com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-            "ENGINE_DEX_REPAIRED", "motor borrado y re-extraído tras clases inválidas",
+            "ENGINE_DEX_REPAIRED",
+            "motor borrado y re-extraído tras clases inválidas (gen=${engineDirName(next)})",
         )
     }
 
