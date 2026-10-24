@@ -17,7 +17,9 @@ param(
     [Parameter(Mandatory = $true)][string]$NotesFile,
     [string]$Title = "",
     [switch]$SkipTests,
-    [switch]$SkipPublish
+    [switch]$SkipPublish,
+    # Hotfix: deja el APK como antes (motor en assets, sin classesN.dex).
+    [switch]$SkipEngineInject
 )
 
 $ErrorActionPreference = "Stop"
@@ -90,18 +92,22 @@ try {
     $engineAligned = Join-Path $root "app\build\outputs\apk\normal\release\app-normal-release-engine-aligned.apk"
     $engineSigned = Join-Path $root "app\build\outputs\apk\normal\release\app-normal-release-engine-signed.apk"
     Write-Host "== Motor dentro del APK (classes2/3/4.dex) =="
-    & python $inject $apk $engineApk $assetsDir
-    if ($LASTEXITCODE -ne 0) { throw "La inyeccion del motor fallo" }
-    & $zipalign.FullName -p -f 4 $engineApk $engineAligned
-    if ($LASTEXITCODE -ne 0) { throw "zipalign fallo con el motor dentro" }
-    & $apksigner.FullName sign --ks $props["storeFile"] --ks-key-alias $props["keyAlias"] `
-        --ks-pass ("pass:" + $props["storePassword"]) --key-pass ("pass:" + $props["keyPassword"]) `
-        --out $engineSigned $engineAligned
-    if ($LASTEXITCODE -ne 0) { throw "La re-firma con la llave historica fallo" }
-    # El motor tiene que estar y los assets seguir (respaldo).
-    & python -c "import sys,zipfile;z=zipfile.ZipFile(sys.argv[1]);n=set(z.namelist());sys.exit(0 if all(f'classes{i}.dex' in n for i in (2,3,4)) and 'assets/x4k/x4k-sdk-1.dex' in n else 1)" $engineSigned
-    if ($LASTEXITCODE -ne 0) { throw "El APK re-firmado no tiene classes2/3/4.dex o perdio los assets de respaldo" }
-    $apk = $engineSigned
+    if ($SkipEngineInject) {
+        Write-Host "== (-SkipEngineInject) el motor se queda en assets: APK como antes =="
+    } else {
+        & python $inject $apk $engineApk $assetsDir
+        if ($LASTEXITCODE -ne 0) { throw "La inyeccion del motor fallo" }
+        & $zipalign.FullName -p -f 4 $engineApk $engineAligned
+        if ($LASTEXITCODE -ne 0) { throw "zipalign fallo con el motor dentro" }
+        & $apksigner.FullName sign --ks $props["storeFile"] --ks-key-alias $props["keyAlias"] `
+            --ks-pass ("pass:" + $props["storePassword"]) --key-pass ("pass:" + $props["keyPassword"]) `
+            --out $engineSigned $engineAligned
+        if ($LASTEXITCODE -ne 0) { throw "La re-firma con la llave historica fallo" }
+        # El motor tiene que estar y los assets seguir (respaldo).
+        & python -c "import sys,zipfile;z=zipfile.ZipFile(sys.argv[1]);n=set(z.namelist());sys.exit(0 if all(f'classes{i}.dex' in n for i in (2,3,4)) and 'assets/x4k/x4k-sdk-1.dex' in n else 1)" $engineSigned
+        if ($LASTEXITCODE -ne 0) { throw "El APK re-firmado no tiene classes2/3/4.dex o perdio los assets de respaldo" }
+        $apk = $engineSigned
+    }
 
     foreach ($pair in @(@("Vision+", $apk), @("Vision+ Home", $homeApk))) {
         $cert = & $apksigner.FullName verify --print-certs $pair[1] | Select-String "SHA-256 digest" | Select-Object -First 1

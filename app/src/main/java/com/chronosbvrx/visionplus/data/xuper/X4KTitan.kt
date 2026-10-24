@@ -330,7 +330,15 @@ object X4KTitan {
                 // ¿El motor YA viene dentro del APK (`classes2/3/4.dex`, estilo Crystal)? Android
                 // lo dejó verificado al instalar: no hay nada que copiar ni verificar en runtime
                 // (era el origen del bug de ART en una ZTE). Solo se preparan las libs nativas.
-                val bundled = runCatching {
+                //
+                // Kill-switch remoto `engine_bundled` (por defecto APAGADO): el APK también lleva
+                // las libs del motor legado con los mismos SONAME y en un Chromecast el motor
+                // murió sin excepción Java. Con la bandera en false se usa el camino de siempre.
+                val bundledAllowed = runCatching {
+                    com.chronosbvrx.visionplus.data.config.RemoteConfig
+                        .flag(app, "engine_bundled", false)
+                }.getOrDefault(false)
+                val bundled = bundledAllowed && runCatching {
                     Class.forName("yc.h", false, X4KTitan::class.java.classLoader)
                 }.isSuccess
                 if (bundled) {

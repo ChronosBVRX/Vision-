@@ -23,7 +23,12 @@ class BundledEngineTest {
     @Test
     fun theAppUsesTheBundledClassesWhenTheApkCarriesThem() {
         val titan = read("src/main/java/com/chronosbvrx/visionplus/data/xuper/X4KTitan.kt")
-        // Detección por el classloader de la app (no por un DexClassLoader secundario).
+        // Kill-switch: por defecto APAGADO hasta que el motor en el APK esté probado en equipos
+        // reales (en un Chromecast murió sin excepción Java).
+        assertTrue(
+            "falta la bandera engine_bundled",
+            titan.contains("flag(app, \"engine_bundled\", false)"),
+        )
         assertTrue(
             "no se detecta el motor dentro del APK",
             titan.contains("Class.forName(\"yc.h\", false, X4KTitan::class.java.classLoader)"),
