@@ -1,6 +1,9 @@
 package com.chronosbvrx.visionplus.ui.tv
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -32,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Border
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
@@ -98,11 +102,12 @@ private fun apply(text: String, key: Key) = when (key) {
  */
 @Composable
 internal fun TvKeyboard(text: String, onTextChange: (String) -> Unit, firstKey: Modifier, modifier: Modifier = Modifier) {
-    val gap = 8.dp
+    val gap = 6.dp
     BoxWithConstraints(modifier) {
         val byWidth = (maxWidth - gap * 5) / 6
         val byHeight = (maxHeight - gap * (KEYBOARD_ROWS.size - 1)) / KEYBOARD_ROWS.size
-        val keySize = minOf(byWidth, byHeight)
+        // Teclas compactas: antes crecían hasta llenar la columna y el teclado se comía la pantalla.
+        val keySize = minOf(byWidth, byHeight, 46.dp)
         Column(verticalArrangement = Arrangement.spacedBy(gap)) {
             KEYBOARD_ROWS.forEachIndexed { r, row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
@@ -123,7 +128,7 @@ internal fun TvKeyboard(text: String, onTextChange: (String) -> Unit, firstKey: 
                             ),
                         ) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(key.label(), style = MaterialTheme.typography.titleMedium)
+                                Text(key.label(), style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                     }
@@ -150,6 +155,13 @@ fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFil
     }
     var results by remember { mutableStateOf<List<Film>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
+    var recents by remember { mutableStateOf(com.chronosbvrx.visionplus.data.search.RecentSearches.list(context)) }
+    // Solo los TÍTULOS para autocompletar (texto barato; no se guardan películas).
+    val knownTitles by androidx.compose.runtime.produceState(emptyList<String>(), rows) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            allFilms(rows).map { it.title }.take(4000)
+        }
+    }
 
     val voiceLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -206,6 +218,26 @@ fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFil
         isSearching = false
     }
 
+    // Recientes: solo la consulta ya asentada (deja de teclear y hay resultados), no cada letra.
+    LaunchedEffect(text, results, isSearching) {
+        val q = text.trim()
+        if (!isSearching && q.length >= 2 && results.isNotEmpty()) {
+            kotlinx.coroutines.delay(1800)
+            com.chronosbvrx.visionplus.data.search.RecentSearches.add(context, q)
+            recents = com.chronosbvrx.visionplus.data.search.RecentSearches.list(context)
+        }
+    }
+
+    // Autocompletar: títulos completos a partir de lo escrito (resultados + catálogo cargado).
+    val suggestions = remember(text, results, knownTitles) {
+        if (text.isBlank()) emptyList()
+        else com.chronosbvrx.visionplus.data.search.suggestTitles(
+            text,
+            results.map { it.title } + knownTitles,
+            limit = 6,
+        )
+    }
+
     val landing = rememberLandingFocus()
     // Al volver de una ficha: la tarjeta exacta que la abrió (el teclado queda de respaldo).
     // La lista se reconstruye al entrar y CAMBIA con cada búsqueda, así que el intento se
@@ -224,7 +256,7 @@ fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFil
 
     Box(Modifier.fillMaxSize().background(VisionBlack)) {
         Row(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxHeight().width(380.dp).padding(24.dp)) {
+            Column(Modifier.fillMaxHeight().width(320.dp).padding(20.dp)) {
                 // Barra de texto de búsqueda
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -309,12 +341,43 @@ fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFil
 
                 TvKeyboard(text = text, onTextChange = { text = it }, firstKey = Modifier.landingFocus(landing), modifier = Modifier.weight(1f))
             }
-            Column(Modifier.fillMaxSize().padding(top = 24.dp, end = 24.dp)) {
+            Column(Modifier.fillMaxSize().padding(top = 20.dp, end = 24.dp)) {
+                // Autocompletar (mientras escribe) o atajos de lo ya buscado (campo vacío).
+                val showSuggestions = text.isNotBlank() && suggestions.isNotEmpty()
+                val showRecents = !showSuggestions && text.isBlank() && recents.isNotEmpty()
+                if (showSuggestions || showRecents) {
+                    Text(
+                        if (showSuggestions) "SUGERENCIAS" else "RECIENTES",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VisionTextSecondary,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(vertical = 8.dp),
+                    ) {
+                        if (showSuggestions) {
+                            suggestions.forEach { suggestion ->
+                                TvSearchChip(suggestion) { text = suggestion }
+                            }
+                        } else {
+                            recents.forEach { recent ->
+                                TvSearchChip(recent) { text = recent }
+                            }
+                            TvSearchChip("Limpiar") {
+                                com.chronosbvrx.visionplus.data.search.RecentSearches.clear(context)
+                                recents = emptyList()
+                            }
+                        }
+                    }
+                }
                 Text(
                     when {
                         isSearching -> "Buscando…"
                         text.isBlank() -> "Películas"
-                        else -> "Resultados"
+                        else -> "Resultados (${results.size})"
                     },
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
@@ -377,5 +440,33 @@ fun TvSearchScreen(rows: List<CatalogRow>, onOpenFilm: (Film) -> Unit, returnFil
                 }
             }
         }
+    }
+}
+
+/** Atajo del buscador de la tele (sugerencia o reciente): aro blanco al enfocar, como el resto. */
+@Composable
+private fun TvSearchChip(label: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = VisionSurfaceHigh,
+            contentColor = Color.White,
+            focusedContainerColor = VisionSurfaceHigh,
+            focusedContentColor = Color.White,
+            pressedContainerColor = VisionBlue,
+            pressedContentColor = Color.White,
+        ),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = RoundedCornerShape(50)),
+        ),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+        )
     }
 }
