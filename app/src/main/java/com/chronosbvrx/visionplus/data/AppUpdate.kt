@@ -21,8 +21,60 @@ import java.net.URL
  */
 object AppUpdate {
     private const val RELEASES_URL = "https://api.github.com/repos/ChronosBVRX/Vision-/releases/latest"
+    /** Canal de pruebas: release marcada como *pre-release* con tag fijo `beta`. */
+    private const val RELEASES_BETA_URL = "https://api.github.com/repos/ChronosBVRX/Vision-/releases/tags/beta"
     private const val RELEASES_PAGE = "https://github.com/ChronosBVRX/Vision-/releases/latest"
+
+    /**
+     * `version.json` que el publicador mete en CADA release (estable y beta). Es una descarga
+     * normal del release (sin la API de GitHub): sin límite por IP y sin depender de qué asset
+     * venga primero. Si un release viejo no lo trae, se cae a la API.
+     */
+    private const val MANIFEST_STABLE =
+        "https://github.com/ChronosBVRX/Vision-/releases/latest/download/version.json"
+    private const val MANIFEST_BETA =
+        "https://github.com/ChronosBVRX/Vision-/releases/download/beta/version.json"
+    private const val APK_STABLE =
+        "https://github.com/ChronosBVRX/Vision-/releases/latest/download/VisionPlus.apk"
+    private const val APK_BETA =
+        "https://github.com/ChronosBVRX/Vision-/releases/download/beta/VisionPlus.apk"
     private const val RECHECK_MINUTES = 10
+
+    private const val PREFS = "vision_updates"
+    private const val K_CHANNEL = "channel"
+    internal const val CHANNEL_STABLE = "stable"
+    internal const val CHANNEL_BETA = "beta"
+
+    /** Canal efectivo de este equipo: preferencia local, o servidor (`beta_device_ids`). */
+    fun channel(context: Context): String {
+        val local = prefs(context).getString(K_CHANNEL, null)?.trim().orEmpty()
+        if (local == CHANNEL_BETA || local == CHANNEL_STABLE) return local
+        val id = com.chronosbvrx.visionplus.data.diag.Diagnostics.deviceId(context)
+        val testers = RemoteConfig.stringListFlag(context, "beta_device_ids")
+        return if (id.isNotEmpty() && testers.any { it.equals(id, ignoreCase = true) }) CHANNEL_BETA else CHANNEL_STABLE
+    }
+
+    fun setChannel(context: Context, channel: String) {
+        prefs(context).edit()
+            .putString(K_CHANNEL, if (channel == CHANNEL_BETA) CHANNEL_BETA else CHANNEL_STABLE)
+            .apply()
+    }
+
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    /**
+     * Qué release ofrecer (puro). En el canal de pruebas se comparan beta y oficial y gana la
+     * más nueva: cuando la beta se convierte en oficial, los equipos de prueba la reciben igual.
+     */
+    internal fun pickRelease(stable: Release?, beta: Release?, channel: String): Release? {
+        if (channel != CHANNEL_BETA) return stable
+        if (stable == null) return beta
+        if (beta == null) return stable
+        val stableNumber = parseReleaseNumber(stable.version)
+        val betaNumber = parseReleaseNumber(beta.version)
+        return if (betaNumber >= stableNumber) beta else stable
+    }
 
     /** The newest release of the repository, after the person looks for it. */
     var latest by mutableStateOf<Release?>(null)
@@ -68,6 +120,17 @@ object AppUpdate {
         )
     }
 
+    /**
+     * La versión de una release: del tag cuando lo lleva (`v2.5.140`) y, si el tag es fijo
+     * (`beta`), del título (`Vision+ 2.5.141 (pruebas)`). Puro y testeable.
+     */
+    internal fun releaseVersion(tag: String, name: String): String {
+        val clean = tag.trim().removePrefix("v").removePrefix("V")
+        if (clean.isNotEmpty() && clean.first().isDigit() && clean.none { it.isLetter() }) return clean
+        val match = Regex("""\d+(?:\.\d+)+""").find(name) ?: return ""
+        return match.value
+    }
+
     /** El versionCode de ESTE build (contra él se mide `min_version_code`). */
     fun currentVersionCode(context: Context): Long = runCatching {
         PackageInfoCompat.getLongVersionCode(context.packageManager.getPackageInfo(context.packageName, 0))
@@ -111,37 +174,91 @@ object AppUpdate {
         failed = false
         return withContext(Dispatchers.IO) {
             try {
-                val connection = (URL(RELEASES_URL).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 10_000
-                    readTimeout = 15_000
-                    setRequestProperty("Accept", "application/vnd.github+json")
-                    setRequestProperty("User-Agent", "visionplus/${currentVersion(context)} (android)")
+                val channel = channel(context)
+                val stable = manifest(context, MANIFEST_STABLE, APK_STABLE) ?: fetch(context, RELEASES_URL)
+                // En pruebas se mira también la beta (pre-release) y gana la más nueva.
+                val beta = if (channel == CHANNEL_BETA) {
+                    manifest(context, MANIFEST_BETA, APK_BETA) ?: fetch(context, RELEASES_BETA_URL)
+                } else {
+                    null
                 }
-                try {
-                    val code = connection.responseCode
-                    if (code !in 200..299) error("GitHub respondió $code")
-                    val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                    val json = JSONObject(body)
-                    val release = Release(
-                        version = json.optString("tag_name").removePrefix("v").removePrefix("V").ifBlank { json.optString("name") },
-                        url = json.optString("html_url").ifBlank { RELEASES_PAGE },
-                        apkUrl = apkAsset(json),
-                        notes = json.optString("body").takeIf { it.isNotBlank() },
-                    )
-                    if (release.version.isBlank()) error("la respuesta no trae versión")
-                    latest = release
+                val chosen = pickRelease(stable, beta, channel)
+                if (chosen != null) {
+                    latest = chosen
                     lastCheckAt = nowMinutes()
-                    release
-                } finally {
-                    connection.disconnect()
+                } else {
+                    failed = true
                 }
-            } catch (fail: Exception) {
-                failed = true
-                null
+                chosen
             } finally {
                 checking = false
             }
         }
+    }
+
+    /** Una descarga de texto con los timeouts de siempre; null si no responde. */
+    private fun downloadText(context: Context, url: String): String? = try {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = 15_000
+            instanceFollowRedirects = true
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", "visionplus/${currentVersion(context)} (android)")
+        }
+        try {
+            if (connection.responseCode !in 200..299) null
+            else connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    } catch (fail: Exception) {
+        null
+    }
+
+    /** El `version.json` del release (canal estable o beta). */
+    private fun manifest(context: Context, manifestUrl: String, apkUrl: String): Release? {
+        val text = downloadText(context, manifestUrl) ?: return null
+        return try {
+            val json = JSONObject(text)
+            val version = json.optString("version").ifBlank { releaseVersion(json.optString("tag_name"), "") }
+            if (version.isBlank()) null else Release(
+                version = version,
+                url = RELEASES_PAGE,
+                apkUrl = apkUrl,
+                notes = json.optString("notes").takeIf { it.isNotBlank() },
+            )
+        } catch (fail: Exception) {
+            null
+        }
+    }
+
+    /** Una release del repositorio; null si GitHub no responde o no trae versión. */
+    private fun fetch(context: Context, url: String): Release? = try {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = 15_000
+            setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("User-Agent", "visionplus/${currentVersion(context)} (android)")
+        }
+        try {
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                null
+            } else {
+                val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val json = JSONObject(body)
+                Release(
+                    version = releaseVersion(json.optString("tag_name"), json.optString("name")),
+                    url = json.optString("html_url").ifBlank { RELEASES_PAGE },
+                    apkUrl = apkAsset(json),
+                    notes = json.optString("body").takeIf { it.isNotBlank() },
+                ).takeIf { it.version.isNotBlank() }
+            }
+        } finally {
+            connection.disconnect()
+        }
+    } catch (fail: Exception) {
+        null
     }
 
     private fun nowMinutes(): Long = System.currentTimeMillis() / 60_000
@@ -149,13 +266,17 @@ object AppUpdate {
     /** The release's .apk asset when it carries one, else null (then only the page is offered). */
     private fun apkAsset(json: JSONObject): String? {
         val assets = json.optJSONArray("assets") ?: return null
+        var fallback: String? = null
         for (i in 0 until assets.length()) {
             val asset = assets.optJSONObject(i) ?: continue
             val name = asset.optString("name")
             val link = asset.optString("browser_download_url")
-            if (link.isNotBlank() && name.endsWith(".apk", ignoreCase = true)) return link
+            if (link.isBlank() || !name.endsWith(".apk", ignoreCase = true)) continue
+            // La app es SIEMPRE VisionPlus.apk: los releases también traen VisionPlusHome.apk.
+            if (name.equals("VisionPlus.apk", ignoreCase = true)) return link
+            if (fallback == null) fallback = link
         }
-        return null
+        return fallback
     }
 
     /** Opens the latest release (its APK asset when there is one, else its page). */

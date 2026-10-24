@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.ui.settings.VisionSettings
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -66,6 +67,23 @@ object RemoteConfig {
             is String -> value.trim().toIntOrNull() ?: default
             else -> default
         }
+
+    internal fun stringListFrom(flags: JSONObject, name: String): List<String> {
+        val raw = flags.opt(name) ?: return emptyList()
+        return when (raw) {
+            is JSONArray -> (0 until raw.length()).mapNotNull {
+                raw.optString(it).trim().takeIf { value -> value.isNotEmpty() }
+            }
+            is String -> raw.split(',', ' ', '\n').map { it.trim() }.filter { it.isNotEmpty() }
+            else -> emptyList()
+        }
+    }
+
+    /** Lista de cadenas de un flag (p. ej. los equipos del canal de pruebas). */
+    fun stringListFlag(context: Context, name: String): List<String> {
+        if (flags.length() == 0) load(context)
+        return stringListFrom(flags, name)
+    }
 
     /** Del JSON de `/v1/config` saca el objeto `flags` (pura, testeable). */
     internal fun parseFlags(text: String?): JSONObject =

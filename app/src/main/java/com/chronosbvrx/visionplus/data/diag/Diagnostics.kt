@@ -348,7 +348,12 @@ object Diagnostics {
         "${frame.className}.${frame.methodName}(${frame.fileName}:${frame.lineNumber})"
     }
 
-    private fun deviceHash(ctx: Context): String = runCatching {
+    private fun deviceHash(ctx: Context): String = deviceHashOf(ctx)
+
+    /** El id de este equipo (mismo hash que viaja en la telemetría). */
+    fun deviceId(context: Context): String = deviceHashOf(context.applicationContext)
+
+    private fun deviceHashOf(ctx: Context): String = runCatching {
         val id = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
         MessageDigest.getInstance("SHA-256").digest(id.toByteArray()).take(8).joinToString("") { "%02x".format(it) }
     }.getOrDefault("")

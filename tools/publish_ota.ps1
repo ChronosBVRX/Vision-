@@ -17,7 +17,9 @@ param(
     [Parameter(Mandatory = $true)][string]$NotesFile,
     [string]$Title = "",
     [switch]$SkipTests,
-    [switch]$SkipPublish
+    [switch]$SkipPublish,
+    # stable = release normal (la ven todos) · beta = pre-release `beta` (solo equipos de pruebas)
+    [ValidateSet("stable", "beta")][string]$Channel = "stable"
 )
 
 $ErrorActionPreference = "Stop"
@@ -117,11 +119,36 @@ try {
     # --- Copia y publicacion ---
     Copy-Item $apk (Join-Path $root "VisionPlus.apk") -Force
     Copy-Item $homeApk (Join-Path $root "VisionPlusHome.apk") -Force
+    # Manifiesto del canal: version.json dentro del release (el actualizador lo lee sin la API).
+    $versionFile = Join-Path $root "app\build\outputs\version.json"
+    # ReadAllText devuelve un string plano: `Get-Content -Raw` se serializaba como objeto.
+    $notesText = [string][System.IO.File]::ReadAllText((Join-Path $root $NotesFile), $utf8)
+    $manifest = [ordered]@{
+        version = $Version
+        versionCode = $newCode
+        apk = "VisionPlus.apk"
+        notes = $notesText
+    }
+    [System.IO.File]::WriteAllText($versionFile, ($manifest | ConvertTo-Json -Compress -Depth 3), $utf8)
     if (-not $SkipPublish) {
-        Write-Host "== Publicando release v$Version =="
-        gh release create "v$Version" VisionPlus.apk VisionPlusHome.apk -R ChronosBVRX/Vision- --title $Title --notes-file (Join-Path $root $NotesFile)
-        if ($LASTEXITCODE -ne 0) { throw "gh release fallo" }
-        Write-Host "== OTA v$Version PUBLICADA: https://github.com/ChronosBVRX/Vision-/releases/tag/v$Version =="
+        if ($Channel -eq "beta") {
+            # Canal de PRUEBAS: release con tag fijo `beta` marcada como pre-release. GitHub
+            # excluye las pre-releases de `/releases/latest`, así que los usuarios normales
+            # no la ven; los equipos marcados en `beta_device_ids` sí.
+            Write-Host "== Publicando BETA en el tag fijo 'beta' =="
+            # `gh` escribe a stderr cuando el tag aún no existe y PowerShell 5 lo trata como
+            # error terminante (misma lección que con Gradle): va por `cmd /c` y se ignora.
+            & cmd /c "gh release delete beta -R ChronosBVRX/Vision- --cleanup-tag -y 2>&1" | Out-Null
+            & gh release create "beta" VisionPlus.apk VisionPlusHome.apk $versionFile -R ChronosBVRX/Vision- `
+                --title "Vision+ $Version (pruebas)" --notes-file (Join-Path $root $NotesFile) --prerelease
+            if ($LASTEXITCODE -ne 0) { throw "gh release (beta) fallo" }
+            Write-Host "== BETA $Version publicada: https://github.com/ChronosBVRX/Vision-/releases/tag/beta =="
+        } else {
+            Write-Host "== Publicando release v$Version =="
+            gh release create "v$Version" VisionPlus.apk VisionPlusHome.apk $versionFile -R ChronosBVRX/Vision- --title $Title --notes-file (Join-Path $root $NotesFile)
+            if ($LASTEXITCODE -ne 0) { throw "gh release fallo" }
+            Write-Host "== OTA v$Version PUBLICADA: https://github.com/ChronosBVRX/Vision-/releases/tag/v$Version =="
+        }
     } else {
         Write-Host "== Build listo (SkipPublish): VisionPlus.apk y VisionPlusHome.apk actualizados sin publicar =="
     }
