@@ -75,11 +75,6 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".ui.player.TitanVodAty"
-            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
-            android:exported="true" />
-
         <!-- Reproductor residente («Camino B»): tarea propia fuera de recientes, una sola
              instancia con su vista del motor reutilizada entre reproducciones; el proceso
              `:x4k` sobrevive a la salida para que el próximo play no arranque en frío. -->

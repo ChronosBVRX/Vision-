@@ -58,7 +58,8 @@ class BundledEngineTest {
         abis.forEach { abi ->
             libs.forEach { name ->
                 val packed = File("src/main/jniLibs/$abi/$name")
-                val original = File("src/main/assets/x4k/lib/$abi/$name")
+                // Los DEX y libs de respaldo viven en `src/debug` (el release ya no los lleva).
+                val original = File("src/debug/assets/x4k/lib/$abi/$name")
                 assertTrue("falta $name en jniLibs/$abi", packed.exists())
                 assertTrue("falta $name en assets/x4k/$abi", original.exists())
                 // Mismo build byte a byte: si vuelve el del motor legado, esto falla.
@@ -72,15 +73,23 @@ class BundledEngineTest {
     }
 
     @Test
-    fun theLegacyEngineCannotLoadTheGoodLibraries() {
-        val titanSdk = read("src/main/java/com/chronosbvrx/visionplus/data/xuper/TitanSdk.kt")
-        // El motor legado se deja inerte: si cargara, usaría las libs buenas con su DEX viejo.
-        assertTrue("el motor legado sigue cargando", titanSdk.contains("MOTOR LEGADO RETIRADO"))
-        assertTrue(
-            "load() debe devolver false de inmediato",
-            titanSdk.contains("fun load(context: Context): Boolean {") &&
-                titanSdk.substringAfter("fun load(context: Context): Boolean {").trimStart().startsWith("// MOTOR LEGADO RETIRADO"),
-        )
+    fun theLegacyEngineIsGone() {
+        // 2.5.138: el motor legado se retiró del proyecto (no solo se dejó inerte).
+        listOf(
+            "src/main/java/com/chronosbvrx/visionplus/data/xuper/MagisClient.kt",
+            "src/main/java/com/chronosbvrx/visionplus/data/xuper/MagisMitan.kt".replace("Mitan", "Titan"),
+            "src/main/java/com/chronosbvrx/visionplus/data/xuper/TitanSdk.kt",
+            "src/main/java/com/chronosbvrx/visionplus/ui/player/TitanVodAty.kt",
+        ).forEach { path ->
+            assertTrue("sigue existiendo el motor legado: $path", !File(path).exists())
+        }
+        val manifest = read("src/main/AndroidManifest.xml")
+        assertTrue("la actividad TitanVodAty sigue en el manifest", !manifest.contains("TitanVodAty"))
+        val player = read("src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
+        assertTrue("quedó la pantalla del motor legado", !player.contains("TitanLivePlayer"))
+        assertTrue("quedó la pantalla del motor legado", !player.contains("TitanVodPlayerScreen"))
+        // Lo que llegue con la ref vieja se intenta por el motor XTV, no por el retirado.
+        assertTrue("la rama magis: no usa XTV", player.contains("channel.copy(url = \"xtvlive:\$code\")"))
     }
 
     @Test

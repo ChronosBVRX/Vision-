@@ -7,7 +7,6 @@ import com.chronosbvrx.visionplus.data.LivePlaylist
 import com.chronosbvrx.visionplus.data.LiveStore
 import com.chronosbvrx.visionplus.data.PLUGIN_TITLE
 import com.chronosbvrx.visionplus.data.XUPER_PLAYLIST_ID
-import com.chronosbvrx.visionplus.data.xuper.MagisClient
 import com.chronosbvrx.visionplus.data.xuper.XuperApiClient
 import com.chronosbvrx.visionplus.data.xuper.XuperEngine
 import com.chronosbvrx.visionplus.data.xuperRows
@@ -57,10 +56,6 @@ class XuperSource : Source {
      */
     override suspend fun catalogRows(): List<CatalogRow> {
         val rows = LinkedHashMap<String, CatalogRow>()
-        appCtx?.let { ctx ->
-            runCatching { MagisClient(ctx).catalogRows() }.getOrDefault(emptyList())
-                .forEach { rows[it.id] = it }
-        }
         val url = cachedUrl
         if (url != null && this::store.isInitialized) {
             val list = LivePlaylist(id = id, name = title, url = url, builtIn = true)
