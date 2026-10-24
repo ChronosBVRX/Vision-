@@ -4,8 +4,19 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.widget.Toast
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -16,10 +27,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.chronosbvrx.visionplus.data.profile.Profile
 import com.chronosbvrx.visionplus.data.profile.ProfileStore
+import com.chronosbvrx.visionplus.ui.profile.ProfileAvatar
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 
@@ -55,26 +71,59 @@ internal fun ProfilesSettingsSection() {
                 style = MaterialTheme.typography.bodySmall,
                 color = VisionTextSecondary,
             )
-            Text(
-                "${active.name} · ${profiles.size} de ${ProfileStore.MAX_PROFILES} en este equipo",
-                style = MaterialTheme.typography.bodySmall,
-                color = VisionTextSecondary,
-            )
-        }
-        profiles.forEach { profile ->
-            val inUse = profile.id == activeId
-            SettingsRow(
-                title = profile.name,
-                supporting = if (inUse) "En uso en este equipo" else "Toca para cambiar a este perfil",
-                onClick = if (inUse) null else {
-                    {
-                        useProfile(context, profile)
-                        reload()
-                    }
-                },
+            Spacer(Modifier.height(10.dp))
+            // Fila de avatares: se elige tocando el círculo, como en la tele.
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                if (inUse) {
-                    Text("En uso", color = VisionBlue, style = MaterialTheme.typography.labelLarge)
+                profiles.forEach { profile ->
+                    val inUse = profile.id == activeId
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .width(76.dp)
+                            .clickable(enabled = !inUse) {
+                                useProfile(context, profile)
+                                reload()
+                            },
+                    ) {
+                        ProfileAvatar(name = profile.name, size = 56.dp, ring = inUse)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            profile.name,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
+                        )
+                        if (inUse) {
+                            Text("En uso", color = VisionBlue, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+                if (profiles.size < ProfileStore.MAX_PROFILES) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .width(76.dp)
+                            .clickable { showCreate = true },
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .border(2.dp, VisionTextSecondary, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("+", style = MaterialTheme.typography.headlineMedium)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Crear",
+                            style = MaterialTheme.typography.labelMedium,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                 }
             }
         }

@@ -73,6 +73,30 @@ class SettingsUxTest {
     }
 
     @Test
+    fun theSearchButtonIsAPillNotABareMagnifier() {
+        // Pedido del usuario: la lupa suelta «se quedó atrás». Ahora es una píldora «Buscar».
+        val tv = source("ui/tv/TvTopBar.kt")
+        assertTrue("la tele no usa la píldora", tv.contains("TvSearchPill(onSearch)"))
+        assertTrue(tv.contains("Text(\"Buscar\""))
+        val phone = source("ui/PhoneApp.kt")
+        assertTrue("el móvil no usa la píldora", phone.contains("Text(\"Buscar\""))
+        assertTrue(phone.contains("nav.push(Route.Search)"))
+    }
+
+    @Test
+    fun thePhoneProfilesAreAvatarsToo() {
+        val card = source("ui/settings/ProfilesCard.kt")
+        assertTrue("sin avatares en móvil", card.contains("ProfileAvatar(name = profile.name, size = 56.dp, ring = inUse)"))
+        // La etiqueta va en su propio renglón dentro de Text(…): se busca el literal, no la forma.
+        assertTrue("sin tarjeta de crear", card.contains("\"Crear\""))
+        assertTrue("sin el círculo de «+»", card.contains("Text(\"+\""))
+        // Se sigue pudiendo crear, renombrar y borrar.
+        assertTrue(card.contains("showCreate = true"))
+        assertTrue(card.contains("showRename = true"))
+        assertTrue(card.contains("SettingsDestructiveRow("))
+    }
+
+    @Test
     fun theAvatarInitialSurvivesAccentsAndSpaces() {
         assertEquals("A", profileInitial("axel"))
         // El acento se respeta: el avatar muestra «Á», no una A pelada.

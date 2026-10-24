@@ -157,8 +157,8 @@ internal fun TvTopBar(
         Spacer(Modifier.width(12.dp))
         ProfileChip(profile, onProfile)
         Spacer(Modifier.width(6.dp))
-        TopBarIcon(Icons.Default.Search, "Buscar", onSearch)
-        Spacer(Modifier.width(2.dp))
+        TvSearchPill(onSearch)
+        Spacer(Modifier.width(4.dp))
         TopBarIcon(Icons.Default.Settings, "Ajustes", onSettings)
     }
 }
@@ -237,6 +237,40 @@ private fun ProfileChip(name: String, onClick: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+}
+
+@Composable
+private fun TvSearchPill(onSearch: () -> Unit) {
+    // Píldora «Buscar» en vez de una lupa pelada: es la acción principal de la barra.
+    Surface(
+        onClick = onSearch,
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.White.copy(alpha = 0.08f),
+            focusedContainerColor = Color.White.copy(alpha = 0.16f),
+            pressedContainerColor = Color.White.copy(alpha = 0.22f),
+            contentColor = Color.White,
+            focusedContentColor = Color.White,
+            pressedContentColor = Color.White,
+        ),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = RoundedCornerShape(50)),
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Icon(
+                Icons.Default.Search,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(15.dp),
+            )
+            Text("Buscar", color = Color.White, fontSize = 12.sp, maxLines = 1)
         }
     }
 }

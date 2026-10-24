@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -60,6 +61,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.data.XuperCatalog
@@ -324,8 +326,26 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
                                 IconButton(onClick = { scope.launch { catalog.load() } }) {
                                     Icon(Icons.Default.Refresh, contentDescription = "Recargar catálogo", tint = Color.White)
                                 }
-                                IconButton(onClick = { nav.push(Route.Search) }) {
-                                    Icon(Icons.Default.Search, contentDescription = "Buscar", tint = Color.White)
+                                // Píldora «Buscar» (misma que en la tele): la acción principal
+                                // de la barra, no una lupa suelta.
+                                androidx.compose.material3.Surface(
+                                    onClick = { nav.push(Route.Search) },
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
+                                    color = Color.White.copy(alpha = 0.10f),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Search,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Text("Buscar", color = Color.White, fontSize = 12.sp, maxLines = 1)
+                                    }
                                 }
                             }
                         },
