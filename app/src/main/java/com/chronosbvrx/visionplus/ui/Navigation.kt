@@ -20,11 +20,22 @@ sealed interface Route {
     /** El control remoto por LAN (teléfono → tele). */
     data object Remote : Route
     data class Title(val film: Film) : Route
-    data class Player(val film: Film, val episode: EpisodePlay? = null, val resumeMs: Long = 0) : Route
+    /**
+     * [launcherOrigin] viaja en los enlaces de Vision+ Home: al cerrar el reproductor la app
+     * termina su tarea y regresa al launcher (conservando su última selección), en vez de
+     * enseñar el menú de Vision+.
+     */
+    data class Player(
+        val film: Film,
+        val episode: EpisodePlay? = null,
+        val resumeMs: Long = 0,
+        val launcherOrigin: Boolean = false,
+    ) : Route
     data class LivePlayer(
         val channel: LiveChannel,
         val channelCodes: List<String> = emptyList(),
         val groupTitle: String? = null,
+        val launcherOrigin: Boolean = false,
     ) : Route
 
     /** Una sección del riel de TV: resuelve su hilera por id (o por título) del índice. */
@@ -112,6 +123,24 @@ class Navigator(start: List<Route>) {
         stack += Route.Home
         if (route != Route.Home) stack += route
     }
+}
+
+/**
+ * Cerrar un reproductor abierto desde Vision+ Home: se termina la tarea de la app para que el
+ * launcher vuelva al frente con su última tarjeta seleccionada. Un reproductor abierto desde el
+ * menú de Vision+ (o por el control remoto) solo desapila su ruta, como siempre.
+ */
+internal fun closePlayback(route: Route, nav: Navigator, exitToLauncher: () -> Unit): Boolean {
+    val fromLauncher = when (route) {
+        is Route.Player -> route.launcherOrigin
+        is Route.LivePlayer -> route.launcherOrigin
+        else -> false
+    }
+    if (fromLauncher) {
+        exitToLauncher()
+        return true
+    }
+    return nav.close(route)
 }
 
 /**

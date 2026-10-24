@@ -75,6 +75,43 @@ class NavigationTest {
     }
 
     @Test
+    fun aPlayerOpenedFromTheLauncherExitsTheAppInsteadOfShowingTheMenu() {
+        val nav = Navigator(listOf(Route.Home))
+        val player = Route.Player(film("home"), launcherOrigin = true)
+        nav.pushPlayer(player)
+        var exited = false
+        assertTrue(closePlayback(player, nav) { exited = true })
+        assertTrue("la app debe soltar su tarea para que vuelva el launcher", exited)
+        assertEquals(
+            "la ruta del reproductor no se desapila: la tarea entera se va",
+            listOf(Route.Home, player),
+            nav.stack.toList(),
+        )
+    }
+
+    @Test
+    fun aLivePlayerOpenedFromTheLauncherAlsoReturnsToTheLauncher() {
+        val nav = Navigator(listOf(Route.Home))
+        val ch = LiveChannel("Canal 5", "xtvlive:cyx_5", null, "México")
+        val live = Route.LivePlayer(ch, channelCodes = listOf("cyx_5"), launcherOrigin = true)
+        nav.pushPlayer(live)
+        var exited = false
+        assertTrue(closePlayback(live, nav) { exited = true })
+        assertTrue(exited)
+    }
+
+    @Test
+    fun aPlayerOpenedInsideTheAppKeepsItsNormalBackBehavior() {
+        val nav = Navigator(listOf(Route.Home))
+        val player = Route.Player(film("inside"))
+        nav.pushPlayer(player)
+        var exited = false
+        assertTrue(closePlayback(player, nav) { exited = true })
+        assertFalse("los players de la propia app no cierran la tarea", exited)
+        assertEquals(Route.Home, nav.current)
+    }
+
+    @Test
     fun closeNeverEmptiesTheStackBelowHome() {
         val nav = Navigator(listOf(Route.Home))
         assertFalse(nav.close(Route.Home))

@@ -76,7 +76,7 @@ internal val TV_RAIL_SPECS = listOf(
 
 /** The TV's shell: Home with its rail, and every other place full screen with Back to return. */
 @Composable
-fun TvApp(catalog: XuperCatalog, nav: Navigator) {
+fun TvApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit = {}) {
     val route = nav.current
     LaunchedEffect(route) { com.chronosbvrx.visionplus.data.diag.Diagnostics.screen(route.toString()) }
     BackHandler(enabled = nav.stack.size > 1 && route !is Route.Player && route !is Route.LivePlayer) { nav.pop() }
@@ -125,6 +125,7 @@ fun TvApp(catalog: XuperCatalog, nav: Navigator) {
                 onClearFilmReturn = { filmReturn = null },
                 liveReturn = liveReturn,
                 onChannelPick = { liveReturn = it },
+                onExitToLauncher = onExitToLauncher,
             )
         }
     }
@@ -142,6 +143,7 @@ private fun TvRoute(
     onClearFilmReturn: () -> Unit = {},
     liveReturn: String? = null,
     onChannelPick: (String) -> Unit = {},
+    onExitToLauncher: () -> Unit = {},
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -276,13 +278,13 @@ private fun TvRoute(
             onPlay = { ep -> nav.push(Route.Player(route.film, ep)) },
             onOpenFilm = { nav.push(Route.Title(it)) },
         )
-        is Route.Player -> PlayerScreen(route.film, isTv = true, onBack = { nav.close(route) }, episode = route.episode, resumeMs = route.resumeMs)
+        is Route.Player -> PlayerScreen(route.film, isTv = true, onBack = { closePlayback(route, nav, onExitToLauncher) }, episode = route.episode, resumeMs = route.resumeMs)
         is Route.LivePlayer -> LivePlayerScreen(
             channel = route.channel,
             isTv = true,
             channelCodes = route.channelCodes,
             groupTitle = route.groupTitle,
-            onBack = { nav.close(route) },
+            onBack = { closePlayback(route, nav, onExitToLauncher) },
         )
         Route.Search -> TvSearchScreen(
             indexRows,

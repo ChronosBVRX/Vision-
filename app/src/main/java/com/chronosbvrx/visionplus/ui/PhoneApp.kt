@@ -113,7 +113,7 @@ internal val TABS = listOf(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
+fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -191,7 +191,7 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
     BackHandler(enabled = !drawerState.isOpen && nav.stack.size > 1 && route !is Route.Player && route !is Route.LivePlayer) { nav.pop() }
 
     when (route) {
-        is Route.Player -> { PlayerScreen(route.film, isTv = false, onBack = { nav.close(route) }, episode = route.episode, resumeMs = route.resumeMs); return }
+        is Route.Player -> { PlayerScreen(route.film, isTv = false, onBack = { closePlayback(route, nav, onExitToLauncher) }, episode = route.episode, resumeMs = route.resumeMs); return }
         else -> Unit
     }
 
@@ -221,7 +221,7 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator) {
                 isTv = false,
                 channelCodes = route.channelCodes,
                 groupTitle = route.groupTitle,
-                onBack = { nav.close(route) },
+                onBack = { closePlayback(route, nav, onExitToLauncher) },
             )
             return
         }

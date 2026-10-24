@@ -17,7 +17,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -53,7 +57,7 @@ internal fun ProfilesSettingsSection() {
     var profiles by remember { mutableStateOf(ProfileStore.profiles(context)) }
     var activeId by remember { mutableStateOf(ProfileStore.activeId(context)) }
     var showCreate by remember { mutableStateOf(false) }
-    var showRename by remember { mutableStateOf(false) }
+    var renameTarget by remember { mutableStateOf<Profile?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
     val active = profiles.firstOrNull { it.id == activeId } ?: profiles.first()
 
@@ -100,6 +104,17 @@ internal fun ProfilesSettingsSection() {
                         if (inUse) {
                             Text("En uso", color = VisionBlue, style = MaterialTheme.typography.labelSmall)
                         }
+                        IconButton(
+                            onClick = { renameTarget = profile },
+                            modifier = Modifier.size(28.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = "Renombrar ${profile.name}",
+                                tint = VisionTextSecondary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
                     }
                 }
                 if (profiles.size < ProfileStore.MAX_PROFILES) {
@@ -134,7 +149,7 @@ internal fun ProfilesSettingsSection() {
                 supporting = "Hasta ${ProfileStore.MAX_PROFILES} personas por equipo",
             )
         }
-        SettingsNavRow("Renombrar «${active.name}»", onClick = { showRename = true })
+        SettingsNavRow("Renombrar «${active.name}»", onClick = { renameTarget = active })
         if (active.id != ProfileStore.DEFAULT_ID) {
             SettingsDestructiveRow(
                 title = "Borrar «${active.name}»",
@@ -163,15 +178,15 @@ internal fun ProfilesSettingsSection() {
         )
     }
 
-    if (showRename) {
+    renameTarget?.let { target ->
         NameDialog(
             title = "Renombrar perfil",
-            initial = active.name,
+            initial = target.name,
             confirm = "Guardar",
-            onDismiss = { showRename = false },
+            onDismiss = { renameTarget = null },
             onAccept = { name ->
-                ProfileStore.rename(context, active.id, name)
-                showRename = false
+                ProfileStore.rename(context, target.id, name)
+                renameTarget = null
                 reload()
             },
         )

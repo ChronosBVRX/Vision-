@@ -92,7 +92,7 @@ class SettingsUxTest {
         assertTrue("sin el círculo de «+»", card.contains("Text(\"+\""))
         // Se sigue pudiendo crear, renombrar y borrar.
         assertTrue(card.contains("showCreate = true"))
-        assertTrue(card.contains("showRename = true"))
+        assertTrue(card.contains("renameTarget = active"))
         assertTrue(card.contains("SettingsDestructiveRow("))
     }
 

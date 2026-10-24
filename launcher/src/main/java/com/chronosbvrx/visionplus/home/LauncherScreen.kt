@@ -426,7 +426,17 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         items = feed?.live.orEmpty(),
                         config = config,
                         metrics = metrics,
-                        onOpen = { item -> openLink(item.playLink) },
+                        onOpen = { item, channels, scope ->
+                            openLink(
+                                VisionLinks.live(
+                                    code = item.code,
+                                    name = item.name,
+                                    logo = item.logo,
+                                    codes = channels.map { it.code },
+                                    scope = scope,
+                                ),
+                            )
+                        },
                         onOpenFull = { openLink(VisionLinks.liveHub()) },
                         onLongClick = { item -> editTarget = EditTarget.Channel(item) },
                         onManageChannels = { personalizePage = PersonalizePage.CHANNELS },

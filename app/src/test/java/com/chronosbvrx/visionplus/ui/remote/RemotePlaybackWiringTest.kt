@@ -31,9 +31,15 @@ class RemotePlaybackWiringTest {
     @Test
     fun theScreensCloseOnlyTheirOwnPlayerRoute() {
         val tv = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/TvApp.kt")
-        assertTrue("TV: Player y vivo cierran su propia ruta", tv.split("nav.close(route)").size - 1 >= 2)
+        assertTrue(
+            "TV: Player y vivo cierran su propia ruta",
+            tv.split("closePlayback(route, nav, onExitToLauncher)").size - 1 >= 2,
+        )
         val phone = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/PhoneApp.kt")
-        assertTrue("móvil: Player y vivo cierran su propia ruta", phone.split("nav.close(route)").size - 1 >= 2)
+        assertTrue(
+            "móvil: Player y vivo cierran su propia ruta",
+            phone.split("closePlayback(route, nav, onExitToLauncher)").size - 1 >= 2,
+        )
     }
 
     @Test

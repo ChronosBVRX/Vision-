@@ -41,13 +41,33 @@ object VisionLinks {
         if (seasonIds.isNotEmpty()) query("sl", seasonIds.joinToString("|"))
         if (seasonNames.isNotEmpty()) query("sn", seasonNames.joinToString("|"))
         if (resumeMs > 0) query("r", resumeMs.toString())
+        // Vision+ Home marca sus reproducciones: al salir del reproductor la app vuelve al
+        // launcher (su última tarjeta), no al menú de Vision+. El control remoto no la manda.
+        query("from", "home")
     }
 
-    /** Abre un canal en vivo, con nombre y logo para que pinte al instante. */
-    fun live(code: String, name: String = "", logo: String = ""): String = buildString {
+    /**
+     * Abre un canal en vivo, con nombre y logo para que pinte al instante.
+     *
+     * [codes] es el grupo desde el que se abrió (el mosaico filtrado del launcher): el
+     * reproductor hace zapping SOLO dentro de esa lista, no sobre los 1000 canales. [scope]
+     * es el rótulo visible («Canales de México», «Mis canales»…).
+     */
+    fun live(
+        code: String,
+        name: String = "",
+        logo: String = "",
+        codes: List<String> = emptyList(),
+        scope: String = "",
+    ): String = buildString {
         append("$SCHEME://$HOST_LIVE/").append(enc(code))
         query("t", name)
         query("p", logo)
+        if (codes.isNotEmpty()) query("c", codes.joinToString("|"))
+        query("g", scope)
+        // Igual que `watch`: el reproductor sabe que se abrió desde Vision+ Home y al salir
+        // devuelve el foco a la tarjeta del launcher, no al menú de la app.
+        query("from", "home")
     }
 
     /** Abre la ficha de un título del catálogo (con su contexto para pintarla al instante). */

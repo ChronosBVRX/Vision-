@@ -53,10 +53,8 @@ import com.chronosbvrx.visionplus.data.remote.RemoteBus
 import com.chronosbvrx.visionplus.data.remote.RemoteKeys
 import com.chronosbvrx.visionplus.data.remote.RemoteProto
 import com.chronosbvrx.visionplus.data.remote.RemoteServer
-import com.chronosbvrx.visionplus.data.remote.remoteLiveChannel
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.data.xuper.EngineWarmup
-import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import com.chronosbvrx.visionplus.ui.SearchSeed
 import com.chronosbvrx.visionplus.ui.activation.ActivationScreen
 import com.chronosbvrx.visionplus.ui.LocalReducedEffects
@@ -66,6 +64,7 @@ import com.chronosbvrx.visionplus.ui.Route
 import com.chronosbvrx.visionplus.ui.TvApp
 import com.chronosbvrx.visionplus.ui.brand.VisionSplash
 import com.chronosbvrx.visionplus.ui.launcherRouteFor
+import com.chronosbvrx.visionplus.ui.liveRouteFor
 import com.chronosbvrx.visionplus.ui.showsFloatingClock
 import com.chronosbvrx.visionplus.ui.systemAnimationsOff
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
@@ -391,9 +390,13 @@ class MainActivity : ComponentActivity() {
                             )
                         } else if (!splashVisible || bootReady) {
                             if (isTv) {
-                                TvApp(catalog, navigator)
+                                TvApp(catalog, navigator) {
+                                    com.chronosbvrx.visionplus.ui.exitAppCleanly(this@MainActivity)
+                                }
                             } else {
-                                PhoneApp(catalog, navigator)
+                                PhoneApp(catalog, navigator) {
+                                    com.chronosbvrx.visionplus.ui.exitAppCleanly(this@MainActivity)
+                                }
                             }
                         }
                         if (splashVisible) {
@@ -467,7 +470,7 @@ class MainActivity : ComponentActivity() {
         if ("open".equals(uri.host, ignoreCase = true)) return openRouteFor(uri)
         if ("title".equals(uri.host, ignoreCase = true)) return titleRouteFor(uri)
         // El control remoto y nuestro propio launcher abren canales con `visionplus://live/<código>`.
-        if ("live".equals(uri.host, ignoreCase = true)) return liveRouteFor(uri)
+        if ("live".equals(uri.host, ignoreCase = true)) return liveRouteFor(this, uri)
         return launcherRouteFor(this, uri)
     }
 
@@ -531,16 +534,6 @@ class MainActivity : ComponentActivity() {
             sourceUrl = if (videoUrl.startsWith("xtv:")) "xtv" else "",
         )
         return Route.Title(film)
-    }
-
-    /** Un canal que el teléfono mandó a abrir: del catálogo cacheado, o mínimo con su código. */
-    private fun liveRouteFor(uri: Uri): Route? {
-        val code = uri.pathSegments.lastOrNull().orEmpty()
-        val name = uri.getQueryParameter("t").orEmpty()
-        val logo = uri.getQueryParameter("p")
-        val cached = runCatching { X4KApi.cachedLiveChannels(this) }.getOrDefault(emptyList())
-        val channel = remoteLiveChannel(code, name, logo, cached) ?: return null
-        return Route.LivePlayer(channel)
     }
 
     /** Entrega una tecla remota al sistema como si viniera del mando. */

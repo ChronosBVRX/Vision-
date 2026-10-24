@@ -50,7 +50,36 @@ class VisionLinksTest {
     @Test
     fun liveCarriesTheNameAndLogoSoThePlayerPaintsInstantly() {
         val link = VisionLinks.live("cyx_5", "Canal 5", "https://img/5.png")
-        assertEquals("visionplus://live/cyx_5?t=Canal%205&p=https%3A%2F%2Fimg%2F5.png", link)
+        assertEquals(
+            "visionplus://live/cyx_5?t=Canal%205&p=https%3A%2F%2Fimg%2F5.png&from=home",
+            link,
+        )
+    }
+
+    @Test
+    fun homeLinksTellTheAppToReturnToTheLauncher() {
+        assertTrue(VisionLinks.live("cyx_5").contains("from=home"))
+        assertTrue(VisionLinks.watch(key = "xtv:9", code = "9").contains("from=home"))
+    }
+
+    @Test
+    fun liveCarriesTheFilteredMenuSoZappingStaysInsideIt() {
+        val link = VisionLinks.live(
+            code = "cyx_5",
+            name = "Canal 5",
+            logo = "",
+            codes = listOf("cyx_5", "cyx_7", "cyx_9"),
+            scope = "Canales de México",
+        )
+        assertTrue(link.contains("c=cyx_5%7Ccyx_7%7Ccyx_9"))
+        assertTrue(link.contains("g=Canales%20de%20M%C3%A9xico"))
+    }
+
+    @Test
+    fun liveWithoutAScopeDoesNotDragEmptyParameters() {
+        val link = VisionLinks.live("cyx_5")
+        assertFalse(link.contains("c="))
+        assertFalse(link.contains("g="))
     }
 
     @Test

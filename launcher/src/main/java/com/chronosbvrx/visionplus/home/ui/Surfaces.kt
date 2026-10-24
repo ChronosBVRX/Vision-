@@ -597,12 +597,19 @@ private fun AppsRow(
 /** La pestaña TV en vivo: mosaico con nombre y guía AHORA de cada canal. */
 private enum class LiveFilter { ALL, MEXICO, FAVORITES }
 
+/** Rótulo que viaja al reproductor para el aviso de cable y el menú de zapping. */
+private fun liveScopeLabel(filter: LiveFilter): String = when (filter) {
+    LiveFilter.ALL -> "Todos los canales"
+    LiveFilter.MEXICO -> "Canales de México"
+    LiveFilter.FAVORITES -> "Mis canales"
+}
+
 @Composable
 fun LiveSurface(
     items: List<LiveItem>,
     config: HomeConfig,
     metrics: HomeMetrics,
-    onOpen: (LiveItem) -> Unit,
+    onOpen: (LiveItem, List<LiveItem>, String) -> Unit,
     onOpenFull: () -> Unit,
     onLongClick: (LiveItem) -> Unit,
     onManageChannels: () -> Unit,
@@ -716,7 +723,7 @@ fun LiveSurface(
                             .fillMaxWidth()
                             .then(if (item.code == firstCode) Modifier.focusRequester(entry) else Modifier),
                         onLongClick = { onLongClick(item) },
-                        onClick = { onOpen(item) },
+                        onClick = { onOpen(item, visible, liveScopeLabel(filter)) },
                     )
                 }
             }

@@ -8,6 +8,8 @@ import com.chronosbvrx.visionplus.data.ResumeCard
 import com.chronosbvrx.visionplus.data.shouldKeep
 import com.chronosbvrx.visionplus.data.launcher.LauncherLinks
 import com.chronosbvrx.visionplus.data.launcher.WatchLink
+import com.chronosbvrx.visionplus.data.remote.remoteLiveChannel
+import com.chronosbvrx.visionplus.data.xuper.X4KApi
 
 /**
  * El deep link del launcher de TV (`visionplus://watch/<clave>`) → la ruta que reanuda la
@@ -20,14 +22,52 @@ import com.chronosbvrx.visionplus.data.launcher.WatchLink
  */
 internal fun launcherRouteFor(context: Context, uri: Uri?): Route? {
     val link = LauncherLinks.parse(uri) ?: return null
+    val fromHome = uri?.getQueryParameter("from") == "home"
     // La orden del teléfono trae su propio minuto: manda sobre el historial de ESTA tele (el
     // usuario acaba de pedir «continuar aquí» desde el otro equipo). Sin minuto, el historial
     // local sigue teniendo la primera palabra, como siempre.
-    if (link.resumeMs > 0) routeFromLink(link, link.resumeMs)?.let { return it }
+    if (link.resumeMs > 0) return routeFromLink(link, link.resumeMs)?.markFromHome(fromHome)
     val entry = PlaybackHistory.get(context, link.key)
         ?.takeIf { shouldKeep(it.positionMs, it.durationMs) }
-    if (entry != null) return resumeRoute(ResumeCard(entry, film = null, progress = 0f))
-    return routeFromLink(link, 0)
+    if (entry != null) return resumeRoute(ResumeCard(entry, film = null, progress = 0f)).markFromHome(fromHome)
+    return routeFromLink(link, 0)?.markFromHome(fromHome)
+}
+
+/** Marca una ruta de reproducción como abierta desde Vision+ Home (sin tocar rutas ajenas). */
+private fun Route.markFromHome(fromHome: Boolean): Route = when {
+    !fromHome -> this
+    this is Route.Player -> copy(launcherOrigin = true)
+    this is Route.LivePlayer -> copy(launcherOrigin = true)
+    else -> this
+}
+
+/**
+ * `visionplus://live/<código>?t=…&p=…&c=<código1>|<código2>…&g=<rótulo>`: el canal que abrió
+ * Vision+ Home. `c` es el menú filtrado desde el que se lanzó (México, Favoritos, Todos): el
+ * reproductor hace zapping SOLO dentro de esa lista, no sobre el catálogo entero. Sin `c`
+ * (un enlace viejo del teléfono o de una tarjeta suelta), se conserva el zapping global.
+ */
+internal fun liveRouteFor(context: Context, uri: Uri?): Route? {
+    if (uri == null) return null
+    val code = uri.pathSegments.lastOrNull().orEmpty().trim()
+    if (code.isBlank()) return null
+    val name = uri.getQueryParameter("t").orEmpty()
+    val logo = uri.getQueryParameter("p")
+    val cached = runCatching { X4KApi.cachedLiveChannels(context) }.getOrDefault(emptyList())
+    val channel = remoteLiveChannel(code, name, logo, cached) ?: return null
+    val codes = uri.getQueryParameter("c")
+        ?.split('|')
+        ?.map { it.trim() }
+        ?.filter { it.isNotBlank() }
+        ?.distinct()
+        .orEmpty()
+    val scope = uri.getQueryParameter("g")?.trim()?.takeIf { it.isNotBlank() }
+    return Route.LivePlayer(
+        channel,
+        channelCodes = codes,
+        groupTitle = scope,
+        launcherOrigin = uri.getQueryParameter("from") == "home",
+    )
 }
 
 /** La ruta que pide el enlace, sin consultar el historial: película, capítulo o URL directa. */

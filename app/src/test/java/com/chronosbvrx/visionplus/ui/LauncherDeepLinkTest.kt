@@ -8,7 +8,9 @@ import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.launcher.LauncherLinks
 import com.chronosbvrx.visionplus.data.launcher.WatchLink
+import com.chronosbvrx.visionplus.home.contract.VisionLinks
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -33,6 +35,47 @@ class LauncherDeepLinkTest {
     }
 
     @Test
+    fun liveLinkCarriesTheLauncherMenuSoZappingStaysInsideIt() {
+        val route = liveRouteFor(
+            context,
+            Uri.parse(
+                VisionLinks.live(
+                    code = "cyx_5",
+                    name = "Canal 5",
+                    logo = "https://img/5.png",
+                    codes = listOf("cyx_5", "cyx_7", "cyx_9"),
+                    scope = "Canales de México",
+                ),
+            ),
+        ) as Route.LivePlayer
+        assertEquals("xtvlive:cyx_5", route.channel.url)
+        assertEquals("Canal 5", route.channel.name)
+        assertEquals(listOf("cyx_5", "cyx_7", "cyx_9"), route.channelCodes)
+        assertEquals("Canales de México", route.groupTitle)
+        assertTrue("el enlace de Vision+ Home debe volver al launcher", route.launcherOrigin)
+    }
+
+    @Test
+    fun aLiveLinkWithoutTheHomeMarkKeepsTheInAppBackBehavior() {
+        val route = liveRouteFor(
+            context,
+            Uri.parse("visionplus://live/cyx_5?t=Canal%205&c=cyx_5%7Ccyx_7"),
+        ) as Route.LivePlayer
+        assertEquals(listOf("cyx_5", "cyx_7"), route.channelCodes)
+        assertFalse("el control remoto no debe cerrar la app al salir", route.launcherOrigin)
+    }
+
+    @Test
+    fun liveLinkWithoutAMenuKeepsTheGlobalZapping() {
+        val route = liveRouteFor(
+            context,
+            Uri.parse(VisionLinks.live(code = "cyx_5", name = "Canal 5")),
+        ) as Route.LivePlayer
+        assertTrue(route.channelCodes.isEmpty())
+        assertNull(route.groupTitle)
+    }
+
+    @Test
     fun linkRoundTripSurvivesAwkwardKeys() {
         val link = WatchLink(
             key = "xtv:ab/c?d#e", title = "Tom & Jerry · C2", posterUrl = "https://x/y.jpg?q=1&z=2",
@@ -40,6 +83,16 @@ class LauncherDeepLinkTest {
         )
         val parsed = LauncherLinks.parse(LauncherLinks.uriFor(link))
         assertEquals(link, parsed)
+    }
+
+    @Test
+    fun aWatchLinkFromHomeAlsoReturnsToTheLauncher() {
+        val route = launcherRouteFor(
+            context,
+            Uri.parse(VisionLinks.watch(key = "xtv:9", title = "Moana", code = "9")),
+        ) as Route.Player
+        assertEquals("xtv:9", route.film.videoUrl)
+        assertTrue("la tarjeta de Vision+ Home debe volver al launcher", route.launcherOrigin)
     }
 
     @Test
