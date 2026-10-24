@@ -818,6 +818,14 @@ object X4KApi {
         val endMs: Long,
     )
 
+    /** AHORA/DESPUÉS ya resueltos por el endpoint masivo (sin la lista completa). */
+    data class EpgNow(
+        val now: String,
+        val next: String,
+        val startMs: Long,
+        val endMs: Long,
+    )
+
     private val epgCache = ConcurrentHashMap<String, Pair<Long, List<EpgItem>>>()
     private const val EPG_CACHE_TTL_MS = 5 * 60 * 1000L
 
@@ -873,22 +881,28 @@ object X4KApi {
         portalItems
     }
 
+    /**
+     * El portal camufla ESPN/Star+ como «Elite Sports Hub»; la guía del VPS los conoce
+     * como ESPN. El mapeo vale para el endpoint individual y para el masivo.
+     */
+    private fun epgNameFor(channelCode: String, channelName: String): String = when {
+        channelCode.equals("ST☆R+HD_cyx", ignoreCase = true) ||
+            channelName.contains("Elite Sports Hub HD", ignoreCase = true) ||
+            channelName.equals("ESPN / Star+ HD", ignoreCase = true) -> "ESPN"
+        channelCode.equals("ST☆R+ 2 HD_cyx", ignoreCase = true) ||
+            channelName.contains("Elite Sports Hub 2", ignoreCase = true) ||
+            channelName.contains("ESPN 2 / Star+ 2", ignoreCase = true) -> "ESPN 2"
+        channelCode.equals("ST☆R+ 3 HD_cyx", ignoreCase = true) ||
+            channelName.contains("Elite Sports Hub 3", ignoreCase = true) ||
+            channelName.contains("ESPN 3 / Star+ 3", ignoreCase = true) -> "ESPN 3"
+        channelCode.equals("ST☆R+ 4 HD_cyx", ignoreCase = true) ||
+            channelName.contains("Elite Sports Hub 4", ignoreCase = true) ||
+            channelName.contains("ESPN 4 / Star+ 4", ignoreCase = true) -> "ESPN 4"
+        else -> channelName
+    }
+
     private fun fetchVpsEpg(channelCode: String, channelName: String): List<EpgItem> {
-        val resolvedName = when {
-            channelCode.equals("ST☆R+HD_cyx", ignoreCase = true) ||
-                channelName.contains("Elite Sports Hub HD", ignoreCase = true) ||
-                channelName.equals("ESPN / Star+ HD", ignoreCase = true) -> "ESPN"
-            channelCode.equals("ST☆R+ 2 HD_cyx", ignoreCase = true) ||
-                channelName.contains("Elite Sports Hub 2", ignoreCase = true) ||
-                channelName.contains("ESPN 2 / Star+ 2", ignoreCase = true) -> "ESPN 2"
-            channelCode.equals("ST☆R+ 3 HD_cyx", ignoreCase = true) ||
-                channelName.contains("Elite Sports Hub 3", ignoreCase = true) ||
-                channelName.contains("ESPN 3 / Star+ 3", ignoreCase = true) -> "ESPN 3"
-            channelCode.equals("ST☆R+ 4 HD_cyx", ignoreCase = true) ||
-                channelName.contains("Elite Sports Hub 4", ignoreCase = true) ||
-                channelName.contains("ESPN 4 / Star+ 4", ignoreCase = true) -> "ESPN 4"
-            else -> channelName
-        }
+        val resolvedName = epgNameFor(channelCode, channelName)
         val encName = java.net.URLEncoder.encode(resolvedName, "UTF-8")
         val encCode = java.net.URLEncoder.encode(channelCode, "UTF-8")
         val url = "${RemoteIndexSource.BASE_URL}/v1/epg?channel=$encName&code=$encCode"
@@ -916,6 +930,65 @@ object X4KApi {
                 )
             }
             out
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /**
+     * Guía AHORA/DESPUÉS de muchos canales en UNA petición (`POST /v1/epg/bulk`).
+     *
+     * El launcher arma su mosaico con 400 canales; pedirlos uno por uno costaba 120
+     * viajes HTTP. El servidor devuelve solo la ventana actual y la siguiente, que es
+     * justo lo que pinta la tarjeta. Si el servidor es viejo o la red falla, devuelve
+     * un mapa vacío y el llamador cae al camino por canal de siempre.
+     */
+    suspend fun epgBulkFor(
+        context: Context,
+        channels: List<Pair<String, String>>,
+    ): Map<String, EpgNow> = withContext(Dispatchers.IO) {
+        if (channels.isEmpty()) return@withContext emptyMap()
+        val payload = JSONObject().apply {
+            put("channels", JSONArray().apply {
+                channels.forEach { (code, name) ->
+                    put(JSONObject().apply {
+                        put("code", code)
+                        put("name", epgNameFor(code, name))
+                    })
+                }
+            })
+        }
+        val url = "${RemoteIndexSource.BASE_URL}/v1/epg/bulk"
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            connectTimeout = 4_000
+            readTimeout = 8_000
+            setRequestProperty("X-Api-Key", RemoteIndexSource.API_KEY)
+            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+            if (connection.responseCode !in 200..299) return@withContext emptyMap()
+            val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val items = JSONObject(text).optJSONObject("channels") ?: return@withContext emptyMap()
+            val out = HashMap<String, EpgNow>(items.length() * 2)
+            items.keys().forEach { code ->
+                val entry = items.optJSONObject(code) ?: return@forEach
+                val now = entry.optJSONObject("now")
+                val next = entry.optJSONObject("next")
+                if (now == null && next == null) return@forEach
+                out[code] = EpgNow(
+                    now = now?.optString("name").orEmpty(),
+                    next = next?.optString("name").orEmpty(),
+                    startMs = now?.optLong("startMs") ?: 0L,
+                    endMs = now?.optLong("endMs") ?: 0L,
+                )
+            }
+            out
+        } catch (e: Exception) {
+            emptyMap()
         } finally {
             connection.disconnect()
         }

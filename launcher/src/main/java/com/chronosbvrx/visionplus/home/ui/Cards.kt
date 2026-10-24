@@ -201,11 +201,14 @@ fun ChannelCard(
     height: Dp,
     modifier: Modifier = Modifier,
     nowMs: Long = System.currentTimeMillis(),
+    showEpg: Boolean = true,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val current = currentProgram(item, nowMs)
     FocusableSurface(
         onClick = onClick,
+        onLongClick = onLongClick,
         modifier = modifier.height(height),
         shape = HomeShapes.card,
     ) {
@@ -215,7 +218,7 @@ fun ChannelCard(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 54.dp),
+                    .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = if (showEpg) 54.dp else 36.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Monogram(item.name, Modifier.fillMaxSize(), size = 22)
@@ -243,27 +246,29 @@ fun ChannelCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "AHORA",
-                        color = HomeColors.BlueBright,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp,
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        current.ifBlank { "Guía no disponible" },
-                        color = if (current.isBlank()) HomeColors.TextFaint else Color.White.copy(alpha = 0.88f),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
+                if (showEpg) {
+                    Spacer(Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "AHORA",
+                            color = HomeColors.BlueBright,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            current.ifBlank { "Guía no disponible" },
+                            color = if (current.isBlank()) HomeColors.TextFaint else Color.White.copy(alpha = 0.88f),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    ThinProgress(liveProgress(item, nowMs))
                 }
-                Spacer(Modifier.height(4.dp))
-                ThinProgress(liveProgress(item, nowMs))
             }
             Badge(
                 text = "EN VIVO",

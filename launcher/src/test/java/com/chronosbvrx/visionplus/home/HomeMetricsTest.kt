@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.home
 
 import androidx.compose.ui.unit.dp
+import com.chronosbvrx.visionplus.home.data.LauncherDensity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,6 +38,19 @@ class HomeMetricsTest {
     fun theLiveCardReservesRoomForNameAndGuide() {
         assertTrue("la tarjeta compacta necesita nombre + AHORA", homeMetrics(540).channelHeight >= 100.dp)
         assertTrue("la tarjeta grande también", homeMetrics(900).channelHeight >= 120.dp)
+    }
+
+    @Test
+    fun theDensityChangesTheWholeHomeWithoutBreakingTheTv() {
+        val compact = homeMetrics(540, LauncherDensity.COMPACT)
+        val comfort = homeMetrics(540, LauncherDensity.COMFORT)
+        val cinema = homeMetrics(540, LauncherDensity.CINEMA)
+        assertTrue(compact.posterWidth < comfort.posterWidth)
+        assertTrue(comfort.posterWidth < cinema.posterWidth)
+        assertTrue(compact.heroHeight <= comfort.heroHeight)
+        assertTrue(comfort.heroHeight < cinema.heroHeight)
+        assertTrue("la tarjeta nunca queda inservible", compact.channelHeight >= 92.dp)
+        assertTrue("la tarjeta de cine tampoco crece sin control", cinema.channelHeight < 180.dp)
     }
 
     @Test

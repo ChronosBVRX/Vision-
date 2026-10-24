@@ -15,6 +15,7 @@ object HomeFeedCodec {
             put("version", feed.meta.version)
             put("generatedAt", feed.meta.generatedAt)
             put("profile", feed.meta.profile)
+            put("profileId", feed.meta.profileId)
             put("profiles", feed.meta.profiles)
             put("online", feed.meta.online)
             put("appVersion", feed.meta.appVersion)
@@ -135,6 +136,7 @@ object HomeFeedCodec {
                     version = version,
                     generatedAt = metaJson.optLong("generatedAt", 0L),
                     profile = metaJson.optString("profile"),
+                    profileId = metaJson.optString("profileId"),
                     profiles = metaJson.optInt("profiles", 1),
                     online = metaJson.optBoolean("online", true),
                     appVersion = metaJson.optString("appVersion"),

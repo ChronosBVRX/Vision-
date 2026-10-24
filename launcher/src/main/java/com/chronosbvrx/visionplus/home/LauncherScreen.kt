@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,28 +36,48 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.chronosbvrx.visionplus.home.contract.HomeFeed
+import com.chronosbvrx.visionplus.home.contract.LiveItem
 import com.chronosbvrx.visionplus.home.contract.VisionLinks
 import com.chronosbvrx.visionplus.home.data.AppEntry
 import com.chronosbvrx.visionplus.home.data.AppsRepository
+import com.chronosbvrx.visionplus.home.data.DisplayConfig
 import com.chronosbvrx.visionplus.home.data.FeedRepository
+import com.chronosbvrx.visionplus.home.data.HomeConfig
 import com.chronosbvrx.visionplus.home.data.HomeUpdate
 import com.chronosbvrx.visionplus.home.data.LauncherPrefs
+import com.chronosbvrx.visionplus.home.data.homeRowEntries
 import com.chronosbvrx.visionplus.home.ui.AppsSurface
 import com.chronosbvrx.visionplus.home.ui.CatalogSurface
 import com.chronosbvrx.visionplus.home.ui.CommandCenterDialog
+import com.chronosbvrx.visionplus.home.ui.DisplaySettingsDialog
 import com.chronosbvrx.visionplus.home.ui.EventsSurface
 import com.chronosbvrx.visionplus.home.ui.HomeColors
 import com.chronosbvrx.visionplus.home.ui.HomeTab
 import com.chronosbvrx.visionplus.home.ui.HomeSurface
+import com.chronosbvrx.visionplus.home.ui.ItemActionsDialog
 import com.chronosbvrx.visionplus.home.ui.LiveSurface
+import com.chronosbvrx.visionplus.home.ui.ManageAppsDialog
+import com.chronosbvrx.visionplus.home.ui.ManageChannelsDialog
+import com.chronosbvrx.visionplus.home.ui.ManageRowsDialog
+import com.chronosbvrx.visionplus.home.ui.MenuAction
 import com.chronosbvrx.visionplus.home.ui.MissingVisionBanner
 import com.chronosbvrx.visionplus.home.ui.OutdatedVisionBanner
+import com.chronosbvrx.visionplus.home.ui.PersonalizeHubDialog
 import com.chronosbvrx.visionplus.home.ui.SearchSurface
 import com.chronosbvrx.visionplus.home.ui.TopChrome
+import com.chronosbvrx.visionplus.home.ui.currentProgram
 import com.chronosbvrx.visionplus.home.ui.requestFocusSafely
 import com.chronosbvrx.visionplus.home.rememberHomeMetrics
+import com.chronosbvrx.visionplus.home.ui.LocalReducedEffects
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private enum class PersonalizePage { HUB, CHANNELS, APPS, ROWS, DISPLAY }
+
+private sealed interface EditTarget {
+    data class Channel(val item: LiveItem) : EditTarget
+    data class App(val app: AppEntry) : EditTarget
+}
 
 /**
  * La pantalla de inicio del sistema. Todo lo que se ve es o del feed de Vision+ o del propio
@@ -69,13 +90,27 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     val prefs = remember { LauncherPrefs(context) }
     val feeds = remember { FeedRepository(context) }
     val appsRepo = remember { AppsRepository(context) }
-    val metrics = rememberHomeMetrics()
-    val reduced = profile.reducedEffects
-    val compact = metrics.posterWidth < 110.dp
 
     var feed by remember { mutableStateOf<HomeFeed?>(null) }
     var apps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
-    var favorites by remember { mutableStateOf(prefs.favorites()) }
+    var recentApps by remember { mutableStateOf(prefs.recentApps()) }
+    val profileKey = feed?.meta?.profileId?.takeIf { it.isNotBlank() }
+        ?: feed?.meta?.profile?.lowercase()?.takeIf { it.isNotBlank() }
+        ?: "principal"
+    val profileAliases = listOf(feed?.meta?.profile.orEmpty(), "principal")
+    var config by remember(profileKey, feed?.meta?.profile, feed?.meta?.profileId) {
+        mutableStateOf(prefs.homeConfig(profileKey, profileAliases))
+    }
+    var personalizePage by remember { mutableStateOf<PersonalizePage?>(null) }
+    var editTarget by remember { mutableStateOf<EditTarget?>(null) }
+    val reduced = when (config.display.animations) {
+        com.chronosbvrx.visionplus.home.data.LauncherAnimations.AUTO -> profile.reducedEffects
+        com.chronosbvrx.visionplus.home.data.LauncherAnimations.LIGHT -> true
+        com.chronosbvrx.visionplus.home.data.LauncherAnimations.FULL -> false
+    }
+    val metrics = rememberHomeMetrics(config.display.density)
+    val compact = metrics.posterWidth < 110.dp
+
     // Un Inicio de sistema siempre abre en Inicio (no en la última pestaña que se miró).
     var tab by rememberSaveable { mutableStateOf(HomeTab.HOME) }
     var commandCenter by remember { mutableStateOf(false) }
@@ -204,17 +239,52 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
 
     fun launchApp(app: AppEntry) {
         prefs.noteLaunch(app.packageName)
+        recentApps = prefs.recentApps()
         if (!appsRepo.launch(app.packageName)) {
             LauncherActions.toast(context, "No se pudo abrir ${app.label}")
         }
     }
 
-    fun toggleFavorite(app: AppEntry) {
-        val added = prefs.toggleFavorite(app.packageName)
-        favorites = prefs.favorites()
+    fun updateConfig(change: (HomeConfig) -> HomeConfig) {
+        val next = change(config)
+        if (next == config) return
+        config = next
+        prefs.saveHomeConfig(profileKey, next, profileAliases)
+    }
+
+    fun toggleAppFavorite(app: AppEntry) {
+        val adding = app.packageName !in config.appFavorites
+        updateConfig { it.toggleAppFavorite(app.packageName) }
         LauncherActions.toast(
             context,
-            if (added) "${app.label} fijada en el Inicio" else "${app.label} quitada del Inicio",
+            if (adding) "${app.label} fijada en el Inicio" else "${app.label} quitada de favoritas",
+        )
+    }
+
+    fun toggleAppHidden(app: AppEntry) {
+        val hiding = app.packageName !in config.hiddenApps
+        updateConfig { it.toggleAppHidden(app.packageName) }
+        LauncherActions.toast(
+            context,
+            if (hiding) "${app.label} oculta · restáurala en Personalizar > Apps" else "${app.label} visible otra vez",
+        )
+    }
+
+    fun toggleChannelFavorite(item: LiveItem) {
+        val adding = item.code !in config.channelFavorites
+        updateConfig { it.toggleChannelFavorite(item.code) }
+        LauncherActions.toast(
+            context,
+            if (adding) "${item.name} en Mis canales" else "${item.name} fuera de Mis canales",
+        )
+    }
+
+    fun toggleChannelHidden(item: LiveItem) {
+        val hiding = item.code !in config.hiddenChannels
+        updateConfig { it.toggleChannelHidden(item.code) }
+        LauncherActions.toast(
+            context,
+            if (hiding) "${item.name} oculto · restáuralo en Personalizar > Canales" else "${item.name} visible otra vez",
         )
     }
 
@@ -225,6 +295,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             (latestApp != null && HomeUpdate.isOlder(feed?.meta?.appVersion.orEmpty(), latestApp!!))
         )
 
+    CompositionLocalProvider(LocalReducedEffects provides reduced) {
     Box(
         Modifier
             .fillMaxSize()
@@ -270,6 +341,8 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                 compact = compact,
                 activeTabRequester = tabLanding,
                 downTarget = if (tab == HomeTab.HOME) landing else sectionLanding,
+                clock24h = config.display.clock24h,
+                showClock = config.display.showClock,
             )
             if (!visionInstalled) {
                 MissingVisionBanner(
@@ -317,7 +390,8 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                     HomeTab.HOME -> HomeSurface(
                         feed = feed,
                         apps = apps,
-                        favorites = favorites,
+                        recentApps = recentApps,
+                        config = config,
                         metrics = metrics,
                         reduced = reduced,
                         compact = compact,
@@ -329,8 +403,9 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         onItem = { item -> openLink(item.openLink) },
                         onContinue = { item -> openLink(item.playLink) },
                         onLive = { item -> openLink(item.playLink) },
+                        onChannelLongClick = { item -> editTarget = EditTarget.Channel(item) },
                         onApp = { app -> launchApp(app) },
-                        onAppFavorite = { app -> toggleFavorite(app) },
+                        onAppLongClick = { app -> editTarget = EditTarget.App(app) },
                         onSeeLive = {
                             tab = HomeTab.LIVE
                             userHasMoved = false
@@ -349,9 +424,12 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
 
                     HomeTab.LIVE -> LiveSurface(
                         items = feed?.live.orEmpty(),
+                        config = config,
                         metrics = metrics,
                         onOpen = { item -> openLink(item.playLink) },
                         onOpenFull = { openLink(VisionLinks.liveHub()) },
+                        onLongClick = { item -> editTarget = EditTarget.Channel(item) },
+                        onManageChannels = { personalizePage = PersonalizePage.CHANNELS },
                         upTarget = tabLanding,
                         landing = sectionLanding,
                     )
@@ -379,12 +457,15 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
 
                     HomeTab.APPS -> AppsSurface(
                         apps = apps,
+                        recentApps = recentApps,
+                        config = config,
                         metrics = metrics,
                         onOpen = { app -> launchApp(app) },
-                        onLongClick = { app -> toggleFavorite(app) },
+                        onLongClick = { app -> editTarget = EditTarget.App(app) },
                         onSystemSettings = { appsRepo.openSystemSettings() },
                         onWifi = { appsRepo.openWifiSettings() },
                         onHomeSettings = { appsRepo.openHomeSettings() },
+                        onManage = { personalizePage = PersonalizePage.APPS },
                         landing = sectionLanding,
                         upTarget = tabLanding,
                     )
@@ -392,12 +473,17 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             }
         }
     }
+    }
 
     if (commandCenter) {
         CommandCenterDialog(
             profileName = feed?.meta?.profile.orEmpty(),
             profiles = feed?.meta?.profiles ?: 1,
             onDismiss = { commandCenter = false },
+            onPersonalize = {
+                commandCenter = false
+                personalizePage = PersonalizePage.HUB
+            },
             onOpenVisionSettings = {
                 commandCenter = false
                 openLink(VisionLinks.settings())
@@ -445,5 +531,201 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                 openLink(item.openLink)
             },
         )
+    }
+
+    editTarget?.let { target ->
+        when (target) {
+            is EditTarget.Channel -> {
+                val item = target.item
+                val favorite = item.code in config.channelFavorites
+                val hidden = item.code in config.hiddenChannels
+                ItemActionsDialog(
+                    title = item.name,
+                    subtitle = currentProgram(item, System.currentTimeMillis()).ifBlank { "Canal en vivo" },
+                    actions = buildList {
+                        add(
+                            MenuAction(
+                                title = if (favorite) "Quitar de Mis canales" else "Fijar en Mis canales",
+                                detail = if (favorite) "Deja de aparecer en la fila de favoritos" else "Aparece en «Mis canales» del Inicio",
+                                onClick = {
+                                    toggleChannelFavorite(item)
+                                    editTarget = null
+                                },
+                            ),
+                        )
+                        add(
+                            MenuAction(
+                                title = if (hidden) "Mostrar canal" else "Ocultar canal",
+                                detail = if (hidden) "Vuelve al mosaico y a las filas" else "Desaparece del mosaico; puedes restaurarlo aquí",
+                                onClick = {
+                                    toggleChannelHidden(item)
+                                    editTarget = null
+                                },
+                            ),
+                        )
+                        if (favorite) {
+                            add(
+                                MenuAction(
+                                    title = "Mover al inicio de Mis canales",
+                                    detail = "Queda como el primer favorito",
+                                    onClick = {
+                                        updateConfig { it.promoteChannelFavorite(item.code) }
+                                        editTarget = null
+                                        LauncherActions.toast(context, "${item.name} al inicio de Mis canales")
+                                    },
+                                ),
+                            )
+                        }
+                        add(
+                            MenuAction(
+                                title = "Gestionar canales",
+                                detail = "Favoritos, ocultos y orden",
+                                onClick = {
+                                    editTarget = null
+                                    personalizePage = PersonalizePage.CHANNELS
+                                },
+                            ),
+                        )
+                    },
+                    onDismiss = { editTarget = null },
+                )
+            }
+
+            is EditTarget.App -> {
+                val app = target.app
+                val favorite = app.packageName in config.appFavorites
+                val hidden = app.packageName in config.hiddenApps
+                ItemActionsDialog(
+                    title = app.label,
+                    subtitle = app.packageName,
+                    actions = buildList {
+                        add(
+                            MenuAction(
+                                title = if (favorite) "Quitar de favoritas" else "Fijar app",
+                                detail = if (favorite) "Deja de ir primero en el Inicio" else "Aparece primero en Apps y en el Inicio",
+                                onClick = {
+                                    toggleAppFavorite(app)
+                                    editTarget = null
+                                },
+                            ),
+                        )
+                        add(
+                            MenuAction(
+                                title = if (hidden) "Mostrar app" else "Ocultar app",
+                                detail = if (hidden) "Vuelve al Inicio y a Apps" else "No se desinstala: solo se oculta del launcher",
+                                onClick = {
+                                    toggleAppHidden(app)
+                                    editTarget = null
+                                },
+                            ),
+                        )
+                        if (favorite) {
+                            add(
+                                MenuAction(
+                                    title = "Mover al inicio de Apps",
+                                    detail = "Queda como la primera favorita",
+                                    onClick = {
+                                        updateConfig { it.promoteAppFavorite(app.packageName) }
+                                        editTarget = null
+                                        LauncherActions.toast(context, "${app.label} al inicio de Apps")
+                                    },
+                                ),
+                            )
+                        }
+                        add(
+                            MenuAction(
+                                title = "Gestionar apps",
+                                detail = "Favoritas, ocultas y orden",
+                                onClick = {
+                                    editTarget = null
+                                    personalizePage = PersonalizePage.APPS
+                                },
+                            ),
+                        )
+                    },
+                    onDismiss = { editTarget = null },
+                )
+            }
+        }
+    }
+
+    when (personalizePage) {
+        PersonalizePage.HUB -> PersonalizeHubDialog(
+            profileName = feed?.meta?.profile.orEmpty(),
+            config = config,
+            channelCount = feed?.live?.size ?: 0,
+            appCount = apps.size,
+            onChannels = { personalizePage = PersonalizePage.CHANNELS },
+            onApps = { personalizePage = PersonalizePage.APPS },
+            onRows = { personalizePage = PersonalizePage.ROWS },
+            onAppearance = { personalizePage = PersonalizePage.DISPLAY },
+            onReset = {
+                updateConfig { it.resetAll() }
+                personalizePage = null
+                LauncherActions.toast(context, "Personalización restablecida")
+            },
+            onDismiss = { personalizePage = null },
+        )
+
+        PersonalizePage.CHANNELS -> ManageChannelsDialog(
+            channels = feed?.live.orEmpty(),
+            config = config,
+            onToggleFavorite = { code -> updateConfig { it.toggleChannelFavorite(code) } },
+            onToggleHidden = { code -> updateConfig { it.toggleChannelHidden(code) } },
+            onMoveFavorite = { code, delta -> updateConfig { it.moveChannelFavorite(code, delta) } },
+            onSort = { sort -> updateConfig { it.setChannelSort(sort) } },
+            onReset = {
+                updateConfig { it.resetChannels() }
+                LauncherActions.toast(context, "Canales restablecidos")
+            },
+            onDismiss = { personalizePage = PersonalizePage.HUB },
+        )
+
+        PersonalizePage.APPS -> ManageAppsDialog(
+            apps = apps,
+            config = config,
+            onToggleFavorite = { pkg -> updateConfig { it.toggleAppFavorite(pkg) } },
+            onToggleHidden = { pkg -> updateConfig { it.toggleAppHidden(pkg) } },
+            onMoveFavorite = { pkg, delta -> updateConfig { it.moveAppFavorite(pkg, delta) } },
+            onReset = {
+                updateConfig { it.resetApps() }
+                LauncherActions.toast(context, "Apps restablecidas")
+            },
+            onDismiss = { personalizePage = PersonalizePage.HUB },
+        )
+
+        PersonalizePage.ROWS -> {
+            val rows = homeRowEntries(config, feed?.rows.orEmpty())
+            ManageRowsDialog(
+                rows = rows,
+                config = config,
+                onMove = { id, delta -> updateConfig { it.moveRow(id, delta) } },
+                onToggle = { id ->
+                    val visible = rows.count { it.id !in config.hiddenRows }
+                    if (id !in config.hiddenRows && visible <= 1) {
+                        LauncherActions.toast(context, "Debe quedar al menos una fila visible")
+                    } else {
+                        updateConfig { it.toggleRow(id) }
+                    }
+                },
+                onReset = {
+                    updateConfig { it.resetRows() }
+                    LauncherActions.toast(context, "Filas restablecidas")
+                },
+                onDismiss = { personalizePage = PersonalizePage.HUB },
+            )
+        }
+
+        PersonalizePage.DISPLAY -> DisplaySettingsDialog(
+            config = config,
+            onChange = { display -> updateConfig { it.withDisplay(display) } },
+            onReset = {
+                updateConfig { it.withDisplay(DisplayConfig()) }
+                LauncherActions.toast(context, "Apariencia restablecida")
+            },
+            onDismiss = { personalizePage = PersonalizePage.HUB },
+        )
+
+        null -> Unit
     }
 }

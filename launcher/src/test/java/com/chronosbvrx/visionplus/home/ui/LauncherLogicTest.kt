@@ -80,6 +80,7 @@ class LauncherLogicTest {
     fun theClockSpeaksMexicoCityEvenOnAnotherTimeZone() {
         // 1970-01-01T00:00:00Z = 18:00 del 31-dic-1969 en el centro de México (UTC-6).
         assertEquals("18:00", clockText(0L))
+        assertEquals("6:00 PM", clockText(0L, clock24h = false))
     }
 
     @Test

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SettingsRemote
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -60,6 +61,7 @@ fun CommandCenterDialog(
     profileName: String,
     profiles: Int,
     onDismiss: () -> Unit,
+    onPersonalize: () -> Unit,
     onOpenVisionSettings: () -> Unit,
     onSystemSettings: () -> Unit,
     onHomeSettings: () -> Unit,
@@ -170,11 +172,17 @@ fun CommandCenterDialog(
                     )
                 }
                 PanelAction(
+                    icon = Icons.Rounded.Tune,
+                    title = "Personalizar Inicio",
+                    detail = "Canales, apps, filas y apariencia",
+                    onClick = onPersonalize,
+                    modifier = Modifier.focusRequester(first),
+                )
+                PanelAction(
                     icon = Icons.Rounded.SettingsRemote,
                     title = "Ajustes de Vision+",
                     detail = "Perfiles, continuidad, calidad y descargas",
                     onClick = onOpenVisionSettings,
-                    modifier = Modifier.focusRequester(first),
                 )
                 PanelAction(
                     icon = Icons.Rounded.Settings,

@@ -79,6 +79,11 @@ import com.chronosbvrx.visionplus.home.contract.MediaKind
 import com.chronosbvrx.visionplus.home.contract.RowKind
 import com.chronosbvrx.visionplus.home.contract.SportsItem
 import com.chronosbvrx.visionplus.home.data.AppEntry
+import com.chronosbvrx.visionplus.home.data.HomeConfig
+import com.chronosbvrx.visionplus.home.data.favoriteChannels
+import com.chronosbvrx.visionplus.home.data.homeRowOrder
+import com.chronosbvrx.visionplus.home.data.visibleApps
+import com.chronosbvrx.visionplus.home.data.visibleChannels
 import com.chronosbvrx.visionplus.home.data.HomeUpdate
 
 /**
@@ -91,7 +96,8 @@ import com.chronosbvrx.visionplus.home.data.HomeUpdate
 fun HomeSurface(
     feed: HomeFeed?,
     apps: List<AppEntry>,
-    favorites: Set<String>,
+    recentApps: List<String>,
+    config: HomeConfig,
     metrics: HomeMetrics,
     reduced: Boolean,
     compact: Boolean,
@@ -103,8 +109,9 @@ fun HomeSurface(
     onItem: (FeedItem) -> Unit,
     onContinue: (ContinueItem) -> Unit,
     onLive: (LiveItem) -> Unit,
+    onChannelLongClick: (LiveItem) -> Unit,
     onApp: (AppEntry) -> Unit,
-    onAppFavorite: (AppEntry) -> Unit,
+    onAppLongClick: (AppEntry) -> Unit,
     onSeeLive: () -> Unit,
     onSeeApps: () -> Unit,
     onOpenHistory: () -> Unit,
@@ -112,6 +119,20 @@ fun HomeSurface(
     onSystemSettings: () -> Unit,
     onPrimaryFocus: (Boolean) -> Unit = {},
 ) {
+    val feedRows = feed?.rows.orEmpty()
+    val feedById = remember(feedRows) { feedRows.associateBy { it.id } }
+    val rowIds = remember(config.rowOrder, feedRows) { homeRowOrder(config, feedRows) }
+    val liveItems = remember(feed?.live, config) {
+        visibleChannels(feed?.live.orEmpty(), config)
+    }
+    val favChannels = remember(feed?.live, config) {
+        favoriteChannels(feed?.live.orEmpty(), config)
+    }
+    val appsView = remember(apps, config, recentApps) {
+        visibleApps(apps, config, recentApps)
+    }
+    val continueItems = feed?.continueWatching.orEmpty()
+    val limit = config.display.itemsPerRow
     CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollBringIntoView) {
         LazyColumn(
             state = listState,
@@ -142,48 +163,76 @@ fun HomeSurface(
                     )
                 }
             }
-            val continueItems = feed?.continueWatching.orEmpty()
-            if (continueItems.isNotEmpty()) {
-                item("continue") {
-                    ContinueRow(
-                        items = continueItems,
-                        metrics = metrics,
-                        onOpen = onContinue,
-                        onSeeAll = onOpenHistory,
-                    )
-                }
-            }
-            val liveItems = feed?.live.orEmpty().take(12)
-            if (liveItems.isNotEmpty()) {
-                item("live") {
-                    LiveRow(
-                        items = liveItems,
-                        metrics = metrics,
-                        onOpen = onLive,
-                        onSeeAll = onSeeLive,
-                    )
-                }
-            }
-            if (apps.isNotEmpty()) {
-                item("apps") {
-                    AppsRow(
-                        apps = orderedApps(apps, favorites, emptyList()).take(if (compact) 8 else 10),
-                        metrics = metrics,
-                        onOpen = onApp,
-                        onLongClick = onAppFavorite,
-                        onSeeAll = onSeeApps,
-                    )
-                }
-            }
-            feed?.rows?.forEach { row ->
-                if (row.items.isNotEmpty()) {
-                    item("row-${row.id}") {
-                        PosterRow(
-                            row = row,
-                            metrics = metrics,
-                            onOpen = onItem,
-                            onSeeAll = null,
-                        )
+            rowIds.forEach { id ->
+                if (id in config.hiddenRows) return@forEach
+                when (id) {
+                    "continue" -> if (continueItems.isNotEmpty()) {
+                        item("continue") {
+                            ContinueRow(
+                                items = continueItems.take(limit),
+                                metrics = metrics,
+                                onOpen = onContinue,
+                                onSeeAll = onOpenHistory,
+                            )
+                        }
+                    }
+
+                    "channels" -> if (favChannels.isNotEmpty()) {
+                        item("channels") {
+                            LiveRow(
+                                items = favChannels,
+                                metrics = metrics,
+                                title = "Mis canales",
+                                subtitle = "Tus favoritos, en tu orden",
+                                limit = limit,
+                                showEpg = config.display.showEpg,
+                                onOpen = onLive,
+                                onSeeAll = onSeeLive,
+                                onLongClick = onChannelLongClick,
+                            )
+                        }
+                    }
+
+                    "live" -> if (liveItems.isNotEmpty()) {
+                        item("live") {
+                            LiveRow(
+                                items = liveItems,
+                                metrics = metrics,
+                                title = "TV en vivo",
+                                subtitle = "Ahora en tu programación",
+                                limit = limit,
+                                showEpg = config.display.showEpg,
+                                onOpen = onLive,
+                                onSeeAll = onSeeLive,
+                                onLongClick = onChannelLongClick,
+                            )
+                        }
+                    }
+
+                    "apps" -> if (appsView.isNotEmpty()) {
+                        item("apps") {
+                            AppsRow(
+                                apps = appsView.take(limit),
+                                metrics = metrics,
+                                onOpen = onApp,
+                                onLongClick = onAppLongClick,
+                                onSeeAll = onSeeApps,
+                            )
+                        }
+                    }
+
+                    else -> feedById[id]?.let { row ->
+                        if (row.items.isNotEmpty()) {
+                            item("row-${row.id}") {
+                                PosterRow(
+                                    row = row,
+                                    metrics = metrics,
+                                    limit = limit,
+                                    onOpen = onItem,
+                                    onSeeAll = null,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -402,6 +451,7 @@ fun MissingVisionBanner(
 private fun PosterRow(
     row: FeedRow,
     metrics: HomeMetrics,
+    limit: Int = 18,
     onOpen: (FeedItem) -> Unit,
     onSeeAll: (() -> Unit)?,
 ) {
@@ -420,7 +470,7 @@ private fun PosterRow(
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
             verticalAlignment = Alignment.Top,
         ) {
-            rowItemsIndexed(row.items, key = { _, item -> item.ref.ifBlank { item.title } }) { index, item ->
+            rowItemsIndexed(row.items.take(limit), key = { _, item -> item.ref.ifBlank { item.title } }) { index, item ->
                 PosterCard(
                     item = item,
                     width = metrics.posterWidth,
@@ -471,14 +521,19 @@ private fun ContinueRow(
 private fun LiveRow(
     items: List<LiveItem>,
     metrics: HomeMetrics,
+    title: String,
+    subtitle: String,
+    limit: Int,
+    showEpg: Boolean,
     onOpen: (LiveItem) -> Unit,
     onSeeAll: () -> Unit,
+    onLongClick: (LiveItem) -> Unit,
 ) {
     val nowMs = rememberNowMs()
     Column(Modifier.fillMaxWidth()) {
         SectionHeader(
-            title = "TV en vivo",
-            subtitle = "Ahora en tu programación",
+            title = title,
+            subtitle = subtitle,
             actionLabel = "Ver todos",
             onAction = onSeeAll,
             modifier = Modifier.padding(horizontal = metrics.horizontalPadding),
@@ -490,12 +545,14 @@ private fun LiveRow(
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
             verticalAlignment = Alignment.Top,
         ) {
-            rowItems(items, key = { it.code }) { item ->
+            rowItems(items.take(limit), key = { it.code }) { item ->
                 ChannelCard(
                     item = item,
                     height = metrics.channelHeight,
                     modifier = Modifier.width(metrics.channelWidth),
                     nowMs = nowMs,
+                    showEpg = showEpg,
+                    onLongClick = { onLongClick(item) },
                     onClick = { onOpen(item) },
                 )
             }
@@ -514,7 +571,7 @@ private fun AppsRow(
     Column(Modifier.fillMaxWidth()) {
         SectionHeader(
             title = "Apps",
-            subtitle = "Mantén OK para fijar una app en el Inicio",
+            subtitle = "Mantén OK para opciones",
             actionLabel = "Ver todas",
             onAction = onSeeAll,
             modifier = Modifier.padding(horizontal = metrics.horizontalPadding),
@@ -538,17 +595,28 @@ private fun AppsRow(
 }
 
 /** La pestaña TV en vivo: mosaico con nombre y guía AHORA de cada canal. */
+private enum class LiveFilter { ALL, MEXICO, FAVORITES }
+
 @Composable
 fun LiveSurface(
     items: List<LiveItem>,
+    config: HomeConfig,
     metrics: HomeMetrics,
     onOpen: (LiveItem) -> Unit,
     onOpenFull: () -> Unit,
+    onLongClick: (LiveItem) -> Unit,
+    onManageChannels: () -> Unit,
     upTarget: FocusRequester? = null,
     landing: FocusRequester? = null,
 ) {
-    var onlyMexico by remember { mutableStateOf(false) }
-    val visible = if (onlyMexico) items.filter { it.mexico } else items
+    var filter by remember { mutableStateOf(LiveFilter.ALL) }
+    val base = remember(items, config) { visibleChannels(items, config) }
+    val favorites = remember(items, config) { favoriteChannels(items, config) }
+    val visible = when (filter) {
+        LiveFilter.ALL -> base
+        LiveFilter.MEXICO -> base.filter { it.mexico }
+        LiveFilter.FAVORITES -> favorites
+    }
     val nowMs = rememberNowMs()
     val entry = remember { FocusRequester() }
     val firstCode = visible.firstOrNull()?.code
@@ -576,10 +644,14 @@ fun LiveSurface(
                     Column(Modifier.fillMaxWidth()) {
                         SectionHeader(
                             title = "TV en vivo",
-                            subtitle = "${visible.size} canales · nombre y guía AHORA",
-                            actionLabel = "Abrir en Vision+",
+                            subtitle = when (filter) {
+                                LiveFilter.FAVORITES -> "${visible.size} favoritos · tu orden"
+                                LiveFilter.MEXICO -> "${visible.size} canales de México"
+                                LiveFilter.ALL -> "${visible.size} canales · nombre y guía AHORA"
+                            },
+                            actionLabel = "Gestionar",
                             actionModifier = upTarget?.let { Modifier.focusProperties { up = it } } ?: Modifier,
-                            onAction = onOpenFull,
+                            onAction = onManageChannels,
                         )
                         Spacer(Modifier.height(8.dp))
                         Row(
@@ -588,16 +660,22 @@ fun LiveSurface(
                         ) {
                             LiveFilterChip(
                                 label = "Todos",
-                                selected = !onlyMexico,
-                                onClick = { onlyMexico = false },
+                                selected = filter == LiveFilter.ALL,
+                                onClick = { filter = LiveFilter.ALL },
                                 modifier = Modifier
                                     .then(if (landing != null) Modifier.focusRequester(landing) else Modifier)
                                     .softFocusDown(entry),
                             )
                             LiveFilterChip(
                                 label = "México",
-                                selected = onlyMexico,
-                                onClick = { onlyMexico = true },
+                                selected = filter == LiveFilter.MEXICO,
+                                onClick = { filter = LiveFilter.MEXICO },
+                                modifier = Modifier.softFocusDown(entry),
+                            )
+                            LiveFilterChip(
+                                label = "Favoritos",
+                                selected = filter == LiveFilter.FAVORITES,
+                                onClick = { filter = LiveFilter.FAVORITES },
                                 modifier = Modifier.softFocusDown(entry),
                             )
                         }
@@ -606,11 +684,25 @@ fun LiveSurface(
                 }
                 if (visible.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
+                        val emptyTitle = when {
+                            filter == LiveFilter.FAVORITES -> "Aún no tienes canales favoritos"
+                            filter == LiveFilter.MEXICO -> "No hay canales de México en la lista"
+                            items.isEmpty() -> "Aún no hay canales en el Inicio"
+                            else -> "No hay canales visibles con tus ajustes"
+                        }
+                        val emptyBody = when {
+                            filter == LiveFilter.FAVORITES ->
+                                "Mantén OK en un canal del mosaico para fijarlo, o gestiónalos aquí."
+                            items.isEmpty() ->
+                                "Abre TV en vivo en Vision+ una vez: en cuanto cargue la lista, aparece aquí."
+                            else -> "Puedes volver a mostrar los canales que ocultaste."
+                        }
+                        val emptyAction = if (items.isNotEmpty()) "Gestionar canales" else "Abrir TV en vivo"
                         EmptyHint(
-                            title = if (onlyMexico) "No hay canales de México en la lista" else "Aún no hay canales en el Inicio",
-                            body = "Abre TV en vivo en Vision+ una vez: en cuanto cargue la lista, aparece aquí.",
-                            action = "Abrir TV en vivo",
-                            onAction = onOpenFull,
+                            title = emptyTitle,
+                            body = emptyBody,
+                            action = emptyAction,
+                            onAction = if (items.isNotEmpty()) onManageChannels else onOpenFull,
                         )
                     }
                 }
@@ -619,9 +711,11 @@ fun LiveSurface(
                         item = item,
                         height = metrics.channelHeight,
                         nowMs = nowMs,
+                        showEpg = config.display.showEpg,
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (item.code == firstCode) Modifier.focusRequester(entry) else Modifier),
+                        onLongClick = { onLongClick(item) },
                         onClick = { onOpen(item) },
                     )
                 }
@@ -1242,16 +1336,21 @@ fun CatalogSurface(
 @Composable
 fun AppsSurface(
     apps: List<AppEntry>,
+    recentApps: List<String>,
+    config: HomeConfig,
     metrics: HomeMetrics,
     onOpen: (AppEntry) -> Unit,
     onLongClick: (AppEntry) -> Unit,
     onSystemSettings: () -> Unit,
     onWifi: () -> Unit,
     onHomeSettings: () -> Unit,
+    onManage: () -> Unit,
     landing: FocusRequester? = null,
     upTarget: FocusRequester? = null,
 ) {
-    val firstPackage = apps.firstOrNull()?.packageName
+    val visible = remember(apps, config, recentApps) { visibleApps(apps, config, recentApps) }
+    val firstPackage = visible.firstOrNull()?.packageName
+    val hidden = config.hiddenApps.size
     CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollBringIntoView) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val columns = when {
@@ -1276,12 +1375,29 @@ fun AppsSurface(
                     Column(Modifier.fillMaxWidth()) {
                         SectionHeader(
                             title = "Apps",
-                            subtitle = "${apps.size} instaladas · mantén OK para fijar en el Inicio",
+                            subtitle = buildString {
+                                append("${visible.size} visibles")
+                                if (hidden > 0) append(" · $hidden ocultas")
+                                append(" · mantén OK para opciones")
+                            },
+                            actionLabel = "Gestionar",
+                            actionModifier = upTarget?.let { Modifier.focusProperties { up = it } } ?: Modifier,
+                            onAction = onManage,
                         )
                         Spacer(Modifier.height(6.dp))
                     }
                 }
-                gridItems(apps, key = { it.packageName }) { app ->
+                if (visible.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        EmptyHint(
+                            title = "Todas las apps están ocultas",
+                            body = "Puedes volver a mostrar las apps que quitaste desde Gestionar.",
+                            action = "Gestionar apps",
+                            onAction = onManage,
+                        )
+                    }
+                }
+                gridItems(visible, key = { it.packageName }) { app ->
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         AppTile(
                             app = app,

@@ -64,10 +64,13 @@ object HomeFeedStore {
     private const val LIVE_LIMIT = 400
 
     /**
-     * La guía se pide en paralelo para la primera pantalla y varias más: el mosaico del
-     * launcher enseña ~30 canales a la vez y antes solo los primeros 16 tenían AHORA.
+     * La guía cubre los 400 canales del mosaico con UNA petición masiva
+     * (`/v1/epg/bulk`). Si el servidor es viejo o el endpoint falla, se cae al
+     * camino por canal de siempre, acotado a los primeros 120 para no bloquear
+     * el arranque del launcher con 400 viajes HTTP.
      */
-    private const val EPG_CHANNELS = 120
+    private const val EPG_CHANNELS = 400
+    private const val EPG_FALLBACK_CHANNELS = 120
     private const val EPG_PARALLEL = 8
     private const val EPG_TIMEOUT_MS = 15_000L
     private const val SPORTS_LIMIT = 250
@@ -241,6 +244,7 @@ object HomeFeedStore {
         version = HomeContract.VERSION,
         generatedAt = System.currentTimeMillis(),
         profile = runCatching { ProfileStore.active(context).name }.getOrDefault(""),
+        profileId = runCatching { ProfileStore.active(context).id }.getOrDefault(""),
         profiles = runCatching { ProfileStore.profiles(context).size }.getOrDefault(1),
         online = NetworkMonitor.isOnline.value,
         appVersion = BuildConfig.VERSION_NAME,
@@ -475,16 +479,37 @@ object HomeFeedStore {
     }
 
     /**
-     * El EPG del VPS, para la primera pantalla del mosaico y varias más, en paralelo. El feed
-     * sin guía ya es útil; la guía llega unos segundos después y se reescribe. Con 8 consultas
-     * simultáneas, 120 canales no bloquean el arranque del launcher.
+     * La guía del VPS para el mosaico completo. Primero UNA petición masiva
+     * (`POST /v1/epg/bulk`, 400 canales); si el servidor es viejo o el endpoint
+     * falla, se cae al camino por canal de siempre (8 en paralelo, primeros 120).
+     * El feed sin guía ya es útil: la guía llega después y se reescribe.
      */
     private suspend fun fetchEpg(context: Context): Map<String, EpgWindow> = coroutineScope {
         val channels = uniqueChannels(context).take(EPG_CHANNELS)
         if (channels.isEmpty()) return@coroutineScope emptyMap()
         val now = System.currentTimeMillis()
+
+        val bulk = runCatching {
+            X4KApi.epgBulkFor(
+                context,
+                channels.map { it.url.removePrefix("xtvlive:") to it.name },
+            )
+        }.getOrDefault(emptyMap())
+        if (bulk.isNotEmpty()) {
+            val out = bulk.mapValues { (_, guide) ->
+                EpgWindow(
+                    now = guide.now,
+                    next = guide.next,
+                    startMs = guide.startMs,
+                    endMs = guide.endMs,
+                )
+            }
+            writeEpgCache(context, out)
+            return@coroutineScope out
+        }
+
         val gate = Semaphore(EPG_PARALLEL)
-        val wanted = channels.map { channel ->
+        val wanted = channels.take(EPG_FALLBACK_CHANNELS).map { channel ->
             async(Dispatchers.IO) {
                 gate.withPermit {
                     val code = channel.url.removePrefix("xtvlive:")

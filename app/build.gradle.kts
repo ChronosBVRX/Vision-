@@ -35,8 +35,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = 385
-        versionName = "2.5.148"
+        versionCode = 388
+        versionName = "2.5.149"
         ndk {
             // Solo ARM: el APK no empaqueta libs x86/x86_64 (los AAR traían credentials/
             // graphics.path de x86_64). En dispositivos x86_64 con traducción ARM (emulador

@@ -70,10 +70,15 @@ class HomeFeedWiringTest {
     @Test
     fun theGuideCoversTheLiveMosaicAndRefreshesFromTheProvider() {
         val store = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedStore.kt")
-        assertTrue("la guía cubre varias pantallas", store.contains("EPG_CHANNELS = 120"))
-        assertTrue("se pide en paralelo", store.contains("EPG_PARALLEL"))
+        assertTrue("la guía cubre los 400 canales del mosaico", store.contains("EPG_CHANNELS = 400"))
+        assertTrue("una sola petición masiva", store.contains("X4KApi.epgBulkFor("))
+        assertTrue("respaldo por canal si el servidor es viejo", store.contains("EPG_FALLBACK_CHANNELS = 120"))
+        assertTrue("se pide en paralelo como respaldo", store.contains("EPG_PARALLEL"))
         assertTrue("la ventana viaja al launcher", store.contains("startMs = guide?.startMs"))
         assertTrue("y también el fin", store.contains("endMs = guide?.endMs"))
+        val api = require("src/main/java/com/chronosbvrx/visionplus/data/xuper/X4KApi.kt")
+        assertTrue("el endpoint masivo del VPS", api.contains("/v1/epg/bulk"))
+        assertTrue("mapea ESPN/Star+ igual que el individual", api.contains("epgNameFor(code, name)"))
         val provider = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedProvider.kt")
         assertTrue("el provider mantiene la guía caliente", provider.contains("HomeFeedStore.refreshAsync(context)"))
     }

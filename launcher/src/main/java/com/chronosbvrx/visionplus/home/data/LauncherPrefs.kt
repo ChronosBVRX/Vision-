@@ -26,6 +26,54 @@ class LauncherPrefs(context: Context) {
     fun favorites(): Set<String> =
         prefs.getStringSet(KEY_FAVORITES, emptySet()).orEmpty().toSet()
 
+    /** La configuración del Inicio de un perfil; la primera vez migra las apps fijadas viejas. */
+    fun homeConfig(profileKey: String, aliases: List<String> = emptyList()): HomeConfig {
+        val key = configKey(profileKey)
+        val primaryRaw = prefs.getString(key, null)
+        val aliasRaw = aliases.asSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .flatMap { alias ->
+                sequenceOf(
+                    prefs.getString(configKey(alias), null),
+                    prefs.getString(legacyConfigKey(alias), null),
+                )
+            }
+            .firstOrNull { it != null }
+        val primary = HomeConfig.fromJson(primaryRaw, favorites())
+        val alias = aliasRaw?.let { HomeConfig.fromJson(it, favorites()) }
+        // Una build anterior pudo guardar un default bajo el nombre antes de que el perfil
+        // tuviera id estable. Si el alias sí tiene personalización, se rescata.
+        val chosen = chooseConfig(primary, alias)
+        if (chosen == alias) prefs.edit().putString(key, chosen.toJson()).apply()
+        return chosen
+    }
+
+    fun saveHomeConfig(profileKey: String, config: HomeConfig, aliases: List<String> = emptyList()) {
+        val key = configKey(profileKey)
+        val editor = prefs.edit().putString(key, config.toJson())
+        aliases.asSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .flatMap { alias -> sequenceOf(configKey(alias), legacyConfigKey(alias)) }
+            .filter { it != key }
+            .distinct()
+            .forEach { editor.remove(it) }
+        editor.apply()
+    }
+
+    private fun configKey(profileKey: String): String =
+        KEY_HOME_CONFIG_PREFIX + profileKey.trim().ifBlank { "principal" }
+            .lowercase()
+            .replace(Regex("[^a-z0-9_-]"), "_")
+            .take(48)
+
+    /** Clave de la primera versión (antes de normalizar a minúsculas). */
+    private fun legacyConfigKey(profileKey: String): String =
+        KEY_HOME_CONFIG_PREFIX + profileKey.trim().ifBlank { "principal" }
+            .replace(Regex("[^A-Za-z0-9_-]"), "_")
+            .take(48)
+
     /** Devuelve true si quedó fijada. */
     fun toggleFavorite(packageName: String): Boolean {
         val current = favorites().toMutableSet()
@@ -57,6 +105,7 @@ class LauncherPrefs(context: Context) {
     private companion object {
         const val KEY_RECENT = "recent_apps"
         const val KEY_FAVORITES = "favorite_apps"
+        const val KEY_HOME_CONFIG_PREFIX = "home_config_"
         const val KEY_TAB = "last_tab"
         const val KEY_DISMISSED_UPDATE = "dismissed_update"
         const val KEY_LAST_TAG = "last_release_tag"

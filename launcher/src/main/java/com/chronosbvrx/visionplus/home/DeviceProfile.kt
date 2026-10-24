@@ -9,6 +9,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.chronosbvrx.visionplus.home.data.LauncherDensity
 
 /**
  * El tamaño de todo lo que se pinta, calculado desde la altura REAL de la pantalla.
@@ -33,7 +34,7 @@ data class HomeMetrics(
 )
 
 /** Pura y testeable: la altura en dp manda sobre cualquier suposición del fabricante. */
-internal fun homeMetrics(screenHeightDp: Int): HomeMetrics {
+internal fun homeMetrics(screenHeightDp: Int, density: LauncherDensity = LauncherDensity.COMFORT): HomeMetrics {
     val h = screenHeightDp.coerceIn(360, 1200)
     val compact = h < 700
     val posterWidth = when {
@@ -42,7 +43,7 @@ internal fun homeMetrics(screenHeightDp: Int): HomeMetrics {
         h < 760 -> 116.dp
         else -> 140.dp
     }
-    return HomeMetrics(
+    val base = HomeMetrics(
         heroHeight = if (compact) (h * 0.46f).dp.coerceIn(196.dp, 300.dp) else 340.dp,
         posterWidth = posterWidth,
         posterHeight = posterWidth * 1.5f,
@@ -55,6 +56,19 @@ internal fun homeMetrics(screenHeightDp: Int): HomeMetrics {
         horizontalPadding = if (compact) 36.dp else 52.dp,
         titleSize = if (compact) 30 else 38,
         synopsisSize = if (compact) 12 else 14,
+    )
+    if (density == LauncherDensity.COMFORT) return base
+    val scale = if (density == LauncherDensity.CINEMA) 1.18f else 0.86f
+    return base.copy(
+        heroHeight = (base.heroHeight.value * if (density == LauncherDensity.CINEMA) 1.06f else 0.94f).dp,
+        posterWidth = (base.posterWidth.value * scale).dp,
+        posterHeight = (base.posterHeight.value * scale).dp,
+        continueWidth = (base.continueWidth.value * scale).dp,
+        continueHeight = (base.continueHeight.value * scale).dp,
+        channelWidth = (base.channelWidth.value * scale).dp,
+        channelHeight = (base.channelHeight.value * scale).coerceAtLeast(92f).dp,
+        appTile = (base.appTile.value * scale).coerceAtLeast(64f).dp,
+        gap = (base.gap.value * scale).dp,
     )
 }
 
@@ -83,10 +97,10 @@ class DeviceProfile(context: Context) {
 }
 
 @Composable
-fun rememberHomeMetrics(): HomeMetrics {
+fun rememberHomeMetrics(density: LauncherDensity = LauncherDensity.COMFORT): HomeMetrics {
     val configuration = LocalConfiguration.current
-    return remember(configuration.screenHeightDp) {
-        homeMetrics(configuration.screenHeightDp)
+    return remember(configuration.screenHeightDp, density) {
+        homeMetrics(configuration.screenHeightDp, density)
     }
 }
 

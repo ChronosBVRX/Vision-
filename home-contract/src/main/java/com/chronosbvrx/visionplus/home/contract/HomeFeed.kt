@@ -22,6 +22,8 @@ data class FeedMeta(
     val version: Int = HomeContract.VERSION,
     val generatedAt: Long = 0L,
     val profile: String = "",
+    /** Identidad estable del perfil: la personalización no depende del nombre. */
+    val profileId: String = "",
     val profiles: Int = 1,
     val online: Boolean = true,
     val appVersion: String = "",

@@ -66,19 +66,19 @@ enum class HomeTab(val key: String, val label: String) {
 
 /** La hora de la casa: centro de México, aunque la tele esté en otra zona. */
 @Composable
-fun rememberClockText(): String {
-    var text by remember { mutableStateOf(clockText()) }
-    LaunchedEffect(Unit) {
+fun rememberClockText(clock24h: Boolean = true): String {
+    var text by remember(clock24h) { mutableStateOf(clockText(clock24h = clock24h)) }
+    LaunchedEffect(clock24h) {
         while (true) {
             kotlinx.coroutines.delay(msToNextMinute() + 40L)
-            text = clockText()
+            text = clockText(clock24h = clock24h)
         }
     }
     return text
 }
 
-internal fun clockText(nowMs: Long = System.currentTimeMillis()): String =
-    SimpleDateFormat("HH:mm", Locale.US)
+internal fun clockText(nowMs: Long = System.currentTimeMillis(), clock24h: Boolean = true): String =
+    SimpleDateFormat(if (clock24h) "HH:mm" else "h:mm a", Locale.US)
         .apply { timeZone = TimeZone.getTimeZone("America/Mexico_City") }
         .format(Date(nowMs))
 
@@ -102,8 +102,10 @@ fun TopChrome(
     compact: Boolean = false,
     activeTabRequester: FocusRequester? = null,
     downTarget: FocusRequester? = null,
+    clock24h: Boolean = true,
+    showClock: Boolean = true,
 ) {
-    val clock = rememberClockText()
+    val clock = rememberClockText(clock24h)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -159,13 +161,15 @@ fun TopChrome(
             }
         }
         // Hora
-        Text(
-            clock,
-            color = HomeColors.TextDim,
-            style = MaterialTheme.typography.titleMedium,
-            letterSpacing = 0.8.sp,
-        )
-        Spacer(Modifier.width(if (compact) 14.dp else 20.dp))
+        if (showClock) {
+            Text(
+                clock,
+                color = HomeColors.TextDim,
+                style = MaterialTheme.typography.titleMedium,
+                letterSpacing = 0.8.sp,
+            )
+            Spacer(Modifier.width(if (compact) 14.dp else 20.dp))
+        }
         // Perfil
         ProfileChip(name = profile, compact = compact)
         Spacer(Modifier.width(8.dp))
