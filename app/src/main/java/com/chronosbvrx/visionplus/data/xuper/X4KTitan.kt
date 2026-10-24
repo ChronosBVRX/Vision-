@@ -327,6 +327,27 @@ object X4KTitan {
             loader?.let { return true }
             return try {
                 val app = context.applicationContext
+                // ¿El motor YA viene dentro del APK (`classes2/3/4.dex`, estilo Crystal)? Android
+                // lo dejó verificado al instalar: no hay nada que copiar ni verificar en runtime
+                // (era el origen del bug de ART en una ZTE). Solo se preparan las libs nativas.
+                val bundled = runCatching {
+                    Class.forName("yc.h", false, X4KTitan::class.java.classLoader)
+                }.isSuccess
+                if (bundled) {
+                    val libDir = extractNativeLibs(app, force = false)
+                    if (preloadEngineLibs(libDir)) {
+                        adoptLoader(X4KTitan::class.java.classLoader)
+                        runCatching { File(app.filesDir, ENGINE_VERIFY_FLAG).delete() }
+                        Log.i(
+                            TAG,
+                            "SDK X4K desde el APK (sin extraer): env=${envClass != null} " +
+                                "program=${programClass != null} view=${viewClass != null}",
+                        )
+                        com.chronosbvrx.visionplus.data.diag.Diagnostics.engine("cargado")
+                        return true
+                    }
+                    Log.w(TAG, "motor en el APK pero las libs no precargaron: se usa la copia de assets")
+                }
                 val revision = readRevision(app)
                 // Carpeta legada (`files/x4k`): el motor vive ahora en generaciones `x4k-rN`.
                 // Se libera en la primera apertura (17 MB en una tele con poco espacio).
@@ -547,6 +568,36 @@ object X4KTitan {
 
     private fun writeRevision(app: Context, revision: Int) {
         runCatching { File(app.filesDir, ENGINE_REVISION_FILE).writeText(revision.toString()) }
+    }
+
+    /**
+     * Precarga las librerías nativas del motor desde [libDir] por **ruta absoluta**, en orden de
+     * dependencias. Es obligatorio cuando las clases vienen del APK: `System.loadLibrary` usa el
+     * classloader de la app y el APK también trae las libs del motor legado (Magis) con los
+     * mismos nombres; precargar fija el build correcto (y si algo falla se cae a los assets).
+     */
+    private fun preloadEngineLibs(libDir: File): Boolean {
+        val order = listOf(
+            "libc++_shared.so",
+            "libtnet-3.1.14.so",
+            "libijksdl.so",
+            "libijkplayer.so",
+            "libijkffmpeg.so",
+            "libranger-jni.so",
+        )
+        for (name in order) {
+            val file = File(libDir, name)
+            if (!file.exists() || file.length() == 0L) {
+                Log.w(TAG, "lib del motor ausente: $name")
+                return false
+            }
+            val ok = runCatching { System.load(file.absolutePath) }.isSuccess
+            if (!ok) {
+                Log.w(TAG, "no pude precargar $name")
+                return false
+            }
+        }
+        return true
     }
 
     /**
