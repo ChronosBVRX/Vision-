@@ -114,6 +114,11 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     // Un Inicio de sistema siempre abre en Inicio (no en la última pestaña que se miró).
     var tab by rememberSaveable { mutableStateOf(HomeTab.HOME) }
     var commandCenter by remember { mutableStateOf(false) }
+    // Se recalcula al abrir el centro de control: si acaba de aceptar el rol, muestra el estado
+    // correcto y deja la puerta manual para cambiar al otro launcher.
+    val homeDefault = remember(commandCenter) {
+        if (commandCenter) appsRepo.isVisionHomeDefault() else false
+    }
     var searchOpen by remember { mutableStateOf(false) }
     var visionInstalled by remember { mutableStateOf(appsRepo.visionPlusInstalled()) }
     var canInstall by remember { mutableStateOf(HomeUpdate.canInstall(context)) }
@@ -475,6 +480,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         onSystemSettings = { appsRepo.openSystemSettings() },
                         onWifi = { appsRepo.openWifiSettings() },
                         onHomeSettings = { appsRepo.openHomeSettings() },
+                        onRequestHome = { appsRepo.requestHomeRole() },
                         onManage = { personalizePage = PersonalizePage.APPS },
                         landing = sectionLanding,
                         upTarget = tabLanding,
@@ -506,6 +512,11 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                 commandCenter = false
                 appsRepo.openHomeSettings()
             },
+            onRequestHome = {
+                commandCenter = false
+                appsRepo.requestHomeRole()
+            },
+            homeDefault = homeDefault,
             onUpdate = {
                 scope.launch { HomeUpdate.installLatest(context) }
             },

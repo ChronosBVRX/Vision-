@@ -1351,6 +1351,7 @@ fun AppsSurface(
     onSystemSettings: () -> Unit,
     onWifi: () -> Unit,
     onHomeSettings: () -> Unit,
+    onRequestHome: () -> Unit = {},
     onManage: () -> Unit,
     landing: FocusRequester? = null,
     upTarget: FocusRequester? = null,
@@ -1428,7 +1429,8 @@ fun AppsSurface(
                     listOf(
                         SystemAction("settings", "Ajustes de la tele", Icons.Rounded.Settings, onSystemSettings),
                         SystemAction("wifi", "Wi-Fi y red", Icons.Rounded.Wifi, onWifi),
-                        SystemAction("home", "Cambiar el Inicio", Icons.Rounded.Home, onHomeSettings),
+                        SystemAction("use-home", "Poner como Inicio", Icons.Rounded.Home, onRequestHome),
+                        SystemAction("home", "Cambiar el Inicio", Icons.Rounded.SettingsRemote, onHomeSettings),
                     ),
                     key = { it.id },
                 ) { action ->

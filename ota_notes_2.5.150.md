@@ -1,4 +1,10 @@
-# Vision+ 2.5.150 + Vision+ Home 1.0.12 — OFICIAL
+# Vision+ 2.5.150 + Vision+ Home 1.0.13 — OFICIAL
+
+**Poner Vision+ Home como Inicio, sin buscar en Ajustes**
+- Nuevo botón directo en el **centro de control** y en **Apps**: en Android 10 o superior abre la **ventana del sistema para elegir el launcher predeterminado**.
+- Se conserva **«Cambiar el Inicio (ajustes)»** para cuando quieras volver al launcher del sistema o al otro Inicio.
+- Si Vision+ Home ya es tu Inicio, el centro de control lo muestra y deja igualmente la puerta manual.
+- En equipos anteriores a Android 10 el sistema no tiene esa ventana: se abre el selector de Inicio de Ajustes, también sin buscar a mano entre menús.
 
 **Perfiles: renombra sin cambiar de perfil**
 - En la tele, pon el foco sobre cualquier perfil y aparece un **lápiz debajo**: ábrelo y se renombra ESE perfil sin entrar en él.

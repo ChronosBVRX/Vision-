@@ -73,6 +73,8 @@ fun CommandCenterDialog(
     appVersion: String = "",
     latestAppVersion: String = "",
     onUpdateVision: () -> Unit = {},
+    onRequestHome: () -> Unit = {},
+    homeDefault: Boolean = false,
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -146,6 +148,14 @@ fun CommandCenterDialog(
                     HomeButton(label = "Cambiar", onClick = onOpenVisionSettings, icon = null)
                 }
                 Spacer(Modifier.height(18.dp))
+                if (!homeDefault) {
+                    PanelAction(
+                        icon = Icons.Rounded.Home,
+                        title = "Poner Vision+ Home como Inicio",
+                        detail = "Abre la ventana del sistema para elegirlo",
+                        onClick = onRequestHome,
+                    )
+                }
                 if (!visionInstalled) {
                     PanelAction(
                         icon = Icons.Rounded.Download,
@@ -191,9 +201,13 @@ fun CommandCenterDialog(
                     onClick = onSystemSettings,
                 )
                 PanelAction(
-                    icon = Icons.Rounded.Home,
-                    title = "Cambiar el Inicio",
-                    detail = "Elegir Vision+ Home o el Inicio del sistema",
+                    icon = Icons.Rounded.Settings,
+                    title = if (homeDefault) "Vision+ Home ya es tu Inicio" else "Cambiar el Inicio (ajustes)",
+                    detail = if (homeDefault) {
+                        "Abre los ajustes para cambiar al Inicio del sistema"
+                    } else {
+                        "Elige Vision+ Home o el Inicio del sistema"
+                    },
                     onClick = onHomeSettings,
                 )
                 UpdateAction(onUpdate = onUpdate)

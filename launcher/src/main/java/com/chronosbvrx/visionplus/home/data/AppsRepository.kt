@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.provider.Settings
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -66,9 +67,47 @@ class AppsRepository(context: Context) {
     /** Ajustes de Android: la puerta de salida que un launcher nunca debe esconder. */
     fun openSystemSettings(): Boolean = open(Intent(Settings.ACTION_SETTINGS))
 
-    /** El selector de Inicio del sistema (aquí se elige Vision+ Home como pantalla de inicio). */
+    /** La puerta MANUAL: ajustes de Inicio para cambiar a Vision+ Home o al launcher del sistema. */
     fun openHomeSettings(): Boolean =
-        open(Intent(Settings.ACTION_HOME_SETTINGS)) || open(Intent(Settings.ACTION_SETTINGS))
+        open(Intent(Settings.ACTION_HOME_SETTINGS)) ||
+            open(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) ||
+            open(Intent(Settings.ACTION_SETTINGS))
+
+    /** True si Vision+ Home ya es el launcher predeterminado del equipo. */
+    fun isVisionHomeDefault(): Boolean {
+        if (Build.VERSION.SDK_INT >= 29) return HomeRoleApi29.isHeld(app)
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        return runCatching {
+            pm.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == app.packageName
+        }.getOrDefault(false)
+    }
+
+    /**
+     * La acción INTUITIVA: en Android 10+ pide el rol de Inicio al sistema, que abre la ventana
+     * para elegir el launcher predeterminado. Si el equipo no tiene RoleManager (Android 9 o
+     * anteriores) o el rol no está disponible, cae al selector de Inicio de Ajustes. En todos
+     * los casos queda [openHomeSettings] como opción manual.
+     */
+    fun requestHomeRole(): Boolean {
+        val action = if (Build.VERSION.SDK_INT >= 29) {
+            homeRoleAction(
+                Build.VERSION.SDK_INT,
+                roleAvailable = HomeRoleApi29.isAvailable(app),
+                roleHeld = HomeRoleApi29.isHeld(app),
+            )
+        } else {
+            homeRoleAction(Build.VERSION.SDK_INT, roleAvailable = false, roleHeld = false)
+        }
+        return when (action) {
+            HomeRoleAction.REQUEST_ROLE -> {
+                val intent = HomeRoleApi29.requestIntent(app)
+                if (intent != null && open(intent)) true else openHomeSettings()
+            }
+            // Ya es el Inicio: esta puerta deja cambiar al otro sin buscar en Ajustes.
+            HomeRoleAction.ALREADY_DEFAULT -> openHomeSettings()
+            HomeRoleAction.OPEN_SETTINGS -> openHomeSettings()
+        }
+    }
 
     fun openWifiSettings(): Boolean = open(Intent(Settings.ACTION_WIFI_SETTINGS))
 
