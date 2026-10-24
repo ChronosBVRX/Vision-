@@ -12,6 +12,8 @@ import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -1271,9 +1273,14 @@ object X4KApi {
     ): VodMedia? = withContext(Dispatchers.IO) {
         guarded {
             val prefetchCid = xtvPortalId(contentId)
+            val startedAt = android.os.SystemClock.uptimeMillis()
             vodPrefetch.remove(prefetchCid)?.let {
                 if (System.currentTimeMillis() - it.atMs < PREFETCH_TTL_MS) {
                     Log.i(TAG, "play adelantado desde la ficha: $prefetchCid (${it.media.durationMs} ms)")
+                    com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                        "PLAYBACK_PREP", "cached=true totalMs=0" +
+                            " desdeFicha=${System.currentTimeMillis() - it.atMs}ms",
+                    )
                     return@guarded it.media
                 }
             }
@@ -1290,20 +1297,39 @@ object X4KApi {
                     "PLAYER_HEAL_APPLIED", "sesion+slb frescas",
                 )
             }
-            ensureEngineData(context, force = healed)
             val cid = xtvPortalId(contentId)
             val sid = xtvPortalId(seriesId)
-            // La ficha editorial solo se pide si aún no sabemos la duración: en cajas
-            // lentas cada llamada cuesta 0.2-0.7 s y el reproductor la recupera en
-            // segundo plano para el rótulo. Con duración conocida, directo a la licencia.
+            // La sesión/SLB y la ficha del título NO dependen entre sí. En una caja de TV cada
+            // llamada cuesta 0.2-0.7 s: hacerlas en serie regalaba una ida y vuelta en cada
+            // reproducción. Se lanzan juntas y se esperan antes de pedir la licencia (el
+            // `startPlayVOD` sí necesita la sesión ya resuelta).
+            var slbMs = 0L
+            var metaMs = 0L
             var item: JSONObject? = null
-            if (fallbackDurationMs <= 0L) {
-                // The editorial card carries the true running time; a flaky network gets a second try.
-                item = itemInfo(context, cid)
-                if (item == null) {
-                    kotlinx.coroutines.delay(800)
-                    item = itemInfo(context, cid)
+            kotlinx.coroutines.coroutineScope {
+                val slb = async {
+                    val t = android.os.SystemClock.uptimeMillis()
+                    runCatching { ensureEngineData(context, force = healed) }
+                    slbMs = android.os.SystemClock.uptimeMillis() - t
                 }
+                // La ficha editorial solo se pide si aún no sabemos la duración: en cajas
+                // lentas cada llamada cuesta 0.2-0.7 s y el reproductor la recupera en
+                // segundo plano para el rótulo. Con duración conocida, directo a la licencia.
+                val meta = if (fallbackDurationMs <= 0L) async {
+                    val t = android.os.SystemClock.uptimeMillis()
+                    // The editorial card carries the true running time; a flaky network gets a second try.
+                    val first = itemInfo(context, cid)
+                    val out = first ?: run {
+                        kotlinx.coroutines.delay(800)
+                        itemInfo(context, cid)
+                    }
+                    metaMs = android.os.SystemClock.uptimeMillis() - t
+                    out
+                } else {
+                    null
+                }
+                slb.await()
+                item = meta?.await()
             }
             var durMs = extractDurationMs(item)
             // Los capítulos de serie no suelen traer duración propia: heredar de la ficha de la serie.
@@ -1322,6 +1348,7 @@ object X4KApi {
                 durMs = fallbackDurationMs
             }
             var medias: JSONArray? = null
+            val licenseStart = android.os.SystemClock.uptimeMillis()
             for (type in listOf("2", "1")) {
                 var d = runCatching {
                     callWithSession(context, "/api/portalCore/v10/startPlayVOD") { token ->
@@ -1372,6 +1399,17 @@ object X4KApi {
                 }
             }
             val m = medias ?: return@guarded null
+            val totalMs = android.os.SystemClock.uptimeMillis() - startedAt
+            val licenseMs = android.os.SystemClock.uptimeMillis() - licenseStart
+            // Solo se reporta lo que se SIENTE lento: el desglose dice cuál de las fases se
+            // come el tiempo en cada equipo (antes se adivinaba).
+            if (totalMs > 2_500L) {
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "PLAYBACK_PREP",
+                    "cached=false slbMs=$slbMs metaMs=$metaMs licenseMs=$licenseMs " +
+                        "totalMs=$totalMs healed=$healed",
+                )
+            }
             VodMedia(
                 mediasJson = m.toString(),
                 durationMs = durMs,

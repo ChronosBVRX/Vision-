@@ -61,6 +61,13 @@ internal const val ENGINE_MANIFEST_NAME = "engine-manifest.txt"
 /** Archivo con la generación extraída: una RUTA de DEX nueva fuerza artefactos ART nuevos. */
 internal const val ENGINE_REVISION_FILE = "x4k-rev"
 
+/**
+ * Marca de "hay que verificar el contenido": se enciende cuando el motor falló (o se reparó)
+ * y se apaga en cuanto una carga verifica bien. Así los equipos sanos NO leen 17 MB de hash en
+ * cada arranque del reproductor (en una caja lenta eso era hasta 1 s antes del primer cuadro).
+ */
+internal const val ENGINE_VERIFY_FLAG = "x4k-verify"
+
 /** Tope de generaciones; al llegar aquí se vuelve a 0 (la carpeta vieja se borra igual). */
 internal const val ENGINE_REVISION_MAX = 20
 
@@ -332,6 +339,9 @@ object X4KTitan {
                 val appVersion = BuildConfig.VERSION_CODE
                 // Un motor sellado por otra versión de la app pudo cambiar: se re-extrae.
                 val staleEngine = seal.version != appVersion
+                // Solo se hashea el contenido si hay una marca de fallo previo (o si el sello
+                // no trae huella); en régimen sano manda el tamaño y no se leen 17 MB.
+                val verifyContent = File(app.filesDir, ENGINE_VERIFY_FLAG).exists()
                 val sizes = LinkedHashMap<String, Long>()
                 val hashes = LinkedHashMap<String, String>()
                 val paths = ArrayList<String>()
@@ -339,9 +349,11 @@ object X4KTitan {
                 DEX_ASSETS.forEachIndexed { index, asset ->
                     val file = File(workDir, "sdk-$index.dex")
                     val expectedSha = seal.hashes[file.name]
-                    // Se hashea SOLO si el sello trae huella (motor sellado por esta versión):
-                    // 17 MB en el arranque del proceso `:x4k`, nunca en cada reproducción.
-                    val actualSha = if (file.exists() && expectedSha != null) sha256Of(file) else null
+                    val actualSha = if (verifyContent && file.exists() && expectedSha != null) {
+                        sha256Of(file)
+                    } else {
+                        null
+                    }
                     val wasCorrupt = engineFileWasCorrupt(
                         file.exists(), file.length(), seal.version, appVersion, seal.sizes, file.name,
                         expectedSha, actualSha,
@@ -354,9 +366,9 @@ object X4KTitan {
                         if (expectedSha != null && actualSha != null && expectedSha != actualSha) {
                             copyMismatch = true
                         }
-                        if (!copyAssetAtomically(app, asset, file)) {
-                            throw java.io.IOException("no se pudo extraer $asset")
-                        }
+                        // El sha se calcula MIENTRAS se copia: sellar no cuesta una lectura extra.
+                        val copiedSha = copyAssetAtomically(app, asset, file)
+                            ?: throw java.io.IOException("no se pudo extraer $asset")
                         if (wasCorrupt) {
                             val why = if (expectedSha != null && actualSha != null && expectedSha != actualSha) {
                                 "contenido distinto"
@@ -368,10 +380,14 @@ object X4KTitan {
                                 "ENGINE_DEX_MISMATCH", "${file.name} $why (${file.length()} B)",
                             )
                         }
+                        file.setReadOnly()
+                        sizes[file.name] = file.length()
+                        hashes[file.name] = copiedSha
+                    } else {
+                        file.setReadOnly()
+                        sizes[file.name] = file.length()
+                        hashes[file.name] = actualSha ?: expectedSha ?: ""
                     }
-                    file.setReadOnly()
-                    sizes[file.name] = file.length()
-                    hashes[file.name] = actualSha ?: sha256Of(file) ?: ""
                     paths += file.absolutePath
                 }
                 // El sello se escribe SOLO cuando los tres DEX quedaron copiados y medidos: si
@@ -404,6 +420,8 @@ object X4KTitan {
                     memoryLoader(app) ?: throw it
                 }
                 adoptLoader(cl)
+                // Verificó bien: se apaga la marca y los próximos arranques no leen 17 MB.
+                runCatching { File(app.filesDir, ENGINE_VERIFY_FLAG).delete() }
                 // Autocomprobación del espacio de nombres: si una clase del motor la sirve
                 // nuestro APK, se reporta AQUÍ (antes del crash del reproductor).
                 val leaks = leakedEngineNames(cl)
@@ -499,6 +517,8 @@ object X4KTitan {
         runCatching {
             val app = context.applicationContext
             val revision = readRevision(app)
+            // La próxima carga verifica el contenido (por si la copia quedó dañada).
+            runCatching { File(app.filesDir, ENGINE_VERIFY_FLAG).writeText("1") }
             val workDir = File(app.filesDir, engineDirName(revision))
             val seal = parseEngineSeal(
                 runCatching { File(workDir, ENGINE_MANIFEST_NAME).readText() }.getOrDefault("")
@@ -531,17 +551,21 @@ object X4KTitan {
 
     /**
      * Copia un asset a [target] sin dejar nunca un archivo a medias: se escribe en
-     * `name.part`, se fuerza a disco y solo entonces se renombra (atómico en el mismo
+     * `name.part<pid>`, se fuerza a disco y solo entonces se renombra (atómico en el mismo
      * sistema de archivos). Una copia interrumpida deja el `.part`, no el archivo bueno.
+     *
+     * Devuelve el **sha256** de lo copiado (se calcula en la misma pasada, sin leer otra vez)
+     * o `null` si la copia falló.
      */
-    private fun copyAssetAtomically(app: Context, asset: String, target: File): Boolean {
-        val dir = target.parentFile ?: return false
+    private fun copyAssetAtomically(app: Context, asset: String, target: File): String? {
+        val dir = target.parentFile ?: return null
         dir.mkdirs()
         // El sufijo con el pid evita que dos procesos del mismo UID escriban el mismo `.part`.
         val tmp = File(dir, target.name + ".part" + android.os.Process.myPid())
         runCatching { tmp.delete() }
         return try {
             var copied = 0L
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
             app.assets.open(asset).use { input ->
                 tmp.outputStream().use { output ->
                     val buffer = ByteArray(64 * 1024)
@@ -549,6 +573,7 @@ object X4KTitan {
                         val read = input.read(buffer)
                         if (read <= 0) break
                         output.write(buffer, 0, read)
+                        digest.update(buffer, 0, read)
                         copied += read
                     }
                     output.flush()
@@ -557,20 +582,20 @@ object X4KTitan {
             }
             if (copied <= 0L) {
                 runCatching { tmp.delete() }
-                false
+                null
             } else {
                 runCatching { target.delete() }
                 if (tmp.renameTo(target)) {
-                    true
+                    sha256Of(digest.digest())
                 } else {
                     runCatching { tmp.delete() }
-                    false
+                    null
                 }
             }
         } catch (e: Exception) {
             Log.w(TAG, "no se pudo extraer $asset: ${e.message}")
             runCatching { tmp.delete() }
-            false
+            null
         }
     }
 
@@ -598,7 +623,7 @@ object X4KTitan {
         LIB_NAMES.forEach { name ->
             val out = File(libDir, name)
             if (!out.exists() || out.length() == 0L) {
-                if (!copyAssetAtomically(app, "x4k/lib/$abi/$name", out)) {
+                if (copyAssetAtomically(app, "x4k/lib/$abi/$name", out) == null) {
                     Log.w(TAG, "lib $name no disponible")
                 }
             }
@@ -695,37 +720,53 @@ object X4KTitan {
         return routingProxy("wc.a") to routingProxy("wc.b")
     }
 
+    /** Cuánto tardó el último arranque real del motor (0 si ya estaba caliente). */
+    @Volatile
+    var lastBootMs: Long = 0L
+        private set
+
     /** Boots the engine: `yc.h.m.a().r(workPath, callbacks...)`. */
     fun boot(context: Context): Boolean {
-        if (booted) return true
+        if (booted) {
+            lastBootMs = 0L
+            return true
+        }
         synchronized(this) {
-            if (booted) return true
-            if (bootOnce(context)) return true
-            if (!linkageFailure) return false
-            // El DEX extraído no verifica en ESTE equipo. Se repara en dos pasos, de lo más
-            // barato a lo más radical:
-            //  1. re-extraer en una GENERACIÓN nueva (ruta de DEX nueva ⇒ ART no reutiliza su
-            //     vdex/oat) y limpiar los artefactos de ART del equipo;
-            //  2. cargar los DEX en memoria (sin archivos ni artefactos: la última palanca).
-            linkageFailure = false
-            if (healBudget <= 0) return false
-            healBudget -= 1
-            healExtracted(context)
-            if (bootOnce(context)) return true
-            if (!linkageFailure) return false
-            linkageFailure = false
-            Log.w(TAG, "motor: reintento final con los DEX en memoria")
-            val memory = memoryLoader(context.applicationContext) ?: return false
-            runCatching { adoptLoader(memory) }.getOrElse {
-                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-                    "ENGINE_VERIFY_FAIL", "memoria: ${it.javaClass.simpleName}: ${it.message}",
-                )
-                return false
+            if (booted) {
+                lastBootMs = 0L
+                return true
             }
-            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-                "ENGINE_MEMORY_OK", "motor cargado con los DEX en memoria",
-            )
-            return bootOnce(context)
+            val started = android.os.SystemClock.uptimeMillis()
+            try {
+                if (bootOnce(context)) return true
+                if (!linkageFailure) return false
+                // El DEX extraído no verifica en ESTE equipo. Se repara en dos pasos, de lo más
+                // barato a lo más radical:
+                //  1. re-extraer en una GENERACIÓN nueva (ruta de DEX nueva ⇒ ART no reutiliza su
+                //     vdex/oat) y limpiar los artefactos de ART del equipo;
+                //  2. cargar los DEX en memoria (sin archivos ni artefactos: la última palanca).
+                linkageFailure = false
+                if (healBudget <= 0) return false
+                healBudget -= 1
+                healExtracted(context)
+                if (bootOnce(context)) return true
+                if (!linkageFailure) return false
+                linkageFailure = false
+                Log.w(TAG, "motor: reintento final con los DEX en memoria")
+                val memory = memoryLoader(context.applicationContext) ?: return false
+                runCatching { adoptLoader(memory) }.getOrElse {
+                    com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                        "ENGINE_VERIFY_FAIL", "memoria: ${it.javaClass.simpleName}: ${it.message}",
+                    )
+                    return false
+                }
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "ENGINE_MEMORY_OK", "motor cargado con los DEX en memoria",
+                )
+                return bootOnce(context)
+            } finally {
+                lastBootMs = android.os.SystemClock.uptimeMillis() - started
+            }
         }
     }
 
@@ -797,6 +838,9 @@ object X4KTitan {
         entryClass = null
         viewClass = null
         val app = context.applicationContext
+        // A partir de aquí se verifica el contenido en cada arranque hasta que una carga
+        // vuelva a verificar bien.
+        runCatching { File(app.filesDir, ENGINE_VERIFY_FLAG).writeText("1") }
         // Todas las generaciones (y la carpeta legada `x4k`): el motor se estrena de cero.
         // OJO: solo directorios — `x4k-rev` es el archivo de la generación y no se borra.
         app.filesDir?.listFiles()?.forEach { dir ->

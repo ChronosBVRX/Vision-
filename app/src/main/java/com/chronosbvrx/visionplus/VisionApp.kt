@@ -21,11 +21,12 @@ import coil.ImageLoaderFactory
 class VisionApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
+        val mainProcess = isMainProcess()
+        // `:x4k` es el proceso del REPRODUCTOR y de las descargas: aquí solo va lo que el motor
+        // necesita. Los avisos y el modo niños son de la interfaz (proceso principal) y la
+        // config remota se lee de la caché al primer `flag()` sin abrir red: en una caja de TV
+        // cada milisegundo antes del motor se nota al dar Play.
         com.chronosbvrx.visionplus.data.offline.OfflineRegistry.init(this)
-        // Avisos locales (capítulos nuevos + partidos): canal de notificación.
-        com.chronosbvrx.visionplus.data.notify.ReminderKit.ensureChannel(this)
-        // Modo niños: restaura el bloqueo si quedó activo (el PIN vive hasheado).
-        com.chronosbvrx.visionplus.data.kids.KidsMode.init(this)
         // Identidad propia del portal (pool del servidor): cada proceso la carga en
         // memoria una vez; sin slot se sigue con la identidad compartida (legado).
         com.chronosbvrx.visionplus.data.xuper.X4KApi.initSlots(this)
@@ -33,11 +34,15 @@ class VisionApp : Application(), ImageLoaderFactory {
         // Corre también en `:x4k` (crashes del reproductor) y encola ahí; la subida
         // la hace el proceso principal para no duplicar envíos.
         com.chronosbvrx.visionplus.data.diag.Diagnostics.init(this)
-        // Configuración remota (Fase 2): kill-switches que el servidor puede activar sin OTA.
-        com.chronosbvrx.visionplus.data.config.RemoteConfig.init(this)
-        // El puente de progreso offline solo vive en el proceso principal: el `:x4k`
-        // emite, el principal escucha. Registrarlo en `:x4k` duplicaría eventos.
-        if (isMainProcess()) {
+        if (mainProcess) {
+            // Avisos locales (capítulos nuevos + partidos): canal de notificación.
+            com.chronosbvrx.visionplus.data.notify.ReminderKit.ensureChannel(this)
+            // Modo niños: restaura el bloqueo si quedó activo (el PIN vive hasheado).
+            com.chronosbvrx.visionplus.data.kids.KidsMode.init(this)
+            // Configuración remota (Fase 2): kill-switches que el servidor puede activar sin OTA.
+            com.chronosbvrx.visionplus.data.config.RemoteConfig.init(this)
+            // El puente de progreso offline solo vive en el proceso principal: el `:x4k` emite,
+            // el principal escucha. Registrarlo en `:x4k` duplicaría eventos.
             runCatching {
                 com.chronosbvrx.visionplus.data.offline.OfflineProgressReceiver.register(this)
             }

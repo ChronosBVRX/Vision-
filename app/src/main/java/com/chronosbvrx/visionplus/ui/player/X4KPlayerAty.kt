@@ -3774,6 +3774,18 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** Al primer cuadro: reanuda lo pedido desde Inicio, o pregunta si quedó a medias. */
     private fun onFirstFrame() {
+        // Cuánto se sintió desde el toque hasta el primer cuadro, y cuánto fue motor: en una
+        // caja de TV es el dato que dice si el costo está en el portal, en el arranque del
+        // motor o en la señal. Solo se reporta lo lento (>3 s) para no llenar la telemetría.
+        runCatching {
+            val firstFrameMs = System.currentTimeMillis() - startedAtMs
+            if (startedAtMs > 0L && firstFrameMs > 3_000L) {
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "PLAYER_START",
+                    "firstFrameMs=$firstFrameMs bootMs=${com.chronosbvrx.visionplus.data.xuper.X4KTitan.lastBootMs} live=$liveMode",
+                )
+            }
+        }
         // El motor pintó: la racha de fallos silenciosos vuelve a cero (auto-reparado).
         com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.noteSuccess(this)
         if (liveMode) return
