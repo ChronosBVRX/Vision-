@@ -2,3 +2,6 @@
 # El contrato se serializa con org.json (reflexión nativa del framework), así que sus DTOs
 # deben conservarse con sus nombres tal cual los lee el launcher.
 -keep class com.chronosbvrx.visionplus.home.contract.** { *; }
+
+# RoleManager (API 29) se aísla para que Android 9 nunca lo verifique al cargar el launcher.
+-keep class com.chronosbvrx.visionplus.home.data.HomeRoleApi29 { *; }
