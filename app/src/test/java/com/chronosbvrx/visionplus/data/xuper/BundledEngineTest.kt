@@ -23,11 +23,10 @@ class BundledEngineTest {
     @Test
     fun theAppUsesTheBundledClassesWhenTheApkCarriesThem() {
         val titan = read("src/main/java/com/chronosbvrx/visionplus/data/xuper/X4KTitan.kt")
-        // Kill-switch: por defecto APAGADO hasta que el motor en el APK esté probado en equipos
-        // reales (en un Chromecast murió sin excepción Java).
+        // Kill-switch encendido por defecto: el camino nuevo ya está validado en Chromecast.
         assertTrue(
             "falta la bandera engine_bundled",
-            titan.contains("flag(app, \"engine_bundled\", false)"),
+            titan.contains("flag(app, \"engine_bundled\", true)"),
         )
         assertTrue(
             "no se detecta el motor dentro del APK",
@@ -40,29 +39,48 @@ class BundledEngineTest {
         // El respaldo a assets debe seguir existiendo.
         assertTrue("se perdió el respaldo de assets", titan.contains("engineFileNeedsExtraction"))
         assertTrue("se perdió el cargador aislado", titan.contains("EngineClassLoader("))
+        // Precargar las libs fue justo lo que rompió el Chromecast: `libranger-jni.so` no tiene
+        // SONAME y Android acababa cargando la copia del motor legado.
+        assertTrue("no debe precargarse nada a mano", !titan.contains("preloadEngineLibs"))
     }
 
     @Test
-    fun theNativeLibsArePreloadedInDependencyOrder() {
-        val titan = read("src/main/java/com/chronosbvrx/visionplus/data/xuper/X4KTitan.kt")
-        val preload = titan.substringAfter("private fun preloadEngineLibs")
-        // El APK también trae las libs del motor legado con los MISMOS nombres: si no se
-        // precargan éstas, `System.loadLibrary` resolvería el build equivocado.
-        val order = listOf(
-            "libc++_shared.so",
-            "libtnet-3.1.14.so",
-            "libijksdl.so",
-            "libijkplayer.so",
-            "libijkffmpeg.so",
+    fun theNativeLibsInTheApkAreTheGoodEngine() {
+        val abis = listOf("arm64-v8a", "armeabi-v7a")
+        val libs = listOf(
             "libranger-jni.so",
+            "libijkffmpeg.so",
+            "libijkplayer.so",
+            "libijksdl.so",
+            "libtnet-3.1.14.so",
+            "libc++_shared.so",
         )
-        var last = -1
-        order.forEach { name ->
-            val at = preload.indexOf("\"$name\"")
-            assertTrue("falta $name en la precarga", at > last)
-            last = at
+        abis.forEach { abi ->
+            libs.forEach { name ->
+                val packed = File("src/main/jniLibs/$abi/$name")
+                val original = File("src/main/assets/x4k/lib/$abi/$name")
+                assertTrue("falta $name en jniLibs/$abi", packed.exists())
+                assertTrue("falta $name en assets/x4k/$abi", original.exists())
+                // Mismo build byte a byte: si vuelve el del motor legado, esto falla.
+                org.junit.Assert.assertEquals(
+                    "jniLibs/$abi/$name no es el build del motor X4K",
+                    original.length(),
+                    packed.length(),
+                )
+            }
         }
-        assertTrue("no se carga por ruta absoluta", preload.contains("System.load(file.absolutePath)"))
+    }
+
+    @Test
+    fun theLegacyEngineCannotLoadTheGoodLibraries() {
+        val titanSdk = read("src/main/java/com/chronosbvrx/visionplus/data/xuper/TitanSdk.kt")
+        // El motor legado se deja inerte: si cargara, usaría las libs buenas con su DEX viejo.
+        assertTrue("el motor legado sigue cargando", titanSdk.contains("MOTOR LEGADO RETIRADO"))
+        assertTrue(
+            "load() debe devolver false de inmediato",
+            titanSdk.contains("fun load(context: Context): Boolean {") &&
+                titanSdk.substringAfter("fun load(context: Context): Boolean {").trimStart().startsWith("// MOTOR LEGADO RETIRADO"),
+        )
     }
 
     @Test

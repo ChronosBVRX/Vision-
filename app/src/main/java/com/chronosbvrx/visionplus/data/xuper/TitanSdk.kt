@@ -62,6 +62,16 @@ object TitanSdk {
 
     /** Extracts and loads the SDK once; safe to call from anywhere. */
     fun load(context: Context): Boolean {
+        // MOTOR LEGADO RETIRADO (2.5.137). Sus librerías nativas salieron de `lib/` para dejar
+        // sitio al motor X4K: comparten nombres (`libranger-jni.so`, `libijk*`) y `libranger-jni`
+        // NO tiene SONAME, así que Android cargaba la copia equivocada y su `JNI_OnLoad` tumbaba
+        // la reproducción en el Chromecast. Este motor ya no se usa (todas las refs se sirven
+        // por XTV); se deja inerte para que no pueda cargar las libs del motor bueno.
+        return false
+    }
+
+    @Suppress("unused")
+    private fun loadLegacy(context: Context): Boolean {
         loader?.let { return true }
         synchronized(this) {
             loader?.let { return true }
