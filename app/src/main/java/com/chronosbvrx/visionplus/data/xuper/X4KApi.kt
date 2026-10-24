@@ -1765,6 +1765,8 @@ object X4KApi {
         markersJson: String = "",
     ) {
         val p = prefs(context)
+        // A partir de este instante el motor manda: el trabajo de fondo del catálogo espera.
+        com.chronosbvrx.visionplus.data.PlaybackFocus.launched()
         var entries = p.getString(K_ENTRIES, "").orEmpty()
         var params = p.getString(K_PARAMS, "").orEmpty()
         // Una renovación a media preparación borra entries/params; sin SLB el motor no

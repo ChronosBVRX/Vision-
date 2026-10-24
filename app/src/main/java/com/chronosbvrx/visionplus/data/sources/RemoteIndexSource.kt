@@ -35,10 +35,30 @@ object RemoteIndexSource {
     /** Titles per category fetched for browsing/searching on the device. */
     private const val FILMS_PER_CATEGORY = 100
 
+    /**
+     * En Smart TV / equipos modestos el mismo índice se hace con menos títulos por fila.
+     * Medido en una TCL de 2 GB: leer el índice de 100 por fila costaba **12.4 s** de CPU
+     * (`cacheMs=12436`) y competía con el arranque del motor. Con 24 baja a ~1/4; el resto se
+     * pide bajo demanda con `/v1/category` (botón «Ver más»).
+     */
+    private const val TV_FILMS_PER_CATEGORY = 24
+
+    /** Títulos por fila según el equipo (puro, testeable). */
+    internal fun filmsPerCategoryFor(isTelevision: Boolean, lowEnd: Boolean): Int =
+        if (isTelevision || lowEnd) TV_FILMS_PER_CATEGORY else FILMS_PER_CATEGORY
+
+    private fun effectiveLimit(context: Context): Int = filmsPerCategoryFor(
+        com.chronosbvrx.visionplus.DeviceKind.isTelevision(context),
+        com.chronosbvrx.visionplus.DevicePerformance.isLowEndDevice(context),
+    )
+
     private const val PREFS = "catalog_remote"
     private const val K_PAYLOAD = "payload_json"
     private const val K_VERSION = "version"
     private const val K_AT = "rows_at"
+
+    /** Cuántos títulos por fila se guardaron: si cambia (modo TV), se pide el índice de nuevo. */
+    private const val K_LIMIT = "films_limit"
 
     /** El índice vive en un archivo, no en SharedPreferences: con varios MB, el XML de prefs
      *  se carga completo en memoria al primer acceso y causaba ANR/jank en el arranque. */
@@ -109,7 +129,12 @@ object RemoteIndexSource {
             return@withContext cached
         }
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val fetched = runCatching { download(prefs.getInt(K_VERSION, 0), cached) }
+        val limit = effectiveLimit(context)
+        // Si el equipo cambió de peso (o se actualizó la app), el índice guardado se hizo con
+        // otra medida: se pide completo (`since=0`) para no quedarse con el de 100 por fila.
+        val storedLimit = prefs.getInt(K_LIMIT, FILMS_PER_CATEGORY)
+        val since = if (storedLimit == limit) prefs.getInt(K_VERSION, 0) else 0
+        val fetched = runCatching { download(since, cached, limit) }
             .onFailure {
                 com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
                     "INDEX_FETCH_FAIL", "${it.javaClass.simpleName}: ${it.message}",
@@ -127,6 +152,7 @@ object RemoteIndexSource {
             prefs.edit()
                 .putInt(K_VERSION, fetched.first)
                 .putLong(K_AT, System.currentTimeMillis())
+                .putInt(K_LIMIT, limit)
                 .apply()
         }
         Log.i(TAG, "índice remoto v${fetched.first}: ${fetched.second.size} categorías")
@@ -145,8 +171,8 @@ object RemoteIndexSource {
         return rows
     }
 
-    private fun download(since: Int, cached: List<CatalogRow>): Pair<Int, List<CatalogRow>> {
-        val connection = (URL("$BASE_URL/v1/index?limitFilms=$FILMS_PER_CATEGORY&since=$since")
+    private fun download(since: Int, cached: List<CatalogRow>, limit: Int = FILMS_PER_CATEGORY): Pair<Int, List<CatalogRow>> {
+        val connection = (URL("$BASE_URL/v1/index?limitFilms=$limit&since=$since")
             .openConnection() as HttpURLConnection).apply {
             connectTimeout = 12_000
             readTimeout = 30_000

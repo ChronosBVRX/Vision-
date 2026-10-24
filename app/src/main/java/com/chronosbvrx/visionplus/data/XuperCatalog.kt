@@ -159,6 +159,7 @@ class XuperCatalog(context: Context) {
             // la pantalla de inicio conserva las filas curadas mientras se descarga el índice para Búsqueda.
             CoroutineScope(Dispatchers.IO).launch {
                 kotlinx.coroutines.delay(3_500L)
+                awaitPlaybackIdle()
                 runCatching { RemoteIndexSource.rows(app) }
                     .getOrDefault(emptyList())
                     .takeIf { it.isNotEmpty() }
@@ -208,11 +209,27 @@ class XuperCatalog(context: Context) {
     }
 
     /**
+     * Espera a que el motor deje de estar arrancando.
+     *
+     * En una TCL de 2 GB se midió `cacheMs=12436`: 12.4 s de CPU solo para leer el índice
+     * guardado. Si eso corre mientras el reproductor negocia la señal, se la quita. Tope de
+     * 60 s: nunca se queda esperando una película entera.
+     */
+    private suspend fun awaitPlaybackIdle() {
+        var waited = 0L
+        while (com.chronosbvrx.visionplus.data.PlaybackFocus.busy() && waited < 60_000L) {
+            kotlinx.coroutines.delay(1_000L)
+            waited += 1_000L
+        }
+    }
+
+    /**
      * Índice en CACHÉ (segundo plano): manda Búsqueda/Categorías al instante con el último
      * curado y sustituye la semilla del primer frame por el estreno #1 del índice sin
      * pisar las filas que ya estén pintadas (vivo/base a medias del portal, p. ej.).
      */
     private suspend fun cachedIndexRows() {
+        awaitPlaybackIdle()
         val started = android.os.SystemClock.uptimeMillis()
         val cachedIndex = kotlinx.coroutines.withContext(Dispatchers.IO) { RemoteIndexSource.cached(app) }
         lastLoadTimings = lastLoadTimings.replaceFirst("cacheMs=0", "cacheMs=${android.os.SystemClock.uptimeMillis() - started}")
@@ -237,6 +254,7 @@ class XuperCatalog(context: Context) {
         if (portalLoading) return
         portalLoading = true
         try {
+            awaitPlaybackIdle()
             val started = android.os.SystemClock.uptimeMillis()
             runCatching { com.chronosbvrx.visionplus.data.xuper.X4KApi.homeRows(app) }
             val xtvLive = runCatching {
