@@ -51,7 +51,7 @@ private const val EXIT_MS = 260
  * [canExit] triggers the exit fade and [onFinished] notifies caller to dismiss.
  */
 @Composable
-fun VisionSplash(isTv: Boolean, canExit: Boolean, onFinished: () -> Unit) {
+fun VisionSplash(isTv: Boolean, canExit: Boolean, status: String? = null, onFinished: () -> Unit) {
     val exitAnim = remember { Animatable(0f) }
     LaunchedEffect(canExit) {
         if (!canExit) return@LaunchedEffect
@@ -100,7 +100,7 @@ fun VisionSplash(isTv: Boolean, canExit: Boolean, onFinished: () -> Unit) {
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    text = "Iniciando Vision+...",
+                    text = status ?: "Iniciando Vision+...",
                     color = VisionTextSecondary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,

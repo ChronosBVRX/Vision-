@@ -3,7 +3,6 @@ package com.chronosbvrx.visionplus.data.xuper
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.provider.Settings
 import android.util.Log
 import com.chronosbvrx.visionplus.ui.player.X4KPlayerAty
 
@@ -11,6 +10,9 @@ import com.chronosbvrx.visionplus.ui.player.X4KPlayerAty
  * Receptor ligero en el proceso `:x4k` que precalienta el motor nativo Titan/Ranger
  * (`X4KTitan.load`, `boot`, `sendEntriesCdnList`, `sendEnv`) y la caché de canales en
  * memoria RAM en segundo plano antes de que el usuario haga clic en un canal o título.
+ *
+ * Lo usan el splash de la app (acción [ACTION_PREWARM]) y el camino diferido de siempre
+ * (`X4KApi.prewarmEngine`). El launcher, en cambio, se vincula a [EngineWarmService].
  */
 class X4KWarmupReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
@@ -35,36 +37,17 @@ class X4KWarmupReceiver : BroadcastReceiver() {
         val appCtx = context.applicationContext
         val entriesJson = intent?.getStringExtra("entriesJson")
         val playParams = intent?.getStringExtra("playParams").orEmpty()
+        val source = if (intent?.action == ACTION_PREWARM) "splash" else "deferred"
         val pending = goAsync()
         Thread {
             try {
-                if (!X4KPlayerAty.isPlayerActive) {
-                    val apiPrefs = appCtx.getSharedPreferences("x4k_api", Context.MODE_PRIVATE)
-                    val resolvedEntries = if (!entriesJson.isNullOrBlank()) {
-                        entriesJson
-                    } else {
-                        apiPrefs.getString("entries_json", null)
-                    }
-                    val resolvedParams = if (playParams.isNotBlank()) {
-                        playParams
-                    } else {
-                        apiPrefs.getString("play_params", "").orEmpty()
-                    }
-                    val androidId = runCatching {
-                        Settings.Secure.getString(appCtx.contentResolver, Settings.Secure.ANDROID_ID).orEmpty()
-                    }.getOrDefault("")
-                    val ok = X4KTitan.ensureConfigured(
-                        context = appCtx,
-                        userId = X4KApi.userIdOf(),
-                        devId = X4KApi.snOf(),
-                        androidId = androidId,
-                        entriesJson = resolvedEntries,
-                        playParams = resolvedParams,
-                    )
-                    // Pre-parsear también la lista de canales en la memoria RAM del proceso :x4k
-                    X4KApi.cachedLive(appCtx)
-                    Log.i("X4KWarmupReceiver", "Proceso :x4k y motor Titan precalentados (ok=$ok)")
-                }
+                EngineWarmup.warmBlocking(
+                    context = appCtx,
+                    entriesOverride = entriesJson,
+                    paramsOverride = playParams,
+                    source = source,
+                    playerActive = { X4KPlayerAty.isPlayerActive },
+                )
             } catch (e: Exception) {
                 Log.w("X4KWarmupReceiver", "Precalentamiento :x4k omitido: ${e.message}")
             } finally {
@@ -74,6 +57,9 @@ class X4KWarmupReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        /** El splash pide el warmup explícitamente (misma app, receptor no exportado). */
+        const val ACTION_PREWARM = "com.chronosbvrx.visionplus.action.X4K_PREWARM"
+
         /** Orden del principal: el proceso `:x4k` se reinicia antes de una descarga. */
         const val ACTION_DIE_FOR_DOWNLOADS = "com.chronosbvrx.visionplus.action.X4K_DIE_FOR_DOWNLOADS"
 

@@ -55,6 +55,7 @@ import com.chronosbvrx.visionplus.data.remote.RemoteProto
 import com.chronosbvrx.visionplus.data.remote.RemoteServer
 import com.chronosbvrx.visionplus.data.remote.remoteLiveChannel
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
+import com.chronosbvrx.visionplus.data.xuper.EngineWarmup
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import com.chronosbvrx.visionplus.ui.SearchSeed
 import com.chronosbvrx.visionplus.ui.activation.ActivationScreen
@@ -71,6 +72,7 @@ import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionTheme
 import com.chronosbvrx.visionplus.ui.tv.FocusRescue
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -91,6 +93,9 @@ class MainActivity : ComponentActivity() {
 
     /** El servidor del control remoto; solo existe en la televisión. */
     private var remoteServer: RemoteServer? = null
+
+    /** True cuando el Inicio ya se pintó al menos una vez (no adelantar el motor en el arranque). */
+    @Volatile private var appBooted = false
 
     /**
      * A D-pad key no view handled (onKeyDown only sees those), with nothing focused on the TV screen: the screen's landing
@@ -151,6 +156,12 @@ class MainActivity : ComponentActivity() {
         HomeFeedStore.refreshAsync(this)
         // Continuidad entre equipos: empuja el minuto/favoritos y trae lo del otro equipo.
         com.chronosbvrx.visionplus.data.sync.SyncStore.syncAsync(this)
+        // Si el proceso `:x4k` murió mientras la app estaba en segundo plano (o el launcher
+        // ya soltó su vínculo), se vuelve a calentar en segundo plano. En 1.5 GB la política
+        // lo omite y se conserva el camino diferido.
+        if (isTv && appBooted && EngineWarmup.shouldWarm(this) && !EngineWarmup.isWarmFresh(this)) {
+            EngineWarmup.requestWarm(this)
+        }
     }
 
     override fun onPause() {
@@ -220,6 +231,7 @@ class MainActivity : ComponentActivity() {
                     }
                     var splashVisible by rememberSaveable { mutableStateOf(true) }
                     var bootReady by remember { mutableStateOf(false) }
+                    var warming by remember { mutableStateOf(false) }
                     val navigator = remember { nav }
                     val catalog = remember { XuperCatalog(this@MainActivity) }
                     val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
@@ -261,6 +273,32 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(Unit) {
                         val minSplash = launch { delay(600L) }
                         var hitCap = false
+                        var warmOutcome: EngineWarmup.WarmOutcome? = null
+                        // El motor se calienta EN PARALELO con todo lo demás, desde el primer
+                        // frame del splash: no espera a la sonda de red ni al catálogo. Solo en
+                        // TV con RAM suficiente (2 GB+); los equipos de 1.5 GB conservan el
+                        // camino diferido de siempre. Si Vision+ Home ya lo calentó,
+                        // `awaitReadyOrWarm` vuelve al instante y no se espera nada.
+                        val warmJob = if (!deepLinked && !needsActivation) {
+                            val shouldWait = EngineWarmup.shouldWarmOnSplash(this@MainActivity) &&
+                                !EngineWarmup.isWarmFresh(this@MainActivity)
+                            async {
+                                if (shouldWait) warming = true
+                                val outcome = runCatching {
+                                    EngineWarmup.awaitReadyOrWarm(
+                                        this@MainActivity,
+                                        EngineWarmup.splashTimeoutMs(this@MainActivity),
+                                    )
+                                }.getOrNull()
+                                warming = false
+                                outcome ?: EngineWarmup.WarmOutcome(
+                                    result = EngineWarmup.Result.SKIPPED,
+                                    source = "error",
+                                    alreadyWarm = false,
+                                    elapsedMs = 0L,
+                                )
+                            }
+                        } else null
                         // La sonda de salida corre en IO (nunca frena el hilo principal): con una
                         // red que dice «internet» pero no llega a ningún lado, se abre directo el
                         // Modo Sin Conexión en vez de un Inicio vacío.
@@ -277,22 +315,50 @@ class MainActivity : ComponentActivity() {
                                     catalog.load()
                                 } == null
                             }
+                            warmOutcome = warmJob?.await()
                             // Con el índice fresco, Vision+ Home estrena filas reales.
                             HomeFeedStore.refreshAsync(this@MainActivity)
                         }
                         minSplash.join()
                         bootReady = true
+                        appBooted = true
                         // Telemetría del arranque en frío: si abrir el Inicio tardó más de lo
                         // justo se reporta con los ms de cada fase (el diagnóstico aclarará si
                         // la lentitud es del arranque del sistema o de nuestra carga). El
                         // handicap del reloj: el primer frame del splash ya contaba.
                         val bootMs = android.os.SystemClock.uptimeMillis() - bootStartedMs
+                        val warmMs = warmOutcome?.elapsedMs ?: 0L
                         if (bootMs > BOOT_SLOW_TRACE_MS) {
                             runCatching {
                                 com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
                                     "BOOT_SLOW",
-                                    "bootMs=$bootMs hitCap=$hitCap ${catalog.lastLoadTimings.take(300)}",
+                                    "bootMs=$bootMs hitCap=$hitCap warm=${warmOutcome?.result?.name ?: "none"} " +
+                                        "warmMs=$warmMs warmSource=${warmOutcome?.source ?: "-"} " +
+                                        catalog.lastLoadTimings.take(300),
                                 )
+                            }
+                        }
+                        if (warmOutcome?.result == EngineWarmup.Result.TIMEOUT) {
+                            runCatching {
+                                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                                    "ENGINE_WARM_TIMEOUT",
+                                    "ms=$warmMs ramMb=${DevicePerformance.totalMemoryMb(this@MainActivity)} " +
+                                        "source=${warmOutcome?.source ?: "-"}",
+                                )
+                            }
+                        } else if (warmOutcome?.let { it.result == EngineWarmup.Result.READY && !it.alreadyWarm } == true) {
+                            android.util.Log.i(
+                                "EngineWarmup",
+                                "splash warm ready ms=$warmMs source=${warmOutcome?.source ?: "-"}",
+                            )
+                            if (warmMs > 4_000L) {
+                                runCatching {
+                                    com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                                        "ENGINE_WARM_SLOW",
+                                        "ms=$warmMs source=${warmOutcome?.source ?: "-"} " +
+                                            "ramMb=${DevicePerformance.totalMemoryMb(this@MainActivity)}",
+                                    )
+                                }
                             }
                         }
                         if (com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.value) {
@@ -334,6 +400,7 @@ class MainActivity : ComponentActivity() {
                             VisionSplash(
                                 isTv = isTv,
                                 canExit = bootReady,
+                                status = if (warming) "Preparando el reproductor..." else null,
                                 onFinished = { splashVisible = false },
                             )
                         }

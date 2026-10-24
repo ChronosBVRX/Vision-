@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- El feed de Vision+ (permiso de firma: solo con la llave histórica). -->
     <uses-permission android:name="com.chronosbvrx.visionplus.permission.HOME_FEED" />
+    <!-- Precalentamiento opcional del motor de Vision+ (mismo candado de firma). -->
+    <uses-permission android:name="com.chronosbvrx.visionplus.permission.ENGINE_PREWARM" />
 
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />

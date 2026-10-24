@@ -7,6 +7,11 @@
     android:name="com.chronosbvrx.visionplus.permission.HOME_FEED"
     android:protectionLevel="signature" />
 
+<!-- Precalentamiento opcional del motor desde Vision+ Home: mismo candado de firma. -->
+<permission
+    android:name="com.chronosbvrx.visionplus.permission.ENGINE_PREWARM"
+    android:protectionLevel="signature" />
+
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 <!-- Control remoto por LAN: la tele escucha la difusión del teléfono y sostiene el multicast. -->
@@ -90,6 +95,13 @@
         <receiver
             android:name=".data.xuper.X4KWarmupReceiver"
             android:exported="false"
+            android:process=":x4k" />
+
+        <!-- Vision+ Home (opcional): calienta el motor al arrancar la tele. Solo firma. -->
+        <service
+            android:name=".data.xuper.EngineWarmService"
+            android:exported="true"
+            android:permission="com.chronosbvrx.visionplus.permission.ENGINE_PREWARM"
             android:process=":x4k" />
 
         <!-- Avisos locales (capítulos nuevos + partidos): alarma del sistema. -->
