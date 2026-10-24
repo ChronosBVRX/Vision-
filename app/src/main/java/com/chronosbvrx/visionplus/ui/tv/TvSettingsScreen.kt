@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.ui.tv
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,9 +12,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -36,8 +39,11 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Border
+import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.chronosbvrx.visionplus.BuildConfig
 import com.chronosbvrx.visionplus.DevicePerformance
@@ -58,6 +64,9 @@ import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.settings.VisionSettings
 import com.chronosbvrx.visionplus.ui.settings.rememberUpdateCheck
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
+import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionSurface
+import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -69,43 +78,92 @@ enum class TvSettingsTab(val label: String) {
     SYSTEM("Sistema y Rendimiento"),
 }
 
-/** "Ajustes" en Smart TV con navegación D-pad. */
+/** "Ajustes" en Smart TV con navegación D-pad: riel de categorías a la izquierda y opciones a la derecha. */
 @Composable
 fun TvSettingsScreen(initialTab: TvSettingsTab = TvSettingsTab.PLAYBACK) {
     var tab by rememberSaveable { mutableStateOf(initialTab) }
     val landing = rememberLandingFocus()
 
-    Column(Modifier.fillMaxSize().background(VisionBlack).padding(horizontal = 48.dp, vertical = 28.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Ajustes", style = MaterialTheme.typography.titleLarge, color = Color.White)
-            Spacer(Modifier.width(20.dp))
-            LazyRow(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(TvSettingsTab.entries.toList()) { t ->
-                    TvTab(
-                        label = t.label,
-                        selected = t == tab,
-                        onClick = { tab = t },
-                        modifier = if (t == tab) Modifier.landingFocus(landing) else Modifier,
-                    )
-                }
+    Row(
+        Modifier.fillMaxSize().background(VisionBlack).padding(horizontal = 48.dp, vertical = 18.dp),
+    ) {
+        // Riel: el mismo patrón del Inicio (categorías a la izquierda, contenido a la derecha).
+        Column(Modifier.width(232.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                "AJUSTES",
+                style = MaterialTheme.typography.labelMedium,
+                color = VisionTextSecondary,
+                modifier = Modifier.padding(start = 14.dp, bottom = 8.dp),
+            )
+            TvSettingsTab.entries.forEach { t ->
+                SettingsRailItem(
+                    label = t.label,
+                    selected = t == tab,
+                    onClick = { tab = t },
+                    modifier = if (t == tab) Modifier.landingFocus(landing) else Modifier,
+                )
             }
         }
+        Spacer(Modifier.width(32.dp))
         Column(
             modifier = Modifier
-                .fillMaxWidth()
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(top = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             when (tab) {
                 TvSettingsTab.PLAYBACK -> TvPlaybackTab()
                 TvSettingsTab.SYSTEM -> TvSystemTab()
             }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+/** Una categoría del riel de Ajustes: acento azul cuando está seleccionada y aro blanco al enfocar. */
+@Composable
+private fun SettingsRailItem(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (selected) VisionSurfaceHigh else Color.Transparent,
+            focusedContainerColor = if (selected) VisionSurfaceHigh else VisionSurface,
+            pressedContainerColor = VisionBlue,
+            contentColor = Color.White,
+            focusedContentColor = Color.White,
+            pressedContentColor = Color.White,
+        ),
+        border = ClickableSurfaceDefaults.border(
+            border = Border.None,
+            focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = RoundedCornerShape(10.dp)),
+            pressedBorder = Border.None,
+        ),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+        ) {
+            Box(
+                Modifier
+                    .width(3.dp)
+                    .height(18.dp)
+                    .background(if (selected) VisionBlue else Color.Transparent, RoundedCornerShape(2.dp)),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                label,
+                color = Color.White,
+                fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Bold
+                else androidx.compose.ui.text.font.FontWeight.Normal,
+                maxLines = 1,
+            )
         }
     }
 }

@@ -2,6 +2,7 @@ package com.chronosbvrx.visionplus.ui.tv
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,9 +42,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Border
+import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Surface
 import com.chronosbvrx.visionplus.data.profile.ProfileStore
 import com.chronosbvrx.visionplus.ui.Route
 import com.chronosbvrx.visionplus.ui.VisionClock
+import com.chronosbvrx.visionplus.ui.profile.ProfileAvatar
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
@@ -64,7 +69,9 @@ internal enum class TvTopTab(val label: String, val description: String, val tar
 internal fun tvTopBarVisible(route: Route): Boolean =
     route == Route.Home || route == Route.Live || route == Route.Sports ||
         route is Route.Section || route == Route.Library ||
-        route == Route.Categories || route is Route.Category
+        route == Route.Categories || route is Route.Category ||
+        // Ajustes y Buscar son parte del mismo shell: si no, parecen otra app.
+        route == Route.Settings || route == Route.Search
 
 /** Qué pestaña se pinta activa para la ruta actual (null = ninguna). */
 internal fun tvTopTabFor(route: Route): TvTopTab? = when (route) {
@@ -90,6 +97,7 @@ internal fun TvTopBar(
     onTab: (TvTopTab) -> Unit,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
+    onProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -147,7 +155,7 @@ internal fun TvTopBar(
             letterSpacing = 0.8.sp,
         )
         Spacer(Modifier.width(12.dp))
-        ProfileChip(profile)
+        ProfileChip(profile, onProfile)
         Spacer(Modifier.width(6.dp))
         TopBarIcon(Icons.Default.Search, "Buscar", onSearch)
         Spacer(Modifier.width(2.dp))
@@ -197,38 +205,39 @@ private fun TopTabPill(
 }
 
 @Composable
-private fun ProfileChip(name: String) {
+private fun ProfileChip(name: String, onClick: () -> Unit) {
     val label = name.trim().ifBlank { "Principal" }
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(Color.White.copy(alpha = 0.07f))
-            .padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    // El chip abre «Perfiles» (como en Netflix): elegir quién eres desde cualquier pantalla.
+    Surface(
+        onClick = onClick,
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.White.copy(alpha = 0.07f),
+            focusedContainerColor = Color.White.copy(alpha = 0.14f),
+            pressedContainerColor = Color.White.copy(alpha = 0.18f),
+            contentColor = VisionTextSecondary,
+            focusedContentColor = Color.White,
+            pressedContentColor = Color.White,
+        ),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = RoundedCornerShape(50)),
+        ),
     ) {
-        Box(
-            Modifier
-                .size(22.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Brush.linearGradient(listOf(VisionBlue, Color(0xFF6E4BF6)))),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier.padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
+            ProfileAvatar(name = label, size = 22.dp)
             Text(
-                label.take(1).uppercase(),
-                color = Color.White,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
+                label,
+                color = Color.Unspecified,
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        Text(
-            label,
-            color = VisionTextSecondary,
-            style = MaterialTheme.typography.bodySmall,
-            fontSize = 11.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 

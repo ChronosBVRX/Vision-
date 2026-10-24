@@ -69,7 +69,9 @@ internal fun showsFloatingClock(isTv: Boolean, route: Route): Boolean =
     isTv &&
         route !is Route.Player &&
         route !is Route.LivePlayer &&
-        route !is Route.Search
+        route !is Route.Search &&
+        // Ajustes ya tiene la hora en la barra superior: la píldora flotante la duplicaría.
+        route != Route.Settings
 
 /** El tic de la hora mostrada: despierta justo al cambiar el minuto, nunca cada segundo. */
 @Composable

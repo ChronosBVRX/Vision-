@@ -222,6 +222,10 @@ private fun TvRoute(
     }
 
     val showTopBar = com.chronosbvrx.visionplus.ui.tv.tvTopBarVisible(route)
+    var showProfiles by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    if (showProfiles) {
+        com.chronosbvrx.visionplus.ui.tv.TvProfilesDialog(onDismiss = { showProfiles = false })
+    }
     Column(Modifier.fillMaxSize()) {
         if (showTopBar) {
             com.chronosbvrx.visionplus.ui.tv.TvTopBar(
@@ -229,6 +233,8 @@ private fun TvRoute(
                 onTab = { tab -> guardedGo(tab.target, viaTab = true) },
                 onSearch = { guardedGo(Route.Search, viaTab = false) },
                 onSettings = { guardedGo(Route.Settings, viaTab = false) },
+                // El chip del perfil abre «Perfiles» desde cualquier pantalla.
+                onProfile = { showProfiles = true },
             )
         }
         Box(Modifier.weight(1f)) {

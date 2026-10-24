@@ -68,7 +68,10 @@ internal fun TvTab(label: String, selected: Boolean, onClick: () -> Unit, modifi
     }
 }
 
-/** A settings row button: dark surface, red on focus, 60% of the width. */
+/**
+ * A settings row button: dark surface and a **white focus ring** (the same language as the new
+ * home cards), full width of its column. Antes era 60% del ancho y azul al enfocar.
+ */
 @Composable
 internal fun TvActionOption(
     label: String,
@@ -78,23 +81,27 @@ internal fun TvActionOption(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(0.6f),
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        modifier = modifier.fillMaxWidth(),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = VisionSurfaceHigh,
-            focusedContainerColor = VisionBlue,
+            focusedContainerColor = VisionSurfaceHigh,
             pressedContainerColor = VisionBlue,
             contentColor = Color.White,
             focusedContentColor = Color.White,
             pressedContentColor = Color.White,
         ),
-        border = ClickableSurfaceDefaults.border(border = Border.None, focusedBorder = Border.None, pressedBorder = Border.None),
+        border = ClickableSurfaceDefaults.border(
+            border = Border.None,
+            focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = RoundedCornerShape(10.dp)),
+            pressedBorder = Border.None,
+        ),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 13.dp),
         ) {
-            Text(label, color = Color.White, modifier = Modifier.weight(1f))
+            Text(label, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
             if (trailing != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

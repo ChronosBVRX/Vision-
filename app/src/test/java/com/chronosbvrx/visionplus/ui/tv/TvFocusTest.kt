@@ -636,8 +636,11 @@ class TvFocusTest {
     @Test
     fun settingsTabsAllRender() {
         start(Route.Home, Route.Settings)
-        assertLanded("Ajustes")
-        compose.onAllNodesWithText("Ajustes").assertCountEquals(1)
+        // La 2.5.143 cambió el título por un riel de categorías dentro del shell (barra superior).
+        assertLanded("Reproducción")
+        compose.onAllNodesWithText("AJUSTES").assertCountEquals(1)
+        compose.onAllNodesWithText("Reproducción").assertCountEquals(1)
+        compose.onAllNodesWithText("Sistema y Rendimiento").assertCountEquals(1)
     }
 
     @Test
