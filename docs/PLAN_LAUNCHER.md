@@ -3,14 +3,21 @@
 > Decisión del usuario (2026-10-23): **APK separado**, no un modo dentro de la app.
 > Este documento fija la arquitectura y las fases. **No hay código de producto todavía.**
 
-## Estado (2026-10-23) — PUBLICADO en la OTA 2.5.127
+## Estado (2026-10-23) — PUBLICADO en la OTA 2.5.130
 
-`VisionPlus.apk` (vc363, 101.2 MB) + `VisionPlusHome.apk` (v1.0.3 / vc4, 1.2 MB), los dos con la
-firma histórica `9593cb0d…`. Fases 1-5 hechas; fase 6 verificada en emulador con el **release R8**
-instalado (permiso `HOME_FEED: granted=true`, hero/filas/TV en vivo/apps reales, ficha y buscador
-por deep link). **El launcher se instala Vision+ él solo** si la tele viene vacía (banner con
-progreso + permiso de «apps desconocidas»). **Pendiente**: prueba física en la ZTE y el Chromecast
-(elegir Inicio, reiniciar y ver que se queda; abrir un canal y una ficha con el mando).
+`VisionPlus.apk` (vc366, 101.2 MB) + `VisionPlusHome.apk` (v1.0.9 / vc10, 1.3 MB), los dos con la
+firma histórica `9593cb0d…`. Incluye el **buscador propio** (provider `/search` + teclado de mando
+y voz), **TV en vivo con México primero** (400 canales, chips Todos/México) y **Deportes** con la
+agenda completa y filtros de **deporte, día y liga** que abren el partido en Vision+.
+Desde la 2.5.130 la **app de tele comparte la piel del launcher** (`TvTopBar` global con
+Inicio/TV en vivo/Deportes/Películas/Series/Mi lista + reloj/perfil/lupa/ajustes, hero y tarjetas
+2:3 con la nota dorada, botón principal blanco, pantalla completa; el riel se retiró) y el launcher
+1.0.9 **detecta y ofrece actualizar** una Vision+ vieja o sin feed.
+Verificado en la **A32** con `vision_force_tv=1` y horizontal (Inicio, TV en vivo con nombres
+completos, Deportes con 15 eventos/2 en vivo, Películas y Mi lista) y en el emulador con el release
+R8 (permiso `HOME_FEED: granted=true`). La A32 quedó restaurada (kiosco de La Veinte activo, home
+original, `vision_force_tv=0`). **Pendiente**: prueba física en la ZTE/Chromecast (elegir Inicio,
+reiniciar y ver que se queda; abrir un canal y una ficha con el mando).
 
 Lecciones que costaron un build:
 - `Modifier.onFocusChanged` va **antes** del `clickable/focusable`; si va después, nunca observa el
@@ -22,6 +29,18 @@ Lecciones que costaron un build:
   no solo al terminar el catálogo: si no, la fila de TV en vivo queda vacía hasta el próximo ciclo.
 - El foco inicial del launcher se pide con **reintentos** hasta que el hero real está compuesto
   (el primer frame puede traer el hero de marca y el de tendencia llega después).
+- **No anidar `LazyRow` dentro de `LazyVerticalGrid`** para el encabezado/filtros: el encabezado y
+  los chips se superponen. La pantalla va en `Column` (encabezado + chips con `horizontalScroll`) y
+  la rejilla aparte con `weight(1f)`.
+- La agenda deportiva **vencida** se filtra en el feed (`dateIso >= hoy`): una caché de mayo no
+  puede pintarse como si fuera de hoy.
+- La barra superior de la app **se lleva 62 dp**: las filas del Inicio se calculan sobre lo que
+  queda (`TV_TOP_BAR_DP`) o las 3 filas prometidas dejan de caber. El reloj flotante de la tele se
+  apaga cuando hay barra (la hora vive dentro de ella).
+- En la tele la app va **a pantalla completa** (`WindowInsetsControllerCompat.hide(systemBars())`):
+  sin eso, la barra de estado del sistema se monta sobre la barra superior y las pestañas.
+- Los nombres de canal de TV en vivo van en **dos líneas** (nombre arriba, grupo abajo): con el
+  grupo a la derecha, la columna del nombre se queda en «L…» / «E…».
 
 ## 1. Qué es y qué no es
 

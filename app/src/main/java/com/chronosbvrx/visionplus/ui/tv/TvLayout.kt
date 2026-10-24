@@ -73,8 +73,13 @@ internal fun tvRowMetrics(screenHeightDp: Int): TvRowMetrics {
 }
 
 /** Las medidas de fila de esta pantalla, recalculadas solo si cambia la altura disponible. */
+internal const val TV_TOP_BAR_DP = 62
+
 @Composable
 internal fun rememberTvRowMetrics(): TvRowMetrics {
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
-    return remember(screenHeightDp) { tvRowMetrics(screenHeightDp) }
+    return remember(screenHeightDp) {
+        // La barra superior se lleva su alto: las filas se calculan sobre lo que queda.
+        tvRowMetrics((screenHeightDp - TV_TOP_BAR_DP).coerceAtLeast(360))
+    }
 }

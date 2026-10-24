@@ -154,8 +154,8 @@ fun TvPosterCard(
             .onFocusChanged { if (it.isFocused) onFocus() },
         scale = cardFocusScale(reduced),
         colors = CardDefaults.colors(containerColor = VisionSurfaceHigh),
-        border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color.White))),
-        shape = CardDefaults.shape(shape = RoundedCornerShape(12.dp)),
+        border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Color.White))),
+        shape = CardDefaults.shape(shape = RoundedCornerShape(14.dp)),
     ) {
         Box(
             modifier = Modifier
@@ -191,16 +191,15 @@ fun TvPosterCard(
                     ),
             )
 
-            // Badge de Calificación (Esquina superior izquierda)
+            // Badge de Calificación (arriba a la derecha, como en el launcher)
             if (score > 0.0) {
                 val formatted = if (score % 1.0 == 0.0) score.toInt().toString() else String.format(Locale.US, "%.1f", score)
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp)
-                        .background(Color(0xDD0B1220), shape = RoundedCornerShape(8.dp))
-                        .border(BorderStroke(1.dp, VisionBlue.copy(alpha = 0.85f)), shape = RoundedCornerShape(8.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .background(Color.Black.copy(alpha = 0.62f), shape = RoundedCornerShape(50))
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -224,17 +223,14 @@ fun TvPosterCard(
                 }
             }
 
-            // Badge de Estado (Esquina superior derecha)
+            // Badge de Estado (arriba a la izquierda)
             if (!badge.isNullOrBlank()) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .background(
-                            Brush.horizontalGradient(listOf(VisionBlue, VisionBlueDark)),
-                            shape = RoundedCornerShape(4.dp),
-                        )
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .background(VisionBlue, shape = RoundedCornerShape(50))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
                 ) {
                     Text(
                         text = badge.uppercase(),

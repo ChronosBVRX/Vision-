@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
@@ -50,6 +52,7 @@ import java.util.TimeZone
 enum class HomeTab(val key: String, val label: String) {
     HOME("home", "Inicio"),
     LIVE("live", "TV en vivo"),
+    EVENTS("events", "Deportes"),
     MOVIES("movies", "Películas"),
     SERIES("series", "Series"),
     APPS("apps", "Apps"),
@@ -133,12 +136,12 @@ fun TopChrome(
             )
         }
         Spacer(Modifier.width(if (compact) 18.dp else 30.dp))
-        Row(
+        LazyRow(
             modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            HomeTab.entries.forEach { item ->
+            items(HomeTab.entries.toList()) { item ->
                 TabPill(
                     label = item.label,
                     selected = item == tab,

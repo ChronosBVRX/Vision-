@@ -7,6 +7,44 @@ import org.junit.Test
 
 class HomeFeedCodecTest {
 
+    @Test
+    fun sportsAndMexicanChannelsSurviveTheRoundTrip() {
+        val feed = HomeFeed(
+            live = listOf(
+                LiveItem(code = "c5", name = "Canal 5", mexico = true, now = "Ana de nadie"),
+                LiveItem(code = "axn", name = "AXN", mexico = false),
+            ),
+            sports = listOf(
+                SportsItem(
+                    id = "event:1",
+                    name = "América vs Cruz Azul",
+                    category = "Football",
+                    dateIso = "2026-10-23",
+                    league = "Liga MX",
+                    homeName = "América",
+                    awayName = "Cruz Azul",
+                    homeScore = 1,
+                    awayScore = 0,
+                    detail = "45'",
+                    live = true,
+                    alive = 3,
+                    total = 3,
+                    openLink = VisionLinks.sports("event:1"),
+                ),
+                SportsItem(id = "event:2", name = "GP de México", dateText = "Hoy", time = "14:00"),
+            ),
+        )
+        assertEquals(feed, HomeFeedCodec.decode(HomeFeedCodec.encode(feed)))
+    }
+
+    @Test
+    fun aScoreOfZeroIsNotConfusedWithNoScore() {
+        val raw = """{"meta":{"version":${HomeContract.VERSION}},"sports":[{"id":"e","name":"A vs B","homeScore":0,"awayScore":2}]}"""
+        val event = HomeFeedCodec.decode(raw)!!.sports.single()
+        assertEquals(0, event.homeScore)
+        assertEquals(2, event.awayScore)
+    }
+
     private fun sampleFeed() = HomeFeed(
         meta = FeedMeta(
             version = HomeContract.VERSION,

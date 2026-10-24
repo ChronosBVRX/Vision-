@@ -8,6 +8,7 @@ import android.os.Looper
 import com.chronosbvrx.visionplus.home.contract.HomeContract
 import com.chronosbvrx.visionplus.home.contract.HomeFeed
 import com.chronosbvrx.visionplus.home.contract.HomeFeedCodec
+import com.chronosbvrx.visionplus.home.contract.FeedItem
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,6 +29,29 @@ class FeedRepository(context: Context) {
     fun cached(): HomeFeed? = HomeFeedCodec.decode(
         runCatching { cacheFile.takeIf { it.exists() }?.readText() }.getOrNull(),
     )
+
+    /** Busca en el catálogo completo a través de Vision+ (mismo buscador del servidor). */
+    suspend fun search(query: String): List<FeedItem> = withContext(Dispatchers.IO) {
+        val clean = query.trim()
+        if (clean.isBlank()) return@withContext emptyList()
+        val uri = Uri.parse(HomeContract.SEARCH_URI).buildUpon()
+            .appendQueryParameter("q", clean)
+            .build()
+        val raw = withTimeoutOrNull(6_000L) {
+            runCatching {
+                app.contentResolver.query(
+                    uri,
+                    arrayOf(HomeContract.COLUMN),
+                    null,
+                    null,
+                    null,
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) else null
+                }
+            }.getOrNull()
+        }
+        HomeFeedCodec.decode(raw)?.rows?.firstOrNull()?.items.orEmpty()
+    }
 
     /** Consulta el provider de Vision+. Null = no se pudo leer (sin permiso, sin app, tarde). */
     suspend fun refresh(): HomeFeed? = withContext(Dispatchers.IO) {

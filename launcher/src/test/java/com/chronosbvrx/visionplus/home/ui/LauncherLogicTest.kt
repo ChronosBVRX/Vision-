@@ -93,8 +93,15 @@ class LauncherLogicTest {
     fun everyTabHasAStableKeyForThePreference() {
         assertEquals(HomeTab.HOME, HomeTab.of("home"))
         assertEquals(HomeTab.APPS, HomeTab.of("apps"))
+        assertEquals(HomeTab.EVENTS, HomeTab.of("events"))
         assertEquals(HomeTab.HOME, HomeTab.of("basura"))
         assertEquals(HomeTab.HOME, HomeTab.of(null))
+    }
+
+    @Test
+    fun theSportsTabIsBetweenLiveTvAndMovies() {
+        val keys = HomeTab.entries.map { it.key }
+        assertEquals(listOf("home", "live", "events", "movies", "series", "apps"), keys)
     }
 
     private fun item(ref: String, title: String, kind: String) = FeedItem(

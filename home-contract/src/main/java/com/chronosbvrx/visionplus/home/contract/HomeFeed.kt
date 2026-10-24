@@ -11,9 +11,10 @@ data class HomeFeed(
     val continueWatching: List<ContinueItem> = emptyList(),
     val live: List<LiveItem> = emptyList(),
     val rows: List<FeedRow> = emptyList(),
+    val sports: List<SportsItem> = emptyList(),
 ) {
     val isEmpty: Boolean
-        get() = hero.isEmpty() && continueWatching.isEmpty() && live.isEmpty() && rows.isEmpty()
+        get() = hero.isEmpty() && continueWatching.isEmpty() && live.isEmpty() && rows.isEmpty() && sports.isEmpty()
 }
 
 /** Contexto del feed: quién es el perfil activo y cuándo se generó. */
@@ -70,7 +71,36 @@ data class LiveItem(
     val next: String = "",
     /** 0..100 del programa en curso. */
     val progress: Int = 0,
+    /** Señal mexicana: el launcher la pone primero y la puede filtrar. */
+    val mexico: Boolean = false,
     val playLink: String = "",
+)
+
+/** Un evento deportivo (en vivo o próximo) con su enlace al evento en Vision+. */
+data class SportsItem(
+    val id: String,
+    /** «América vs Cruz Azul» (o el nombre del evento si no hay equipos). */
+    val name: String,
+    /** Football / Basketball / Tennis… (el launcher lo rotula en español). */
+    val category: String = "",
+    /** yyyy-MM-dd en el centro de México. */
+    val dateIso: String = "",
+    val league: String = "",
+    val leagueLogo: String = "",
+    val homeName: String = "",
+    val awayName: String = "",
+    val homeLogo: String = "",
+    val awayLogo: String = "",
+    val homeScore: Int? = null,
+    val awayScore: Int? = null,
+    /** «45'», «FT», «Hoy 20:00»… */
+    val detail: String = "",
+    val live: Boolean = false,
+    val alive: Int = 0,
+    val total: Int = 0,
+    val dateText: String = "",
+    val time: String = "",
+    val openLink: String = "",
 )
 
 /** Una hilera del Inicio. */

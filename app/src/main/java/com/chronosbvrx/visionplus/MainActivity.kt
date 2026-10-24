@@ -158,6 +158,20 @@ class MainActivity : ComponentActivity() {
         super.onPause()
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && isTv) hideSystemBars()
+    }
+
+    private fun hideSystemBars() {
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        androidx.core.view.WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior =
+                androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
     override fun onDestroy() {
         if (isFinishing) {
             remoteServer?.stop()
@@ -180,6 +194,9 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         isTv = DeviceKind.isTelevision(this)
+        // En la tele no hay barra de estado/navegación: el Inicio va a pantalla completa
+        // (igual que Vision+ Home). En el móvil se conservan.
+        if (isTv) hideSystemBars()
         // Latido de la apertura: denominador del «% de sesiones sin crash» en la telemetría.
         com.chronosbvrx.visionplus.data.diag.Diagnostics.sessionStart()
         com.chronosbvrx.visionplus.ui.settings.VisionSettings.init(this)
@@ -211,7 +228,11 @@ class MainActivity : ComponentActivity() {
                     // centro; el móvil lo lleva como texto pequeño dentro de su barra superior
                     // (`PhoneApp`), para que no estorbe ni se monte sobre la navegación.
                     val clockRoute = navigator.current
-                    val showClock = !needsActivation && showsFloatingClock(isTv, clockRoute)
+                    // El reloj flotante ya no se monta sobre la barra superior: la hora vive
+                    // DENTRO de la barra (como en Vision+ Home). Solo queda en las pantallas
+                    // que no llevan barra (ficha, ajustes).
+                    val showClock = !needsActivation && showsFloatingClock(isTv, clockRoute) &&
+                        !com.chronosbvrx.visionplus.ui.tv.tvTopBarVisible(clockRoute)
 
                     // Salida con confirmación desde la pantalla principal: el primer Atrás
                     // avisa («presiona de nuevo»), el segundo dentro de la ventana cierra la
@@ -392,6 +413,13 @@ class MainActivity : ComponentActivity() {
         }
         "live" -> Route.Live
         "library" -> Route.Library
+        "sports" -> {
+            // El launcher manda el partido: la pantalla de Deportes abre su selector.
+            uri.getQueryParameter("event")?.takeIf { it.isNotBlank() }?.let { event ->
+                com.chronosbvrx.visionplus.ui.sports.DeportesReturn.pickingId = event
+            }
+            Route.Sports
+        }
         "section" -> uri.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() }?.let { name ->
             Route.Section(name, sectionTitle(name))
         }

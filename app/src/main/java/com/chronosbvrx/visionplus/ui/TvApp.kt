@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -220,6 +221,17 @@ private fun TvRoute(
         return
     }
 
+    val showTopBar = com.chronosbvrx.visionplus.ui.tv.tvTopBarVisible(route)
+    Column(Modifier.fillMaxSize()) {
+        if (showTopBar) {
+            com.chronosbvrx.visionplus.ui.tv.TvTopBar(
+                active = com.chronosbvrx.visionplus.ui.tv.tvTopTabFor(route),
+                onTab = { tab -> guardedGo(tab.target, viaTab = true) },
+                onSearch = { guardedGo(Route.Search, viaTab = false) },
+                onSettings = { guardedGo(Route.Settings, viaTab = false) },
+            )
+        }
+        Box(Modifier.weight(1f)) {
     when (route) {
         Route.Home -> TvHomeScreen(
             catalog = catalog,
@@ -330,5 +342,7 @@ private fun TvRoute(
         Route.Settings -> TvSettingsScreen()
         Route.About -> TvAboutScreen()
         else -> Unit
+    }
+        }
     }
 }

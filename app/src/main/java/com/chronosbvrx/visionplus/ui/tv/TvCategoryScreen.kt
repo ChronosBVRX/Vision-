@@ -693,6 +693,7 @@ private fun Hero(film: Film, landing: LandingFocus?, onOpenFilm: (Film) -> Unit)
                 TvCompactAction(
                     label = "Reproducir",
                     icon = VisionIcons.Play,
+                    primary = true,
                     modifier = if (landing != null) Modifier.landingFocus(landing) else Modifier,
                     onClick = { onOpenFilm(film) },
                 )

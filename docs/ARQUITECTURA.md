@@ -47,7 +47,17 @@ LauncherActivity ──► LauncherScreen (otro APK: barra superior, hero, filas
                     │
                     ├── ui/*            tarjetas, foco, centro de control, buscador
                     └── data/*          FeedRepository (caché + provider), apps, update
+
+TvApp (tele) ──► TvTopBar (barra superior global: Inicio/TV/Deportes/Películas/Series/Mi lista)
+                    │                 + reloj CDMX, perfil, lupa y ajustes
+                    └── la pantalla de la ruta (TvHomeScreen, TvLiveScreen, TvSportsScreen…)
 ```
+
+La tele de Vision+ comparte el **lenguaje visual** con Vision+ Home: `ui/tv/TvTopBar.kt` (barra
+superior global, el riel se retiró) y `TvComponents.kt`/`TvWidgets.kt` (hero, tarjetas 2:3 con la
+nota dorada, chips redondeados, botón principal blanco, anillo de foco). `tvTopBarVisible(route)`
+decide en qué rutas se pinta (no en fichas, reproductores, buscador ni ajustes) y
+`TV_TOP_BAR_DP = 62` se descuenta al calcular las filas del Inicio.
 
 Regla de oro: **la lógica testeable vive en `data/` como funciones puras** (`internal`),
 y la UI solo la pinta. Los guardianes de la suite (`*Test.kt`) prueban esas funciones y,

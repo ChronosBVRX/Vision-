@@ -62,7 +62,7 @@ internal val TV_RAIL_COLLAPSED_WIDTH = 80.dp
  * Where the screen's content starts. Less than [TV_RAIL_COLLAPSED_WIDTH] on purpose: the content
  * carries its own 48 dp inset.
  */
-internal val TV_RAIL_CONTENT_START = 28.dp
+internal val TV_RAIL_CONTENT_START = 0.dp
 
 /** The rail's width while it shows icons and words: it opens over the content, which does not move. */
 private val TV_RAIL_EXPANDED_WIDTH = 264.dp

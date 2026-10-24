@@ -67,6 +67,10 @@ fun CommandCenterDialog(
     visionInstalled: Boolean = true,
     visionInstallState: HomeUpdate.State = HomeUpdate.State.Idle,
     onInstallVision: () -> Unit = {},
+    appOutdated: Boolean = false,
+    appVersion: String = "",
+    latestAppVersion: String = "",
+    onUpdateVision: () -> Unit = {},
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -152,6 +156,17 @@ fun CommandCenterDialog(
                             HomeUpdate.State.Idle -> "El launcher se baja la app del release oficial"
                         },
                         onClick = onInstallVision,
+                    )
+                } else if (appOutdated) {
+                    PanelAction(
+                        icon = Icons.Rounded.Download,
+                        title = "Actualizar Vision+",
+                        detail = if (appVersion.isBlank()) {
+                            "Vision+ no responde al Inicio; actualízalo"
+                        } else {
+                            "v$appVersion → v$latestAppVersion"
+                        },
+                        onClick = onUpdateVision,
                     )
                 }
                 PanelAction(

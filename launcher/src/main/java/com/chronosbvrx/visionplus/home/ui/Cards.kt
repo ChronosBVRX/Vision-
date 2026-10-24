@@ -70,7 +70,7 @@ fun PosterCard(
                             ),
                         ),
                 )
-                if (item.badge.isNotBlank()) {
+                if (item.badge.isNotBlank() && item.badge.toIntOrNull() == null) {
                     Badge(
                         text = item.badge,
                         modifier = Modifier.align(Alignment.TopStart).padding(8.dp),

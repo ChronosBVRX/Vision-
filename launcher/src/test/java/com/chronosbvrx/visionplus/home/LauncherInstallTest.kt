@@ -1,6 +1,8 @@
 package com.chronosbvrx.visionplus.home
 
+import com.chronosbvrx.visionplus.home.data.HomeUpdate
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -40,6 +42,17 @@ class LauncherInstallTest {
         assertTrue(surfaces.contains("Instalar Vision+"))
         assertTrue("el aviso muestra el progreso", surfaces.contains("Descargando Vision+…"))
         assertTrue("el aviso lleva a los ajustes de la tele", surfaces.contains("Ajustes"))
+    }
+
+    @Test
+    fun anOldVisionIsDetectedAndOfferedForUpdate() {
+        assertTrue(HomeUpdate.isOlder("2.5.9", "2.5.130"))
+        assertTrue(HomeUpdate.isOlder("2.5.127", "2.5.130"))
+        assertFalse(HomeUpdate.isOlder("2.5.130", "2.5.130"))
+        assertFalse(HomeUpdate.isOlder("2.5.131", "2.5.130"))
+        assertFalse(HomeUpdate.isOlder("", "2.5.130"))
+        assertTrue("el aviso de app vieja existe", surfaces.contains("Vision+ está desactualizado"))
+        assertTrue("y ofrece actualizarla", surfaces.contains("Actualizar Vision+"))
     }
 
     @Test

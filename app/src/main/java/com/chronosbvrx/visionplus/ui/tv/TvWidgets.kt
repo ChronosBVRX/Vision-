@@ -111,29 +111,36 @@ internal fun TvCompactAction(
     label: String,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
+    /** El botón principal del hero es BLANCO (como en Vision+ Home). */
+    primary: Boolean = false,
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
+    val ink = if (primary) Color(0xFF070B13) else Color.White
     Surface(
         onClick = onClick,
         modifier = modifier.height(TAB_HEIGHT),
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = VisionSurfaceHigh,
-            focusedContainerColor = VisionBlue,
-            pressedContainerColor = VisionBlue,
-            contentColor = Color.White,
-            focusedContentColor = Color.White,
-            pressedContentColor = Color.White,
+            containerColor = if (primary) Color.White else VisionSurfaceHigh,
+            focusedContainerColor = if (primary) Color.White else VisionBlue,
+            pressedContainerColor = if (primary) Color.White else VisionBlue,
+            contentColor = ink,
+            focusedContentColor = ink,
+            pressedContentColor = ink,
         ),
-        border = ClickableSurfaceDefaults.border(border = Border.None, focusedBorder = Border.None, pressedBorder = Border.None),
+        border = ClickableSurfaceDefaults.border(
+            border = if (primary) Border(BorderStroke(2.dp, Color.White)) else Border.None,
+            focusedBorder = Border(BorderStroke(2.dp, if (primary) VisionBlue else Color.White)),
+            pressedBorder = Border.None,
+        ),
         interactionSource = interaction,
     ) {
         Box(Modifier.fillMaxHeight().padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (icon != null) Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                Text(label, color = Color.White.copy(alpha = if (focused) 1f else 0.95f), maxLines = 1)
+                if (icon != null) Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(20.dp))
+                Text(label, color = ink.copy(alpha = if (focused) 1f else 0.95f), maxLines = 1)
             }
         }
     }

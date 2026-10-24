@@ -9,6 +9,7 @@ import com.chronosbvrx.visionplus.data.HomeCurated
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.ResumeEntry
+import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.isEpisodeEntry
 import com.chronosbvrx.visionplus.data.offline.NetworkMonitor
 import com.chronosbvrx.visionplus.data.profile.ProfileStore
@@ -25,6 +26,7 @@ import com.chronosbvrx.visionplus.home.contract.HomeFeedCodec
 import com.chronosbvrx.visionplus.home.contract.LiveItem
 import com.chronosbvrx.visionplus.home.contract.MediaKind
 import com.chronosbvrx.visionplus.home.contract.RowKind
+import com.chronosbvrx.visionplus.home.contract.SportsItem
 import com.chronosbvrx.visionplus.home.contract.VisionLinks
 import java.io.File
 import kotlin.math.roundToInt
@@ -53,9 +55,25 @@ object HomeFeedStore {
     /** Freno entre refrescos de fondo (la app lo llama en cada onResume). */
     private const val REFRESH_THROTTLE_MS = 20_000L
 
-    private const val LIVE_LIMIT = 24
+    private const val LIVE_LIMIT = 400
     private const val EPG_CHANNELS = 16
+    private const val SPORTS_LIMIT = 250
     private const val ROW_LIMIT = 18
+
+    /** Canales mexicanos de referencia: primero lo que la gente busca. */
+    private val POPULAR_MX = listOf(
+        "canal 5", "azteca 7", "las estrellas", "canal 2", "azteca uno", "tudn", "fox sports",
+        "espn", "canal 6", "multimedios", "imagen", "milenio", "adn40", "a+", "canal 22",
+        "once", "canal 11", "tvc", "enlace", "excelsior", "el financiero", "bloomberg",
+        "golden", "bandamax", "telehit", "de pelicula", "tlnovelas", "distrito comedia",
+        "bitme", "forotv", "canal del congreso", "ingenio", "azteca internacional",
+    )
+
+    internal fun mxPriority(name: String): Int {
+        val n = name.lowercase()
+        val index = POPULAR_MX.indexOfFirst { n.contains(it) }
+        return if (index >= 0) index else POPULAR_MX.size
+    }
 
     /** «A&E HD», «A&E FHD» y «A&E» son la MISMA señal: una sola tarjeta por canal. */
     private val QUALITY_TAG = Regex("\\b(fhd|uhd|hd|sd|4k|h265|hevc|h264)\\b")
@@ -122,11 +140,11 @@ object HomeFeedStore {
                 notifyChange(app)
             }
             val epg = runCatching { withTimeoutOrNull(8_000L) { fetchEpg(app) } }.getOrNull()
-            if (!epg.isNullOrEmpty()) {
-                runCatching {
-                    write(app, HomeFeedCodec.encode(build(app, epg)))
-                    notifyChange(app)
-                }
+            // La agenda deportiva se refresca aquí (el launcher no tiene red propia).
+            runCatching { withTimeoutOrNull(6_000L) { GeeSportsSource.refreshEvents(app) } }
+            runCatching {
+                write(app, HomeFeedCodec.encode(build(app, epg.orEmpty())))
+                notifyChange(app)
             }
         }
     }
@@ -168,13 +186,16 @@ object HomeFeedStore {
 
         val liveItems = runCatching { liveItems(app, guide) }.getOrDefault(emptyList())
 
+        val sports = runCatching { sportsItems(app) }.getOrDefault(emptyList())
+
         val rows = ArrayList<FeedRow>(6)
         if (curated.top10.isNotEmpty()) {
             rows += FeedRow(
                 id = "top10",
                 label = "Top 10 en Vision+",
                 kind = RowKind.TOP10,
-                items = curated.top10.mapIndexedNotNull { i, film -> item(film, badge = "${i + 1}") },
+                // El puesto lo pinta el launcher (chip de ranking); el badge es para «NUEVO».
+                items = curated.top10.mapNotNull { film -> item(film) },
             )
         }
         if (curated.premieres.isNotEmpty()) {
@@ -197,6 +218,7 @@ object HomeFeedStore {
             continueWatching = continueItems,
             live = liveItems,
             rows = rows,
+            sports = sports,
         )
     }
 
@@ -323,19 +345,104 @@ object HomeFeedStore {
                     now = guide?.now.orEmpty(),
                     next = guide?.next.orEmpty(),
                     progress = guide?.progressAt(now) ?: 0,
+                    mexico = isMexico(channel.name),
                     playLink = VisionLinks.live(code, channel.name, channel.logo.orEmpty()),
                 )
             }
     }
 
     /** Las señales de la casa, una por canal (sin las copias HD/FHD del mismo feed). */
-    private fun uniqueChannels(context: Context): List<com.chronosbvrx.visionplus.data.LiveChannel> =
-        X4KApi.cachedLiveChannels(context)
+    private fun uniqueChannels(context: Context): List<com.chronosbvrx.visionplus.data.LiveChannel> {
+        val all = X4KApi.cachedLiveChannels(context)
             .asSequence()
             .filter { it.url.startsWith("xtvlive:") && it.name.isNotBlank() }
             .distinctBy { channelKey(it.name) }
-            .take(LIVE_LIMIT)
             .toList()
+        // México primero (y dentro de México, los canales de referencia); el resto conserva
+        // el orden del portal. «Todos los canales de México» + los populares del resto.
+        val mexico = all.filter { isMexico(it.name) }.sortedBy { mxPriority(it.name) }
+        val rest = all.filterNot { isMexico(it.name) }
+        return (mexico + rest).take(LIVE_LIMIT)
+    }
+
+    private fun isMexico(name: String): Boolean =
+        runCatching { com.chronosbvrx.visionplus.data.LiveTaxonomy.countryFor(name) == "México" }
+            .getOrDefault(false)
+
+    /** La agenda de Deportes en vivo que ya espeja el VPS (en vivo primero, luego por hora). */
+    private fun sportsItems(context: Context): List<SportsItem> = runCatching {
+        GeeSportsSource.cachedEvents(context)
+            .asSequence()
+            .filter { it.id.isNotBlank() }
+            // La agenda vencida (caché vieja) no debe aparecer como si fuera de hoy.
+            .filter {
+                it.dateIso.isBlank() ||
+                    it.dateIso >= com.chronosbvrx.visionplus.data.sports.SportsSource.todayIso()
+            }
+            .sortedWith(
+                compareBy<GeeSportsSource.GeeEvent> { it.dateIso }
+                    .thenByDescending { it.live || it.alive > 0 || it.status == "in" }
+                    .thenBy { it.time },
+            )
+            .take(SPORTS_LIMIT)
+            .map { event ->
+                val home = event.homeName.ifBlank { event.teamA }
+                val away = event.awayName.ifBlank { event.teamB }
+                val live = event.live || event.alive > 0 || event.status == "in"
+                SportsItem(
+                    id = event.id,
+                    name = when {
+                        home.isNotBlank() && away.isNotBlank() && !home.equals(away, ignoreCase = true) ->
+                            "$home vs $away"
+                        home.isNotBlank() -> home
+                        else -> event.name
+                    },
+                    category = event.category,
+                    dateIso = event.dateIso,
+                    league = event.leagueLabel,
+                    leagueLogo = event.leagueLogo,
+                    homeName = home,
+                    awayName = away,
+                    homeLogo = event.homeLogo,
+                    awayLogo = event.awayLogo,
+                    homeScore = event.scoreHome,
+                    awayScore = event.scoreAway,
+                    detail = event.detail.ifBlank { if (live) "EN VIVO" else event.time },
+                    live = live,
+                    alive = event.alive,
+                    total = event.total,
+                    dateText = event.dateText,
+                    time = event.time,
+                    openLink = VisionLinks.sports(event.id),
+                )
+            }
+            .toList()
+    }.getOrDefault(emptyList())
+
+    /** Búsqueda del launcher: el MISMO buscador del servidor que usa la app. */
+    suspend fun searchItems(context: Context, query: String, limit: Int = 40): List<FeedItem> {
+        val clean = query.trim()
+        if (clean.isBlank()) return emptyList()
+        return runCatching { RemoteIndexSource.search(clean, limit) }.getOrDefault(emptyList())
+            .mapNotNull { searchItem(it) }
+    }
+
+    /** Una tarjeta de resultado: aquí el póster es opcional (el launcher pinta monograma). */
+    private fun searchItem(film: Film): FeedItem? {
+        if (film.id.isBlank() || film.title.isBlank()) return null
+        val series = isSeriesFilm(film)
+        return FeedItem(
+            ref = film.id,
+            title = film.title,
+            poster = film.posterUrl,
+            year = film.year,
+            rating = film.score,
+            kind = film.kind,
+            series = series,
+            openLink = openLinkFor(film),
+            playLink = if (series) "" else playLinkFor(film),
+        )
+    }
 
     /**
      * El EPG del VPS, solo para los primeros canales y con presupuesto. El feed sin guía ya es

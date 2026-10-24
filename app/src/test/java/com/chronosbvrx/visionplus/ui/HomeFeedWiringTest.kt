@@ -48,6 +48,33 @@ class HomeFeedWiringTest {
     }
 
     @Test
+    fun theLauncherSearchesThroughTheApp() {
+        val provider = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedProvider.kt")
+        assertTrue("el provider atiende /search", provider.contains("\"search\""))
+        assertTrue("usa el buscador de la app", provider.contains("HomeFeedStore.searchItems("))
+        val store = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedStore.kt")
+        assertTrue("el buscador es el del servidor", store.contains("RemoteIndexSource.search("))
+    }
+
+    @Test
+    fun theLauncherOpensTheExactEventInSports() {
+        val main = require("src/main/java/com/chronosbvrx/visionplus/MainActivity.kt")
+        assertTrue("atiende open/sports", main.contains("\"sports\" ->"))
+        assertTrue("siembra el partido", main.contains("DeportesReturn.pickingId = event"))
+        val store = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedStore.kt")
+        assertTrue("el feed trae la agenda", store.contains("GeeSportsSource.cachedEvents("))
+        assertTrue("y su enlace al evento", store.contains("VisionLinks.sports(event.id)"))
+    }
+
+    @Test
+    fun theLiveFeedPutsMexicoFirst() {
+        val store = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedStore.kt")
+        assertTrue("ordena México primero", store.contains("val mexico = all.filter { isMexico(it.name) }"))
+        assertTrue("los canales de la casa mandan", store.contains("mxPriority(it.name)"))
+        assertTrue("el feed marca el canal mexicano", store.contains("mexico = isMexico(channel.name)"))
+    }
+
+    @Test
     fun theManifestDeclaresEveryHostTheLauncherFires() {
         val manifest = require("src/main/AndroidManifest.xml")
         for (host in listOf("watch", "live", "title", "open")) {

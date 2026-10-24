@@ -61,6 +61,7 @@ object HomeFeedCodec {
                     put("now", item.now)
                     put("next", item.next)
                     put("progress", item.progress)
+                    put("mexico", item.mexico)
                     put("playLink", item.playLink)
                 })
             }
@@ -87,6 +88,31 @@ object HomeFeedCodec {
                             })
                         }
                     })
+                })
+            }
+        })
+        put("sports", JSONArray().apply {
+            feed.sports.forEach { item ->
+                put(JSONObject().apply {
+                    put("id", item.id)
+                    put("name", item.name)
+                    put("category", item.category)
+                    put("dateIso", item.dateIso)
+                    put("league", item.league)
+                    put("leagueLogo", item.leagueLogo)
+                    put("homeName", item.homeName)
+                    put("awayName", item.awayName)
+                    put("homeLogo", item.homeLogo)
+                    put("awayLogo", item.awayLogo)
+                    put("homeScore", item.homeScore ?: JSONObject.NULL)
+                    put("awayScore", item.awayScore ?: JSONObject.NULL)
+                    put("detail", item.detail)
+                    put("live", item.live)
+                    put("alive", item.alive)
+                    put("total", item.total)
+                    put("dateText", item.dateText)
+                    put("time", item.time)
+                    put("openLink", item.openLink)
                 })
             }
         })
@@ -146,7 +172,31 @@ object HomeFeedCodec {
                         now = o.optString("now"),
                         next = o.optString("next"),
                         progress = o.optInt("progress").coerceIn(0, 100),
+                        mexico = o.optBoolean("mexico", false),
                         playLink = o.optString("playLink"),
+                    )
+                },
+                sports = root.optJSONArray("sports").objects { o ->
+                    SportsItem(
+                        id = o.optString("id"),
+                        name = o.optString("name"),
+                        category = o.optString("category"),
+                        dateIso = o.optString("dateIso"),
+                        league = o.optString("league"),
+                        leagueLogo = o.optString("leagueLogo"),
+                        homeName = o.optString("homeName"),
+                        awayName = o.optString("awayName"),
+                        homeLogo = o.optString("homeLogo"),
+                        awayLogo = o.optString("awayLogo"),
+                        homeScore = if (o.isNull("homeScore")) null else o.optInt("homeScore"),
+                        awayScore = if (o.isNull("awayScore")) null else o.optInt("awayScore"),
+                        detail = o.optString("detail"),
+                        live = o.optBoolean("live", false),
+                        alive = o.optInt("alive"),
+                        total = o.optInt("total"),
+                        dateText = o.optString("dateText"),
+                        time = o.optString("time"),
+                        openLink = o.optString("openLink"),
                     )
                 },
                 rows = root.optJSONArray("rows").objects { o ->

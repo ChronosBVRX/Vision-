@@ -123,6 +123,22 @@ class HomeFeedStoreTest {
         assertEquals(0, HomeFeedStore.EpgWindow("x", "y").progressAt(1_500L))
     }
 
+    @Test
+    fun mexicanChannelsLeadWithTheHouseBrandsFirst() {
+        assertTrue(
+            "Canal 5 debe ir antes que un canal de la cola",
+            HomeFeedStore.mxPriority("Canal 5 HD") < HomeFeedStore.mxPriority("CANAL 9 HD"),
+        )
+        assertTrue(
+            "TUDN debe ir antes que la cola",
+            HomeFeedStore.mxPriority("TUDN MEXICO FHD") < HomeFeedStore.mxPriority("CANAL 9 HD"),
+        )
+        assertTrue(
+            "un canal desconocido cae al final",
+            HomeFeedStore.mxPriority("CANAL 9 HD") >= HomeFeedStore.mxPriority("Canal 22"),
+        )
+    }
+
     private fun film(id: String, kind: String, seasons: List<SeasonRef>) = Film(
         id = id,
         title = "Título",

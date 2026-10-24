@@ -78,6 +78,12 @@ object VisionLinks {
     /** La rejilla completa de TV en vivo de Vision+. */
     fun liveHub(): String = "$SCHEME://$HOST_OPEN/live"
 
+    /** La sección de Deportes en vivo; con [eventId] abre ese partido. */
+    fun sports(eventId: String = ""): String = buildString {
+        append("$SCHEME://$HOST_OPEN/sports")
+        if (eventId.isNotBlank()) query("event", eventId)
+    }
+
     /** Una sección del catálogo (movies, series, anime…) en Vision+. */
     fun section(name: String): String = "$SCHEME://$HOST_OPEN/section/${enc(name)}"
 

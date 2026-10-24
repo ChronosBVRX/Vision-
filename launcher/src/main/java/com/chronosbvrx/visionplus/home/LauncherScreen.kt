@@ -39,12 +39,14 @@ import com.chronosbvrx.visionplus.home.data.LauncherPrefs
 import com.chronosbvrx.visionplus.home.ui.AppsSurface
 import com.chronosbvrx.visionplus.home.ui.CatalogSurface
 import com.chronosbvrx.visionplus.home.ui.CommandCenterDialog
+import com.chronosbvrx.visionplus.home.ui.EventsSurface
 import com.chronosbvrx.visionplus.home.ui.HomeColors
 import com.chronosbvrx.visionplus.home.ui.HomeTab
 import com.chronosbvrx.visionplus.home.ui.HomeSurface
 import com.chronosbvrx.visionplus.home.ui.LiveSurface
 import com.chronosbvrx.visionplus.home.ui.MissingVisionBanner
-import com.chronosbvrx.visionplus.home.ui.SearchDialog
+import com.chronosbvrx.visionplus.home.ui.OutdatedVisionBanner
+import com.chronosbvrx.visionplus.home.ui.SearchSurface
 import com.chronosbvrx.visionplus.home.ui.TopChrome
 import com.chronosbvrx.visionplus.home.rememberHomeMetrics
 import kotlinx.coroutines.delay
@@ -69,11 +71,14 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     var feed by remember { mutableStateOf<HomeFeed?>(null) }
     var apps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
     var favorites by remember { mutableStateOf(prefs.favorites()) }
-    var tab by rememberSaveable { mutableStateOf(HomeTab.of(prefs.lastTab)) }
+    // Un Inicio de sistema siempre abre en Inicio (no en la última pestaña que se miró).
+    var tab by rememberSaveable { mutableStateOf(HomeTab.HOME) }
     var commandCenter by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
     var visionInstalled by remember { mutableStateOf(appsRepo.visionPlusInstalled()) }
     var canInstall by remember { mutableStateOf(HomeUpdate.canInstall(context)) }
+    var latestApp by remember { mutableStateOf<String?>(null) }
+    var feedAttempted by remember { mutableStateOf(false) }
     var homeKey by remember { mutableIntStateOf(0) }
     var forceLanding by remember { mutableIntStateOf(0) }
     var heroFocused by remember { mutableStateOf(false) }
@@ -86,6 +91,9 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         apps = appsRepo.load()
         visionInstalled = appsRepo.visionPlusInstalled()
         feeds.refresh()?.let { feed = it }
+        feedAttempted = true
+        // La versión del release (cacheada 24 h) decide si Vision+ se quedó atrás.
+        latestApp = HomeUpdate.latestAppVersion(context)
     }
 
     // Vision+ avisa cuando cambia el historial/perfil y el Inicio se refresca solo.
@@ -108,8 +116,6 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             }
         }
     }
-
-    LaunchedEffect(tab) { prefs.lastTab = tab.key }
 
     // El botón Home ya estando en el launcher: vuelve al Inicio y cierra paneles.
     LaunchedEffect(homeSignal) {
@@ -175,6 +181,13 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         )
     }
 
+    // Vision+ instalado pero sin feed (canal nuevo) o más viejo que el release: se ofrece
+    // actualizarlo desde aquí; el usuario no tiene que abrir la app para descubrirlo.
+    val appOutdated = visionInstalled && feedAttempted && (
+        feed == null ||
+            (latestApp != null && HomeUpdate.isOlder(feed?.meta?.appVersion.orEmpty(), latestApp!!))
+        )
+
     Box(
         Modifier
             .fillMaxSize()
@@ -206,6 +219,27 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                     state = HomeUpdate.visionState,
                     canInstall = canInstall,
                     onInstall = {
+                        if (HomeUpdate.canInstall(context)) {
+                            scope.launch { HomeUpdate.installVisionPlus(context) }
+                        } else {
+                            HomeUpdate.openInstallPermission(context)
+                        }
+                    },
+                    onSettings = { appsRepo.openSystemSettings() },
+                    modifier = Modifier.padding(
+                        start = metrics.horizontalPadding,
+                        end = metrics.horizontalPadding,
+                        top = 4.dp,
+                        bottom = 8.dp,
+                    ),
+                )
+            } else if (appOutdated) {
+                OutdatedVisionBanner(
+                    current = feed?.meta?.appVersion.orEmpty(),
+                    latest = latestApp.orEmpty(),
+                    state = HomeUpdate.visionState,
+                    canInstall = canInstall,
+                    onUpdate = {
                         if (HomeUpdate.canInstall(context)) {
                             scope.launch { HomeUpdate.installVisionPlus(context) }
                         } else {
@@ -254,6 +288,13 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         onOpen = { item -> openLink(item.playLink) },
                         onOpenFull = { openLink(VisionLinks.liveHub()) },
                         upTarget = tabLanding,
+                    )
+
+                    HomeTab.EVENTS -> EventsSurface(
+                        events = feed?.sports.orEmpty(),
+                        metrics = metrics,
+                        onOpen = { event -> openLink(event.openLink) },
+                        onOpenFull = { openLink(VisionLinks.sports()) },
                     )
 
                     HomeTab.MOVIES, HomeTab.SERIES -> CatalogSurface(
@@ -310,19 +351,27 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                     HomeUpdate.openInstallPermission(context)
                 }
             },
+            appOutdated = appOutdated,
+            appVersion = feed?.meta?.appVersion.orEmpty(),
+            latestAppVersion = latestApp.orEmpty(),
+            onUpdateVision = {
+                if (HomeUpdate.canInstall(context)) {
+                    scope.launch { HomeUpdate.installVisionPlus(context) }
+                } else {
+                    HomeUpdate.openInstallPermission(context)
+                }
+            },
         )
     }
 
     if (searchOpen) {
-        SearchDialog(
+        SearchSurface(
+            isTv = profile.isTv,
+            repo = feeds,
             onDismiss = { searchOpen = false },
-            onSearch = { query ->
+            onOpen = { item ->
                 searchOpen = false
-                openLink(VisionLinks.search(query))
-            },
-            onOpenSearch = {
-                searchOpen = false
-                openLink(VisionLinks.search())
+                openLink(item.openLink)
             },
         )
     }

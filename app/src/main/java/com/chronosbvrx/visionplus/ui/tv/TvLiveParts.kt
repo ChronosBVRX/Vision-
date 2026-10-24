@@ -195,9 +195,17 @@ internal fun TvChannelRow(
     ) {
         Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvChannelTile(channel, Modifier.size(40.dp))
-            Text(channel.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f)) {
+                Text(channel.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    channel.effectiveGroup(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VisionTextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             if (favorite) Icon(Icons.Default.Star, contentDescription = "Favorito", tint = Color(0xFFFFC94D), modifier = Modifier.size(18.dp))
-            Text(channel.effectiveGroup(), style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

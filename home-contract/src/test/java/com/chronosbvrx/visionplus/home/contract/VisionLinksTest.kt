@@ -61,6 +61,12 @@ class VisionLinksTest {
     }
 
     @Test
+    fun theSportsSectionCanOpenASpecificEvent() {
+        assertEquals("visionplus://open/sports", VisionLinks.sports())
+        assertEquals("visionplus://open/sports?event=event%3A7", VisionLinks.sports("event:7"))
+    }
+
+    @Test
     fun theOtherDestinationsAreStable() {
         assertEquals("visionplus://open/settings", VisionLinks.settings())
         assertEquals("visionplus://open/home", VisionLinks.home())

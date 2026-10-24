@@ -499,7 +499,7 @@ fun TvHomeScreen(
             )
         }
 
-        // Contenido con riel a la izquierda y desplazamiento vertical fluido
+        // Contenido a todo lo ancho: la navegación vive en la barra superior.
         Column(Modifier.fillMaxSize().padding(start = TV_RAIL_CONTENT_START)) {
             CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollBringIntoView) {
                 LazyColumn(
@@ -679,8 +679,7 @@ fun TvHomeScreen(
             }
         }
 
-        // Riel de navegación lateral con D-pad
-        TvSideRail(railItems, Modifier.align(Alignment.CenterStart), bottomItems)
+        // La navegación vive en la barra superior (TvTopBar): el riel ya no se pinta.
 
         // Campana de actualizaciones del sistema
         var showPluginUpdates by rememberSaveable { mutableStateOf(false) }
@@ -1114,6 +1113,7 @@ private fun HeroBillboard(
             TvCompactAction(
                 label = "Reproducir",
                 icon = VisionIcons.Play,
+                primary = true,
                 modifier = when {
                     isHeroTarget && returnRequester != null -> Modifier.focusRequester(returnRequester)
                     landing != null -> Modifier.landingFocus(landing)

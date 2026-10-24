@@ -6,6 +6,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.chronosbvrx.visionplus.home.ui.HomeTheme
 
 /**
@@ -22,6 +25,7 @@ class LauncherActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        hideSystemBars()
         val profile = DeviceProfile(this)
         setContent {
             HomeTheme(reducedEffects = profile.reducedEffects) {
@@ -37,6 +41,24 @@ class LauncherActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.action == Intent.ACTION_MAIN) homeSignal.intValue++
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    /**
+     * Un Inicio de tele no lleva barra de gestos ni de estado: en la tele no existen y en un
+     * teléfono (probando el launcher en horizontal) estorban y se comen el borde. Se pueden
+     * sacar deslizando desde el borde (modo inmersivo pegajoso), así nadie queda atrapado.
+     */
+    private fun hideSystemBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
     }
 
     /** El launcher nunca se cierra con Atrás; Compose lo maneja y aquí no se deja salir. */

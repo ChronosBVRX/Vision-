@@ -82,6 +82,40 @@ object HomeUpdate {
         visionState = State.Idle
     }
 
+    /**
+     * La versión de Vision+ del último release (el tag, p. ej. «2.5.130»). Se cachea 24 h:
+     * el launcher la usa para avisar si la app instalada se quedó atrás.
+     */
+    suspend fun latestAppVersion(context: Context): String? = withContext(Dispatchers.IO) {
+        val prefs = LauncherPrefs(context)
+        val now = System.currentTimeMillis()
+        val cached = prefs.lastReleaseTag
+        if (cached.isNotBlank() && now - prefs.lastReleaseAt < 24L * 60 * 60 * 1000) {
+            return@withContext cached
+        }
+        val fresh = runCatching { fetchTag() }.getOrNull()
+        if (fresh.isNullOrBlank()) return@withContext cached.takeIf { it.isNotBlank() }
+        prefs.lastReleaseTag = fresh
+        prefs.lastReleaseAt = now
+        fresh
+    }
+
+    /** Compara versiones «2.5.9» < «2.5.130» sin caer en el orden alfabético. */
+    internal fun isOlder(current: String, latest: String): Boolean {
+        fun parts(value: String) = value.trim().removePrefix("v")
+            .split('.')
+            .mapNotNull { it.toIntOrNull() }
+        val a = parts(current)
+        val b = parts(latest)
+        if (a.isEmpty() || b.isEmpty()) return false
+        for (index in 0 until maxOf(a.size, b.size)) {
+            val left = a.getOrElse(index) { 0 }
+            val right = b.getOrElse(index) { 0 }
+            if (left != right) return left < right
+        }
+        return false
+    }
+
     private suspend fun installAsset(
         context: Context,
         assetName: String,
@@ -115,6 +149,27 @@ object HomeUpdate {
     }
 
     private fun assetUrl(assetName: String): String? {
+        val body = releaseJson() ?: return null
+        val assets = JSONObject(body).optJSONArray("assets") ?: return null
+        for (i in 0 until assets.length()) {
+            val asset = assets.optJSONObject(i) ?: continue
+            if (asset.optString("name").equals(assetName, ignoreCase = true)) {
+                return asset.optString("browser_download_url").takeIf { it.isNotBlank() }
+            }
+        }
+        return null
+    }
+
+    /** El tag del último release, sin la «v» («v2.5.130» → «2.5.130»). */
+    private fun fetchTag(): String? {
+        val body = releaseJson() ?: return null
+        return JSONObject(body).optString("tag_name")
+            .trim()
+            .removePrefix("v")
+            .takeIf { it.isNotBlank() }
+    }
+
+    private fun releaseJson(): String? {
         val connection = (URL(RELEASES_URL).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 20_000
@@ -125,15 +180,7 @@ object HomeUpdate {
         try {
             connection.connect()
             if (connection.responseCode !in 200..299) return null
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            val assets = JSONObject(body).optJSONArray("assets") ?: return null
-            for (i in 0 until assets.length()) {
-                val asset = assets.optJSONObject(i) ?: continue
-                if (asset.optString("name").equals(assetName, ignoreCase = true)) {
-                    return asset.optString("browser_download_url").takeIf { it.isNotBlank() }
-                }
-            }
-            return null
+            return connection.inputStream.bufferedReader().use { it.readText() }
         } finally {
             connection.disconnect()
         }

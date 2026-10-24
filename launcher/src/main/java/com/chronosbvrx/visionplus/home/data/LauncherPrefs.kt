@@ -45,10 +45,21 @@ class LauncherPrefs(context: Context) {
         get() = prefs.getInt(KEY_DISMISSED_UPDATE, 0)
         set(value) = prefs.edit().putInt(KEY_DISMISSED_UPDATE, value).apply()
 
+    /** Última versión de Vision+ vista en el release (caché de 24 h). */
+    var lastReleaseTag: String
+        get() = prefs.getString(KEY_LAST_TAG, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_LAST_TAG, value).apply()
+
+    var lastReleaseAt: Long
+        get() = prefs.getLong(KEY_LAST_TAG_AT, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_TAG_AT, value).apply()
+
     private companion object {
         const val KEY_RECENT = "recent_apps"
         const val KEY_FAVORITES = "favorite_apps"
         const val KEY_TAB = "last_tab"
         const val KEY_DISMISSED_UPDATE = "dismissed_update"
+        const val KEY_LAST_TAG = "last_release_tag"
+        const val KEY_LAST_TAG_AT = "last_release_tag_at"
     }
 }

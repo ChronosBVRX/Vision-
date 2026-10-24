@@ -10,6 +10,9 @@ object HomeContract {
     const val AUTHORITY = "com.chronosbvrx.visionplus.homefeed"
     const val FEED_URI = "content://$AUTHORITY/feed"
 
+    /** El buscador del launcher: el mismo del servidor que usa la app. */
+    const val SEARCH_URI = "content://$AUTHORITY/search"
+
     /**
      * Permiso de nivel `signature`: solo se concede a un APK firmado con la MISMA llave
      * histórica. El feed jamás queda expuesto a una app ajena.
@@ -26,8 +29,8 @@ object HomeContract {
     const val LAUNCHER_PACKAGE = "com.chronosbvrx.visionplus.home"
 
     /** Versión del launcher que se publica junto a esta build. */
-    const val LAUNCHER_VERSION_NAME = "1.0.3"
-    const val LAUNCHER_VERSION_CODE = 4
+    const val LAUNCHER_VERSION_NAME = "1.0.9"
+    const val LAUNCHER_VERSION_CODE = 10
 
     /** El asset del release con el APK del launcher. */
     const val LAUNCHER_ASSET = "VisionPlusHome.apk"
