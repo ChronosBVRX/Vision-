@@ -5,6 +5,13 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **OTA 2.5.139 PUBLICADA: la licencia ya no se rinde con el portal lento — último intento con 25 s/60 s y `PLAYBACK_LICENSE_FAIL` con el motivo exacto — 872 Android** (2026-10-24):
+  - *Reporte*: «La tv TCL sigue fallando y no reproduce». Telemetría de la TCL en **2.5.138**: `PLAYBACK_HANDOFF_FAIL sin-medios (prepare=null)` + `PORTAL_SLOW semillaMs=1, cacheMs=16436, portalMs=47107`. El empaquetado/motor ya está bien (el Chromecast reproduce con el mismo APK); lo que falla es la **licencia**: `startPlayVOD` no devuelve medios.
+  - *Causa probable (medida parcialmente)*: el portal de esa tele tarda ~47 s en la fase del portal y `post()` corta a **15 s connect / 25 s read**; tras dos intentos (normal + sesión nueva) `prepareVod` devolvía `null` y el handoff moría sin motivo. No se pudo confirmar con logcat: la tele es Android 9 sin ADB por red y el barrido de `:5555` en la LAN no encontró nada (la depuración USB necesita cable a este PC).
+  - *Fix*: `post(path, specific, connectMs = 15_000, readMs = 25_000)` con timeouts por llamada; `prepareVod` factoriza el cuerpo (`licenseBody`) y, si tras los dos intentos no hay medios, hace un **último intento con 25 s / 60 s** (`license("2"|"1")`), y si aun así falla emite `PLAYBACK_LICENSE_FAIL` con `cid`, `motivo` (excepción/código del portal o «sin medios») y `ms`. En redes buenas no cambia nada.
+  - *Verificado*: compila; **872 Android** en verde (nuevo caso en `PlaybackSpeedWiringTest`: timeouts por llamada, reintento largo y telemetría del motivo); release R8 **70.7 MB** con firma histórica; publicado v2.5.139 (vc375), notas en `ota_notes_2.5.139.md`.
+  - *Pendiente*: probar en la TCL y, si sigue fallando, **`PLAYBACK_LICENSE_FAIL` dirá el motivo exacto** (si es `portal100024`/región, timeout o vacío). Para logcat nativo en la TCL hace falta cable USB a este PC (Android 9 no tiene emparejamiento inalámbrico) o una opción de «depuración de red» del fabricante.
+
 - **OTA 2.5.138 PUBLICADA: APK de 105 → 70.7 MB y retirada del motor legado — el release ya no lleva los assets del motor (respaldo solo en debug) y se borran las clases del motor viejo — 871 Android** (2026-10-24):
   - *Pedido*: «Baja el APK y haz limpieza de deuda».
   - *APK*: `assets/x4k` (3 DEX de 17 MB + 14 MB de libs) se movió a **`app/src/debug/assets/x4k`**: el release ya no lo lleva (el motor vive en `classes2/3/4.dex` y `lib/<abi>` desde la 2.5.137) y las compilaciones de depuración conservan el respaldo para desarrollar sin inyectar. `tools/publish_ota.ps1` **siempre inyecta** (se quitó `-SkipEngineInject`, que ahora produciría un release sin motor) y lee los DEX de `src/debug/assets`.

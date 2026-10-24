@@ -65,6 +65,20 @@ class PlaybackSpeedWiringTest {
     }
 
     @Test
+    fun theLicenseGetsASlowNetworkRetry() {
+        val text = File("src/main/java/com/chronosbvrx/visionplus/data/xuper/X4KApi.kt").readText()
+        val prepare = text.substringAfter("suspend fun prepareVod(").substringBefore("suspend fun playVod(")
+        // La TCL (2.5.138) fallaba con «sin-medios» y el portal a 47 s: el tope de 25 s cortaba
+        // la licencia. Ahora hay un último intento con más paciencia y el motivo en telemetría.
+        assertTrue("sin reintento con timeout largo", prepare.contains("connectMs = 25_000, readMs = 60_000"))
+        assertTrue("sin telemetría del motivo", prepare.contains("PLAYBACK_LICENSE_FAIL"))
+        assertTrue("el reintento no reutiliza el cuerpo", prepare.contains("suspend fun license("))
+        val post = text.substringAfter("private fun post(").substringBefore("private fun snTokenCall")
+        assertTrue("post no acepta timeouts", post.contains("connectMs: Int = 15_000"))
+        assertTrue(post.contains("readMs: Int = 25_000"))
+    }
+
+    @Test
     fun theEngineNoLongerHashesItsDexOnEveryPlayerStart() {
         val titan = source("data/xuper/X4KTitan.kt")
         // La marca se enciende con un fallo (o una reparación) y se apaga al verificar bien.

@@ -218,7 +218,12 @@ object X4KApi {
     }
 
     /** One encrypted portal call, failing over to the backup host. */
-    private fun post(path: String, specific: JSONObject): JSONObject {
+    private fun post(
+        path: String,
+        specific: JSONObject,
+        connectMs: Int = 15_000,
+        readMs: Int = 25_000,
+    ): JSONObject {
         val body = base(specific)
         val wire = XuperCrypto.encryptBody(body.toString(), KEY_BYTES)
         var last: Exception? = null
@@ -226,8 +231,8 @@ object X4KApi {
             try {
                 val conn = (URL("https://$host$path").openConnection() as HttpsURLConnection).apply {
                     requestMethod = "POST"
-                    connectTimeout = 15_000
-                    readTimeout = 25_000
+                    connectTimeout = connectMs
+                    readTimeout = readMs
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json; charset=utf-8")
                     setRequestProperty("apk", APP_ID)
@@ -1349,21 +1354,31 @@ object X4KApi {
             }
             var medias: JSONArray? = null
             val licenseStart = android.os.SystemClock.uptimeMillis()
+            var lastLicenseError: String? = null
+            // Cuerpo de la licencia (type "2" = directo, "1" = respaldo del portal).
+            fun licenseBody(type: String, token: String): JSONObject = JSONObject().apply {
+                put("userToken", token)
+                put("userId", userIdOf())
+                put("portalCode", PORTAL)
+                put("contentId", cid)
+                put("seriesContentId", sid)
+                put("type", type)
+                put("startTime", 0)
+                put("authType", "0")
+                put("episodeNumberList", JSONArray().put(1))
+            }
+            suspend fun license(type: String, connectMs: Int, readMs: Int): JSONObject? = runCatching {
+                post("/api/portalCore/v10/startPlayVOD", licenseBody(type, ensureSession(context)), connectMs, readMs)
+            }.onFailure {
+                lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
+            }.getOrNull()
             for (type in listOf("2", "1")) {
                 var d = runCatching {
                     callWithSession(context, "/api/portalCore/v10/startPlayVOD") { token ->
-                        JSONObject().apply {
-                            put("userToken", token)
-                            put("userId", userIdOf())
-                            put("portalCode", PORTAL)
-                            put("contentId", cid)
-                            put("seriesContentId", sid)
-                            put("type", type)
-                            put("startTime", 0)
-                            put("authType", "0")
-                            put("episodeNumberList", JSONArray().put(1))
-                        }
+                        licenseBody(type, token)
                     }
+                }.onFailure {
+                    lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
                 }.getOrNull()
                 // Si la sesión guardada estaba desincronizada o el portal rechazó inicialmente,
                 // renovar sesión explícitamente y reintentar de inmediato antes de descartar.
@@ -1371,17 +1386,9 @@ object X4KApi {
                     d = runCatching {
                         // Token rechazado: mint forzado (salta el silencio de 30 s).
                         val freshToken = renewSession(context, force = true)
-                        post("/api/portalCore/v10/startPlayVOD", JSONObject().apply {
-                            put("userToken", freshToken)
-                            put("userId", userIdOf())
-                            put("portalCode", PORTAL)
-                            put("contentId", cid)
-                            put("seriesContentId", sid)
-                            put("type", type)
-                            put("startTime", 0)
-                            put("authType", "0")
-                            put("episodeNumberList", JSONArray().put(1))
-                        })
+                        post("/api/portalCore/v10/startPlayVOD", licenseBody(type, freshToken))
+                    }.onFailure {
+                        lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
                     }.getOrNull() ?: d
                 }
                 if (d != null) {
@@ -1397,6 +1404,23 @@ object X4KApi {
                         break
                     }
                 }
+            }
+            // Último intento con más paciencia: en una tele con el portal a 45 s el tope de 25 s
+            // cortaba la licencia y el play moría como «sin-medios» (TCL, 2.5.138).
+            if (medias == null) {
+                val d = license("2", connectMs = 25_000, readMs = 60_000)
+                    ?: license("1", connectMs = 25_000, readMs = 60_000)
+                if (d != null) {
+                    if (durMs <= 0L) durMs = extractDurationMs(d)
+                    medias = collectMedias(d).takeIf { it.length() > 0 }
+                }
+            }
+            if (medias == null) {
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "PLAYBACK_LICENSE_FAIL",
+                    "cid=$cid motivo=${lastLicenseError ?: "sin medios"} " +
+                        "ms=${android.os.SystemClock.uptimeMillis() - licenseStart}",
+                )
             }
             val m = medias ?: return@guarded null
             val totalMs = android.os.SystemClock.uptimeMillis() - startedAt
