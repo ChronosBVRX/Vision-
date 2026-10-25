@@ -34,11 +34,17 @@ import androidx.compose.foundation.lazy.items as rowItems
 import androidx.compose.foundation.lazy.itemsIndexed as rowItemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SettingsRemote
+import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -1350,6 +1356,12 @@ fun AppsSurface(
     onLongClick: (AppEntry) -> Unit,
     onSystemSettings: () -> Unit,
     onWifi: () -> Unit,
+    onDisplay: () -> Unit,
+    onSound: () -> Unit,
+    onStorage: () -> Unit,
+    onDate: () -> Unit,
+    onAbout: () -> Unit,
+    onAppList: () -> Unit,
     onHomeSettings: () -> Unit,
     onRequestHome: () -> Unit = {},
     onManage: () -> Unit,
@@ -1386,7 +1398,7 @@ fun AppsSurface(
                             subtitle = buildString {
                                 append("${visible.size} visibles")
                                 if (hidden > 0) append(" · $hidden ocultas")
-                                append(" · mantén OK para opciones")
+                                append(" · mantén OK: abrir, fijar, desinstalar")
                             },
                             actionLabel = "Gestionar",
                             actionModifier = upTarget?.let { Modifier.focusProperties { up = it } } ?: Modifier,
@@ -1429,6 +1441,12 @@ fun AppsSurface(
                     listOf(
                         SystemAction("settings", "Ajustes de la tele", Icons.Rounded.Settings, onSystemSettings),
                         SystemAction("wifi", "Wi-Fi y red", Icons.Rounded.Wifi, onWifi),
+                        SystemAction("display", "Pantalla", Icons.Rounded.Tv, onDisplay),
+                        SystemAction("sound", "Sonido", Icons.AutoMirrored.Rounded.VolumeUp, onSound),
+                        SystemAction("storage", "Almacenamiento", Icons.Rounded.Storage, onStorage),
+                        SystemAction("clock", "Fecha y hora", Icons.Rounded.Schedule, onDate),
+                        SystemAction("about", "Acerca de", Icons.Rounded.Info, onAbout),
+                        SystemAction("apps", "Apps del sistema", Icons.Rounded.Apps, onAppList),
                         SystemAction("use-home", "Poner como Inicio", Icons.Rounded.Home, onRequestHome),
                         SystemAction("home", "Cambiar el Inicio", Icons.Rounded.SettingsRemote, onHomeSettings),
                     ),

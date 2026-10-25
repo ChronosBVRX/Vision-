@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -18,13 +19,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.RestartAlt
@@ -50,6 +54,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,6 +81,7 @@ import kotlinx.coroutines.delay
 internal data class MenuAction(
     val title: String,
     val detail: String = "",
+    val danger: Boolean = false,
     val onClick: () -> Unit,
 )
 
@@ -249,12 +257,26 @@ internal fun ItemActionsDialog(
         requestFocusSafely(first)
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.74f)), contentAlignment = Alignment.Center) {
+        BoxWithConstraints(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.74f))
+                // Si el menú salió con OK largo, el KeyUp que se está soltando no debe
+                // activar la primera acción. Lo consume esta ventana.
+                .onPreviewKeyEvent { event ->
+                    event.type == KeyEventType.KeyUp && TvPressGuard.takeKeyUp()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            val maxPanelHeight = maxHeight * 0.92f
             Column(
                 Modifier
                     .width(470.dp)
+                    .heightIn(max = maxPanelHeight)
                     .clip(HomeShapes.panel)
                     .background(HomeColors.Deep)
+                    // Nunca se esconde una acción: si no cabe, el mando la desplaza.
+                    .verticalScroll(rememberScrollState())
                     .padding(22.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp),
             ) {
@@ -277,7 +299,11 @@ internal fun ItemActionsDialog(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text(action.title, color = HomeColors.Text, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    action.title,
+                                    color = if (action.danger) HomeColors.Live else HomeColors.Text,
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
                                 if (action.detail.isNotBlank()) {
                                     Text(action.detail, color = HomeColors.TextFaint, style = MaterialTheme.typography.bodySmall)
                                 }
@@ -438,6 +464,7 @@ fun ManageAppsDialog(
     onToggleFavorite: (String) -> Unit,
     onToggleHidden: (String) -> Unit,
     onMoveFavorite: (String, Int) -> Unit,
+    onUninstall: (AppEntry) -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -453,7 +480,7 @@ fun ManageAppsDialog(
     }
     PersonalizePanel(
         title = "Apps",
-        subtitle = "OK en estrella = favorita · OK en ojo = oculta · flechas = orden",
+        subtitle = "OK en estrella = favorita · ojo = oculta · papelera = desinstalar",
         onDismiss = onDismiss,
         first = first,
     ) {
@@ -479,6 +506,7 @@ fun ManageAppsDialog(
                     onToggleFavorite = { onToggleFavorite(app.packageName) },
                     onToggleHidden = { onToggleHidden(app.packageName) },
                     onMoveFavorite = { delta -> onMoveFavorite(app.packageName, delta) },
+                    onUninstall = { onUninstall(app) },
                 )
             }
         }
@@ -499,6 +527,7 @@ private fun AppManageRow(
     onToggleFavorite: () -> Unit,
     onToggleHidden: () -> Unit,
     onMoveFavorite: (Int) -> Unit,
+    onUninstall: () -> Unit,
 ) {
     Row(
         Modifier
@@ -530,7 +559,7 @@ private fun AppManageRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                app.packageName,
+                if (app.versionName.isBlank()) app.packageName else "${app.packageName} · v${app.versionName}",
                 color = HomeColors.TextFaint,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
@@ -563,6 +592,13 @@ private fun AppManageRow(
             label = if (hidden) "Mostrar" else "Ocultar",
             onClick = onToggleHidden,
         )
+        if (app.canUninstall) {
+            MiniAction(
+                icon = Icons.Rounded.DeleteOutline,
+                label = "Desinstalar ${app.label}",
+                onClick = onUninstall,
+            )
+        }
     }
 }
 

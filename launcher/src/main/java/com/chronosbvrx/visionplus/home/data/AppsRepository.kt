@@ -1,7 +1,9 @@
 package com.chronosbvrx.visionplus.home.data
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.net.Uri
@@ -14,12 +16,19 @@ import com.chronosbvrx.visionplus.home.contract.HomeContract
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** Una app instalada, ya lista para pintar. */
+/**
+ * Una app instalada, ya lista para pintar y para gestionar.
+ *
+ * `canUninstall` no es un capricho: Android no deja quitar las apps de sistema que nunca se
+ * actualizaron, y el menú tiene que decir la verdad antes de abrir el desinstalador.
+ */
 data class AppEntry(
     val packageName: String,
     val label: String,
     val icon: ImageBitmap? = null,
     val isSystem: Boolean = false,
+    val canUninstall: Boolean = false,
+    val versionName: String = "",
 )
 
 /**
@@ -58,6 +67,50 @@ class AppsRepository(context: Context) {
 
     fun isInstalled(packageName: String): Boolean = runCatching {
         pm.getPackageInfo(packageName, 0)
+        true
+    }.getOrDefault(false)
+
+    /** ¿El sistema dejaría quitarla? Las de fábrica sin actualizar no se pueden desinstalar. */
+    fun canUninstall(packageName: String): Boolean = runCatching {
+        val flags = pm.getApplicationInfo(packageName, 0).flags
+        uninstallable(
+            isSystem = flags and ApplicationInfo.FLAG_SYSTEM != 0,
+            updatedSystem = flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0,
+        )
+    }.getOrDefault(false)
+
+    /**
+     * Abre el desinstalador del sistema. Se lanza el intent DIRECTAMENTE (la visibilidad de
+     * paquetes de Android 11+ puede ocultar al instalador en una consulta, pero no impide
+     * abrirlo). En teles sin esa pantalla cae a la ficha de la app, donde vive igual.
+     */
+    fun requestUninstall(packageName: String): Boolean {
+        if (packageName.isBlank() || packageName == app.packageName) return false
+        val intent = Intent(Intent.ACTION_DELETE, Uri.fromParts("package", packageName, null))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (open(intent)) return true
+        return openAppInfo(packageName)
+    }
+
+    /** La ficha del sistema: permisos, almacenamiento, «Forzar detención» y desinstalar. */
+    fun openAppInfo(packageName: String): Boolean {
+        if (packageName.isBlank()) return false
+        val details = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", packageName, null),
+        )
+        if (open(details)) return true
+        if (open(Intent(Settings.ACTION_APPLICATION_SETTINGS))) return true
+        return open(Intent(Settings.ACTION_SETTINGS))
+    }
+
+    /**
+     * Cierra una app que quedó abierta en segundo plano (el launcher está al frente, así que la
+     * otra app por definición lo está). Es la utilidad clásica de un launcher de tele.
+     */
+    fun stopApp(packageName: String): Boolean = runCatching {
+        val am = app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        am.killBackgroundProcesses(packageName)
         true
     }.getOrDefault(false)
 
@@ -170,6 +223,28 @@ class AppsRepository(context: Context) {
 
     fun openWifiSettings(): Boolean = open(Intent(Settings.ACTION_WIFI_SETTINGS))
 
+    fun openDisplaySettings(): Boolean = open(Intent(Settings.ACTION_DISPLAY_SETTINGS))
+
+    fun openSoundSettings(): Boolean = open(Intent(Settings.ACTION_SOUND_SETTINGS))
+
+    fun openDateTimeSettings(): Boolean = open(Intent(Settings.ACTION_DATE_SETTINGS))
+
+    fun openAboutSettings(): Boolean = open(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS))
+
+    /** Almacenamiento: la pantalla exacta si el firmware la tiene; si no, «Acerca de». */
+    fun openStorageSettings(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            open(Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS))
+        ) {
+            return true
+        }
+        if (open(Intent(Settings.ACTION_MEMORY_CARD_SETTINGS))) return true
+        return open(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS))
+    }
+
+    /** La lista de apps del sistema: sirve para desinstalar lo que este launcher no lista. */
+    fun openAppListSettings(): Boolean = open(Intent(Settings.ACTION_APPLICATION_SETTINGS))
+
     private fun open(intent: Intent): Boolean = runCatching {
         app.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         true
@@ -192,13 +267,22 @@ class AppsRepository(context: Context) {
                 if (!saw.add(pkg)) continue
                 val label = runCatching { info.loadLabel(pm).toString() }.getOrNull()
                     ?.takeIf { it.isNotBlank() } ?: pkg
-                val system = (info.activityInfo.applicationInfo?.flags ?: 0) and
-                    android.content.pm.ApplicationInfo.FLAG_SYSTEM != 0
+                val appInfo = info.activityInfo.applicationInfo
+                val flags = appInfo?.flags ?: 0
+                val system = flags and ApplicationInfo.FLAG_SYSTEM != 0
+                val updatedSystem = flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0
                 out += AppEntry(
                     packageName = pkg,
                     label = label,
                     icon = iconOf(info),
                     isSystem = system,
+                    canUninstall = uninstallable(
+                        isSystem = system,
+                        updatedSystem = updatedSystem,
+                    ),
+                    versionName = runCatching { pm.getPackageInfo(pkg, 0).versionName }
+                        .getOrNull()
+                        .orEmpty(),
                 )
             }
         }
@@ -209,4 +293,56 @@ class AppsRepository(context: Context) {
         val drawable: Drawable = info.loadIcon(pm)
         drawable.toBitmap(width = 128, height = 128).asImageBitmap()
     }.getOrNull()
+}
+
+/**
+ * La regla real de Android para el botón «Desinstalar»: una app de fábrica que nunca se
+ * actualizó no se puede quitar; una de fábrica actualizada solo pierde la actualización.
+ * No se usa `FLAG_INSTALLED`: en varias versiones no viene en la consulta del launcher y hacía
+ * desaparecer «Desinstalar» en apps instaladas por el usuario (verificado en Android 16).
+ */
+internal fun uninstallable(
+    isSystem: Boolean,
+    updatedSystem: Boolean,
+): Boolean = !isSystem || updatedSystem
+
+/**
+ * Busca apps instaladas por nombre (sin acentos ni mayúsculas) o por paquete. Es lo que hace
+ * que el buscador del launcher también sirva para abrir «Netflix» escribiendo «net».
+ */
+internal fun filterApps(
+    apps: List<AppEntry>,
+    query: String,
+    limit: Int = 6,
+): List<AppEntry> {
+    val folded = foldSearch(query)
+    val compact = folded.filter { it.isLetterOrDigit() }
+    if (folded.isBlank()) return emptyList()
+    return apps.asSequence()
+        .map { app ->
+            val label = foldSearch(app.label)
+            val labelCompact = label.filter { it.isLetterOrDigit() }
+            val hitsLabel = label.contains(folded) || labelCompact.contains(compact)
+            val hitsPackage = app.packageName.contains(folded.replace(" ", "."))
+            app to (hitsLabel || hitsPackage)
+        }
+        .filter { it.second }
+        .sortedWith(
+            compareByDescending<Pair<AppEntry, Boolean>> {
+                foldSearch(it.first.label).startsWith(folded)
+            }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.first.label },
+        )
+        .map { it.first }
+        .take(limit.coerceAtLeast(1))
+        .toList()
+}
+
+/** Minúsculas, sin acentos y sin espacios repetidos: la misma forma para consulta y nombre. */
+internal fun foldSearch(text: String): String {
+    val normalized = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD)
+    return normalized
+        .replace(Regex("\\p{M}+"), "")
+        .lowercase(java.util.Locale.ROOT)
+        .replace(Regex("\\s+"), " ")
+        .trim()
 }

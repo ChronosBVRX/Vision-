@@ -2,7 +2,9 @@ package com.chronosbvrx.visionplus.home.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -10,16 +12,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.items as rowItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -45,17 +50,21 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chronosbvrx.visionplus.home.contract.FeedItem
+import com.chronosbvrx.visionplus.home.data.AppEntry
 import com.chronosbvrx.visionplus.home.data.FeedRepository
+import com.chronosbvrx.visionplus.home.data.filterApps
 import kotlinx.coroutines.delay
 
 /**
- * El buscador del sistema: busca en el catálogo completo (a través de Vision+) y pinta los
- * resultados **aquí mismo**; solo al elegir uno se abre la ficha en Vision+.
+ * El buscador del sistema: busca títulos en el catálogo completo (a través de Vision+) **y**
+ * en las apps instaladas. Un launcher de verdad te deja abrir Netflix escribiendo «net» sin
+ * recorrer el cajón de apps.
  *
  * En la tele se escribe con el teclado del mando (y se puede dictar); en el teléfono sale el
  * teclado del sistema.
@@ -66,6 +75,8 @@ fun SearchSurface(
     repo: FeedRepository,
     onDismiss: () -> Unit,
     onOpen: (FeedItem) -> Unit,
+    apps: List<AppEntry> = emptyList(),
+    onApp: (AppEntry) -> Unit = {},
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -78,6 +89,7 @@ fun SearchSurface(
         val fieldFocus = remember { FocusRequester() }
         val firstKey = remember { FocusRequester() }
         val keyboard = LocalSoftwareKeyboardController.current
+        val appHits = remember(query, apps) { filterApps(apps, query) }
 
         val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val spoken = result.data
@@ -201,22 +213,81 @@ fun SearchSurface(
                     )
                 }
 
-                Spacer(Modifier.height(16.dp))
-                Box(Modifier.weight(1f)) {
-                    when {
-                        query.isBlank() -> SearchHint(
-                            "Escribe o dicta un título",
-                            "Los resultados aparecen aquí; al elegir uno se abre su ficha en Vision+.",
+                Spacer(Modifier.height(12.dp))
+                Column(Modifier.weight(1f).fillMaxWidth()) {
+                    if (appHits.isNotEmpty()) {
+                        Text(
+                            "Apps instaladas",
+                            color = HomeColors.TextFaint,
+                            style = MaterialTheme.typography.bodySmall,
                         )
-                        searching && results.isEmpty() -> SearchHint("Buscando…", "Consultando el catálogo completo.")
-                        searched && results.isEmpty() -> SearchHint(
-                            "Sin resultados para «${query.trim()}»",
-                            "Prueba con otro nombre o con el título original.",
-                        )
-                        else -> SearchResults(results, isTv = isTv, onOpen = onOpen)
+                        Spacer(Modifier.height(5.dp))
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth().focusGroup(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(bottom = 2.dp),
+                        ) {
+                            rowItems(appHits, key = { it.packageName }) { app ->
+                                AppHitChip(app = app, onClick = { onApp(app) })
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                    }
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        when {
+                            query.isBlank() -> SearchHint(
+                                "Escribe o dicta un título",
+                                "Busca películas y series, o abre una app instalada escribiendo su nombre.",
+                            )
+                            searching && results.isEmpty() -> SearchHint("Buscando…", "Consultando el catálogo completo.")
+                            searched && results.isEmpty() && appHits.isEmpty() -> SearchHint(
+                                "Sin resultados para «${query.trim()}»",
+                                "Prueba con otro nombre, el título original o una app instalada.",
+                            )
+                            searched && results.isEmpty() -> SearchHint(
+                                "Sin títulos en Vision+",
+                                "Arriba están las apps instaladas que coinciden.",
+                            )
+                            else -> SearchResults(results, isTv = isTv, onOpen = onOpen)
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AppHitChip(app: AppEntry, onClick: () -> Unit) {
+    FocusableSurface(
+        onClick = onClick,
+        shape = HomeShapes.pill,
+        modifier = Modifier.height(38.dp),
+        focusedScale = 1.03f,
+    ) { focused ->
+        Row(
+            Modifier
+                .fillMaxHeight()
+                .background(if (focused) HomeColors.SurfaceHigh else HomeColors.Surface)
+                .padding(horizontal = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val icon = app.icon
+            if (icon != null) {
+                Image(
+                    bitmap = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Text(
+                app.label,
+                color = HomeColors.Text,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

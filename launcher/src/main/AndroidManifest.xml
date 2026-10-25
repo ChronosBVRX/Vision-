@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Auto-actualización del launcher (se instala como cualquier APK, sin tienda). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- «Cerrar app» del menú largo: detiene apps que quedaron en segundo plano. -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+    <!-- Desinstalar desde el launcher: el instalador de Android exige este permiso al que
+         lanza ACTION_DELETE (verificado en Android 16: sin él la pantalla abre y se cierra). -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- El feed de Vision+ (permiso de firma: solo con la llave histórica). -->
     <uses-permission android:name="com.chronosbvrx.visionplus.permission.HOME_FEED" />
     <!-- Precalentamiento opcional del motor de Vision+ (mismo candado de firma). -->

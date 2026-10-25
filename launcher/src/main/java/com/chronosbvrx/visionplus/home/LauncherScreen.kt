@@ -1,6 +1,9 @@
 package com.chronosbvrx.visionplus.home
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -33,6 +36,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.chronosbvrx.visionplus.home.contract.HomeFeed
@@ -169,10 +173,35 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         onDispose { feeds.stopObserving(observer) }
     }
 
+    // Instalar o desinstalar una app se ve al instante: un launcher no puede seguir mostrando
+    // lo que ya no existe (ni esconder lo que acaba de llegar).
+    DisposableEffect(Unit) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context?, intent: Intent?) {
+                scope.launch {
+                    apps = appsRepo.load(force = true)
+                    recentApps = prefs.recentApps()
+                    visionInstalled = appsRepo.visionPlusInstalled()
+                }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_CHANGED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addDataScheme("package")
+        }
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+    }
+
     // Al volver de una app o del reproductor, el minuto y el perfil son los de ahora.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         scope.launch {
             feeds.refresh()?.let { feed = it }
+            apps = appsRepo.load(force = true)
+            recentApps = prefs.recentApps()
             visionInstalled = appsRepo.visionPlusInstalled()
             canInstall = HomeUpdate.canInstall(context)
             // Si el instalador se canceló, el botón vuelve a ofrecer la instalación.
@@ -263,6 +292,16 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         recentApps = prefs.recentApps()
         if (!appsRepo.launch(app.packageName)) {
             LauncherActions.toast(context, "No se pudo abrir ${app.label}")
+        }
+    }
+
+    fun openSystemPage(opened: Boolean, name: String) {
+        if (!opened) LauncherActions.toast(context, "Este equipo no tiene la pantalla de $name")
+    }
+
+    fun requestUninstall(app: AppEntry) {
+        if (!appsRepo.requestUninstall(app.packageName)) {
+            LauncherActions.toast(context, "No se pudo abrir el desinstalador")
         }
     }
 
@@ -495,6 +534,24 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         onLongClick = { app -> editTarget = EditTarget.App(app) },
                         onSystemSettings = { appsRepo.openSystemSettings() },
                         onWifi = { appsRepo.openWifiSettings() },
+                        onDisplay = {
+                            openSystemPage(appsRepo.openDisplaySettings(), "pantalla")
+                        },
+                        onSound = {
+                            openSystemPage(appsRepo.openSoundSettings(), "sonido")
+                        },
+                        onStorage = {
+                            openSystemPage(appsRepo.openStorageSettings(), "almacenamiento")
+                        },
+                        onDate = {
+                            openSystemPage(appsRepo.openDateTimeSettings(), "fecha y hora")
+                        },
+                        onAbout = {
+                            openSystemPage(appsRepo.openAboutSettings(), "acerca del equipo")
+                        },
+                        onAppList = {
+                            openSystemPage(appsRepo.openAppListSettings(), "apps del sistema")
+                        },
                         onHomeSettings = { appsRepo.openHomeSettings() },
                         onRequestHome = { requestHome() },
                         onManage = { personalizePage = PersonalizePage.APPS },
@@ -573,6 +630,11 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         SearchSurface(
             isTv = profile.isTv,
             repo = feeds,
+            apps = apps,
+            onApp = { app ->
+                searchOpen = false
+                launchApp(app)
+            },
             onDismiss = { searchOpen = false },
             onOpen = { item ->
                 searchOpen = false
@@ -643,10 +705,27 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                 val app = target.app
                 val favorite = app.packageName in config.appFavorites
                 val hidden = app.packageName in config.hiddenApps
+                val canOpen = appsRepo.launchIntent(app.packageName) != null
                 ItemActionsDialog(
                     title = app.label,
-                    subtitle = app.packageName,
+                    subtitle = buildString {
+                        append(app.packageName)
+                        if (app.versionName.isNotBlank()) append(" · v").append(app.versionName)
+                        append(if (app.isSystem) " · app del sistema" else " · instalada")
+                    },
                     actions = buildList {
+                        if (canOpen) {
+                            add(
+                                MenuAction(
+                                    title = "Abrir",
+                                    detail = "Abrir ahora",
+                                    onClick = {
+                                        editTarget = null
+                                        launchApp(app)
+                                    },
+                                ),
+                            )
+                        }
                         add(
                             MenuAction(
                                 title = if (favorite) "Quitar de favoritas" else "Fijar app",
@@ -667,29 +746,55 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                                 },
                             ),
                         )
-                        if (favorite) {
+                        // Las opciones de verdad de un launcher: la ficha del sistema y
+                        // desinstalar sin salir a buscar Ajustes.
+                        add(
+                            MenuAction(
+                                title = "Información de la app",
+                                detail = "Permisos, almacenamiento, versión y forzar detención",
+                                onClick = {
+                                    editTarget = null
+                                    if (!appsRepo.openAppInfo(app.packageName)) {
+                                        LauncherActions.toast(context, "No se pudo abrir la información de ${app.label}")
+                                    }
+                                },
+                            ),
+                        )
+                        if (!app.isSystem) {
                             add(
                                 MenuAction(
-                                    title = "Mover al inicio de Apps",
-                                    detail = "Queda como la primera favorita",
+                                    title = "Cerrar app",
+                                    detail = "La detiene; se abre de nuevo cuando la uses",
                                     onClick = {
-                                        updateConfig { it.promoteAppFavorite(app.packageName) }
                                         editTarget = null
-                                        LauncherActions.toast(context, "${app.label} al inicio de Apps")
+                                        if (appsRepo.stopApp(app.packageName)) {
+                                            LauncherActions.toast(context, "${app.label} cerrada")
+                                        } else {
+                                            LauncherActions.toast(context, "No se pudo cerrar ${app.label}")
+                                        }
                                     },
                                 ),
                             )
                         }
-                        add(
-                            MenuAction(
-                                title = "Gestionar apps",
-                                detail = "Favoritas, ocultas y orden",
-                                onClick = {
-                                    editTarget = null
-                                    personalizePage = PersonalizePage.APPS
-                                },
-                            ),
-                        )
+                        if (app.canUninstall) {
+                            add(
+                                MenuAction(
+                                    title = if (app.isSystem) "Quitar actualización" else "Desinstalar",
+                                    detail = if (app.isSystem) {
+                                        "Vuelve a la versión de fábrica de esa app"
+                                    } else {
+                                        "Abre el desinstalador de Android"
+                                    },
+                                    danger = true,
+                                    onClick = {
+                                        editTarget = null
+                                        if (!appsRepo.requestUninstall(app.packageName)) {
+                                            LauncherActions.toast(context, "No se pudo abrir el desinstalador")
+                                        }
+                                    },
+                                ),
+                            )
+                        }
                     },
                     onDismiss = { editTarget = null },
                 )
@@ -735,6 +840,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             onToggleFavorite = { pkg -> updateConfig { it.toggleAppFavorite(pkg) } },
             onToggleHidden = { pkg -> updateConfig { it.toggleAppHidden(pkg) } },
             onMoveFavorite = { pkg, delta -> updateConfig { it.moveAppFavorite(pkg, delta) } },
+            onUninstall = { app -> requestUninstall(app) },
             onReset = {
                 updateConfig { it.resetApps() }
                 LauncherActions.toast(context, "Apps restablecidas")

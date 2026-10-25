@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,15 +41,48 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+/**
+ * La tecla OK de un mando repite mientras se mantiene. Si el menú se abre a mitad de la
+ * pulsación, la ventana nueva recibiría el KeyUp y activaría su primer botón: este candado se
+ * come EXACTAMENTE ese KeyUp, lo reciba la tarjeta o el diálogo. Se vence solo para no dejar
+ * una tecla muda si el equipo nunca entrega el KeyUp.
+ */
+internal object TvPressGuard {
+    private var pendingAt = 0L
+
+    fun expectKeyUp() {
+        pendingAt = System.currentTimeMillis()
+    }
+
+    fun takeKeyUp(): Boolean {
+        if (pendingAt == 0L) return false
+        val expired = System.currentTimeMillis() - pendingAt > 2_500L
+        pendingAt = 0L
+        return !expired
+    }
+}
+
+/** Cuánto hay que mantener OK para que salga el menú de opciones (como en un launcher). */
+internal const val LONG_PRESS_MS = 550L
 
 /**
  * La tarjeta enfocable del sistema. Un solo lugar define cómo se siente el mando en TODA la
  * pantalla: anillo blanco, sombra azul y un escalado corto (que se apaga en equipos modestos).
+ *
+ * `onLongClick` funciona con el dedo Y con el mando: se mantiene OK (o se pulsa Menú/Info en
+ * el control) y salen las opciones de la app o del canal.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -61,7 +95,11 @@ fun FocusableSurface(
     content: @Composable (focused: Boolean) -> Unit,
 ) {
     val reduced = LocalReducedEffects.current
+    val scope = rememberCoroutineScope()
     var focused by remember { mutableStateOf(false) }
+    var longPressFired by remember { mutableStateOf(false) }
+    var suppressClick by remember { mutableStateOf(false) }
+    var longPressJob by remember { mutableStateOf<Job?>(null) }
     val scale by animateFloatAsState(
         targetValue = if (focused && !reduced) focusedScale else 1f,
         animationSpec = tween(durationMillis = 120),
@@ -84,10 +122,72 @@ fun FocusableSurface(
             )
             // El observador va ANTES del clickable: así ve el nodo enfocable que crea.
             .onFocusChanged { focused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                val native = event.nativeKeyEvent.keyCode
+                val isOk = native == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                    native == android.view.KeyEvent.KEYCODE_ENTER ||
+                    native == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+                // El KeyUp del OK largo que abrió un menú no debe activar NADA (ni esta
+                // tarjeta ni el primer botón del diálogo que acaba de recibir el foco).
+                if (event.type == KeyEventType.KeyUp && isOk && TvPressGuard.takeKeyUp()) {
+                    return@onPreviewKeyEvent true
+                }
+                if (onLongClick == null) return@onPreviewKeyEvent false
+                val isMenu = native == android.view.KeyEvent.KEYCODE_MENU ||
+                    native == android.view.KeyEvent.KEYCODE_INFO
+                // El botón Menú/Info del mando abre las opciones de una vez.
+                if (event.type == KeyEventType.KeyDown && isMenu) {
+                    longPressJob?.cancel()
+                    longPressJob = null
+                    longPressFired = false
+                    onLongClick.invoke()
+                    return@onPreviewKeyEvent true
+                }
+                if (!isOk) return@onPreviewKeyEvent false
+                when (event.type) {
+                    KeyEventType.KeyDown -> {
+                        if (event.nativeKeyEvent.repeatCount == 0) {
+                            longPressFired = false
+                            suppressClick = false
+                            longPressJob?.cancel()
+                            longPressJob = scope.launch {
+                                delay(LONG_PRESS_MS)
+                                if (focused) {
+                                    longPressFired = true
+                                    suppressClick = true
+                                    TvPressGuard.expectKeyUp()
+                                    onLongClick.invoke()
+                                }
+                            }
+                        } else if (!longPressFired) {
+                            // Hay mandos que no esperan al temporizador: la repetición
+                            // sostenida ya es un OK largo.
+                            longPressJob?.cancel()
+                            longPressJob = null
+                            longPressFired = true
+                            suppressClick = true
+                            TvPressGuard.expectKeyUp()
+                            onLongClick.invoke()
+                        }
+                        false
+                    }
+
+                    KeyEventType.KeyUp -> {
+                        longPressJob?.cancel()
+                        longPressJob = null
+                        false
+                    }
+
+                    else -> false
+                }
+            }
             .combinedClickable(
                 interactionSource = interaction,
                 indication = null,
-                onClick = onClick,
+                onClick = {
+                    // Tras un OK largo, el KeyUp no debe abrir además la app/canal.
+                    if (suppressClick) suppressClick = false else onClick()
+                },
                 onLongClick = onLongClick,
             ),
     ) {
