@@ -47,17 +47,35 @@ object AppUpdate {
 
     /** Canal efectivo de este equipo: preferencia local, o servidor (`beta_device_ids`). */
     fun channel(context: Context): String {
-        val local = prefs(context).getString(K_CHANNEL, null)?.trim().orEmpty()
-        if (local == CHANNEL_BETA || local == CHANNEL_STABLE) return local
+        val local = prefs(context).getString(K_CHANNEL, null)
         val id = com.chronosbvrx.visionplus.data.diag.Diagnostics.deviceId(context)
         val testers = RemoteConfig.stringListFlag(context, "beta_device_ids")
-        return if (id.isNotEmpty() && testers.any { it.equals(id, ignoreCase = true) }) CHANNEL_BETA else CHANNEL_STABLE
+        return channelFor(local, id.isNotEmpty() && testers.any { it.equals(id, ignoreCase = true) })
+    }
+
+    /**
+     * La decisión del canal (pura): el interruptor de Ajustes MANDA en los dos sentidos —
+     * encendido recibe betas aunque el equipo no esté en la lista del servidor, y apagado
+     * vuelve a la oficial aunque sí estuviera marcado como probador.
+     */
+    internal fun channelFor(local: String?, testerFromServer: Boolean): String {
+        val clean = local?.trim().orEmpty()
+        if (clean == CHANNEL_BETA || clean == CHANNEL_STABLE) return clean
+        return if (testerFromServer) CHANNEL_BETA else CHANNEL_STABLE
     }
 
     fun setChannel(context: Context, channel: String) {
         prefs(context).edit()
             .putString(K_CHANNEL, if (channel == CHANNEL_BETA) CHANNEL_BETA else CHANNEL_STABLE)
             .apply()
+    }
+
+    /** ¿Este equipo recibe las versiones de pruebas? (preferencia local sobre la del servidor). */
+    fun betaChannel(context: Context): Boolean = channel(context) == CHANNEL_BETA
+
+    /** Enciende o apaga el canal de pruebas desde Ajustes (gana sobre `beta_device_ids`). */
+    fun setBetaChannel(context: Context, enabled: Boolean) {
+        setChannel(context, if (enabled) CHANNEL_BETA else CHANNEL_STABLE)
     }
 
     private fun prefs(context: Context) =

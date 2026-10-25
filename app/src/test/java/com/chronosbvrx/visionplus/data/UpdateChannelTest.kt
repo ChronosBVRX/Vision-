@@ -70,6 +70,32 @@ class UpdateChannelTest {
     }
 
     @Test
+    fun theSwitchWinsOverTheServerInBothDirections() {
+        // Encendido a mano: recibe betas aunque el servidor no lo tenga como probador.
+        assertEquals(AppUpdate.CHANNEL_BETA, AppUpdate.channelFor("beta", testerFromServer = false))
+        // Apagado a mano: vuelve a la oficial aunque sí estuviera marcado.
+        assertEquals(AppUpdate.CHANNEL_STABLE, AppUpdate.channelFor("stable", testerFromServer = true))
+        // Sin elección local manda el servidor.
+        assertEquals(AppUpdate.CHANNEL_BETA, AppUpdate.channelFor(null, testerFromServer = true))
+        assertEquals(AppUpdate.CHANNEL_STABLE, AppUpdate.channelFor(null, testerFromServer = false))
+        assertEquals(AppUpdate.CHANNEL_STABLE, AppUpdate.channelFor("   ", testerFromServer = false))
+    }
+
+    @Test
+    fun theSwitchIsInSettingsOnPhoneAndTvAndChecksRightAway() {
+        val phone = File("src/main/java/com/chronosbvrx/visionplus/ui/phone/SettingsScreen.kt").readText()
+        assertTrue("Ajustes del teléfono no tiene el interruptor", phone.contains("Canal de pruebas (beta)"))
+        assertTrue("el interruptor no guarda la elección", phone.contains("AppUpdate.setBetaChannel"))
+        assertTrue("no busca la beta al encenderlo", phone.contains("update.run()"))
+        val tv = File("src/main/java/com/chronosbvrx/visionplus/ui/tv/TvSettingsScreen.kt").readText()
+        assertTrue("Ajustes de la tele no tiene el interruptor", tv.contains("Canal de pruebas (beta)"))
+        assertTrue("el interruptor de la tele no guarda la elección", tv.contains("AppUpdate.setBetaChannel"))
+        val api = File("src/main/java/com/chronosbvrx/visionplus/data/AppUpdate.kt").readText()
+        assertTrue(api.contains("fun betaChannel("))
+        assertTrue(api.contains("fun setBetaChannel("))
+    }
+
+    @Test
     fun theUpdaterOnlyInstallsTheApp() {
         val source = File("src/main/java/com/chronosbvrx/visionplus/data/AppUpdate.kt").readText()
         // Cada release lleva VisionPlus.apk y VisionPlusHome.apk: nunca instalar el launcher.

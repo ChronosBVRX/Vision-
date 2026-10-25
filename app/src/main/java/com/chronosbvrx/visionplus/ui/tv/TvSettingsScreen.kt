@@ -364,6 +364,19 @@ private fun ColumnScope.TvSystemTab() {
 
     TvSectionTitle("Actualizaciones y Sistema")
     Note("Versión instalada: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})")
+    val betaChannel = AppUpdate.betaChannel(context)
+    TvActionOption("Canal de pruebas (beta): ${if (betaChannel) "Sí" else "No"}") {
+        val on = !AppUpdate.betaChannel(context)
+        AppUpdate.setBetaChannel(context, on)
+        Toast.makeText(
+            context,
+            if (on) "Canal de pruebas activado: buscando la última beta…" else "Vuelves al canal oficial",
+            Toast.LENGTH_SHORT,
+        ).show()
+        // Al encenderlo se revisa YA: si hay una beta más nueva, sale el aviso sin esperar.
+        update.run()
+    }
+    Note("Encendido recibes cada versión de pruebas en cuanto se publica; apagado solo las oficiales.")
     TvActionOption(if (update.checking) "Buscando…" else "Buscar actualizaciones") { update.run() }
     TvActionOption("Licencias de software libre") { showNotices = true }
 }

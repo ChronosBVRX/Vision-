@@ -430,6 +430,27 @@ private fun SystemTab() {
     }
 
     SettingsSection("Actualizaciones y Sistema") {
+        var beta by remember { mutableStateOf(com.chronosbvrx.visionplus.data.AppUpdate.betaChannel(context)) }
+        SettingsSwitchRow(
+            title = "Canal de pruebas (beta)",
+            checked = beta,
+            supporting = if (beta) {
+                "Recibes cada versión de pruebas en cuanto se publica"
+            } else {
+                "Solo versiones oficiales; enciéndelo para probar las betas"
+            },
+            onCheckedChange = { on ->
+                com.chronosbvrx.visionplus.data.AppUpdate.setBetaChannel(context, on)
+                beta = on
+                Toast.makeText(
+                    context,
+                    if (on) "Canal de pruebas activado: buscando la última beta…" else "Vuelves al canal oficial",
+                    Toast.LENGTH_SHORT,
+                ).show()
+                // Al encenderlo se revisa YA: si hay una beta más nueva, sale el aviso sin esperar.
+                update.run()
+            },
+        )
         SettingsRow(
             title = if (update.checking) "Buscando…" else "Buscar actualizaciones",
             supporting = "Versión instalada: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
