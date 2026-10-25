@@ -15,6 +15,13 @@
 
     <!-- Ver las apps instaladas sin pedir QUERY_ALL_PACKAGES: solo las que se pueden lanzar. -->
     <queries>
+        <!-- Los otros Inicios del equipo: sin esto la app no puede saber quién abre la tele
+             (Android 11+ oculta los paquetes que no se declaran) y reporta un launcher falso. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+            <category android:name="android.intent.category.DEFAULT" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
@@ -46,10 +53,22 @@
             android:screenOrientation="landscape"
             android:stateNotNeeded="true"
             android:theme="@style/Theme.VisionHome">
+            <!--
+              El Inicio va en un filtro PROPIO (como los launchers de Google): mezclar HOME con
+              LEANBACK_LAUNCHER/LAUNCHER hace que varios firmware no lo ofrezcan como Inicio.
+
+              NO se declara `android:priority`: Android recorta a 0 cualquier prioridad >0 pedida
+              por una app que no es privilegiada, así que el launcher de fábrica siempre gana ese
+              desempate. La elección real se hace por rol (Android 10+) o en Ajustes.
+            -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Aparecer en la lista de apps de la tele y del teléfono (no como Inicio). -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>

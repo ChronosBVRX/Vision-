@@ -75,6 +75,7 @@ fun CommandCenterDialog(
     onUpdateVision: () -> Unit = {},
     onRequestHome: () -> Unit = {},
     homeDefault: Boolean = false,
+    currentHome: String? = null,
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -152,7 +153,8 @@ fun CommandCenterDialog(
                     PanelAction(
                         icon = Icons.Rounded.Home,
                         title = "Poner Vision+ Home como Inicio",
-                        detail = "Abre la ventana del sistema para elegirlo",
+                        detail = currentHome?.let { "Ahora abre: $it · te llevo a la ventana correcta" }
+                            ?: "Abre la ventana del sistema para elegirlo",
                         onClick = onRequestHome,
                     )
                 }
@@ -203,10 +205,10 @@ fun CommandCenterDialog(
                 PanelAction(
                     icon = Icons.Rounded.Settings,
                     title = if (homeDefault) "Vision+ Home ya es tu Inicio" else "Cambiar el Inicio (ajustes)",
-                    detail = if (homeDefault) {
-                        "Abre los ajustes para cambiar al Inicio del sistema"
-                    } else {
-                        "Elige Vision+ Home o el Inicio del sistema"
+                    detail = when {
+                        homeDefault -> "Abre los ajustes para cambiar al Inicio del sistema"
+                        currentHome != null -> "Ahora abre: $currentHome · elige Vision+ Home"
+                        else -> "Elige Vision+ Home o el Inicio del sistema"
                     },
                     onClick = onHomeSettings,
                 )
@@ -364,5 +366,86 @@ fun SearchDialog(
                 }
             }
         }
+    }
+}
+
+
+/**
+ * La tele no trae selector de Inicio (muchos firmware lo esconden): en vez de un botón que no
+ * hace nada, los tres pasos exactos con el nombre del launcher que manda y un atajo a SU ficha
+ * de app, que es donde vive «Borrar predeterminados».
+ */
+@Composable
+fun HomeGuideDialog(
+    currentLauncher: String,
+    onOpenCurrentLauncher: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        val first = remember { FocusRequester() }
+        LaunchedEffect(Unit) {
+            delay(80)
+            runCatching { first.requestFocus() }
+        }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.72f)))
+            Column(
+                Modifier
+                    .width(560.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(HomeColors.Surface)
+                    .padding(horizontal = 28.dp, vertical = 26.dp),
+            ) {
+                Text(
+                    "Poner Vision+ Home como Inicio",
+                    color = HomeColors.Text,
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Esta tele no trae una pantalla para elegir el Inicio, pero se puede en 3 pasos:",
+                    color = HomeColors.TextDim,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(14.dp))
+                GuideStep(1, "Abre los ajustes de «$currentLauncher», el Inicio actual.")
+                GuideStep(2, "Entra en «Borrar predeterminados».")
+                GuideStep(3, "Pulsa el botón Inicio del mando y elige Vision+ Home · Siempre.")
+                Spacer(Modifier.height(18.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HomeButton(
+                        label = "Abrir los ajustes del launcher",
+                        onClick = onOpenCurrentLauncher,
+                        icon = Icons.Rounded.Settings,
+                        primary = true,
+                        modifier = Modifier.focusRequester(first),
+                    )
+                    HomeButton(label = "Cerrar", onClick = onDismiss, icon = null, primary = false)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuideStep(number: Int, text: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(HomeColors.Blue),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("$number", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        }
+        Text(text, color = HomeColors.TextDim, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
     }
 }

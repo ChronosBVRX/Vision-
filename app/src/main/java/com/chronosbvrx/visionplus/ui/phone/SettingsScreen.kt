@@ -61,6 +61,7 @@ import com.chronosbvrx.visionplus.ui.settings.SettingsSection
 import com.chronosbvrx.visionplus.ui.settings.SettingsSwitchRow
 import com.chronosbvrx.visionplus.ui.settings.SettingsValueRow
 import com.chronosbvrx.visionplus.ui.settings.SyncSettingsSection
+import com.chronosbvrx.visionplus.ui.settings.TvHomeSetupSection
 import com.chronosbvrx.visionplus.ui.settings.VisionSettings
 import com.chronosbvrx.visionplus.ui.settings.rememberUpdateCheck
 import com.chronosbvrx.visionplus.ui.kids.ActivitySettingsBlock
@@ -375,6 +376,9 @@ private fun SystemTab() {
     ProfilesSettingsSection()
 
     SyncSettingsSection()
+
+    // Solo en el teléfono: desde aquí se configura el Inicio de la tele por ADB inalámbrico.
+    TvHomeSetupSection()
 
     SettingsSection("Mi actividad") {
         ActivitySettingsBlock()

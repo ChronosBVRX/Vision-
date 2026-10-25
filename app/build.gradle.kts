@@ -35,8 +35,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = 389
-        versionName = "2.5.150"
+        versionCode = 390
+        versionName = "2.5.151"
         ndk {
             // Solo ARM: el APK no empaqueta libs x86/x86_64 (los AAR traían credentials/
             // graphics.path de x86_64). En dispositivos x86_64 con traducción ARM (emulador
@@ -197,6 +197,13 @@ tasks.matching { it.name == "minifyNormalReleaseWithR8" }.configureEach {
     finalizedBy(verifyEngineNamespace)
 }
 
+// Conscrypt trae un backend nativo que Robolectric no puede cargar en la JVM (y los tests no
+// hablan ADB): se saca del classpath de pruebas, no del APK.
+configurations.matching { it.name.endsWith("UnitTestRuntimeClasspath") }
+    .configureEach {
+        exclude(group = "org.conscrypt", module = "conscrypt-android")
+    }
+
 dependencies {
     // El contrato del feed que lee Vision+ Home (launcher): DTOs y deep links compartidos.
     implementation(project(":home-contract"))
@@ -231,6 +238,13 @@ dependencies {
     // The one source's engine, packed inside: the 3DES portalCore client and its HLS proxy.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+
+    // ADB por Wi-Fi desde el teléfono (solo móvil): emparejamiento y shell remoto en la tele.
+    implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
+    implementation("com.github.MuntashirAkon:sun-security-android:1.1")
+    implementation("org.conscrypt:conscrypt-android:2.5.3")
+    // Certificado autofirmado de la llave ADB (bcprov ya viene con libadb, misma versión).
+    implementation("org.bouncycastle:bcpkix-jdk15to18:1.81")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.16")

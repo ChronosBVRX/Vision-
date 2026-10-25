@@ -43,6 +43,7 @@ import com.chronosbvrx.visionplus.home.data.AppsRepository
 import com.chronosbvrx.visionplus.home.data.DisplayConfig
 import com.chronosbvrx.visionplus.home.data.FeedRepository
 import com.chronosbvrx.visionplus.home.data.HomeConfig
+import com.chronosbvrx.visionplus.home.data.HomeRoleAction
 import com.chronosbvrx.visionplus.home.data.HomeUpdate
 import com.chronosbvrx.visionplus.home.data.LauncherPrefs
 import com.chronosbvrx.visionplus.home.data.homeRowEntries
@@ -52,6 +53,7 @@ import com.chronosbvrx.visionplus.home.ui.CommandCenterDialog
 import com.chronosbvrx.visionplus.home.ui.DisplaySettingsDialog
 import com.chronosbvrx.visionplus.home.ui.EventsSurface
 import com.chronosbvrx.visionplus.home.ui.HomeColors
+import com.chronosbvrx.visionplus.home.ui.HomeGuideDialog
 import com.chronosbvrx.visionplus.home.ui.HomeTab
 import com.chronosbvrx.visionplus.home.ui.HomeSurface
 import com.chronosbvrx.visionplus.home.ui.ItemActionsDialog
@@ -118,6 +120,20 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     // correcto y deja la puerta manual para cambiar al otro launcher.
     val homeDefault = remember(commandCenter) {
         if (commandCenter) appsRepo.isVisionHomeDefault() else false
+    }
+    // Quién abre la tele HOY (para decirlo sin mentir) y la guía de 3 pasos si el firmware no
+    // tiene selector de Inicio.
+    val currentHome = remember(commandCenter) {
+        if (commandCenter) appsRepo.currentHomeLabel() else null
+    }
+    var homeGuide by remember { mutableStateOf<String?>(null) }
+    fun requestHome() {
+        commandCenter = false
+        if (appsRepo.planHomeChange() == HomeRoleAction.OPEN_CURRENT_LAUNCHER) {
+            homeGuide = appsRepo.currentHomeLabel() ?: "el launcher actual"
+        } else {
+            appsRepo.requestHomeRole()
+        }
     }
     var searchOpen by remember { mutableStateOf(false) }
     var visionInstalled by remember { mutableStateOf(appsRepo.visionPlusInstalled()) }
@@ -480,7 +496,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         onSystemSettings = { appsRepo.openSystemSettings() },
                         onWifi = { appsRepo.openWifiSettings() },
                         onHomeSettings = { appsRepo.openHomeSettings() },
-                        onRequestHome = { appsRepo.requestHomeRole() },
+                        onRequestHome = { requestHome() },
                         onManage = { personalizePage = PersonalizePage.APPS },
                         landing = sectionLanding,
                         upTarget = tabLanding,
@@ -513,10 +529,10 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                 appsRepo.openHomeSettings()
             },
             onRequestHome = {
-                commandCenter = false
-                appsRepo.requestHomeRole()
+                requestHome()
             },
             homeDefault = homeDefault,
+            currentHome = currentHome,
             onUpdate = {
                 scope.launch { HomeUpdate.installLatest(context) }
             },
@@ -539,6 +555,17 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                     HomeUpdate.openInstallPermission(context)
                 }
             },
+        )
+    }
+
+    homeGuide?.let { launcher ->
+        HomeGuideDialog(
+            currentLauncher = launcher,
+            onOpenCurrentLauncher = {
+                homeGuide = null
+                appsRepo.openCurrentLauncherDetails()
+            },
+            onDismiss = { homeGuide = null },
         )
     }
 

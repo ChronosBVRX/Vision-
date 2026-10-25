@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// La MISMA llave histórica que Vision+: el permiso `signature` del feed solo se concede a
+// La MISMA llave histÃ³rica que Vision+: el permiso `signature` del feed solo se concede a
 // APKs firmados con el mismo certificado. Sin llave, se firma con debug (pruebas locales).
 val keystoreProps = Properties().apply {
     val file = rootProject.file("keystore.properties")
@@ -31,8 +31,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus.home"
         minSdk = 24
         targetSdk = 35
-        versionCode = 14
-        versionName = "1.0.13"
+        versionCode = 15
+        versionName = "1.0.14"
     }
 
     signingConfigs {

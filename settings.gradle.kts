@@ -16,6 +16,12 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Emparejamiento ADB por Wi-Fi desde el móvil (LibADB, de App Manager).
+        maven("https://jitpack.io") {
+            content {
+                includeGroupByRegex("com\\.github\\.MuntashirAkon.*")
+            }
+        }
     }
 }
 

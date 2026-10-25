@@ -70,3 +70,16 @@
     public static <1> INSTANCE;
     kotlinx.serialization.KSerializer serializer(...);
 }
+
+# --- ADB por Wi-Fi desde el teléfono (LibADB + BouncyCastle + Conscrypt + SPAKE2) ---
+# El emparejamiento y el shell remoto usan reflexión/JCA: sin estos keep el release (R8)
+# perdería los proveedores y el flujo «Inicio en la TV» solo funcionaría en debug.
+-keep class io.github.muntashirakon.adb.** { *; }
+-dontwarn io.github.muntashirakon.adb.**
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**
+-keep class org.conscrypt.** { *; }
+-dontwarn org.conscrypt.**
+-keep class com.google.security.spake2.** { *; }
+-dontwarn com.google.security.spake2.**
+-keep class * extends java.security.Provider { *; }

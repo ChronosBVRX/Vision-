@@ -32,6 +32,36 @@ class LauncherHomeRoleWiringTest {
     }
 
     @Test
+    fun theHomeIsDetectedByResolvingTheIntentAndNeverByTheRoleAlone() {
+        val repo = source("data/AppsRepository.kt")
+        assertTrue(
+            "el estado del Inicio debe salir de resolveActivity, no del rol (Google TV miente)",
+            repo.contains("resolveActivity(homeIntent(), PackageManager.MATCH_DEFAULT_ONLY)"),
+        )
+        assertTrue("falta la decisión sin efectos", repo.contains("fun planHomeChange()"))
+        assertTrue("no se comprueba si el firmware atiende el intent", repo.contains("fun handles("))
+        assertTrue(
+            "los stubs vacíos de Google TV deben descartarse",
+            repo.contains("EmptyStubActivity"),
+        )
+        assertTrue(
+            "sin selector, hay que abrir la ficha del launcher actual (Borrar predeterminados)",
+            repo.contains("Settings.ACTION_APPLICATION_DETAILS_SETTINGS"),
+        )
+        assertTrue("falta el nombre visible del Inicio actual", repo.contains("currentHomeLabel()"))
+    }
+
+    @Test
+    fun whenNoSettingsScreenExistsTheLauncherExplainsTheThreeSteps() {
+        val overlays = source("ui/Overlays.kt")
+        assertTrue("falta la guía de los 3 pasos", overlays.contains("fun HomeGuideDialog("))
+        assertTrue("la guía no menciona Borrar predeterminados", overlays.contains("Borrar predeterminados"))
+        val screen = source("LauncherScreen.kt")
+        assertTrue("el launcher no abre la guía", screen.contains("HomeGuideDialog("))
+        assertTrue("el launcher no consulta la ruta real", screen.contains("planHomeChange()"))
+    }
+
+    @Test
     fun theControlCenterOffersTheDirectActionAndTheManualOne() {
         val overlays = source("ui/Overlays.kt")
         assertTrue("el centro de control no recibe la acción directa", overlays.contains("onRequestHome"))
