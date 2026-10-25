@@ -156,6 +156,17 @@ class TvHomeAdbTest {
     }
 
     @Test
+    fun pairingHasARealTimeoutAndTheDialogCanAlwaysBeClosed() {
+        val setup = source("data/adb/TvHomeSetup.kt")
+        assertTrue("no corre el emparejamiento en su propio hilo", setup.contains("Executors.newSingleThreadExecutor"))
+        assertTrue("no abandona un emparejamiento colgado", setup.contains("future.get(timeoutMs"))
+        assertTrue("no intenta conectar aunque la tele no confirme", setup.contains("pruebo a conectar igual"))
+        val ui = source("ui/settings/TvHomeSetupCard.kt")
+        assertTrue("el diálogo no se puede cancelar", ui.contains("\"Cancelar\""))
+        assertTrue("no cancela el trabajo al cerrar", ui.contains("job?.cancel()"))
+    }
+
+    @Test
     fun theShellToleratesLibadbsClosedStreamInsteadOfLosingTheOutput() {
         val adb = source("data/adb/TvAdb.kt")
         assertTrue("no tolera el cierre de LibADB", adb.contains("fun isClosedMessage("))

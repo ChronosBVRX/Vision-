@@ -2,6 +2,8 @@ package com.chronosbvrx.visionplus.data.adb
 
 import android.content.Context
 import androidx.compose.runtime.mutableStateOf
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -117,6 +119,30 @@ internal object TvHomeSetup {
     }
 
     /**
+     * Empareja con un tope REAL. `TvAdb.pair()` es una llamada bloqueante que, en algunos
+     * televisores, no vuelve aunque el emparejamiento ya se hizo (se queda esperando el cierre
+     * del diálogo del sistema). Se ejecuta en su propio hilo y, si no contesta, se abandona y se
+     * prueba a conectar igual: si la tele ya emparejó, la conexión funciona.
+     */
+    private fun pairWithTimeout(host: String, port: Int, code: String, timeoutMs: Long = 45_000): Boolean {
+        val executor = Executors.newSingleThreadExecutor()
+        return try {
+            val future = executor.submit<Boolean> {
+                runCatching { TvAdb.pair(host, port, code) }.getOrDefault(false)
+            }
+            try {
+                future.get(timeoutMs, TimeUnit.MILLISECONDS)
+            } catch (t: Throwable) {
+                log("  emparejamiento sin respuesta en ${timeoutMs / 1000}s")
+                future.cancel(true)
+                false
+            }
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    /**
      * Busca una tele NUEVA en modo emparejamiento. El servicio solo existe mientras el
      * televisor tiene abierta la pantalla de «Emparejar dispositivo con código».
      */
@@ -152,24 +178,20 @@ internal object TvHomeSetup {
         try {
             state.value = current.copy(phase = Phase.WORKING, message = "Emparejando con la tele…")
             TvAdb.init(context)
-            val paired = withTimeoutOrNull(60_000) {
-                runCatching { TvAdb.pair(current.host, current.pairingPort, code) }.getOrDefault(false)
-            } ?: false
-            log(if (paired) "emparejado con ${current.host}" else "la tele rechazó el emparejamiento")
-            if (!paired) {
-                state.value = state.value.copy(
-                    phase = Phase.ERROR,
-                    message = "La tele rechazó el código. Vuelve a abrir «Emparejar dispositivo con código» y repite.",
-                )
-                return@withContext
-            }
-            state.value = state.value.copy(message = "Emparejado. Conectando…")
+            val paired = pairWithTimeout(current.host, current.pairingPort, code)
+            log(if (paired) "emparejado con ${current.host}" else "la tele no confirmó; pruebo a conectar igual")
+            state.value = state.value.copy(message = "Conectando con la tele…")
             val connected = connectTo(context, host = current.host, id = "")
             if (!connected) {
                 state.value = state.value.copy(
                     phase = Phase.ERROR,
-                    message = "Emparejado, pero no pude conectarme. Revisa que la depuración inalámbrica siga encendida. " +
-                        "Mira «Detalles» para ver hasta dónde llegó.",
+                    message = if (paired) {
+                        "Emparejado, pero no pude conectarme. Revisa que la depuración inalámbrica siga encendida. " +
+                            "Mira «Detalles» para ver hasta dónde llegó."
+                    } else {
+                        "No se pudo emparejar. Abre otra vez «Emparejar dispositivo con código» en la tele y repite. " +
+                            "Mira «Detalles» para ver qué contestó."
+                    },
                 )
                 return@withContext
             }

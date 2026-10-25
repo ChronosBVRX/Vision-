@@ -32,6 +32,7 @@ import com.chronosbvrx.visionplus.data.adb.TvHomeSetup
 import com.chronosbvrx.visionplus.data.adb.TvRecord
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
@@ -218,11 +219,18 @@ private fun TvHomeSetupDialog(onDismiss: () -> Unit) {
     val state by TvHomeSetup.state
     val scope = rememberCoroutineScope()
     var code by remember { mutableStateOf("") }
+    var job by remember { mutableStateOf<Job?>(null) }
     val phase = state.phase
     val readyToPair = phase == TvHomeSetup.Phase.READY && state.pairingPort > 0
 
+    fun close() {
+        job?.cancel()
+        TvHomeSetup.resetMessage()
+        onDismiss()
+    }
+
     AlertDialog(
-        onDismissRequest = { if (phase != TvHomeSetup.Phase.WORKING) onDismiss() },
+        onDismissRequest = { close() },
         title = { Text("Agregar una tele") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -311,12 +319,12 @@ private fun TvHomeSetupDialog(onDismiss: () -> Unit) {
         confirmButton = {
             when {
                 readyToPair -> Button(
-                    onClick = { scope.launch { TvHomeSetup.pairAndApply(context, code) } },
+                    onClick = { job = scope.launch { TvHomeSetup.pairAndApply(context, code) } },
                     enabled = code.length == 6,
                 ) { Text("Emparejar y aplicar") }
 
                 phase == TvHomeSetup.Phase.ERROR -> Button(
-                    onClick = { scope.launch { TvHomeSetup.search(context) } },
+                    onClick = { job = scope.launch { TvHomeSetup.search(context) } },
                 ) { Text("Buscar otra vez") }
 
                 phase == TvHomeSetup.Phase.DONE -> Button(
@@ -327,14 +335,9 @@ private fun TvHomeSetupDialog(onDismiss: () -> Unit) {
             }
         },
         dismissButton = {
-            TextButton(
-                onClick = {
-                    if (phase != TvHomeSetup.Phase.WORKING) {
-                        TvHomeSetup.resetMessage()
-                        onDismiss()
-                    }
-                },
-            ) { Text("Cerrar") }
+            TextButton(onClick = { close() }) {
+                Text(if (phase == TvHomeSetup.Phase.WORKING) "Cancelar" else "Cerrar")
+            }
         },
     )
 }
