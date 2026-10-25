@@ -1,12 +1,11 @@
 package com.chronosbvrx.visionplus.data.adb
 
 import android.content.Context
-import android.content.SharedPreferences
 import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Las reglas del «dejar Vision+ Home como Inicio» por ADB, separadas de la red para poder
@@ -42,7 +41,7 @@ internal object TvHomeRules {
 
     /** Quién está realmente en pantalla según `dumpsys activity activities`. */
     fun parseResumedPackage(dumpsys: String): String? =
-        Regex("(?:topResumedActivity|mResumedActivity)\\s*[:=]\\s*ActivityRecord\\{[^ ]+ u\\d+ ([^/\\s]+)/")
+        Regex("(?:topResumedActivity|mResumedActivity|ResumedActivity)\\s*[:=]\\s*ActivityRecord\\{[^ ]+ u\\d+ ([^/\\s]+)/")
             .find(dumpsys)
             ?.groupValues
             ?.getOrNull(1)
@@ -54,9 +53,12 @@ internal object TvHomeRules {
 }
 
 /**
- * «Inicio en la TV» desde el teléfono: empareja ADB por Wi-Fi con la tele (una sola vez) y
- * aplica el mismo procedimiento que se hacía con una PC — fijar Vision+ Home y retirar el
- * Inicio del fabricante solo si sigue robándose la pantalla.
+ * «Inicio en la TV» desde el teléfono: empareja ADB por Wi-Fi (una vez por tele) y aplica el
+ * mismo procedimiento que se hacía con una PC — fijar Vision+ Home y retirar el Inicio del
+ * fabricante solo si sigue robándose la pantalla.
+ *
+ * Se lleva una LISTA de teles y cada paso deja un registro (`log`) visible en la interfaz: si
+ * un televisor se resiste, se ve exactamente qué comando contestó qué.
  */
 internal object TvHomeSetup {
 
@@ -67,85 +69,80 @@ internal object TvHomeSetup {
         val message: String = "",
         val host: String = "",
         val pairingPort: Int = 0,
-        val paired: Boolean = false,
-        val applied: Boolean = false,
-        val disabled: List<String> = emptyList(),
-        val originalHome: String = "",
+        val tvs: List<TvRecord> = emptyList(),
+        val busyId: String = "",
+        val log: List<String> = emptyList(),
     )
-
-    private const val PREFS = "tv_adb_home"
-    private const val K_PAIRED = "paired"
-    private const val K_ORIGINAL = "original_home"
-    private const val K_DISABLED = "disabled"
 
     /** Estado observable (mismo patrón que SyncStore/RemoteClient): la UI lo lee directo. */
     val state = mutableStateOf(UiState())
 
-    private fun prefs(context: Context): SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-
     fun load(context: Context) {
-        val p = prefs(context)
         state.value = state.value.copy(
-            paired = p.getBoolean(K_PAIRED, false),
-            disabled = p.getStringSet(K_DISABLED, emptySet()).orEmpty().sorted(),
-            originalHome = p.getString(K_ORIGINAL, "").orEmpty(),
+            tvs = TvAdbStore.load(context),
             phase = Phase.IDLE,
             message = "",
+            busyId = "",
+            log = emptyList(),
         )
+    }
+
+    fun resetMessage() {
+        state.value = state.value.copy(phase = Phase.IDLE, message = "", busyId = "")
+    }
+
+    /** Añade una línea al registro visible (una por paso; se queda con las últimas 16). */
+    private fun log(line: String) {
+        val clean = line.replace('\n', ' ').trim().take(200)
+        if (clean.isBlank()) return
+        state.value = state.value.copy(log = (state.value.log + clean).takeLast(16))
+    }
+
+    /** Ejecuta un comando en la tele con tope de tiempo y deja el resultado en el registro. */
+    private suspend fun sh(command: String, timeoutMs: Long = 15_000): String {
+        log("$ $command")
+        val out = withTimeoutOrNull(timeoutMs) {
+            withContext(Dispatchers.IO) {
+                runCatching { TvAdb.shell(command) }
+                    .getOrElse { "ERROR ${it.javaClass.simpleName}: ${it.message.orEmpty()}" }
+            }
+        }
+        if (out == null) {
+            log("  (la tele no contestó en ${timeoutMs / 1000}s)")
+            return ""
+        }
+        val first = out.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().take(180)
+        log("  $first")
+        return out
     }
 
     /**
-     * Busca la tele. El servicio de emparejamiento solo existe mientras la tele tiene abierta
-     * la pantalla de «Emparejar dispositivo con código»; si ya está emparejado basta el de
-     * conexión, que vive mientras la depuración inalámbrica esté encendida.
+     * Busca una tele NUEVA en modo emparejamiento. El servicio solo existe mientras el
+     * televisor tiene abierta la pantalla de «Emparejar dispositivo con código».
      */
     suspend fun search(context: Context) = withContext(Dispatchers.IO) {
-        state.value = state.value.copy(phase = Phase.SEARCHING, message = "Buscando la tele en tu red…")
+        state.value = state.value.copy(phase = Phase.SEARCHING, message = "Buscando la tele en tu red…", log = emptyList())
         val pairing = AdbDiscovery.find(context, AdbDiscovery.SERVICE_PAIRING, 20_000)
-        if (pairing != null) {
+        if (pairing == null) {
             state.value = state.value.copy(
-                phase = Phase.READY,
-                host = pairing.host,
-                pairingPort = pairing.port,
-                message = "Tele encontrada. Escribe el código que muestra la pantalla.",
+                phase = Phase.ERROR,
+                message = "No encontré ninguna tele esperando el código. En el televisor: Ajustes → Sistema → " +
+                    "Desarrollador → Depuración inalámbrica → «Emparejar dispositivo con código».\n\n" +
+                    "En teles Android 9/10 activa «ADB por red» y deja el control remoto vinculado para " +
+                    "que el teléfono sepa su dirección.",
             )
             return@withContext
         }
-        val connect = AdbDiscovery.find(context, AdbDiscovery.SERVICE_CONNECT, 12_000)
-        if (connect != null && prefs(context).getBoolean(K_PAIRED, false)) {
-            state.value = state.value.copy(
-                phase = Phase.READY,
-                host = connect.host,
-                pairingPort = 0,
-                message = "Ya está emparejada: puedes aplicar el Inicio sin código.",
-            )
-            return@withContext
-        }
-        // Teles Android 9/10 y cajas con «ADB por red»: no tienen el emparejamiento moderno,
-        // pero sí un ADB en el 5555. La tele pedirá autorizar la llave (un OK con el mando).
-        val legacy = connectLegacyTcp(context)
-        if (legacy != null) {
-            prefs(context).edit().putBoolean(K_PAIRED, true).apply()
-            state.value = state.value.copy(
-                phase = Phase.READY,
-                host = legacy,
-                pairingPort = 0,
-                paired = true,
-                message = "Conectada por ADB de red. Pulsa Aplicar para dejar el Inicio.",
-            )
-            return@withContext
-        }
+        log("emparejamiento en ${pairing.host}:${pairing.port}")
         state.value = state.value.copy(
-            phase = Phase.ERROR,
-            message = "No encontré la tele. En la tele: Ajustes → Sistema → Desarrollador → " +
-                "Depuración inalámbrica, y deja abierta «Emparejar dispositivo con código».\n\n" +
-                "En teles Android 9/10 activa «ADB por red» y vincula antes el control remoto " +
-                "para que el teléfono sepa su dirección.",
+            phase = Phase.READY,
+            host = pairing.host,
+            pairingPort = pairing.port,
+            message = "Tele encontrada. Escribe el código que muestra la pantalla.",
         )
     }
 
-    /** Empareja con el código de 6 dígitos y aplica el Inicio en el mismo paso. */
+    /** Empareja el televisor nuevo, lo guarda en la lista y le aplica el Inicio. */
     suspend fun pairAndApply(context: Context, code: String) = withContext(Dispatchers.IO) {
         val current = state.value
         if (current.host.isBlank() || current.pairingPort == 0) {
@@ -155,7 +152,10 @@ internal object TvHomeSetup {
         try {
             state.value = current.copy(phase = Phase.WORKING, message = "Emparejando con la tele…")
             TvAdb.init(context)
-            val paired = TvAdb.pair(current.host, current.pairingPort, code)
+            val paired = withTimeoutOrNull(60_000) {
+                runCatching { TvAdb.pair(current.host, current.pairingPort, code) }.getOrDefault(false)
+            } ?: false
+            log(if (paired) "emparejado con ${current.host}" else "la tele rechazó el emparejamiento")
             if (!paired) {
                 state.value = state.value.copy(
                     phase = Phase.ERROR,
@@ -163,10 +163,27 @@ internal object TvHomeSetup {
                 )
                 return@withContext
             }
-            prefs(context).edit().putBoolean(K_PAIRED, true).apply()
-            state.value = state.value.copy(paired = true, message = "Emparejado. Conectando…")
-            connect(context)
-            applyInternal(context)
+            state.value = state.value.copy(message = "Emparejado. Conectando…")
+            val connected = connectTo(context, host = current.host, id = "")
+            if (!connected) {
+                state.value = state.value.copy(
+                    phase = Phase.ERROR,
+                    message = "Emparejado, pero no pude conectarme. Revisa que la depuración inalámbrica siga encendida. " +
+                        "Mira «Detalles» para ver hasta dónde llegó.",
+                )
+                return@withContext
+            }
+            val (identity, model) = identify()
+            log("tele: ${model.ifBlank { "(sin modelo)" }} · id=${identity.ifBlank { "(sin id)" }}")
+            val record = TvRecord(
+                id = identity.ifBlank { "host:${current.host}" },
+                label = model.ifBlank { "Tele ${current.host.substringAfterLast('.')}" },
+                host = current.host,
+                paired = true,
+                updatedAt = System.currentTimeMillis(),
+            )
+            state.value = state.value.copy(tvs = TvAdbStore.upsert(context, record))
+            applyInternal(context, record)
         } catch (t: Throwable) {
             state.value = state.value.copy(
                 phase = Phase.ERROR,
@@ -176,180 +193,265 @@ internal object TvHomeSetup {
         }
     }
 
-    /** Reaplica sin código (la llave ya está guardada). Útil si una actualización devolvió el Inicio. */
-    suspend fun apply(context: Context) = withContext(Dispatchers.IO) {
+    /** Reaplica en una tele concreta, sin código. */
+    suspend fun apply(context: Context, tvId: String) = withContext(Dispatchers.IO) {
+        val record = TvAdbStore.find(context, tvId)
+        if (record == null) {
+            state.value = state.value.copy(phase = Phase.ERROR, message = "Esa tele ya no está en la lista.")
+            return@withContext
+        }
+        state.value = state.value.copy(
+            phase = Phase.WORKING,
+            busyId = tvId,
+            message = "Conectando con ${record.displayName}…",
+            log = emptyList(),
+        )
         try {
-            TvAdb.init(context)
-            state.value = state.value.copy(phase = Phase.WORKING, message = "Conectando con la tele…")
-            connect(context)
-            applyInternal(context)
+            if (!connectTo(context, record.host, record.id)) {
+                state.value = state.value.copy(
+                    phase = Phase.ERROR,
+                    busyId = "",
+                    message = "No encontré «${record.displayName}». Enciende la depuración inalámbrica del televisor " +
+                        "y vuelve a intentar.",
+                )
+                return@withContext
+            }
+            applyInternal(context, record)
         } catch (t: Throwable) {
             state.value = state.value.copy(
                 phase = Phase.ERROR,
-                message = "No se pudo conectar: ${t.javaClass.simpleName}. Enciende la depuración inalámbrica y busca la tele otra vez.",
+                busyId = "",
+                message = "No se pudo conectar: ${t.javaClass.simpleName}. Enciende la depuración inalámbrica e intenta otra vez.",
             )
             TvAdb.disconnectQuietly()
         }
     }
 
-    /** Devuelve la tele como estaba: reactiva lo desactivado y vuelve a su Inicio original. */
-    suspend fun restore(context: Context) = withContext(Dispatchers.IO) {
+    /** Devuelve ESA tele como estaba: reactiva lo retirado y vuelve a su Inicio original. */
+    suspend fun restore(context: Context, tvId: String) = withContext(Dispatchers.IO) {
+        val record = TvAdbStore.find(context, tvId)
+        if (record == null) {
+            state.value = state.value.copy(phase = Phase.ERROR, message = "Esa tele ya no está en la lista.")
+            return@withContext
+        }
+        state.value = state.value.copy(
+            phase = Phase.WORKING,
+            busyId = tvId,
+            message = "Restaurando ${record.displayName}…",
+            log = emptyList(),
+        )
         try {
-            TvAdb.init(context)
-            state.value = state.value.copy(phase = Phase.WORKING, message = "Restaurando el Inicio de la tele…")
-            connect(context)
-            val p = prefs(context)
-            val disabled = p.getStringSet(K_DISABLED, emptySet()).orEmpty().sorted()
-            for (pkg in disabled) {
-                TvAdb.shell("pm enable $pkg")
+            if (!connectTo(context, record.host, record.id)) {
+                state.value = state.value.copy(
+                    phase = Phase.ERROR,
+                    busyId = "",
+                    message = "No encontré «${record.displayName}». Enciende la depuración inalámbrica y vuelve a intentar.",
+                )
+                return@withContext
             }
-            val original = p.getString(K_ORIGINAL, "").orEmpty()
-            if (original.isNotBlank()) {
-                TvAdb.shell("pm set-home-activity ${original.removePrefix("package:")}")
+            record.disabled.forEach { pkg -> sh("pm enable $pkg") }
+            if (record.originalHome.isNotBlank()) {
+                sh("pm set-home-activity ${record.originalHome.removePrefix("package:")}")
             }
-            p.edit().clear().apply()
-            state.value = state.value.copy(
-                phase = Phase.DONE,
+            val clean = record.copy(
                 applied = false,
-                paired = false,
                 disabled = emptyList(),
                 originalHome = "",
-                message = if (disabled.isEmpty()) {
-                    "La tele vuelve a su Inicio de siempre."
+                updatedAt = System.currentTimeMillis(),
+            )
+            state.value = state.value.copy(
+                phase = Phase.DONE,
+                busyId = "",
+                tvs = TvAdbStore.upsert(context, clean),
+                message = if (record.disabled.isEmpty()) {
+                    "${record.displayName} vuelve a su Inicio de siempre."
                 } else {
-                    "Listo: reactivé ${disabled.size} app(s) y la tele vuelve a su Inicio de siempre."
+                    "Listo: reactivé ${record.disabled.size} app(s) en ${record.displayName} y vuelve a su Inicio."
                 },
             )
             TvAdb.disconnectQuietly()
         } catch (t: Throwable) {
             state.value = state.value.copy(
                 phase = Phase.ERROR,
+                busyId = "",
                 message = "No se pudo restaurar: ${t.message.orEmpty()}",
             )
             TvAdb.disconnectQuietly()
         }
     }
 
-    fun resetMessage() {
-        state.value = state.value.copy(phase = Phase.IDLE, message = "")
+    /** Quita la tele de la lista (no toca el televisor). */
+    fun forget(context: Context, tvId: String) {
+        val record = TvAdbStore.find(context, tvId)
+        state.value = state.value.copy(
+            tvs = TvAdbStore.remove(context, tvId),
+            phase = Phase.IDLE,
+            busyId = "",
+            message = "${record?.displayName ?: "La tele"} quitada de la lista.",
+        )
     }
 
     // --- interno ---
 
+    /** Android ID + modelo del televisor conectado (con tope: un firmware mudo no cuelga el flujo). */
+    private suspend fun identify(): Pair<String, String> {
+        suspend fun read(command: String): String = withTimeoutOrNull(8_000) {
+            withContext(Dispatchers.IO) { runCatching { TvAdb.shell(command) }.getOrDefault("") }
+        }.orEmpty()
+        val androidId = read("settings get secure android_id")
+        val serial = read("getprop ro.serialno")
+        val model = read("getprop ro.product.model")
+        return TvAdbStore.identityFrom(androidId, serial) to model.trim()
+    }
+
     /**
-     * Teles viejas o cajas: ADB sobre TCP en el 5555 (sin emparejamiento TLS moderno). La
-     * primera vez la tele muestra «¿Permitir depuración USB?»; se reintenta mientras la
-     * persona lo acepta con el mando.
+     * Conecta con UNA tele: prueba primero el host conocido (el del emparejamiento), luego el
+     * resto de puertos visibles y, al final, el ADB clásico del 5555 de las teles viejas.
+     * Antes de tocar nada compara la identidad: si hay dos teles y ninguna coincide, no se
+     * aplica nada en la equivocada.
      */
-    private suspend fun connectLegacyTcp(context: Context): String? {
-        val hosts = runCatching {
-            com.chronosbvrx.visionplus.data.remote.RemoteClient.rememberedTvs(context)
-                .map { it.host }
-                .distinct()
-        }.getOrDefault(emptyList())
-        if (hosts.isEmpty()) return null
+    private suspend fun connectTo(context: Context, host: String, id: String): Boolean {
         TvAdb.init(context)
-        for (host in hosts.take(3)) {
-            repeat(4) { attempt ->
+        if (TvAdb.isConnected) TvAdb.disconnectQuietly()
+
+        val endpoints = AdbDiscovery.findAll(context, AdbDiscovery.SERVICE_CONNECT, 10_000, 4)
+            .sortedByDescending { it.host == host }
+        log("puertos ADB visibles: ${endpoints.size}")
+        for (endpoint in endpoints) {
+            val ok = runCatching { TvAdb.connect(endpoint.host, endpoint.port) }.getOrDefault(false)
+            log("  ${endpoint.host}:${endpoint.port} → ${if (ok) "conectado" else "sin conexión"}")
+            if (!ok) continue
+            val identity = identify().first
+            if (id.isBlank() || identity.isBlank() || identity == id) return true
+            log("  es otra tele (id=$identity); sigo buscando")
+            TvAdb.disconnectQuietly()
+        }
+
+        if (host.isNotBlank()) {
+            repeat(3) { attempt ->
                 val ok = runCatching { TvAdb.connect(host, 5555) }.getOrDefault(false)
-                if (ok) return host
-                TvAdb.disconnectQuietly()
-                state.value = state.value.copy(
-                    message = "Probando $host… si la tele muestra un aviso de depuración, acéptalo con el mando.",
-                )
-                if (attempt < 3) delay(2_500)
+                log("  $host:5555 → ${if (ok) "conectado" else "sin conexión"}")
+                if (ok) {
+                    val identity = identify().first
+                    if (id.isBlank() || identity.isBlank() || identity == id || id.startsWith("host:")) return true
+                    TvAdb.disconnectQuietly()
+                }
+                if (attempt < 2) delay(1_500)
             }
         }
-        return null
+        return false
     }
 
-    private suspend fun connect(context: Context) {
-        var endpoint: AdbEndpoint? = null
-        repeat(4) {
-            endpoint = AdbDiscovery.find(context, AdbDiscovery.SERVICE_CONNECT, 8_000)
-            if (endpoint == null) delay(1_200)
+    /**
+     * Instala Vision+ Home en la tele con el APK que viaja en esta app (1.4 MB). Sin esto, el
+     * flujo se negaba a retirar el Inicio (dejaría el televisor sin pantalla).
+     */
+    private suspend fun installBundledLauncher(context: Context): Boolean {
+        log("Vision+ Home no está en la tele: lo instalo desde el teléfono…")
+        val bytes = withContext(Dispatchers.IO) {
+            runCatching { context.assets.open("vision_home.apk").use { it.readBytes() } }.getOrNull()
         }
-        val ep = endpoint
-        if (ep == null) {
-            // Tele sin emparejamiento moderno: su ADB vive en el 5555.
-            if (connectLegacyTcp(context) != null) return
-            error("la tele no publica el puerto de depuración")
+        if (bytes == null) {
+            log("  falta el APK dentro de la app")
+            return false
         }
-        if (!TvAdb.isConnected) {
-            TvAdb.connect(ep.host, ep.port)
-        }
+        val ok = withTimeoutOrNull(90_000) {
+            withContext(Dispatchers.IO) { runCatching { TvAdb.installApk(bytes) }.getOrDefault(false) }
+        } ?: false
+        log(if (ok) "  Vision+ Home instalado" else "  no se pudo instalar")
+        return ok
     }
 
-    private suspend fun applyInternal(context: Context) {
-        state.value = state.value.copy(phase = Phase.WORKING, message = "Comprobando la tele…")
-        // Candado: sin Vision+ Home instalado, retirar el Inicio dejaría la tele sin pantalla.
-        val installed = runCatching {
-            TvAdb.shell("pm list packages ${TvHomeRules.OUR_PKG}")
-        }.getOrDefault("")
+    private suspend fun applyInternal(context: Context, record: TvRecord) {
+        state.value = state.value.copy(
+            phase = Phase.WORKING,
+            busyId = record.id,
+            message = "Comprobando ${record.displayName}…",
+        )
+        val installed = sh("pm list packages ${TvHomeRules.OUR_PKG}")
         if (!installed.contains(TvHomeRules.OUR_PKG)) {
-            state.value = state.value.copy(
-                phase = Phase.ERROR,
-                message = "La tele no tiene Vision+ Home instalado. Instálalo primero (Vision+ → Ajustes → " +
-                    "Sistema → Vision+ Home) y vuelve a intentar.",
-            )
-            TvAdb.disconnectQuietly()
-            return
+            if (!installBundledLauncher(context)) {
+                state.value = state.value.copy(
+                    phase = Phase.ERROR,
+                    busyId = "",
+                    message = "${record.displayName} no tiene Vision+ Home y no pude instalarlo. Revisa «Detalles».",
+                )
+                TvAdb.disconnectQuietly()
+                return
+            }
         }
-        state.value = state.value.copy(phase = Phase.WORKING, message = "Fijando Vision+ Home como Inicio…")
+
+        state.value = state.value.copy(message = "Fijando Vision+ Home como Inicio en ${record.displayName}…")
         val resolve =
             "cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME"
-        val before = runCatching { TvAdb.shell(resolve) }.getOrDefault("")
-        val original = TvHomeRules.parseResolveActivity(before)
-        val p = prefs(context)
-        if (p.getString(K_ORIGINAL, null) == null && original != null && !original.startsWith(TvHomeRules.OUR_PKG)) {
-            p.edit().putString(K_ORIGINAL, original).apply()
+        var current = record
+        if (current.originalHome.isBlank()) {
+            val before = sh(resolve)
+            val original = TvHomeRules.parseResolveActivity(before)
+            if (original != null && !original.startsWith(TvHomeRules.OUR_PKG)) {
+                current = current.copy(originalHome = original)
+            }
         }
 
-        TvAdb.shell("pm set-home-activity ${TvHomeRules.OUR_HOME}")
+        sh("pm set-home-activity ${TvHomeRules.OUR_HOME}")
+        val disabled = current.disabled.toMutableSet()
 
-        val disabled = p.getStringSet(K_DISABLED, emptySet()).orEmpty().toMutableSet()
         repeat(3) { attempt ->
             val effective = probeEffectiveHome()
+            log("  abre: ${effective ?: "(no se pudo leer)"}")
             if (effective == TvHomeRules.OUR_PKG) {
-                state.value = state.value.copy(
-                    phase = Phase.DONE,
+                val done = current.copy(
                     applied = true,
                     paired = true,
-                    disabled = disabled.sorted(),
-                    originalHome = p.getString(K_ORIGINAL, "").orEmpty(),
+                    disabled = disabled.toList(),
+                    updatedAt = System.currentTimeMillis(),
+                )
+                state.value = state.value.copy(
+                    phase = Phase.DONE,
+                    busyId = "",
+                    tvs = TvAdbStore.upsert(context, done),
                     message = if (disabled.isEmpty()) {
-                        "Listo: Vision+ Home es el Inicio de la tele."
+                        "Listo: Vision+ Home es el Inicio de ${done.displayName}."
                     } else {
-                        "Listo: Vision+ Home es el Inicio. Retiré ${disabled.size} Inicio(s) que lo tapaban " +
-                            "(puedes devolverlos con «Restaurar la tele»)."
+                        "Listo: ${done.displayName} abre Vision+ Home. Retiré ${disabled.size} Inicio(s) que lo " +
+                            "tapaban (puedes devolverlos con «Restaurar»)."
                     },
                 )
                 TvAdb.disconnectQuietly()
                 return
             }
             if (!TvHomeRules.canDisable(effective)) {
+                val kept = current.copy(disabled = disabled.toList(), updatedAt = System.currentTimeMillis())
                 state.value = state.value.copy(
                     phase = Phase.ERROR,
-                    message = "La tele sigue abriendo «$effective», y esa app no se puede retirar sin dejarla " +
-                        "inservible. No hay forma segura sin root.",
+                    busyId = "",
+                    tvs = TvAdbStore.upsert(context, kept),
+                    message = "${record.displayName} sigue abriendo «$effective», y esa app no se puede retirar sin " +
+                        "dejar la tele inservible. No hay forma segura sin root.",
                 )
                 TvAdb.disconnectQuietly()
                 return
             }
             state.value = state.value.copy(
                 phase = Phase.WORKING,
-                message = "La tele sigue abriendo «$effective»; lo retiro (intento ${attempt + 1} de 3)…",
+                busyId = record.id,
+                message = "${record.displayName} sigue abriendo «$effective»; lo retiro (intento ${attempt + 1} de 3)…",
             )
-            TvAdb.shell("pm disable-user --user 0 $effective")
+            sh("pm disable-user --user 0 $effective")
             disabled += effective!!
-            p.edit().putStringSet(K_DISABLED, disabled).apply()
+            current = current.copy(disabled = disabled.toList(), updatedAt = System.currentTimeMillis())
+            TvAdbStore.upsert(context, current)
             delay(1_000)
         }
+
+        val effective = probeEffectiveHome()
+        val done = current.copy(applied = effective == TvHomeRules.OUR_PKG, updatedAt = System.currentTimeMillis())
         state.value = state.value.copy(
             phase = Phase.ERROR,
-            applied = probeEffectiveHome() == TvHomeRules.OUR_PKG,
-            message = "Casi: revisa la pantalla de la tele. Algunas marcas vuelven a su Inicio al reiniciar; " +
-                "puedes reaplicarlo sin código.",
+            busyId = "",
+            tvs = TvAdbStore.upsert(context, done),
+            message = "Casi: revisa la pantalla de ${record.displayName}. Algunas marcas vuelven a su Inicio al " +
+                "reiniciar; puedes reaplicarlo sin código.",
         )
         TvAdb.disconnectQuietly()
     }
@@ -357,19 +459,17 @@ internal object TvHomeSetup {
     /**
      * El paquete que abre la tele AHORA. `resolve-activity` puede contestar el que tiene más
      * prioridad y no el que usa el sistema, así que se pulsa Inicio y se lee quién quedó al
-     * frente — es la misma comprobación que se hacía a mano con `dumpsys`.
+     * frente — la misma comprobación que se hacía a mano con `dumpsys`.
      */
     private suspend fun probeEffectiveHome(): String? {
-        runCatching { TvAdb.shell("input keyevent KEYCODE_WAKEUP") }
-        runCatching { TvAdb.shell("input keyevent KEYCODE_HOME") }
+        sh("input keyevent KEYCODE_WAKEUP", 8_000)
+        sh("input keyevent KEYCODE_HOME", 8_000)
         delay(1_500)
-        val dumpsys = runCatching { TvAdb.shell("dumpsys activity activities") }.getOrDefault("")
+        val dumpsys = sh("dumpsys activity activities", 20_000)
         val resumed = TvHomeRules.parseResumedPackage(dumpsys)
         if (resumed != null) return resumed
         val resolve =
-            runCatching {
-                TvAdb.shell("cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME")
-            }.getOrDefault("")
+            sh("cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME")
         return TvHomeRules.packageOf(TvHomeRules.parseResolveActivity(resolve))
     }
 }
