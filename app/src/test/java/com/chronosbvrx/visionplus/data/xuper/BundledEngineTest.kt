@@ -98,7 +98,10 @@ class BundledEngineTest {
         assertTrue("no se inyecta el motor", script.contains("inject_engine_dex.py"))
         assertTrue("no se re-firma", script.contains("app-normal-release-engine-signed.apk"))
         assertTrue("no se alinea después de inyectar", script.contains("-p -f 4"))
-        assertTrue("no se verifica el contenido inyectado", script.contains("classes{i}.dex"))
+        // Candado del bug de la 2.5.151: el motor debe SUMAR 3 DEX, no reemplazar los de la app.
+        assertTrue("no se cuentan los DEX antes de inyectar", script.contains("\$dexBefore"))
+        assertTrue("no se exige que el motor sume 3 DEX", script.contains("\$dexBefore + 3"))
+        assertTrue("no se aborta si se pierden DEX propios", script.contains("perdio DEX propios"))
         // Si algo falla, el APK que se publica no sale (la firma se comprueba después).
         assertTrue(script.contains("La re-firma con la llave historica fallo"))
     }
@@ -110,6 +113,9 @@ class BundledEngineTest {
         assertTrue("no valida el tamaño declarado", inject.contains("declared != len(blob)"))
         // Deben entrar sin compresión: ART los mapea directo.
         assertTrue("no se guardan sin comprimir", inject.contains("compress_type = zipfile.ZIP_STORED"))
-        assertTrue("no se apuntan a classes2/3/4", inject.contains("classes2.dex"))
+        // El índice se calcula desde los DEX que ya trae la app: nunca se pisa classes2.dex.
+        assertTrue("no calcula el primer índice libre", inject.contains("def target_names("))
+        assertTrue("no salta los DEX propios", inject.contains("while f\"classes{index}.dex\" in existing"))
+        assertTrue("no protege un DEX existente", inject.contains("ya existía"))
     }
 }

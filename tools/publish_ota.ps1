@@ -92,7 +92,9 @@ try {
     $engineApk = Join-Path $root "app\build\outputs\apk\normal\release\app-normal-release-engine.apk"
     $engineAligned = Join-Path $root "app\build\outputs\apk\normal\release\app-normal-release-engine-aligned.apk"
     $engineSigned = Join-Path $root "app\build\outputs\apk\normal\release\app-normal-release-engine-signed.apk"
-    Write-Host "== Motor dentro del APK (classes2/3/4.dex) =="
+    Write-Host "== Motor dentro del APK (classesN.dex despues de los propios) =="
+    $dexCounter = "import sys,zipfile;z=zipfile.ZipFile(sys.argv[1]);print(sum(1 for e in z.infolist() if e.filename.startswith('classes') and e.filename.endswith('.dex')))"
+    $dexBefore = [int](& python -c $dexCounter $apk)
     & python $inject $apk $engineApk $assetsDir
     if ($LASTEXITCODE -ne 0) { throw "La inyeccion del motor fallo" }
     & $zipalign.FullName -p -f 4 $engineApk $engineAligned
@@ -101,9 +103,12 @@ try {
         --ks-pass ("pass:" + $props["storePassword"]) --key-pass ("pass:" + $props["keyPassword"]) `
         --out $engineSigned $engineAligned
     if ($LASTEXITCODE -ne 0) { throw "La re-firma con la llave historica fallo" }
-    # El motor tiene que estar (ya no hay respaldo en el APK de release).
-    & python -c "import sys,zipfile;z=zipfile.ZipFile(sys.argv[1]);n=set(z.namelist());sys.exit(0 if all(f'classes{i}.dex' in n for i in (2,3,4)) else 1)" $engineSigned
-    if ($LASTEXITCODE -ne 0) { throw "El APK re-firmado no tiene classes2/3/4.dex" }
+    # Candado: el motor tiene que SUMAR 3 DEX, nunca comerse los de la app (la 2.5.151 no abria
+    # porque el inyector escribia en classes2/3/4 y borraba el classes2.dex propio).
+    $dexAfter = [int](& python -c $dexCounter $engineSigned)
+    if ($dexAfter -ne ($dexBefore + 3)) {
+        throw "El APK perdio DEX propios al inyectar el motor: antes $dexBefore, despues $dexAfter (esperado $($dexBefore + 3))"
+    }
     $apk = $engineSigned
 
     foreach ($pair in @(@("Vision+", $apk), @("Vision+ Home", $homeApk))) {

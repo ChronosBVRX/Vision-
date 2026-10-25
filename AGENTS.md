@@ -5,6 +5,13 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **HOTFIX 2.5.152: la 2.5.151 no abría — el inyector del motor sobrescribía `classes2.dex` de la app al crecer con LibADB/Conscrypt/BouncyCastle — 924 app** (2026-10-24):
+  - *Reporte del usuario*: «Se rompió la app, ya no abre» justo después de instalar la 2.5.151.
+  - *Causa medida (comparando los dos APK, no adivinada)*: el build 2.5.151 produjo **`classes.dex` (9,758,564 B) + `classes2.dex` (3,895,868 B)** porque las dependencias nuevas (LibADB + Conscrypt + BouncyCastle) pasaron del límite del primer DEX. `tools/inject_engine_dex.py` escribía el motor **siempre** en `classes2/3/4.dex` y además **borraba** cualquier DEX con ese nombre: el `classes2.dex` propio desapareció y lo reemplazó el del motor (8,370,784 B). ART se queda sin clases → la app muere al arrancar. Prueba: el APK publicado tiene `classes2.dex=8,370,784` (motor) y el build previo tenía `classes2.dex=3,895,868` (app).
+  - *Fix*: el inyector calcula el **primer índice libre** (`target_names`, salta `classes.dex`, `classes2.dex`…) y **aborta** si fuera a pisar un DEX existente; el publicador cuenta los DEX antes/después y **aborta si no son `antes + 3`** («El APK perdio DEX propios al inyectar el motor»). Verificado en local: `classes.dex 9.76 MB · classes2.dex 3.89 MB (app) · classes3/4/5 (motor)`.
+  - *Guardianes*: `BundledEngineTest` exige `target_names`, el salto de índices, el aborto por DEX existente y el candado `$dexBefore + 3` del publicador.
+  - *Lección*: cualquier paso que **escriba archivos con nombre fijo** dentro del APK (DEX, libs) tiene que contar/verificar lo que ya hay; un build que crece deja de ser el caso que se probó.
+  - *Publicado*: **v2.5.152 (vc391)** con app + Vision+ Home 1.0.14, firma histórica. La 2.5.151 se queda rota: los equipos deben instalar la 2.5.152 encima.
 - **TELÉFONO → TELE: «Inicio en la TV» por ADB inalámbrico, sin PC (en pruebas, sin publicar) — 8 tests nuevos** (2026-10-24):
   - *Pedido del usuario*: «¿puedo hacer un script para que Vision del móvil haga este proceso en una tv con Vision TV? Para no tener que usar una PC y adb, sino el mismo móvil lo configura como predeterminado» → «que sea casi desatendida, solamente el user activa depuración inalámbrica y nuestra app hace el resto, pero esto solo se activa en la app de teléfono».
   - *Límite de Android que NO se puede saltar*: el emparejamiento exige el **código de 6 dígitos** que muestra la tele (SPAKE2). Se pide UNA vez; la llave queda guardada y después se reaplica sin código.
