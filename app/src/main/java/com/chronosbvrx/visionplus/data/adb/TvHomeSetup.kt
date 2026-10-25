@@ -404,6 +404,7 @@ internal object TvHomeSetup {
         }
 
         state.value = state.value.copy(message = "Fijando Vision+ Home como Inicio en ${record.displayName}…")
+        sh("input keyevent KEYCODE_WAKEUP", 8_000)
         val resolve =
             "cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME"
         var current = record
@@ -481,13 +482,16 @@ internal object TvHomeSetup {
     /**
      * El paquete que abre la tele AHORA. `resolve-activity` puede contestar el que tiene más
      * prioridad y no el que usa el sistema, así que se pulsa Inicio y se lee quién quedó al
-     * frente — la misma comprobación que se hacía a mano con `dumpsys`.
+     * frente. Se filtra con `grep` en el propio televisor: el `dumpsys` completo son megabytes
+     * y por ADB tarda decenas de segundos (era lo que hacía parecer que «no hacía nada»).
      */
     private suspend fun probeEffectiveHome(): String? {
-        sh("input keyevent KEYCODE_WAKEUP", 8_000)
-        sh("input keyevent KEYCODE_HOME", 8_000)
-        delay(1_500)
-        val dumpsys = sh("dumpsys activity activities", 20_000)
+        sh("input keyevent KEYCODE_HOME", 10_000)
+        delay(1_200)
+        val dumpsys = sh(
+            "dumpsys activity activities | grep -m1 -E '(topResumedActivity|mResumedActivity|ResumedActivity).*ActivityRecord'",
+            15_000,
+        )
         val resumed = TvHomeRules.parseResumedPackage(dumpsys)
         if (resumed != null) return resumed
         val resolve =

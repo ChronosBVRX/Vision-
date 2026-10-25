@@ -153,6 +153,10 @@ class TvHomeAdbTest {
         assertTrue("no restaura una tele concreta", setup.contains("suspend fun restore(context: Context, tvId: String)"))
         assertTrue("no identifica la tele antes de tocarla", setup.contains("connectTo(context"))
         assertTrue("no verifica quién abre la tele de verdad", setup.contains("probeEffectiveHome"))
+        assertTrue(
+            "no filtra el dumpsys en la propia tele (por ADB tarda decenas de segundos)",
+            setup.contains("grep -m1 -E"),
+        )
     }
 
     @Test
