@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -134,7 +135,7 @@ fun HeroStage(
         }
     }
 
-    Box(modifier.fillMaxWidth().height(metrics.heroHeight)) {
+    Box(modifier.fillMaxWidth().height(metrics.heroHeight).clipToBounds()) {
         // --- Arte de fondo -------------------------------------------------------
         Crossfade(
             targetState = current.id,

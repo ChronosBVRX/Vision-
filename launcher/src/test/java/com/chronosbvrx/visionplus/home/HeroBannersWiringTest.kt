@@ -50,6 +50,7 @@ class HeroBannersWiringTest {
         assertTrue("caché de Coil por ruta", hero.contains("diskCacheKey"))
         assertTrue("petición de arte cacheada", hero.contains("bannerImageRequest("))
         assertTrue("siguiente diapositiva lista", hero.contains("Coil.imageLoader(context).enqueue"))
+        assertTrue("el zoom no se sale del hero", hero.contains("clipToBounds()"))
 
         val surfaces = source("ui/Surfaces.kt")
         assertTrue("el Inicio usa el hero nuevo", surfaces.contains("HeroStage("))

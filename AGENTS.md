@@ -5,6 +5,14 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **VISION TV 2.5.162 BETA (2026-10-26): el zoom del hero ya no se sale del banner — recorte `clipToBounds` en launcher 1.2.4; verificado en la TLC física — 970 Android + 117 launcher + 399 backend; beta publicado**:
+  - *Pedido*: «conforme se va haciendo grande la imagen del header se sale de la parte oscura del banner… una parte se ve por detrás del filtro oscuro y una pequeña parte en su color original» (launcher).
+  - *Causa medida en la TLC*: `HeroBackdrop` escala el arte a 1.07 con `graphicsLayer` (Ken Burns); el `Box` del hero no recortaba, así que la imagen se dibujaba fuera de su caja y los degradados —hijos del mismo `Box`— no cubrían esa franja. En la captura se veía la franja inferior del arte sin filtro sobre la fila siguiente.
+  - *Fix (`launcher/.../ui/Hero.kt`)*: `Modifier.clipToBounds()` en el `Box` del `HeroStage`; el zoom queda siempre dentro del banner y el degradado cubre todo el arte. No se tocó la animación ni el arte.
+  - *Verificado en la TLC (BeyondTV, 1920×1080, Android 9)*: launcher 1.2.4 debug; capturas antes (`tlc_zoom_early.png`/`tlc_zoom_late.png`: franja inferior sin filtro) y después (`tlc_check.png`/`tlc_zoom_max.png`: borde limpio, sin franja); bajar 3 y subir deja el hero completo (`tlc_scroll_fixed.png`). La app 2.5.161 sigue instalada; este arreglo es del launcher.
+  - *Pruebas*: **970 Android + 117 launcher + 399 backend** en verde (nuevo guardián `clipToBounds` en `HeroBannersWiringTest`).
+  - *Publicado*: beta **2.5.162 (vc401)** + **Vision+ Home 1.2.4 (vc21)**, `VisionPlus.apk` **78.8 MB** + `VisionPlusHome.apk` 1.4 MB + `version.json`, firma histórica `9593cb0d…`; assets verificados (`versionCode=401`/`versionName=2.5.162`, launcher `21`/`1.2.4`, firma, cadenas `nextRefreshAt`/`Transmisiones de GeeSports`, sin `Canales posibles`). Launcher release instalado en la TLC: slides de película y deportes sin franja; bajar/subir deja el hero completo. La app es la misma 2.5.161 (el cambio va en el launcher); reemplaza a la beta 2.5.161.
+  - *Pendiente*: probar en la TLC el hero de la app y un partido en vivo; si va bien, promover 2.5.162 a estable.
 - **VISION TV 2.5.161 BETA (2026-10-26): el hero vuelve COMPLETO al subir — la lista se ancla al tope al enfocar sus botones (launcher 1.2.3) — 970 Android + 117 launcher + 399 backend; beta publicado; la estable sigue en 2.5.157**:
   - *Pedido*: «cuando bajas en el menú y regresas hacia arriba los banners ya no se ven completos, se ven cortados» (launcher y app).
   - *Causa medida*: el hero es el primer ítem del `LazyColumn`; al volver arriba el foco caía en sus botones y el `MinimalScrollBringIntoView` solo desplazaba lo justo para mostrar el botón, dejando el título/sinopsis/arte por encima del viewport. La captura del launcher mostraba el hero a ~150 px (solo botones y una tira de arte).
@@ -12,7 +20,7 @@
   - *Fix app (`TvHomeScreen.kt` + `TvWidgets.kt`)*: `TvCompactAction` gana `onFocusChanged` (desde su `interactionSource`); cada acción del hero incrementa `heroActionTick`; `LaunchedEffect(heroActionTick) { if (tick > 0 && returnFilmId == null) rowsListState.scrollToItem(0) }`. La guarda `returnFilmId == null` evita que el regreso a una ficha pierda la tarjeta original (lo cazó `TvFocusTest.homeBackRestoresSameCardAfterLateContent`).
   - *Verificado en el emulador (TV 1080p)*: launcher y app, bajar 3 y subir 8 con el D-pad → hero completo (título, metadatos, sinopsis y botones); capturas `launcher_fixed.png`/`app_fixed.png`.
   - *Pruebas*: **970 Android + 117 launcher + 399 backend** en verde (nuevo guardián `TvHeroWiringTest.returningToTheHeroAnchorsTheFullBanner`; aserciones en `HeroBannersWiringTest`).
-  - *Publicado*: beta **2.5.161 (vc400)** + **Vision+ Home 1.2.3 (vc20)**, `VisionPlus.apk` **78.8 MB** + `VisionPlusHome.apk` 1.4 MB + `version.json`, firma histórica `9593cb0d…`; assets descargados y verificados (`versionCode=400`/`versionName=2.5.161`, launcher `20`/`1.2.3`, firma histórica, cadenas `Transmisiones de GeeSports`/`nextRefreshAt`, **sin** `Canales posibles`). Instalado en el emulador (release): app y launcher con el hero **completo** tras bajar y subir con el mando. Reemplaza a la beta 2.5.160 (mismo contenido + este arreglo).
+  - *Publicado*: beta **2.5.161 (vc400)** + **Vision+ Home 1.2.3 (vc20)**, `VisionPlus.apk` **78.8 MB** + `VisionPlusHome.apk` 1.4 MB + `version.json`, firma histórica `9593cb0d…`; assets descargados y verificados (`versionCode=400`/`versionName=2.5.161`, launcher `20`/`1.2.3`, firma histórica, cadenas `Transmisiones de GeeSports`/`nextRefreshAt`, **sin** `Canales posibles`). Instalado en el emulador (release): app y launcher con el hero **completo** tras bajar y subir con el mando. Reemplaza a la beta 2.5.160 (mismo contenido + este arreglo). **Reemplazada por la beta 2.5.162 (launcher 1.2.4, recorte del zoom).**
   - *Pendiente*: probar en la TCL/caja física el regreso arriba con el mando; si va bien, promover 2.5.161 a estable.
 - **VISION TV 2.5.160 BETA (2026-10-26): banners diarios con coste cero y el selector de Deportes solo con fuentes de GeeSports — 969 Android + 117 launcher + 399 backend; beta publicado; la estable sigue en 2.5.157**:
   - *Pedido*: «no haya fallback en los canales de la agenda deportiva, solo muestro los de GeeSports… el diálogo me deja escoger entre dos categorías, la primera casi nunca tiene opciones» + «exprime al máximo el rendimiento de los banners para que no me cueste absolutamente nada ni tenga riesgo de que me cueste nada pero que sí funciona».
@@ -1615,8 +1623,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** - pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.161 BETA**
-  (versionCode **400**; beta 2.5.161; estable v2.5.157; launcher 1.2.3/20 - **historial de la base 2.5.150:** **perfiles renomrables sin cambiar de perfil** (lápiz al
+- App Android (Compose) **"Vision+"** - pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.162 BETA**
+  (versionCode **401**; beta 2.5.162; estable v2.5.157; launcher 1.2.4/21 - **historial de la base 2.5.150:** **perfiles renomrables sin cambiar de perfil** (lápiz al
   enfocar en la tele, modal de escritura con el teclado nativo de la TV; lápiz por perfil en el móvil),
   **zapping acotado al menú del launcher** y **Atrás devuelve a Vision+ Home**; incluye el precalentamiento
   del motor, la EPG masiva y «Personalizar Inicio» de las betas 2.5.149) y el **launcher 1.0.13**
