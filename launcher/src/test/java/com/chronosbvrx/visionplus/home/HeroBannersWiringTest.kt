@@ -19,6 +19,10 @@ class HeroBannersWiringTest {
         assertTrue("misma llave que el índice", repo.contains("X-Api-Key"))
         assertTrue("caché en disco", repo.contains("launcher_banners.json"))
         assertTrue("parseo puro", repo.contains("parseBanners("))
+        assertTrue("caducidad del servidor", repo.contains("parseBannersExpiry"))
+        assertTrue("una sola descarga", repo.contains("Mutex()"))
+        assertTrue("enfriamiento si falla", repo.contains("FAIL_BACKOFF_MS"))
+        assertTrue("sin sondeo en bucle", repo.contains("nextRefreshAt"))
         assertTrue("https", repo.contains("https://visionplusv2.duckdns.org"))
         assertTrue("no hay cleartext", !repo.contains("http://"))
 
@@ -42,12 +46,19 @@ class HeroBannersWiringTest {
         assertTrue("marcador", hero.contains("SportsScoreboard("))
         assertTrue("punto en vivo", hero.contains("LiveDot("))
         assertTrue("agenda desde el hero", hero.contains("onSportsHub()"))
+        assertTrue("clave estable del arte", hero.contains("bannerArtCacheKey"))
+        assertTrue("caché de Coil por ruta", hero.contains("diskCacheKey"))
+        assertTrue("petición de arte cacheada", hero.contains("bannerImageRequest("))
+        assertTrue("siguiente diapositiva lista", hero.contains("Coil.imageLoader(context).enqueue"))
 
         val surfaces = source("ui/Surfaces.kt")
         assertTrue("el Inicio usa el hero nuevo", surfaces.contains("HeroStage("))
         assertTrue("le pasa las diapositivas", surfaces.contains("items = hero"))
         assertTrue("pausa cableada", surfaces.contains("heroPaused"))
         assertTrue("deportes al hub", surfaces.contains("onOpenSports"))
+        val screen = source("LauncherScreen.kt")
+        assertTrue("no recorta el hero al volver", screen.contains("LaunchedEffect(heroFocused)"))
+        assertTrue("ancla la lista al tope", screen.contains("homeListState.scrollToItem(0)"))
     }
 
     @Test
@@ -58,6 +69,9 @@ class HeroBannersWiringTest {
         assertTrue("arte panorámico TMDB", server.contains("w1280"))
         assertTrue("selección pura", server.contains("def pick_movie_candidates("))
         assertTrue("refresco en segundo plano", server.contains("background.add_task(refresh_movies"))
+        assertTrue("un solo refresco en el VPS", server.contains("pg_try_advisory_lock"))
+        assertTrue("enfriamiento del refresco", server.contains("_BACKGROUND_RETRY_SECONDS"))
+        assertTrue("próximo refresco futuro", server.contains("next_at ="))
         val app = file("server/api/app.py")
         assertTrue("ruta /v1/banners", app.contains("@app.get(\"/v1/banners\")"))
         assertTrue("importa el módulo", app.contains("import banners as launcher_banners"))

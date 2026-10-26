@@ -65,22 +65,24 @@ class LiveSportsPlayerUiTest {
     }
 
     @Test
-    fun theSportsDialogHandsTheMatchContextAndTheBackstopToThePlayer() {
+    fun theSportsDialogHandsTheMatchContextAndOnlyGeeSources() {
         val mobile = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/sports/GeeSportsTabs.kt")
         val tv = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/tv/TvGeeSportsTabs.kt")
         for ((name, text) in listOf("móvil" to mobile, "TV" to tv)) {
             assertTrue("$name: arma el contexto", text.contains("eventInfo: GeeZapSignals.EventInfo? = null"))
             assertTrue("$name: lo entrega al reproductor", text.contains("GeeZapSignals.arm(picked, zapOrder, eventInfo)"))
-            assertTrue("$name: respaldo automático al tocar una caída", text.contains("GeeBackstop.forGuide(backstops, guideName)"))
-            assertTrue("$name: lo dice en la fila", text.contains("respaldo automático"))
-            // La lista enseña SOLO lo de GeeSports: ningún respaldo pintado.
-            assertFalse("$name: sin sección de respaldos", text.contains("Respaldo en tu lista"))
-            assertFalse("$name: sin filas de respaldo", text.contains("Backstop.Backstop,") || text.contains("back.channel.name"))
+            assertTrue("$name: solo fuentes de GeeSports", text.contains("Transmisiones de GeeSports:"))
+            assertTrue("$name: filtra las ranuras sin URL", text.contains("filter { it.link.isNotBlank() }"))
+            // Sin la sección del catálogo ni respaldo automático.
+            assertFalse("$name: sin Canales posibles", text.contains("Canales posibles"))
+            assertFalse("$name: sin respaldo", text.contains("GeeBackstop"))
+            assertFalse("$name: sin filas de respaldo", text.contains("respaldo automático"))
         }
         val screenMobile = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/sports/SportsScreen.kt")
         val screenTv = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/tv/TvSportsScreen.kt")
         for ((name, text) in listOf("móvil" to screenMobile, "TV" to screenTv)) {
-            assertTrue("$name: el respaldo viaja al reproductor", text.contains("fallback = pickingBackstops.firstOrNull()?.channel"))
+            assertFalse("$name: sin pickingBackstops", text.contains("pickingBackstops"))
+            assertFalse("$name: sin fallback al catálogo", text.contains("fallback ="))
         }
     }
 

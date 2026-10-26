@@ -50,8 +50,6 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
-import com.chronosbvrx.visionplus.data.gee.GeeBackstop
-import com.chronosbvrx.visionplus.data.gee.GeeGuide
 import com.chronosbvrx.visionplus.data.gee.GeeHealth
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.ui.sports.GeeSportsState
@@ -235,15 +233,14 @@ private fun TvGeeChannelRow(
 }
 
 /**
- * El selector de transmisiones en la TV: los canales de TV reales de la lista
- * (resueltos de la guía) y las transmisiones directas, vivos primero. OK sintoniza.
+ * El selector de transmisiones en la TV: SOLO las señales que GeeSports publica para el
+ * partido (con dirección real), vivos primero. OK sintoniza esa fuente.
  *
  * Con [playable] en false (el partido aún no comienza o ya terminó) NO se ofrecen
- * señales: solo se muestra dónde se transmite y el aviso [blockNote].
+ * señales: solo se muestra el aviso [blockNote].
  *
  * [checks] son las comprobaciones de vida que la app acaba de hacer (mandan sobre el
- * dato del servidor) y [backstops] los canales de la casa que cubren una cadena que la
- * fuente deportiva no puede servir.
+ * dato del servidor). No hay respaldo al catálogo: si una fuente está caída, se ve caída.
  */
 @Composable
 internal fun TvGeeLinkPickDialog(
@@ -252,69 +249,30 @@ internal fun TvGeeLinkPickDialog(
     links: List<GeeSportsSource.GeeLink>,
     onDismiss: () -> Unit,
     onPlay: (LiveChannel) -> Unit,
-    guide: List<String> = emptyList(),
-    geeTv: List<GeeGuide.TvOption> = emptyList(),
     playable: Boolean = true,
     blockNote: String = "",
     checks: Map<String, GeeHealth.Check> = emptyMap(),
-    backstops: List<GeeBackstop.Backstop> = emptyList(),
     eventInfo: GeeZapSignals.EventInfo? = null,
 ) {
     // El estado REAL de cada señal: lo comprobado por la app ahora mismo manda sobre el
     // dato del servidor (que puede tener minutos).
     fun aliveOf(link: GeeSportsSource.GeeLink): Boolean? =
         GeeHealth.effective(link.alive, checks[link.link.trim()])
-    // Zapping dentro del bloque de opciones: la lista ORDENADA del evento (guía de la parrilla
-    // + enlaces directos) queda armada para el reproductor en línea, que la recoge al montar.
-    val zapOrder = remember(links, geeTv) {
-        buildList {
-            geeTv.forEach { option -> add(GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo")) }
-            // Las ranuras que la fuente declara sin dirección todavía no entran al zapping.
-            links.filter { it.link.isNotBlank() }.forEach { link ->
-                add(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
-            }
+    // Solo las señales que GeeSports publica con una dirección real. Las ranuras que la
+    // fuente declara sin URL no se ofrecen: la lista es de fuentes, no de promesas.
+    val linkRows = remember(links) {
+        links.filter { it.link.isNotBlank() }.distinctBy { it.link }
+    }
+    // Zapping dentro del bloque de opciones: la lista ORDENADA del evento queda armada
+    // para el reproductor en línea, que la recoge al montar.
+    val zapOrder = remember(linkRows) {
+        linkRows.map { link ->
+            GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo")
         }.distinctBy { it.url }
     }
+    val liveLinks = remember(linkRows, checks) { linkRows.filter { aliveOf(it) == true } }
 
-    /**
-     * El respaldo AUTOMÁTICO: si la opción que se toca no está viva, se sintoniza la misma
-     * cadena confirmada del catálogo (por su nombre de parrilla; para un enlace directo caído,
-     * la primera cadena del partido que la fuente no pueda servir). La lista enseña solo lo de
-     * GeeSports y, con la fuente viva, ella manda.
-     */
-    /**
-     * Una sola fila por canal: si el partido ya trae su canal VIVO en la otra sección, la copia
-     * caída no se repite —«TUDN MX · Caído» arriba y «TUDN MEXICO FHD · Disponible» abajo eran el
-     * MISMO canal con dos estados y confundían—.
-     */
-    val liveLinks = remember(links, checks) { links.filter { aliveOf(it) == true } }
-    val liveTv = remember(geeTv, checks) { geeTv.filter { aliveOf(it.link) == true } }
-    val tvRows = remember(geeTv, liveLinks) {
-        geeTv.filter { option ->
-            aliveOf(option.link) == true ||
-                liveLinks.none { GeeBackstop.isSameChannel(option.guideName, it.name) }
-        }
-    }
-    val linkRows = remember(links, liveTv) {
-        links.filter { link ->
-            aliveOf(link) == true ||
-                liveTv.none { GeeBackstop.isSameChannel(it.guideName, link.name) }
-        }
-    }
-
-    fun playZap(picked: LiveChannel, dead: Boolean = false, guideName: String? = null) {
-        val backstop = if (!dead) {
-            null
-        } else if (guideName != null) {
-            GeeBackstop.forGuide(backstops, guideName) ?: backstops.firstOrNull()
-        } else {
-            backstops.firstOrNull()
-        }
-        if (backstop != null) {
-            GeeZapSignals.arm(backstop.channel, emptyList(), eventInfo)
-            onPlay(backstop.channel)
-            return
-        }
+    fun playZap(picked: LiveChannel) {
         GeeZapSignals.arm(picked, zapOrder, eventInfo)
         onPlay(picked)
     }
@@ -352,14 +310,6 @@ internal fun TvGeeLinkPickDialog(
                     if (subtitle.isNotBlank()) {
                         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary, modifier = Modifier.padding(top = 2.dp))
                     }
-                    if (guide.isNotEmpty()) {
-                        Text(
-                            "Se transmite en: " + guide.take(4).joinToString(" · "),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = VisionBlueBright,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
                     Spacer(Modifier.height(14.dp))
                     if (!playable) {
                         Text(
@@ -369,78 +319,43 @@ internal fun TvGeeLinkPickDialog(
                         )
                         Spacer(Modifier.height(14.dp))
                         TvCompactAction("Volver", onClick = onDismiss, modifier = Modifier.landingFocus(modalLanding))
-                    } else if (tvRows.isEmpty() && linkRows.isEmpty()) {
+                    } else if (linkRows.isEmpty()) {
                         Text("Sin transmisiones disponibles por ahora.", style = MaterialTheme.typography.bodyMedium, color = VisionTextSecondary)
                         Spacer(Modifier.height(14.dp))
                         TvCompactAction("Volver", onClick = onDismiss, modifier = Modifier.landingFocus(modalLanding))
                     } else {
-                        val firstTv = tvRows.firstOrNull()
                         val firstLink = linkRows.firstOrNull()
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
                         ) {
-                            if (firstTv != null) {
-                                item(key = "tv_label") {
-                                    Text(
-                                        "Canales posibles:",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = VisionTextSecondary,
-                                        modifier = Modifier.padding(bottom = 2.dp),
-                                    )
-                                }
-                                // Clave con índice: el dedupe de la guía ya evita repetidos, pero
-                                // una clave duplicada JAMÁS debe tumbar la pantalla (LazyColumn).
-                                itemsIndexed(tvRows, key = { index, option -> "tv_${index}_${option.link.link}" }) { _, option ->
-                                    val optionAlive = aliveOf(option.link) == true
-                                    TvGeeTvChannelItem(
-                                        option = option,
-                                        alive = aliveOf(option.link),
-                                        onClick = {
-                                            playZap(
-                                                GeeSportsSource.toChannel(option.link, option.title, "Deportes en vivo"),
-                                                dead = !optionAlive,
-                                                guideName = option.guideName,
-                                            )
-                                        },
-                                        modifier = if (option == firstTv) Modifier.landingFocus(modalLanding) else Modifier,
-                                    )
-                                }
+                            item(key = "links_label") {
+                                Text(
+                                    "Transmisiones de GeeSports:",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = VisionTextSecondary,
+                                    modifier = Modifier.padding(bottom = 2.dp),
+                                )
                             }
-                            if (firstLink != null) {
-                                item(key = "links_label") {
+                            itemsIndexed(linkRows, key = { index, link -> "link_${index}_${link.link}" }) { _, link ->
+                                TvGeeLinkItem(
+                                    link = link,
+                                    alive = aliveOf(link),
+                                    fallbackTitle = title,
+                                    onClick = {
+                                        playZap(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
+                                    },
+                                    modifier = if (link == firstLink) Modifier.landingFocus(modalLanding) else Modifier,
+                                )
+                            }
+                            if (liveLinks.isNotEmpty()) {
+                                item(key = "links_note") {
                                     Text(
-                                        "Posibles transmisiones:",
+                                        ZAP_HINT,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = VisionTextSecondary,
-                                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                                        color = VisionBlueBright,
+                                        modifier = Modifier.padding(top = 6.dp),
                                     )
-                                }
-                                itemsIndexed(linkRows, key = { index, link -> "link_${index}_${link.link}" }) { _, link ->
-                                    val linkAlive = aliveOf(link) == true
-                                    TvGeeLinkItem(
-                                        link = link,
-                                        alive = aliveOf(link),
-                                        fallbackTitle = title,
-                                        onClick = {
-                                            playZap(
-                                                GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"),
-                                                dead = !linkAlive,
-                                                guideName = link.name,
-                                            )
-                                        },
-                                        modifier = if (geeTv.isEmpty() && link == firstLink) Modifier.landingFocus(modalLanding) else Modifier,
-                                    )
-                                }
-                                if (liveLinks.isNotEmpty()) {
-                                    item(key = "links_note") {
-                                        Text(
-                                            ZAP_HINT,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = VisionBlueBright,
-                                            modifier = Modifier.padding(top = 6.dp),
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -451,48 +366,6 @@ internal fun TvGeeLinkPickDialog(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun TvGeeTvChannelItem(
-    option: GeeGuide.TvOption,
-    alive: Boolean?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val shape = RoundedCornerShape(10.dp)
-    Surface(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        shape = ClickableSurfaceDefaults.shape(shape),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = VisionSurfaceHigh,
-            focusedContainerColor = VisionBlue,
-            contentColor = Color.White,
-            focusedContentColor = Color.White,
-        ),
-        border = ClickableSurfaceDefaults.border(
-            focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = shape),
-        ),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(option.title, style = MaterialTheme.typography.labelLarge, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    if (alive == true) "Canal en vivo" else "Canal en vivo · respaldo automático",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = VisionTextSecondary,
-                )
-            }
-            Spacer(Modifier.width(10.dp))
-            TvGeeSignalBadge(alive)
         }
     }
 }
@@ -535,7 +408,7 @@ private fun TvGeeLinkItem(
             Column(Modifier.weight(1f)) {
                 Text(link.name.ifBlank { fallbackTitle }, style = MaterialTheme.typography.labelLarge, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    if (alive == true) typeText else "$typeText · respaldo automático",
+                    typeText,
                     style = MaterialTheme.typography.bodySmall,
                     color = VisionTextSecondary,
                 )

@@ -9,8 +9,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.chronosbvrx.visionplus.data.LiveChannel
-import com.chronosbvrx.visionplus.data.gee.GeeBackstop
-import com.chronosbvrx.visionplus.data.gee.GeeGuide
 import com.chronosbvrx.visionplus.data.gee.GeeHealth
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.ui.sports.GeeLinkPickDialog
@@ -51,13 +49,6 @@ class GeePickDialogDuplicateTest {
         alive = true,
     )
 
-    private fun option(title: String, score: Int = 100) = GeeGuide.TvOption(
-        guideName = title,
-        title = title,
-        link = link(title),
-        score = score,
-    )
-
     @Before
     fun setUp() {
         FocusRescue.target = null
@@ -76,15 +67,13 @@ class GeePickDialogDuplicateTest {
                     links = listOf(duplicated, duplicated),
                     onDismiss = {},
                     onPlay = { _: LiveChannel -> },
-                    guide = listOf("Canal 5", "Canal 5 Televisa"),
-                    geeTv = listOf(option("Canal 5"), option("Canal 5")),
                 )
             }
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        assertText("Canales posibles:")
-        assertText("Posibles transmisiones:")
+        assertText("Transmisiones de GeeSports:")
+        assertAbsent("Canales posibles:")
     }
 
     @Test
@@ -98,15 +87,13 @@ class GeePickDialogDuplicateTest {
                     links = listOf(duplicated, duplicated),
                     onDismiss = {},
                     onPlay = { _: LiveChannel -> },
-                    guide = listOf("ESPN", "ESPN+"),
-                    geeTv = listOf(option("ESPN"), option("ESPN")),
                 )
             }
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        assertText("Canales posibles:")
-        assertText("Posibles transmisiones:")
+        assertText("Transmisiones de GeeSports:")
+        assertAbsent("Canales posibles:")
     }
 
     @Test
@@ -119,7 +106,6 @@ class GeePickDialogDuplicateTest {
                     links = listOf(link("ESPN")),
                     onDismiss = {},
                     onPlay = { _: LiveChannel -> },
-                    guide = listOf("ESPN"),
                     playable = false,
                     blockNote = "Aún no comienza · podrás verlo cuando el partido esté en vivo.",
                 )
@@ -127,11 +113,9 @@ class GeePickDialogDuplicateTest {
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        // La guía se conserva (dónde se transmite)…
-        assertText("Se transmite en: ESPN")
+        // Con el partido aún cerrado no se ofrecen señales; solo el aviso.
         assertText("podrás verlo cuando el partido esté en vivo")
-        // …pero NO se ofrecen señales para reproducir.
-        assertAbsent("Posibles transmisiones:")
+        assertAbsent("Transmisiones de GeeSports:")
         assertAbsent("Canales posibles:")
     }
 
@@ -145,7 +129,6 @@ class GeePickDialogDuplicateTest {
                     links = listOf(link("ESPN")),
                     onDismiss = {},
                     onPlay = { _: LiveChannel -> },
-                    guide = listOf("ESPN"),
                     playable = false,
                     blockNote = "Aún no comienza · podrás verlo cuando el partido esté en vivo.",
                 )
@@ -153,9 +136,8 @@ class GeePickDialogDuplicateTest {
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        assertText("Se transmite en: ESPN")
         assertText("podrás verlo cuando el partido esté en vivo")
-        assertAbsent("Posibles transmisiones:")
+        assertAbsent("Transmisiones de GeeSports:")
         assertAbsent("Canales posibles:")
     }
 
@@ -283,12 +265,6 @@ class GeePickDialogDuplicateTest {
         assertText("CDMX")
     }
 
-    // ----- respaldo automático ---------------------------------------------------------------
-
-    private val telemundo = LiveChannel(name = "TELEMUNDO EAST HD", url = "xtvlive:tm-east")
-
-    private fun backstop() = GeeBackstop.Backstop(guideName = "Telemundo", channel = telemundo)
-
     private fun deadChannel(name: String): GeeSportsSource.GeeLink = GeeSportsSource.GeeLink(
         name = name,
         link = "https://cdn.test/$name.m3u8",
@@ -298,124 +274,63 @@ class GeePickDialogDuplicateTest {
         alive = false,
     )
 
-    private fun healthyChannel(name: String): GeeSportsSource.GeeLink = GeeSportsSource.GeeLink(
-        name = name,
-        link = "https://cdn.test/$name.m3u8",
-        headers = emptyMap(),
-        type = "hls",
-        drm = "",
-        alive = true,
-    )
-
     @Test
-    fun thePhonePickerShowsOnlySportsSourcesAndTapsADeadOneIntoTheBackstop() {
+    fun onlyGeeSportsSourcesAreListedAndADeadOnePlaysItsOwnLink() {
         var played: LiveChannel? = null
+        val dead = deadChannel("TUDN MEXICO FHD")
         compose.setContent {
             VisionTheme {
                 GeeLinkPickDialog(
                     title = "Guadalajara vs Tigres UANL",
                     subtitle = "Liga MX · Hoy 17:07",
-                    links = listOf(link("TUDN MEXICO FHD")),
+                    links = listOf(dead),
                     onDismiss = {},
                     onPlay = { played = it },
-                    guide = emptyList(),
-                    geeTv = listOf(
-                        GeeGuide.TvOption(guideName = "Telemundo", title = "Telemundo", link = deadChannel("Telemundo"), score = 100),
-                    ),
-                    backstops = listOf(backstop()),
                 )
             }
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        // La lista enseña SOLO lo de la fuente deportiva: nada de respaldos a la vista.
-        assertText("Canales posibles:")
-        assertText("Telemundo")
-        assertAbsent("TELEMUNDO EAST HD")
-        assertAbsent("Respaldo en tu lista:")
-        // Pero la fila caída avisa que su respaldo es automático…
-        assertText("respaldo automático")
-        // …y al tocarla se reproduce la cadena confirmada de la casa, sin preguntar.
-        compose.onNodeWithText("Telemundo").performClick()
+        assertText("Transmisiones de GeeSports:")
+        assertText("TUDN MEXICO FHD")
+        assertText("Caído")
+        assertAbsent("Canales posibles:")
+        assertAbsent("respaldo automático")
+        compose.onNodeWithText("TUDN MEXICO FHD").performClick()
         compose.waitForIdle()
-        assertEquals("xtvlive:tm-east", played?.url)
+        assertEquals(dead.link, played?.url)
     }
 
     @Test
-    fun theTvPickerShowsOnlySportsSourcesAndSendsADeadOneToTheBackstop() {
-        var played: LiveChannel? = null
-        compose.setContent {
-            VisionTheme {
-                TvGeeLinkPickDialog(
-                    title = "Guadalajara vs Tigres UANL",
-                    subtitle = "Liga MX · Hoy 17:07",
-                    links = listOf(link("TUDN MEXICO FHD")),
-                    onDismiss = {},
-                    onPlay = { played = it },
-                    guide = emptyList(),
-                    geeTv = listOf(
-                        GeeGuide.TvOption(guideName = "Telemundo", title = "Telemundo", link = deadChannel("Telemundo"), score = 100),
-                    ),
-                    backstops = listOf(backstop()),
-                )
-            }
-        }
-        compose.mainClock.advanceTimeBy(700)
-        compose.waitForIdle()
-        assertText("Canales posibles:")
-        assertAbsent("TELEMUNDO EAST HD")
-        assertAbsent("Respaldo en tu lista:")
-        // La fila caída queda en el foco de entrada y es accionable (OK la manda al respaldo).
-        compose.onNodeWithText("Telemundo").assert(hasClickAction())
-        assertNull("todavía no se sintoniza sola", played)
-    }
-
-    @Test
-    fun theSameChannelNeverAppearsTwiceWithOppositeStates() {
-        // El caso del Cruz Azul: arriba «TUDN MX · Caído» y abajo «TUDN MEXICO FHD · Disponible»
-        // son el MISMO canal. Se enseña una sola vez: la que sí sirve.
-        val deadTudn = GeeSportsSource.GeeLink(
-            name = "TUDN MX",
-            link = "https://cdn.test/tudn-mx.m3u8",
+    fun aDeclaredNameWithoutUrlIsNotOfferedAtAll() {
+        val pending = GeeSportsSource.GeeLink(
+            name = "TUDN US",
+            link = "",
             headers = emptyMap(),
             type = "hls",
             drm = "",
-            alive = false,
-        )
-        val liveFeed = GeeSportsSource.GeeLink(
-            name = "TUDN MEXICO FHD",
-            link = "https://cdn.test/tudn-mexico.mpd",
-            headers = emptyMap(),
-            type = "dash",
-            drm = "kid:key",
-            alive = true,
+            alive = null,
         )
         compose.setContent {
             VisionTheme {
                 GeeLinkPickDialog(
-                    title = "Cruz Azul vs FC Juárez",
-                    subtitle = "Liga MX · Hoy 21:10",
-                    links = listOf(liveFeed),
+                    title = "León vs América",
+                    subtitle = "Liga MX · Hoy 19:00",
+                    links = listOf(pending),
                     onDismiss = {},
                     onPlay = { _: LiveChannel -> },
-                    guide = emptyList(),
-                    geeTv = listOf(GeeGuide.TvOption(guideName = "TUDN", title = "TUDN MX", link = deadTudn, score = 100)),
                 )
             }
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        // La transmisión viva se queda; la copia caída del mismo canal, no.
-        assertText("TUDN MEXICO FHD")
-        assertText("Disponible")
-        assertAbsent("TUDN MX")
-        assertAbsent("Caído")
+        assertText("Sin transmisiones disponibles por ahora.")
+        assertAbsent("TUDN US")
+        assertAbsent("La fuente aún no publica su señal")
     }
 
     @Test
-    fun theListShowsTheLinkItselfAndRecommendsZappingUntilTheMatchIsFound() {
-        // Sin falsa expectativa: la sección se llama «Posibles transmisiones», cada una enseña su
-        // enlace y se recomienda intercalar hasta encontrar la que esté dando el partido.
+    fun theListShowsTheGeeLinkAndTheZappingHint() {
         val live = GeeSportsSource.GeeLink(
             name = "TUDN MEXICO FHD",
             link = "https://otte.cache.aiv-cdn.net/bom-nitro/live/clients/dash/enc/x/out/v1/abc/cenc.mpd|user-agent=UA",
@@ -432,82 +347,16 @@ class GeePickDialogDuplicateTest {
                     links = listOf(live),
                     onDismiss = {},
                     onPlay = { _: LiveChannel -> },
-                    guide = emptyList(),
                 )
             }
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        assertText("Posibles transmisiones:")
-        assertText("otte.cache.aiv-cdn.net")           // el enlace a la vista (sin las cabeceras)
+        assertText("Transmisiones de GeeSports:")
+        assertText("otte.cache.aiv-cdn.net")
         assertAbsent("user-agent=")
         assertText("cambia entre ellas")
         assertText("Arriba/Abajo durante la reproducción")
-    }
-
-    @Test
-    fun aDeclaredNameWithoutUrlIsListedAndTappingItUsesTheBackstopForThatName() {
-        // El caso de León-América: la fuente declara «TUDN US» sin URL. Se lista (como la app
-        // original) y al tocarla se reproduce NUESTRO canal confirmado de ese nombre.
-        val pending = GeeSportsSource.GeeLink(
-            name = "TUDN US",
-            link = "",
-            headers = emptyMap(),
-            type = "hls",
-            drm = "",
-            alive = null,
-        )
-        val tudnUsa = LiveChannel(name = "TUDN USA HD", url = "xtvlive:tudn-usa")
-        var played: LiveChannel? = null
-        compose.setContent {
-            VisionTheme {
-                GeeLinkPickDialog(
-                    title = "León vs América",
-                    subtitle = "Liga MX · Hoy 19:00",
-                    links = listOf(pending),
-                    onDismiss = {},
-                    onPlay = { played = it },
-                    backstops = listOf(GeeBackstop.Backstop(guideName = "TUDN US", channel = tudnUsa)),
-                )
-            }
-        }
-        compose.mainClock.advanceTimeBy(500)
-        compose.waitForIdle()
-        assertText("TUDN US")
-        assertText("La fuente aún no publica su señal")
-        assertText("respaldo automático")
-        compose.onNodeWithText("TUDN US").performClick()
-        compose.waitForIdle()
-        assertEquals("xtvlive:tudn-usa", played?.url)
-    }
-
-    @Test
-    fun aHealthySportsSourceAlwaysWinsEvenIfABackstopExists() {
-        // La fuente deportiva manda SIEMPRE: con su señal viva se reproduce la suya, no el respaldo.
-        var played: LiveChannel? = null
-        compose.setContent {
-            VisionTheme {
-                GeeLinkPickDialog(
-                    title = "Guadalajara vs Tigres UANL",
-                    subtitle = "Liga MX · Hoy 17:07",
-                    links = emptyList(),
-                    onDismiss = {},
-                    onPlay = { played = it },
-                    guide = emptyList(),
-                    geeTv = listOf(
-                        GeeGuide.TvOption(guideName = "Telemundo", title = "Telemundo", link = healthyChannel("Telemundo"), score = 100),
-                    ),
-                    backstops = listOf(backstop()),
-                )
-            }
-        }
-        compose.mainClock.advanceTimeBy(500)
-        compose.waitForIdle()
-        assertText("Disponible")
-        assertAbsent("respaldo automático")
-        compose.onNodeWithText("Telemundo").performClick()
-        compose.waitForIdle()
-        assertEquals("https://cdn.test/Telemundo.m3u8", played?.url)
     }
 
     @Test

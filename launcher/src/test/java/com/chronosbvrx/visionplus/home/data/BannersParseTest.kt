@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.home.data
 
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -73,5 +74,37 @@ class BannersParseTest {
         assertTrue(parseBanners("{}").isEmpty())
         assertTrue(parseBanners("{\"items\":[null,3,{\"title\":\"sin kind\"}]}").isNotEmpty())
         assertTrue(parseBanners("no es json").isEmpty())
+    }
+
+    @Test
+    fun theCacheExpiresWhenTheServerWillRefresh() {
+        val next = 1_000_000L
+        assertEquals(next + 5 * 60 * 1000L, parseBannersExpiry("""{"nextRefreshAt":$next}"""))
+    }
+
+    @Test
+    fun anOldServerWithoutNextRefreshFallsBackToSixHours() {
+        val fileAt = 1_000_000L
+        assertEquals(fileAt + 6 * 60 * 60 * 1000L, parseBannersExpiry("{}", fallbackAt = fileAt))
+        assertEquals(0L, parseBannersExpiry("{}"))
+    }
+
+    @Test
+    fun readingTheCacheDoesNotMakeItLookNewer() {
+        val source = File("src/main/java/com/chronosbvrx/visionplus/home/data/BannersRepository.kt").readText()
+        assertTrue(source.contains("target.lastModified()"))
+        assertTrue(source.contains("parseBannersExpiry(raw, target.lastModified())"))
+        assertFalse(source.contains("now to slides"))
+        assertTrue(source.contains("Mutex()"))
+        assertTrue(source.contains("withLock"))
+    }
+
+    @Test
+    fun theArtworkKeyIgnoresTheDailyCdnVersion() {
+        assertEquals(
+            "https://image.tmdb.org/t/p/w1280/abc.jpg",
+            bannerArtCacheKey("https://image.tmdb.org/t/p/w1280/abc.jpg?v=123456"),
+        )
+        assertEquals("https://img/b.jpg", bannerArtCacheKey("https://img/b.jpg"))
     }
 }

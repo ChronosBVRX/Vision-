@@ -54,15 +54,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.Coil
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.home.HomeMetrics
 import com.chronosbvrx.visionplus.home.contract.durationLabel
 import com.chronosbvrx.visionplus.home.data.HeroSlide
+import com.chronosbvrx.visionplus.home.data.bannerArtCacheKey
 import kotlinx.coroutines.delay
 
 private const val ROTATE_MS_NORMAL = 9_000
@@ -100,6 +104,18 @@ fun HeroStage(
     val pausedState = rememberUpdatedState(paused)
     var progress by remember { mutableFloatStateOf(0f) }
     val compact = metrics.heroHeight < 240.dp
+    val context = LocalContext.current
+
+    // La siguiente diapositiva se deja lista mientras se ve la actual: el crossfade
+    // entra con la imagen ya decodificada (cero espera al girar el hero).
+    LaunchedEffect(items, safeIndex) {
+        if (items.size <= 1) return@LaunchedEffect
+        val next = items[(safeIndex + 1) % items.size]
+        if (next.sports) return@LaunchedEffect
+        val url = next.backdrop.ifBlank { next.poster }
+        if (url.isBlank()) return@LaunchedEffect
+        runCatching { Coil.imageLoader(context).enqueue(bannerImageRequest(context, url)) }
+    }
 
     LaunchedEffect(items, safeIndex, reduced) {
         progress = 0f
@@ -300,6 +316,7 @@ fun HeroStage(
 
 @Composable
 private fun HeroBackdrop(slide: HeroSlide, reduced: Boolean) {
+    val context = LocalContext.current
     val zoom = remember(slide.id) { Animatable(1f) }
     LaunchedEffect(slide.id, reduced) {
         zoom.snapTo(1f)
@@ -319,20 +336,26 @@ private fun HeroBackdrop(slide: HeroSlide, reduced: Boolean) {
             SportsBackdrop(slide)
         } else {
             val art = slide.backdrop.ifBlank { slide.poster }
+            val posterModel = remember(context, slide.poster) {
+                slide.poster.takeIf { it.isNotBlank() }?.let { bannerImageRequest(context, it) }
+            }
+            val artModel = remember(context, art) {
+                art.takeIf { it.isNotBlank() }?.let { bannerImageRequest(context, it) }
+            }
             // Póster de respaldo detrás: si el arte panorámico no carga (CDN), el hero
             // no se queda en negro.
-            if (slide.poster.isNotBlank() && art != slide.poster) {
+            if (posterModel != null && art != slide.poster) {
                 AsyncImage(
-                    model = slide.poster,
+                    model = posterModel,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     alpha = 0.55f,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            if (art.isNotBlank()) {
+            if (artModel != null) {
                 AsyncImage(
-                    model = art,
+                    model = artModel,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
@@ -380,8 +403,12 @@ private fun SportsBackdrop(slide: HeroSlide) {
             ),
         )
         if (slide.backdrop.isNotBlank()) {
+            val context = LocalContext.current
+            val model = remember(context, slide.backdrop) {
+                bannerImageRequest(context, slide.backdrop)
+            }
             AsyncImage(
-                model = slide.backdrop,
+                model = model,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 alpha = 0.34f,
@@ -629,3 +656,15 @@ private fun TeamBlock(
         }
     }
 }
+
+/**
+ * Una petición de arte con clave estable: el `?v=` diario del CDN cambia la URL, pero
+ * no la imagen. Coil reutiliza la copia en disco/memoria y no vuelve a descargarla.
+ */
+private fun bannerImageRequest(context: android.content.Context, url: String): ImageRequest =
+    ImageRequest.Builder(context)
+        .data(url)
+        .size(1280, 720)
+        .memoryCacheKey(bannerArtCacheKey(url))
+        .diskCacheKey(bannerArtCacheKey(url))
+        .build()

@@ -49,8 +49,6 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
-import com.chronosbvrx.visionplus.data.gee.GeeBackstop
-import com.chronosbvrx.visionplus.data.gee.GeeGuide
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.sports.SportsSource
 import com.chronosbvrx.visionplus.ui.components.EmptyState
@@ -82,35 +80,10 @@ fun SportsScreen(
         pickingId?.let { id -> gee.events.firstOrNull { it.id == id } }
     }
     val context = LocalContext.current
-    // La guía del partido (parrilla oficial) y sus canales 24/7 del catálogo deportivo.
-    val pickingGuide = remember(picking) { picking?.broadcasts.orEmpty() }
-    val pickingTv = remember(picking, gee.groups) {
-        val event = picking
-        if (event == null) emptyList()
-        else runCatching { GeeGuide.channelsFor(event.broadcasts, gee.groups) }.getOrDefault(emptyList())
-    }
-    // El respaldo: las cadenas de la parrilla que la fuente deportiva NO puede servir en vivo y
-    // que sí tenemos en el catálogo de la casa (coincidencia del 100 %, nunca un parecido).
-    // NO se enseña en la lista (la lista es solo de la fuente deportiva): es para el respaldo
-    // AUTOMÁTICO, tanto al tocar una fuente caída como al agotarse las señales.
-    val pickingBackstops = remember(picking, pickingTv, gee.xtvChannels, gee.checks) {
-        val event = picking
-        if (event == null) {
-            emptyList()
-        } else {
-            GeeBackstop.needed(
-                guide = event.broadcasts + event.links.map { it.name },
-                liveOptions = buildList {
-                    pickingTv.forEach { option -> add(GeeBackstop.LiveOption(option.title, gee.aliveOf(option.link) == true)) }
-                    event.links.forEach { link -> add(GeeBackstop.LiveOption(link.name, gee.aliveOf(link) == true)) }
-                },
-                xtv = gee.xtvChannels,
-            )
-        }
-    }
     // El contexto del partido que viaja al reproductor (su aviso de cable usa la misma interfaz
-    // que la TV en vivo: liga, marcador y dónde se transmite; el respaldo va con él).
-    val pickingInfo = remember(picking, pickingBackstops) {
+    // que la TV en vivo: liga, marcador y dónde se transmite). La lista de fuentes es
+    // exclusivamente de GeeSports.
+    val pickingInfo = remember(picking) {
         val event = picking
         if (event == null) {
             null
@@ -121,7 +94,6 @@ fun SportsScreen(
                 scoreLine = geeScoreLine(event),
                 guide = event.broadcasts,
                 signals = event.links.size,
-                fallback = pickingBackstops.firstOrNull()?.channel,
             )
         }
     }
@@ -327,12 +299,9 @@ fun SportsScreen(
                 pickingId = null
             },
             onPlay = onPlay,
-            guide = pickingGuide,
-            geeTv = pickingTv,
             playable = GeeAgenda.playable(event, now),
             blockNote = GeeAgenda.blockNote(event, now),
             checks = gee.checks,
-            backstops = pickingBackstops,
             eventInfo = pickingInfo,
         )
     }

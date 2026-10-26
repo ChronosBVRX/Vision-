@@ -9,7 +9,19 @@ import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 import banners
+
+
+@pytest.fixture(autouse=True)
+def _clean_refresh_state():
+    """Cada prueba arranca sin un refresco en curso ni enfriamiento heredado."""
+    banners._refresh_running = False
+    banners._last_refresh_attempt = 0.0
+    yield
+    banners._refresh_running = False
+    banners._last_refresh_attempt = 0.0
 
 
 def _movie(**over):
@@ -122,6 +134,10 @@ class _FakeAcquire:
     async def execute(self, *args, **kwargs):
         return None
 
+    async def fetchval(self, query, *args, **kwargs):
+        # El candado de refresco se concede en las pruebas; el resto de consultas no aplica.
+        return "advisory" in query
+
     def transaction(self):
         return self
 
@@ -189,3 +205,67 @@ def test_serve_never_breaks_the_home_without_candidates():
     result = asyncio.run(banners.serve(pool, background, tmdb_key=""))
     assert result["items"] == []
     assert isinstance(result["generatedAt"], int)
+
+
+def test_stale_photo_returns_a_future_retry_instead_of_a_past_expiry():
+    banners._ensured = False
+    payload = banners.movie_banner(_movie(), "", 0)
+    pool = _FakePool([_row(payload, age_hours=30)])
+    background = _FakeBackground()
+    result = asyncio.run(banners.serve(pool, background, tmdb_key=""))
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    # El cliente no debe recibir una fecha vencida (eso lo haría preguntar en bucle).
+    assert result["nextRefreshAt"] > now_ms + 10 * 60 * 1000
+    assert len(background.tasks) == 1
+
+
+def test_two_stale_requests_only_schedule_one_refresh():
+    banners._ensured = False
+    payload = banners.movie_banner(_movie(), "", 0)
+    pool = _FakePool([_row(payload, age_hours=30)])
+    background = _FakeBackground()
+    first = asyncio.run(banners.serve(pool, background, tmdb_key=""))
+    second = asyncio.run(banners.serve(pool, background, tmdb_key=""))
+    assert first["items"] and second["items"]
+    assert len(background.tasks) == 1
+    assert second["nextRefreshAt"] > first["generatedAt"]
+
+
+def test_a_failed_initial_build_is_not_retried_immediately(monkeypatch):
+    banners._ensured = False
+    calls = []
+
+    async def fake_refresh(pool, key):
+        calls.append(1)
+        return 0
+
+    monkeypatch.setattr(banners, "refresh_movies", fake_refresh)
+    pool = _FakePool([], week=None)
+    background = _FakeBackground()
+    first = asyncio.run(banners.serve(pool, background, tmdb_key=""))
+    second = asyncio.run(banners.serve(pool, background, tmdb_key=""))
+    assert first["items"] == [] and second["items"] == []
+    assert len(calls) == 1
+
+
+class _LockedOutAcquire(_FakeAcquire):
+    async def fetchval(self, query, *args, **kwargs):
+        return False
+
+
+class _LockedOutPool(_FakePool):
+    def acquire(self):
+        return _LockedOutAcquire(self)
+
+
+def test_refresh_skips_tmdb_when_another_instance_holds_the_lock(monkeypatch):
+    calls = []
+
+    async def fake_candidates(pool):
+        calls.append(1)
+        return [_movie()]
+
+    monkeypatch.setattr(banners, "_candidate_rows", fake_candidates)
+    result = asyncio.run(banners.refresh_movies(_LockedOutPool([]), "key"))
+    assert result == 0
+    assert calls == []

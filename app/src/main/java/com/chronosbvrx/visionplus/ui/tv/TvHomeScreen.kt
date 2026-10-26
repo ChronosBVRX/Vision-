@@ -93,6 +93,7 @@ import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.allFilms
 import com.chronosbvrx.visionplus.data.banners.BannerSource
+import com.chronosbvrx.visionplus.data.banners.bannerArtCacheKey
 import com.chronosbvrx.visionplus.data.banners.HomeBanner
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.XuperCatalog
@@ -277,6 +278,17 @@ fun TvHomeScreen(
     // aunque la tarjeta exacta ya no exista o su fila esté fuera de pantalla.
     val rowEntry = remember { FocusRequester() }
     val rowsListState = rememberLazyListState()
+    var heroActionTick by remember { mutableIntStateOf(0) }
+
+    // Al enfocar una acción del hero (volver arriba con el mando), la lista se ancla al
+    // tope: el minimal bring-into-view dejaba el banner a medio scroll y se veía cortado.
+    // Durante un regreso a una tarjeta no se toca el scroll: el foco pasa por el hero y
+    // debe terminar en LA MISMA tarjeta que se abrió.
+    LaunchedEffect(heroActionTick) {
+        if (heroActionTick > 0 && returnFilmId == null) {
+            runCatching { rowsListState.scrollToItem(0) }
+        }
+    }
 
     // Al regresar de la ficha, restaurar foco en la tarjeta exacta (o el héroe, si era su
     // título). El regreso solo vale cuando se llegó aquí abriendo una ficha (el riel tiene
@@ -506,6 +518,21 @@ fun TvHomeScreen(
     val heroDrift by rememberHeroDrift(reduced, HERO_DRIFT_MS)
     val screenPx = rememberScreenPx()
 
+    // Deja lista la siguiente diapositiva mientras se ve la actual: al girar, el arte
+    // entra desde la caché de Coil (sin descargarlo en ese instante).
+    LaunchedEffect(heroItems, heroIndex, screenPx) {
+        if (heroItems.size <= 1) return@LaunchedEffect
+        val next = heroItems[(heroIndex + 1) % heroItems.size].featured()
+        if (next.event != null) return@LaunchedEffect
+        val url = next.imageUrl
+        if (url.isNullOrBlank()) return@LaunchedEffect
+        runCatching {
+            coil.Coil.imageLoader(context).enqueue(
+                heroImageRequest(context, url, screenPx.width, screenPx.height),
+            )
+        }
+    }
+
     Box(Modifier.fillMaxSize().background(VisionBlack)) {
         // Fondo cinemático inmersivo con drift y degradado suave.
         // En un partido, el fondo es un lienzo deportivo con las crestas y un gradiente.
@@ -515,11 +542,7 @@ fun TvHomeScreen(
             } else {
                 Box(Modifier.fillMaxSize()) {
                     AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(f?.imageUrl)
-                            .crossfade(0)
-                            .size(screenPx.width, screenPx.height)
-                            .build(),
+                        model = heroImageRequest(context, f?.imageUrl, screenPx.width, screenPx.height),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
@@ -559,6 +582,8 @@ fun TvHomeScreen(
                 .data(url)
                 .size(16)
                 .allowHardware(false)
+                .memoryCacheKey(bannerArtCacheKey(url) + "#ambient16")
+                .diskCacheKey(bannerArtCacheKey(url))
                 .target(onSuccess = { drawable ->
                     val bmp = (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
                     if (bmp != null) {
@@ -614,6 +639,7 @@ fun TvHomeScreen(
                                         DeportesReturn.pickingId = null
                                         onGoRoute(Route.Sports)
                                     },
+                                    onHeroActionFocus = { heroActionTick++ },
                                 )
                             }
 
@@ -1119,6 +1145,7 @@ private fun HeroBillboard(
     onToggleFavorite: () -> Unit,
     onOpenSports: (GeeSportsSource.GeeEvent) -> Unit = {},
     onOpenSportsHub: () -> Unit = {},
+    onHeroActionFocus: () -> Unit = {},
 ) {
     if (featured == null) return
     val event = featured.event
@@ -1224,11 +1251,13 @@ private fun HeroBillboard(
                     primary = true,
                     modifier = if (landing != null) Modifier.landingFocus(landing) else Modifier,
                     onClick = { onOpenSports(event) },
+                    onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
                 )
                 TvCompactAction(
                     label = "Agenda",
                     icon = Icons.Default.Info,
                     onClick = onOpenSportsHub,
+                    onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
                 )
             } else {
                 TvCompactAction(
@@ -1241,16 +1270,19 @@ private fun HeroBillboard(
                         else -> Modifier
                     },
                     onClick = { currentFilm?.let(onOpenFilm) },
+                    onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
                 )
                 TvCompactAction(
                     label = "Detalles",
                     icon = Icons.Default.Info,
                     onClick = { currentFilm?.let(onOpenFilm) },
+                    onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
                 )
                 TvCompactAction(
                     label = if (inFavorites) "En Favoritos" else "Favorito",
                     icon = if (inFavorites) VisionIcons.Favorite else VisionIcons.FavoriteBorder,
                     onClick = onToggleFavorite,
+                    onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
                 )
             }
         }
@@ -1625,4 +1657,25 @@ private fun ContinueRow(
         }
         Spacer(Modifier.height(metrics.bottomGap))
     }
+}
+
+/**
+ * Petición del arte del hero con clave estable. El `?v=` del VPS cambia cada día para
+ * forzar un edge sano de TMDB; Coil, en cambio, reutiliza la misma imagen por su ruta.
+ */
+private fun heroImageRequest(
+    context: android.content.Context,
+    url: String?,
+    width: Int,
+    height: Int,
+): ImageRequest {
+    val builder = ImageRequest.Builder(context)
+        .data(url)
+        .crossfade(0)
+        .size(width, height)
+    if (!url.isNullOrBlank()) {
+        val key = bannerArtCacheKey(url)
+        builder.memoryCacheKey(key).diskCacheKey(key)
+    }
+    return builder.build()
 }

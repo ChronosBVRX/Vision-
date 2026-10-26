@@ -267,6 +267,13 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         runCatching { homeListState.scrollToItem(0) }
     }
 
+    // Volver al hero con el mando: el minimal bring-into-view solo alcanzaba los botones y
+    // dejaba la lista a medio scroll, así que el banner se veía cortado. Al enfocar el hero,
+    // la lista se ancla al tope y se ve completo.
+    LaunchedEffect(heroFocused) {
+        if (heroFocused) runCatching { homeListState.scrollToItem(0) }
+    }
+
     // Un SOLO aterrizaje verificado. Ya no se simulan diez «Abajo»: el foco se pide al héroe
     // (o al primer control de la pestaña) y se reintenta mientras el contenido termina de
     // componerse. Si el usuario ya movió el mando, no se vuelve a robar el foco.

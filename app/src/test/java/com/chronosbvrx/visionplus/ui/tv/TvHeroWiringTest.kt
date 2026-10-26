@@ -49,7 +49,35 @@ class TvHeroWiringTest {
         assertTrue(source.contains("X-Api-Key"))
         assertTrue(source.contains("vision_home_banners.json"))
         assertTrue(source.contains("parseHomeBanners("))
-        assertTrue(source.contains("cached(app)"))
+        assertTrue(source.contains("readCache(app)"))
+        assertTrue(source.contains("parseBannerExpiry"))
+        assertTrue(source.contains("Mutex()"))
+        assertTrue(source.contains("FAIL_BACKOFF_MS"))
+        assertTrue(source.contains("nextRefreshAt"))
+    }
+
+    @Test
+    fun theHeroReusesTheArtworkByItsStablePathAndPreparesTheNextSlide() {
+        val source = source("data/banners/BannerSource.kt")
+        assertTrue(source.contains("bannerArtCacheKey"))
+        val screen = source("ui/tv/TvHomeScreen.kt")
+        assertTrue(screen.contains("bannerArtCacheKey"))
+        assertTrue(screen.contains("diskCacheKey"))
+        assertTrue(screen.contains("heroImageRequest("))
+        assertTrue(screen.contains("coil.Coil.imageLoader(context).enqueue"))
+        assertTrue(screen.contains("LaunchedEffect(heroItems, heroIndex, screenPx)"))
+    }
+
+    @Test
+    fun returningToTheHeroAnchorsTheFullBanner() {
+        val screen = source("ui/tv/TvHomeScreen.kt")
+        assertTrue(screen.contains("heroActionTick"))
+        assertTrue(screen.contains("rowsListState.scrollToItem(0)"))
+        assertTrue(screen.contains("onHeroActionFocus"))
+        assertTrue(screen.contains("onFocusChanged = { focused -> if (focused) onHeroActionFocus() }"))
+        val widgets = source("ui/tv/TvWidgets.kt")
+        assertTrue(widgets.contains("onFocusChanged: (Boolean) -> Unit"))
+        assertTrue(widgets.contains("LaunchedEffect(focused)"))
     }
 
     private fun source(rel: String): String {

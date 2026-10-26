@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 import unicodedata
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -27,6 +28,13 @@ log = logging.getLogger("visionplus.banners")
 TMDB_IMAGE = "https://image.tmdb.org/t/p/w1280"
 BANNER_TTL_SECONDS = 20 * 3600
 MAX_MOVIES = 5
+
+# Un solo refresco a la vez en TODO el VPS (aunque la API corra con varios workers).
+_REFRESH_LOCK_KEY = 773421
+# Si la foto está vieja o falló, no se martilla TMDB: se reintenta en 15 min.
+_BACKGROUND_RETRY_SECONDS = 15 * 60
+_refresh_running = False
+_last_refresh_attempt = 0.0
 
 _CREATE_TABLE = """
 create table if not exists launcher_banners (
@@ -259,8 +267,10 @@ async def _candidate_rows(pool) -> list[Any]:
     return [dict(row) for row in rows]
 
 
-async def refresh_movies(pool, tmdb_key: str, limit: int = MAX_MOVIES) -> int:
-    """Busca la foto del día y la reemplaza completa (una transacción)."""
+async def _refresh_movies_locked(
+    pool, tmdb_key: str, limit: int, lock_conn
+) -> int:
+    """Cuerpo del refresco, ya con el candado tomado (misma conexión para escribir)."""
     rows = await _candidate_rows(pool)
     picked = pick_movie_candidates(rows, limit=limit)
     if not picked:
@@ -282,21 +292,48 @@ async def refresh_movies(pool, tmdb_key: str, limit: int = MAX_MOVIES) -> int:
         art = backdrops[position]
         backdrop = art if isinstance(art, str) else ""
         payloads.append(movie_banner(row, backdrop, position))
-    async with pool.acquire() as connection:
-        async with connection.transaction():
-            await connection.execute("delete from launcher_banners where kind = 'movie'")
-            for position, payload in enumerate(payloads):
-                await connection.execute(
-                    """
-                    insert into launcher_banners (id, kind, position, payload, generated_at)
-                    values ($1, 'movie', $2, $3::jsonb, now())
-                    """,
-                    payload["id"],
-                    position,
-                    json.dumps(payload, ensure_ascii=False),
-                )
+    async with lock_conn.transaction():
+        await lock_conn.execute("delete from launcher_banners where kind = 'movie'")
+        for position, payload in enumerate(payloads):
+            await lock_conn.execute(
+                """
+                insert into launcher_banners (id, kind, position, payload, generated_at)
+                values ($1, 'movie', $2, $3::jsonb, now())
+                """,
+                payload["id"],
+                position,
+                json.dumps(payload, ensure_ascii=False),
+            )
     log.info("banners: %s películas/series actualizadas (tmdb=%s)", len(payloads), bool(tmdb_key))
     return len(payloads)
+
+
+async def refresh_movies(pool, tmdb_key: str, limit: int = MAX_MOVIES) -> int:
+    """Busca la foto del día y la reemplaza completa (una transacción).
+
+    El candado de Postgres evita que dos peticiones (o dos workers) gasten las mismas
+    llamadas a TMDB: el que no lo consigue sirve la foto que ya hay y se va.
+    """
+    global _refresh_running
+    try:
+        async with pool.acquire() as lock_conn:
+            locked = await lock_conn.fetchval(
+                "select pg_try_advisory_lock($1)", _REFRESH_LOCK_KEY
+            )
+            if not locked:
+                log.info("banners: otra instancia ya está refrescando")
+                return 0
+            try:
+                return await _refresh_movies_locked(pool, tmdb_key, limit, lock_conn)
+            finally:
+                await lock_conn.execute(
+                    "select pg_advisory_unlock($1)", _REFRESH_LOCK_KEY
+                )
+    except Exception:  # noqa: BLE001 - un refresco fallido no puede tumbar el Inicio
+        log.exception("banners: falló el refresco")
+        return 0
+    finally:
+        _refresh_running = False
 
 
 async def _load_movies(pool) -> tuple[list[dict], datetime | None]:
@@ -321,31 +358,50 @@ async def _load_movies(pool) -> tuple[list[dict], datetime | None]:
 
 
 async def serve(pool, background, tmdb_key: str) -> dict:
-    """Respuesta de `/v1/banners`: cache diaria + refresco en segundo plano."""
+    """Respuesta de `/v1/banners`: cache diaria + refresco en segundo plano.
+
+    La respuesta SIEMPRE trae `nextRefreshAt` en el futuro: cuando la foto está vieja
+    (o no hay), el cliente espera al reintento en vez de preguntar en bucle. El refresco
+    real corre una sola vez (candado de Postgres) y con enfriamiento si falla.
+    """
+    global _last_refresh_attempt, _refresh_running
     now = datetime.now(timezone.utc)
     movies: list[dict] = []
     stamp: datetime | None = None
+    stale = True
     try:
         await ensure_table(pool)
         movies, stamp = await _load_movies(pool)
         stale = stamp is None or (now - stamp).total_seconds() > BANNER_TTL_SECONDS
         if not movies:
             # Primera petición tras el despliegue: se construye en el momento (5 llamadas
-            # a TMDB en paralelo). Si TMDB tarda o falla, el launcher usa su feed.
-            try:
-                await asyncio.wait_for(refresh_movies(pool, tmdb_key), timeout=14.0)
-                movies, stamp = await _load_movies(pool)
-            except Exception:  # noqa: BLE001
-                log.exception("banners: no se pudo construir la foto inicial")
+            # a TMDB en paralelo). Si TMDB tarda o falla, el launcher usa su feed y el
+            # siguiente intento espera el enfriamiento (no se martilla TMDB).
+            mono = time.monotonic()
+            if mono - _last_refresh_attempt >= _BACKGROUND_RETRY_SECONDS:
+                _last_refresh_attempt = mono
+                try:
+                    await asyncio.wait_for(refresh_movies(pool, tmdb_key), timeout=14.0)
+                    movies, stamp = await _load_movies(pool)
+                    stale = stamp is None or (now - stamp).total_seconds() > BANNER_TTL_SECONDS
+                except Exception:  # noqa: BLE001
+                    log.exception("banners: no se pudo construir la foto inicial")
         elif stale:
             # Ya hay algo que servir; la búsqueda del día corre después de responder.
-            background.add_task(refresh_movies, pool, tmdb_key)
+            # Un solo refresco a la vez y, si falló, 15 min de enfriamiento.
+            mono = time.monotonic()
+            if not _refresh_running and mono - _last_refresh_attempt >= _BACKGROUND_RETRY_SECONDS:
+                _last_refresh_attempt = mono
+                _refresh_running = True
+                background.add_task(refresh_movies, pool, tmdb_key)
     except Exception:  # noqa: BLE001 - el Inicio nunca se cae por los banners
         log.exception("banners: cache no disponible")
+    if stale:
+        next_at = now + timedelta(seconds=_BACKGROUND_RETRY_SECONDS)
+    else:
+        next_at = (stamp or now) + timedelta(seconds=BANNER_TTL_SECONDS)
     return {
         "generatedAt": int((stamp or now).timestamp() * 1000),
-        "nextRefreshAt": int(
-            ((stamp or now) + timedelta(seconds=BANNER_TTL_SECONDS)).timestamp() * 1000
-        ),
+        "nextRefreshAt": int(next_at.timestamp() * 1000),
         "items": movies,
     }
