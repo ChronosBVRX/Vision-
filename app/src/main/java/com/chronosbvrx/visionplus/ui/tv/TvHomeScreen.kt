@@ -41,6 +41,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -49,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -64,6 +66,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -89,6 +92,9 @@ import com.chronosbvrx.visionplus.data.ResumeCard
 import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.allFilms
+import com.chronosbvrx.visionplus.data.banners.BannerSource
+import com.chronosbvrx.visionplus.data.banners.HomeBanner
+import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.data.XuperStatus
 import com.chronosbvrx.visionplus.data.formatResume
@@ -100,6 +106,7 @@ import com.chronosbvrx.visionplus.ui.plugins.PluginUpdatesBellIcon
 import com.chronosbvrx.visionplus.ui.plugins.appUpdateBadgeCount
 import com.chronosbvrx.visionplus.ui.rememberHeroDrift
 import com.chronosbvrx.visionplus.ui.rememberScreenPx
+import com.chronosbvrx.visionplus.ui.sports.DeportesReturn
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
@@ -116,9 +123,30 @@ private data class Featured(
     val imageUrl: String?,
     val meta: String,
     val film: Film? = null,
-)
+    val event: GeeSportsSource.GeeEvent? = null,
+    val badge: String = "TENDENCIA DE HOY",
+    val eyebrow: String = "TENDENCIA DE HOY",
+) {
+    val key: String
+        get() = film?.id ?: event?.id ?: title
+}
 
 private fun Film.featured() = Featured(title, synopsis, posterUrl, metaLine(), this)
+
+private fun TvHeroItem.featured() = Featured(
+    title = title,
+    subtitle = subtitle,
+    imageUrl = imageUrl.ifBlank { null },
+    meta = meta,
+    film = film,
+    event = event,
+    badge = badge,
+    eyebrow = eyebrow,
+)
+
+/** En Robolectric no se toca la red: los tests de foco no deben depender de TMDB/GeeSports. */
+private fun isRobolectric(): Boolean =
+    runCatching { Class.forName("org.robolectric.Robolectric") }.isSuccess
 
 private const val HERO_SCALE = 1.12f
 private const val HERO_DRIFT_MS = 14_000
@@ -294,6 +322,52 @@ fun TvHomeScreen(
     LaunchedEffect(rows, indexForHome) { reloadContinue() }
     val syncAt = com.chronosbvrx.visionplus.data.sync.SyncStore.state.value.lastSyncAt
     LaunchedEffect(syncAt) { if (syncAt > 0) reloadContinue() }
+
+    // Banners diarios del VPS (arte panorámico TMDB) + partidos de GeeSports.
+    // Se muestra la copia en disco al instante y se refresca en segundo plano.
+    var homeBanners by remember { mutableStateOf<List<HomeBanner>>(emptyList()) }
+    var sportsEvents by remember { mutableStateOf<List<GeeSportsSource.GeeEvent>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        if (!isRobolectric()) {
+            homeBanners = runCatching {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    BannerSource.cached(context)
+                }
+            }.getOrDefault(emptyList())
+            runCatching { BannerSource.load(context) }.getOrNull()?.let { homeBanners = it }
+        }
+    }
+    LaunchedEffect(Unit) {
+        if (!isRobolectric()) {
+            sportsEvents = runCatching {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    GeeSportsSource.cachedEvents(context)
+                }
+            }.getOrDefault(emptyList())
+            runCatching { GeeSportsSource.refreshEvents(context) }.getOrNull()?.let { sportsEvents = it }
+        }
+    }
+    val heroItems = remember(homeBanners, sportsEvents, homeFilms) {
+        buildTvHeroItems(homeBanners, sportsEvents, homeFilms)
+    }
+    var heroIndex by remember(heroItems) { mutableIntStateOf(0) }
+    // Si el usuario está recorriendo las filas, manda la tarjeta enfocada; si no,
+    // el hero rota solo por la foto del día y los partidos.
+    LaunchedEffect(heroItems, heroIndex, focusFilm) {
+        if (focusFilm == null) {
+            heroItems.getOrNull(heroIndex)?.let { featured = it.featured() }
+        }
+    }
+    LaunchedEffect(heroItems, focusFilm, reduced) {
+        if (focusFilm != null || heroItems.size <= 1) return@LaunchedEffect
+        val every = if (reduced) 13_000L else 9_000L
+        while (true) {
+            delay(every)
+            if (focusFilm != null) break
+            heroIndex = (heroIndex + 1) % heroItems.size
+        }
+    }
+
     // Avisos de capítulos nuevos de series seguidas (una vez al día como máximo).
     LaunchedEffect(Unit) {
         homeScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -424,7 +498,7 @@ fun TvHomeScreen(
         onDispose { homeLifecycle.lifecycle.removeObserver(observer) }
     }
 
-    val currentFilm = focusFilm ?: featured?.film ?: top10Films.firstOrNull() ?: allAvailableFilms.firstOrNull()
+    val currentFilm = focusFilm ?: featured?.film
     var inFavorites by remember(currentFilm?.id) {
         mutableStateOf(currentFilm?.let { UserLibrary.isFavorite(context, it.id) } ?: false)
     }
@@ -433,30 +507,35 @@ fun TvHomeScreen(
     val screenPx = rememberScreenPx()
 
     Box(Modifier.fillMaxSize().background(VisionBlack)) {
-        // Fondo cinemático inmersivo con drift y degradado suave
-        Crossfade(targetState = featured?.imageUrl, animationSpec = backdropFadeSpec(reduced), label = "bg") { url ->
-            Box(Modifier.fillMaxSize()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(url)
-                        .crossfade(0)
-                        .size(screenPx.width, screenPx.height)
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth(0.68f)
-                        .fillMaxHeight(0.75f)
-                        .align(Alignment.TopEnd)
-                        .graphicsLayer {
-                            if (!reduced) {
-                                val margin = size.width * (HERO_SCALE - 1f) / 2f
-                                scaleX = HERO_SCALE
-                                scaleY = HERO_SCALE
-                                translationX = (heroDrift * 2f - 1f) * margin
-                            }
-                        },
-                )
+        // Fondo cinemático inmersivo con drift y degradado suave.
+        // En un partido, el fondo es un lienzo deportivo con las crestas y un gradiente.
+        Crossfade(targetState = featured, animationSpec = backdropFadeSpec(reduced), label = "bg") { f ->
+            if (f?.event != null) {
+                TvSportsHeroBackdrop(event = f.event)
+            } else {
+                Box(Modifier.fillMaxSize()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(f?.imageUrl)
+                            .crossfade(0)
+                            .size(screenPx.width, screenPx.height)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth(0.68f)
+                            .fillMaxHeight(0.75f)
+                            .align(Alignment.TopEnd)
+                            .graphicsLayer {
+                                if (!reduced) {
+                                    val margin = size.width * (HERO_SCALE - 1f) / 2f
+                                    scaleX = HERO_SCALE
+                                    scaleY = HERO_SCALE
+                                    translationX = (heroDrift * 2f - 1f) * margin
+                                }
+                            },
+                    )
+                }
             }
         }
         Box(
@@ -526,6 +605,14 @@ fun TvHomeScreen(
                                             UserLibrary.toggleFavorite(context, f)
                                             inFavorites = !inFavorites
                                         }
+                                    },
+                                    onOpenSports = { event ->
+                                        DeportesReturn.pickingId = event.id
+                                        onGoRoute(Route.Sports)
+                                    },
+                                    onOpenSportsHub = {
+                                        DeportesReturn.pickingId = null
+                                        onGoRoute(Route.Sports)
                                     },
                                 )
                             }
@@ -1017,6 +1104,8 @@ internal fun homeReturnRowIndex(
 
 /**
  * Billboard Cinemático del Hero con badge, metadatos y botones directos interactivos.
+ * Cuando la diapositiva es un partido, cambia el marcador y las acciones (Ver en vivo /
+ * Agenda) sin cambiar el foco del primer botón.
  */
 @Composable
 private fun HeroBillboard(
@@ -1028,21 +1117,35 @@ private fun HeroBillboard(
     returnFilmId: String? = null,
     onOpenFilm: (Film) -> Unit,
     onToggleFavorite: () -> Unit,
+    onOpenSports: (GeeSportsSource.GeeEvent) -> Unit = {},
+    onOpenSportsHub: () -> Unit = {},
 ) {
     if (featured == null) return
+    val event = featured.event
     if (landing != null) RescueAnchor(landing)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 48.dp, vertical = 20.dp),
     ) {
-        // Badge superior distintivo
+        // Badge superior distintivo: cine azul, deportes rojo en vivo.
+        val badgeBackground = if (event?.live == true) {
+            Brush.horizontalGradient(listOf(Color(0xFFC0292E), Color(0xFF7A1013)))
+        } else {
+            Brush.horizontalGradient(listOf(VisionBlue, VisionBlueDark))
+        }
+        val badgeText = if (event != null) {
+            featured.eyebrow.ifBlank { "DEPORTES · EN VIVO" }
+        } else {
+            listOf(featured.eyebrow, featured.badge)
+                .filter { it.isNotBlank() }
+                .distinct()
+                .joinToString(" · ")
+                .ifBlank { "TENDENCIA DE HOY" }
+        }
         Box(
             modifier = Modifier
-                .background(
-                    Brush.horizontalGradient(listOf(VisionBlue, VisionBlueDark)),
-                    shape = RoundedCornerShape(4.dp),
-                )
+                .background(badgeBackground, shape = RoundedCornerShape(4.dp))
                 .padding(horizontal = 9.dp, vertical = 4.dp),
         ) {
             Row(
@@ -1050,13 +1153,13 @@ private fun HeroBillboard(
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 Icon(
-                    VisionIcons.WeeklyTrending,
+                    if (event != null) Icons.Default.SportsSoccer else VisionIcons.WeeklyTrending,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(13.dp),
                 )
                 Text(
-                    text = "TENDENCIA DE HOY",
+                    text = badgeText,
                     style = TextStyle(
                         color = Color.White,
                         fontSize = 11.sp,
@@ -1064,6 +1167,9 @@ private fun HeroBillboard(
                         letterSpacing = 1.4.sp,
                     ),
                 )
+                if (event?.live == true) {
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(Color.White))
+                }
             }
         }
 
@@ -1080,7 +1186,7 @@ private fun HeroBillboard(
             modifier = Modifier.fillMaxWidth(0.58f),
         )
 
-        // Metadatos (Año, Calificación, Género / Temporadas)
+        // Metadatos (Año, Calificación, Género / Temporadas o liga y estado)
         if (featured.meta.isNotBlank()) {
             Text(
                 text = featured.meta,
@@ -1092,8 +1198,9 @@ private fun HeroBillboard(
             )
         }
 
-        // Sinopsis
-        if (featured.subtitle.isNotBlank()) {
+        if (event != null) {
+            TvSportsScoreboard(event)
+        } else if (featured.subtitle.isNotBlank()) {
             Text(
                 text = featured.subtitle,
                 style = MaterialTheme.typography.bodyMedium,
@@ -1110,29 +1217,172 @@ private fun HeroBillboard(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.padding(top = 16.dp),
         ) {
-            TvCompactAction(
-                label = "Reproducir",
-                icon = VisionIcons.Play,
-                primary = true,
-                modifier = when {
-                    isHeroTarget && returnRequester != null -> Modifier.focusRequester(returnRequester)
-                    landing != null -> Modifier.landingFocus(landing)
-                    else -> Modifier
-                },
-                onClick = { currentFilm?.let(onOpenFilm) },
+            if (event != null) {
+                TvCompactAction(
+                    label = if (event.live) "Ver en vivo" else "Ver partido",
+                    icon = Icons.Default.SportsSoccer,
+                    primary = true,
+                    modifier = if (landing != null) Modifier.landingFocus(landing) else Modifier,
+                    onClick = { onOpenSports(event) },
+                )
+                TvCompactAction(
+                    label = "Agenda",
+                    icon = Icons.Default.Info,
+                    onClick = onOpenSportsHub,
+                )
+            } else {
+                TvCompactAction(
+                    label = "Reproducir",
+                    icon = VisionIcons.Play,
+                    primary = true,
+                    modifier = when {
+                        isHeroTarget && returnRequester != null -> Modifier.focusRequester(returnRequester)
+                        landing != null -> Modifier.landingFocus(landing)
+                        else -> Modifier
+                    },
+                    onClick = { currentFilm?.let(onOpenFilm) },
+                )
+                TvCompactAction(
+                    label = "Detalles",
+                    icon = Icons.Default.Info,
+                    onClick = { currentFilm?.let(onOpenFilm) },
+                )
+                TvCompactAction(
+                    label = if (inFavorites) "En Favoritos" else "Favorito",
+                    icon = if (inFavorites) VisionIcons.Favorite else VisionIcons.FavoriteBorder,
+                    onClick = onToggleFavorite,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvSportsScoreboard(event: GeeSportsSource.GeeEvent) {
+    Row(
+        modifier = Modifier.padding(top = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        TvTeamSide(event.homeName, event.homeLogo, alignEnd = true)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            val score = when {
+                event.scoreHome != null && event.scoreAway != null -> "${event.scoreHome}  ${event.scoreAway}"
+                event.scoreHome != null -> "${event.scoreHome}  -"
+                event.scoreAway != null -> "-  ${event.scoreAway}"
+                else -> "VS"
+            }
+            Text(
+                text = score,
+                style = MaterialTheme.typography.displaySmall,
+                color = Color.White,
+                fontWeight = FontWeight.Black,
             )
-            TvCompactAction(
-                label = "Detalles",
-                icon = Icons.Default.Info,
-                onClick = { currentFilm?.let(onOpenFilm) },
+            Text(
+                text = event.detail.ifBlank { if (event.live) "EN VIVO" else event.time.take(5) },
+                style = MaterialTheme.typography.titleSmall,
+                color = if (event.live) Color(0xFFFF8A8D) else VisionTextSecondary,
+                maxLines = 1,
             )
-            TvCompactAction(
-                label = if (inFavorites) "En Favoritos" else "Favorito",
-                icon = if (inFavorites) VisionIcons.Favorite else VisionIcons.FavoriteBorder,
-                onClick = onToggleFavorite,
+        }
+        TvTeamSide(event.awayName, event.awayLogo, alignEnd = false)
+    }
+}
+
+@Composable
+private fun TvTeamSide(name: String, logo: String, alignEnd: Boolean) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (alignEnd) {
+            Text(
+                text = name,
+                color = Color.White,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(110.dp),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.White.copy(alpha = 0.08f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (logo.isNotBlank()) {
+                AsyncImage(
+                    model = logo,
+                    contentDescription = name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(4.dp),
+                )
+            } else {
+                Text(
+                    text = name.trim().split(' ').filter { it.isNotBlank() }.take(2)
+                        .joinToString("") { it.take(1).uppercase() }.ifBlank { "VS" },
+                    color = Color.White.copy(alpha = 0.55f),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+        if (!alignEnd) {
+            Text(
+                text = name,
+                color = Color.White,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.width(110.dp),
             )
         }
     }
+}
+
+@Composable
+private fun TvSportsHeroBackdrop(event: GeeSportsSource.GeeEvent) {
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.linearGradient(
+                listOf(Color(0xFF04121D), Color(0xFF0A2238), VisionBlack),
+            ),
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 110.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TvAmbientCrest(event.homeLogo)
+            TvAmbientCrest(event.awayLogo)
+        }
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.radialGradient(
+                    listOf(VisionBlue.copy(alpha = 0.15f), Color.Transparent),
+                ),
+            ),
+        )
+    }
+}
+
+@Composable
+private fun TvAmbientCrest(logo: String) {
+    if (logo.isBlank()) return
+    AsyncImage(
+        model = logo,
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        modifier = Modifier.size(190.dp).graphicsLayer { alpha = 0.14f },
+    )
 }
 
 /**
