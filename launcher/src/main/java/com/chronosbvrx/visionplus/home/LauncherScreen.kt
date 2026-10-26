@@ -44,12 +44,15 @@ import com.chronosbvrx.visionplus.home.contract.LiveItem
 import com.chronosbvrx.visionplus.home.contract.VisionLinks
 import com.chronosbvrx.visionplus.home.data.AppEntry
 import com.chronosbvrx.visionplus.home.data.AppsRepository
+import com.chronosbvrx.visionplus.home.data.BannersRepository
 import com.chronosbvrx.visionplus.home.data.DisplayConfig
 import com.chronosbvrx.visionplus.home.data.FeedRepository
+import com.chronosbvrx.visionplus.home.data.HeroSlide
 import com.chronosbvrx.visionplus.home.data.HomeConfig
 import com.chronosbvrx.visionplus.home.data.HomeRoleAction
 import com.chronosbvrx.visionplus.home.data.HomeUpdate
 import com.chronosbvrx.visionplus.home.data.LauncherPrefs
+import com.chronosbvrx.visionplus.home.data.composeHeroSlides
 import com.chronosbvrx.visionplus.home.data.homeRowEntries
 import com.chronosbvrx.visionplus.home.ui.AppsSurface
 import com.chronosbvrx.visionplus.home.ui.CatalogSurface
@@ -100,6 +103,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     var feed by remember { mutableStateOf<HomeFeed?>(null) }
     var apps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
     var recentApps by remember { mutableStateOf(prefs.recentApps()) }
+    var heroBanners by remember { mutableStateOf<List<HeroSlide>>(emptyList()) }
     val profileKey = feed?.meta?.profileId?.takeIf { it.isNotBlank() }
         ?: feed?.meta?.profile?.lowercase()?.takeIf { it.isNotBlank() }
         ?: "principal"
@@ -116,6 +120,17 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     }
     val metrics = rememberHomeMetrics(config.display.density)
     val compact = metrics.posterWidth < 110.dp
+    // Hero: banners diarios del VPS (arte panorámico) + partidos en vivo de la agenda.
+    // Se recalcula cuando llega el feed o los banners; no cada minuto para no reiniciar
+    // el carrusel mientras el usuario lo está mirando.
+    val heroSlides = remember(feed?.hero, feed?.sports, heroBanners) {
+        composeHeroSlides(
+            banners = heroBanners,
+            feedHero = feed?.hero.orEmpty(),
+            sports = feed?.sports.orEmpty(),
+            nowMs = System.currentTimeMillis(),
+        )
+    }
 
     // Un Inicio de sistema siempre abre en Inicio (no en la última pestaña que se miró).
     var tab by rememberSaveable { mutableStateOf(HomeTab.HOME) }
@@ -159,10 +174,17 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         feed = feeds.cached()
         apps = appsRepo.load()
         visionInstalled = appsRepo.visionPlusInstalled()
+        heroBanners = BannersRepository.cached(context)
         feeds.refresh()?.let { feed = it }
         feedAttempted = true
         // La versión del release (cacheada 24 h) decide si Vision+ se quedó atrás.
         latestApp = HomeUpdate.latestAppVersion(context)
+    }
+
+    // Los banners diarios no esperan al feed: cargan en paralelo para que el hero
+    // tenga el arte del VPS desde el primer momento.
+    LaunchedEffect(Unit) {
+        BannersRepository.load(context)?.let { heroBanners = it }
     }
 
     // Vision+ avisa cuando cambia el historial/perfil y el Inicio se refresca solo.
@@ -200,6 +222,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         scope.launch {
             feeds.refresh()?.let { feed = it }
+            BannersRepository.load(context)?.let { heroBanners = it }
             apps = appsRepo.load(force = true)
             recentApps = prefs.recentApps()
             visionInstalled = appsRepo.visionPlusInstalled()
@@ -211,13 +234,18 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         }
     }
 
-    // TV en vivo y Deportes cambian con el reloj aunque nadie toque el mando: se vuelve a
-    // pedir el feed (y con él la guía EPG y la fase de cada partido) cada dos minutos.
+    // El Inicio también envejece (marcador en vivo, minutos, banners): se refresca solo.
+    // HOME cada 5 min (el provider tiene su propio freno) y TV/Deportes cada 2 min.
     LaunchedEffect(tab) {
-        if (tab != HomeTab.LIVE && tab != HomeTab.EVENTS) return@LaunchedEffect
+        val every = when (tab) {
+            HomeTab.HOME -> 300_000L
+            HomeTab.LIVE, HomeTab.EVENTS -> 120_000L
+            else -> return@LaunchedEffect
+        }
         while (true) {
-            delay(120_000L)
+            delay(every)
             feeds.refresh()?.let { feed = it }
+            BannersRepository.load(context)?.let { heroBanners = it }
         }
     }
 
@@ -449,17 +477,20 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                 when (tab) {
                     HomeTab.HOME -> HomeSurface(
                         feed = feed,
+                        hero = heroSlides,
                         apps = apps,
                         recentApps = recentApps,
                         config = config,
                         metrics = metrics,
-                        reduced = reduced,
+                        heroReduced = profile.lowRam,
                         compact = compact,
+                        heroPaused = heroFocused,
                         landing = landing,
                         listState = homeListState,
                         tabLanding = tabLanding,
-                        onHeroPlay = { item -> openLink(item.playLink.ifBlank { item.openLink }) },
-                        onHeroOpen = { item -> openLink(item.openLink) },
+                        onHeroPlay = { slide -> openLink(slide.playLink.ifBlank { slide.openLink }) },
+                        onHeroOpen = { slide -> openLink(slide.openLink.ifBlank { slide.playLink }) },
+                        onOpenSports = { openLink(VisionLinks.sports()) },
                         onItem = { item -> openLink(item.openLink) },
                         onContinue = { item -> openLink(item.playLink) },
                         onLive = { item -> openLink(item.playLink) },

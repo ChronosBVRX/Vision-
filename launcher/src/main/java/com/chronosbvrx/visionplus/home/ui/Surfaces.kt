@@ -78,13 +78,13 @@ import com.chronosbvrx.visionplus.home.HomeMetrics
 import com.chronosbvrx.visionplus.home.contract.ContinueItem
 import com.chronosbvrx.visionplus.home.contract.FeedItem
 import com.chronosbvrx.visionplus.home.contract.FeedRow
-import com.chronosbvrx.visionplus.home.contract.HeroItem
 import com.chronosbvrx.visionplus.home.contract.HomeFeed
 import com.chronosbvrx.visionplus.home.contract.LiveItem
 import com.chronosbvrx.visionplus.home.contract.MediaKind
 import com.chronosbvrx.visionplus.home.contract.RowKind
 import com.chronosbvrx.visionplus.home.contract.SportsItem
 import com.chronosbvrx.visionplus.home.data.AppEntry
+import com.chronosbvrx.visionplus.home.data.HeroSlide
 import com.chronosbvrx.visionplus.home.data.HomeConfig
 import com.chronosbvrx.visionplus.home.data.favoriteChannels
 import com.chronosbvrx.visionplus.home.data.homeRowOrder
@@ -101,17 +101,19 @@ import com.chronosbvrx.visionplus.home.data.HomeUpdate
 @Composable
 fun HomeSurface(
     feed: HomeFeed?,
+    hero: List<HeroSlide>,
     apps: List<AppEntry>,
     recentApps: List<String>,
     config: HomeConfig,
     metrics: HomeMetrics,
-    reduced: Boolean,
+    heroReduced: Boolean,
     compact: Boolean,
+    heroPaused: Boolean = false,
     landing: FocusRequester,
     listState: LazyListState,
     tabLanding: FocusRequester? = null,
-    onHeroPlay: (HeroItem) -> Unit,
-    onHeroOpen: (HeroItem) -> Unit,
+    onHeroPlay: (HeroSlide) -> Unit,
+    onHeroOpen: (HeroSlide) -> Unit,
     onItem: (FeedItem) -> Unit,
     onContinue: (ContinueItem) -> Unit,
     onLive: (LiveItem) -> Unit,
@@ -123,6 +125,7 @@ fun HomeSurface(
     onOpenHistory: () -> Unit,
     onOpenVision: () -> Unit,
     onSystemSettings: () -> Unit,
+    onOpenSports: () -> Unit = {},
     onPrimaryFocus: (Boolean) -> Unit = {},
 ) {
     val feedRows = feed?.rows.orEmpty()
@@ -147,7 +150,7 @@ fun HomeSurface(
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             item("hero") {
-                if (feed?.hero.isNullOrEmpty()) {
+                if (hero.isEmpty()) {
                     BrandHero(
                         metrics = metrics,
                         landing = landing,
@@ -158,14 +161,16 @@ fun HomeSurface(
                     )
                 } else {
                     HeroStage(
-                        items = feed.hero,
+                        items = hero,
                         metrics = metrics,
-                        reduced = reduced,
+                        reduced = heroReduced,
                         landing = landing,
                         upTarget = tabLanding,
+                        paused = heroPaused,
                         onPlay = onHeroPlay,
                         onOpen = onHeroOpen,
-                        onPrimaryFocus = onPrimaryFocus,
+                        onSportsHub = onOpenSports,
+                        onControlFocus = onPrimaryFocus,
                     )
                 }
             }
