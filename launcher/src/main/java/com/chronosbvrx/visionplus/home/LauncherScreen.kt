@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.chronosbvrx.visionplus.home.contract.HomeFeed
 import com.chronosbvrx.visionplus.home.contract.LiveItem
 import com.chronosbvrx.visionplus.home.contract.VisionLinks
@@ -95,6 +97,7 @@ private sealed interface EditTarget {
 @Composable
 fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val prefs = remember { LauncherPrefs(context) }
     val feeds = remember { FeedRepository(context) }
@@ -234,18 +237,22 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         }
     }
 
-    // El Inicio también envejece (marcador en vivo, minutos, banners): se refresca solo.
+    // El Inicio también envejece (marcador en vivo, minutos, banners): se refresca solo
+    // mientras está AL FRENTE. Al abrir una app o el reproductor, el ciclo de vida corta
+    // estas llamadas y no se gasta red en segundo plano.
     // HOME cada 5 min (el provider tiene su propio freno) y TV/Deportes cada 2 min.
-    LaunchedEffect(tab) {
+    LaunchedEffect(tab, lifecycleOwner) {
         val every = when (tab) {
             HomeTab.HOME -> 300_000L
             HomeTab.LIVE, HomeTab.EVENTS -> 120_000L
             else -> return@LaunchedEffect
         }
-        while (true) {
-            delay(every)
-            feeds.refresh()?.let { feed = it }
-            BannersRepository.load(context)?.let { heroBanners = it }
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                delay(every)
+                feeds.refresh()?.let { feed = it }
+                BannersRepository.load(context)?.let { heroBanners = it }
+            }
         }
     }
 

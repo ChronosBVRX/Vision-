@@ -28,6 +28,7 @@ class HeroBannersWiringTest {
         assertTrue("mezcla cine + deportes", screen.contains("composeHeroSlides("))
         assertTrue("se lo pasa al Inicio", screen.contains("hero = heroSlides"))
         assertTrue("se pausa con el foco", screen.contains("heroPaused = heroFocused"))
+        assertTrue("solo refresca con el Inicio al frente", screen.contains("repeatOnLifecycle"))
     }
 
     @Test
