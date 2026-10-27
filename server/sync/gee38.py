@@ -34,7 +34,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import asyncpg
 from Crypto.Cipher import AES
@@ -92,6 +92,15 @@ EVENTS_LINKS_MAX = 320
 # selector nunca enseña un enlace de hace horas (el CMS los rota a menudo).
 HOT_LINKS_SECONDS = int(os.environ.get("GEE38_HOT_SECONDS", "300") or "300")
 HOT_LINKS_MAX = int(os.environ.get("GEE38_HOT_MAX", "60") or "60")
+
+
+def _mx_today() -> date:
+    """Fecha de Ciudad de México (UTC-6): la agenda del CMS va en hora local.
+
+    OJO: el contenedor corre en UTC; a las 21:00 de CDMX `date.today()` ya es el día
+    siguiente y el pase caliente dejaba de priorizar los partidos que se están jugando.
+    """
+    return datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=-6))).date()
 
 
 # ----------------------------------------------------------------------------
@@ -983,7 +992,7 @@ async def _refresh_hot_links(pool: asyncpg.Pool, key: bytes) -> int:
     frescos los enlaces que abre el selector. Los partidos de HOY entran siempre
     primero; el resto se ordena por el `checked_at` más viejo.
     """
-    today = date.today()
+    today = _mx_today()
     low = (today - timedelta(days=1)).isoformat()
     high = (today + timedelta(days=2)).isoformat()
     try:
