@@ -72,12 +72,18 @@ class LiveSportsPlayerUiTest {
             assertTrue("$name: arma el contexto", text.contains("eventInfo: GeeZapSignals.EventInfo? = null"))
             assertTrue("$name: lo entrega al reproductor", text.contains("GeeZapSignals.arm(picked, zapOrder, eventInfo)"))
             assertTrue("$name: solo fuentes de GeeSports", text.contains("Transmisiones de GeeSports:"))
-            assertTrue("$name: filtra las ranuras sin URL", text.contains("filter { it.link.isNotBlank() }"))
+            // La lista la arma la pieza pura con LOS enlaces del evento (sin guía/catálogo).
+            assertTrue("$name: usa solo los enlaces del evento", text.contains("geePickRows(title, links, checks, playingUrl)"))
+            assertFalse("$name: sin la línea de la guía", text.contains("Se transmite en: "))
             // Sin la sección del catálogo ni respaldo automático.
             assertFalse("$name: sin Canales posibles", text.contains("Canales posibles"))
             assertFalse("$name: sin respaldo", text.contains("GeeBackstop"))
             assertFalse("$name: sin filas de respaldo", text.contains("respaldo automático"))
         }
+        val picks = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/sports/GeePicks.kt")
+        assertTrue("las ranuras sin URL no se ofrecen", picks.contains("if (raw.isBlank()) continue"))
+        assertFalse("sin canales de la guía", picks.contains("GeeGuide.channelsFor"))
+        assertTrue("lo que responde va primero", picks.contains("aliveRank(it.alive)"))
         val screenMobile = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/sports/SportsScreen.kt")
         val screenTv = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/tv/TvSportsScreen.kt")
         for ((name, text) in listOf("móvil" to screenMobile, "TV" to screenTv)) {

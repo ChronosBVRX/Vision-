@@ -36,9 +36,9 @@ class GeeSportsState(
         private set
     var groups by mutableStateOf(GeeSportsSource.cachedGroups(context))
         private set
-    var selectedCategory by mutableStateOf<String?>(null)
+    var selectedCategory by mutableStateOf(if (DeportesReturn.categoryChosen) DeportesReturn.category else "Football")
         private set
-    var selectedDay by mutableStateOf(SportsSource.todayIso())
+    var selectedDay by mutableStateOf(DeportesReturn.validDay() ?: SportsSource.todayIso())
         private set
     var loading by mutableStateOf(false)
         private set
@@ -66,7 +66,10 @@ class GeeSportsState(
         private set
 
     init {
-        selectCategory("Football")
+        if (!DeportesReturn.categoryChosen) {
+            DeportesReturn.category = selectedCategory
+            DeportesReturn.categoryChosen = true
+        }
         refresh()
     }
 
@@ -93,10 +96,27 @@ class GeeSportsState(
 
     fun pickDay(date: String) {
         selectedDay = date
+        DeportesReturn.day = date
+    }
+
+    /**
+     * Abre el deporte y el día del partido que llega pedido desde FUERA (el héroe del Inicio o
+     * un enlace del launcher): sin esto, una selección vieja de la pantalla podría dejar el
+     * partido pedido fuera de la vista. Al volver del reproductor NO se usa (la persona
+     * regresa a la selección que había hecho).
+     */
+    fun showEvent(event: GeeSportsSource.GeeEvent) {
+        if (event.category.isNotBlank()) selectedCategory = event.category
+        if (event.dateIso.isNotBlank()) selectedDay = event.dateIso
+        DeportesReturn.category = selectedCategory
+        DeportesReturn.categoryChosen = true
+        DeportesReturn.day = selectedDay
     }
 
     fun selectCategory(category: String?) {
         selectedCategory = if (selectedCategory == category) null else category
+        DeportesReturn.category = selectedCategory
+        DeportesReturn.categoryChosen = true
     }
 
     /** Avanza el reloj de la agenda (lo llama el tic de la pantalla). */
@@ -167,7 +187,67 @@ fun rememberGeeSportsState(): GeeSportsState {
  * Recuerdo del partido con el modal de opciones abierto: al volver del
  * reproductor (Atrás), el modal reaparece en vez de caer a la lista, para
  * poder elegir otro canal sin buscar de nuevo el partido.
+ *
+ * También guarda la SELECCIÓN de la pantalla (deporte, día, liga, pestaña
+ * «Canales») y el enlace que se estaba viendo: al volver se restaura el mismo
+ * menú, con la opción que se sintonizó enfocada («la selección que hiciste»).
+ * Es memoria del proceso: si la app muere, todo vuelve a los valores por defecto.
  */
 internal object DeportesReturn {
     var pickingId: String? = null
+
+    // --- La selección de la pantalla (sobrevive al viaje al reproductor) -------------------
+    var category: String? = null
+    var categoryChosen: Boolean = false
+    var day: String? = null
+    var league: String? = null
+    var channels: Boolean = false
+
+    /** El partido que se estaba viendo y el enlace sintonizado (uno solo: el último). */
+    private var watchingEventId: String? = null
+    var watchingUrl: String? = null
+        private set
+
+    /** Se llama al tocar una transmisión: al volver, ese partido y esa opción mandan. */
+    fun rememberWatching(eventId: String, url: String) {
+        watchingEventId = eventId
+        watchingUrl = url
+    }
+
+    /**
+     * El partido al que hay que volver (una sola vez: la pantalla lo consume al montar).
+     * El enlace se conserva hasta que el modal se cierra o se abre otro partido.
+     */
+    fun consumeWatchingEvent(): String? {
+        val out = watchingEventId
+        watchingEventId = null
+        return out
+    }
+
+    /** Un día guardado que ya pasó no sirve: la agenda de hoy es la que importa. */
+    fun validDay(today: String = SportsSource.todayIso()): String? {
+        val stored = day ?: return null
+        return if (stored < today) today else stored
+    }
+
+    /** Se cierra el modal (o se elige otro partido): la marca de «Viendo» deja de aplicar. */
+    fun forgetWatching() {
+        watchingEventId = null
+        watchingUrl = null
+    }
+
+    /**
+     * Solo pruebas: los objetos de proceso cruzan clases de test dentro del mismo JVM
+     * (Robolectric no los reinicia) y una selección sembrada por un test contaminaría al
+     * siguiente. En producción nunca se llama.
+     */
+    internal fun resetForTests() {
+        pickingId = null
+        category = null
+        categoryChosen = false
+        day = null
+        league = null
+        channels = false
+        forgetWatching()
+    }
 }

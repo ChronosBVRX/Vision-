@@ -160,6 +160,32 @@ class GeePickDialogDuplicateTest {
         assertText("Principal")
     }
 
+    @Test
+    fun onlyGeeSportsLinksAreListedAndThePlayedSignalIsMarked() {
+        val espn = link("ESPN")
+        compose.setContent {
+            VisionTheme {
+                GeeLinkPickDialog(
+                    title = "Sevilla vs Osasuna",
+                    subtitle = "LaLiga · Hoy 14:00",
+                    links = listOf(link("FANCODE FHD"), espn),
+                    onDismiss = {},
+                    onPlay = { _: LiveChannel -> },
+                    playingUrl = espn.link,
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        // Solo los enlaces de GeeSports: sin la línea/canal de la guía.
+        assertText("FANCODE FHD")
+        assertText("ESPN")
+        assertText("Viendo")
+        assertAbsent("Se transmite en: ESPN")
+        assertAbsent("Canal en vivo · ESPN")
+        assertAbsent("Canales posibles:")
+    }
+
     private fun assertText(text: String) {
         val matches = compose.onAllNodes(hasText(text, substring = true), useUnmergedTree = true)
             .fetchSemanticsNodes().size
@@ -324,7 +350,7 @@ class GeePickDialogDuplicateTest {
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        assertText("Sin transmisiones disponibles por ahora.")
+        assertText("Sin enlaces disponibles")
         assertAbsent("TUDN US")
         assertAbsent("La fuente aún no publica su señal")
     }

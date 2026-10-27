@@ -73,11 +73,26 @@ fun SportsScreen(
     onPlay: (LiveChannel) -> Unit,
 ) {
     val gee = rememberGeeSportsState()
-    var pickingId by remember { mutableStateOf(DeportesReturn.pickingId) }
-    var league by remember { mutableStateOf<String?>(null) }
-    var channels by remember { mutableStateOf(false) }
+    // Al volver del reproductor, el partido que se estaba viendo manda: su menú reaparece
+    // con la opción sintonizada marcada. Si no venimos de ahí, se respeta el partido que el
+    // launcher haya pedido por enlace (`DeportesReturn.pickingId`).
+    val returnedFromPlayer = remember { DeportesReturn.consumeWatchingEvent() }
+    var pickingId by remember { mutableStateOf(returnedFromPlayer ?: DeportesReturn.pickingId) }
+    var league by remember { mutableStateOf(DeportesReturn.league) }
+    var channels by remember { mutableStateOf(DeportesReturn.channels) }
     val picking = remember(pickingId, gee.events) {
         pickingId?.let { id -> gee.events.firstOrNull { it.id == id } }
+    }
+    // Un partido pedido desde el héroe/launcher se abre en SU deporte y SU día; al volver
+    // del reproductor no se toca la selección (se regresa a la que la persona dejó).
+    LaunchedEffect(pickingId, gee.events) {
+        if (returnedFromPlayer != null) return@LaunchedEffect
+        val event = picking ?: return@LaunchedEffect
+        if (gee.selectedDay != event.dateIso ||
+            !event.category.equals(gee.selectedCategory.orEmpty(), ignoreCase = true)
+        ) {
+            gee.showEvent(event)
+        }
     }
     val context = LocalContext.current
     // El contexto del partido que viaja al reproductor (su aviso de cable usa la misma interfaz
@@ -164,6 +179,7 @@ fun SportsScreen(
                     selected = !channels && gee.selectedCategory == category,
                     onClick = {
                         channels = false
+                        DeportesReturn.channels = false
                         gee.selectCategory(category)
                     },
                     label = { Text(geeCategoryLabel(category)) },
@@ -179,7 +195,10 @@ fun SportsScreen(
             item(key = "canales") {
                 FilterChip(
                     selected = channels,
-                    onClick = { channels = true },
+                    onClick = {
+                        channels = true
+                        DeportesReturn.channels = true
+                    },
                     label = { Text("Canales") },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = VisionBlue,
@@ -227,7 +246,10 @@ fun SportsScreen(
                     item(key = "liga_all") {
                         FilterChip(
                             selected = league == null,
-                            onClick = { league = null },
+                            onClick = {
+                                league = null
+                                DeportesReturn.league = null
+                            },
                             label = { Text("Todas") },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = VisionBlue,
@@ -241,7 +263,10 @@ fun SportsScreen(
                     items(leagues, key = { "liga_$it" }) { name ->
                         FilterChip(
                             selected = league == name,
-                            onClick = { league = if (league == name) null else name },
+                            onClick = {
+                                league = if (league == name) null else name
+                                DeportesReturn.league = league
+                            },
                             label = { Text(name, maxLines = 1) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = VisionBlue,
@@ -278,6 +303,8 @@ fun SportsScreen(
                             }
                             gridItems(section.events, key = { it.id }) { event ->
                                 GeeEventTile(event, now) {
+                                    // Abrir el menú de otro partido ya no es «volver a lo que veías».
+                                    DeportesReturn.forgetWatching()
                                     DeportesReturn.pickingId = event.id
                                     pickingId = event.id
                                 }
@@ -296,13 +323,19 @@ fun SportsScreen(
             links = event.links,
             onDismiss = {
                 DeportesReturn.pickingId = null
+                DeportesReturn.forgetWatching()
                 pickingId = null
             },
-            onPlay = onPlay,
+            onPlay = { picked ->
+                // Al volver del reproductor, este partido reaparece con ESA opción marcada.
+                DeportesReturn.rememberWatching(event.id, picked.url)
+                onPlay(picked)
+            },
             playable = GeeAgenda.playable(event, now),
             blockNote = GeeAgenda.blockNote(event, now),
             checks = gee.checks,
             eventInfo = pickingInfo,
+            playingUrl = DeportesReturn.watchingUrl,
         )
     }
 }

@@ -90,7 +90,7 @@ class TvSportsMosaicTest {
         FocusRescue.target = null
         FocusRescue.screenHasFocus = false
         FocusRescue.dialogsOpen = 0
-        DeportesReturn.pickingId = null
+        DeportesReturn.resetForTests()
         // La caché en memoria cruza clases de test (Robolectric no reinicia los estáticos):
         // aquí se siembra el archivo, así que la memoria arranca limpia y se lee del disco.
         com.chronosbvrx.visionplus.data.gee.GeeSportsSource.resetMemoryForTests()

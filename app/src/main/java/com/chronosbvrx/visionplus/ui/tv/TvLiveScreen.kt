@@ -161,9 +161,9 @@ fun TvLiveScreen(
         if (!FocusRescue.screenHasFocus && channels.isNotEmpty()) landing.request()
     }
 
-    LaunchedEffect(state.selected?.id, state.group) {
-        selectedCountry = null
-    }
+    // Cambiar de lista, grupo o pestaña limpia el filtro de país: se hace en el toque
+    // concreto y NO en un efecto del primer pase, que al volver del reproductor borraba la
+    // selección que la persona había hecho (el filtro se restaura con `rememberSaveable`).
 
     Column(Modifier.fillMaxSize().background(VisionBlack).padding(horizontal = 48.dp, vertical = 27.dp)) {
         Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -172,6 +172,7 @@ fun TvLiveScreen(
                 items(state.playlists, key = { it.id }) { playlist ->
                     TvPlaylistTab(playlist.name, selected = state.selected?.id == playlist.id, onClick = {
                         favoritesOnly = false
+                        selectedCountry = null
                         state.pick(playlist)
                     })
                 }
@@ -242,6 +243,7 @@ fun TvLiveScreen(
                             selected = favoritesOnly,
                             onClick = {
                                 favoritesOnly = true
+                                selectedCountry = null
                                 state.selectGroup(null)
                             },
                             modifier = if (channels.isEmpty()) Modifier.landingFocus(landing) else Modifier,
@@ -256,6 +258,7 @@ fun TvLiveScreen(
                                 selected = !favoritesOnly && state.group == genre,
                                 onClick = {
                                     favoritesOnly = false
+                                    selectedCountry = null
                                     state.selectGroup(genre)
                                 },
                             )
@@ -264,6 +267,7 @@ fun TvLiveScreen(
                     item(key = "all") {
                         TvRailRow(LiveCopy.ALL_GROUPS, null, allChannels.size, !favoritesOnly && state.group == null, {
                             favoritesOnly = false
+                            selectedCountry = null
                             state.selectGroup(null)
                         })
                     }

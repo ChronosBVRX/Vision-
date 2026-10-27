@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -104,6 +106,19 @@ internal fun GeeAliveBadge(alive: Boolean?) {
         }
     } else {
         Text(label, style = MaterialTheme.typography.bodySmall, color = color)
+    }
+}
+
+/** La opción que se estaba viendo: al volver del reproductor el modal la trae marcada. */
+@Composable
+internal fun GeePlayingBadge() {
+    Surface(color = VisionBlueBright, shape = RoundedCornerShape(50)) {
+        Text(
+            "Viendo",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFF06121F),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
     }
 }
 
@@ -237,15 +252,19 @@ private fun GeeChannelRow(channel: GeeSportsSource.GeeChannel, onClick: () -> Un
 }
 
 /**
- * El selector de transmisión: SOLO las señales que GeeSports publica con una dirección
- * real para el partido (vivas primero, el servidor ya las ordena). Las ranuras sin URL
- * no se ofrecen y no hay respaldo al catálogo: si una fuente está caída, se ve caída.
+ * El selector de transmisión: UNA sola lista con las señales del partido. Primero la
+ * cadena de la **guía oficial** que sí lo transmite (resuelta en el catálogo deportivo:
+ * ESPN, TUDN, Fox Sports…), después las transmisiones directas de la fuente (vivas
+ * primero, el servidor ya las ordena). Las ranuras sin URL no se ofrecen y no hay
+ * respaldo al catálogo de la casa: si una fuente está caída, se ve caída.
  *
  * Con [playable] en false (el partido aún no comienza o ya terminó) NO se ofrecen
  * señales para reproducir: solo se muestra el aviso [blockNote].
  *
  * [checks] son las comprobaciones de vida que la app acaba de hacer (mandan sobre el
- * dato del servidor: una caída y un levantamiento se ven al momento).
+ * dato del servidor: una caída y un levantamiento se ven al momento). [playingUrl] es la
+ * señal que se estaba viendo al salir: al volver del reproductor el modal reabre con
+ * esa opción marcada y enfocada.
  */
 @Composable
 internal fun GeeLinkPickDialog(
@@ -258,24 +277,22 @@ internal fun GeeLinkPickDialog(
     blockNote: String = "",
     checks: Map<String, GeeHealth.Check> = emptyMap(),
     eventInfo: GeeZapSignals.EventInfo? = null,
+    playingUrl: String? = null,
 ) {
-    // El estado REAL de cada señal: lo comprobado por la app ahora mismo manda sobre el
-    // dato del servidor (que puede tener minutos).
-    fun aliveOf(link: GeeSportsSource.GeeLink): Boolean? =
-        GeeHealth.effective(link.alive, checks[link.link.trim()])
-    // Solo las señales que GeeSports publica con una dirección real. Las ranuras que la
-    // fuente declara sin URL no se ofrecen: la lista es de fuentes, no de promesas.
-    val linkRows = remember(links) {
-        links.filter { it.link.isNotBlank() }.distinctBy { it.link }
+    // SOLO las señales que GeeSports publica para este partido. Nada de guía/catálogo.
+    val rows = remember(title, links, checks, playingUrl) {
+        geePickRows(title, links, checks, playingUrl)
     }
     // Zapping dentro del bloque de opciones: la lista ORDENADA del evento queda armada
     // para el reproductor en línea, que la recoge al montar.
-    val zapOrder = remember(linkRows) {
-        linkRows.map { link ->
-            GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo")
-        }.distinctBy { it.url }
+    val zapOrder = remember(rows) { rows.map { it.channel }.distinctBy { it.url } }
+    val liveRows = remember(rows) { rows.filter { it.alive == true } }
+    val listState = rememberLazyListState()
+    val playingIndex = rows.indexOfFirst { it.playing }
+    // La opción que se estaba viendo queda a la vista al volver del reproductor.
+    LaunchedEffect(rows.size, playingIndex) {
+        if (playingIndex > 0) runCatching { listState.scrollToItem(playingIndex + 1) }
     }
-    val liveLinks = remember(linkRows, checks) { linkRows.filter { aliveOf(it) == true } }
 
     fun playZap(picked: LiveChannel) {
         GeeZapSignals.arm(picked, zapOrder, eventInfo)
@@ -306,15 +323,16 @@ internal fun GeeLinkPickDialog(
                         color = VisionTextSecondary,
                     )
                     Spacer(Modifier.height(6.dp))
-                } else if (linkRows.isEmpty()) {
+                } else if (rows.isEmpty()) {
                     Text(
-                        "Sin transmisiones disponibles por ahora.",
+                        "Sin enlaces disponibles",
                         style = MaterialTheme.typography.bodyMedium,
                         color = VisionTextSecondary,
                     )
                     Spacer(Modifier.height(6.dp))
                 } else {
                     LazyColumn(
+                        state = listState,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
                     ) {
@@ -326,12 +344,9 @@ internal fun GeeLinkPickDialog(
                                 modifier = Modifier.padding(bottom = 2.dp),
                             )
                         }
-                        itemsIndexed(linkRows, key = { index, link -> "link_${index}_${link.link}" }) { _, link ->
-                            val linkAlive = aliveOf(link) == true
+                        itemsIndexed(rows, key = { index, row -> "link_${index}_${row.link}" }) { _, row ->
                             Surface(
-                                onClick = {
-                                    playZap(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
-                                },
+                                onClick = { playZap(row.channel) },
                                 shape = RoundedCornerShape(12.dp),
                                 color = VisionSurfaceHigh,
                                 modifier = Modifier.fillMaxWidth(),
@@ -344,38 +359,37 @@ internal fun GeeLinkPickDialog(
                                     Spacer(Modifier.width(10.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text(
-                                            link.name.ifBlank { title },
+                                            row.title,
                                             style = MaterialTheme.typography.labelLarge,
                                             color = Color.White,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                         )
-                                        val typeText = when {
-                                            link.type == "dash" && link.drm.isNotBlank() -> "DASH · ClearKey"
-                                            link.type == "dash" -> "DASH"
-                                            else -> "HLS"
-                                        }
                                         Text(
-                                            typeText,
+                                            row.typeLabel,
                                             style = MaterialTheme.typography.bodySmall,
                                             color = VisionTextSecondary,
                                         )
                                         // El enlace a la vista: la fuente declara canales que
                                         // pueden estar dando OTRO partido — sin falsa expectativa.
                                         Text(
-                                            linkDisplay(link.link),
+                                            linkDisplay(row.link),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = VisionTextSecondary.copy(alpha = 0.75f),
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                         )
                                     }
+                                    if (row.playing) {
+                                        Spacer(Modifier.width(8.dp))
+                                        GeePlayingBadge()
+                                    }
                                     Spacer(Modifier.width(8.dp))
-                                    GeeAliveBadge(aliveOf(link))
+                                    GeeAliveBadge(row.alive)
                                 }
                             }
                         }
-                        if (liveLinks.isNotEmpty()) {
+                        if (liveRows.isNotEmpty()) {
                             item(key = "links_note") {
                                 Text(
                                     ZAP_HINT,

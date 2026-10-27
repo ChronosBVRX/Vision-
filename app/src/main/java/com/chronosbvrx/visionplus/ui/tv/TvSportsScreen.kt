@@ -56,6 +56,7 @@ import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.sports.SportsSource
+import com.chronosbvrx.visionplus.ui.sports.DeportesReturn
 import com.chronosbvrx.visionplus.ui.sports.GeeTiles
 import com.chronosbvrx.visionplus.ui.sports.GeeZapSignals
 import com.chronosbvrx.visionplus.ui.sports.geeCategoryLabel
@@ -84,11 +85,26 @@ private val LiveRed = Color(0xFFD32F2F)
 @Composable
 fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
     val gee = rememberGeeSportsState()
-    var league by remember { mutableStateOf<String?>(null) }
-    var channels by remember { mutableStateOf(false) }
-    var pickingId by remember { mutableStateOf(com.chronosbvrx.visionplus.ui.sports.DeportesReturn.pickingId) }
+    var league by remember { mutableStateOf(DeportesReturn.league) }
+    var channels by remember { mutableStateOf(DeportesReturn.channels) }
+    // Al volver del reproductor, el partido que se estaba viendo manda: su menú reaparece
+    // con la opción sintonizada marcada. Si no venimos de ahí, se respeta el partido que el
+    // launcher haya pedido por enlace (`DeportesReturn.pickingId`).
+    val returnedFromPlayer = remember { DeportesReturn.consumeWatchingEvent() }
+    var pickingId by remember { mutableStateOf(returnedFromPlayer ?: DeportesReturn.pickingId) }
     val picking = remember(pickingId, gee.events) {
         pickingId?.let { id -> gee.events.firstOrNull { it.id == id } }
+    }
+    // Un partido pedido desde el héroe/launcher se abre en SU deporte y SU día; al volver
+    // del reproductor no se toca la selección (se regresa a la que la persona dejó).
+    LaunchedEffect(pickingId, gee.events) {
+        if (returnedFromPlayer != null) return@LaunchedEffect
+        val event = picking ?: return@LaunchedEffect
+        if (gee.selectedDay != event.dateIso ||
+            !event.category.equals(gee.selectedCategory.orEmpty(), ignoreCase = true)
+        ) {
+            gee.showEvent(event)
+        }
     }
     val geeEntryFocus = remember { FocusRequester() }
     // Destino de aterrizaje SIEMPRE compuesto (el primer chip del deporte, o «Canales»):
@@ -156,7 +172,15 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
     // existe —agenda vacía o en camino—, el foco cae en un chip compuesto. La llave incluye
     // «hay eventos»: cuando la agenda llega tarde, el intento se re-arma solo y el mosaico
     // queda enfocado sin que el usuario toque nada.
+    //
+    // Al volver del reproductor con el menú del partido abierto NO se reinicia el scroll ni se
+    // roba el foco: la persona regresa donde estaba y el modal recupera su opción.
+    var skipLanding by remember { mutableStateOf(pickingId != null) }
     LaunchedEffect(gee.selectedCategory, league, channels, filtered.isEmpty()) {
+        if (skipLanding) {
+            skipLanding = false
+            return@LaunchedEffect
+        }
         runCatching { gridState.scrollToItem(0) }
         delay(140)
         if (!requestFocusSafely(geeEntryFocus)) landing.request()
@@ -200,6 +224,7 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                         compact = true,
                         onClick = {
                             channels = false
+                            DeportesReturn.channels = false
                             gee.selectCategory(category)
                         },
                         // El primer chip del deporte es el destino de respaldo (siempre compuesto).
@@ -212,7 +237,10 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                         label = "Canales",
                         selected = channels,
                         compact = true,
-                        onClick = { channels = true },
+                        onClick = {
+                            channels = true
+                            DeportesReturn.channels = true
+                        },
                         // Sin deportes listados, «Canales» (siempre pintado) sostiene el rescate.
                         modifier = (if (gee.categories.isEmpty()) Modifier.landingFocus(landing) else Modifier)
                             .softFocusDown(geeEntryFocus),
@@ -258,7 +286,10 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                                 label = "Todas",
                                 selected = league == null,
                                 compact = true,
-                                onClick = { league = null },
+                                onClick = {
+                                    league = null
+                                    DeportesReturn.league = null
+                                },
                                 modifier = Modifier.softFocusDown(geeEntryFocus),
                             )
                         }
@@ -267,7 +298,10 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                                 label = name,
                                 selected = league == name,
                                 compact = true,
-                                onClick = { league = if (league == name) null else name },
+                                onClick = {
+                                    league = if (league == name) null else name
+                                    DeportesReturn.league = league
+                                },
                                 modifier = Modifier.softFocusDown(geeEntryFocus),
                             )
                         }
@@ -300,7 +334,9 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                                     nowMs = now,
                                     modifier = if (event.id == firstEventId) Modifier.focusRequester(geeEntryFocus) else Modifier,
                                     onClick = {
-                                        com.chronosbvrx.visionplus.ui.sports.DeportesReturn.pickingId = event.id
+                                        // Abrir el menú de otro partido ya no es «volver a lo que veías».
+                                        DeportesReturn.forgetWatching()
+                                        DeportesReturn.pickingId = event.id
                                         pickingId = event.id
                                     },
                                 )
@@ -317,14 +353,20 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                 subtitle = geeEventSubtitle(event),
                 links = event.links,
                 onDismiss = {
-                    com.chronosbvrx.visionplus.ui.sports.DeportesReturn.pickingId = null
+                    DeportesReturn.pickingId = null
+                    DeportesReturn.forgetWatching()
                     pickingId = null
                 },
-                onPlay = onPlay,
+                onPlay = { picked ->
+                    // Al volver del reproductor, este partido reaparece con ESA opción marcada.
+                    DeportesReturn.rememberWatching(event.id, picked.url)
+                    onPlay(picked)
+                },
                 playable = GeeAgenda.playable(event, now),
                 blockNote = GeeAgenda.blockNote(event, now),
                 checks = gee.checks,
                 eventInfo = pickingInfo,
+                playingUrl = DeportesReturn.watchingUrl,
             )
         }
     }

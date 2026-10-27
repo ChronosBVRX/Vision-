@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -52,9 +53,11 @@ import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeHealth
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.ui.sports.GeePickRow
 import com.chronosbvrx.visionplus.ui.sports.GeeSportsState
 import com.chronosbvrx.visionplus.ui.sports.GeeZapSignals
 import com.chronosbvrx.visionplus.ui.sports.ZAP_HINT
+import com.chronosbvrx.visionplus.ui.sports.geePickRows
 import com.chronosbvrx.visionplus.ui.sports.linkDisplay
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
@@ -233,14 +236,16 @@ private fun TvGeeChannelRow(
 }
 
 /**
- * El selector de transmisiones en la TV: SOLO las señales que GeeSports publica para el
- * partido (con dirección real), vivos primero. OK sintoniza esa fuente.
+ * El selector de transmisiones en la TV: UNA sola lista. Primero la cadena de la **guía
+ * oficial** del partido resuelta en el catálogo deportivo (ESPN, TUDN, Fox Sports…), luego
+ * las señales directas de la fuente. OK sintoniza esa fuente.
  *
  * Con [playable] en false (el partido aún no comienza o ya terminó) NO se ofrecen
  * señales: solo se muestra el aviso [blockNote].
  *
  * [checks] son las comprobaciones de vida que la app acaba de hacer (mandan sobre el
- * dato del servidor). No hay respaldo al catálogo: si una fuente está caída, se ve caída.
+ * dato del servidor). No hay respaldo al catálogo de la casa: si una fuente está caída,
+ * se ve caída. [playingUrl] marca y enfoca la opción que se estaba viendo al volver.
  */
 @Composable
 internal fun TvGeeLinkPickDialog(
@@ -253,24 +258,23 @@ internal fun TvGeeLinkPickDialog(
     blockNote: String = "",
     checks: Map<String, GeeHealth.Check> = emptyMap(),
     eventInfo: GeeZapSignals.EventInfo? = null,
+    playingUrl: String? = null,
 ) {
-    // El estado REAL de cada señal: lo comprobado por la app ahora mismo manda sobre el
-    // dato del servidor (que puede tener minutos).
-    fun aliveOf(link: GeeSportsSource.GeeLink): Boolean? =
-        GeeHealth.effective(link.alive, checks[link.link.trim()])
-    // Solo las señales que GeeSports publica con una dirección real. Las ranuras que la
-    // fuente declara sin URL no se ofrecen: la lista es de fuentes, no de promesas.
-    val linkRows = remember(links) {
-        links.filter { it.link.isNotBlank() }.distinctBy { it.link }
+    // SOLO las señales que GeeSports publica para este partido. Nada de guía/catálogo.
+    val rows = remember(title, links, checks, playingUrl) {
+        geePickRows(title, links, checks, playingUrl)
     }
     // Zapping dentro del bloque de opciones: la lista ORDENADA del evento queda armada
     // para el reproductor en línea, que la recoge al montar.
-    val zapOrder = remember(linkRows) {
-        linkRows.map { link ->
-            GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo")
-        }.distinctBy { it.url }
+    val zapOrder = remember(rows) { rows.map { it.channel }.distinctBy { it.url } }
+    val liveRows = remember(rows) { rows.filter { it.alive == true } }
+    val listState = rememberLazyListState()
+    val playingIndex = rows.indexOfFirst { it.playing }
+    val landingIndex = if (playingIndex >= 0) playingIndex else 0
+    // La opción que se estaba viendo queda a la vista (y con el foco) al volver.
+    LaunchedEffect(rows.size, playingIndex) {
+        if (playingIndex > 0) runCatching { listState.scrollToItem(playingIndex + 1) }
     }
-    val liveLinks = remember(linkRows, checks) { linkRows.filter { aliveOf(it) == true } }
 
     fun playZap(picked: LiveChannel) {
         GeeZapSignals.arm(picked, zapOrder, eventInfo)
@@ -282,7 +286,7 @@ internal fun TvGeeLinkPickDialog(
         onDispose { FocusRescue.dialogsOpen-- }
     }
     val modalLanding = rememberLandingFocus("tv_gee_pick_$title")
-    LaunchedEffect(title) {
+    LaunchedEffect(title, rows.size) {
         delay(120)
         modalLanding.request()
     }
@@ -319,13 +323,13 @@ internal fun TvGeeLinkPickDialog(
                         )
                         Spacer(Modifier.height(14.dp))
                         TvCompactAction("Volver", onClick = onDismiss, modifier = Modifier.landingFocus(modalLanding))
-                    } else if (linkRows.isEmpty()) {
-                        Text("Sin transmisiones disponibles por ahora.", style = MaterialTheme.typography.bodyMedium, color = VisionTextSecondary)
+                    } else if (rows.isEmpty()) {
+                        Text("Sin enlaces disponibles", style = MaterialTheme.typography.bodyMedium, color = VisionTextSecondary)
                         Spacer(Modifier.height(14.dp))
                         TvCompactAction("Volver", onClick = onDismiss, modifier = Modifier.landingFocus(modalLanding))
                     } else {
-                        val firstLink = linkRows.firstOrNull()
                         LazyColumn(
+                            state = listState,
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
                         ) {
@@ -337,18 +341,14 @@ internal fun TvGeeLinkPickDialog(
                                     modifier = Modifier.padding(bottom = 2.dp),
                                 )
                             }
-                            itemsIndexed(linkRows, key = { index, link -> "link_${index}_${link.link}" }) { _, link ->
+                            itemsIndexed(rows, key = { index, row -> "link_${index}_${row.link}" }) { index, row ->
                                 TvGeeLinkItem(
-                                    link = link,
-                                    alive = aliveOf(link),
-                                    fallbackTitle = title,
-                                    onClick = {
-                                        playZap(GeeSportsSource.toChannel(link, link.name.ifBlank { title }, "Deportes en vivo"))
-                                    },
-                                    modifier = if (link == firstLink) Modifier.landingFocus(modalLanding) else Modifier,
+                                    row = row,
+                                    onClick = { playZap(row.channel) },
+                                    modifier = if (index == landingIndex) Modifier.landingFocus(modalLanding) else Modifier,
                                 )
                             }
-                            if (liveLinks.isNotEmpty()) {
+                            if (liveRows.isNotEmpty()) {
                                 item(key = "links_note") {
                                     Text(
                                         ZAP_HINT,
@@ -372,19 +372,11 @@ internal fun TvGeeLinkPickDialog(
 
 @Composable
 private fun TvGeeLinkItem(
-    link: GeeSportsSource.GeeLink,
-    alive: Boolean?,
-    fallbackTitle: String,
+    row: GeePickRow,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(10.dp)
-    val typeText = when {
-        link.link.isBlank() -> "La fuente aún no publica su señal"
-        link.type == "dash" && link.drm.isNotBlank() -> "DASH · ClearKey"
-        link.type == "dash" -> "DASH"
-        else -> "HLS"
-    }
     Surface(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
@@ -406,25 +398,40 @@ private fun TvGeeLinkItem(
             Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(link.name.ifBlank { fallbackTitle }, style = MaterialTheme.typography.labelLarge, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(row.title, style = MaterialTheme.typography.labelLarge, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    typeText,
+                    row.typeLabel,
                     style = MaterialTheme.typography.bodySmall,
                     color = VisionTextSecondary,
                 )
                 // El enlace a la vista: la fuente declara canales que pueden estar dando otro partido.
-                if (link.link.isNotBlank()) {
-                    Text(
-                        linkDisplay(link.link),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = VisionTextSecondary.copy(alpha = 0.75f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                Text(
+                    linkDisplay(row.link),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VisionTextSecondary.copy(alpha = 0.75f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (row.playing) {
+                Spacer(Modifier.width(10.dp))
+                TvGeePlayingBadge()
             }
             Spacer(Modifier.width(10.dp))
-            TvGeeSignalBadge(alive)
+            TvGeeSignalBadge(row.alive)
         }
+    }
+}
+
+/** La opción que se estaba viendo: al volver del reproductor el modal la trae marcada. */
+@Composable
+private fun TvGeePlayingBadge() {
+    Surface(shape = RoundedCornerShape(50), colors = SurfaceDefaults.colors(containerColor = VisionBlueBright)) {
+        Text(
+            "Viendo",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFF06121F),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
     }
 }
