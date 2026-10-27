@@ -5,6 +5,15 @@
 > `C:\Users\Axel Rosete\Desktop\Proyectos\Vision+\` (aquí hay una copia idéntica de este archivo).
 
 ## Proyecto y objetivo
+- **VISION TV 2.5.165 BETA (2026-10-26): los enlaces de Deportes se actualizan solos cada 5 min — pase caliente en el worker + refresco de eventos en la app — 993 Android + 417 backend; beta publicado**:
+  - *Pedido*: «Hay que ver qué siempre se actualicen los enlaces».
+  - *Diagnóstico medido*: el worker completo corría cada **45 min** y el CMS a veces publica `events.txt` a medias (**79 vs 1,378 guardados**); el partido Instituto vs Riestra conservaba un enlace con `checked_at` del **23-oct**, aunque el evento seguía en la agenda. El `events.txt` parcial también impedía refrescar su `links_ref`.
+  - *Servidor (`server/sync/gee38.py`, desplegado)*: `_fetch_events_full` lee `events.txt` **4 veces** y `_merge_event_pages` fusiona por partido quedándose con el `links_ref` más nuevo; `_refresh_hot_links` corre cada **5 min** para los partidos de la ventana (ayer..pasado mañana), **ordena por el `checked_at` más viejo**, vuelve a bajar su `pro/*.txt`, sondea y actualiza el payload. El `loop` alterna ciclo completo (45 min) y pase caliente (5 min). El primer pase actualizó **56 eventos**; ya filtrando solo eventos con enlaces y priorizando el `checked_at` más viejo, el siguiente actualizó **60**. Los partidos de hoy ya sirven enlaces con `checked_at` del día (p. ej. el `LOW QUALITY` del Instituto, 02:53 UTC).
+  - *App (`GeeSportsState` + `SportsScreen`/`TvSportsScreen`)*: `refreshLinks` pide **solo los eventos** (no los grupos) cada **5 min** mientras Deportes está al frente (`repeatOnLifecycle(RESUMED)`), sin esperar el TTL de 8 min ni el ciclo del worker. El diálogo usa la lista actualizada.
+  - *Se mantiene*: solo enlaces de GeeSports; «Sin enlaces disponibles» si no hay; «Viendo» y el regreso al mismo partido.
+  - *Pruebas*: **993 Android + 417 backend** en verde (`_merge_event_pages` nuevo, `theSportsScreenRefreshesTheLinksWhileItIsOpen`).
+  - *Publicado*: beta **2.5.165 (vc405)**, `VisionPlus.apk` **82,581,080 B (82.6 MB)**, `VisionPlusHome.apk` **1.2.4 (vc21, 1,476,052 B)** y `version.json`; firma histórica `9593cb0d…`; 5 DEX (app 2 + motor 3), cadenas `Sin enlaces disponibles`/`Transmisiones de GeeSports` presentes y sin `Canales posibles`. Asset descargado y verificado (`versionCode=405`/`versionName=2.5.165`, launcher 21/1.2.4); instalado en el emulador: Deportes con **19 eventos y 8 en vivo**, señales de GeeSports. Reemplaza a la beta 2.5.164.
+  - *Pendiente*: verificar en la TLC que el enlace de un partido en vivo cambia a `checked_at` reciente y que el selector lo abre; el ADB de la TLC está cerrado ahora. Después, promover a estable.
 - **VISION TV 2.5.164 BETA (2026-10-26): Deportes vuelve a tener UNA sola fuente de verdad — solo los enlaces de GeeSports; si no hay, «Sin enlaces disponibles» — 984 Android; beta publicado**:
   - *Pedido*: «Tu única fuente de verdad es los canales de GeeSports; si no hay enlaces online pon una leyenda sin enlaces disponibles. Pero solo muestra los que GeeSports manda» (además: en la APK de GeeSports las fuentes sí abren el partido; en Vision no).
   - *Causa*: la 2.5.163 había vuelto a poner la guía/parrilla (ESPN/TNT/TyC) al frente del selector y a mezclarla con las señales del evento. En el emulador, para Instituto vs Riestra la guía ofrecía ESPN/TyC **caídos** y un TNT de guía que respondía **HTTP 591**; los enlaces directos de GeeSports para ese partido venían vacíos. La APK original usa los enlaces del evento, no la parrilla.
@@ -1643,8 +1652,8 @@
   (2) prueba física en A32/POCO si cambia runtime. Guardianes:
   `OfflineDownloadDispatchTest`, `X4KTitanStatusTest`, reconcile-tests. Si otro agente
   avanza en paralelo, rebasear contra este tag y re-correr la suite completa.
-- App Android (Compose) **"Vision+"** - pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.164 BETA**
-  (versionCode **403**; beta 2.5.164; estable v2.5.157; launcher 1.2.4/21 - **historial de la base 2.5.150:** **perfiles renomrables sin cambiar de perfil** (lápiz al
+- App Android (Compose) **"Vision+"** - pkg `com.chronosbvrx.visionplus`, `versionName` actual **2.5.165 BETA**
+  (versionCode **405**; beta 2.5.165; estable v2.5.157; launcher 1.2.4/21 - **historial de la base 2.5.150:** **perfiles renomrables sin cambiar de perfil** (lápiz al
   enfocar en la tele, modal de escritura con el teclado nativo de la TV; lápiz por perfil en el móvil),
   **zapping acotado al menú del launcher** y **Atrás devuelve a Vision+ Home**; incluye el precalentamiento
   del motor, la EPG masiva y «Personalizar Inicio» de las betas 2.5.149) y el **launcher 1.0.13**

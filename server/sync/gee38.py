@@ -41,6 +41,29 @@ from Crypto.Cipher import AES
 
 log = logging.getLogger("gee38")
 
+
+def _cms_gap(exc: Exception) -> bool:
+    """¿Es un hueco permanente del CMS (archivo retirado o enlace vacío)?
+
+    Estos casos se repiten en cada ciclo (TAPMAD BD, Willow Event) y no son un fallo
+    nuestro: se registran como INFO para no llenar el log de avisos idénticos. Un
+    problema de red o de cifrado sigue siendo WARNING.
+    """
+    text = str(exc).lower()
+    return (
+        "404" in text
+        or "no host given" in text
+        or "archivo retirado del cms" in text
+    )
+
+
+def _gap_log(message: str, exc: Exception) -> None:
+    """Registra el hueco del CMS con el nivel que le toca (INFO si es permanente)."""
+    if _cms_gap(exc):
+        log.info("gee38: %s (CMS: %s)", message, exc)
+    else:
+        log.warning("gee38: %s (%s)", message, exc)
+
 BASE_DEFAULT = "https://new.whatyouthink.site/"
 BASE = os.environ.get("GEE38_BASE", BASE_DEFAULT).rstrip("/") + "/"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -63,6 +86,12 @@ PROBE_BYTES = 800
 # Con el catálogo actual (~220 eventos) el presupuesto los cubre a todos: cada
 # partido que la app puede mostrar sale con su lista de enlaces recién bajada.
 EVENTS_LINKS_MAX = 320
+
+# Los enlaces de los partidos de la ventana (ayer..pasado mañana) se vuelven a
+# descargar y sondear cada 5 min, entre los ciclos completos de 30 min. Así el
+# selector nunca enseña un enlace de hace horas (el CMS los rota a menudo).
+HOT_LINKS_SECONDS = int(os.environ.get("GEE38_HOT_SECONDS", "300") or "300")
+HOT_LINKS_MAX = int(os.environ.get("GEE38_HOT_MAX", "60") or "60")
 
 
 # ----------------------------------------------------------------------------
@@ -492,7 +521,7 @@ async def _sync_groups(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
                             decrypt_body(await _fetch_async(ch["links_ref"]), key)
                         )
                     except Exception as exc:  # noqa: BLE001 - un canal caído no tumba al grupo
-                        log.warning("gee38: canal %s sin enlaces (%s)", ch["name"][:30], exc)
+                        _gap_log(f"canal {ch['name'][:30]} sin enlaces", exc)
 
                 await asyncio.gather(*(_channel_links(ch) for ch in bundle))
                 for ch in bundle:
@@ -501,7 +530,7 @@ async def _sync_groups(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
                     channels.append(ch_out)
                     links.extend(ch_out["links"])
         except Exception as exc:  # noqa: BLE001 - entrada retirada del CMS o red
-            log.warning("gee38: grupo %s no disponible (%s)", g["name"], exc)
+            _gap_log(f"grupo {g['name']} no disponible", exc)
 
         if links:
             await _probe_many(links)
@@ -577,6 +606,49 @@ def _event_rank(ev: dict, today: date) -> tuple:
     return (0 if ev["visible"] else 1, dist, ev["event"])
 
 
+def _merge_event_pages(pages: list[list[dict]]) -> list[dict]:
+    """Une varias lecturas de `events.txt` (el CMS a veces sirve copias a medias).
+
+    Por cada partido se queda la entrada con el `links_ref` MÁS NUEVO (el nombre
+    del `pro/*.txt` lleva el epoch en base64): una lectura parcial no debe pisar
+    los enlaces frescos de otra. Si la nueva no trae `links_ref` se conserva la
+    anterior.
+    """
+    best: dict[str, dict] = {}
+    for page in pages:
+        for ev in page:
+            eid = _event_id(ev)
+            prev = best.get(eid)
+            if prev is None:
+                best[eid] = ev
+                continue
+            prev_ref = str(prev.get("links_ref") or "").strip()
+            new_ref = str(ev.get("links_ref") or "").strip()
+            if new_ref and (
+                not prev_ref or _api_timestamp(new_ref) >= _api_timestamp(prev_ref)
+            ):
+                best[eid] = ev
+    return list(best.values())
+
+
+async def _fetch_events_full(key: bytes, attempts: int = 4) -> list[dict]:
+    """Lee `events.txt` varias veces y fusiona; el CMS publica copias parciales.
+
+    Visto en vivo: 79 eventos cuando la copia buena trae cientos (y al rato vuelve
+    a estar completa). No se acepta la primera lectura a medias: se reintenta y se
+    unen las entradas, conservando el `links_ref` más nuevo de cada partido.
+    """
+    pages: list[list[dict]] = []
+    for attempt in range(max(1, attempts)):
+        try:
+            pages.append(parse_events(decrypt_body(await _fetch_async("events.txt"), key)))
+        except Exception as exc:  # noqa: BLE001 - la siguiente lectura puede salir bien
+            _gap_log("events.txt no disponible", exc)
+        if attempt < attempts - 1:
+            await asyncio.sleep(2.0 + attempt)
+    return _merge_event_pages(pages)
+
+
 def _norm_team(text: str) -> str:
     """Nombre de equipo comparable: sin tildes, minúsculas, sin signos."""
     lowered = unicodedata.normalize("NFD", (text or "").lower())
@@ -640,7 +712,7 @@ def _merge_sibling_links(
 
 
 async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
-    events = parse_events(decrypt_body(await _fetch_async("events.txt"), key))
+    events = await _fetch_events_full(key)
     today = date.today()
     window_str = {(today + timedelta(days=delta)).isoformat() for delta in (-1, 0, 1, 2, 3)}
     old: dict[str, dict] = {}
@@ -681,7 +753,7 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
                 fresh_budget -= 1
                 fetched = True
             except Exception as exc:  # noqa: BLE001
-                log.warning("gee38: evento %s sin enlaces (%s)", ev["event"][:40], exc)
+                _gap_log(f"evento {ev['event'][:40]} sin enlaces", exc)
         if not fetched:
             # Sin presupuesto este ciclo: conserva los enlaces del ciclo anterior.
             links = (old.get(eid) or {}).get("links") or []
@@ -902,6 +974,80 @@ async def _resolve_key_auto(pool: asyncpg.Pool) -> bytes | None:
     return None
 
 
+async def _refresh_hot_links(pool: asyncpg.Pool, key: bytes) -> int:
+    """Re-descarga y sondea los enlaces de los partidos de la ventana (cada 5 min).
+
+    El ciclo completo (30 min) puede quedarse con un `links_ref` viejo si el CMS
+    publica `events.txt` a medias; este pase usa el `links_ref` guardado de cada
+    partido, baja su `pro/*.txt` actual y vuelve a sondear. Es el que mantiene
+    frescos los enlaces que abre el selector.
+    """
+    today = date.today()
+    low = (today - timedelta(days=1)).isoformat()
+    high = (today + timedelta(days=2)).isoformat()
+    try:
+        rows = await pool.fetch(
+            """
+            select id, payload from gee38_catalog
+             where kind = 'event'
+               and coalesce(payload->>'date_iso', '') between $1 and $2
+               and jsonb_array_length(coalesce(payload->'links', '[]'::jsonb)) > 0
+             order by (
+                 select min(coalesce(lk->>'checked_at', ''))
+                   from jsonb_array_elements(
+                       coalesce(payload->'links', '[]'::jsonb)
+                   ) as lk
+             ) asc nulls first,
+             updated_at asc
+             limit $3
+            """,
+            low,
+            high,
+            max(1, HOT_LINKS_MAX),
+        )
+    except Exception:
+        log.exception("gee38: no se pudieron leer los eventos calientes")
+        return 0
+    updated = 0
+    for row in rows:
+        value = row["payload"]
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                continue
+        if not isinstance(value, dict):
+            continue
+        ref = str(value.get("links_ref") or "").strip()
+        links = [lk for lk in (value.get("links") or []) if isinstance(lk, dict)]
+        if ref:
+            try:
+                fresh = parse_pro(decrypt_body(await _fetch_async(ref), key))
+                if fresh:
+                    links = fresh
+            except Exception as exc:  # noqa: BLE001 - se conservan los guardados
+                _gap_log(f"caliente {str(value.get('event') or '')[:40]} sin enlaces", exc)
+        if not links:
+            continue
+        await _probe_many(links)
+        links = _sort_links(links)
+        value["links"] = links
+        value["alive"] = sum(1 for lk in links if lk.get("alive"))
+        value["total"] = len(links)
+        try:
+            await pool.execute(
+                "update gee38_catalog set payload = $2::jsonb, updated_at = now() where id = $1",
+                row["id"],
+                json.dumps(value, ensure_ascii=False),
+            )
+            updated += 1
+        except Exception:
+            log.exception("gee38: no se pudo guardar el evento caliente %s", row["id"])
+    if updated:
+        log.info("gee38: %s eventos con enlaces frescos", updated)
+    return updated
+
+
 async def sync(pool: asyncpg.Pool) -> int:
     await _refresh_base(pool)
     key = await _resolve_key_auto(pool)
@@ -917,17 +1063,28 @@ async def sync(pool: asyncpg.Pool) -> int:
 
 
 async def loop(pool: asyncpg.Pool) -> None:
-    """Tarea de fondo: su propio ciclo, sin tocar el índice de catálogo."""
+    """Tarea de fondo: ciclo completo + refresco caliente de enlaces."""
     if os.environ.get("GEE38_SYNC", "1") != "1":
         log.info("gee38: deshabilitado por entorno")
         return
-    interval = int(os.environ.get("GEE38_INTERVAL_SECONDS", "1800") or "1800")
-    log.info("gee38: ciclo propio cada %s s", interval)
+    interval = max(300, int(os.environ.get("GEE38_INTERVAL_SECONDS", "1800") or "1800"))
+    hot = max(60, HOT_LINKS_SECONDS)
+    log.info("gee38: ciclo completo cada %s s; enlaces calientes cada %s s", interval, hot)
+    next_full = time.monotonic()
     while True:
-        started = time.monotonic()
-        try:
-            await sync(pool)
-        except Exception:  # noqa: BLE001 - se reintenta en el siguiente ciclo
-            log.exception("gee38: el ciclo falló")
-        elapsed = time.monotonic() - started
-        await asyncio.sleep(max(60.0, interval - elapsed))
+        if time.monotonic() >= next_full:
+            try:
+                await sync(pool)
+                next_full = time.monotonic() + interval
+            except Exception:  # noqa: BLE001 - se reintenta pronto
+                log.exception("gee38: el ciclo falló")
+                next_full = time.monotonic() + 300
+        else:
+            try:
+                stored = await _meta_get(pool, "key")
+                if isinstance(stored, str) and stored:
+                    await _refresh_hot_links(pool, base64.b64decode(stored))
+            except Exception:  # noqa: BLE001 - no debe tumbar el ciclo completo
+                log.exception("gee38: falló el refresco caliente")
+        wait = min(float(hot), max(30.0, next_full - time.monotonic()))
+        await asyncio.sleep(wait)

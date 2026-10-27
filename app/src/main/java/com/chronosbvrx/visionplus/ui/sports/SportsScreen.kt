@@ -36,6 +36,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -127,6 +130,17 @@ fun SportsScreen(
         while (true) {
             delay(30_000)
             gee.tick()
+        }
+    }
+    // Los enlaces de los partidos también se actualizan solos cada 5 min mientras
+    // Deportes está al frente: el servidor tiene un pase caliente y la app lo recoge.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                delay(GEE_LINKS_REFRESH_MS)
+                gee.refreshLinks(force = true)
+            }
         }
     }
     // El vigilante de vida: mientras la pantalla está abierta, comprueba sin parar las señales

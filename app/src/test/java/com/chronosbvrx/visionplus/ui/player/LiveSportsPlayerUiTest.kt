@@ -93,6 +93,19 @@ class LiveSportsPlayerUiTest {
     }
 
     @Test
+    fun theSportsScreenRefreshesTheLinksWhileItIsOpen() {
+        val mobile = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/sports/SportsScreen.kt")
+        val tv = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/tv/TvSportsScreen.kt")
+        for ((name, text) in listOf("móvil" to mobile, "TV" to tv)) {
+            assertTrue("$name: pide enlaces frescos", text.contains("gee.refreshLinks(force = true)"))
+            assertTrue("$name: solo con la pantalla al frente", text.contains("repeatOnLifecycle(Lifecycle.State.RESUMED)"))
+        }
+        val state = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/sports/GeeSportsState.kt")
+        assertTrue("pase periódico de 5 minutos", state.contains("GEE_LINKS_REFRESH_MS = 5L * 60 * 1000"))
+        assertTrue("solo eventos, no grupos", state.contains("GeeSportsSource.refreshEvents(context, force)"))
+    }
+
+    @Test
     fun thePlayerFallsBackToTheHouseChannelByItselfWhenEverythingElseGivesUp() {
         val player = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
         // El respaldo es del reproductor: al agotarse las señales lo pide, con telemetría.

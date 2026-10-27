@@ -22,6 +22,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Cada cuánto se refrescan SOLO los enlaces de los partidos mientras Deportes está al frente. */
+internal const val GEE_LINKS_REFRESH_MS = 5L * 60 * 1000
+
 /**
  * El estado de los deportes en vivo (GeeSports): eventos por deporte y grupos de
  * canales 24/7. Arranca en frame 0 con la última copia buena (memoria/archivo) y
@@ -172,6 +175,20 @@ class GeeSportsState(
             if (freshXtv.isNotEmpty()) xtvChannels = freshXtv
             refreshedAt = System.currentTimeMillis()
             loading = false
+        }
+    }
+
+    /**
+     * Refresca SOLO los enlaces/eventos de GeeSports. Es el pase periódico de Deportes:
+     * no vuelve a bajar los grupos 24/7 (TTL 30 min) y mantiene el selector al día.
+     */
+    fun refreshLinks(force: Boolean = false) {
+        scope.launch {
+            val fresh = withContext(Dispatchers.IO) {
+                runCatching { GeeSportsSource.refreshEvents(context, force) }.getOrDefault(emptyList())
+            }
+            if (fresh.isNotEmpty()) events = fresh
+            refreshedAt = System.currentTimeMillis()
         }
     }
 }

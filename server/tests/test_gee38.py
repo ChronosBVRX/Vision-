@@ -168,6 +168,22 @@ def test_parse_events_reads_fields_and_dates():
     assert ev["link_names"] == ["Azteca 7", "Canal 5"]
 
 
+def test_merge_event_pages_keeps_the_newest_links_ref_per_match():
+    old = gee38.parse_events(json.dumps([{"event": json.dumps(EVENT)}]).encode())[0]
+    newer_ref = "pro/" + base64.b64encode(b"new1799999999").decode() + ".txt"
+    newer = dict(old, links_ref=newer_ref)
+
+    merged = gee38._merge_event_pages([[old], [newer]])
+    assert len(merged) == 1
+    assert merged[0]["links_ref"] == newer_ref
+
+    # Una lectura parcial sin `links_ref` no puede pisar la buena.
+    partial = dict(newer, links_ref="")
+    merged = gee38._merge_event_pages([[newer], [partial]])
+    assert len(merged) == 1
+    assert merged[0]["links_ref"] == newer_ref
+
+
 def test_parse_events_tolerates_bad_dates():
     bad = dict(EVENT, date="tbd")
     out = gee38.parse_events(json.dumps([{"event": json.dumps(bad)}]).encode())
@@ -1015,3 +1031,23 @@ async def test_gee38_events_merges_espn_agenda_with_gee_links(monkeypatch):
     # El evento de fútbol quedó absorbido por la tarjeta; el básquet pasa tal cual.
     assert "event:mx1" not in ids
     assert "event:nba" in ids
+
+
+def test_cms_gaps_are_info_but_real_failures_stay_warning():
+    # El CMS publica huecos permanentes (TAPMAD BD 404, Willow Event sin host): no son
+    # fallos nuestros y repetirlos como WARNING cada 45 min llenaba el log del worker.
+    assert gee38._cms_gap(RuntimeError("HTTP Error 404: Not Found"))
+    assert gee38._cms_gap(RuntimeError("<urlopen error no host given>"))
+    assert gee38._cms_gap(RuntimeError("respuesta no cifrada (archivo retirado del CMS)"))
+    assert not gee38._cms_gap(TimeoutError("timed out"))
+    assert not gee38._cms_gap(ValueError("llave invalida"))
+
+
+def test_gee38_uses_the_helper_for_every_cms_gap():
+    import inspect
+
+    src = inspect.getsource(gee38)
+    assert 'log.warning("gee38: grupo %s no disponible' not in src
+    assert 'log.warning("gee38: canal %s sin enlaces' not in src
+    assert 'log.warning("gee38: evento %s sin enlaces' not in src
+    assert src.count("_gap_log(") >= 3
