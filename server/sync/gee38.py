@@ -980,7 +980,8 @@ async def _refresh_hot_links(pool: asyncpg.Pool, key: bytes) -> int:
     El ciclo completo (30 min) puede quedarse con un `links_ref` viejo si el CMS
     publica `events.txt` a medias; este pase usa el `links_ref` guardado de cada
     partido, baja su `pro/*.txt` actual y vuelve a sondear. Es el que mantiene
-    frescos los enlaces que abre el selector.
+    frescos los enlaces que abre el selector. Los partidos de HOY entran siempre
+    primero; el resto se ordena por el `checked_at` más viejo.
     """
     today = date.today()
     low = (today - timedelta(days=1)).isoformat()
@@ -992,17 +993,19 @@ async def _refresh_hot_links(pool: asyncpg.Pool, key: bytes) -> int:
              where kind = 'event'
                and coalesce(payload->>'date_iso', '') between $1 and $2
                and jsonb_array_length(coalesce(payload->'links', '[]'::jsonb)) > 0
-             order by (
+             order by (coalesce(payload->>'date_iso', '') = $3) desc,
+             (
                  select min(coalesce(lk->>'checked_at', ''))
                    from jsonb_array_elements(
                        coalesce(payload->'links', '[]'::jsonb)
                    ) as lk
              ) asc nulls first,
              updated_at asc
-             limit $3
+             limit $4
             """,
             low,
             high,
+            today.isoformat(),
             max(1, HOT_LINKS_MAX),
         )
     except Exception:
