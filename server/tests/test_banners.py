@@ -18,10 +18,10 @@ import banners
 def _clean_refresh_state():
     """Cada prueba arranca sin un refresco en curso ni enfriamiento heredado."""
     banners._refresh_running = False
-    banners._last_refresh_attempt = 0.0
+    banners._last_refresh_attempt = None
     yield
     banners._refresh_running = False
-    banners._last_refresh_attempt = 0.0
+    banners._last_refresh_attempt = None
 
 
 def _movie(**over):
@@ -229,6 +229,36 @@ def test_two_stale_requests_only_schedule_one_refresh():
     assert first["items"] and second["items"]
     assert len(background.tasks) == 1
     assert second["nextRefreshAt"] > first["generatedAt"]
+
+
+def test_fresh_boot_still_schedules_the_first_refresh(monkeypatch):
+    """Regresión: se comparaba contra 0.0 y, en un equipo/CI recién arrancado
+    (`monotonic()` < 15 min), el primer refresco se saltaba y el Inicio se quedaba
+    con la foto vieja hasta el siguiente intento."""
+    banners._ensured = False
+    monkeypatch.setattr(banners, "_mono", lambda: 3.0)
+    payload = banners.movie_banner(_movie(), "", 0)
+    pool = _FakePool([_row(payload, age_hours=30)])
+    background = _FakeBackground()
+    asyncio.run(banners.serve(pool, background, tmdb_key=""))
+    assert len(background.tasks) == 1
+
+
+def test_fresh_boot_builds_the_first_photo_synchronously(monkeypatch):
+    """La otra rama: sin foto previa y con el reloj recién arrancado, se construye ya."""
+    banners._ensured = False
+    monkeypatch.setattr(banners, "_mono", lambda: 3.0)
+    calls = []
+
+    async def fake_refresh(pool, key):
+        calls.append(1)
+        return 0
+
+    monkeypatch.setattr(banners, "refresh_movies", fake_refresh)
+    pool = _FakePool([], week=None)
+    background = _FakeBackground()
+    asyncio.run(banners.serve(pool, background, tmdb_key=""))
+    assert len(calls) == 1
 
 
 def test_a_failed_initial_build_is_not_retried_immediately(monkeypatch):

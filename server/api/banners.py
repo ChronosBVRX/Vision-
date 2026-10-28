@@ -34,7 +34,23 @@ _REFRESH_LOCK_KEY = 773421
 # Si la foto está vieja o falló, no se martilla TMDB: se reintenta en 15 min.
 _BACKGROUND_RETRY_SECONDS = 15 * 60
 _refresh_running = False
-_last_refresh_attempt = 0.0
+# `None` = nunca se intentó. NO usar 0.0: `time.monotonic()` cuenta desde el arranque del
+# equipo, así que en un contenedor recién levantado (o un runner de CI) vale menos que el
+# enfriamiento y la primera búsqueda se quedaría esperando 15 minutos.
+_last_refresh_attempt: float | None = None
+
+
+def _mono() -> float:
+    """Reloj monótono (seam de pruebas: un equipo recién arrancado tiene valores pequeños)."""
+    return time.monotonic()
+
+
+def _refresh_due(mono: float) -> bool:
+    """La primera vez siempre; después, un enfriamiento de `_BACKGROUND_RETRY_SECONDS`."""
+    return (
+        _last_refresh_attempt is None
+        or mono - _last_refresh_attempt >= _BACKGROUND_RETRY_SECONDS
+    )
 
 _CREATE_TABLE = """
 create table if not exists launcher_banners (
@@ -377,8 +393,8 @@ async def serve(pool, background, tmdb_key: str) -> dict:
             # Primera petición tras el despliegue: se construye en el momento (5 llamadas
             # a TMDB en paralelo). Si TMDB tarda o falla, el launcher usa su feed y el
             # siguiente intento espera el enfriamiento (no se martilla TMDB).
-            mono = time.monotonic()
-            if mono - _last_refresh_attempt >= _BACKGROUND_RETRY_SECONDS:
+            mono = _mono()
+            if _refresh_due(mono):
                 _last_refresh_attempt = mono
                 try:
                     await asyncio.wait_for(refresh_movies(pool, tmdb_key), timeout=14.0)
@@ -389,8 +405,8 @@ async def serve(pool, background, tmdb_key: str) -> dict:
         elif stale:
             # Ya hay algo que servir; la búsqueda del día corre después de responder.
             # Un solo refresco a la vez y, si falló, 15 min de enfriamiento.
-            mono = time.monotonic()
-            if not _refresh_running and mono - _last_refresh_attempt >= _BACKGROUND_RETRY_SECONDS:
+            mono = _mono()
+            if not _refresh_running and _refresh_due(mono):
                 _last_refresh_attempt = mono
                 _refresh_running = True
                 background.add_task(refresh_movies, pool, tmdb_key)
