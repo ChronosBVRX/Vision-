@@ -34,6 +34,15 @@ class MarkersPlayerWiringTest {
     }
 
     @Test
+    fun thePlaceholderCorrectionDialogIsGone() {
+        // Decisión del usuario: cero trabajo manual. El diálogo que solo aparentaba
+        // corregir intro/outro ya no existe en el camino de ExoPlayer.
+        val dialogs = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerDialogs.kt")
+        assertFalse(dialogs.contains("SkipMarkersDialog"))
+        assertFalse(dialogs.contains("Corregir intro y outro"))
+    }
+
+    @Test
     fun theComposePlayerUsesRealMarkersAndTheSamePolicy() {
         val screen = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
         assertTrue("auto-skip por política", screen.contains("shouldApplyAutoSkip("))

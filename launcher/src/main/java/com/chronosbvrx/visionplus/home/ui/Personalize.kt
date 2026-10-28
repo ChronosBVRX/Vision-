@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.chronosbvrx.visionplus.home.ui
 
 import androidx.compose.foundation.Image
@@ -26,14 +28,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.ChildCare
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.LiveTv
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.Tab
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.ViewStream
 import androidx.compose.material.icons.rounded.Visibility
@@ -52,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
@@ -72,10 +79,11 @@ import com.chronosbvrx.visionplus.home.data.DisplayConfig
 import com.chronosbvrx.visionplus.home.data.HomeConfig
 import com.chronosbvrx.visionplus.home.data.LauncherAnimations
 import com.chronosbvrx.visionplus.home.data.LauncherDensity
+import com.chronosbvrx.visionplus.home.data.LauncherPreset
+import kotlinx.coroutines.delay
 import com.chronosbvrx.visionplus.home.data.RowEntry
 import com.chronosbvrx.visionplus.home.data.favoriteChannels
 import com.chronosbvrx.visionplus.home.data.visibleChannels
-import kotlinx.coroutines.delay
 
 /** Una acción del menú contextual de una tarjeta. */
 internal data class MenuAction(
@@ -86,28 +94,18 @@ internal data class MenuAction(
 )
 
 @Composable
-private fun rememberInitialFocus(): FocusRequester {
-    val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        delay(100)
-        requestFocusSafely(first)
-    }
-    return first
-}
-
-@Composable
 private fun PersonalizePanel(
     title: String,
     subtitle: String,
     onDismiss: () -> Unit,
-    first: FocusRequester,
+    focus: DialogFocus,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Box(Modifier.fillMaxSize().background(HomeColors.Deep)) {
+        Box(Modifier.fillMaxSize().background(HomeColors.Deep).dialogRootFocus(focus)) {
             Column(
                 Modifier
                     .fillMaxSize()
@@ -123,6 +121,7 @@ private fun PersonalizePanel(
                         onClick = onDismiss,
                         icon = Icons.Rounded.Close,
                         primary = false,
+                        modifier = Modifier.dialogFallbackFocus(focus),
                     )
                 }
                 Spacer(Modifier.height(18.dp))
@@ -141,17 +140,31 @@ fun PersonalizeHubDialog(
     onChannels: () -> Unit,
     onApps: () -> Unit,
     onRows: () -> Unit,
+    onTabs: () -> Unit,
+    onPresets: () -> Unit,
     onAppearance: () -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val first = rememberInitialFocus()
+    val focus = rememberDialogFocus()
     var confirmReset by remember { mutableStateOf(false) }
+    // La fila «Restablecer» y su confirmación comparten destino: al alternar, el foco vuelve
+    // ahí en vez de perderse (el nodo enfocado se reemplaza).
+    val resetFocus = remember { FocusRequester() }
+    var resetSeen by remember { mutableStateOf(false) }
+    LaunchedEffect(confirmReset) {
+        if (!resetSeen) {
+            resetSeen = true
+            return@LaunchedEffect
+        }
+        delay(90)
+        requestFocusSafely(resetFocus)
+    }
     PersonalizePanel(
         title = "Personalizar Inicio",
         subtitle = "${profileName.ifBlank { "Principal" }} · se guarda por perfil",
         onDismiss = onDismiss,
-        first = first,
+        focus = focus,
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().focusGroup(),
@@ -163,7 +176,7 @@ fun PersonalizeHubDialog(
                     title = "Canales",
                     detail = "${config.channelFavorites.size} favoritos · ${config.hiddenChannels.size} ocultos · $channelCount en la lista",
                     onClick = onChannels,
-                    modifier = Modifier.focusRequester(first),
+                    modifier = Modifier.dialogFocus(focus),
                 )
             }
             item {
@@ -184,6 +197,22 @@ fun PersonalizeHubDialog(
             }
             item {
                 PersonalizeRow(
+                    icon = Icons.Rounded.Tab,
+                    title = "Pestañas",
+                    detail = "${config.tabOrder.count { it !in config.hiddenTabs }} en la barra · orden y visibilidad",
+                    onClick = onTabs,
+                )
+            }
+            item {
+                PersonalizeRow(
+                    icon = Icons.Rounded.AutoAwesome,
+                    title = "Plantillas",
+                    detail = "TV primero, Cine, Solo lo mío o Niños en un toque",
+                    onClick = onPresets,
+                )
+            }
+            item {
+                PersonalizeRow(
                     icon = Icons.Rounded.Palette,
                     title = "Apariencia",
                     detail = "Densidad, animaciones, reloj y guía AHORA",
@@ -200,7 +229,7 @@ fun PersonalizeHubDialog(
                                 onReset()
                             },
                             primary = true,
-                            modifier = Modifier.focusRequester(first),
+                            modifier = Modifier.focusRequester(resetFocus),
                         )
                         HomeButton(label = "Cancelar", onClick = { confirmReset = false }, primary = false)
                     }
@@ -210,6 +239,8 @@ fun PersonalizeHubDialog(
                         title = "Restablecer personalización",
                         detail = "Vuelve a los canales, apps, filas y apariencia originales",
                         onClick = { confirmReset = true },
+                        // Al cancelar la confirmación, esta fila vuelve a ser el destino.
+                        modifier = Modifier.focusRequester(resetFocus),
                     )
                 }
             }
@@ -251,16 +282,13 @@ internal fun ItemActionsDialog(
     actions: List<MenuAction>,
     onDismiss: () -> Unit,
 ) {
-    val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        delay(80)
-        requestFocusSafely(first)
-    }
+    val focus = rememberDialogFocus()
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.74f))
+                .dialogRootFocus(focus)
                 // Si el menú salió con OK largo, el KeyUp que se está soltando no debe
                 // activar la primera acción. Lo consume esta ventana.
                 .onPreviewKeyEvent { event ->
@@ -289,7 +317,7 @@ internal fun ItemActionsDialog(
                         shape = HomeShapes.panel,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .then(if (index == 0) Modifier.focusRequester(first) else Modifier),
+                            .then(if (index == 0) Modifier.dialogFocus(focus) else Modifier),
                     ) { focused ->
                         Row(
                             Modifier
@@ -311,7 +339,7 @@ internal fun ItemActionsDialog(
                         }
                     }
                 }
-                HomeButton(label = "Cerrar", onClick = onDismiss, icon = Icons.Rounded.Close, primary = false)
+                HomeButton(label = "Cerrar", onClick = onDismiss, icon = Icons.Rounded.Close, primary = false, modifier = Modifier.dialogFallbackFocus(focus))
             }
         }
     }
@@ -328,7 +356,8 @@ fun ManageChannelsDialog(
     onReset: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val first = rememberInitialFocus()
+    val focus = rememberDialogFocus()
+    val filtersFocus = remember { FocusRequester() }
     var filter by remember { mutableIntStateOf(0) }
     val favorites = config.channelFavorites.toSet()
     val visible = remember(channels, config, filter) {
@@ -342,20 +371,44 @@ fun ManageChannelsDialog(
         title = "Canales",
         subtitle = "OK en estrella = favorito · OK en ojo = oculto · flechas = orden",
         onDismiss = onDismiss,
-        first = first,
+        focus = focus,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.focusGroup()) {
-            PersonalizeChip("Todos", filter == 0) { filter = 0 }
-            PersonalizeChip("Favoritos", filter == 1) { filter = 1 }
-            PersonalizeChip("Ocultos", filter == 2) { filter = 2 }
+            PersonalizeChip(
+                label = "Todos",
+                selected = filter == 0,
+                modifier = Modifier
+                    .focusRequester(filtersFocus)
+                    .softFocusDown(focus.requester),
+            ) { filter = 0 }
+            PersonalizeChip(
+                "Favoritos",
+                filter == 1,
+                modifier = Modifier.softFocusDown(focus.requester),
+            ) { filter = 1 }
+            PersonalizeChip(
+                "Ocultos",
+                filter == 2,
+                modifier = Modifier.softFocusDown(focus.requester),
+            ) { filter = 2 }
         }
         Spacer(Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.focusGroup()) {
-            PersonalizeChip("Auto", config.channelSort == ChannelSort.AUTO) { onSort(ChannelSort.AUTO) }
-            PersonalizeChip("Favoritos primero", config.channelSort == ChannelSort.FAVORITES) {
-                onSort(ChannelSort.FAVORITES)
-            }
-            PersonalizeChip("A-Z", config.channelSort == ChannelSort.ALPHA) { onSort(ChannelSort.ALPHA) }
+            PersonalizeChip(
+                "Auto",
+                config.channelSort == ChannelSort.AUTO,
+                modifier = Modifier.softFocusDown(focus.requester),
+            ) { onSort(ChannelSort.AUTO) }
+            PersonalizeChip(
+                "Favoritos primero",
+                config.channelSort == ChannelSort.FAVORITES,
+                modifier = Modifier.softFocusDown(focus.requester),
+            ) { onSort(ChannelSort.FAVORITES) }
+            PersonalizeChip(
+                "A-Z",
+                config.channelSort == ChannelSort.ALPHA,
+                modifier = Modifier.softFocusDown(focus.requester),
+            ) { onSort(ChannelSort.ALPHA) }
         }
         Spacer(Modifier.height(8.dp))
         LazyColumn(
@@ -370,7 +423,8 @@ fun ManageChannelsDialog(
                     favoriteIndex = config.channelFavorites.indexOf(item.code),
                     favoriteCount = config.channelFavorites.size,
                     first = item.code == visible.firstOrNull()?.code,
-                    firstRequester = first,
+                    dialogFocus = focus,
+                    upTarget = filtersFocus,
                     onToggleFavorite = { onToggleFavorite(item.code) },
                     onToggleHidden = { onToggleHidden(item.code) },
                     onMoveFavorite = { delta -> onMoveFavorite(item.code, delta) },
@@ -390,11 +444,13 @@ private fun ChannelManageRow(
     favoriteIndex: Int,
     favoriteCount: Int,
     first: Boolean,
-    firstRequester: FocusRequester?,
+    dialogFocus: DialogFocus?,
+    upTarget: FocusRequester? = null,
     onToggleFavorite: () -> Unit,
     onToggleHidden: () -> Unit,
     onMoveFavorite: (Int) -> Unit,
 ) {
+    val upModifier = if (first && upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier
     Row(
         Modifier
             .fillMaxWidth()
@@ -434,25 +490,31 @@ private fun ChannelManageRow(
                 label = "Subir",
                 enabled = favoriteIndex > 0,
                 onClick = { onMoveFavorite(-1) },
-                modifier = if (first && favoriteIndex == 0) Modifier.focusRequester(firstRequester!!) else Modifier,
+                modifier = upModifier.then(
+                    if (first && favoriteIndex == 0) Modifier.dialogFocus(dialogFocus!!) else Modifier,
+                ),
             )
             MiniAction(
                 icon = Icons.Rounded.ArrowDownward,
                 label = "Bajar",
                 enabled = favoriteIndex in 0 until favoriteCount - 1,
                 onClick = { onMoveFavorite(1) },
+                modifier = upModifier,
             )
         }
         MiniAction(
             icon = if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
             label = if (favorite) "Quitar de favoritos" else "Fijar en Mis canales",
             onClick = onToggleFavorite,
-            modifier = if (first && !(favorite && favoriteIndex == 0)) Modifier.focusRequester(firstRequester!!) else Modifier,
+            modifier = upModifier.then(
+                if (first && !(favorite && favoriteIndex == 0)) Modifier.dialogFocus(dialogFocus!!) else Modifier,
+            ),
         )
         MiniAction(
             icon = if (hidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
             label = if (hidden) "Mostrar" else "Ocultar",
             onClick = onToggleHidden,
+            modifier = upModifier,
         )
     }
 }
@@ -468,7 +530,8 @@ fun ManageAppsDialog(
     onReset: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val first = rememberInitialFocus()
+    val focus = rememberDialogFocus()
+    val filtersFocus = remember { FocusRequester() }
     var filter by remember { mutableIntStateOf(0) }
     val favorites = config.appFavorites.toSet()
     val visible = remember(apps, config, filter) {
@@ -482,12 +545,26 @@ fun ManageAppsDialog(
         title = "Apps",
         subtitle = "OK en estrella = favorita · ojo = oculta · papelera = desinstalar",
         onDismiss = onDismiss,
-        first = first,
+        focus = focus,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.focusGroup()) {
-            PersonalizeChip("Todas", filter == 0) { filter = 0 }
-            PersonalizeChip("Favoritas", filter == 1) { filter = 1 }
-            PersonalizeChip("Ocultas", filter == 2) { filter = 2 }
+            PersonalizeChip(
+                label = "Todas",
+                selected = filter == 0,
+                modifier = Modifier
+                    .focusRequester(filtersFocus)
+                    .softFocusDown(focus.requester),
+            ) { filter = 0 }
+            PersonalizeChip(
+                "Favoritas",
+                filter == 1,
+                modifier = Modifier.softFocusDown(focus.requester),
+            ) { filter = 1 }
+            PersonalizeChip(
+                "Ocultas",
+                filter == 2,
+                modifier = Modifier.softFocusDown(focus.requester),
+            ) { filter = 2 }
         }
         Spacer(Modifier.height(8.dp))
         LazyColumn(
@@ -502,7 +579,8 @@ fun ManageAppsDialog(
                     favoriteIndex = config.appFavorites.indexOf(app.packageName),
                     favoriteCount = config.appFavorites.size,
                     first = app.packageName == visible.firstOrNull()?.packageName,
-                    firstRequester = first,
+                    dialogFocus = focus,
+                    upTarget = filtersFocus,
                     onToggleFavorite = { onToggleFavorite(app.packageName) },
                     onToggleHidden = { onToggleHidden(app.packageName) },
                     onMoveFavorite = { delta -> onMoveFavorite(app.packageName, delta) },
@@ -523,12 +601,14 @@ private fun AppManageRow(
     favoriteIndex: Int,
     favoriteCount: Int,
     first: Boolean,
-    firstRequester: FocusRequester?,
+    dialogFocus: DialogFocus?,
+    upTarget: FocusRequester? = null,
     onToggleFavorite: () -> Unit,
     onToggleHidden: () -> Unit,
     onMoveFavorite: (Int) -> Unit,
     onUninstall: () -> Unit,
 ) {
+    val upModifier = if (first && upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier
     Row(
         Modifier
             .fillMaxWidth()
@@ -572,31 +652,38 @@ private fun AppManageRow(
                 label = "Subir",
                 enabled = favoriteIndex > 0,
                 onClick = { onMoveFavorite(-1) },
-                modifier = if (first && favoriteIndex == 0) Modifier.focusRequester(firstRequester!!) else Modifier,
+                modifier = upModifier.then(
+                    if (first && favoriteIndex == 0) Modifier.dialogFocus(dialogFocus!!) else Modifier,
+                ),
             )
             MiniAction(
                 icon = Icons.Rounded.ArrowDownward,
                 label = "Bajar",
                 enabled = favoriteIndex in 0 until favoriteCount - 1,
                 onClick = { onMoveFavorite(1) },
+                modifier = upModifier,
             )
         }
         MiniAction(
             icon = if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
             label = if (favorite) "Quitar de favoritas" else "Fijar app",
             onClick = onToggleFavorite,
-            modifier = if (first && !(favorite && favoriteIndex == 0)) Modifier.focusRequester(firstRequester!!) else Modifier,
+            modifier = upModifier.then(
+                if (first && !(favorite && favoriteIndex == 0)) Modifier.dialogFocus(dialogFocus!!) else Modifier,
+            ),
         )
         MiniAction(
             icon = if (hidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
             label = if (hidden) "Mostrar" else "Ocultar",
             onClick = onToggleHidden,
+            modifier = upModifier,
         )
         if (app.canUninstall) {
             MiniAction(
                 icon = Icons.Rounded.DeleteOutline,
                 label = "Desinstalar ${app.label}",
                 onClick = onUninstall,
+                modifier = upModifier,
             )
         }
     }
@@ -611,12 +698,12 @@ internal fun ManageRowsDialog(
     onReset: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val first = rememberInitialFocus()
+    val focus = rememberDialogFocus()
     PersonalizePanel(
         title = "Filas del Inicio",
         subtitle = "Arriba/Abajo cambia el orden · ojo oculta la fila",
         onDismiss = onDismiss,
-        first = first,
+        focus = focus,
     ) {
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth().focusGroup(),
@@ -651,7 +738,7 @@ internal fun ManageRowsDialog(
                         label = "Subir",
                         enabled = index > 0,
                         onClick = { onMove(row.id, -1) },
-                        modifier = if (row.id == rows.firstOrNull()?.id) Modifier.focusRequester(first) else Modifier,
+                        modifier = if (row.id == rows.firstOrNull()?.id) Modifier.dialogFocus(focus) else Modifier,
                     )
                     MiniAction(
                         icon = Icons.Rounded.ArrowDownward,
@@ -672,6 +759,126 @@ internal fun ManageRowsDialog(
     }
 }
 
+/** Una pestaña de la barra, con su id estable y su nombre visible. */
+internal data class TabEntry(val id: String, val label: String)
+
+/**
+ * Las pestañas del launcher: orden y visibilidad. Inicio no se mueve ni se oculta (es la
+ * puerta de vuelta), y las de la tele solo aparecen si el equipo las reporta.
+ */
+@Composable
+internal fun ManageTabsDialog(
+    tabs: List<TabEntry>,
+    config: HomeConfig,
+    inputsAvailable: Boolean = true,
+    onMove: (String, Int) -> Unit,
+    onToggle: (String) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val focus = rememberDialogFocus()
+    PersonalizePanel(
+        title = "Pestañas",
+        subtitle = "Arriba/Abajo cambia el orden · el ojo oculta la pestaña · Inicio siempre está",
+        onDismiss = onDismiss,
+        focus = focus,
+    ) {
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth().focusGroup(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            items(tabs, key = { it.id }) { tab ->
+                val index = config.tabOrder.indexOf(tab.id)
+                val hidden = tab.id in config.hiddenTabs
+                val fixed = tab.id == HomeConfig.HOME_TAB_ID
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 54.dp)
+                        .focusGroup()
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            tab.label,
+                            color = if (hidden && !fixed) HomeColors.TextFaint else HomeColors.Text,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            when {
+                                fixed -> "Siempre visible · abre el Inicio"
+                                tab.id == "inputs" && !inputsAvailable -> "Sin fuentes en este equipo"
+                                hidden -> "Oculta"
+                                else -> "Visible"
+                            },
+                            color = HomeColors.TextFaint,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    MiniAction(
+                        icon = Icons.Rounded.ArrowUpward,
+                        label = "Subir",
+                        enabled = !fixed && index > 1,
+                        onClick = { onMove(tab.id, -1) },
+                        modifier = if (tab.id == tabs.firstOrNull()?.id) Modifier.dialogFocus(focus) else Modifier,
+                    )
+                    MiniAction(
+                        icon = Icons.Rounded.ArrowDownward,
+                        label = "Bajar",
+                        enabled = !fixed && index in 1 until config.tabOrder.lastIndex,
+                        onClick = { onMove(tab.id, 1) },
+                    )
+                    MiniAction(
+                        icon = if (hidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                        label = if (hidden) "Mostrar" else "Ocultar",
+                        enabled = !fixed,
+                        onClick = { onToggle(tab.id) },
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        HomeButton(label = "Restablecer pestañas", onClick = onReset, icon = Icons.Rounded.RestartAlt, primary = false)
+    }
+}
+
+/** Plantillas de Inicio: una disposición completa en un toque. */
+@Composable
+internal fun PresetsDialog(
+    onApply: (LauncherPreset) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val focus = rememberDialogFocus()
+    PersonalizePanel(
+        title = "Plantillas",
+        subtitle = "Un Inicio listo en un toque · se deshace con Restablecer personalización",
+        onDismiss = onDismiss,
+        focus = focus,
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().focusGroup(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(LauncherPreset.entries.toList(), key = { it.name }) { preset ->
+                PersonalizeRow(
+                    icon = when (preset) {
+                        LauncherPreset.TV_FIRST -> Icons.Rounded.LiveTv
+                        LauncherPreset.CINEMA -> Icons.Rounded.Movie
+                        LauncherPreset.JUST_MINE -> Icons.Rounded.Star
+                        LauncherPreset.KIDS -> Icons.Rounded.ChildCare
+                    },
+                    title = preset.label,
+                    detail = preset.detail,
+                    onClick = { onApply(preset) },
+                    modifier = if (preset == LauncherPreset.entries.first()) Modifier.dialogFocus(focus) else Modifier,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun DisplaySettingsDialog(
     config: HomeConfig,
@@ -679,13 +886,13 @@ fun DisplaySettingsDialog(
     onReset: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val first = rememberInitialFocus()
+    val focus = rememberDialogFocus()
     val display = config.display
     PersonalizePanel(
         title = "Apariencia",
         subtitle = "OK cambia cada opción · los cambios se aplican al instante",
         onDismiss = onDismiss,
-        first = first,
+        focus = focus,
     ) {
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth().focusGroup(),
@@ -710,7 +917,7 @@ fun DisplaySettingsDialog(
                             ),
                         )
                     },
-                    modifier = Modifier.focusRequester(first),
+                    modifier = Modifier.dialogFocus(focus),
                 )
             }
             item {
@@ -794,11 +1001,16 @@ private fun ChoiceRow(
 }
 
 @Composable
-private fun PersonalizeChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun PersonalizeChip(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     FocusableSurface(
         onClick = onClick,
         shape = HomeShapes.pill,
-        modifier = Modifier.height(34.dp),
+        modifier = modifier.height(34.dp),
         focusedScale = 1.04f,
     ) {
         Box(
@@ -819,7 +1031,7 @@ private fun PersonalizeChip(label: String, selected: Boolean, onClick: () -> Uni
 }
 
 @Composable
-private fun MiniAction(
+internal fun MiniAction(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     enabled: Boolean = true,

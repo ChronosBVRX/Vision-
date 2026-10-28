@@ -6,7 +6,9 @@ import com.chronosbvrx.visionplus.home.contract.HeroItem
 import com.chronosbvrx.visionplus.home.contract.HomeFeed
 import com.chronosbvrx.visionplus.home.contract.MediaKind
 import com.chronosbvrx.visionplus.home.data.AppEntry
+import com.chronosbvrx.visionplus.home.data.HomeConfig
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LauncherLogicTest {
@@ -100,9 +102,30 @@ class LauncherLogicTest {
     }
 
     @Test
-    fun theSportsTabIsBetweenLiveTvAndMovies() {
+    fun theTabsKeepAStableOrderAndSportsStaysAfterLiveTv() {
         val keys = HomeTab.entries.map { it.key }
-        assertEquals(listOf("home", "live", "events", "movies", "series", "apps"), keys)
+        assertEquals(listOf("home", "live", "inputs", "events", "movies", "series", "apps"), keys)
+        assertTrue(keys.indexOf("events") > keys.indexOf("live"))
+        assertTrue(keys.indexOf("events") < keys.indexOf("movies"))
+    }
+
+    @Test
+    fun theTabBarFollowsTheConfiguredOrderAndHidesWhatTheUserHid() {
+        val config = HomeConfig(
+            tabOrder = listOf("home", "apps", "movies", "series", "live", "events", "inputs"),
+            hiddenTabs = setOf("events"),
+        )
+        assertEquals(
+            listOf("home", "apps", "movies", "series", "live", "inputs"),
+            visibleTabs(config, inputsAvailable = true).map { it.key },
+        )
+        // Un equipo sin sintonizador ni HDMI no enseña «Entradas» aunque esté en el orden.
+        assertTrue(visibleTabs(config, inputsAvailable = false).none { it == HomeTab.INPUTS })
+        // Inicio siempre va primero y visible, aunque el orden guardado diga otra cosa.
+        val weird = HomeConfig(tabOrder = listOf("apps", "home", "live"), hiddenTabs = setOf("home"))
+        val tabs = visibleTabs(weird, inputsAvailable = true)
+        assertEquals(HomeTab.HOME, tabs.first())
+        assertEquals(1, tabs.count { it == HomeTab.HOME })
     }
 
     private fun item(ref: String, title: String, kind: String) = FeedItem(

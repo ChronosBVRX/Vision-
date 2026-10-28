@@ -158,6 +158,7 @@ fun HomeScreen(
     val top10Films = curated.top10
     val estrenosFilms = curated.premieres
     val ownKindRows = curated.kindRows
+    val themeRows = curated.themeRows
     val hero = curated.hero
     androidx.compose.runtime.LaunchedEffect(Unit) { catalog.refreshPersonal() }
     val context = LocalContext.current
@@ -197,7 +198,7 @@ fun HomeScreen(
     LaunchedEffect(Unit) {
         homeScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val films = runCatching {
-                com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.trending(20)
+                com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.trending(40)
             }.getOrDefault(emptyList())
             val visible = if (locked) films.filter { it.kind == "kids" } else films
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { trendingFilms = visible }
@@ -206,13 +207,16 @@ fun HomeScreen(
     // «Populares de la semana» no repite lo que ya muestran el Top 10 y Novedades:
     // una tarjeta por obra y sin traslape con las filas de arriba (con catálogo chico
     // se conserva la hilera para no dejarla vacía).
-    val weeklyFilms = remember(trendingFilms, top10Films, estrenosFilms) {
-        Popularity.withoutRepeats(trendingFilms, top10Films + estrenosFilms)
+    val weeklyFilms = remember(trendingFilms, top10Films, estrenosFilms, themeRows) {
+        Popularity.withoutRepeats(
+            trendingFilms,
+            top10Films + estrenosFilms + themeRows.flatMap { it.films },
+        )
     }
-    // Las filas por tipo tampoco repiten lo que ya salió en el Top 10, Novedades o
-    // «Populares de la semana» (esa hilera llega después del curado, por eso se filtra aquí).
-    val kindRowsForHome = remember(ownKindRows, weeklyFilms, top10Films, estrenosFilms) {
-        val shown = top10Films + estrenosFilms + weeklyFilms
+    // Las filas por tipo tampoco repiten lo que ya salió en el Top 10, Novedades,
+    // temáticas o «Populares de la semana» (esa hilera llega después del curado).
+    val kindRowsForHome = remember(ownKindRows, weeklyFilms, top10Films, estrenosFilms, themeRows) {
+        val shown = top10Films + estrenosFilms + themeRows.flatMap { it.films } + weeklyFilms
         ownKindRows.map { row ->
             row.copy(films = Popularity.withoutRepeats(row.films, shown, minKeep = 4))
         }
@@ -221,7 +225,8 @@ fun HomeScreen(
     // memoria (sin red nueva). Se calcula fuera del hilo de composición: el índice puede
     // tener miles de títulos. Nunca repite la semilla ni lo que ya vive en «Seguir viendo».
     val becauseRow by androidx.compose.runtime.produceState<BecauseRow?>(
-        null, lastSeen, homeFilms, top10Films, estrenosFilms, weeklyFilms, continueCards, locked,
+        null, lastSeen, homeFilms, top10Films, estrenosFilms, weeklyFilms, themeRows,
+        continueCards, locked,
     ) {
         val seed = lastSeen
         if (seed == null || homeFilms.isEmpty()) {
@@ -242,7 +247,7 @@ fun HomeScreen(
             // Sin traslape con lo de arriba mientras queden tarjetas suficientes.
             val fresh = Popularity.withoutRepeats(
                 base.films,
-                top10Films + estrenosFilms + weeklyFilms,
+                top10Films + estrenosFilms + themeRows.flatMap { it.films } + weeklyFilms,
                 minKeep = HomePersonal.MIN_CARDS,
             )
             if (fresh.size >= HomePersonal.MIN_CARDS) base.copy(films = fresh) else null
@@ -329,6 +334,14 @@ fun HomeScreen(
                     onSeeAll = { onGoSection(Route.Section("movies", "Películas")) },
                 )
             }
+        }
+        items(themeRows, key = { it.id }) { row ->
+            FilmRow(
+                row = row,
+                posterWidth = sizes.posterWidth,
+                onOpen = onOpenFilm,
+                onSeeAll = { onGoSection(Route.Categories) },
+            )
         }
         if (continueCards.isNotEmpty()) {
             item(key = "continue") { ContinueRow(cards = continueCards, onResume = onResume) }

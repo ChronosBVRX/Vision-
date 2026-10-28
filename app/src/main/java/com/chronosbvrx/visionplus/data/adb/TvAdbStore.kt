@@ -17,6 +17,10 @@ internal data class TvRecord(
     val applied: Boolean = false,
     val originalHome: String = "",
     val disabled: List<String> = emptyList(),
+    /** Qué versión de Vision+ tiene esa tele (se lee del propio televisor). */
+    val appVersion: String = "",
+    /** Qué versión del launcher tiene esa tele (se lee del propio televisor). */
+    val launcherVersion: String = "",
     val updatedAt: Long = 0L,
 ) {
     /** Nombre corto para la interfaz. */
@@ -79,6 +83,8 @@ internal object TvAdbStore {
                     disabled = obj.optJSONArray("disabled")?.let { items ->
                         (0 until items.length()).mapNotNull { items.optString(it).takeIf(String::isNotBlank) }
                     }.orEmpty(),
+                    appVersion = obj.optString("appVersion").trim(),
+                    launcherVersion = obj.optString("launcherVersion").trim(),
                     updatedAt = obj.optLong("updatedAt", 0L),
                 )
             }.distinctBy { it.id }
@@ -97,6 +103,8 @@ internal object TvAdbStore {
                     .put("applied", tv.applied)
                     .put("originalHome", tv.originalHome)
                     .put("disabled", JSONArray(tv.disabled))
+                    .put("appVersion", tv.appVersion)
+                    .put("launcherVersion", tv.launcherVersion)
                     .put("updatedAt", tv.updatedAt),
             )
         }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
+import java.io.File
 import java.security.PrivateKey
 import java.security.cert.Certificate
 import java.util.concurrent.CountDownLatch
@@ -80,16 +81,41 @@ internal object TvAdb : AbsAdbConnectionManager() {
     }
 
     /**
-     * Instala un APK en la tele por ADB (`pm install -S`). Se usa para dejar Vision+ Home en el
+     * Instala un APK en la tele por ADB (`pm install -r -S`). Se usa para dejar Vision+ Home en el
      * televisor cuando el flujo lo necesita y no estaba: así el usuario no tiene que ir a la tele.
+     *
+     * `-r` es obligatorio: sin él, una tele que ya trae una versión anterior responde
+     * `INSTALL_FAILED_ALREADY_EXISTS` y el launcher nunca se actualizaría.
      */
-    fun installApk(bytes: ByteArray): Boolean {
-        val stream = openStream("exec:pm install -S ${bytes.size}")
+    fun installApk(bytes: ByteArray): Boolean =
+        installApkOutput(bytes)?.contains("Success", ignoreCase = true) == true
+
+    /** Igual que [installApk], pero devuelve la respuesta de `pm` para poder mostrarla. */
+    fun installApkOutput(bytes: ByteArray): String? =
+        installStream(bytes.size.toLong()) { output -> output.write(bytes) }
+
+    /**
+     * Instala un APK grande (Vision+, ~82 MB) sin cargarlo entero en memoria: el archivo se
+     * transmite por ADB en bloques.
+     */
+    fun installApkFile(file: File): Boolean =
+        installApkFileOutput(file)?.contains("Success", ignoreCase = true) == true
+
+    /** Igual que [installApkFile], pero devuelve la respuesta de `pm`. */
+    fun installApkFileOutput(file: File): String? {
+        if (!file.isFile || file.length() <= 0) return null
+        return installStream(file.length()) { output ->
+            file.inputStream().use { input -> input.copyTo(output, 64 * 1024) }
+        }
+    }
+
+    private fun installStream(size: Long, write: (java.io.OutputStream) -> Unit): String? {
+        val stream = openStream("exec:pm install -r -S $size")
         return try {
             val output = stream.openOutputStream()
             // No se cierra antes de leer: `pm install -S` termina al recibir el tamaño exacto y
             // responde por el mismo stream; cerrar aquí podría cortar la respuesta.
-            output.write(bytes)
+            write(output)
             output.flush()
             val text = StringBuilder()
             val input = stream.openInputStream()
@@ -106,9 +132,9 @@ internal object TvAdb : AbsAdbConnectionManager() {
                 runCatching { input.close() }
             }
             runCatching { output.close() }
-            text.contains("Success", ignoreCase = true)
+            text.toString()
         } catch (t: Throwable) {
-            false
+            null
         } finally {
             runCatching { stream.close() }
         }

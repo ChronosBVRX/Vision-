@@ -51,6 +51,24 @@ alter table titles add column if not exists program_type text not null default '
 alter table titles add column if not exists popularity numeric(10,3) not null default 0;
 alter table titles add column if not exists vote_count integer not null default 0;
 
+-- «Recién llegado»: primera vez que el sync vio el título. No se toca en los
+-- upserts (el portal reescribe metadatos cada ciclo), así que sirve para que
+-- «Novedades y Estrenos» muestre lo que de verdad entró al catálogo y se mueva
+-- solo. Las filas que ya existían al estrenar la columna se marcan como viejas:
+-- no inventamos 52k novedades el día del despliegue.
+do $$
+begin
+    if not exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public' and table_name = 'titles'
+          and column_name = 'first_seen_at'
+    ) then
+        alter table titles add column first_seen_at timestamptz not null default now();
+        update titles set first_seen_at = now() - interval '180 days';
+    end if;
+end $$;
+create index if not exists idx_titles_first_seen on titles (first_seen_at desc);
+
 create table if not exists categories (
     id text primary key,                       -- estrenos | recomendados | genero-accion | xtv-movies-…
     title text not null,
@@ -64,6 +82,21 @@ create table if not exists title_categories (
     category_id text not null references categories(id) on delete cascade,
     position integer not null default 0,
     primary key (title_id, category_id)
+);
+
+-- Foto de las colecciones temáticas clasificadas por TMDB (Halloween, Día de
+-- Muertos). Se guarda para que un fallo de red no borre la colección: el
+-- constructor usa la última copia buena. `media` es obligatorio porque TMDB
+-- comparte IDs entre películas y series (300401 = «Day of the Dead» 1957 y
+-- «Dynasty» 2017).
+create table if not exists theme_tmdb (
+    theme_id text not null,
+    tmdb_id integer not null,
+    media text not null default '',
+    title text not null default '',
+    year integer not null default 0,
+    updated_at timestamptz not null default now(),
+    primary key (theme_id, tmdb_id, media)
 );
 
 -- Fase 3: enriquecimiento TMDB / datasets IMDb, con confianza de match y overrides.
@@ -87,6 +120,12 @@ alter table enrichment add column if not exists vote_count integer not null defa
 -- Versión del emparejador TMDB que intentó por última vez cada fila: subir ALGO_VERSION
 -- en tmdb.py da una pasada fresca a TODOS los «sin match» sin esperar el cooldown.
 alter table enrichment add column if not exists match_algo text not null default '';
+-- Última vez que se refrescó la popularidad de esta ficha desde TMDB. Sin esto, los
+-- valores se quedaban congelados desde el enriquecimiento inicial y el Top 10 no
+-- cambiaba nunca (`tmdb.refresh_popularity` rota los títulos por antigüedad).
+alter table enrichment add column if not exists popularity_at timestamptz;
+create index if not exists idx_enrichment_popularity_at
+    on enrichment (popularity_at nulls first);
 
 create index if not exists idx_titles_source on titles (source);
 create index if not exists idx_title_categories_category on title_categories (category_id, position);
@@ -241,6 +280,10 @@ create table if not exists epg_programs (
 
 create index if not exists idx_epg_norm_time on epg_programs (norm_name, start_time, end_time);
 create index if not exists idx_epg_end_time on epg_programs (end_time);
+-- País de la señal (mx, ar, cl…): la clave `norm_name` es `<país>:<cadena>` para
+-- que «Canal 5 de Honduras» no reciba la guía de «Canal 5 de México».
+alter table epg_programs add column if not exists country text not null default '';
+create index if not exists idx_epg_country on epg_programs (country, norm_name);
 
 -- Diagnóstico de campo (Fase 1): crashes, ANRs y anomalías que la app reporta.
 -- El worker hace triage (huella nueva → alerta; sin reportes 48 h → resuelta).
@@ -311,6 +354,18 @@ create table if not exists weekly_trending (
     updated_at timestamptz not null default now(),
     primary key (week, tmdb_id)
 );
+
+-- Banners diarios del Inicio (Vision+ Home): la foto curada de películas/series con
+-- su arte panorámico de TMDB. La API la refresca sola cada 20 h; los partidos no se
+-- guardan aquí (el launcher los toma de la agenda del feed).
+create table if not exists launcher_banners (
+    id text primary key,
+    kind text not null default 'movie',
+    position integer not null default 0,
+    payload jsonb not null default '{}'::jsonb,
+    generated_at timestamptz not null default now()
+);
+create index if not exists idx_launcher_banners_kind on launcher_banners (kind, position);
 
 -- Agenda de estrenos (TVMaze, gratis y sin llave): capítulos que salen al aire por
 -- día en México, con el imdb para casarlos con las series que sigue el usuario.

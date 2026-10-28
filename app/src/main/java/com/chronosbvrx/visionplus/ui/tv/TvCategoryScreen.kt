@@ -1,8 +1,14 @@
+@file:OptIn(
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.ui.ExperimentalComposeUiApi::class,
+)
+
 package com.chronosbvrx.visionplus.ui.tv
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -125,11 +132,14 @@ fun TvCategoryScreen(
     BackHandler(enabled = selectedCategory != null) {
         selectedCategory = null
     }
-    // Cambiar de modo (destacados ↔ cuadrícula) o de categoría RE-CREA la fila de chips y,
-    // en la cuadrícula, el héroe desaparece: sin un aterrizaje nuevo el foco moría ahí (el
-    // landing del héroe ya no está compuesto). Pide el destino del modo activo.
+    // Cambiar de modo (destacados ↔ cuadrícula) RE-CREA la fila de chips y, en la cuadrícula,
+    // el héroe desaparece: sin un aterrizaje nuevo el foco moría ahí (el landing del héroe ya
+    // no está compuesto). Se re-aterriza SOLO al cambiar de modo: elegir otro género dentro de
+    // la cuadrícula conserva el foco en el chip que se acaba de pulsar (antes saltaba al botón
+    // «Volver a Todo» en cada selección).
     val activeCategory = selectedCategory
-    LaunchedEffect(activeCategory) {
+    val gridMode = activeCategory != null
+    LaunchedEffect(gridMode) {
         delay(120)
         landing.request()
     }
@@ -169,11 +179,6 @@ fun TvCategoryScreen(
     val novelties = remember(films, section) {
         if (section == null) Popularity.realPremieres(films, limit = 100) else emptyList()
     }
-    val forYou = remember(films) {
-        val played = UserLibrary.played(context).map { it.id }.toSet()
-        val candidates = films.filter { it.id !in played && (it.score > 0 || it.popularity > 0) }
-        Popularity.reorderRow(candidates).ifEmpty { films }
-    }
 
     if (section != null && sectionRows == null) {
         Column(Modifier.fillMaxSize().background(VisionBlack)) {
@@ -189,9 +194,24 @@ fun TvCategoryScreen(
     }
 
     val loaded = sectionRows
-    val categoryChips = remember(loaded, films, section) {
-        if (section != null && loaded != null) {
-            val genres = loaded.map { it.title.trim() }.filter { it.isNotBlank() }.distinct()
+    // Sin repetir tarjeta entre categorías: cada título vive en UNA fila de género
+    // (el primario que calcula el servidor); esto además limpia la caché vieja y a
+    // los servidores anteriores para que la misma película no salga en Drama y
+    // Suspenso a la vez.
+    val loadedDisjoint = remember(loaded) { loaded?.let { Popularity.disjointRows(it) } }
+    val forYou = remember(films, loadedDisjoint) {
+        val played = UserLibrary.played(context).map { it.id }.toSet()
+        val candidates = films.filter { it.id !in played && (it.score > 0 || it.popularity > 0) }
+        val ranked = Popularity.reorderRow(candidates).ifEmpty { films }
+        Popularity.withoutRepeats(
+            ranked,
+            loadedDisjoint.orEmpty().flatMap { it.films },
+            minKeep = 6,
+        )
+    }
+    val categoryChips = remember(loadedDisjoint, films, section) {
+        if (section != null && loadedDisjoint != null) {
+            val genres = loadedDisjoint.map { it.title.trim() }.filter { it.isNotBlank() }.distinct()
             listOf(CHIP_ALL) + genres
         } else {
             listOf(CHIP_ALL, "Mejor valoradas", "Novedades", "Recomendado para ti")
@@ -222,8 +242,8 @@ fun TvCategoryScreen(
 
             item(key = "gap") { Spacer(Modifier.height(10.dp)) }
 
-            if (section != null && loaded != null) {
-                if (loaded.isEmpty()) {
+            if (section != null && loadedDisjoint != null) {
+                if (loadedDisjoint.isEmpty()) {
                     item(key = "empty") {
                         Text(
                             "Sin contenido todavía",
@@ -233,8 +253,8 @@ fun TvCategoryScreen(
                         )
                     }
                 } else {
-                    val premiereRow = loaded.firstOrNull { it.id.endsWith("-estrenos") }
-                    val otherRows = loaded.filterNot { it.id.endsWith("-estrenos") }
+                    val premiereRow = loadedDisjoint.firstOrNull { it.id.endsWith("-estrenos") }
+                    val otherRows = loadedDisjoint.filterNot { it.id.endsWith("-estrenos") }
 
                     if (premiereRow != null) {
                         item(key = premiereRow.id) {
@@ -351,11 +371,11 @@ fun TvCategoryScreen(
         }
     } else {
         // MODO 2: VISTA DE CATÁLOGO COMPLETO EN CUADRÍCULA (GRID)
-        val categoryFilms = remember(activeCategory, loaded, films, topRated, novelties, forYou) {
+        val categoryFilms = remember(activeCategory, loadedDisjoint, films, topRated, novelties, forYou) {
             val raw = when {
-                loaded != null -> {
-                    val matchingRow = loaded.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
-                    matchingRow?.films ?: loaded.flatMap { it.films }
+                loadedDisjoint != null -> {
+                    val matchingRow = loadedDisjoint.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
+                    matchingRow?.films ?: loadedDisjoint.flatMap { it.films }
                         .filter {
                             it.synopsis.contains(activeCategory, ignoreCase = true) ||
                                 it.title.contains(activeCategory, ignoreCase = true)
@@ -370,8 +390,8 @@ fun TvCategoryScreen(
             Popularity.reorderRow(raw)
         }
 
-        val activeRow = remember(loaded, activeCategory) {
-            loaded?.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
+        val activeRow = remember(loadedDisjoint, activeCategory) {
+            loadedDisjoint?.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
         }
         TvCategoryGrid(
             categoryName = activeCategory,
@@ -399,6 +419,7 @@ private fun CategoryChipsRow(
     onSelect: (String) -> Unit,
 ) {
     LazyRow(
+        modifier = Modifier.focusGroup().focusRestorer(),
         contentPadding = PaddingValues(horizontal = 48.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {

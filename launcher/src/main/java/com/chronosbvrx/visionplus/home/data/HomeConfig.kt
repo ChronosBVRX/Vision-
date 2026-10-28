@@ -15,9 +15,31 @@ enum class LauncherAnimations { AUTO, LIGHT, FULL }
 /** Orden del mosaico de canales. */
 enum class ChannelSort { AUTO, FAVORITES, ALPHA }
 
+/**
+ * Dónde abre el launcher al ENCENDER la tele (no al pulsar Home, que siempre vuelve al
+ * Inicio para que el botón nunca sorprenda). [LAST] recuerda la última pestaña usada.
+ */
+enum class StartTab(val label: String) {
+    HOME("Inicio"),
+    LIVE("TV en vivo"),
+    INPUTS("Entradas de la tele"),
+    APPS("Apps"),
+    LAST("La última que usaste"),
+}
+
+/**
+ * Plantillas de Inicio: un launcher de verdad trae atajos de disposición, no solo opciones
+ * sueltas. Se aplican al instante y se deshacen con «Restablecer personalización».
+ */
+enum class LauncherPreset(val label: String, val detail: String) {
+    TV_FIRST("TV primero", "TV en vivo, Mis canales y las entradas de la tele al frente"),
+    CINEMA("Cine", "Top 10, estrenos y el catálogo primero; la TV en vivo se aparta"),
+    JUST_MINE("Solo lo mío", "Seguir viendo, Mis canales y tus apps; sin catálogo de relleno"),
+    KIDS("Niños", "Infantil y anime primero, con las secciones de adultos fuera"),
+}
+
 /** Preferencias visuales del launcher. */
-data class DisplayConfig(
-    val density: LauncherDensity = LauncherDensity.COMFORT,
+data class DisplayConfig(    val density: LauncherDensity = LauncherDensity.COMFORT,
     val animations: LauncherAnimations = LauncherAnimations.AUTO,
     val clock24h: Boolean = true,
     val showClock: Boolean = true,
@@ -47,6 +69,14 @@ data class HomeConfig(
     val appFavorites: List<String> = emptyList(),
     val hiddenApps: Set<String> = emptySet(),
     val display: DisplayConfig = DisplayConfig(),
+    /** Pestaña con la que abre el launcher al encender la tele. */
+    val startTab: StartTab = StartTab.HOME,
+    /** Entradas de video del televisor que el usuario quitó del launcher (no del sistema). */
+    val hiddenInputs: Set<String> = emptySet(),
+    /** Orden de las pestañas de la barra (Inicio siempre va primero). */
+    val tabOrder: List<String> = DEFAULT_TAB_ORDER,
+    /** Pestañas que el usuario quitó de la barra. */
+    val hiddenTabs: Set<String> = emptySet(),
 ) {
     fun toggleChannelFavorite(code: String): HomeConfig {
         if (code.isBlank()) return this
@@ -136,6 +166,77 @@ data class HomeConfig(
 
     fun withDisplay(display: DisplayConfig): HomeConfig = copy(display = display.normalized())
 
+    fun setStartTab(tab: StartTab): HomeConfig = copy(startTab = tab)
+
+    fun toggleInputHidden(id: String): HomeConfig {
+        if (id.isBlank()) return this
+        val hidden = if (id in hiddenInputs) hiddenInputs - id else hiddenInputs + id
+        return copy(hiddenInputs = hidden)
+    }
+
+    fun resetInputs(): HomeConfig = copy(hiddenInputs = emptySet())
+
+    /** Mueve una pestaña; Inicio no se mueve ni se oculta (siempre abre el Inicio). */
+    fun moveTab(id: String, delta: Int): HomeConfig {
+        if (id == HOME_TAB_ID) return this
+        val index = tabOrder.indexOf(id)
+        if (index < 0) return this
+        val target = (index + delta).coerceIn(1, tabOrder.lastIndex)
+        if (target == index) return this
+        val next = tabOrder.toMutableList().apply { add(target, removeAt(index)) }
+        return copy(tabOrder = next)
+    }
+
+    fun toggleTab(id: String): HomeConfig {
+        if (id.isBlank() || id == HOME_TAB_ID) return this
+        val hidden = if (id in hiddenTabs) hiddenTabs - id else hiddenTabs + id
+        return copy(hiddenTabs = hidden)
+    }
+
+    fun resetTabs(): HomeConfig = copy(tabOrder = DEFAULT_TAB_ORDER, hiddenTabs = emptySet())
+
+    /**
+     * Aplica una plantilla: ordena las filas y las pestañas, y oculta lo que sobra. Es
+     * determinista (no depende de la configuración anterior) para que se sienta una plantilla
+     * de verdad; cualquier ajuste posterior del usuario manda.
+     */
+    fun withPreset(preset: LauncherPreset): HomeConfig = when (preset) {
+        LauncherPreset.TV_FIRST -> copy(
+            rowOrder = rowsFirst("continue", "channels", "live", "inputs", "apps", "top10"),
+            hiddenRows = emptySet(),
+            tabOrder = tabsFirst("home", "live", "inputs", "events", "apps"),
+            hiddenTabs = emptySet(),
+        )
+        LauncherPreset.CINEMA -> copy(
+            rowOrder = rowsFirst(
+                "continue", "top10", "premieres",
+                "home-kind-movie", "home-kind-series", "home-kind-anime", "apps",
+            ),
+            hiddenRows = setOf("live", "channels", "inputs"),
+            tabOrder = tabsFirst("home", "movies", "series", "apps"),
+            hiddenTabs = emptySet(),
+        )
+        LauncherPreset.JUST_MINE -> copy(
+            rowOrder = rowsFirst("continue", "channels", "apps"),
+            hiddenRows = setOf(
+                "live", "inputs", "top10", "premieres",
+                "home-kind-movie", "home-kind-series", "home-kind-anime", "home-kind-kids",
+            ),
+            tabOrder = tabsFirst("home", "apps"),
+            hiddenTabs = setOf("live", "events"),
+        )
+        LauncherPreset.KIDS -> copy(
+            // El modo niños de Vision+ filtra el catálogo; aquí se deja el Inicio a la vista.
+            rowOrder = rowsFirst("home-kind-kids", "home-kind-anime", "continue", "apps"),
+            hiddenRows = setOf(
+                "live", "channels", "inputs", "top10", "premieres",
+                "home-kind-movie", "home-kind-series",
+            ),
+            tabOrder = tabsFirst("home", "apps"),
+            hiddenTabs = setOf("live", "events", "movies", "series"),
+        )
+    }
+
     fun resetChannels(): HomeConfig = copy(
         channelFavorites = emptyList(),
         hiddenChannels = emptySet(),
@@ -156,6 +257,10 @@ data class HomeConfig(
             appFavorites.isNotEmpty() ||
             hiddenApps.isNotEmpty() ||
             rowOrder != DEFAULT_ROW_ORDER ||
+            startTab != StartTab.HOME ||
+            hiddenInputs.isNotEmpty() ||
+            tabOrder != DEFAULT_TAB_ORDER ||
+            hiddenTabs.isNotEmpty() ||
             display != DisplayConfig()
 
     fun toJson(): String = JSONObject().apply {
@@ -167,6 +272,10 @@ data class HomeConfig(
         put("channelSort", channelSort.name)
         put("appFavorites", JSONArray(appFavorites))
         put("hiddenApps", JSONArray(hiddenApps.toList()))
+        put("startTab", startTab.name)
+        put("hiddenInputs", JSONArray(hiddenInputs.toList()))
+        put("tabOrder", JSONArray(tabOrder))
+        put("hiddenTabs", JSONArray(hiddenTabs.toList()))
         put("display", JSONObject().apply {
             put("density", display.density.name)
             put("animations", display.animations.name)
@@ -178,13 +287,21 @@ data class HomeConfig(
     }.toString()
 
     companion object {
-        const val VERSION = 1
+        /** Versión 3: entradas de la tele, pestaña inicial y barra de pestañas configurable. */
+        const val VERSION = 3
+
+        /** Inicio nunca se oculta ni se mueve: es la puerta de vuelta del launcher. */
+        const val HOME_TAB_ID = "home"
+
+        /** El orden de la barra que traía el launcher. */
+        val DEFAULT_TAB_ORDER = listOf("home", "live", "inputs", "events", "movies", "series", "apps")
 
         /** Filas sintéticas + filas del feed, en el orden que tenía el Inicio. */
         val DEFAULT_ROW_ORDER = listOf(
             "continue",
             "channels",
             "live",
+            "inputs",
             "apps",
             "top10",
             "premieres",
@@ -198,6 +315,7 @@ data class HomeConfig(
             "continue" to "Seguir viendo",
             "channels" to "Mis canales",
             "live" to "TV en vivo",
+            "inputs" to "Entradas de la tele",
             "apps" to "Apps",
         )
 
@@ -209,7 +327,8 @@ data class HomeConfig(
             if (raw.isNullOrBlank()) return default(legacyAppFavorites)
             return runCatching {
                 val root = JSONObject(raw)
-                val order = root.optJSONArray("rowOrder").strings().ifEmpty { DEFAULT_ROW_ORDER }
+                val version = root.optInt("version", 1)
+                val order = migrateRowOrder(root.optJSONArray("rowOrder").strings(), version)
                 val favorites = root.optJSONArray("appFavorites")
                     ?.strings()
                     ?: legacyAppFavorites.toList()
@@ -222,8 +341,33 @@ data class HomeConfig(
                     appFavorites = favorites.distinct(),
                     hiddenApps = root.optJSONArray("hiddenApps").strings().toSet(),
                     display = displayFrom(root.optJSONObject("display")),
+                    startTab = enumOf(root.optString("startTab"), StartTab.HOME),
+                    hiddenInputs = root.optJSONArray("hiddenInputs").strings().toSet(),
+                    tabOrder = root.optJSONArray("tabOrder").strings(),
+                    hiddenTabs = root.optJSONArray("hiddenTabs").strings().toSet(),
                 ).normalized()
             }.getOrDefault(default(legacyAppFavorites))
+        }
+
+        /** La plantilla empieza por estas filas y conserva las demás detrás. */
+        private fun rowsFirst(vararg ids: String): List<String> =
+            (ids.toList() + DEFAULT_ROW_ORDER).distinct()
+
+        private fun tabsFirst(vararg ids: String): List<String> =
+            (ids.toList() + DEFAULT_TAB_ORDER).distinct()
+
+        /**
+         * Una configuración guardada por la versión 1 no conoce la fila «Entradas». Se le
+         * inserta EN SU SITIO (después de TV en vivo) en vez de dejarla al final: el Inicio
+         * queda como el de una tele, sin reordenar lo que la persona ya había movido.
+         */
+        internal fun migrateRowOrder(order: List<String>, version: Int): List<String> {
+            val base = order.ifEmpty { DEFAULT_ROW_ORDER }
+            if (version >= VERSION || "inputs" in base) return base
+            val next = base.toMutableList()
+            val afterLive = next.indexOf("live")
+            next.add(if (afterLive >= 0) afterLive + 1 else next.size, "inputs")
+            return next
         }
 
         private fun displayFrom(obj: JSONObject?): DisplayConfig {
@@ -243,6 +387,9 @@ data class HomeConfig(
 
         private fun HomeConfig.normalized(): HomeConfig = copy(
             rowOrder = if (rowOrder.isEmpty()) DEFAULT_ROW_ORDER else rowOrder,
+            // Las pestañas nuevas de una versión futura entran al final, nunca desaparecen.
+            tabOrder = (tabOrder + DEFAULT_TAB_ORDER).distinct(),
+            hiddenTabs = hiddenTabs - HOME_TAB_ID,
             display = display.normalized(),
         )
 

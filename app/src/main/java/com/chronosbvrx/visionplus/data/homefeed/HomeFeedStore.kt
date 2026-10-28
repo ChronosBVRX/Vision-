@@ -221,6 +221,14 @@ object HomeFeedStore {
                 items = curated.premieres.mapNotNull { item(it, badge = "NUEVO") },
             )
         }
+        // Colecciones temáticas (Día de Muertos, Halloween, terror/comedia…): el
+        // launcher usa el mismo Inicio, así que también se encienden por fecha.
+        curated.themeRows.forEach { row ->
+            val items = row.films.mapNotNull { item(it) }
+            if (items.isNotEmpty()) {
+                rows += FeedRow(id = row.id, label = row.title, items = items.take(ROW_LIMIT))
+            }
+        }
         curated.kindRows.forEach { row ->
             val items = row.films.mapNotNull { item(it) }
             if (items.isNotEmpty()) {

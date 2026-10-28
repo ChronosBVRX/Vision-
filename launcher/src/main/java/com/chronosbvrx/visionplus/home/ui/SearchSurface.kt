@@ -86,8 +86,8 @@ fun SearchSurface(
         var results by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
         var searching by remember { mutableStateOf(false) }
         var searched by remember { mutableStateOf(false) }
+        val focus = rememberDialogFocus()
         val fieldFocus = remember { FocusRequester() }
-        val firstKey = remember { FocusRequester() }
         val keyboard = LocalSoftwareKeyboardController.current
         val appHits = remember(query, apps) { filterApps(apps, query) }
 
@@ -100,10 +100,8 @@ fun SearchSurface(
         }
 
         LaunchedEffect(Unit) {
-            delay(160)
-            if (isTv) {
-                runCatching { firstKey.requestFocus() }
-            } else {
+            delay(120)
+            if (!isTv) {
                 runCatching { fieldFocus.requestFocus() }
                 runCatching { keyboard?.show() }
             }
@@ -125,7 +123,7 @@ fun SearchSurface(
             searched = true
         }
 
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.82f))) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.82f)).dialogRootFocus(focus)) {
             Column(
                 Modifier
                     .fillMaxSize()
@@ -144,7 +142,7 @@ fun SearchSurface(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(Modifier.weight(1f))
-                    HomeButton(label = "Cerrar", onClick = onDismiss, icon = Icons.Rounded.Close, primary = false)
+                    HomeButton(label = "Cerrar", onClick = onDismiss, icon = Icons.Rounded.Close, primary = false, modifier = Modifier.dialogFallbackFocus(focus))
                 }
                 Spacer(Modifier.height(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -201,7 +199,7 @@ fun SearchSurface(
                 if (isTv) {
                     Spacer(Modifier.height(12.dp))
                     TvKeyboard(
-                        firstKey = firstKey,
+                        firstKey = Modifier.dialogFocus(focus),
                         onKey = { key ->
                             query = when (key) {
                                 "⌫" -> query.dropLast(1)
@@ -339,7 +337,7 @@ private fun SearchHint(title: String, body: String) {
 
 /** Teclado de mando: 3 filas de letras + acciones. Cada tecla es enfocable. */
 @Composable
-private fun TvKeyboard(firstKey: FocusRequester, onKey: (String) -> Unit) {
+private fun TvKeyboard(firstKey: Modifier, onKey: (String) -> Unit) {
     val rows = listOf(
         "QWERTYUIOP".map { it.toString() },
         "ASDFGHJKLÑ".map { it.toString() },
@@ -353,7 +351,7 @@ private fun TvKeyboard(firstKey: FocusRequester, onKey: (String) -> Unit) {
                         label = key,
                         modifier = Modifier
                             .weight(1f)
-                            .then(if (index == 0 && key == "Q") Modifier.focusRequester(firstKey) else Modifier),
+                            .then(if (index == 0 && key == "Q") firstKey else Modifier),
                         onPress = { onKey(key) },
                     )
                 }

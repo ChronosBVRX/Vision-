@@ -91,6 +91,10 @@ internal fun tvTopTabFor(route: Route): TvTopTab? = when (route) {
  * La barra superior de la tele: marca, pestañas, hora de CDMX, perfil, buscador y ajustes.
  * Es la misma idea que la de Vision+ Home, con las secciones de la app (sin Apps ni sistema).
  */
+@OptIn(
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.ui.ExperimentalComposeUiApi::class,
+)
 @Composable
 internal fun TvTopBar(
     active: TvTopTab?,

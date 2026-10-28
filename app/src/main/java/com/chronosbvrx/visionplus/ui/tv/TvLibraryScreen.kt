@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.ui.tv
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -179,7 +180,7 @@ fun TvLibraryScreen(
                 contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxWidth().weight(1f),
+                modifier = Modifier.fillMaxWidth().weight(1f).focusGroup(),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) { }
                 itemsIndexed(historyCards, key = { _, card -> card.entry.key }) { index, card ->
@@ -204,7 +205,7 @@ fun TvLibraryScreen(
             contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxWidth().weight(1f).focusGroup(),
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) { }
             itemsIndexed(films, key = { _, film -> film.id }) { index, film ->

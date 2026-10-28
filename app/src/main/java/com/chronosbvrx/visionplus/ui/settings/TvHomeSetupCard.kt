@@ -25,10 +25,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.chronosbvrx.visionplus.data.adb.Apk
+import com.chronosbvrx.visionplus.data.adb.ApkState
+import com.chronosbvrx.visionplus.data.adb.TvAppPackage
 import com.chronosbvrx.visionplus.data.adb.TvHomeSetup
+import com.chronosbvrx.visionplus.data.adb.TvLauncherPackage
 import com.chronosbvrx.visionplus.data.adb.TvRecord
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
@@ -36,11 +41,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
- * «Inicio en la TV» en Ajustes del TELÉFONO: empareja ADB por Wi-Fi con cada tele (una vez) y
- * deja Vision+ Home como Inicio sin necesidad de una PC.
+ * «Instalar en TV» en Ajustes del TELÉFONO: deja el televisor listo para usarse, sin PC.
  *
- * Se pueden tener VARIAS teles: cada una guarda su Inicio original y lo que se le retiró, y
- * puede reaplicarse, restaurarse o quitarse de la lista por separado.
+ * Por cada tele: baja del release oficial la última Vision+ y el último Vision+ Home, los instala
+ * por ADB inalámbrico, fija el launcher como Inicio y solo retira el Inicio del fabricante si
+ * sigue robándose la pantalla. Cada tele guarda su Inicio original y lo retirado para poder
+ * restaurarla; se pueden tener varias y cada una se maneja por separado.
  */
 @Composable
 internal fun TvHomeSetupSection() {
@@ -49,18 +55,79 @@ internal fun TvHomeSetupSection() {
     val scope = rememberCoroutineScope()
     var adding by remember { mutableStateOf(false) }
     var forgetting by remember { mutableStateOf<TvRecord?>(null) }
+    var cachedLauncher by remember { mutableStateOf<Apk?>(null) }
+    val launcherState = TvLauncherPackage.state
+    val appState = TvAppPackage.state
 
-    LaunchedEffect(Unit) { TvHomeSetup.load(context) }
+    LaunchedEffect(Unit) {
+        TvHomeSetup.load(context)
+        cachedLauncher = TvLauncherPackage.cached(context)
+    }
 
-    SettingsSection("Inicio en la TV") {
+    SettingsSection("Vision+ Home en tu tele") {
         SettingsBlock {
-            Text("Vision+ Home como Inicio, sin PC", style = MaterialTheme.typography.bodyLarge)
+            Text("Instala Vision+ y deja su Inicio, sin PC", style = MaterialTheme.typography.bodyLarge)
             Text(
-                "Este teléfono se conecta a cada tele por ADB inalámbrico. Solo se configura desde aquí; " +
-                    "en el televisor no hay nada que instalar.",
+                "Tu teléfono baja la última versión de Vision+ y de Vision+ Home del release oficial, " +
+                    "las instala en la tele por ADB inalámbrico y deja el launcher como pantalla de inicio. " +
+                    "No hay que descargar nada a mano ni conectar una computadora.",
                 style = MaterialTheme.typography.bodySmall,
                 color = VisionTextSecondary,
+                modifier = Modifier.padding(top = 2.dp),
             )
+            Text(
+                "Android 11 o más: se empareja con el código de la tele. Android 8/9: escribe la dirección " +
+                    "del televisor (Ajustes → Red) con «ADB por red» encendido.",
+                style = MaterialTheme.typography.bodySmall,
+                color = VisionTextSecondary,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+
+            Text(
+                when (val s = launcherState) {
+                    ApkState.Looking -> "Buscando Vision+ Home en el release…"
+                    is ApkState.Downloading -> "Descargando Vision+ Home… ${s.percent} %"
+                    is ApkState.Ready -> "Vision+ Home " +
+                        TvLauncherPackage.versionLine(s.versionName, s.versionCode) +
+                        if (s.fromRelease) " · última del release" else " · incluida en la app"
+                    is ApkState.Failed -> "No se pudo bajar Vision+ Home: ${s.message}"
+                    ApkState.Idle -> cachedLauncher?.let {
+                        "Vision+ Home " + TvLauncherPackage.versionLine(it.versionName, it.versionCode) +
+                            " listo en el teléfono"
+                    } ?: "Vision+ Home se descarga del release al instalar."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (launcherState is ApkState.Failed) MaterialTheme.colorScheme.error else VisionBlue,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+
+            when (val s = appState) {
+                is ApkState.Downloading -> Text(
+                    "Descargando Vision+… ${s.percent} %",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VisionBlue,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                is ApkState.Ready -> Text(
+                    "Vision+ " + TvLauncherPackage.versionLine(s.versionName, s.versionCode) + " instalado",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VisionBlue,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                is ApkState.Failed -> Text(
+                    "No se pudo instalar Vision+: ${s.message}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                else -> Unit
+            }
+
+            if (launcherState is ApkState.Idle && cachedLauncher == null) {
+                TextButton(
+                    onClick = { scope.launch { cachedLauncher = TvLauncherPackage.resolve(context) } },
+                ) { Text("Buscar la última versión") }
+            }
 
             if (state.tvs.isEmpty()) {
                 Text(
@@ -74,6 +141,12 @@ internal fun TvHomeSetupSection() {
                 TvHomeRow(
                     tv = tv,
                     busy = state.busyId == tv.id,
+                    onInstall = {
+                        scope.launch {
+                            TvHomeSetup.install(context, tv.id)
+                            cachedLauncher = TvLauncherPackage.cached(context)
+                        }
+                    },
                     onApply = { scope.launch { TvHomeSetup.apply(context, tv.id) } },
                     onRestore = { scope.launch { TvHomeSetup.restore(context, tv.id) } },
                     onForget = { forgetting = tv },
@@ -81,10 +154,9 @@ internal fun TvHomeSetupSection() {
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
-                Button(onClick = {
-                    adding = true
-                    scope.launch { TvHomeSetup.search(context) }
-                }) { Text(if (state.tvs.isEmpty()) "Configurar la tele" else "Agregar otra tele") }
+                Button(onClick = { adding = true }) {
+                    Text(if (state.tvs.isEmpty()) "Configurar la tele" else "Agregar otra tele")
+                }
             }
 
             if (state.message.isNotBlank()) {
@@ -147,11 +219,12 @@ internal fun TvHomeSetupSection() {
 private fun TvHomeRow(
     tv: TvRecord,
     busy: Boolean,
+    onInstall: () -> Unit,
     onApply: () -> Unit,
     onRestore: () -> Unit,
     onForget: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(tv.displayName, style = MaterialTheme.typography.bodyLarge)
             if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -165,6 +238,29 @@ private fun TvHomeRow(
             style = MaterialTheme.typography.bodySmall,
             color = if (tv.applied) VisionBlue else VisionTextSecondary,
         )
+        if (tv.appVersion.isNotBlank() || tv.launcherVersion.isNotBlank()) {
+            Text(
+                listOfNotNull(
+                    tv.appVersion.takeIf { it.isNotBlank() }?.let { "Vision+ $it" },
+                    tv.launcherVersion.takeIf { it.isNotBlank() }?.let { "Home $it" },
+                ).joinToString(" · ") + " en la tele",
+                style = MaterialTheme.typography.labelSmall,
+                color = VisionTextSecondary,
+            )
+        }
+        Button(
+            onClick = onInstall,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+        ) {
+            Text(
+                if (tv.launcherVersion.isBlank()) {
+                    "Instalar Vision+ y su Inicio"
+                } else {
+                    "Actualizar Vision+ y su Inicio"
+                },
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TextButton(onClick = onApply, enabled = !busy) { Text("Aplicar") }
             TextButton(onClick = onRestore, enabled = !busy) { Text("Restaurar") }
@@ -229,11 +325,28 @@ private fun TvHomeSetupDialog(onDismiss: () -> Unit) {
         onDismiss()
     }
 
+    // Una sola búsqueda/conexión a la vez: la anterior se cancela para que no pise el resultado.
+    fun run(block: suspend () -> Unit) {
+        job?.cancel()
+        job = scope.launch { block() }
+    }
+
+    // La búsqueda con código vive DENTRO del diálogo: al cerrarlo se cancela y no deja mensajes
+    // de error sueltos en la pantalla de atrás.
+    LaunchedEffect(Unit) {
+        job = scope.launch { TvHomeSetup.search(context) }
+    }
+
     AlertDialog(
         onDismissRequest = { close() },
         title = { Text("Agregar una tele") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                Modifier
+                    .heightIn(max = 430.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 when (phase) {
                     TvHomeSetup.Phase.IDLE,
                     TvHomeSetup.Phase.SEARCHING,
@@ -253,8 +366,8 @@ private fun TvHomeSetupDialog(onDismiss: () -> Unit) {
                             color = VisionTextSecondary,
                         )
                         Text(
-                            "En teles Android 9/10 activa «ADB por red» y vincula antes el control remoto " +
-                                "para que el teléfono sepa su dirección.",
+                            "En teles Android 8/9 no hay código: no hace falta tener nada instalado en el " +
+                                "televisor, solo «ADB por red» encendido; escribe su dirección abajo.",
                             style = MaterialTheme.typography.bodySmall,
                             color = VisionTextSecondary,
                         )
@@ -272,8 +385,9 @@ private fun TvHomeSetupDialog(onDismiss: () -> Unit) {
                             )
                         }
                         Text(
-                            "Si el televisor sigue abriendo su launcher de fábrica, la app retira ESE Inicio para " +
-                                "que abra Vision+ Home. Se puede devolver con «Restaurar».",
+                            "Se instalará en la tele la última versión de Vision+ (unos 82 MB) y de Vision+ Home. " +
+                                "Después, Vision+ Home quedará como Inicio y, si el launcher de fábrica sigue " +
+                                "abriéndose, se retira ESE Inicio (puedes devolverlo con «Restaurar»).",
                             style = MaterialTheme.typography.bodySmall,
                             color = VisionTextSecondary,
                         )
@@ -314,17 +428,25 @@ private fun TvHomeSetupDialog(onDismiss: () -> Unit) {
                         }
                     }
                 }
+                ManualTvSection(
+                    busy = phase == TvHomeSetup.Phase.WORKING || phase == TvHomeSetup.Phase.SEARCHING,
+                    onConnect = { host -> run { TvHomeSetup.connectByAddress(context, host) } },
+                )
             }
         },
         confirmButton = {
             when {
                 readyToPair -> Button(
-                    onClick = { job = scope.launch { TvHomeSetup.pairAndApply(context, code) } },
+                    onClick = { run { TvHomeSetup.pairAndApply(context, code) } },
                     enabled = code.length == 6,
                 ) { Text("Emparejar y aplicar") }
 
+                phase == TvHomeSetup.Phase.ERROR && state.legacyHost.isNotBlank() -> Button(
+                    onClick = { run { TvHomeSetup.connectByAddress(context, state.legacyHost) } },
+                ) { Text("Reintentar conexión") }
+
                 phase == TvHomeSetup.Phase.ERROR -> Button(
-                    onClick = { job = scope.launch { TvHomeSetup.search(context) } },
+                    onClick = { run { TvHomeSetup.search(context) } },
                 ) { Text("Buscar otra vez") }
 
                 phase == TvHomeSetup.Phase.DONE -> Button(
@@ -340,4 +462,36 @@ private fun TvHomeSetupDialog(onDismiss: () -> Unit) {
             }
         },
     )
+}
+
+/**
+ * La puerta para las teles Android 8/9: no tienen código de emparejamiento, así que se escribe
+ * la dirección del televisor (Ajustes → Red) y se conecta por ADB. No hace falta tener Vision+
+ * instalada en la tele: esa era justo la trampa del flujo viejo.
+ */
+@Composable
+private fun ManualTvSection(
+    busy: Boolean,
+    onConnect: (String) -> Unit,
+) {
+    var address by remember { mutableStateOf("") }
+    Text(
+        "¿Tele Android 8/9? Esas no usan código: escribe su dirección (Ajustes → Red del televisor) " +
+            "con «ADB por red» encendido.",
+        style = MaterialTheme.typography.labelMedium,
+        color = VisionTextSecondary,
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = address,
+            onValueChange = { value -> address = value.trim().take(18) },
+            label = { Text("Dirección (192.168.1.x)") },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(
+            onClick = { onConnect(address) },
+            enabled = !busy && address.isNotBlank(),
+        ) { Text("Conectar") }
+    }
 }

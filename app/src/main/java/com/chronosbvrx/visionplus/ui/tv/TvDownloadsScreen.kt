@@ -3,6 +3,7 @@ package com.chronosbvrx.visionplus.ui.tv
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -229,6 +230,11 @@ fun TvDownloadsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 activeDownloads.forEachIndexed { idx, item ->
+                    // Todas las filas de descargas en curso tienen un botón enfocable; la
+                    // primera es el aterrizaje cuando no hay nada completado. Antes, con una
+                    // descarga en curso (sin pausa) y sin descargas completadas, la pantalla se
+                    // abría SIN foco y el mando no tenía dónde caer.
+                    val landingHere = completedDownloads.isEmpty() && idx == 0
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -272,7 +278,8 @@ fun TvDownloadsScreen(
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (item.state == DownloadState.PAUSED || item.state == DownloadState.ERROR) {
+                            val retryShown = item.state == DownloadState.PAUSED || item.state == DownloadState.ERROR
+                            if (retryShown) {
                                 Button(
                                     onClick = { OfflineDownloadManager.resumeDownload(context, item.id) },
                                     colors = ButtonDefaults.colors(
@@ -281,7 +288,7 @@ fun TvDownloadsScreen(
                                         contentColor = Color.White,
                                         focusedContentColor = Color.Black,
                                     ),
-                                    modifier = if (completedDownloads.isEmpty() && idx == 0) Modifier.landingFocus(landing) else Modifier,
+                                    modifier = if (landingHere) Modifier.landingFocus(landing) else Modifier,
                                 ) {
                                     Text("Reintentar", fontWeight = FontWeight.Bold)
                                 }
@@ -294,6 +301,9 @@ fun TvDownloadsScreen(
                                     contentColor = Color.White,
                                     focusedContentColor = Color.White,
                                 ),
+                                // Si no hay «Reintentar» (descargando o en cola), este es el
+                                // único control de la fila y sostiene el aterrizaje.
+                                modifier = if (landingHere && !retryShown) Modifier.landingFocus(landing) else Modifier,
                             ) {
                                 Icon(Icons.Default.Delete, contentDescription = "Cancelar", modifier = Modifier.size(16.dp))
                             }
@@ -352,7 +362,7 @@ fun TvDownloadsScreen(
             contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxWidth().weight(1f).focusGroup(),
         ) {
             itemsIndexed(completedDownloads, key = { _, item -> item.id }) { index, item ->
                 Column(Modifier.fillMaxWidth()) {

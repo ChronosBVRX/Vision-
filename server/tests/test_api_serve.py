@@ -46,6 +46,22 @@ def test_film_prefers_enrichment():
     assert out["synopsis"] == "Sinopsis TMDB"
 
 
+def test_film_keeps_the_season_year_for_season_titles():
+    """«The Last of Us T2» (2025) no puede mostrar 2023, el año de la T1."""
+    enr = {"rating": 8.4, "year": 2023, "overview": ""}
+    season = app.film(
+        _record(title="The Last of Us T2", year=2025, kind="series"), enr, season_year=True
+    )
+    assert season["year"] == 2025
+    base = app.film(
+        _record(title="The Last of Us", year=2023, kind="series"), enr, season_year=True
+    )
+    assert base["year"] == 2023
+    # En una fila normal manda TMDB: es el año de estreno de la serie.
+    normal = app.film(_record(title="The Last of Us T2", year=2025, kind="series"), enr)
+    assert normal["year"] == 2023
+
+
 def test_film_keeps_portal_without_enrichment():
     out = app.film(_record(), None)
     assert out["score"] == 7.0
@@ -78,6 +94,38 @@ def test_grouped_entry_prefers_xtv_member():
     assert entry["videoUrl"] == "xtv:Y"
     assert entry["title"] == "Show"
     assert entry["groupId"] == "g"
+
+
+def test_grouped_entry_shows_the_served_season_year():
+    """Una serie vieja con temporada nueva no puede abrir «Novedades» con 2011."""
+    row = _record(id="xtv:S15", title="Crimen en el paraíso T15", year=2026)
+    member_of = {"xtv:S15": {"group_id": "g", "title_id": "xtv:S15", "season": 15}}
+    seasons = [
+        {"n": 1, "titleId": "xtv:S1", "videoUrl": "xtv:S1"},
+        {"n": 15, "titleId": "xtv:S15", "videoUrl": "xtv:S15"},
+    ]
+    enr = {"rating": 7.6, "year": 2011, "overview": ""}
+    entry, _ = app._grouped_entry(
+        row, member_of, {"g": seasons}, {"g": "Crimen en el paraíso"}, enr,
+        season_year=True,
+    )
+    assert entry["year"] == 2026
+    # En una fila normal (tendencias/búsqueda) se conserva el año de estreno de la serie.
+    normal, _ = app._grouped_entry(
+        row, member_of, {"g": seasons}, {"g": "Crimen en el paraíso"}, enr,
+    )
+    assert normal["year"] == 2011
+    # Nunca baja el año: una ficha de 2026 no se vuelve 2011 por su primera temporada.
+    old_row = _record(id="xtv:S1", title="Show T1", year=2011)
+    entry, _ = app._grouped_entry(
+        old_row,
+        {"xtv:S1": {"group_id": "g", "title_id": "xtv:S1", "season": 1}},
+        {"g": seasons},
+        {"g": "Show"},
+        {"rating": 7.6, "year": 2026, "overview": ""},
+        season_year=True,
+    )
+    assert entry["year"] == 2026
 
 
 def test_team_tokens():
@@ -117,6 +165,58 @@ def test_index_is_bounded_by_default():
     # pide 100 por categoría y ese es el default seguro.
     source = open(app.__file__, encoding="utf-8").read()
     assert "limitFilms: int = Query(default=100, ge=1, le=500)" in source
+
+
+def test_index_limits_inside_each_category_without_temp_spill():
+    # La ventana sobre las 460k filas de title_categories escribía ~16.8 MB de
+    # temporales por recálculo (y con el disco al 87 % tumbó /v1/index con DiskFull).
+    # El LATERAL aplica el tope por categoría con el índice (category_id, position).
+    import inspect
+
+    source = inspect.getsource(app.index)
+    assert "cross join lateral" in source
+    assert "limit $1::int" in source
+    assert "partition by tc.category_id" not in source
+
+
+def test_index_cache_lasts_and_keeps_a_last_good_copy():
+    # El índice solo cambia cuando el sync sube la versión (cada 6 h): 5 min de TTL
+    # obligaban a recalcular decenas de veces al día. Además se guarda la última
+    # copia buena para no devolver 500 si la base falla.
+    assert app._INDEX_CACHE_TTL >= 1800
+    assert 1 <= app._INDEX_LAST_GOOD_MAX <= 8
+
+
+@pytest.mark.anyio
+async def test_index_serves_the_last_good_copy_when_the_database_fails(monkeypatch):
+    app._INDEX_CACHE.clear()
+    app._INDEX_LAST_GOOD.clear()
+    good = {"version": 7, "upToDate": False, "updatedAt": None, "categories": []}
+    app._INDEX_LAST_GOOD[100] = good
+
+    def boom():
+        raise RuntimeError('could not write to file "base/pgsql_tmp/x": No space left on device')
+
+    monkeypatch.setattr(app, "db", boom)
+    try:
+        out = await app.index(since=0, limitFilms=100, x_api_key=app.API_KEY)
+        assert out is good
+    finally:
+        app._INDEX_LAST_GOOD.clear()
+        app._INDEX_CACHE.clear()
+
+
+@pytest.mark.anyio
+async def test_index_still_fails_honestly_without_a_previous_copy(monkeypatch):
+    app._INDEX_CACHE.clear()
+    app._INDEX_LAST_GOOD.clear()
+
+    def boom():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(app, "db", boom)
+    with pytest.raises(RuntimeError):
+        await app.index(since=0, limitFilms=100, x_api_key=app.API_KEY)
 
 
 def test_search_fold_normalization():
@@ -221,5 +321,24 @@ async def test_group_maps_prunes_single_season_leftovers(monkeypatch):
     member_of, seasons, base = await app._group_maps()
     assert len(seasons["g"]) == 2 and "xtv:S" in member_of
     assert "g2" not in seasons and "xtv:L" not in member_of and "g2" not in base
+
+
+@pytest.mark.anyio
+async def test_group_maps_serves_one_entry_per_season(monkeypatch):
+    """Dos fichas de la misma temporada («House» + «House M.D.») → un solo «T5» de XTV."""
+    rows = [
+        {"title_id": "magis:5", "season": 5, "group_id": "g",
+         "base_title": "House", "play_ref": "magis:5", "source": "magis"},
+        {"title_id": "xtv:5", "season": 5, "group_id": "g",
+         "base_title": "House", "play_ref": "xtv:5", "source": "xtv"},
+        {"title_id": "xtv:6", "season": 6, "group_id": "g",
+         "base_title": "House", "play_ref": "xtv:6", "source": "xtv"},
+    ]
+    monkeypatch.setattr(app, "db", lambda: _FakeDb(rows))
+    member_of, seasons, _ = await app._group_maps()
+    assert [s["n"] for s in seasons["g"]] == [5, 6]
+    assert seasons["g"][0]["videoUrl"] == "xtv:5"  # XTV manda sobre el espejo
+    # Las dos fichas siguen siendo del grupo: ninguna se sirve como tarjeta aparte.
+    assert "magis:5" in member_of and "xtv:5" in member_of
 
 

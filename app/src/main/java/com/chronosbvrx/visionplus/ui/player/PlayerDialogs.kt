@@ -280,25 +280,6 @@ private fun MenuRow(label: String, value: String) {
     }
 }
 
-/** "Corregir intro y outro": marks where the opening ends or the ending starts, at the current position. */
-@Composable
-internal fun SkipMarkersDialog(positionLabel: String, onPick: (intro: Boolean) -> Unit, onDismiss: () -> Unit) {
-    val first = rememberDialogLanding()
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = VisionSurface,
-        title = { Text("Corregir intro y outro") },
-        text = {
-            Column {
-                MenuNote("Se marca en el punto donde vas ($positionLabel).")
-                MenuOption("Setear intro (fin del opening)", modifier = first) { onPick(true) }
-                MenuOption("Setear outro (inicio del ending)") { onPick(false) }
-            }
-        },
-        confirmButton = { MenuOption("Cancelar", fill = false, onClick = onDismiss) },
-    )
-}
-
 /**
  * The modifier for a dialog's first option: on a TV it takes the D-pad focus once the dialog's window has it (a few
  * frames late; earlier requests are dropped). On a touch screen nothing takes focus and this does nothing.

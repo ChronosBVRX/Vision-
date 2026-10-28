@@ -271,6 +271,136 @@ class PopularityTest {
     }
 
     @Test
+    fun topPopularRespectsTheServerOrderEvenWhenPopularityDiffers() {
+        // El servidor rankea con popularidad refrescada + tendencia semanal + recién
+        // llegados. Reordenar aquí por popularidad cruda congelaba el Top 10.
+        val first = film("a", popularity = 10.0, votes = 100)
+        val second = film("b", popularity = 90.0, votes = 50)
+        val list = Popularity.topPopular(listOf(first, second), emptyList())
+        assertEquals(listOf("a", "b"), list.map { it.id })
+    }
+
+    @Test
+    fun homeCuratedKeepsTheServerPremiereOrder() {
+        // El servidor pone primero lo recién llegado; la app no lo reordena por
+        // rating/popularidad (antes se perdía y la fila parecía estática).
+        val newest = film("newest", year = 2019, popularity = 2.0, votes = 20)
+        val hit = film("hit", year = 2026, popularity = 500.0, votes = 5_000)
+        // El Top 10 real viene completo del servidor: así el relleno no se lleva
+        // las novedades antes de compararlas.
+        val trendingFilms = (1..10).map {
+            film("trend$it", popularity = 1_000.0 - it, votes = 10_000)
+        }
+        val trending = CatalogRow("tendencias", "Tendencias", trendingFilms)
+        val estrenos = CatalogRow("estrenos", "Estrenos", listOf(newest, hit))
+        val curated = Popularity.homeCurated(
+            emptyList(), listOf(trending, estrenos), yearNow = 2026,
+        )
+        assertEquals(listOf("newest", "hit"), curated.premieres.map { it.id })
+    }
+
+    @Test
+    fun homeCuratedDropsTop10FromServerPremieresByWork() {
+        val top = film("top", tmdb = 777, title = "La misma obra", popularity = 900.0)
+        val otherSeason = film("season2", tmdb = 777, title = "La misma obra T2", popularity = 400.0)
+        val fresh = film("fresh", tmdb = 888, title = "Otra", popularity = 100.0)
+        val trendingFilms = listOf(top) + (1..9).map {
+            film("trend$it", tmdb = 1_000 + it, popularity = 800.0 - it)
+        }
+        val trending = CatalogRow("tendencias", "Tendencias", trendingFilms)
+        val estrenos = CatalogRow("estrenos", "Estrenos", listOf(otherSeason, fresh))
+        val curated = Popularity.homeCurated(
+            emptyList(), listOf(trending, estrenos), yearNow = 2026,
+        )
+        assertTrue(curated.premieres.none { it.tmdbId == 777 })
+        assertTrue(curated.premieres.any { it.id == "fresh" })
+    }
+
+    @Test
+    fun disjointRowsRemovesACardAlreadyShownInAnotherGenre() {
+        val a = film("a", tmdb = 1, title = "A")
+        val b = film("b", tmdb = 2, title = "B")
+        val c = film("c", tmdb = 3, title = "C")
+        val rows = listOf(
+            CatalogRow("xtv-movies-genero-drama", "Drama", listOf(a, b)),
+            CatalogRow("xtv-movies-genero-suspenso", "Suspenso", listOf(b, c)),
+            CatalogRow("xtv-movies-genero-comedia", "Comedia", listOf(a, c)),
+        )
+        val out = Popularity.disjointRows(rows, minKeep = 1)
+        assertEquals(listOf("a", "b"), out[0].films.map { it.id })
+        assertEquals(listOf("c"), out[1].films.map { it.id })
+        // La tercera se quedaba sin nada nuevo: no se pinta una fila vacía.
+        assertEquals(2, out.size)
+    }
+
+    @Test
+    fun disjointRowsKeepsARowAliveWhenFilteringWouldGutIt() {
+        val a = film("a", tmdb = 1, title = "A")
+        val b = film("b", tmdb = 2, title = "B")
+        val c = film("c", tmdb = 3, title = "C")
+        val rows = listOf(
+            CatalogRow("xtv-movies-genero-drama", "Drama", listOf(a, b)),
+            CatalogRow("xtv-movies-genero-suspenso", "Suspenso", listOf(a, b, c)),
+        )
+        // Al quitar a/b solo queda c: con minKeep=2 la fila se conserva completa
+        // (mejor una repetición que una categoría a medias).
+        val out = Popularity.disjointRows(rows, minKeep = 2)
+        assertEquals(listOf("a", "b", "c"), out[1].films.map { it.id })
+    }
+
+    @Test
+    fun topPopularDoesNotCrownSignalFreeFiller() {
+        val filler = film("filler", score = 0.0, popularity = 0.0, votes = 0, year = 1960)
+        assertTrue(Popularity.topPopular(emptyList(), listOf(filler)).isEmpty())
+    }
+
+    @Test
+    fun homeCuratedIncludesThematicRowsAndHidesWorldTrending() {
+        val themeFilms = (1..8).map {
+            film("theme$it", tmdb = 200 + it, year = 1990, popularity = 0.0, title = "Tema $it")
+        }
+        val trendingFilms = (1..10).map {
+            film("top$it", tmdb = 100 + it, popularity = 1_000.0 - it, votes = 1_000)
+        }
+        val trending = CatalogRow("tendencias", "Tendencias", trendingFilms)
+        val theme = CatalogRow("tema-dia-de-muertos", "Día de Muertos", themeFilms)
+        val world = CatalogRow("tema-tendencias-mundo", "Tendencias del mundo", themeFilms)
+        val curated = Popularity.homeCurated(
+            emptyList(), listOf(trending, theme, world), yearNow = 2026,
+        )
+        assertEquals(listOf("tema-dia-de-muertos"), curated.themeRows.map { it.id })
+        // Las filas por tipo no repiten lo que ya mostró una temática.
+        val themeIds = themeFilms.map { it.id }.toSet()
+        assertTrue(curated.kindRows.none { row -> row.films.any { it.id in themeIds } })
+    }
+
+    @Test
+    fun homeCuratedThematicRowsDoNotRepeatEachOther() {
+        val firstFilms = (1..8).map {
+            film("h$it", tmdb = 300 + it, year = 1990, popularity = 0.0, title = "Halloween $it")
+        }
+        val secondFilms = listOf(firstFilms[0], firstFilms[1]) + (9..14).map {
+            film("d$it", tmdb = 300 + it, year = 1990, popularity = 0.0, title = "Muertos $it")
+        }
+        val trendingFilms = (1..10).map {
+            film("top$it", tmdb = 100 + it, popularity = 2_000.0 - it, votes = 1_000)
+        }
+        val curated = Popularity.homeCurated(
+            emptyList(),
+            listOf(
+                CatalogRow("tendencias", "Tendencias", trendingFilms),
+                CatalogRow("tema-halloween", "Halloween", firstFilms),
+                CatalogRow("tema-dia-de-muertos", "Día de Muertos", secondFilms),
+            ),
+            yearNow = 2026,
+        )
+        assertEquals(listOf("tema-halloween", "tema-dia-de-muertos"), curated.themeRows.map { it.id })
+        assertEquals(firstFilms.map { it.id }, curated.themeRows[0].films.map { it.id })
+        // La segunda temática pierde las dos tarjetas que ya salieron en Halloween.
+        assertTrue(curated.themeRows[1].films.none { it.id in setOf("h1", "h2") })
+    }
+
+    @Test
     fun topPopularKeepsRealSequelsApart() {
         val one = film("spider1", popularity = 300.0, year = 2026).copy(title = "Spider-Man")
         val two = film("spider2", popularity = 200.0, year = 2026).copy(title = "Spider-Man 2")

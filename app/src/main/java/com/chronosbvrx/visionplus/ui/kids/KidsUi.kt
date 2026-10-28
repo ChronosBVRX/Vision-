@@ -1,6 +1,8 @@
 package com.chronosbvrx.visionplus.ui.kids
 
 import android.widget.Toast
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -39,6 +41,8 @@ import com.chronosbvrx.visionplus.ui.settings.SettingsSwitchRow
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import com.chronosbvrx.visionplus.ui.tv.TvDialog
+import com.chronosbvrx.visionplus.ui.tv.dialogFocus
+import com.chronosbvrx.visionplus.ui.tv.rememberDialogFocus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -225,6 +229,7 @@ fun ActivitySettingsBlock() {
 fun TvKidsPinDialog(setup: Boolean, onOk: (String) -> Unit, onDismiss: () -> Unit) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
+    val focus = rememberDialogFocus()
     TvDialog(title = if (setup) "Crear PIN de niños" else "PIN de niños", onDismiss = onDismiss) {
         androidx.tv.material3.Text(
             if (setup) "De 4 a 8 dígitos." else "Escribe el PIN para continuar.",
@@ -239,17 +244,24 @@ fun TvKidsPinDialog(setup: Boolean, onOk: (String) -> Unit, onDismiss: () -> Uni
             androidx.tv.material3.Text(error, style = androidx.tv.material3.MaterialTheme.typography.bodySmall)
         }
         Spacer(Modifier.height(8.dp))
-        Row {
-            listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0").forEach { d ->
-                androidx.tv.material3.Button(onClick = {
-                    if (pin.length < 8) pin += d
-                    error = ""
-                }) { androidx.tv.material3.Text(d) }
-                Spacer(Modifier.width(4.dp))
+        // Teclado en DOS filas de cinco: una sola fila de diez no cabe en el panel y dejaba
+        // teclas fuera de la pantalla (el «0» era el primero en perderse).
+        val digits = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
+        digits.chunked(5).forEach { rowDigits ->
+            Row(Modifier.focusGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                rowDigits.forEachIndexed { index, d ->
+                    androidx.tv.material3.Button(
+                        onClick = {
+                            if (pin.length < 8) pin += d
+                            error = ""
+                        },
+                        modifier = if (d == "1") Modifier.dialogFocus(focus) else Modifier,
+                    ) { androidx.tv.material3.Text(d) }
+                }
             }
         }
         Spacer(Modifier.height(8.dp))
-        Row {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             androidx.tv.material3.Button(onClick = {
                 if (!KidsMode.isValidPin(pin)) {
                     error = "El PIN lleva de 4 a 8 dígitos."
@@ -257,7 +269,6 @@ fun TvKidsPinDialog(setup: Boolean, onOk: (String) -> Unit, onDismiss: () -> Uni
                 }
                 onOk(pin)
             }) { androidx.tv.material3.Text("Aceptar") }
-            Spacer(Modifier.width(8.dp))
             androidx.tv.material3.Button(onClick = {
                 pin = pin.dropLast(1)
             }) { androidx.tv.material3.Text("Borrar") }

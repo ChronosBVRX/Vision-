@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -39,12 +40,14 @@ import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SettingsRemote
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Tv
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -68,6 +72,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -75,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.chronosbvrx.visionplus.home.HomeMetrics
+import kotlinx.coroutines.launch
 import com.chronosbvrx.visionplus.home.contract.ContinueItem
 import com.chronosbvrx.visionplus.home.contract.FeedItem
 import com.chronosbvrx.visionplus.home.contract.FeedRow
@@ -86,10 +92,12 @@ import com.chronosbvrx.visionplus.home.contract.SportsItem
 import com.chronosbvrx.visionplus.home.data.AppEntry
 import com.chronosbvrx.visionplus.home.data.HeroSlide
 import com.chronosbvrx.visionplus.home.data.HomeConfig
+import com.chronosbvrx.visionplus.home.data.TvInputSource
 import com.chronosbvrx.visionplus.home.data.favoriteChannels
 import com.chronosbvrx.visionplus.home.data.homeRowOrder
 import com.chronosbvrx.visionplus.home.data.visibleApps
 import com.chronosbvrx.visionplus.home.data.visibleChannels
+import com.chronosbvrx.visionplus.home.data.visibleInputs
 import com.chronosbvrx.visionplus.home.data.HomeUpdate
 
 /**
@@ -104,6 +112,7 @@ fun HomeSurface(
     hero: List<HeroSlide>,
     apps: List<AppEntry>,
     recentApps: List<String>,
+    inputs: List<TvInputSource>,
     config: HomeConfig,
     metrics: HomeMetrics,
     heroReduced: Boolean,
@@ -116,10 +125,12 @@ fun HomeSurface(
     onHeroOpen: (HeroSlide) -> Unit,
     onItem: (FeedItem) -> Unit,
     onContinue: (ContinueItem) -> Unit,
-    onLive: (LiveItem) -> Unit,
+    onLive: (LiveItem, List<LiveItem>, String) -> Unit,
     onChannelLongClick: (LiveItem) -> Unit,
     onApp: (AppEntry) -> Unit,
     onAppLongClick: (AppEntry) -> Unit,
+    onInput: (TvInputSource) -> Unit,
+    onSeeInputs: () -> Unit,
     onSeeLive: () -> Unit,
     onSeeApps: () -> Unit,
     onOpenHistory: () -> Unit,
@@ -137,11 +148,33 @@ fun HomeSurface(
     val favChannels = remember(feed?.live, config) {
         favoriteChannels(feed?.live.orEmpty(), config)
     }
+    val inputItems = remember(inputs, config) {
+        visibleInputs(inputs, config.hiddenInputs)
+    }
     val appsView = remember(apps, config, recentApps) {
         visibleApps(apps, config, recentApps)
     }
     val continueItems = feed?.continueWatching.orEmpty()
     val limit = config.display.itemsPerRow
+    // El LazyColumn solo compone lo visible: al enfocar la última fila visible, la flecha
+    // Abajo no encontraba la siguiente (todavía no existía) y el mando se quedaba ahí. Al
+    // enfocar una fila se deja asomado un «pico» de la vecina para que siempre haya destino.
+    val rowScope = rememberCoroutineScope()
+    val rowPeekPx = with(LocalDensity.current) { 120.dp.toPx() }
+    fun revealRowPeek(itemKey: String) {
+        val info = listState.layoutInfo
+        val item = info.visibleItemsInfo.firstOrNull { it.key == itemKey } ?: return
+        val below = (item.offset + item.size + rowPeekPx) - info.viewportEndOffset
+        if (below > 2f) {
+            rowScope.launch { runCatching { listState.animateScrollBy(below) } }
+            return
+        }
+        val firstVisible = info.visibleItemsInfo.firstOrNull()?.index ?: 0
+        val above = info.viewportStartOffset - (item.offset - rowPeekPx)
+        if (above > 2f && firstVisible > 0) {
+            rowScope.launch { runCatching { listState.animateScrollBy(-above) } }
+        }
+    }
     CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollBringIntoView) {
         LazyColumn(
             state = listState,
@@ -179,69 +212,92 @@ fun HomeSurface(
                 when (id) {
                     "continue" -> if (continueItems.isNotEmpty()) {
                         item("continue") {
-                            ContinueRow(
-                                items = continueItems.take(limit),
-                                metrics = metrics,
-                                onOpen = onContinue,
-                                onSeeAll = onOpenHistory,
-                            )
+                            Box(Modifier.onFocusChanged { if (it.hasFocus) revealRowPeek("continue") }) {
+                                ContinueRow(
+                                    items = continueItems.take(limit),
+                                    metrics = metrics,
+                                    onOpen = onContinue,
+                                    onSeeAll = onOpenHistory,
+                                )
+                            }
                         }
                     }
 
                     "channels" -> if (favChannels.isNotEmpty()) {
                         item("channels") {
-                            LiveRow(
-                                items = favChannels,
-                                metrics = metrics,
-                                title = "Mis canales",
-                                subtitle = "Tus favoritos, en tu orden",
-                                limit = limit,
-                                showEpg = config.display.showEpg,
-                                onOpen = onLive,
-                                onSeeAll = onSeeLive,
-                                onLongClick = onChannelLongClick,
-                            )
+                            Box(Modifier.onFocusChanged { if (it.hasFocus) revealRowPeek("channels") }) {
+                                LiveRow(
+                                    items = favChannels,
+                                    metrics = metrics,
+                                    title = "Mis canales",
+                                    subtitle = "Tus favoritos, en tu orden",
+                                    limit = limit,
+                                    showEpg = config.display.showEpg,
+                                    onOpen = { item -> onLive(item, favChannels, "Mis canales") },
+                                    onSeeAll = onSeeLive,
+                                    onLongClick = onChannelLongClick,
+                                )
+                            }
                         }
                     }
 
                     "live" -> if (liveItems.isNotEmpty()) {
                         item("live") {
-                            LiveRow(
-                                items = liveItems,
-                                metrics = metrics,
-                                title = "TV en vivo",
-                                subtitle = "Ahora en tu programación",
-                                limit = limit,
-                                showEpg = config.display.showEpg,
-                                onOpen = onLive,
-                                onSeeAll = onSeeLive,
-                                onLongClick = onChannelLongClick,
-                            )
+                            Box(Modifier.onFocusChanged { if (it.hasFocus) revealRowPeek("live") }) {
+                                LiveRow(
+                                    items = liveItems,
+                                    metrics = metrics,
+                                    title = "TV en vivo",
+                                    subtitle = "Ahora en tu programación",
+                                    limit = limit,
+                                    showEpg = config.display.showEpg,
+                                    onOpen = { item -> onLive(item, liveItems, "Todos los canales") },
+                                    onSeeAll = onSeeLive,
+                                    onLongClick = onChannelLongClick,
+                                )
+                            }
+                        }
+                    }
+
+                    "inputs" -> if (inputItems.isNotEmpty()) {
+                        item("inputs") {
+                            Box(Modifier.onFocusChanged { if (it.hasFocus) revealRowPeek("inputs") }) {
+                                InputsRow(
+                                    items = inputItems.take(limit),
+                                    metrics = metrics,
+                                    onOpen = onInput,
+                                    onSeeAll = onSeeInputs,
+                                )
+                            }
                         }
                     }
 
                     "apps" -> if (appsView.isNotEmpty()) {
                         item("apps") {
-                            AppsRow(
-                                apps = appsView.take(limit),
-                                metrics = metrics,
-                                onOpen = onApp,
-                                onLongClick = onAppLongClick,
-                                onSeeAll = onSeeApps,
-                            )
+                            Box(Modifier.onFocusChanged { if (it.hasFocus) revealRowPeek("apps") }) {
+                                AppsRow(
+                                    apps = appsView.take(limit),
+                                    metrics = metrics,
+                                    onOpen = onApp,
+                                    onLongClick = onAppLongClick,
+                                    onSeeAll = onSeeApps,
+                                )
+                            }
                         }
                     }
 
                     else -> feedById[id]?.let { row ->
                         if (row.items.isNotEmpty()) {
                             item("row-${row.id}") {
-                                PosterRow(
-                                    row = row,
-                                    metrics = metrics,
-                                    limit = limit,
-                                    onOpen = onItem,
-                                    onSeeAll = null,
-                                )
+                                Box(Modifier.onFocusChanged { if (it.hasFocus) revealRowPeek("row-${row.id}") }) {
+                                    PosterRow(
+                                        row = row,
+                                        metrics = metrics,
+                                        limit = limit,
+                                        onOpen = onItem,
+                                        onSeeAll = null,
+                                    )
+                                }
                             }
                         }
                     }
@@ -338,6 +394,7 @@ fun OutdatedVisionBanner(
     onUpdate: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    primaryModifier: Modifier = Modifier,
 ) {
     val busy = state is HomeUpdate.State.Checking || state is HomeUpdate.State.Downloading
     Row(
@@ -390,6 +447,7 @@ fun OutdatedVisionBanner(
             onClick = { if (!busy) onUpdate() },
             icon = if (canInstall) Icons.Rounded.Download else Icons.Rounded.Lock,
             primary = true,
+            modifier = primaryModifier,
         )
         HomeButton(label = "Ajustes", onClick = onSettings, icon = Icons.Rounded.Settings, primary = false)
     }
@@ -403,6 +461,7 @@ fun MissingVisionBanner(
     onInstall: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    primaryModifier: Modifier = Modifier,
 ) {
     val busy = state is HomeUpdate.State.Checking || state is HomeUpdate.State.Downloading
     Row(
@@ -453,6 +512,7 @@ fun MissingVisionBanner(
             onClick = { if (!busy) onInstall() },
             icon = if (canInstall) Icons.Rounded.Download else Icons.Rounded.Lock,
             primary = true,
+            modifier = primaryModifier,
         )
         HomeButton(label = "Ajustes", onClick = onSettings, icon = Icons.Rounded.Settings, primary = false)
     }
@@ -476,7 +536,6 @@ private fun PosterRow(
         )
         Spacer(Modifier.height(10.dp))
         LazyRow(
-            modifier = Modifier.focusGroup().focusRestorer(),
             contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
             verticalAlignment = Alignment.Top,
@@ -511,7 +570,6 @@ private fun ContinueRow(
         )
         Spacer(Modifier.height(10.dp))
         LazyRow(
-            modifier = Modifier.focusGroup().focusRestorer(),
             contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
             verticalAlignment = Alignment.Top,
@@ -551,7 +609,6 @@ private fun LiveRow(
         )
         Spacer(Modifier.height(10.dp))
         LazyRow(
-            modifier = Modifier.focusGroup().focusRestorer(),
             contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
             verticalAlignment = Alignment.Top,
@@ -589,7 +646,6 @@ private fun AppsRow(
         )
         Spacer(Modifier.height(10.dp))
         LazyRow(
-            modifier = Modifier.focusGroup().focusRestorer(),
             contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
         ) {
@@ -599,6 +655,40 @@ private fun AppsRow(
                     tile = metrics.appTile,
                     onClick = { onOpen(app) },
                     onLongClick = { onLongClick(app) },
+                )
+            }
+        }
+    }
+}
+
+/** Las entradas del televisor en el Inicio: TV abierta y HDMI a un OK de distancia. */
+@Composable
+private fun InputsRow(
+    items: List<TvInputSource>,
+    metrics: HomeMetrics,
+    onOpen: (TvInputSource) -> Unit,
+    onSeeAll: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        SectionHeader(
+            title = "Entradas de la tele",
+            subtitle = "TV abierta y tus HDMI",
+            actionLabel = "Ver todas",
+            onAction = onSeeAll,
+            modifier = Modifier.padding(horizontal = metrics.horizontalPadding),
+        )
+        Spacer(Modifier.height(10.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
+            horizontalArrangement = Arrangement.spacedBy(metrics.gap),
+            verticalAlignment = Alignment.Top,
+        ) {
+            rowItems(items, key = { it.id.ifBlank { it.label } }) { item ->
+                InputCard(
+                    item = item,
+                    width = metrics.channelWidth,
+                    height = metrics.channelHeight,
+                    onClick = { onOpen(item) },
                 )
             }
         }
@@ -648,7 +738,7 @@ fun LiveSurface(
             }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
-                modifier = Modifier.fillMaxSize().focusGroup(),
+                modifier = Modifier.fillMaxSize().focusGroup().focusRestorer(),
                 contentPadding = PaddingValues(
                     start = metrics.horizontalPadding,
                     end = metrics.horizontalPadding,
@@ -772,6 +862,139 @@ private fun LiveFilterChip(
     }
 }
 
+/**
+ * La pestaña Entradas: las fuentes de video del TELEVISOR (TV abierta, HDMI, AV). Es lo que
+ * un launcher de tele enseña y la TV en vivo de internet no puede dar.
+ */
+@Composable
+fun InputsSurface(
+    inputs: List<TvInputSource>,
+    config: HomeConfig,
+    metrics: HomeMetrics,
+    onOpen: (TvInputSource) -> Unit,
+    onRefresh: () -> Unit,
+    onManage: () -> Unit,
+    onOpenLive: () -> Unit,
+    upTarget: FocusRequester? = null,
+    landing: FocusRequester? = null,
+) {
+    val visible = remember(inputs, config) { visibleInputs(inputs, config.hiddenInputs) }
+    val firstId = visible.firstOrNull()?.id
+    CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollBringIntoView) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 8.dp)) {
+            val columns = when {
+                maxWidth >= 1200.dp -> 6
+                maxWidth >= 960.dp -> 5
+                maxWidth >= 720.dp -> 4
+                else -> 3
+            }
+            val usable = maxWidth - metrics.horizontalPadding * 2 - metrics.gap * (columns - 1)
+            val cellWidth = usable / columns
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                modifier = Modifier.fillMaxSize().focusGroup().focusRestorer(),
+                contentPadding = PaddingValues(
+                    start = metrics.horizontalPadding,
+                    end = metrics.horizontalPadding,
+                    top = 8.dp,
+                    bottom = 32.dp,
+                ),
+                horizontalArrangement = Arrangement.spacedBy(metrics.gap),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column(Modifier.fillMaxWidth()) {
+                        SectionHeader(
+                            title = "Entradas de la tele",
+                            subtitle = when {
+                                inputs.isEmpty() -> "Este equipo no reporta fuentes de video"
+                                visible.isEmpty() -> "Todas las entradas están ocultas"
+                                else -> "${visible.size} fuentes · TV abierta y HDMI"
+                            },
+                            actionLabel = "Gestionar",
+                            actionModifier = upTarget?.let { Modifier.focusProperties { up = it } } ?: Modifier,
+                            onAction = onManage,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+                if (visible.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        InputsEmpty(
+                            hasInputs = inputs.isNotEmpty(),
+                            onRefresh = onRefresh,
+                            onManage = onManage,
+                            onOpenLive = onOpenLive,
+                            landing = landing,
+                        )
+                    }
+                }
+                gridItems(visible, key = { it.id.ifBlank { it.label } }) { item ->
+                    InputCard(
+                        item = item,
+                        width = cellWidth,
+                        height = cellWidth * 0.64f,
+                        modifier = if (item.id == firstId && landing != null) {
+                            Modifier.focusRequester(landing)
+                        } else {
+                            Modifier
+                        },
+                        onClick = { onOpen(item) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InputsEmpty(
+    hasInputs: Boolean,
+    onRefresh: () -> Unit,
+    onManage: () -> Unit,
+    onOpenLive: () -> Unit,
+    landing: FocusRequester? = null,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(HomeShapes.panel)
+            .background(HomeColors.Surface)
+            .padding(28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            if (hasInputs) "Todas las entradas están ocultas" else "Este equipo no tiene entradas de TV",
+            color = HomeColors.Text,
+            style = MaterialTheme.typography.headlineMedium,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (hasInputs) {
+                "Puedes volver a mostrar tus fuentes desde «Gestionar»."
+            } else {
+                "El launcher muestra solo lo que reporta el equipo. En una tele verás TV abierta y sus HDMI; una TV box o una PC no tienen esa función, así que no se inventa."
+            },
+            color = HomeColors.TextDim,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            HomeButton(
+                label = if (hasInputs) "Gestionar entradas" else "Buscar de nuevo",
+                onClick = if (hasInputs) onManage else onRefresh,
+                modifier = if (landing != null) Modifier.focusRequester(landing) else Modifier,
+            )
+            HomeButton(
+                label = "Abrir TV en vivo",
+                onClick = onOpenLive,
+                icon = Icons.Rounded.LiveTv,
+                primary = false,
+            )
+        }
+    }
+}
+
 /** La pestaña Deportes: deporte, liga y día como la agenda de Vision+, y abre el evento. */
 @Composable
 fun EventsSurface(
@@ -873,7 +1096,7 @@ fun EventsSurface(
                 }
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
-                    modifier = Modifier.fillMaxSize().focusGroup(),
+                    modifier = Modifier.fillMaxSize().focusGroup().focusRestorer(),
                     contentPadding = PaddingValues(
                         start = metrics.horizontalPadding,
                         end = metrics.horizontalPadding,
@@ -1296,7 +1519,7 @@ fun CatalogSurface(
             val cellWidth = usable / columns
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
-                modifier = Modifier.fillMaxSize().focusGroup(),
+                modifier = Modifier.fillMaxSize().focusGroup().focusRestorer(),
                 contentPadding = PaddingValues(
                     start = metrics.horizontalPadding,
                     end = metrics.horizontalPadding,
@@ -1329,6 +1552,7 @@ fun CatalogSurface(
                             body = "Abre Vision+ para explorar el catálogo completo; en cuanto veas algo, aparece en este Inicio.",
                             action = "Abrir Vision+",
                             onAction = onOpenFull,
+                            actionModifier = if (landing != null) Modifier.focusRequester(landing) else Modifier,
                         )
                     }
                 }
@@ -1360,6 +1584,7 @@ fun AppsSurface(
     onOpen: (AppEntry) -> Unit,
     onLongClick: (AppEntry) -> Unit,
     onSystemSettings: () -> Unit,
+    onLauncherSettings: () -> Unit = {},
     onWifi: () -> Unit,
     onDisplay: () -> Unit,
     onSound: () -> Unit,
@@ -1386,7 +1611,7 @@ fun AppsSurface(
             }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
-                modifier = Modifier.fillMaxSize().focusGroup(),
+                modifier = Modifier.fillMaxSize().focusGroup().focusRestorer(),
                 contentPadding = PaddingValues(
                     start = metrics.horizontalPadding,
                     end = metrics.horizontalPadding,
@@ -1419,6 +1644,7 @@ fun AppsSurface(
                             body = "Puedes volver a mostrar las apps que quitaste desde Gestionar.",
                             action = "Gestionar apps",
                             onAction = onManage,
+                            actionModifier = if (landing != null) Modifier.focusRequester(landing) else Modifier,
                         )
                     }
                 }
@@ -1444,6 +1670,7 @@ fun AppsSurface(
                 }
                 gridItems(
                     listOf(
+                        SystemAction("launcher", "Ajustes del launcher", Icons.Rounded.Tune, onLauncherSettings),
                         SystemAction("settings", "Ajustes de la tele", Icons.Rounded.Settings, onSystemSettings),
                         SystemAction("wifi", "Wi-Fi y red", Icons.Rounded.Wifi, onWifi),
                         SystemAction("display", "Pantalla", Icons.Rounded.Tv, onDisplay),
@@ -1511,7 +1738,13 @@ private fun ActionTile(icon: ImageVector, label: String, tile: Dp, onClick: () -
 }
 
 @Composable
-private fun EmptyHint(title: String, body: String, action: String, onAction: () -> Unit) {
+private fun EmptyHint(
+    title: String,
+    body: String,
+    action: String,
+    onAction: () -> Unit,
+    actionModifier: Modifier = Modifier,
+) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -1524,7 +1757,7 @@ private fun EmptyHint(title: String, body: String, action: String, onAction: () 
         Spacer(Modifier.height(8.dp))
         Text(body, color = HomeColors.TextDim, style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(16.dp))
-        HomeButton(label = action, onClick = onAction)
+        HomeButton(label = action, onClick = onAction, modifier = actionModifier)
     }
 }
 

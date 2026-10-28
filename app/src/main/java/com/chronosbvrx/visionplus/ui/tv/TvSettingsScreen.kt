@@ -3,6 +3,7 @@ package com.chronosbvrx.visionplus.ui.tv
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -88,7 +89,7 @@ fun TvSettingsScreen(initialTab: TvSettingsTab = TvSettingsTab.PLAYBACK) {
         Modifier.fillMaxSize().background(VisionBlack).padding(horizontal = 48.dp, vertical = 18.dp),
     ) {
         // Riel: el mismo patrón del Inicio (categorías a la izquierda, contenido a la derecha).
-        Column(Modifier.width(232.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.width(232.dp).focusGroup(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 "AJUSTES",
                 style = MaterialTheme.typography.labelMedium,

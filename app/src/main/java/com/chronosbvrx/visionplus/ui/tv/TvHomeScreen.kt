@@ -1,3 +1,8 @@
+@file:OptIn(
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.ui.ExperimentalComposeUiApi::class,
+)
+
 package com.chronosbvrx.visionplus.ui.tv
 
 import androidx.compose.animation.Crossfade
@@ -8,6 +13,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -246,6 +252,7 @@ fun TvHomeScreen(
     val top10Films = curated.top10
     val estrenosFilms = curated.premieres
     val ownKindRows = curated.kindRows
+    val themeRows = curated.themeRows
 
     // 3. Filas restantes del catálogo (evitando duplicar estrenos y listas personales en la cabecera)
     val otherRows = remember(rows) {
@@ -279,6 +286,30 @@ fun TvHomeScreen(
     val rowEntry = remember { FocusRequester() }
     val rowsListState = rememberLazyListState()
     var heroActionTick by remember { mutableIntStateOf(0) }
+    val homeScope = rememberCoroutineScope()
+
+    // El LazyColumn solo compone lo que se ve: cuando el foco está en la ÚLTIMA fila visible, la
+    // flecha Abajo no encuentra ninguna tarjeta a la que saltar (la siguiente fila aún no existe)
+    // y el mando se queda atorado ahí. Al enfocar una tarjeta se deja asomado un «pico» de la
+    // fila siguiente: con ella compuesta, Abajo entra y el foco nunca se pierde.
+    val nextRowPeekPx = with(androidx.compose.ui.platform.LocalDensity.current) { 132.dp.toPx() }
+    fun revealNextRowPeek(rowIndex: Int) {
+        if (rowIndex < 0) return
+        val info = rowsListState.layoutInfo
+        val item = info.visibleItemsInfo.firstOrNull { it.index == rowIndex } ?: return
+        val below = (item.offset + item.size + nextRowPeekPx) - info.viewportEndOffset
+        if (below > 2f) {
+            homeScope.launch { runCatching { rowsListState.animateScrollBy(below) } }
+            return
+        }
+        // Simétrico: si la fila es la primera visible (el héroe/hubs ya no están compuestos),
+        // se deja asomar el borde de la fila anterior para que «arriba» también tenga destino.
+        val firstVisible = info.visibleItemsInfo.firstOrNull()?.index ?: 0
+        val above = info.viewportStartOffset - (item.offset - nextRowPeekPx)
+        if (above > 2f && firstVisible > 0) {
+            homeScope.launch { runCatching { rowsListState.animateScrollBy(-above) } }
+        }
+    }
 
     // Al enfocar una acción del hero (volver arriba con el mando), la lista se ancla al
     // tope: el minimal bring-into-view dejaba el banner a medio scroll y se veía cortado.
@@ -313,7 +344,6 @@ fun TvHomeScreen(
     // Semilla de «Porque viste X» y el catálogo ya cruzado de las filas personales.
     var lastSeen by remember { mutableStateOf<ResumeEntry?>(null) }
     var homeFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
-    val homeScope = rememberCoroutineScope()
     fun reloadContinue() {
         homeScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val history = PlaybackHistory.list(context)
@@ -391,7 +421,7 @@ fun TvHomeScreen(
     LaunchedEffect(Unit) {
         homeScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val films = runCatching {
-                com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.trending(20)
+                com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.trending(40)
             }.getOrDefault(emptyList())
             val visible = if (locked) films.filter { it.kind == "kids" } else films
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { trendingFilms = visible }
@@ -400,13 +430,16 @@ fun TvHomeScreen(
     // «Populares de la semana» no repite lo que ya muestran el Top 10 y Novedades:
     // una tarjeta por obra y sin traslape con las filas de arriba (con catálogo chico
     // se conserva la hilera para no dejarla vacía).
-    val weeklyFilms = remember(trendingFilms, top10Films, estrenosFilms) {
-        Popularity.withoutRepeats(trendingFilms, top10Films + estrenosFilms)
+    val weeklyFilms = remember(trendingFilms, top10Films, estrenosFilms, themeRows) {
+        Popularity.withoutRepeats(
+            trendingFilms,
+            top10Films + estrenosFilms + themeRows.flatMap { it.films },
+        )
     }
-    // Las filas por tipo tampoco repiten lo que ya salió en el Top 10, Novedades o
-    // «Populares de la semana» (esa hilera llega después del curado, por eso se filtra aquí).
-    val kindRowsForHome = remember(ownKindRows, weeklyFilms, top10Films, estrenosFilms) {
-        val shown = top10Films + estrenosFilms + weeklyFilms
+    // Las filas por tipo tampoco repiten lo que ya salió en el Top 10, Novedades,
+    // temáticas o «Populares de la semana».
+    val kindRowsForHome = remember(ownKindRows, weeklyFilms, top10Films, estrenosFilms, themeRows) {
+        val shown = top10Films + estrenosFilms + themeRows.flatMap { it.films } + weeklyFilms
         ownKindRows.map { row ->
             row.copy(films = Popularity.withoutRepeats(row.films, shown, minKeep = 4))
         }
@@ -415,7 +448,8 @@ fun TvHomeScreen(
     // memoria. «Tus series · Esta semana»: agenda cacheada cruzada con las series seguidas.
     // Las dos se calculan fuera del hilo de composición (miles de títulos en el índice).
     val becauseRow by androidx.compose.runtime.produceState<BecauseRow?>(
-        null, lastSeen, homeFilms, top10Films, estrenosFilms, weeklyFilms, continueCards, locked,
+        null, lastSeen, homeFilms, top10Films, estrenosFilms, weeklyFilms, themeRows,
+        continueCards, locked,
     ) {
         val seed = lastSeen
         if (seed == null || homeFilms.isEmpty()) {
@@ -435,7 +469,7 @@ fun TvHomeScreen(
             ) ?: return@withContext null
             val fresh = Popularity.withoutRepeats(
                 base.films,
-                top10Films + estrenosFilms + weeklyFilms,
+                top10Films + estrenosFilms + themeRows.flatMap { it.films } + weeklyFilms,
                 minKeep = HomePersonal.MIN_CARDS,
             )
             if (fresh.size >= HomePersonal.MIN_CARDS) base.copy(films = fresh) else null
@@ -477,6 +511,7 @@ fun TvHomeScreen(
             heroFilmId = featured?.film?.id,
             top10 = top10Films,
             premieres = estrenosFilms,
+            themeRows = themeRows,
             trending = weeklyFilms,
             continueCards = continueCards,
             becauseTitle = becauseRow?.title.orEmpty(),
@@ -613,7 +648,7 @@ fun TvHomeScreen(
                 ) {
                     // Las filas salen de [homeSlots], la MISMA lista que calcula el índice del
                     // regreso: pintar y regresar ya no pueden desincronizarse.
-                    homeSlots.forEach { slot ->
+                    homeSlots.forEachIndexed { slotIndex, slot ->
                         when (slot) {
                             // 1. BILLBOARD HERO INTERACTIVO CON ACCIONES DIRECTAS
                             is HomeRowSlot.Billboard -> item(key = slot.key) {
@@ -680,7 +715,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it },
+                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -695,7 +730,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it },
+                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -709,7 +744,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it },
+                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -721,7 +756,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it },
+                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
                             onResume = onResume,
                         )
                     }
@@ -735,7 +770,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it },
+                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -749,7 +784,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it },
+                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -764,7 +799,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it },
+                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -778,7 +813,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it },
+                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -885,6 +920,7 @@ private fun TvQuickHubsRow(
         TvRowLabel("Colecciones y Especiales", 22.dp, icon = VisionIcons.Collections)
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
+                modifier = Modifier,
                 contentPadding = PaddingValues(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
@@ -1069,12 +1105,16 @@ internal fun homeRowSlots(
     becauseTitle: String = "",
     becauseFilms: List<Film> = emptyList(),
     followCards: List<FollowAiring> = emptyList(),
+    themeRows: List<CatalogRow> = emptyList(),
 ): List<HomeRowSlot> = buildList {
     add(HomeRowSlot.Billboard(heroFilmId))
     add(HomeRowSlot.Hubs)
     if (showPlaceholders || showNoRows) add(HomeRowSlot.Status)
     if (top10.isNotEmpty()) add(HomeRowSlot.Top10(top10))
     if (premieres.isNotEmpty()) add(HomeRowSlot.Premieres(premieres))
+    // Las temáticas (Día de Muertos, Halloween, terror/comedia…) van después de
+    // Novedades y antes de la hilera semanal: se ven sin enterrarlas al fondo.
+    themeRows.forEach { add(HomeRowSlot.Kind(it)) }
     if (trending.isNotEmpty()) add(HomeRowSlot.Trending(trending))
     if (continueCards.isNotEmpty()) add(HomeRowSlot.Continue(continueCards))
     if (becauseFilms.isNotEmpty() && becauseTitle.isNotBlank()) {
@@ -1110,6 +1150,7 @@ internal fun homeReturnRowIndex(
     becauseTitle: String = "",
     becauseFilms: List<Film> = emptyList(),
     followCards: List<FollowAiring> = emptyList(),
+    themeRows: List<CatalogRow> = emptyList(),
 ): Int = homeRowIndexOf(
     homeRowSlots(
         heroFilmId = heroFilmId,
@@ -1124,6 +1165,7 @@ internal fun homeReturnRowIndex(
         becauseTitle = becauseTitle,
         becauseFilms = becauseFilms,
         followCards = followCards,
+        themeRows = themeRows,
     ),
     returnFilmId,
 )
@@ -1454,6 +1496,7 @@ internal fun HomePosterRow(
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
                 state = rowState,
+                modifier = Modifier,
                 contentPadding = PaddingValues(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -1529,6 +1572,7 @@ private fun HomeAiringRow(
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
                 state = rowState,
+                modifier = Modifier,
                 contentPadding = PaddingValues(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -1606,6 +1650,7 @@ private fun ContinueRow(
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
                 state = rowState,
+                modifier = Modifier,
                 contentPadding = PaddingValues(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {

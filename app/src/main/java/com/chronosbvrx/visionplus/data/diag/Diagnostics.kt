@@ -63,6 +63,14 @@ object Diagnostics {
     @Volatile private var engineState = "sin-iniciar"
     @Volatile private var app: Application? = null
 
+    /**
+     * Actividades al frente en ESTE proceso. El vigilante de ANR no mide mientras la app
+     * está en segundo plano: Android congela el proceso (cached app freezer) y
+     * `uptimeMillis` sigue corriendo, así que el hueco se reportaba como un bloqueo de
+     * horas que nunca existió (era el 74 % de los ANR del VPS).
+     */
+    private val resumedActivities = java.util.concurrent.atomic.AtomicInteger(0)
+
     /** Id de la sesión de uso actual (uno por apertura); vacío hasta [init]. */
     @Volatile private var session = ""
     private val sessionReported = AtomicBoolean(false)
@@ -159,8 +167,44 @@ object Diagnostics {
         val frames = Looper.getMainLooper().thread.stackTrace.take(40).joinToString("\n") { frame ->
             "${frame.className}.${frame.methodName}(${frame.fileName}:${frame.lineNumber})"
         }
-        enqueue(build(kind = "anr", code = "MAIN_BLOCKED_${blockedMs / 1000}s", detail = frames))
+        // La duración exacta va en el mensaje; el CÓDIGO va por rango para que la huella
+        // no cambie con cada segundo (51s/52s/53s creaban una alerta de Telegram cada una).
+        enqueue(build(kind = "anr", code = anrCode(blockedMs), detail = frames, message = "blockedMs=$blockedMs"))
     }
+
+    /** Código estable del ANR por rango de duración (la huella no cambia por segundos). */
+    internal fun anrCode(blockedMs: Long): String {
+        val ms = blockedMs.coerceAtLeast(0L)
+        val bucket = when {
+            ms < 10_000L -> "5-9s"
+            ms < 60_000L -> "10-59s"
+            ms < 600_000L -> "1-10min"
+            else -> "mas-de-10min"
+        }
+        return "MAIN_BLOCKED_$bucket"
+    }
+
+    /**
+     * Bloqueo del hilo principal SOLO si la app estaba al frente durante todo el intervalo.
+     * Con la app en segundo plano el proceso puede estar congelado y el reloj sigue: el
+     * hueco no es un ANR real.
+     */
+    internal fun anrBlockedMs(prevTickMs: Long, nowMs: Long, foregroundBefore: Boolean, foregroundNow: Boolean): Long {
+        if (!foregroundBefore || !foregroundNow || prevTickMs <= 0L) return 0L
+        return (nowMs - prevTickMs).coerceAtLeast(0L)
+    }
+
+    /** Una actividad de este proceso quedó visible/interactiva. */
+    fun activityResumed() {
+        resumedActivities.incrementAndGet()
+    }
+
+    /** Una actividad de este proceso dejó de estar al frente. */
+    fun activityPaused() {
+        resumedActivities.updateAndGet { value -> if (value > 0) value - 1 else 0 }
+    }
+
+    private fun isForeground(): Boolean = resumedActivities.get() > 0
 
     // ----- internos -----
 
@@ -302,10 +346,11 @@ object Diagnostics {
             var lastReport = 0L
             while (true) {
                 val tick = AtomicLong(0L)
-                main.post { tick.set(SystemClock.uptimeMillis()) }
+                val foregroundBefore = isForeground()
+                if (foregroundBefore) main.post { tick.set(SystemClock.uptimeMillis()) }
                 Thread.sleep(ANR_PING_MS)
-                val elapsed = if (tick.get() == 0L) 0L else SystemClock.uptimeMillis() - tick.get()
                 val now = SystemClock.uptimeMillis()
+                val elapsed = anrBlockedMs(tick.get(), now, foregroundBefore, isForeground())
                 if (elapsed > ANR_THRESHOLD_MS && now - lastReport > ANR_COOLDOWN_MS) {
                     lastReport = now
                     runCatching { reportAnr(elapsed) }

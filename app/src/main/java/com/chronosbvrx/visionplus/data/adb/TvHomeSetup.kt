@@ -2,10 +2,13 @@ package com.chronosbvrx.visionplus.data.adb
 
 import android.content.Context
 import androidx.compose.runtime.mutableStateOf
+import com.chronosbvrx.visionplus.home.contract.HomeContract
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -52,6 +55,14 @@ internal object TvHomeRules {
         !pkg.isNullOrBlank() && pkg != OUR_PKG && pkg !in PROTECTED
 
     fun packageOf(component: String?): String? = component?.substringBefore("/")?.takeIf { it.isNotBlank() }
+
+    /** `versionName=1.3.1` de `dumpsys package`; vacío/null si la app no está. */
+    fun parseVersionName(output: String): String? = Regex("versionName=([^\\s]+)")
+        .find(output)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.trim()
+        ?.takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
 }
 
 /**
@@ -72,6 +83,8 @@ internal object TvHomeSetup {
         val host: String = "",
         val pairingPort: Int = 0,
         val tvs: List<TvRecord> = emptyList(),
+        /** Última dirección Android 8/9 intentada, para ofrecer «Reintentar conexión». */
+        val legacyHost: String = "",
         val busyId: String = "",
         val log: List<String> = emptyList(),
     )
@@ -90,7 +103,13 @@ internal object TvHomeSetup {
     }
 
     fun resetMessage() {
-        state.value = state.value.copy(phase = Phase.IDLE, message = "", busyId = "")
+        state.value = state.value.copy(
+            phase = Phase.IDLE,
+            message = "",
+            busyId = "",
+            legacyHost = "",
+            log = emptyList(),
+        )
     }
 
     /** Añade una línea al registro visible (una por paso; se queda con las últimas 16). */
@@ -133,6 +152,7 @@ internal object TvHomeSetup {
             try {
                 future.get(timeoutMs, TimeUnit.MILLISECONDS)
             } catch (t: Throwable) {
+                if (t is CancellationException) throw t
                 log("  emparejamiento sin respuesta en ${timeoutMs / 1000}s")
                 future.cancel(true)
                 false
@@ -149,13 +169,13 @@ internal object TvHomeSetup {
     suspend fun search(context: Context) = withContext(Dispatchers.IO) {
         state.value = state.value.copy(phase = Phase.SEARCHING, message = "Buscando la tele en tu red…", log = emptyList())
         val pairing = AdbDiscovery.find(context, AdbDiscovery.SERVICE_PAIRING, 20_000)
+        if (!isActive) return@withContext
         if (pairing == null) {
             state.value = state.value.copy(
                 phase = Phase.ERROR,
                 message = "No encontré ninguna tele esperando el código. En el televisor: Ajustes → Sistema → " +
                     "Desarrollador → Depuración inalámbrica → «Emparejar dispositivo con código».\n\n" +
-                    "En teles Android 9/10 activa «ADB por red» y deja el control remoto vinculado para " +
-                    "que el teléfono sepa su dirección.",
+                    "En teles Android 8/9 no hay código: enciende «ADB por red» y escribe su dirección abajo.",
             )
             return@withContext
         }
@@ -168,6 +188,131 @@ internal object TvHomeSetup {
         )
     }
 
+    /**
+     * Conecta con una tele Android 8/9 por su dirección (la que muestra el televisor en Ajustes →
+     * Red) y la deja lista: instala Vision+ y Home y fija el Inicio. Esas teles no tienen el
+     * emparejamiento con código de Android 11, solo «ADB por red» en el puerto 5555.
+     *
+     * Antes de conectar se comprueba el puerto: si está cerrado se dice tal cual (no tiene sentido
+     * esperar 90 s); si está abierto se espera a que la persona acepte «¿Permitir depuración?».
+     */
+    suspend fun connectByAddress(context: Context, rawHost: String) = withContext(Dispatchers.IO) {
+        val host = normalizeHost(rawHost)
+        if (host == null) {
+            state.value = state.value.copy(
+                phase = Phase.ERROR,
+                message = "Escribe una dirección válida, por ejemplo 192.168.1.50.",
+            )
+            return@withContext
+        }
+        TvAppPackage.reset()
+        TvLauncherPackage.reset()
+        state.value = state.value.copy(
+            phase = Phase.WORKING,
+            busyId = "",
+            legacyHost = host,
+            message = "Comprobando $host:5555…",
+            log = emptyList(),
+        )
+        try {
+            TvAdb.init(context)
+            if (TvAdb.isConnected) TvAdb.disconnectQuietly()
+            log("comprobando $host:5555")
+            if (!isPortOpen(host, 5555)) {
+                state.value = state.value.copy(
+                    phase = Phase.ERROR,
+                    message = "El puerto 5555 de $host está cerrado. En la tele: Ajustes → Sistema → " +
+                        "Información → 7 toques a «Versión» → Desarrollador → enciende «ADB por red». " +
+                        "Revisa también que sea la IP correcta y que esté en la misma Wi-Fi.",
+                )
+                return@withContext
+            }
+            log("puerto abierto; esperando autorización")
+            state.value = state.value.copy(
+                message = "Conectando con $host… Si la tele pregunta «¿Permitir depuración?», acéptalo con el mando.",
+            )
+            var connected = false
+            var unauthorized = false
+            val start = System.currentTimeMillis()
+            var attempt = 0
+            while (!connected && System.currentTimeMillis() - start < 60_000) {
+                attempt++
+                val result = runCatching { TvAdb.connect(host, 5555) }
+                connected = result.getOrDefault(false)
+                if (!connected) {
+                    val error = result.exceptionOrNull()
+                    unauthorized = unauthorized || looksUnauthorized(error)
+                }
+                log("intento $attempt: ${if (connected) "conectado" else "esperando a la tele"}")
+                if (!connected) delay(2_000)
+            }
+            if (!isActive) return@withContext
+            if (!connected) {
+                state.value = state.value.copy(
+                    phase = Phase.ERROR,
+                    message = if (unauthorized) {
+                        "$host respondió, pero no autorizó al teléfono. Acepta «¿Permitir depuración?» en la tele " +
+                            "(marca «Permitir siempre») y pulsa «Reintentar conexión»."
+                    } else {
+                        "El puerto 5555 de $host está abierto, pero la tele no completó la conexión. Acepta el " +
+                            "aviso de depuración con el mando y pulsa «Reintentar conexión»."
+                    },
+                )
+                TvAdb.disconnectQuietly()
+                return@withContext
+            }
+            val (identity, model) = identify()
+            log("tele: ${model.ifBlank { "(sin modelo)" }} · id=${identity.ifBlank { "(sin id)" }}")
+            val record = TvRecord(
+                id = identity.ifBlank { "host:$host" },
+                label = model.ifBlank { "Tele ${host.substringAfterLast('.')}" },
+                host = host,
+                paired = true,
+                updatedAt = System.currentTimeMillis(),
+            )
+            state.value = state.value.copy(
+                tvs = TvAdbStore.upsert(context, record),
+                message = "Conectado con ${record.displayName}. Instalando Vision+ y su Inicio…",
+            )
+            applyInternal(context, record, updateLauncher = true, updateApp = true)
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            state.value = state.value.copy(
+                phase = Phase.ERROR,
+                message = "No se pudo conectar: ${t.javaClass.simpleName}: ${t.message.orEmpty()}",
+            )
+            TvAdb.disconnectQuietly()
+        }
+    }
+
+    /** «192.168.1.50», «192.168.1.50:5555» o una URL → IP limpia; null si no lo parece. */
+    internal fun normalizeHost(raw: String): String? {
+        val clean = raw.trim()
+            .removePrefix("http://")
+            .removePrefix("https://")
+            .substringBefore('/')
+            .substringBefore(':')
+            .trim()
+        val octets = clean.split('.').map { it.toIntOrNull() ?: return null }
+        if (octets.size != 4 || octets.any { it !in 0..255 }) return null
+        return clean
+    }
+
+    /** ¿El puerto está abierto? Evita esperar 90 s cuando la tele ni siquiera tiene ADB por red. */
+    internal fun isPortOpen(host: String, port: Int, timeoutMs: Int = 1_500): Boolean = runCatching {
+        java.net.Socket().use { socket ->
+            socket.connect(java.net.InetSocketAddress(host, port), timeoutMs)
+            true
+        }
+    }.getOrDefault(false)
+
+    /** LibADB no tipifica la negativa de la llave: se reconoce por el nombre o el mensaje. */
+    private fun looksUnauthorized(t: Throwable?): Boolean {
+        if (t == null) return false
+        val text = (t.javaClass.name + " " + t.message.orEmpty()).lowercase()
+        return "auth" in text || "unauthor" in text || "denied" in text
+    }
+
     /** Empareja el televisor nuevo, lo guarda en la lista y le aplica el Inicio. */
     suspend fun pairAndApply(context: Context, code: String) = withContext(Dispatchers.IO) {
         val current = state.value
@@ -176,6 +321,8 @@ internal object TvHomeSetup {
             return@withContext
         }
         try {
+            TvAppPackage.reset()
+            TvLauncherPackage.reset()
             state.value = current.copy(phase = Phase.WORKING, message = "Emparejando con la tele…")
             TvAdb.init(context)
             val paired = pairWithTimeout(current.host, current.pairingPort, code)
@@ -207,6 +354,7 @@ internal object TvHomeSetup {
             state.value = state.value.copy(tvs = TvAdbStore.upsert(context, record))
             applyInternal(context, record)
         } catch (t: Throwable) {
+            if (t is CancellationException) throw t
             state.value = state.value.copy(
                 phase = Phase.ERROR,
                 message = "No se pudo emparejar: ${t.javaClass.simpleName}: ${t.message.orEmpty()}",
@@ -228,6 +376,8 @@ internal object TvHomeSetup {
             message = "Conectando con ${record.displayName}…",
             log = emptyList(),
         )
+        TvAppPackage.reset()
+        TvLauncherPackage.reset()
         try {
             if (!connectTo(context, record.host, record.id)) {
                 state.value = state.value.copy(
@@ -238,12 +388,53 @@ internal object TvHomeSetup {
                 )
                 return@withContext
             }
-            applyInternal(context, record)
+            applyInternal(context, record, updateLauncher = false)
         } catch (t: Throwable) {
+            if (t is CancellationException) throw t
             state.value = state.value.copy(
                 phase = Phase.ERROR,
                 busyId = "",
                 message = "No se pudo conectar: ${t.javaClass.simpleName}. Enciende la depuración inalámbrica e intenta otra vez.",
+            )
+            TvAdb.disconnectQuietly()
+        }
+    }
+
+    /**
+     * Deja la tele lista: instala o actualiza Vision+ (la app) y Vision+ Home con la última
+     * versión del release y fija el launcher como Inicio. Es el botón «Instalar en TV».
+     */
+    suspend fun install(context: Context, tvId: String) = withContext(Dispatchers.IO) {
+        val record = TvAdbStore.find(context, tvId)
+        if (record == null) {
+            state.value = state.value.copy(phase = Phase.ERROR, message = "Esa tele ya no está en la lista.")
+            return@withContext
+        }
+        TvAppPackage.reset()
+        TvLauncherPackage.reset()
+        state.value = state.value.copy(
+            phase = Phase.WORKING,
+            busyId = tvId,
+            message = "Preparando Vision+ y su Inicio para ${record.displayName}…",
+            log = emptyList(),
+        )
+        try {
+            if (!connectTo(context, record.host, record.id)) {
+                state.value = state.value.copy(
+                    phase = Phase.ERROR,
+                    busyId = "",
+                    message = "No encontré «${record.displayName}». Enciende la depuración inalámbrica del televisor " +
+                        "y vuelve a intentar.",
+                )
+                return@withContext
+            }
+            applyInternal(context, record, updateLauncher = true, updateApp = true)
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            state.value = state.value.copy(
+                phase = Phase.ERROR,
+                busyId = "",
+                message = "No se pudo instalar: ${t.javaClass.simpleName}: ${t.message.orEmpty()}",
             )
             TvAdb.disconnectQuietly()
         }
@@ -293,6 +484,7 @@ internal object TvHomeSetup {
             )
             TvAdb.disconnectQuietly()
         } catch (t: Throwable) {
+            if (t is CancellationException) throw t
             state.value = state.value.copy(
                 phase = Phase.ERROR,
                 busyId = "",
@@ -364,50 +556,166 @@ internal object TvHomeSetup {
         return false
     }
 
-    /**
-     * Instala Vision+ Home en la tele con el APK que viaja en esta app (1.4 MB). Sin esto, el
-     * flujo se negaba a retirar el Inicio (dejaría el televisor sin pantalla).
-     */
-    private suspend fun installBundledLauncher(context: Context): Boolean {
-        log("Vision+ Home no está en la tele: lo instalo desde el teléfono…")
-        val bytes = withContext(Dispatchers.IO) {
-            runCatching { context.assets.open("vision_home.apk").use { it.readBytes() } }.getOrNull()
-        }
-        if (bytes == null) {
-            log("  falta el APK dentro de la app")
-            return false
-        }
-        val ok = withTimeoutOrNull(90_000) {
-            withContext(Dispatchers.IO) { runCatching { TvAdb.installApk(bytes) }.getOrDefault(false) }
-        } ?: false
-        log(if (ok) "  Vision+ Home instalado" else "  no se pudo instalar")
-        return ok
+    /** La versión de un paquete en la tele AHORA ("" si no está instalado). */
+    private suspend fun packageVersionOnTv(pkg: String): String {
+        val out = sh("dumpsys package $pkg | grep -m1 versionName", 12_000)
+        return TvHomeRules.parseVersionName(out).orEmpty()
     }
 
-    private suspend fun applyInternal(context: Context, record: TvRecord) {
+    private suspend fun launcherVersionOnTv(): String = packageVersionOnTv(TvHomeRules.OUR_PKG)
+
+    /**
+     * Deja la última Vision+ en la tele. Si no está, la instala; con [update], la sube a la
+     * versión publicada. Devuelve la versión que quedó (`""` si no hay ninguna y no se pudo
+     * instalar: en ese caso el flujo NO toca el Inicio, para no dejar la tele sin app que abrir).
+     */
+    private suspend fun ensureVisionPlus(context: Context, update: Boolean): String {
+        val pkg = HomeContract.APP_PACKAGE
+        val onTv = packageVersionOnTv(pkg)
+        log(if (onTv.isBlank()) "Vision+ no está en la tele" else "la tele tiene Vision+ $onTv")
+        if (onTv.isNotBlank()) {
+            if (!update) return onTv
+            val latest = runCatching { TvAppPackage.latestVersion(context) }.getOrNull()
+            if (latest.isNullOrBlank()) {
+                log("no pude comprobar la última versión de Vision+; se queda la que tiene")
+                return onTv
+            }
+            if (!TvLauncherPackage.isNewer(latest, onTv)) {
+                log("Vision+ ya está al día ($onTv)")
+                return onTv
+            }
+            log("hay una Vision+ más nueva: $latest")
+        }
+        val apk = TvAppPackage.resolve(context)
+        if (apk == null) {
+            log("no pude descargar Vision+")
+            return onTv
+        }
+        if (onTv.isNotBlank() && !TvLauncherPackage.isNewer(apk.versionName, onTv)) {
+            log("la tele ya tiene Vision+ $onTv")
+            return onTv
+        }
+        state.value = state.value.copy(
+            message = if (onTv.isBlank()) {
+                "Instalando Vision+ ${apk.versionName} en la tele… (puede tardar unos minutos)"
+            } else {
+                "Actualizando Vision+ $onTv a ${apk.versionName}… (puede tardar unos minutos)"
+            },
+        )
+        log("instalando Vision+ ${apk.versionName} (${apk.file.length() / 1_048_576} MB)…")
+        val output = withTimeoutOrNull(15L * 60_000) {
+            withContext(Dispatchers.IO) { runCatching { TvAdb.installApkFileOutput(apk.file) }.getOrNull() }
+        }
+        val ok = output.orEmpty().contains("Success", ignoreCase = true)
+        if (ok) {
+            log("Vision+ ${apk.versionName} instalado")
+        } else {
+            val reason = output.orEmpty().lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().take(140)
+            log("no se pudo instalar Vision+${if (reason.isBlank()) "" else ": $reason"}")
+        }
+        val after = packageVersionOnTv(pkg)
+        return when {
+            after.isNotBlank() -> after
+            ok -> apk.versionName
+            else -> onTv
+        }
+    }
+
+    /**
+     * Deja Vision+ Home en la tele: si no está lo instala y, con [update], lo sube a la última
+     * versión publicada. El APK sale del release oficial (con respaldo dentro de la app), así que
+     * el televisor recibe la versión buena sin que nadie descargue nada a mano.
+     *
+     * Devuelve la versión que quedó en la tele, o `null` si no había nada y no se pudo instalar.
+     */
+    private suspend fun ensureLauncher(context: Context, installed: String, update: Boolean): String? {
+        val apk = TvLauncherPackage.resolve(context)
+        if (apk == null) {
+            log("no pude obtener el APK de Vision+ Home")
+            return installed.takeIf { it.isNotBlank() }
+        }
+        log(
+            "APK listo: Vision+ Home ${apk.versionName} " +
+                "(${if (apk.fromRelease) "del release oficial" else "incluido en la app"})",
+        )
+        val newer = TvLauncherPackage.isNewer(apk.versionName, installed)
+        if (installed.isNotBlank() && !(update && newer)) {
+            log("la tele ya tiene Vision+ Home $installed")
+            return installed
+        }
+        state.value = state.value.copy(
+            message = if (installed.isBlank()) {
+                "Instalando Vision+ Home ${apk.versionName} en la tele…"
+            } else {
+                "Actualizando Vision+ Home $installed a ${apk.versionName}…"
+            },
+        )
+        val bytes = withContext(Dispatchers.IO) { runCatching { apk.file.readBytes() }.getOrNull() }
+        if (bytes == null || bytes.size < 100_000) {
+            log("no pude leer el APK descargado")
+            return installed.takeIf { it.isNotBlank() }
+        }
+        val output = withTimeoutOrNull(120_000) {
+            withContext(Dispatchers.IO) { runCatching { TvAdb.installApkOutput(bytes) }.getOrNull() }
+        }
+        val ok = output.orEmpty().contains("Success", ignoreCase = true)
+        if (ok) {
+            log("Vision+ Home ${apk.versionName} instalado")
+        } else {
+            val reason = output.orEmpty().lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().take(140)
+            log("no se pudo instalar${if (reason.isBlank()) "" else ": $reason"}")
+        }
+        val after = launcherVersionOnTv()
+        return when {
+            after.isNotBlank() -> after
+            ok -> apk.versionName
+            else -> installed.takeIf { it.isNotBlank() }
+        }
+    }
+
+    private suspend fun applyInternal(
+        context: Context,
+        record: TvRecord,
+        updateLauncher: Boolean = false,
+        updateApp: Boolean = false,
+    ) {
         state.value = state.value.copy(
             phase = Phase.WORKING,
             busyId = record.id,
             message = "Comprobando ${record.displayName}…",
         )
-        val installed = sh("pm list packages ${TvHomeRules.OUR_PKG}")
-        if (!installed.contains(TvHomeRules.OUR_PKG)) {
-            if (!installBundledLauncher(context)) {
-                state.value = state.value.copy(
-                    phase = Phase.ERROR,
-                    busyId = "",
-                    message = "${record.displayName} no tiene Vision+ Home y no pude instalarlo. Revisa «Detalles».",
-                )
-                TvAdb.disconnectQuietly()
-                return
-            }
+        // Primero la app: el Inicio necesita qué abrir. Si no hay Vision+ y no se pudo instalar,
+        // no se toca el Inicio del televisor.
+        val appVersion = ensureVisionPlus(context, updateApp)
+        if (appVersion.isBlank()) {
+            state.value = state.value.copy(
+                phase = Phase.ERROR,
+                busyId = "",
+                message = "${record.displayName} no tiene Vision+ y no pude instalarlo. No toco su Inicio para " +
+                    "no dejarla sin pantalla. Revisa «Detalles».",
+            )
+            TvAdb.disconnectQuietly()
+            return
         }
+        val onTv = launcherVersionOnTv()
+        log(if (onTv.isBlank()) "Vision+ Home no está en la tele" else "la tele tiene Vision+ Home $onTv")
+        val version = ensureLauncher(context, onTv, updateLauncher)
+        if (version == null) {
+            state.value = state.value.copy(
+                phase = Phase.ERROR,
+                busyId = "",
+                message = "${record.displayName} no tiene Vision+ Home y no pude instalarlo. Revisa «Detalles».",
+            )
+            TvAdb.disconnectQuietly()
+            return
+        }
+        var current = record.copy(appVersion = appVersion, launcherVersion = version, paired = true)
+        state.value = state.value.copy(tvs = TvAdbStore.upsert(context, current))
 
         state.value = state.value.copy(message = "Fijando Vision+ Home como Inicio en ${record.displayName}…")
         sh("input keyevent KEYCODE_WAKEUP", 8_000)
         val resolve =
             "cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME"
-        var current = record
         if (current.originalHome.isBlank()) {
             val before = sh(resolve)
             val original = TvHomeRules.parseResolveActivity(before)
@@ -434,10 +742,10 @@ internal object TvHomeSetup {
                     busyId = "",
                     tvs = TvAdbStore.upsert(context, done),
                     message = if (disabled.isEmpty()) {
-                        "Listo: Vision+ Home es el Inicio de ${done.displayName}."
+                        "Listo: ${done.displayName} abre Vision+ Home con Vision+ $appVersion."
                     } else {
-                        "Listo: ${done.displayName} abre Vision+ Home. Retiré ${disabled.size} Inicio(s) que lo " +
-                            "tapaban (puedes devolverlos con «Restaurar»)."
+                        "Listo: ${done.displayName} abre Vision+ Home con Vision+ $appVersion. Retiré " +
+                            "${disabled.size} Inicio(s) que lo tapaban (puedes devolverlos con «Restaurar»)."
                     },
                 )
                 TvAdb.disconnectQuietly()

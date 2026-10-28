@@ -46,6 +46,8 @@ services:
       DATABASE_URL: "postgresql://${POSTGRES_USER:-catalog_user}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-catalog_db}"
       API_KEY: "${API_KEY:?define API_KEY en server/.env}"
       CONFIG_ADMIN_KEY: "${CONFIG_ADMIN_KEY:-}"
+      # Banners diarios del Inicio: arte panorámico de TMDB (se busca 1 vez/día).
+      TMDB_API_KEY: "${TMDB_API_KEY:-}"
       # Espejo de capítulos: TTL de la copia (vencida → se encarga el refresco y
       # la app cae al portal) y cooldown anti-martillo de la cola.
       EPISODES_TTL_HOURS: "${EPISODES_TTL_HOURS:-48}"
@@ -144,6 +146,13 @@ services:
       TMDB_REMATCH_BATCH: "${TMDB_REMATCH_BATCH:-2500}"
       TMDB_REMATCH_COOLDOWN_DAYS: "${TMDB_REMATCH_COOLDOWN_DAYS:-14}"
       TMDB_BACKFILL_BATCH: "${TMDB_BACKFILL_BATCH:-3000}"
+      # Refresco de popularidad: sin esto el Top 10 se queda con los valores del
+      # primer match. Rota fichas por antigüedad y prioriza lo popular.
+      TMDB_POPULARITY_REFRESH_BATCH: "${TMDB_POPULARITY_REFRESH_BATCH:-240}"
+      TMDB_POPULARITY_REFRESH_DAYS: "${TMDB_POPULARITY_REFRESH_DAYS:-2}"
+      TMDB_POPULARITY_REFRESH_GAP: "${TMDB_POPULARITY_REFRESH_GAP:-0.08}"
+      # «Populares de la semana»: TMDB mueve su trending a diario.
+      TMDB_TRENDING_REFRESH_HOURS: "${TMDB_TRENDING_REFRESH_HOURS:-12}"
       # Nombres para buscar (es-MX/original/regionales) de matches ya hechos: lote por
       # ciclo y ritmo propio (una llamada por título conocido, sin búsqueda).
       TMDB_ALIAS_BATCH: "${TMDB_ALIAS_BATCH:-1500}"

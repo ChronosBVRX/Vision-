@@ -10,6 +10,7 @@ indexa; los desacuerdos de match pueden corregirse luego en `enrichment`.
 """
 
 import asyncio
+import datetime as dt
 import json
 import logging
 import os
@@ -40,6 +41,15 @@ REMATCH_COOLDOWN_DAYS = int(os.environ.get("TMDB_REMATCH_COOLDOWN_DAYS", "14"))
 ALGO_VERSION = "2"
 # Backfill de popularidad/votos para matches viejos (los que llegaron antes de las columnas).
 BACKFILL_BATCH = int(os.environ.get("TMDB_BACKFILL_BATCH", "3000"))
+# Refresco de popularidad: TMDB la mueve a diario, pero antes solo se pedía al
+# enriquecer (una vez) y el Top 10 se quedaba congelado. Rota por antigüedad y
+# prioriza lo popular, con un presupuesto pequeño por ciclo.
+POPULARITY_REFRESH_BATCH = int(os.environ.get("TMDB_POPULARITY_REFRESH_BATCH", "240"))
+POPULARITY_REFRESH_DAYS = int(os.environ.get("TMDB_POPULARITY_REFRESH_DAYS", "2"))
+POPULARITY_REFRESH_GAP = float(os.environ.get("TMDB_POPULARITY_REFRESH_GAP", "0.08"))
+# La tendencia semanal de TMDB se mueve a diario: se refresca cada N horas (2
+# llamadas) para que «Populares de la semana» no sea una foto del lunes.
+TRENDING_REFRESH_HOURS = int(os.environ.get("TMDB_TRENDING_REFRESH_HOURS", "12"))
 # Backfill de NOMBRES (es-MX/original/alternativos) para matches viejos: una llamada por
 # título ya conocido (sin búsqueda) y con su propio ritmo, más rápido que el gota a gota
 # del enriquecimiento pero lejos del límite de TMDB (una pasada de estreno puede subirse).
@@ -255,9 +265,7 @@ def parse_credits(payload, media: str) -> dict[str, str]:
 
 def current_week() -> str:
     """Etiqueta ISO de la semana (2026-W42): la tendencia se refresca por semana."""
-    import datetime
-
-    year, week, _ = datetime.date.today().isocalendar()
+    year, week, _ = dt.date.today().isocalendar()
     return f"{year}-W{week:02d}"
 
 
@@ -279,29 +287,116 @@ def parse_trending(payload, media: str) -> list:
     return out
 
 
+# Cuántas páginas de `/discover` se piden por tipo para una colección temática.
+# 12 páginas = 240 títulos populares por tipo; suficiente para llenar una fila de
+# 28 sin bajar el catálogo entero (Halloween tiene ~1,000 películas históricas).
+DISCOVER_PAGES = int(os.environ.get("TMDB_DISCOVER_PAGES", "12"))
+
+
+def parse_discover_members(payload, media: str) -> list[dict]:
+    """Filas de `/discover` → [{id, media, title, year}] (puro, testeable).
+
+    Se guarda el título y el año de TMDB porque sus IDs NO son únicos entre cine y
+    series: 300401 es la película «Day of the Dead» (1957) y la serie «Dynasty».
+    Al cruzar con el catálogo, `themes._title_matches` desempata ese choque.
+    """
+    out: list[dict] = []
+    results = (payload or {}).get("results") if isinstance(payload, dict) else None
+    if not isinstance(results, list):
+        return out
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        try:
+            tmdb_id = int(item.get("id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if tmdb_id <= 0:
+            continue
+        title = (item.get("title") or item.get("name") or "").strip()
+        date = item.get("release_date") or item.get("first_air_date") or ""
+        year = int(date[:4]) if len(date) >= 4 and date[:4].isdigit() else 0
+        out.append({"id": tmdb_id, "media": media, "title": title, "year": year})
+    return out
+
+
+def discover_keyword_members(keywords, pages: int | None = None) -> list[dict]:
+    """Obras que TMDB clasifica con [keywords], en cine y series.
+
+    Es la fuente de verdad de las temáticas: `/discover/movie?with_keywords=` y
+    `/discover/tv?with_keywords=`. Se ordena por popularidad de TMDB y se corta a
+    `pages`; el constructor de temas lo cruza con el catálogo por `tmdb_id`.
+    """
+    if not KEY:
+        return []
+    keyword_param = "|".join(str(int(keyword)) for keyword in keywords if int(keyword) > 0)
+    if not keyword_param:
+        return []
+    limit = max(1, min(int(pages or DISCOVER_PAGES), 500))
+    out: list[dict] = []
+    for media in ("movie", "tv"):
+        for page in range(1, limit + 1):
+            try:
+                payload = _get(
+                    f"/discover/{media}",
+                    with_keywords=keyword_param,
+                    sort_by="popularity.desc",
+                    include_adult="false",
+                    page=page,
+                )
+            except Exception as exc:  # noqa: BLE001 - se conserva la copia anterior
+                log.warning("TMDB discover %s kw=%s p%s falló: %s", media, keyword_param, page, exc)
+                if not out:
+                    raise
+                break
+            out.extend(parse_discover_members(payload, media))
+            if page >= int(payload.get("total_pages") or 1):
+                break
+    return out
+
+
 async def sync_trending(pool) -> int:
     """Baja lo más visto de la semana (cine + series) y lo deja en `weekly_trending`.
 
-    Dos llamadas por semana (una por tipo): si la semana ya está guardada no hace nada.
+    La foto se refresca cada `TRENDING_REFRESH_HOURS` (TMDB la mueve a diario): así
+    «Populares de la semana» cambia sin esperar al lunes. Se piden LOS DOS tipos y
+    solo se guarda si ambos llegaron completos: una mitad guardada dejaba la fila
+    incompleta toda la semana (antes se saltaba el resto por `have > 0`).
     """
     if not KEY:
         return 0
     week = current_week()
     async with pool.acquire() as conn:
-        have = await conn.fetchval("select count(*) from weekly_trending where week = $1", week)
-        if have:
-            return 0
+        row = await conn.fetchrow(
+            "select count(*) as n, max(updated_at) as at from weekly_trending where week = $1",
+            week,
+        )
+    have = int(row["n"] or 0) if row else 0
+    last = row["at"] if row else None
+    fresh_enough = (
+        have >= 20
+        and last is not None
+        and last >= dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=TRENDING_REFRESH_HOURS)
+    )
+    if fresh_enough:
+        return 0
     rows = []
     try:
         for media in ("movie", "tv"):
             payload = await asyncio.to_thread(_get, f"/trending/{media}/week", language="es-MX")
-            rows += [(tmdb_id, media, rank) for tmdb_id, rank in parse_trending(payload, media)]
+            part = parse_trending(payload, media)
+            if not part:
+                raise RuntimeError(f"trending {media} vino vacío")
+            rows += [(tmdb_id, media, rank) for tmdb_id, rank in part]
     except Exception as exc:  # noqa: BLE001 - sin red no se tumba el ciclo
         log.warning("TMDB trending falló: %s", exc)
         return 0
     if not rows:
         return 0
-    async with pool.acquire() as conn:
+    async with pool.acquire() as conn, conn.transaction():
+        # Se reemplaza la foto de la semana: si un título sale del ranking, no se
+        # queda pegado con su puesto viejo.
+        await conn.execute("delete from weekly_trending where week = $1", week)
         await conn.executemany(
             """
             insert into weekly_trending (week, tmdb_id, media, rank, updated_at)
@@ -639,6 +734,89 @@ async def backfill_popularity(pool) -> int:
         if DELAY:
             await asyncio.sleep(DELAY)
     log.info("TMDB: %s/%s popularidad rellenada", done, len(pending))
+    return done
+
+
+async def refresh_popularity(pool) -> int:
+    """Refresca la popularidad/votos de los títulos ya casados, por rotación.
+
+    El Top 10 se congeló porque `popularity` solo se llenaba una vez (al enriquecer)
+    y TMDB la mueve a diario. Aquí se piden `POPULARITY_REFRESH_BATCH` fichas por
+    ciclo, empezando por las más populares y por las que llevan más tiempo sin
+    refrescarse; el marcador `popularity_at` evita repetir la misma ficha en cada
+    ciclo. También se actualizan los géneros: si TMDB corrige la ficha, el índice
+    de géneros lo recoge sin esperar a un re-match.
+    """
+    if not KEY or POPULARITY_REFRESH_BATCH <= 0:
+        return 0
+    async with pool.acquire() as conn:
+        pending = await conn.fetch(
+            """
+            select e.title_id, e.tmdb_id, t.kind
+            from enrichment e
+            join titles t on t.id = e.title_id
+            where coalesce(e.match_confidence, 0) >= 0.5
+              and e.tmdb_id is not null
+              and coalesce(t.play_ref, '') <> ''
+              and (
+                  e.popularity_at is null
+                  or e.popularity_at < now() - make_interval(days => $2)
+              )
+            order by case when coalesce(t.popularity, 0) >= 20 then 0 else 1 end,
+                     e.popularity_at nulls first,
+                     coalesce(t.popularity, 0) desc
+            limit $1
+            """,
+            POPULARITY_REFRESH_BATCH,
+            POPULARITY_REFRESH_DAYS,
+        )
+    if not pending:
+        return 0
+    done = 0
+    for row in pending:
+        details = None
+        for media in (("tv", "movie") if _media_for(row["kind"]) == "tv" else ("movie", "tv")):
+            try:
+                details = await asyncio.to_thread(
+                    _get, f"/{media}/{row['tmdb_id']}",
+                    language="es-MX", gap=POPULARITY_REFRESH_GAP,
+                )
+                break
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    continue
+                if exc.code == 429:
+                    time.sleep(3.0)
+                raise
+            except Exception:  # noqa: BLE001 - se reintenta otro ciclo
+                details = None
+                break
+        if not details:
+            # La ficha ya no existe en ese id: se marca para no martillarla cada ciclo.
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "update enrichment set popularity_at = now() where title_id = $1",
+                    row["title_id"],
+                )
+            continue
+        popularity, votes = _impact_of(details)
+        genres = [g.get("name") for g in details.get("genres") or [] if g.get("name")]
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                update enrichment
+                   set popularity = $2, vote_count = $3, genres = $4,
+                       popularity_at = now(), updated_at = now()
+                 where title_id = $1
+                """,
+                row["title_id"], popularity, votes, genres,
+            )
+            await conn.execute(
+                "update titles set popularity = $2, vote_count = $3, updated_at = now() where id = $1",
+                row["title_id"], popularity, votes,
+            )
+        done += 1
+    log.info("TMDB: %s/%s popularidad refrescada", done, len(pending))
     return done
 
 

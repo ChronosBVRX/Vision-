@@ -531,3 +531,106 @@ def test_quality_slo_respects_the_cooldown(monkeypatch):
     assert alerts == []
     assert conn.executed == []
 
+
+def test_epg_should_alert_when_missing_stale_or_empty():
+    import datetime as dt
+
+    now = dt.datetime(2026, 10, 24, 18, 0, tzinfo=dt.timezone.utc)
+    # Sin datos: avisa.
+    assert diag.epg_should_alert(None, now, 0) is True
+    # Guía fresca y con programas: no avisa.
+    assert diag.epg_should_alert(now - dt.timedelta(hours=2), now, 9000) is False
+    # Guía vieja (más de 8 h): avisa.
+    assert diag.epg_should_alert(now - dt.timedelta(hours=9), now, 9000) is True
+    # Guía fresca pero casi vacía: avisa.
+    assert diag.epg_should_alert(now - dt.timedelta(hours=1), now, 120) is True
+    # Enfriamiento: no repite el aviso antes de 12 h.
+    assert (
+        diag.epg_should_alert(
+            now - dt.timedelta(hours=9), now, 9000,
+            previous=now - dt.timedelta(hours=1),
+        )
+        is False
+    )
+
+
+def test_epg_alert_text_is_human_and_has_the_command():
+    import datetime as dt
+
+    now = dt.datetime(2026, 10, 24, 18, 0, tzinfo=dt.timezone.utc)
+    text = diag.epg_alert_text(now - dt.timedelta(hours=9), now, 120, 30)
+    assert "guía de TV" in text
+    assert "hace 9 h" in text
+    assert "120" in text
+    assert "/v1/epg/health" in text
+    # Sin datos no truena y lo dice.
+    assert "nunca" in diag.epg_alert_text(None, now, 0, 0)
+
+
+def test_disk_is_low_by_percent_or_free_gb():
+    gb = 1024 ** 3
+    # 8 % libre: bajo por porcentaje.
+    assert diag.disk_is_low(int(8 * gb), int(100 * gb), min_pct=10, min_free_gb=5)
+    # 40 % libre: sano.
+    assert not diag.disk_is_low(int(40 * gb), int(100 * gb), min_pct=10, min_free_gb=5)
+    # 15 GB libres en 200 GB (7.5 %): bajo por porcentaje aunque tenga GB de sobra.
+    assert diag.disk_is_low(int(15 * gb), int(200 * gb), min_pct=10, min_free_gb=5)
+    # 20 GB libres en 500 GB (4 %): bajo.
+    assert diag.disk_is_low(int(20 * gb), int(500 * gb), min_pct=10, min_free_gb=5)
+    # Sin total no se alarma; sin espacio libre sí.
+    assert not diag.disk_is_low(0, 0, min_pct=10, min_free_gb=5)
+    assert diag.disk_is_low(0, int(100 * gb), min_pct=10, min_free_gb=5)
+
+
+def test_disk_alert_respects_cooldown():
+    gb = 1024 ** 3
+    low = (int(1 * gb), int(100 * gb), int(0.2 * gb), int(15 * gb))
+    # Primera vez: avisa.
+    assert diag.disk_should_alert(*low, None, cooldown_hours=12)
+    # Recién avisado: no repite.
+    assert not diag.disk_should_alert(*low, 1.0, cooldown_hours=12)
+    # Pasado el enfriamiento: vuelve a avisar.
+    assert diag.disk_should_alert(*low, 13.0, cooldown_hours=12)
+    # Sano: no avisa aunque haya pasado el enfriamiento.
+    healthy = (int(80 * gb), int(100 * gb), int(12 * gb), int(15 * gb))
+    assert not diag.disk_should_alert(*healthy, 13.0, cooldown_hours=12)
+
+
+def test_disk_alert_text_has_both_mounts_and_hints():
+    gb = 1024 ** 3
+    text = diag.disk_alert_text(int(4.2 * gb), int(133 * gb), int(0.9 * gb), int(15 * gb))
+    assert "disco del VPS" in text
+    assert "/ (Docker + sistema)" in text
+    assert "/var/oled (backups)" in text
+    assert "4.2 GB libres" in text
+    assert "docker system df" in text
+    assert "df -h / /var/oled" in text
+    assert "No space left on device" in text
+
+
+def test_disk_recovered_text_says_it_is_ok():
+    gb = 1024 ** 3
+    text = diag.disk_recovered_text(int(80 * gb), int(133 * gb), int(12 * gb), int(15 * gb))
+    assert "volvió a tener espacio" in text
+    assert "80.0 GB libres" in text
+
+
+def test_disk_text_omits_the_mount_that_is_not_visible():
+    # El worker corre en un contenedor: `/var/oled` puede no estar montado. No se
+    # inventa una línea con 0 GB; el disco crítico (`/`, donde vive Docker) sí se ve.
+    gb = 1024 ** 3
+    text = diag.disk_alert_text(int(4 * gb), int(133 * gb), 0, 0)
+    assert "/ (Docker + sistema)" in text
+    assert "/var/oled (backups):" not in text
+    assert "0.0 GB libres de 0.0 GB" not in text
+
+
+def test_disk_health_is_wired_into_the_triage_loop():
+    import inspect
+
+    loop = inspect.getsource(diag.loop)
+    assert "await disk_health(pool)" in loop
+    source = inspect.getsource(diag)
+    assert "shutil.disk_usage" in source
+    assert "DISK_ALERT_KEY" in source
+    assert "delete from sync_meta where key = $1" in source

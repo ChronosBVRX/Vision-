@@ -10,6 +10,7 @@ import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.mirror.EpisodeMirror
 import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -1428,6 +1429,9 @@ object X4KApi {
             var medias: JSONArray? = null
             val licenseStart = android.os.SystemClock.uptimeMillis()
             var lastLicenseError: String? = null
+            // Salir de la ficha cancela el prefetch de la licencia: eso NO es un fallo de
+            // reproducción y no debe reportarse como PLAYBACK_LICENSE_FAIL.
+            var cancelledLicense = false
             // Cuerpo de la licencia (type "2" = directo, "1" = respaldo del portal).
             fun licenseBody(type: String, token: String): JSONObject = JSONObject().apply {
                 put("userToken", token)
@@ -1443,7 +1447,8 @@ object X4KApi {
             suspend fun license(type: String, connectMs: Int, readMs: Int): JSONObject? = runCatching {
                 post("/api/portalCore/v10/startPlayVOD", licenseBody(type, ensureSession(context)), connectMs, readMs)
             }.onFailure {
-                lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
+                if (it is CancellationException) cancelledLicense = true
+                else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
             }.getOrNull()
             for (type in listOf("2", "1")) {
                 var d = runCatching {
@@ -1451,7 +1456,8 @@ object X4KApi {
                         licenseBody(type, token)
                     }
                 }.onFailure {
-                    lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
+                    if (it is CancellationException) cancelledLicense = true
+                    else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
                 }.getOrNull()
                 // Si la sesión guardada estaba desincronizada o el portal rechazó inicialmente,
                 // renovar sesión explícitamente y reintentar de inmediato antes de descartar.
@@ -1461,7 +1467,8 @@ object X4KApi {
                         val freshToken = renewSession(context, force = true)
                         post("/api/portalCore/v10/startPlayVOD", licenseBody(type, freshToken))
                     }.onFailure {
-                        lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
+                        if (it is CancellationException) cancelledLicense = true
+                        else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
                     }.getOrNull() ?: d
                 }
                 if (d != null) {
@@ -1488,7 +1495,7 @@ object X4KApi {
                     medias = collectMedias(d).takeIf { it.length() > 0 }
                 }
             }
-            if (medias == null) {
+            if (medias == null && !cancelledLicense) {
                 com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
                     "PLAYBACK_LICENSE_FAIL",
                     "cid=$cid motivo=${lastLicenseError ?: "sin medios"} " +

@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
+
 package com.chronosbvrx.visionplus.home.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -32,10 +34,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -44,6 +48,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.chronosbvrx.visionplus.home.data.HomeConfig
+import com.chronosbvrx.visionplus.home.data.StartTab
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -53,6 +59,7 @@ import java.util.TimeZone
 enum class HomeTab(val key: String, val label: String) {
     HOME("home", "Inicio"),
     LIVE("live", "TV en vivo"),
+    INPUTS("inputs", "Entradas"),
     EVENTS("events", "Deportes"),
     MOVIES("movies", "Películas"),
     SERIES("series", "Series"),
@@ -62,6 +69,34 @@ enum class HomeTab(val key: String, val label: String) {
     companion object {
         fun of(key: String?): HomeTab = entries.firstOrNull { it.key == key } ?: HOME
     }
+}
+
+/**
+ * La pestaña con la que abre el launcher al encender la tele. [StartTab.LAST] usa la última
+ * que se miró; sin preferencia guardada, el Inicio de siempre.
+ */
+internal fun startTabFor(start: StartTab, lastKey: String?): HomeTab = when (start) {
+    StartTab.LAST -> HomeTab.of(lastKey)
+    StartTab.HOME -> HomeTab.HOME
+    StartTab.LIVE -> HomeTab.LIVE
+    StartTab.INPUTS -> HomeTab.INPUTS
+    StartTab.APPS -> HomeTab.APPS
+}
+
+/**
+ * La barra tal como la configuró la persona: **Inicio siempre primero y visible** (es la
+ * puerta de vuelta), luego su orden, sin las pestañas que ocultó y sin «Entradas» cuando el
+ * equipo no reporta fuentes. Las pestañas nuevas de una versión futura aparecen al final.
+ */
+internal fun visibleTabs(config: HomeConfig, inputsAvailable: Boolean): List<HomeTab> {
+    val ordered = config.tabOrder.mapNotNull { key -> HomeTab.entries.firstOrNull { it.key == key } }
+    val all = (ordered + HomeTab.entries).distinct()
+    val visible = all.filter { tab ->
+        tab != HomeTab.HOME &&
+            tab.key !in config.hiddenTabs &&
+            (tab != HomeTab.INPUTS || inputsAvailable)
+    }
+    return listOf(HomeTab.HOME) + visible
 }
 
 /** La hora de la casa: centro de México, aunque la tele esté en otra zona. */
@@ -91,6 +126,7 @@ internal fun msToNextMinute(nowMs: Long = System.currentTimeMillis()): Long {
  * La barra del sistema. Es lo primero que se ve al encender la tele: marca a la izquierda,
  * pestañas al centro-izquierda, hora/perfil/acciones a la derecha. Nunca se desplaza.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TopChrome(
     tab: HomeTab,
@@ -104,6 +140,11 @@ fun TopChrome(
     downTarget: FocusRequester? = null,
     clock24h: Boolean = true,
     showClock: Boolean = true,
+    /**
+     * Las pestañas que ESTE equipo puede mostrar. Una TV box no tiene sintonizador ni
+     * entradas HDMI, así que «Entradas» no se pinta: un launcher no enseña puertas vacías.
+     */
+    availableTabs: List<HomeTab> = HomeTab.entries,
 ) {
     val clock = rememberClockText(clock24h)
     Row(
@@ -141,11 +182,11 @@ fun TopChrome(
         }
         Spacer(Modifier.width(if (compact) 18.dp else 30.dp))
         LazyRow(
-            modifier = Modifier.weight(1f).focusGroup(),
+            modifier = Modifier.weight(1f).focusGroup().focusRestorer(),
             horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            items(HomeTab.entries.toList()) { item ->
+            items(availableTabs.toList()) { item ->
                 TabPill(
                     label = item.label,
                     selected = item == tab,
@@ -171,11 +212,11 @@ fun TopChrome(
             Spacer(Modifier.width(if (compact) 14.dp else 20.dp))
         }
         // Perfil
-        ProfileChip(name = profile, compact = compact)
+        ProfileChip(name = profile, compact = compact, downTarget = downTarget)
         Spacer(Modifier.width(8.dp))
-        ChromeIcon(Icons.Rounded.Search, "Buscar", onSearch)
+        ChromeIcon(Icons.Rounded.Search, "Buscar", onSearch, downTarget)
         Spacer(Modifier.width(4.dp))
-        ChromeIcon(Icons.Rounded.Settings, "Ajustes", onCommandCenter)
+        ChromeIcon(Icons.Rounded.Settings, "Ajustes", onCommandCenter, downTarget)
     }
 }
 
@@ -229,12 +270,13 @@ private fun TabPill(
 }
 
 @Composable
-private fun ProfileChip(name: String, compact: Boolean) {
+private fun ProfileChip(name: String, compact: Boolean, downTarget: FocusRequester? = null) {
     val label = name.trim().ifBlank { "Principal" }
     Row(
         modifier = Modifier
             .clip(HomeShapes.pill)
             .background(Color.White.copy(alpha = 0.07f))
+            .then(if (downTarget != null) Modifier.softFocusDown(downTarget) else Modifier)
             .padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
@@ -265,7 +307,12 @@ private fun ProfileChip(name: String, compact: Boolean) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ChromeIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun ChromeIcon(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    downTarget: FocusRequester? = null,
+) {
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
@@ -273,6 +320,7 @@ private fun ChromeIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
             .clip(RoundedCornerShape(50))
             .background(if (focused) Color.White.copy(alpha = 0.20f) else Color.Transparent)
             .then(if (focused) Modifier.border(1.dp, Color.White, RoundedCornerShape(50)) else Modifier)
+            .then(if (downTarget != null) Modifier.softFocusDown(downTarget) else Modifier)
             .onFocusChanged { focused = it.isFocused }
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },

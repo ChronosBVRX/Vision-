@@ -6,8 +6,12 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
+import android.os.StatFs
 import android.provider.Settings
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -244,6 +248,55 @@ class AppsRepository(context: Context) {
 
     /** La lista de apps del sistema: sirve para desinstalar lo que este launcher no lista. */
     fun openAppListSettings(): Boolean = open(Intent(Settings.ACTION_APPLICATION_SETTINGS))
+
+    /** Idioma y región del equipo (el launcher no traduce el sistema por su cuenta). */
+    fun openLanguageSettings(): Boolean = open(Intent(Settings.ACTION_LOCALE_SETTINGS))
+
+    /** Accesibilidad: subtítulos del sistema, lector de pantalla, pulsación prolongada. */
+    fun openAccessibilitySettings(): Boolean = open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+
+    /** Protector de pantalla (Daydream) del televisor. */
+    fun openScreensaverSettings(): Boolean = open(Intent(Settings.ACTION_DREAM_SETTINGS))
+
+    /** Apps predeterminadas: navegador, asistente, Inicio… */
+    fun openDefaultAppsSettings(): Boolean = open(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+
+    /** «Wi-Fi» o «Ethernet»: lo que de verdad está conectado ahora, sin adivinar. */
+    fun networkLabel(): String = runCatching {
+        val manager = app.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val caps = manager.getNetworkCapabilities(manager.activeNetwork)
+            ?: return@runCatching "Sin red"
+        when {
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Datos móviles"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "VPN"
+            else -> "Conectada"
+        }
+    }.getOrDefault("Sin red")
+
+    /** «TCL BeyondTV · Android 9» para la cabecera de Sistema. */
+    fun deviceLabel(): String = buildString {
+        val maker = Build.MANUFACTURER.trim()
+        val model = Build.MODEL.trim()
+        if (maker.isNotBlank() && !model.startsWith(maker, ignoreCase = true)) {
+            append(maker).append(' ')
+        }
+        append(model.ifBlank { "Televisor" })
+        append(" · Android ").append(Build.VERSION.RELEASE)
+    }
+
+    /** Espacio libre del equipo, para que el launcher diga algo útil en Sistema. */
+    fun storageLabel(): String = runCatching {
+        val stat = StatFs(Environment.getDataDirectory().absolutePath)
+        val gb = 1024L * 1024L * 1024L
+        val mb = 1024L * 1024L
+        val total = stat.totalBytes / gb
+        val free = stat.availableBytes
+        // «0 GB libres» no dice nada: por debajo de un giga se habla en MB.
+        val freeText = if (free < gb) "${free / mb} MB" else "${free / gb} GB"
+        "$freeText libres de $total GB"
+    }.getOrDefault("")
 
     private fun open(intent: Intent): Boolean = runCatching {
         app.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

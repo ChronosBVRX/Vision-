@@ -72,7 +72,8 @@ import kotlinx.coroutines.launch
 
 private enum class SettingsTab(val label: String) {
     PLAYBACK("Reproducción"),
-    SYSTEM("Sistema y Rendimiento"),
+    SYSTEM("Sistema"),
+    INSTALL_TV("Instalar en TV"),
 }
 
 /**
@@ -120,11 +121,21 @@ fun SettingsScreen(contentPadding: PaddingValues) {
                 when (tab) {
                     SettingsTab.PLAYBACK -> PlaybackTab()
                     SettingsTab.SYSTEM -> SystemTab()
+                    SettingsTab.INSTALL_TV -> TvInstallTab()
                 }
                 Spacer(Modifier.height(contentPadding.calculateBottomPadding() + 32.dp))
             }
         }
     }
+}
+
+/**
+ * Pestaña propia del TELÉFONO: instala Vision+ y Vision+ Home en las teles de la casa por ADB
+ * inalámbrico y deja el launcher como Inicio, sin PC y sin descargar nada a mano.
+ */
+@Composable
+private fun TvInstallTab() {
+    TvHomeSetupSection()
 }
 
 @Composable
@@ -376,9 +387,6 @@ private fun SystemTab() {
     ProfilesSettingsSection()
 
     SyncSettingsSection()
-
-    // Solo en el teléfono: desde aquí se configura el Inicio de la tele por ADB inalámbrico.
-    TvHomeSetupSection()
 
     SettingsSection("Mi actividad") {
         ActivitySettingsBlock()

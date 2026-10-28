@@ -136,6 +136,10 @@ fun CategoriesScreen(
     val shown = remember(rows, query) {
         rows.filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) }
     }
+    // Las colecciones temáticas (Día de Muertos, Halloween, Navidad…) van en su
+    // propia sección arriba; después el resto de géneros y colecciones.
+    val shownThemes = remember(shown) { shown.filter { it.id.startsWith("tema-") } }
+    val shownOther = remember(shown) { shown.filterNot { it.id.startsWith("tema-") } }
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         modifier = Modifier.fillMaxSize(),
@@ -174,8 +178,17 @@ fun CategoriesScreen(
                 }
             }
         }
-        items(shown, key = { it.id }) { row ->
-            CategoryCard(title = row.title, imageUrl = row.films.firstOrNull()?.posterUrl, onClick = { openRowId = row.id })
+        if (shownThemes.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel("Temáticas") }
+            items(shownThemes, key = { it.id }) { row ->
+                CategoryCard(title = row.title, imageUrl = row.films.firstOrNull()?.posterUrl, onClick = { openRowId = row.id })
+            }
+        }
+        if (shownOther.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel("Géneros y colecciones") }
+            items(shownOther, key = { it.id }) { row ->
+                CategoryCard(title = row.title, imageUrl = row.films.firstOrNull()?.posterUrl, onClick = { openRowId = row.id })
+            }
         }
         if (shown.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {

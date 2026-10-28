@@ -91,7 +91,7 @@ fun TvApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit = 
     // su foco sola, pero si a los 300 ms el mando sigue sin nada enfocado, el rescate
     // verificado (solo destinos compuestos) lo devuelve. Solo actúa sin foco (nunca pelea
     // con el usuario).
-    LaunchedEffect(nav.stack.size) {
+    LaunchedEffect(nav.stack.size, route) {
         delay(300)
         repeat(10) {
             if (FocusRescue.screenHasFocus) return@LaunchedEffect

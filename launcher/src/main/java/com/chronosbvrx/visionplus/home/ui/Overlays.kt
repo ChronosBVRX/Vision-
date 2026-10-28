@@ -29,17 +29,15 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SettingsRemote
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -50,7 +48,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chronosbvrx.visionplus.home.data.HomeUpdate
-import kotlinx.coroutines.delay
 
 /**
  * El «centro de control» del sistema: perfil, ajustes, actualización y la puerta al Inicio
@@ -66,6 +63,8 @@ fun CommandCenterDialog(
     onSystemSettings: () -> Unit,
     onHomeSettings: () -> Unit,
     onUpdate: () -> Unit,
+    onLauncherSettings: () -> Unit,
+    onWatchTv: (() -> Unit)? = null,
     visionInstalled: Boolean = true,
     visionInstallState: HomeUpdate.State = HomeUpdate.State.Idle,
     onInstallVision: () -> Unit = {},
@@ -81,12 +80,8 @@ fun CommandCenterDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        val first = remember { FocusRequester() }
-        LaunchedEffect(Unit) {
-            delay(60)
-            runCatching { first.requestFocus() }
-        }
-        Box(Modifier.fillMaxSize()) {
+        val focus = rememberDialogFocus()
+        Box(Modifier.fillMaxSize().dialogRootFocus(focus)) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -108,7 +103,7 @@ fun CommandCenterDialog(
                         style = MaterialTheme.typography.headlineMedium,
                         modifier = Modifier.weight(1f),
                     )
-                    HomeButton(label = "Cerrar", onClick = onDismiss, icon = Icons.Rounded.Close, primary = false)
+                    HomeButton(label = "Cerrar", onClick = onDismiss, icon = Icons.Rounded.Close, primary = false, modifier = Modifier.dialogFallbackFocus(focus))
                 }
                 Spacer(Modifier.height(18.dp))
                 Row(
@@ -185,11 +180,25 @@ fun CommandCenterDialog(
                 }
                 PanelAction(
                     icon = Icons.Rounded.Tune,
+                    title = "Ajustes de Vision+ Home",
+                    detail = "Cómo abre, entradas de TV, sistema y actualizaciones",
+                    onClick = onLauncherSettings,
+                    modifier = Modifier.dialogFocus(focus),
+                )
+                PanelAction(
+                    icon = Icons.Rounded.Tune,
                     title = "Personalizar Inicio",
                     detail = "Canales, apps, filas y apariencia",
                     onClick = onPersonalize,
-                    modifier = Modifier.focusRequester(first),
                 )
+                if (onWatchTv != null) {
+                    PanelAction(
+                        icon = Icons.Rounded.Tv,
+                        title = "Ver TV abierta",
+                        detail = "Enciende el sintonizador del televisor",
+                        onClick = onWatchTv,
+                    )
+                }
                 PanelAction(
                     icon = Icons.Rounded.SettingsRemote,
                     title = "Ajustes de Vision+",
@@ -257,7 +266,7 @@ private fun PanelAction(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .clip(HomeShapes.panel)
             .background(HomeColors.Surface),
@@ -269,7 +278,9 @@ private fun PanelAction(
         ) {
             FocusableSurface(
                 onClick = onClick,
-                modifier = Modifier.fillMaxWidth(),
+                // El modificador del llamador va en el nodo ENFOCABLE: un `focusRequester`
+                // puesto en la fila de arriba (que no es enfocable) nunca enfocaba nada.
+                modifier = Modifier.fillMaxWidth().then(modifier),
                 shape = HomeShapes.panel,
             ) {
                 Row(
@@ -308,11 +319,7 @@ fun SearchDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        val first = remember { FocusRequester() }
-        LaunchedEffect(Unit) {
-            delay(60)
-            runCatching { first.requestFocus() }
-        }
+        val focus = rememberDialogFocus()
         val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val text = result.data
                 ?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)
@@ -320,7 +327,13 @@ fun SearchDialog(
                 .orEmpty()
             if (text.isNotBlank()) onSearch(text) else onDismiss()
         }
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.62f)), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.62f))
+                .dialogRootFocus(focus),
+            contentAlignment = Alignment.Center,
+        ) {
             Column(
                 Modifier
                     .width(560.dp)
@@ -352,7 +365,7 @@ fun SearchDialog(
                         },
                         icon = Icons.Rounded.Mic,
                         primary = true,
-                        modifier = Modifier.focusRequester(first),
+                        modifier = Modifier.dialogFocus(focus),
                     )
                     HomeButton(
                         label = "Abrir el buscador",
@@ -362,7 +375,7 @@ fun SearchDialog(
                 }
                 Spacer(Modifier.height(18.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HomeButton(label = "Cerrar", onClick = onDismiss, icon = Icons.Rounded.Close, primary = false)
+                    HomeButton(label = "Cerrar", onClick = onDismiss, icon = Icons.Rounded.Close, primary = false, modifier = Modifier.dialogFallbackFocus(focus))
                 }
             }
         }
@@ -385,12 +398,8 @@ fun HomeGuideDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        val first = remember { FocusRequester() }
-        LaunchedEffect(Unit) {
-            delay(80)
-            runCatching { first.requestFocus() }
-        }
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val focus = rememberDialogFocus()
+        Box(Modifier.fillMaxSize().dialogRootFocus(focus), contentAlignment = Alignment.Center) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.72f)))
             Column(
                 Modifier
@@ -421,7 +430,7 @@ fun HomeGuideDialog(
                         onClick = onOpenCurrentLauncher,
                         icon = Icons.Rounded.Settings,
                         primary = true,
-                        modifier = Modifier.focusRequester(first),
+                        modifier = Modifier.dialogFocus(focus),
                     )
                     HomeButton(label = "Cerrar", onClick = onDismiss, icon = null, primary = false)
                 }

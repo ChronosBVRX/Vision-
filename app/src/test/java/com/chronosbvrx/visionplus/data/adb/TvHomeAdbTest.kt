@@ -108,6 +108,8 @@ class TvHomeAdbTest {
                 applied = true,
                 originalHome = "com.tcl.keycustomfunctionservice/.FallbackHome",
                 disabled = listOf("com.google.android.apps.tv.launcherx", "com.google.android.tungsten.setupwraith"),
+                appVersion = "2.5.171",
+                launcherVersion = "1.3.1",
                 updatedAt = 1234L,
             ),
         )
@@ -116,6 +118,8 @@ class TvHomeAdbTest {
         assertEquals(emptyList<TvRecord>(), TvAdbStore.parse("no es json"))
         assertEquals(emptyList<TvRecord>(), TvAdbStore.parse("""[{"label":"sin id"}]"""))
         assertEquals(2, TvAdbStore.parse(TvAdbStore.serialize(tvs)).first().disabled.size)
+        assertEquals("1.3.1", TvAdbStore.parse(TvAdbStore.serialize(tvs)).first().launcherVersion)
+        assertEquals("2.5.171", TvAdbStore.parse(TvAdbStore.serialize(tvs)).first().appVersion)
     }
 
     @Test
@@ -193,6 +197,145 @@ class TvHomeAdbTest {
         if (tvSettings.exists()) {
             assertFalse("la tele no debe ofrecer el flujo ADB", tvSettings.readText().contains("TvHomeSetupSection"))
         }
+    }
+
+    // --- Instalar Vision+ y su Inicio desde el release ---
+
+    @Test
+    fun installsTheLatestVisionPlusAndLauncherFromTheOfficialRelease() {
+        val pkg = source("data/adb/TvLauncherPackage.kt")
+        assertTrue("no baja del release oficial", pkg.contains("releases/latest/download"))
+        assertTrue("no pide el APK del launcher", pkg.contains("HomeContract.LAUNCHER_ASSET"))
+        assertTrue("no pide el APK de la app", pkg.contains("HomeContract.APP_ASSET"))
+        assertTrue("no lee el version.json del release", pkg.contains("version.json"))
+        assertTrue("no conserva el respaldo dentro de la app", pkg.contains("vision_home.apk"))
+        val adb = source("data/adb/TvAdb.kt")
+        assertTrue("una tele con una versión vieja no se actualizaría", adb.contains("pm install -r -S"))
+        assertTrue("un APK de 82 MB no puede cargarse en memoria", adb.contains("fun installApkFileOutput("))
+        val setup = source("data/adb/TvHomeSetup.kt")
+        assertTrue("no instala Vision+ antes del Inicio", setup.contains("ensureVisionPlus(context, updateApp)"))
+        assertTrue("no deja la tele sin app si no pudo instalar Vision+", setup.contains("No toco su Inicio"))
+    }
+
+    @Test
+    fun knowsWhenTheTvsVersionsAreOld() {
+        assertTrue(TvLauncherPackage.isNewer("1.3.1", "1.0.14"))
+        assertTrue(TvLauncherPackage.isNewer("2.5.171", "2.5.9"))
+        assertFalse(TvLauncherPackage.isNewer("1.0.14", "1.3.1"))
+        assertFalse(TvLauncherPackage.isNewer("1.3.1", "1.3.1"))
+        assertFalse(TvLauncherPackage.isNewer("2.0", "2.0.0"))
+        assertTrue(TvLauncherPackage.isNewer("1.3.1", ""))
+        assertFalse(TvLauncherPackage.isNewer("", "1.3.1"))
+        assertEquals("1.3.1 (vc24)", TvLauncherPackage.versionLine("1.3.1", 24))
+        assertEquals("1.3.1", TvLauncherPackage.versionLine(" 1.3.1 ", 0))
+    }
+
+    @Test
+    fun aCachedApkOnlyCountsWhileItIsFresh() {
+        val now = 10_000_000L
+        assertTrue(TvLauncherPackage.isFresh(now - 1_000, now))
+        assertFalse(TvLauncherPackage.isFresh(now - TvLauncherPackage.CACHE_TTL_MS - 1, now))
+        assertFalse("un reloj que se fue para atrás no vale", TvLauncherPackage.isFresh(now + 60_000, now))
+        assertFalse(TvLauncherPackage.isFresh(0, now))
+    }
+
+    @Test
+    fun readsTheInstalledVersionTheTvReports() {
+        val dumpsys = """
+            Packages:
+              Package [com.chronosbvrx.visionplus.home] (8f2a):
+                versionName=1.3.1
+                versionCode=24
+        """.trimIndent()
+        assertEquals("1.3.1", TvHomeRules.parseVersionName(dumpsys))
+        assertNull(TvHomeRules.parseVersionName("Unable to find package: com.chronosbvrx.visionplus.home"))
+        assertNull(TvHomeRules.parseVersionName("versionName=null"))
+    }
+
+    @Test
+    fun theSettingsHaveADedicatedInstallTvTab() {
+        val screen = source("ui/phone/SettingsScreen.kt")
+        assertTrue("falta la pestaña", screen.contains("INSTALL_TV(\"Instalar en TV\")"))
+        assertTrue(
+            "la pestaña de sistema debe ser corta para que las tres quepan sin desplazar",
+            screen.contains("SYSTEM(\"Sistema\")"),
+        )
+        assertTrue("la pestaña no pinta la sección", screen.contains("TvHomeSetupSection()"))
+        assertTrue("la pestaña no tiene cuerpo", screen.contains("private fun TvInstallTab()"))
+        val ui = source("ui/settings/TvHomeSetupCard.kt")
+        assertTrue("no ofrece instalar", ui.contains("TvHomeSetup.install(context, tv.id)"))
+        assertTrue("no dice que se descarga del release", ui.contains("descarga del release"))
+        assertTrue("no muestra la versión de la tele", ui.contains("tv.launcherVersion"))
+    }
+
+    // --- Teles Android 8/9: sin código de emparejamiento, se conectan por dirección ---
+
+    @Test
+    fun eightOrNineTvsConnectByAddressBecauseTheyHaveNoPairingCode() {
+        val setup = source("data/adb/TvHomeSetup.kt")
+        assertTrue("no conecta por dirección", setup.contains("suspend fun connectByAddress("))
+        assertTrue("no acepta la dirección escrita", setup.contains("fun normalizeHost("))
+        assertTrue("no comprueba el puerto antes de esperar", setup.contains("fun isPortOpen("))
+        assertTrue(
+            "no explica que el puerto 5555 está cerrado",
+            setup.contains("El puerto 5555 de \$host está cerrado"),
+        )
+        assertTrue(
+            "ya no se depende del control remoto de Vision+ para saber la dirección",
+            !setup.contains("deja el control remoto vinculado"),
+        )
+        // La búsqueda automática (mDNS + barrido) no funcionaba en redes reales: se retiró.
+        assertFalse("no debe quedar la búsqueda automática", setup.contains("searchLegacy"))
+        assertFalse("no debe quedar el barrido de la red", setup.contains("LanScan"))
+        val ui = source("ui/settings/TvHomeSetupCard.kt")
+        assertTrue("no hay campo de dirección", ui.contains("Dirección (192.168.1.x)"))
+        assertTrue("no explica ADB por red", ui.contains("ADB por red"))
+        assertTrue("no ofrece conectar", ui.contains("TvHomeSetup.connectByAddress(context"))
+        assertTrue("no ofrece reintentar la conexión", ui.contains("Reintentar conexión"))
+        assertTrue("la búsqueda con código vive fuera del diálogo", ui.contains("LaunchedEffect(Unit)"))
+        assertTrue("no cancela la acción anterior", ui.contains("fun run(block: suspend () -> Unit)"))
+        assertFalse("no debe quedar el botón de búsqueda", ui.contains("Buscar teles Android 8/9"))
+        assertTrue(
+            "la cancelación del diálogo no puede mostrarse como fallo de conexión",
+            setup.contains("if (t is CancellationException) throw t"),
+        )
+        assertTrue("un trabajo cancelado no debe escribir estado", setup.contains("if (!isActive) return@withContext"))
+        assertTrue("no recuerda la última dirección para reintentar", setup.contains("legacyHost = host"))
+    }
+
+    @Test
+    fun checksTheAdbPortBeforeWaitingAndUnderstandsTheTypedAddress() {
+        assertEquals("192.168.1.50", TvHomeSetup.normalizeHost("192.168.1.50"))
+        assertEquals("192.168.1.50", TvHomeSetup.normalizeHost("192.168.1.50:5555"))
+        assertEquals("192.168.1.50", TvHomeSetup.normalizeHost("http://192.168.1.50/"))
+        assertNull(TvHomeSetup.normalizeHost("la tele"))
+        assertNull(TvHomeSetup.normalizeHost("192.168.1.999"))
+
+        val server = java.net.ServerSocket(0, 8, java.net.InetAddress.getByName("127.0.0.1"))
+        try {
+            assertTrue(
+                "no detecta el puerto abierto",
+                TvHomeSetup.isPortOpen("127.0.0.1", server.localPort, 700),
+            )
+        } finally {
+            runCatching { server.close() }
+        }
+        assertFalse(
+            "un puerto cerrado no puede dar por buena la conexión",
+            TvHomeSetup.isPortOpen("127.0.0.1", server.localPort, 300),
+        )
+    }
+
+    @Test
+    fun theAutomaticSearchIsGone() {
+        assertFalse(
+            "LanScan.kt se retiró",
+            File("src/main/java/com/chronosbvrx/visionplus/data/adb/LanScan.kt").exists(),
+        )
+        val adb = source("data/adb/TvAdb.kt")
+        assertFalse("no debe quedar el descubrimiento Android TV por mDNS", adb.contains("findAndroidTvs"))
+        val ui = source("ui/settings/TvHomeSetupCard.kt")
+        assertFalse("no debe quedar la lista de teles encontradas", ui.contains("candidates"))
     }
 
     private fun source(path: String): String {

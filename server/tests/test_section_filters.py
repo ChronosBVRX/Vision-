@@ -142,9 +142,17 @@ def test_curated_rows_exclude_unmatched_titles():
         assert "match_confidence < 0.5" in base_where
 
 
-def test_destacados_first_sql_shape():
-    sql = index_build.DESTACADOS_FIRST_SQL.format(where="x = 1")
-    assert "select tc.title_id" in sql
-    assert "row_number() over (order by tc.position" in sql
+def test_section_rows_use_freshness_and_one_primary_genre():
+    """La sección ya no se pega a los «destacados» del portal y cada título vive en
+    una sola fila de género: la misma película no se repite en Drama/Suspenso/Comedia."""
+    import inspect
+
+    source = inspect.getsource(index_build.build_section_genres)
+    assert "_estrenos_pairs" in source
+    assert "primary_genre" in source
+    assert 'drop = {"Telenovela"} if section == "novelas" else ()' in source
+    assert "NOVELA_PRIORITY" in source
     assert index_build.REST_OFFSET == 1000
+    assert 1 <= index_build.FRESH_TOP <= 20
+    assert not hasattr(index_build, "DESTACADOS_FIRST_SQL")
 

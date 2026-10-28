@@ -9,6 +9,7 @@ Todos los endpoints /v1/* requieren el header X-Api-Key.
 import asyncio
 import hmac
 import json
+import logging
 import os
 import re
 import time
@@ -25,10 +26,13 @@ import markers as skip_markers
 import portal as portal_search
 import slots as device_slots
 import episodes as episodes_mirror
+import banners as launcher_banners
 import sync as device_sync
+from epg_channels import canonical_channel, channel_country, epg_norms_for
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 API_KEY = os.environ["API_KEY"]
+log = logging.getLogger("visionplus.api")
 # Llave de administración para escribir la configuración remota (Fase 2). Sin ella,
 # POST /v1/config queda deshabilitado (403): la API_KEY viaja en el APK y no basta.
 CONFIG_ADMIN_KEY = os.environ.get("CONFIG_ADMIN_KEY", "").strip()
@@ -78,7 +82,7 @@ def db() -> asyncpg.Pool:
     return pool
 
 
-def film(record: asyncpg.Record, enr=None) -> dict:
+def film(record: asyncpg.Record, enr=None, season_year: bool = False) -> dict:
     """La forma que espera `Film` en la app: mapea 1:1 con RemoteIndexSource.
 
     Con enriquecimiento TMDB (confianza >= 0.5) mandan su rating, año y sinopsis
@@ -106,7 +110,16 @@ def film(record: asyncpg.Record, enr=None) -> dict:
         if enr["rating"] is not None:
             rating = enr["rating"]
         if enr["year"]:
-            year = enr["year"]
+            # En «Novedades y Estrenos»/temáticas una ficha de temporada («The Last
+            # of Us T2», 2025) no puede mostrar el año de la primera temporada que
+            # guarda TMDB (2023). En el resto de filas manda TMDB: es el año de
+            # estreno de la serie.
+            record_year = int(record["year"] or 0)
+            enr_year = int(enr["year"] or 0)
+            season_title = bool(
+                re.search(r"\b(?:t|temp\.?|temporada|season)\s*\d+\b", str(record["title"] or ""), re.I)
+            )
+            year = max(record_year, enr_year) if (season_year and season_title) else enr_year
         overview = (enr["overview"] or "").strip()
         if overview:
             synopsis = overview
@@ -230,6 +243,10 @@ async def _group_maps():
     Las películas nunca son temporadas: si un grupo viejo mezclaba una película
     («Zootopia» + «Zootopia+»), aquí se ignora ese miembro y, si al grupo le queda
     una sola temporada, sus miembros se sirven sueltos con su título original.
+
+    Una temporada se sirve UNA vez: al fusionar nombres («House» + «House M.D.», o dos
+    copias de «House of Cards T5») puede haber dos fichas del mismo número. Gana la de
+    XTV (motor nativo) y, entre iguales, la más popular; así el selector no pinta dos «T5».
     """
     group_rows = await db().fetch(
         """
@@ -238,31 +255,57 @@ async def _group_maps():
         join title_groups g on g.id = gm.group_id
         join titles t on t.id = gm.title_id
         where coalesce(t.program_type, '') != 'movie'
-        order by gm.group_id, gm.season, (t.source = 'xtv') desc
+        order by gm.group_id, gm.season, (t.source = 'xtv') desc,
+                 coalesce(t.popularity, 0) desc, coalesce(t.score, 0) desc
         """
     )
     member_of: dict[str, dict] = {}
     seasons_by_group: dict[str, list] = {}
     base_of_group: dict[str, str] = {}
+    rows_by_group: dict[str, list] = {}
     for gr in group_rows:
-        member_of[gr["title_id"]] = gr
-        seasons_by_group.setdefault(gr["group_id"], []).append(
-            {"n": gr["season"], "titleId": gr["title_id"], "videoUrl": gr["play_ref"]}
-        )
+        rows_by_group.setdefault(gr["group_id"], []).append(gr)
         base_of_group[gr["group_id"]] = gr["base_title"]
-    for group_id, seasons in list(seasons_by_group.items()):
-        if len(seasons) < 2:
-            del seasons_by_group[group_id]
+    for group_id, rows in rows_by_group.items():
+        # Un grupo de un solo miembro no es un grupo: su ficha se sirve suelta.
+        if len(rows) < 2:
             base_of_group.pop(group_id, None)
-            for season in seasons:
-                member_of.pop(season["titleId"], None)
+            continue
+        # Preferencia explícita (no solo el ORDER BY): XTV, y luego la más popular.
+        ranked = sorted(
+            rows,
+            key=lambda gr: (
+                1 if str(gr.get("source") or "") == "xtv" else 0,
+                float(gr.get("popularity") or 0),
+                float(gr.get("score") or 0),
+            ),
+            reverse=True,
+        )
+        seasons: list = []
+        seen: set[int] = set()
+        for gr in ranked:
+            if gr["season"] in seen:
+                continue
+            seen.add(gr["season"])
+            seasons.append({"n": gr["season"], "titleId": gr["title_id"], "videoUrl": gr["play_ref"]})
+        seasons.sort(key=lambda s: s["n"])
+        seasons_by_group[group_id] = seasons
+        for gr in rows:
+            member_of[gr["title_id"]] = gr
     return member_of, seasons_by_group, base_of_group
 
 
-def _grouped_entry(row, member_of, seasons_by_group, base_of_group, enr=None) -> tuple[dict, str | None]:
+def _grouped_entry(
+    row,
+    member_of,
+    seasons_by_group,
+    base_of_group,
+    enr=None,
+    season_year: bool = False,
+) -> tuple[dict, str | None]:
     """Film con temporadas resueltas + group_id si está agrupado (si no, None)."""
     member = member_of.get(row["id"])
-    entry = film(row, enr)
+    entry = film(row, enr, season_year=season_year)
     if member is None:
         return entry, None
     entry["groupId"] = member["group_id"]
@@ -277,6 +320,13 @@ def _grouped_entry(row, member_of, seasons_by_group, base_of_group, enr=None) ->
         entry["id"] = xtv_first["titleId"]
         entry["videoUrl"] = xtv_first["videoUrl"]
     entry["seasons"] = seasons
+    # En «Novedades y Estrenos» y en las temáticas la tarjeta representa la temporada
+    # servida: una serie de 2011 con su T15 de 2026 debe decir 2026. En las demás
+    # filas se conserva el año de estreno de la serie (TMDB). Solo sube, nunca baja.
+    if season_year:
+        row_year = int(row["year"] or 0)
+        if row_year > int(entry.get("year") or 0):
+            entry["year"] = row_year
     return entry, member["group_id"]
 
 
@@ -297,11 +347,15 @@ async def healthz():
     return {"status": "ok"}
 
 
-# El índice completo pesa (~10 MB con 100 títulos por categoría) y se pide en cada
-# arranque: recalcularlo desde cero en cada llamada costaba decenas de segundos. Se
-# cachea por versión + límite (el worker sube la versión cuando cambia algo).
+# El índice completo pesa (~6 MB con 100 títulos por categoría) y se pide en cada
+# arranque: recalcularlo desde cero en cada llamada costaba segundos y escribía
+# temporales en disco (16.8 MB medidos por recálculo). Se cachea por versión + límite
+# (el worker sube la versión cuando cambia algo) y se guarda la última copia buena
+# para servirla si la base falla: un 500 dejaba el Inicio a medias en los equipos.
 _INDEX_CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
-_INDEX_CACHE_TTL = 300.0
+_INDEX_CACHE_TTL = 1800.0
+_INDEX_LAST_GOOD: dict[int, dict] = {}
+_INDEX_LAST_GOOD_MAX = 4
 
 
 @app.get("/v1/index")
@@ -316,76 +370,106 @@ async def index(
     `limitFilms` recorta los títulos por categoría EN SQL (para la app móvil); `total`
     sigue siendo el real de la categoría."""
     require_key(x_api_key)
-    version = await index_version()
-    if since and since >= version:
-        return {"version": version, "upToDate": True, "categories": []}
-    cache_key = (version, limitFilms)
-    cached = _INDEX_CACHE.get(cache_key)
-    if cached and time.time() - cached[0] < _INDEX_CACHE_TTL:
-        return cached[1]
-    # Se piden hasta 2× por categoría: al colapsar las temporadas de un grupo quedan
-    # suficientes tarjetas únicas para el límite pedido.
-    fetch_limit = limitFilms * 2 if limitFilms else 0
-    rows = await db().fetch(
-        f"""
-        with ranked as (
-            select {FILM_COLUMNS}, tc.category_id, tc.position,
+    try:
+        version = await index_version()
+        if since and since >= version:
+            return {"version": version, "upToDate": True, "categories": []}
+        cache_key = (version, limitFilms)
+        cached = _INDEX_CACHE.get(cache_key)
+        if cached and time.time() - cached[0] < _INDEX_CACHE_TTL:
+            return cached[1]
+        # Se piden hasta 2× por categoría: al colapsar las temporadas de un grupo quedan
+        # suficientes tarjetas únicas para el límite pedido.
+        fetch_limit = limitFilms * 2 if limitFilms else 0
+        # LATERAL por categoría: el tope se aplica DENTRO de cada categoría usando el
+        # índice (category_id, position), en vez de rankear las 460k filas de
+        # title_categories. Medido: 0 KB de temporales (antes 16.8 MB por recálculo) y
+        # ~1.8× más rápido; la salida es idéntica (127/127 categorías comparadas).
+        rows = await db().fetch(
+            f"""
+            select x.id, x.title, x.year, x.duration_min, x.synopsis,
+                   x.poster_url, x.play_ref, x.source, x.score, x.kind,
+                   x.popularity, x.vote_count,
+                   x.category_id, x.position,
                    c.title as category_title, c.kind as category_kind,
-                   c.position as category_position,
-                   row_number() over (
-                       partition by tc.category_id order by tc.position, t.title
-                   ) as rn
-            from title_categories tc
-            join titles t on t.id = tc.title_id
-            join categories c on c.id = tc.category_id
-            where c.kind != 'section'
+                   c.position as category_position
+            from categories c
+            cross join lateral (
+                select {FILM_COLUMNS}, tc.category_id, tc.position
+                from title_categories tc
+                join titles t on t.id = tc.title_id
+                where tc.category_id = c.id
+                order by tc.position, t.title
+                limit $1::int
+            ) x
+            where c.kind <> 'section'
+            order by c.position, c.title, x.position
+            """,
+            fetch_limit,
         )
-        select * from ranked
-        where ($1::int = 0 or rn <= $1::int)
-        order by category_position, category_title, position
-        """,
-        fetch_limit,
-    )
-    member_of, seasons_by_group, base_of_group = await _group_maps()
-    enr = await _enrichment_map([r["id"] for r in rows])
-    count_rows = await db().fetch(
-        "select tc.category_id, count(*) as n from title_categories tc "
-        "join categories c on c.id = tc.category_id where c.kind != 'section' "
-        "group by 1"
-    )
-    counts = {r["category_id"]: r["n"] for r in count_rows}
+        member_of, seasons_by_group, base_of_group = await _group_maps()
+        enr = await _enrichment_map([r["id"] for r in rows])
+        count_rows = await db().fetch(
+            "select tc.category_id, count(*) as n from title_categories tc "
+            "join categories c on c.id = tc.category_id where c.kind != 'section' "
+            "group by 1"
+        )
+        counts = {r["category_id"]: r["n"] for r in count_rows}
 
-    cats: dict[str, dict] = {}
-    seen_groups: dict[str, set] = {}
-    for row in rows:
-        category = cats.setdefault(
-            row["category_id"],
-            {
-                "id": row["category_id"],
-                "title": row["category_title"],
-                "kind": row["category_kind"],
-                "films": [],
-            },
-        )
-        entry, group_id = _grouped_entry(row, member_of, seasons_by_group, base_of_group, enr.get(row["id"]))
-        if group_id is not None:
-            seen = seen_groups.setdefault(row["category_id"], set())
-            if group_id in seen:
-                continue
-            seen.add(group_id)
-        category["films"].append(entry)
-    for category in cats.values():
-        category["total"] = counts.get(category["id"], len(category["films"]))
-        if limitFilms:
-            category["films"] = category["films"][:limitFilms]
-    updated = await db().fetchval("select updated_at from sync_state where id = 1")
-    result = {
-        "version": version,
-        "upToDate": False,
-        "updatedAt": updated.isoformat() if updated else None,
-        "categories": list(cats.values()),
-    }
+        cats: dict[str, dict] = {}
+        seen_groups: dict[str, set] = {}
+        for row in rows:
+            category = cats.setdefault(
+                row["category_id"],
+                {
+                    "id": row["category_id"],
+                    "title": row["category_title"],
+                    "kind": row["category_kind"],
+                    "films": [],
+                },
+            )
+            entry, group_id = _grouped_entry(
+                row,
+                member_of,
+                seasons_by_group,
+                base_of_group,
+                enr.get(row["id"]),
+                season_year=(
+                    row["category_id"] == "estrenos"
+                    or str(row["category_id"]).endswith("-estrenos")
+                    or row["category_kind"] == "theme"
+                ),
+            )
+            if group_id is not None:
+                seen = seen_groups.setdefault(row["category_id"], set())
+                if group_id in seen:
+                    continue
+                seen.add(group_id)
+            category["films"].append(entry)
+        for category in cats.values():
+            category["total"] = counts.get(category["id"], len(category["films"]))
+            if limitFilms:
+                category["films"] = category["films"][:limitFilms]
+        updated = await db().fetchval("select updated_at from sync_state where id = 1")
+        result = {
+            "version": version,
+            "upToDate": False,
+            "updatedAt": updated.isoformat() if updated else None,
+            "categories": list(cats.values()),
+        }
+    except Exception:
+        # Un fallo de la base (p. ej. pgsql_tmp sin espacio) no debe dejar el Inicio sin
+        # catálogo: se sirve la última copia buena (versión anterior) hasta que vuelva.
+        last = _INDEX_LAST_GOOD.get(limitFilms)
+        if last is None:
+            raise
+        log.warning("index: la base falló; sirviendo la última copia buena (límite %s)", limitFilms, exc_info=True)
+        return last
     _INDEX_CACHE[cache_key] = (time.time(), result)
+    _INDEX_LAST_GOOD.pop(limitFilms, None)
+    _INDEX_LAST_GOOD[limitFilms] = result
+    if len(_INDEX_LAST_GOOD) > _INDEX_LAST_GOOD_MAX:
+        _INDEX_LAST_GOOD.pop(next(iter(_INDEX_LAST_GOOD)))
     # Poda de versiones viejas: la caché es por versión y límite; no debe crecer sin fin.
     if len(_INDEX_CACHE) > 8:
         for key in list(_INDEX_CACHE)[:-8]:
@@ -441,12 +525,15 @@ async def section(
     member_of, seasons_by_group, base_of_group = await _group_maps()
     rows_out = []
     for c in cats:
+        # Se piden 4× filas: al colapsar las temporadas de un grupo (T1..T14 de la
+        # misma serie) el tope se quedaba en 3-6 tarjetas únicas por género. Así el
+        # límite se aplica DESPUÉS del colapso y la fila se llena de verdad.
         films = await db().fetch(
             f"""select {FILM_COLUMNS} from title_categories tc
                 join titles t on t.id = tc.title_id
                 where tc.category_id = $1 order by tc.position limit $2""",
             c["id"],
-            limit,
+            min(limit * 4, 400),
         )
         enr = await _enrichment_map([r["id"] for r in films])
         total = await db().fetchval(
@@ -455,16 +542,27 @@ async def section(
         seen: set[str] = set()
         entries = []
         for r in films:
-            entry, group_id = _grouped_entry(r, member_of, seasons_by_group, base_of_group, enr.get(r["id"]))
+            entry, group_id = _grouped_entry(
+                r,
+                member_of,
+                seasons_by_group,
+                base_of_group,
+                enr.get(r["id"]),
+                season_year=str(c["id"]).endswith("-estrenos"),
+            )
             if group_id is not None:
                 if group_id in seen:
                     continue
                 seen.add(group_id)
             entries.append(entry)
         if entries:
-            rows_out.append({"id": c["id"], "title": c["title"], "total": total, "films": entries})
+            rows_out.append({"id": c["id"], "title": c["title"], "total": total, "films": entries[:limit]})
     result = {"name": name, "title": SECTIONS[name], "version": ver, "rows": rows_out}
-    _SECTION_CACHE[cache_key] = result
+    if rows_out:
+        # No se cachea una sección vacía: el worker borra y recrea las hileras de sección
+        # en cada ciclo y una respuesta a medias dejaría el riel sin ella hasta la
+        # siguiente versión del índice.
+        _SECTION_CACHE[cache_key] = result
     return result
 
 
@@ -1246,7 +1344,8 @@ async def _enrich_matches_with_epg(matches: list[dict]) -> list[dict]:
             """
             select channel_name, norm_name, title, description
             from epg_programs
-            where end_time >= now() - interval '20 minutes'
+            where norm_name like 'mx:%'
+              and end_time >= now() - interval '20 minutes'
               and start_time <= now() + interval '45 minutes'
             """
         )
@@ -1288,7 +1387,7 @@ async def _enrich_matches_with_epg(matches: list[dict]) -> list[dict]:
             full_text = _fold(f"{r['title']} {r['description']}")
             full_toks = set(full_text.split())
             if any(t in full_toks for t in h_tokens) and any(t in full_toks for t in a_tokens):
-                norm = r["norm_name"]
+                norm = r["norm_name"].split(":", 1)[-1]
                 confirmed_channel = norm_to_display.get(norm, r["channel_name"])
                 break
 
@@ -1300,6 +1399,20 @@ async def _enrich_matches_with_epg(matches: list[dict]) -> list[dict]:
             m["broadcasts"] = [confirmed_channel] + [b for b in curr_broad if _fold(b) != _fold(confirmed_channel)]
 
     return matches
+
+
+@app.get("/v1/banners")
+async def launcher_banners_endpoint(
+    background: BackgroundTasks,
+    x_api_key: str | None = Header(default=None),
+):
+    """Banners diarios del Inicio (arte panorámico TMDB) para Vision+ Home."""
+    require_key(x_api_key)
+    return await launcher_banners.serve(
+        db(),
+        background,
+        tmdb_key=os.environ.get("TMDB_API_KEY", "").strip(),
+    )
 
 
 @app.get("/v1/sports")
@@ -1851,7 +1964,7 @@ def _gee_broadcast_filter(links: list[dict], match: dict) -> list[dict]:
 GEE_BRAND_CANONICALS = {
     "mx", "canal5", "azteca7", "lasestrellas", "foxsports", "foxdeportes", "foxone",
     "espn", "espn2", "espn3", "espn4", "espn5", "espndeportes", "espnpremium",
-    "tudn", "tudnusa", "tudncom", "tudnapp", "vix", "universo", "network",
+    "tudn", "tudnusa", "tudncom", "tudnapp", "vix", "universo", "network", "usanetwork",
     "cbs", "cbssports", "cbssn", "nbc", "nbcports", "paramount", "star", "max",
     "dazn", "daznsports", "skysports", "sky", "tntsports", "tntsports1",
     "tntsports2", "tntsports3", "tntsports4", "sportv", "sportvbr",
@@ -2009,114 +2122,197 @@ async def _gee_window_matches(events: list[dict]) -> list[tuple]:
         return []
 
 
-NOISE_WORDS = {
-    "fhd", "uhd", "hd", "sd", "4k", "24", "7", "vip", "latino", "latam",
-    "espana", "mexico", "mex", "colombia", "col", "chile", "cl", "argentina", "ar",
-    "es", "pe", "rd", "gt", "sv", "ni", "hn", "pa", "uy", "central", "usa", "us",
-    "plus", "east", "west", "pc", "tv", "de", "del", "la", "el", "los", "las", "en"
-}
+
+# ----- guía electrónica de programación (EPG) -----
+# La clave es `<país>:<cadena>` (mx:tudn, cl:canal13…): el país evita que un
+# «Canal 5 de Honduras» muestre la programación de «Canal 5 de México». El
+# llamador pide una lista de claves en orden de prioridad y se usa la PRIMERA
+# con datos: nunca se mezclan filas de dos países.
 
 
-def canonical_channel(text: str) -> str:
-    """Normaliza un nombre o código de canal a un token canónico."""
-    if not text:
-        return ""
-    t = "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn").lower()
-    t = re.sub(r"\(.*?\)|\[.*?\]", " ", t)
-    t = re.sub(r"[^a-z0-9]+", " ", t)
-    tokens = [tok for tok in t.split() if tok]
-    if not tokens:
-        return ""
+def _epg_brief(row) -> dict | None:
+    if row is None:
+        return None
+    return {
+        "name": row["title"],
+        "description": row["description"] or "",
+        "startMs": int(row["start_time"].timestamp() * 1000),
+        "endMs": int(row["end_time"].timestamp() * 1000),
+    }
 
-    if any(tok in ("estrellas", "lasestrellas") for tok in tokens) or ("2" in tokens and ("canal" in tokens or "xew" in tokens)):
-        return "lasestrellas"
-    if "azteca" in tokens:
-        if any(tok in ("1", "uno", "un") for tok in tokens):
-            return "azteca1"
-        if "7" in tokens or "siete" in tokens:
-            return "azteca7"
-        if "deportes" in tokens:
-            return "aztecadeportes"
-        if "noticias" in tokens or "adn" in tokens or "40" in tokens:
-            return "adn40"
-        return "azteca"
-    if "tudn" in tokens:
-        return "tudn"
-    if "cinemax" in tokens:
-        return "cinemax"
-    if "warner" in tokens:
-        return "warner"
-    if "sony" in tokens:
-        return "sony"
-    if "hbo" in tokens:
-        if "family" in tokens:
-            return "hbofamily"
-        if "plus" in tokens:
-            return "hboplus"
-        if "mundi" in tokens:
-            return "hbomundi"
-        if "pop" in tokens:
-            return "hbopop"
-        if "xtreme" in tokens:
-            return "hboxtreme"
-        if "signature" in tokens:
-            return "hbosignature"
-        if "2" in tokens:
-            return "hbo2"
-        return "hbo"
-    if "fox" in tokens and "sports" in tokens:
-        if "premium" in tokens:
-            return "foxsportspremium"
-        if "2" in tokens:
-            return "foxsports2"
-        if "3" in tokens:
-            return "foxsports3"
-        return "foxsports"
-    if "espn" in tokens:
-        if "2" in tokens:
-            return "espn2"
-        if "3" in tokens:
-            return "espn3"
-        if "4" in tokens:
-            return "espn4"
-        if "5" in tokens:
-            return "espn5"
-        if "extra" in tokens:
-            return "espnextra"
-        if "premium" in tokens:
-            return "espnpremium"
-        return "espn"
-    if "claro" in tokens and "sports" in tokens:
-        if "2" in tokens:
-            return "clarosports2"
-        return "clarosports1"
-    if "directv" in tokens or "dsports" in tokens:
-        if "2" in tokens:
-            return "dsports2"
-        if "plus" in tokens:
-            return "dsportsplus"
-        return "dsports"
-    if "win" in tokens and "sports" in tokens:
-        if "plus" in tokens or "online" in tokens:
-            return "winsportsplus"
-        return "winsports"
-    if "5" in tokens and ("canal" in tokens or "xhgc" in t or "xhpnh" in t):
-        return "canal5"
-    if "9" in tokens and ("canal" in tokens or "xeq" in t):
-        return "canal9"
-    if "11" in tokens and ("canal" in tokens or "once" in tokens):
-        return "canal11"
-    if "14" in tokens and "canal" in tokens:
-        return "canal14"
-    if "22" in tokens and "canal" in tokens:
-        return "canal22"
-    if "tvc" in tokens and "deportes" in tokens:
-        return "tvcdeportes"
 
-    filtered = [tok for tok in tokens if tok not in NOISE_WORDS]
-    if len(filtered) > 1 and filtered[0] == "canal":
-        filtered = filtered[1:]
-    return "".join(filtered) if filtered else "".join(tokens)
+def _epg_program(row) -> dict:
+    return {
+        "name": row["title"],
+        "description": row["description"] or "",
+        "start": row["start_time"].isoformat(),
+        "end": row["end_time"].isoformat(),
+        "startMs": int(row["start_time"].timestamp() * 1000),
+        "endMs": int(row["end_time"].timestamp() * 1000),
+    }
+
+
+def _epg_unique(rows) -> list:
+    """Quita filas repetidas cuando dos señales de la misma cadena comparten parrilla.
+
+    La ventana (inicio, fin) es la identidad real del programa: dos señales de la
+    misma cadena pueden titularlo distinto («Live: Fútbol…» vs «Monterrey vs.
+    Guadalajara») pero es el mismo bloque. Se conserva la primera.
+    """
+    seen: set[tuple] = set()
+    out = []
+    for row in rows:
+        key = (row["start_time"], row["end_time"])
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(row)
+    return out
+
+
+def _epg_pick(rows, norms: list[str]) -> tuple[str, list]:
+    """Primera clave de `norms` con filas (y solo esas filas). Puro y testeable."""
+    by_norm: dict[str, list] = {}
+    for row in rows:
+        by_norm.setdefault(row["norm_name"], []).append(row)
+    for norm in norms:
+        if by_norm.get(norm):
+            return norm, _epg_unique(by_norm[norm])[:12]
+    return "", []
+
+
+def _epg_window(rows, now_ms: int) -> tuple[dict | None, dict | None]:
+    """(AHORA, DESPUÉS) de una lista ordenada por inicio. Puro y testeable."""
+    current = next(
+        (
+            row for row in rows
+            if int(row["start_time"].timestamp() * 1000) <= now_ms
+            < int(row["end_time"].timestamp() * 1000)
+        ),
+        None,
+    )
+    upcoming = next(
+        (
+            row for row in rows
+            if int(row["start_time"].timestamp() * 1000) > now_ms
+        ),
+        None,
+    )
+    return _epg_brief(current), _epg_brief(upcoming)
+
+
+def _epg_schedulable(name: str) -> bool:
+    """¿Es un canal con parrilla real? Los «24/7» y «ALQUILER» son maratones/VOD."""
+    text = (name or "").upper()
+    return "24/7" not in text and not text.startswith("ALQUILER")
+
+
+async def _epg_snapshot() -> dict:
+    """Foto de la guía: filas, canales, cobertura real del catálogo y frescura."""
+    totals = await db().fetchrow(
+        """
+        select count(*) as rows_total,
+               count(*) filter (where end_time > now()) as future,
+               count(distinct norm_name) as norms,
+               count(distinct country) as countries,
+               max(updated_at) as last_update
+        from epg_programs
+        """
+    )
+    by_country = await db().fetch(
+        """
+        select country,
+               count(*) filter (where end_time > now()) as future,
+               count(distinct norm_name) as norms
+        from epg_programs
+        group by 1 order by 2 desc
+        """
+    )
+    live_norms = {
+        row["norm_name"]
+        for row in await db().fetch(
+            "select distinct norm_name from epg_programs where end_time > now()"
+        )
+    }
+    channels = await db().fetch(
+        """
+        select t.title, t.play_ref, tc.position
+        from titles t
+        join title_categories tc on tc.title_id = t.id
+        where tc.category_id = 'tv-en-vivo'
+        order by tc.position asc
+        """
+    )
+    with_guide = 0
+    schedulable = 0
+    with_guide_schedulable = 0
+    for channel in channels:
+        is_schedulable = _epg_schedulable(channel["title"])
+        if is_schedulable:
+            schedulable += 1
+        code = (channel["play_ref"] or "").split(":")[-1]
+        if any(norm in live_norms for norm in epg_norms_for(channel["title"], code)):
+            with_guide += 1
+            if is_schedulable:
+                with_guide_schedulable += 1
+    # El launcher pinta México primero (y dentro de México sus canales de
+    # referencia): esa es la cobertura que de verdad ve el usuario en el mosaico.
+    mexico_first = sorted(
+        channels,
+        key=lambda channel: 0 if channel_country(channel["title"]) == "mx" else 1,
+    )
+
+    def _guide_count(items) -> int:
+        total = 0
+        for channel in items:
+            code = (channel["play_ref"] or "").split(":")[-1]
+            if any(norm in live_norms for norm in epg_norms_for(channel["title"], code)):
+                total += 1
+        return total
+
+    top30 = _guide_count(mexico_first[:30])
+    top60 = _guide_count(mexico_first[:60])
+    top_with_guide = _guide_count(mexico_first[:120])
+    last = totals["last_update"]
+    now = datetime.now(timezone.utc)
+    stale = bool(last and (now - last).total_seconds() > 8 * 3600)
+    last_cycle = await db().fetchval(
+        "select value from sync_meta where key = 'epg_last_cycle'"
+    )
+    try:
+        cycle = json.loads(last_cycle) if last_cycle else None
+    except Exception:
+        cycle = None
+    total_channels = len(channels)
+    return {
+        "rows": int(totals["rows_total"] or 0),
+        "future": int(totals["future"] or 0),
+        "norms": int(totals["norms"] or 0),
+        "countries": int(totals["countries"] or 0),
+        "lastUpdate": last.isoformat() if last else None,
+        "stale": stale,
+        "channels": total_channels,
+        "withGuide": with_guide,
+        "coveragePct": round(100.0 * with_guide / total_channels) if total_channels else 0,
+        "schedulable": schedulable,
+        "withGuideSchedulable": with_guide_schedulable,
+        "coverageSchedulablePct": round(100.0 * with_guide_schedulable / schedulable) if schedulable else 0,
+        "topChannels": min(120, total_channels),
+        "topWithGuide": top_with_guide,
+        "topCoveragePct": round(100.0 * top_with_guide / min(120, total_channels)) if total_channels else 0,
+        "top30WithGuide": top30,
+        "top30CoveragePct": round(100.0 * top30 / min(30, total_channels)) if total_channels else 0,
+        "top60WithGuide": top60,
+        "top60CoveragePct": round(100.0 * top60 / min(60, total_channels)) if total_channels else 0,
+        "byCountry": {
+            row["country"] or "?": {
+                "future": int(row["future"] or 0),
+                "norms": int(row["norms"] or 0),
+            }
+            for row in by_country
+        },
+        "lastCycle": cycle,
+    }
 
 
 @app.get("/v1/epg")
@@ -2128,53 +2324,97 @@ async def epg(
     """Guía de programación (EPG) para TV en vivo.
 
     Devuelve el programa en curso ("AHORA") y los siguientes para el canal
-    solicitado, con marcas de tiempo en milisegundos de época.
+    solicitado, con marcas de tiempo en milisegundos de época. La clave se
+    resuelve con el país del canal: una señal de Chile no recibe la guía de México.
     """
     require_key(x_api_key)
-    norm = canonical_channel(channel or "") or canonical_channel(code or "")
-    if not norm:
-        return {"channel": channel or "", "norm": "", "programs": []}
+    norms = epg_norms_for(channel or "", code or "")
+    if not norms:
+        return {"channel": channel or "", "norm": "", "country": "", "programs": []}
 
     rows = await db().fetch(
         """
-        select title, description, start_time, end_time
+        select norm_name, title, description, start_time, end_time
         from epg_programs
-        where norm_name = $1
+        where norm_name = any($1::text[])
           and end_time >= now() - interval '20 minutes'
         order by start_time asc
-        limit 12
         """,
-        norm,
+        norms,
     )
-    if not rows and len(norm) >= 3:
-        rows = await db().fetch(
-            """
-            select title, description, start_time, end_time
-            from epg_programs
-            where (norm_name like '%' || $1 || '%' or $1 like '%' || norm_name || '%')
-              and end_time >= now() - interval '20 minutes'
-            order by start_time asc
-            limit 12
-            """,
-            norm,
-        )
-
-    programs = [
-        {
-            "name": r["title"],
-            "description": r["description"] or "",
-            "start": r["start_time"].isoformat(),
-            "end": r["end_time"].isoformat(),
-            "startMs": int(r["start_time"].timestamp() * 1000),
-            "endMs": int(r["end_time"].timestamp() * 1000),
-        }
-        for r in rows
-    ]
+    norm, chosen = _epg_pick(rows, norms)
     return {
         "channel": channel or "",
         "norm": norm,
-        "programs": programs,
+        "country": norm.split(":", 1)[0] if norm else "",
+        "programs": [_epg_program(row) for row in chosen],
     }
+
+
+@app.post("/v1/epg/bulk")
+async def epg_bulk(request: Request, x_api_key: str | None = Header(default=None)):
+    """Guía AHORA/DESPUÉS de hasta 400 canales en UNA petición.
+
+    El launcher de TV pide la guía de 120 canales al armar su mosaico; con este
+    endpoint no necesita 120 viajes HTTP. Devuelve solo lo que el mosaico pinta
+    (nombre y ventana), no la lista completa de programas.
+    """
+    require_key(x_api_key)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    channels = body.get("channels") if isinstance(body, dict) else None
+    if not isinstance(channels, list) or not channels:
+        return {"channels": {}, "generatedAt": int(time.time() * 1000)}
+    if len(channels) > 400:
+        raise HTTPException(status_code=400, detail="máximo 400 canales")
+
+    wanted: list[tuple[str, list[str]]] = []
+    all_norms: list[str] = []
+    for item in channels:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code") or "")
+        name = str(item.get("name") or "")
+        norms = epg_norms_for(name, code)
+        if not norms:
+            continue
+        wanted.append((code or name, norms))
+        all_norms.extend(norms)
+    if not wanted:
+        return {"channels": {}, "generatedAt": int(time.time() * 1000)}
+
+    rows = await db().fetch(
+        """
+        select norm_name, title, description, start_time, end_time
+        from epg_programs
+        where norm_name = any($1::text[])
+          and end_time >= now() - interval '20 minutes'
+        order by start_time asc
+        """,
+        list(dict.fromkeys(all_norms)),
+    )
+    by_norm: dict[str, list] = {}
+    for row in rows:
+        by_norm.setdefault(row["norm_name"], []).append(row)
+
+    now_ms = int(time.time() * 1000)
+    out: dict[str, dict] = {}
+    for key, norms in wanted:
+        norm = next((candidate for candidate in norms if by_norm.get(candidate)), "")
+        if not norm:
+            continue
+        now, upcoming = _epg_window(_epg_unique(by_norm[norm]), now_ms)
+        out[key] = {"norm": norm, "now": now, "next": upcoming}
+    return {"channels": out, "generatedAt": now_ms}
+
+
+@app.get("/v1/epg/health")
+async def epg_health(x_api_key: str | None = Header(default=None)):
+    """Estado de la guía: frescura, filas vigentes y cobertura real del catálogo."""
+    require_key(x_api_key)
+    return await _epg_snapshot()
 
 
 # ----- diagnóstico de campo (Fase 1) -----
@@ -3033,6 +3273,7 @@ async def stats(x_api_key: str | None = Header(default=None)):
             "withoutCategory": int(catalog["without_category"] or 0),
             "deepAt": deep_at.isoformat() if deep_at else None,
         },
+        "epg": await _epg_snapshot(),
     }
 
 

@@ -97,5 +97,5 @@ fun homeRowIcon(rowId: String): ImageVector? = when (rowId) {
     "home-kind-series" -> VisionIcons.Series
     "home-kind-anime" -> VisionIcons.Anime
     "home-kind-kids" -> VisionIcons.Kids
-    else -> null
+    else -> if (rowId.startsWith("tema-")) VisionIcons.Collections else null
 }

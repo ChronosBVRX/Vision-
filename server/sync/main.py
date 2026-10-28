@@ -184,14 +184,6 @@ async def main() -> None:
             while True:
                 changed = await run_connectors(pool)
                 try:
-                    changed += await index_build.build(pool)
-                except Exception:  # noqa: BLE001
-                    log.exception("el índice de estrenos/géneros falló")
-                try:
-                    changed += await grouping.group(pool)
-                except Exception:  # noqa: BLE001
-                    log.exception("el agrupador de temporadas falló")
-                try:
                     changed += await tmdb.enrich_batch(pool)
                 except Exception:  # noqa: BLE001
                     log.exception("el enriquecimiento TMDB falló")
@@ -203,6 +195,12 @@ async def main() -> None:
                     changed += await tmdb.backfill_popularity(pool)
                 except Exception:  # noqa: BLE001
                     log.exception("el backfill de popularidad TMDB falló")
+                try:
+                    # Refresco de las cifras que ordenan el Top 10: TMDB las mueve a
+                    # diario y antes se quedaban congeladas desde el primer match.
+                    changed += await tmdb.refresh_popularity(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el refresco de popularidad TMDB falló")
                 try:
                     # Nombres para buscar (es-MX/original/regionales) de los matches ya
                     # hechos: sin esto, «buscando a nemo» no encuentra «Finding Nemo».
@@ -216,11 +214,30 @@ async def main() -> None:
                 except Exception:  # noqa: BLE001
                     log.exception("el backfill de traducciones TMDB falló")
                 try:
+                    # El agrupador va DESPUÉS del enriquecimiento: un match TMDB recién
+                    # hecho («House M.D.» → «House») agrupa en el mismo ciclo.
+                    changed += await grouping.group(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el agrupador de temporadas falló")
+                try:
                     # Director/reparto normalizados de TMDB para el buscador profundo
                     # («tarantino», «pedro pascal»): rellena los huecos del portal.
                     await tmdb.backfill_credits(pool)
                 except Exception:  # noqa: BLE001
                     log.exception("el backfill de créditos TMDB falló")
+                try:
+                    # Tendencia semanal TMDB (2 llamadas cada 12 h): alimenta la fila
+                    # «Populares de la semana» y da señal de vida al Top 10.
+                    await tmdb.sync_trending(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el trending semanal falló")
+                try:
+                    # El índice se arma AL FINAL: así ve la popularidad y los géneros
+                    # refrescados en este mismo ciclo (antes corría antes de TMDB y la
+                    # fila mostraba los valores del ciclo anterior).
+                    changed += await index_build.build(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el índice de estrenos/géneros falló")
                 try:
                     # Mantenimiento del texto de búsqueda: títulos nuevos o con
                     # enriquecimiento más nuevo que su texto (no toca la versión).
@@ -232,12 +249,6 @@ async def main() -> None:
                     await aniskip.sync(pool)
                 except Exception:  # noqa: BLE001
                     log.exception("el mapeo TMDB→MAL falló")
-                try:
-                    # Tendencia semanal TMDB (2 llamadas/semana): alimenta la fila
-                    # «Populares de la semana».
-                    await tmdb.sync_trending(pool)
-                except Exception:  # noqa: BLE001
-                    log.exception("el trending semanal falló")
                 try:
                     # Agenda de estrenos TVMaze (7 días, gratis): avisos de capítulos nuevos.
                     await schedule.sync(pool)

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.chronosbvrx.visionplus.home
 
 import android.content.BroadcastReceiver
@@ -27,6 +29,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -54,8 +58,12 @@ import com.chronosbvrx.visionplus.home.data.HomeConfig
 import com.chronosbvrx.visionplus.home.data.HomeRoleAction
 import com.chronosbvrx.visionplus.home.data.HomeUpdate
 import com.chronosbvrx.visionplus.home.data.LauncherPrefs
+import com.chronosbvrx.visionplus.home.data.LauncherPreset
+import com.chronosbvrx.visionplus.home.data.TvInputSource
+import com.chronosbvrx.visionplus.home.data.TvInputsRepository
 import com.chronosbvrx.visionplus.home.data.composeHeroSlides
 import com.chronosbvrx.visionplus.home.data.homeRowEntries
+import com.chronosbvrx.visionplus.home.data.tunerOf
 import com.chronosbvrx.visionplus.home.ui.AppsSurface
 import com.chronosbvrx.visionplus.home.ui.CatalogSurface
 import com.chronosbvrx.visionplus.home.ui.CommandCenterDialog
@@ -65,25 +73,39 @@ import com.chronosbvrx.visionplus.home.ui.HomeColors
 import com.chronosbvrx.visionplus.home.ui.HomeGuideDialog
 import com.chronosbvrx.visionplus.home.ui.HomeTab
 import com.chronosbvrx.visionplus.home.ui.HomeSurface
+import com.chronosbvrx.visionplus.home.ui.InputsSurface
 import com.chronosbvrx.visionplus.home.ui.ItemActionsDialog
+import com.chronosbvrx.visionplus.home.ui.LauncherSettingsActions
+import com.chronosbvrx.visionplus.home.ui.LauncherSettingsDialog
+import com.chronosbvrx.visionplus.home.ui.LauncherSettingsSection
+import com.chronosbvrx.visionplus.home.ui.LauncherSystemInfo
+import com.chronosbvrx.visionplus.home.ui.LauncherSystemPage
 import com.chronosbvrx.visionplus.home.ui.LiveSurface
 import com.chronosbvrx.visionplus.home.ui.ManageAppsDialog
 import com.chronosbvrx.visionplus.home.ui.ManageChannelsDialog
 import com.chronosbvrx.visionplus.home.ui.ManageRowsDialog
+import com.chronosbvrx.visionplus.home.ui.ManageTabsDialog
 import com.chronosbvrx.visionplus.home.ui.MenuAction
 import com.chronosbvrx.visionplus.home.ui.MissingVisionBanner
 import com.chronosbvrx.visionplus.home.ui.OutdatedVisionBanner
 import com.chronosbvrx.visionplus.home.ui.PersonalizeHubDialog
+import com.chronosbvrx.visionplus.home.ui.PresetsDialog
 import com.chronosbvrx.visionplus.home.ui.SearchSurface
+import com.chronosbvrx.visionplus.home.ui.TabEntry
 import com.chronosbvrx.visionplus.home.ui.TopChrome
 import com.chronosbvrx.visionplus.home.ui.currentProgram
 import com.chronosbvrx.visionplus.home.ui.requestFocusSafely
+import com.chronosbvrx.visionplus.home.ui.softFocusDown
+import com.chronosbvrx.visionplus.home.ui.startTabFor
+import com.chronosbvrx.visionplus.home.ui.visibleTabs
 import com.chronosbvrx.visionplus.home.rememberHomeMetrics
 import com.chronosbvrx.visionplus.home.ui.LocalReducedEffects
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-private enum class PersonalizePage { HUB, CHANNELS, APPS, ROWS, DISPLAY }
+private enum class PersonalizePage { HUB, CHANNELS, APPS, ROWS, TABS, PRESETS, DISPLAY }
 
 private sealed interface EditTarget {
     data class Channel(val item: LiveItem) : EditTarget
@@ -102,11 +124,15 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     val prefs = remember { LauncherPrefs(context) }
     val feeds = remember { FeedRepository(context) }
     val appsRepo = remember { AppsRepository(context) }
+    val tvInputs = remember { TvInputsRepository(context) }
 
     var feed by remember { mutableStateOf<HomeFeed?>(null) }
     var apps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
     var recentApps by remember { mutableStateOf(prefs.recentApps()) }
     var heroBanners by remember { mutableStateOf<List<HeroSlide>>(emptyList()) }
+    var inputs by remember { mutableStateOf<List<TvInputSource>>(emptyList()) }
+    var inputsLoaded by remember { mutableStateOf(false) }
+    var system by remember { mutableStateOf(LauncherSystemInfo()) }
     val profileKey = feed?.meta?.profileId?.takeIf { it.isNotBlank() }
         ?: feed?.meta?.profile?.lowercase()?.takeIf { it.isNotBlank() }
         ?: "principal"
@@ -123,6 +149,12 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     }
     val metrics = rememberHomeMetrics(config.display.density)
     val compact = metrics.posterWidth < 110.dp
+    // Una TV box no tiene sintonizador ni entradas HDMI: la pestaña «Entradas» solo existe si
+    // el equipo reporta al menos una fuente real. Nunca se inventa «TV abierta».
+    val inputsAvailable = inputs.isNotEmpty()
+    val availableTabs = remember(config.tabOrder, config.hiddenTabs, inputsAvailable) {
+        visibleTabs(config, inputsAvailable)
+    }
     // Hero: banners diarios del VPS (arte panorámico) + partidos en vivo de la agenda.
     // Se recalcula cuando llega el feed o los banners; no cada minuto para no reiniciar
     // el carrusel mientras el usuario lo está mirando.
@@ -135,18 +167,21 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         )
     }
 
-    // Un Inicio de sistema siempre abre en Inicio (no en la última pestaña que se miró).
-    var tab by rememberSaveable { mutableStateOf(HomeTab.HOME) }
+    // Un Inicio de sistema siempre abre donde el usuario lo dejó configurado (o en Inicio):
+    // el botón Home, en cambio, siempre vuelve al Inicio para no sorprender.
+    var tab by rememberSaveable { mutableStateOf(startTabFor(config.startTab, prefs.lastTab)) }
     var commandCenter by remember { mutableStateOf(false) }
-    // Se recalcula al abrir el centro de control: si acaba de aceptar el rol, muestra el estado
-    // correcto y deja la puerta manual para cambiar al otro launcher.
-    val homeDefault = remember(commandCenter) {
-        if (commandCenter) appsRepo.isVisionHomeDefault() else false
+    var settingsSection by remember { mutableStateOf<LauncherSettingsSection?>(null) }
+    // Se recalcula al abrir el panel o al volver del sistema: si acaba de aceptar el rol,
+    // muestra el estado correcto y deja la puerta manual para cambiar al otro launcher.
+    var resumeTick by remember { mutableIntStateOf(0) }
+    val homeDefault = remember(commandCenter, settingsSection, resumeTick) {
+        if (commandCenter || settingsSection != null) appsRepo.isVisionHomeDefault() else false
     }
     // Quién abre la tele HOY (para decirlo sin mentir) y la guía de 3 pasos si el firmware no
     // tiene selector de Inicio.
-    val currentHome = remember(commandCenter) {
-        if (commandCenter) appsRepo.currentHomeLabel() else null
+    val currentHome = remember(commandCenter, settingsSection, resumeTick) {
+        if (commandCenter || settingsSection != null) appsRepo.currentHomeLabel() else null
     }
     var homeGuide by remember { mutableStateOf<String?>(null) }
     fun requestHome() {
@@ -178,10 +213,35 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         apps = appsRepo.load()
         visionInstalled = appsRepo.visionPlusInstalled()
         heroBanners = BannersRepository.cached(context)
+        // Las entradas del televisor son del sistema, no de la red: se leen ya.
+        inputs = tvInputs.inputs()
+        inputsLoaded = true
+        system = LauncherSystemInfo(
+            device = appsRepo.deviceLabel(),
+            network = appsRepo.networkLabel(),
+            storage = appsRepo.storageLabel(),
+        )
         feeds.refresh()?.let { feed = it }
         feedAttempted = true
         // La versión del release (cacheada 24 h) decide si Vision+ se quedó atrás.
         latestApp = HomeUpdate.latestAppVersion(context)
+    }
+
+    // La pestaña se recuerda para quien elija «la última que usaste» al encender.
+    LaunchedEffect(tab) {
+        prefs.lastTab = tab.key
+    }
+
+    // Si la preferencia apuntaba a una pestaña que este equipo no tiene (TV box sin entradas)
+    // o que la persona ocultó, el Inicio se resuelve a Inicio en vez de quedar en una pestaña
+    // que no se ve. No pelea con el usuario: solo actúa cuando la pestaña dejó de existir.
+    LaunchedEffect(inputsLoaded, inputsAvailable, availableTabs, tab) {
+        if (!inputsLoaded) return@LaunchedEffect
+        if (tab !in availableTabs) {
+            tab = HomeTab.HOME
+            userHasMoved = false
+            landingRequest++
+        }
     }
 
     // Los banners diarios no esperan al feed: cargan en paralelo para que el hero
@@ -223,6 +283,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
 
     // Al volver de una app o del reproductor, el minuto y el perfil son los de ahora.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        resumeTick++
         scope.launch {
             feeds.refresh()?.let { feed = it }
             BannersRepository.load(context)?.let { heroBanners = it }
@@ -230,6 +291,14 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             recentApps = prefs.recentApps()
             visionInstalled = appsRepo.visionPlusInstalled()
             canInstall = HomeUpdate.canInstall(context)
+            // Un HDMI recién conectado aparece sin reiniciar el launcher.
+            inputs = tvInputs.inputs()
+            inputsLoaded = true
+            system = LauncherSystemInfo(
+                device = appsRepo.deviceLabel(),
+                network = appsRepo.networkLabel(),
+                storage = appsRepo.storageLabel(),
+            )
             // Si el instalador se canceló, el botón vuelve a ofrecer la instalación.
             if (!visionInstalled && HomeUpdate.visionState is HomeUpdate.State.Ready) {
                 HomeUpdate.resetVision()
@@ -261,6 +330,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         if (homeSignal == 0) return@LaunchedEffect
         tab = HomeTab.HOME
         commandCenter = false
+        settingsSection = null
         searchOpen = false
         userHasMoved = false
         landingRequest++
@@ -303,9 +373,27 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         }
     }
 
+    // Red proactiva de foco: si el contenido cambia debajo del cursor (una fila que se
+    // refresca, un canal que se oculta) el control enfocado desaparece y el Inicio se queda
+    // sin foco. En vez de comerse la siguiente tecla, se devuelve el foco al destino de la
+    // pestaña en cuanto se detecta. Nunca pelea: solo actúa si NADA tiene el foco.
+    LaunchedEffect(tab, commandCenter, settingsSection, searchOpen, personalizePage, editTarget, homeGuide) {
+        val panelOpen = commandCenter || settingsSection != null || searchOpen ||
+            personalizePage != null || editTarget != null || homeGuide != null
+        if (panelOpen) return@LaunchedEffect
+        val target = if (tab == HomeTab.HOME) landing else sectionLanding
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                delay(200)
+                if (!screenHasFocus) requestFocusSafely(target)
+            }
+        }
+    }
+
     // Atrás nunca cierra el sistema: como mucho vuelve a Inicio.
     BackHandler(enabled = true) {
         when {
+            settingsSection != null -> settingsSection = null
             commandCenter -> commandCenter = false
             searchOpen -> searchOpen = false
             tab != HomeTab.HOME -> {
@@ -345,6 +433,39 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         if (!appsRepo.requestUninstall(app.packageName)) {
             LauncherActions.toast(context, "No se pudo abrir el desinstalador")
         }
+    }
+
+    fun openInput(item: TvInputSource) {
+        if (!tvInputs.open(item)) {
+            LauncherActions.toast(context, "No se pudo abrir ${item.label}")
+        }
+    }
+
+    fun refreshInputs() {
+        scope.launch {
+            inputs = tvInputs.inputs()
+            LauncherActions.toast(
+                context,
+                if (inputs.isEmpty()) "Este equipo no reporta entradas de TV" else "${inputs.size} entradas encontradas",
+            )
+        }
+    }
+
+    fun openSystemPage(page: LauncherSystemPage) {
+        val opened = when (page) {
+            LauncherSystemPage.WIFI -> appsRepo.openWifiSettings()
+            LauncherSystemPage.DISPLAY -> appsRepo.openDisplaySettings()
+            LauncherSystemPage.SOUND -> appsRepo.openSoundSettings()
+            LauncherSystemPage.STORAGE -> appsRepo.openStorageSettings()
+            LauncherSystemPage.DATE -> appsRepo.openDateTimeSettings()
+            LauncherSystemPage.LANGUAGE -> appsRepo.openLanguageSettings()
+            LauncherSystemPage.ACCESSIBILITY -> appsRepo.openAccessibilitySettings()
+            LauncherSystemPage.SCREENSAVER -> appsRepo.openScreensaverSettings()
+            LauncherSystemPage.APP_LIST -> appsRepo.openAppListSettings()
+            LauncherSystemPage.DEFAULT_APPS -> appsRepo.openDefaultAppsSettings()
+            LauncherSystemPage.SETTINGS -> appsRepo.openSystemSettings()
+        }
+        if (!opened) LauncherActions.toast(context, "Este equipo no tiene la pantalla de ${page.label}")
     }
 
     fun updateConfig(change: (HomeConfig) -> HomeConfig) {
@@ -396,6 +517,21 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
         feed == null ||
             (latestApp != null && HomeUpdate.isOlder(feed?.meta?.appVersion.orEmpty(), latestApp!!))
         )
+    // El aviso de instalar/actualizar Vision+ vive ENTRE la barra superior y el contenido.
+    // Sin un destino propio, el «abajo» de las pestañas saltaba al héroe y el «arriba» del
+    // héroe volvía a la pestaña: sus botones quedaban inalcanzables con el mando.
+    val bannerVisible = !visionInstalled || appOutdated
+    val bannerFocus = remember { FocusRequester() }
+    val contentLanding = if (tab == HomeTab.HOME) landing else sectionLanding
+    val contentUpTarget: FocusRequester? = if (bannerVisible) bannerFocus else tabLanding
+    val bannerPrimaryModifier = if (bannerVisible) {
+        Modifier
+            .focusRequester(bannerFocus)
+            .focusProperties { up = tabLanding }
+            .softFocusDown(contentLanding)
+    } else {
+        Modifier
+    }
 
     CompositionLocalProvider(LocalReducedEffects provides reduced) {
     Box(
@@ -442,9 +578,10 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                 onCommandCenter = { commandCenter = true },
                 compact = compact,
                 activeTabRequester = tabLanding,
-                downTarget = if (tab == HomeTab.HOME) landing else sectionLanding,
+                downTarget = if (bannerVisible) bannerFocus else contentLanding,
                 clock24h = config.display.clock24h,
                 showClock = config.display.showClock,
+                availableTabs = availableTabs,
             )
             if (!visionInstalled) {
                 MissingVisionBanner(
@@ -464,6 +601,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         top = 4.dp,
                         bottom = 8.dp,
                     ),
+                    primaryModifier = bannerPrimaryModifier,
                 )
             } else if (appOutdated) {
                 OutdatedVisionBanner(
@@ -485,6 +623,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         top = 4.dp,
                         bottom = 8.dp,
                     ),
+                    primaryModifier = bannerPrimaryModifier,
                 )
             }
             Box(Modifier.weight(1f)) {
@@ -494,6 +633,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         hero = heroSlides,
                         apps = apps,
                         recentApps = recentApps,
+                        inputs = inputs,
                         config = config,
                         metrics = metrics,
                         heroReduced = profile.lowRam,
@@ -501,16 +641,34 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         heroPaused = heroFocused,
                         landing = landing,
                         listState = homeListState,
-                        tabLanding = tabLanding,
+                        tabLanding = contentUpTarget,
                         onHeroPlay = { slide -> openLink(slide.playLink.ifBlank { slide.openLink }) },
                         onHeroOpen = { slide -> openLink(slide.openLink.ifBlank { slide.playLink }) },
                         onOpenSports = { openLink(VisionLinks.sports()) },
                         onItem = { item -> openLink(item.openLink) },
                         onContinue = { item -> openLink(item.playLink) },
-                        onLive = { item -> openLink(item.playLink) },
+                        onLive = { item, channels, scope ->
+                            // El canal viaja con SU menú: el reproductor hace zapping (y abre
+                            // «Canales») solo dentro de la fila desde la que se abrió.
+                            openLink(
+                                VisionLinks.live(
+                                    code = item.code,
+                                    name = item.name,
+                                    logo = item.logo,
+                                    codes = channels.map { it.code },
+                                    scope = scope,
+                                ),
+                            )
+                        },
                         onChannelLongClick = { item -> editTarget = EditTarget.Channel(item) },
                         onApp = { app -> launchApp(app) },
                         onAppLongClick = { app -> editTarget = EditTarget.App(app) },
+                        onInput = { item -> openInput(item) },
+                        onSeeInputs = {
+                            tab = HomeTab.INPUTS
+                            userHasMoved = false
+                            landingRequest++
+                        },
                         onSeeLive = {
                             tab = HomeTab.LIVE
                             userHasMoved = false
@@ -545,7 +703,25 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         onOpenFull = { openLink(VisionLinks.liveHub()) },
                         onLongClick = { item -> editTarget = EditTarget.Channel(item) },
                         onManageChannels = { personalizePage = PersonalizePage.CHANNELS },
-                        upTarget = tabLanding,
+                        upTarget = contentUpTarget,
+                        landing = sectionLanding,
+                    )
+
+                    HomeTab.INPUTS -> InputsSurface(
+                        inputs = inputs,
+                        config = config,
+                        metrics = metrics,
+                        onOpen = { item -> openInput(item) },
+                        onRefresh = { refreshInputs() },
+                        onManage = {
+                            settingsSection = LauncherSettingsSection.INPUTS
+                        },
+                        onOpenLive = {
+                            tab = HomeTab.LIVE
+                            userHasMoved = false
+                            landingRequest++
+                        },
+                        upTarget = contentUpTarget,
                         landing = sectionLanding,
                     )
 
@@ -554,7 +730,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         metrics = metrics,
                         onOpen = { event -> openLink(event.openLink) },
                         onOpenFull = { openLink(VisionLinks.sports()) },
-                        upTarget = tabLanding,
+                        upTarget = contentUpTarget,
                         landing = sectionLanding,
                     )
 
@@ -566,7 +742,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         onOpenFull = {
                             openLink(VisionLinks.section(if (tab == HomeTab.MOVIES) "movies" else "series"))
                         },
-                        upTarget = tabLanding,
+                        upTarget = contentUpTarget,
                         landing = sectionLanding,
                     )
 
@@ -578,6 +754,9 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         onOpen = { app -> launchApp(app) },
                         onLongClick = { app -> editTarget = EditTarget.App(app) },
                         onSystemSettings = { appsRepo.openSystemSettings() },
+                        onLauncherSettings = {
+                            settingsSection = LauncherSettingsSection.STARTUP
+                        },
                         onWifi = { appsRepo.openWifiSettings() },
                         onDisplay = {
                             openSystemPage(appsRepo.openDisplaySettings(), "pantalla")
@@ -601,7 +780,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         onRequestHome = { requestHome() },
                         onManage = { personalizePage = PersonalizePage.APPS },
                         landing = sectionLanding,
-                        upTarget = tabLanding,
+                        upTarget = contentUpTarget,
                     )
                 }
             }
@@ -614,6 +793,16 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             profileName = feed?.meta?.profile.orEmpty(),
             profiles = feed?.meta?.profiles ?: 1,
             onDismiss = { commandCenter = false },
+            onLauncherSettings = {
+                commandCenter = false
+                settingsSection = LauncherSettingsSection.STARTUP
+            },
+            onWatchTv = tunerOf(inputs)?.let { tuner ->
+                {
+                    commandCenter = false
+                    openInput(tuner)
+                }
+            },
             onPersonalize = {
                 commandCenter = false
                 personalizePage = PersonalizePage.HUB
@@ -657,6 +846,60 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                     HomeUpdate.openInstallPermission(context)
                 }
             },
+        )
+    }
+
+    settingsSection?.let { section ->
+        LauncherSettingsDialog(
+            section = section,
+            profileName = feed?.meta?.profile.orEmpty(),
+            config = config,
+            inputs = inputs,
+            homeVersion = HomeUpdate.versionName,
+            visionInstalled = visionInstalled,
+            visionVersion = feed?.meta?.appVersion.orEmpty(),
+            latestVisionVersion = latestApp.orEmpty(),
+            homeDefault = homeDefault,
+            currentHome = currentHome,
+            system = system,
+            updateState = HomeUpdate.state,
+            visionState = HomeUpdate.visionState,
+            actions = LauncherSettingsActions(
+                onDismiss = { settingsSection = null },
+                onSection = { settingsSection = it },
+                onStartTab = { start -> updateConfig { it.setStartTab(start) } },
+                onToggleInputsRow = { updateConfig { it.toggleRow("inputs") } },
+                onToggleInput = { id -> updateConfig { it.toggleInputHidden(id) } },
+                onRefreshInputs = { refreshInputs() },
+                onOpenInput = { item -> openInput(item) },
+                onOpenLive = {
+                    settingsSection = null
+                    tab = HomeTab.LIVE
+                    userHasMoved = false
+                    landingRequest++
+                },
+                onPersonalize = {
+                    settingsSection = null
+                    personalizePage = PersonalizePage.HUB
+                },
+                onSystemPage = { page -> openSystemPage(page) },
+                onRequestHome = {
+                    settingsSection = null
+                    requestHome()
+                },
+                onHomeSettings = {
+                    settingsSection = null
+                    appsRepo.openHomeSettings()
+                },
+                onUpdateHome = { scope.launch { HomeUpdate.installLatest(context) } },
+                onUpdateVision = {
+                    if (HomeUpdate.canInstall(context)) {
+                        scope.launch { HomeUpdate.installVisionPlus(context) }
+                    } else {
+                        HomeUpdate.openInstallPermission(context)
+                    }
+                },
+            ),
         )
     }
 
@@ -856,6 +1099,8 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             onChannels = { personalizePage = PersonalizePage.CHANNELS },
             onApps = { personalizePage = PersonalizePage.APPS },
             onRows = { personalizePage = PersonalizePage.ROWS },
+            onTabs = { personalizePage = PersonalizePage.TABS },
+            onPresets = { personalizePage = PersonalizePage.PRESETS },
             onAppearance = { personalizePage = PersonalizePage.DISPLAY },
             onReset = {
                 updateConfig { it.resetAll() }
@@ -898,7 +1143,14 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             ManageRowsDialog(
                 rows = rows,
                 config = config,
-                onMove = { id, delta -> updateConfig { it.moveRow(id, delta) } },
+                onMove = { id, delta ->
+                    updateConfig { cfg ->
+                        // Las filas del feed (Top 10, Novedades…) no viven en la configuración
+                        // hasta que se mueven: sin esto, sus flechas no hacían nada.
+                        val withId = if (id in cfg.rowOrder) cfg else cfg.copy(rowOrder = cfg.rowOrder + id)
+                        withId.moveRow(id, delta)
+                    }
+                },
                 onToggle = { id ->
                     val visible = rows.count { it.id !in config.hiddenRows }
                     if (id !in config.hiddenRows && visible <= 1) {
@@ -914,6 +1166,40 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                 onDismiss = { personalizePage = PersonalizePage.HUB },
             )
         }
+
+        PersonalizePage.TABS -> {
+            val tabs = remember(config.tabOrder, config.hiddenTabs) {
+                val known = HomeTab.entries.associateBy { it.key }
+                (config.tabOrder + HomeTab.entries.map { it.key }).distinct()
+                    .mapNotNull { id -> known[id]?.let { TabEntry(it.key, it.label) } }
+            }
+            ManageTabsDialog(
+                tabs = tabs,
+                config = config,
+                inputsAvailable = inputsAvailable,
+                onMove = { id, delta ->
+                    updateConfig { cfg ->
+                        val withId = if (id in cfg.tabOrder) cfg else cfg.copy(tabOrder = cfg.tabOrder + id)
+                        withId.moveTab(id, delta)
+                    }
+                },
+                onToggle = { id -> updateConfig { it.toggleTab(id) } },
+                onReset = {
+                    updateConfig { it.resetTabs() }
+                    LauncherActions.toast(context, "Pestañas restablecidas")
+                },
+                onDismiss = { personalizePage = PersonalizePage.HUB },
+            )
+        }
+
+        PersonalizePage.PRESETS -> PresetsDialog(
+            onApply = { preset ->
+                updateConfig { it.withPreset(preset) }
+                personalizePage = null
+                LauncherActions.toast(context, "Plantilla «${preset.label}» aplicada")
+            },
+            onDismiss = { personalizePage = PersonalizePage.HUB },
+        )
 
         PersonalizePage.DISPLAY -> DisplaySettingsDialog(
             config = config,

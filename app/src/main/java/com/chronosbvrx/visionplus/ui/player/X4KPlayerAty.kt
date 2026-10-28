@@ -102,6 +102,7 @@ class X4KPlayerAty : ComponentActivity() {
             previewSeekMs = -1L
             scrubbing = false
             playerView?.let { com.chronosbvrx.visionplus.data.xuper.X4KTitan.seekTo(it, target) }
+            holdSeekBarAt(target)
             noteAppSeek()
         }
     }
@@ -285,6 +286,9 @@ class X4KPlayerAty : ComponentActivity() {
     /** Re-arranques internos del motor por falta de primer cuadro (sin mostrar error). */
     private var softRestarts = 0
 
+    /** Ya se re-emitió el play para recuperar la vista de render (una sola vez por reproducción). */
+    private var renderReattach = false
+
     // Detector de saltos de contenido (telemetría «PLAYER_FRAME_SKIP»): la posición no puede
     // avanzar más que el reloj de pared. Es el caso reportado «no es pausa, es un salto».
     private var skipProbePosMs = -1L
@@ -311,6 +315,11 @@ class X4KPlayerAty : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var controlsVisible = false
     private var scrubbing = false
+    // «Seleccionar un minuto»: el motor tarda un instante en reflejar el seek. Mientras tanto
+    // el sondeo no puede devolver el pulgar a la posición vieja (se sentía como si el toque no
+    // hubiera hecho nada). Se sostiene la barra en el destino hasta que el motor llega o vence.
+    private var seekHoldTargetMs = -1L
+    private var seekHoldUntilMs = 0L
     private var swallowWakeupKeyCode: Int = KeyEvent.KEYCODE_UNKNOWN
     private var lastControlsWakeupMs: Long = 0L
     /** Cuándo se armó el swallow: un mando que no manda el UP no puede dejar la tecla muerta. */
@@ -438,6 +447,7 @@ class X4KPlayerAty : ComponentActivity() {
                 var idx = findChannelIndex(curCode.ifBlank { code })
                 if (idx < 0 && resolvedArr.length() > 0) idx = 0
                 liveIndex = idx
+                Log.i(TAG, "zapping scope: codes=${codes?.size ?: 0} resolved=${resolvedArr.length()} index=$idx group=$liveGroupTitle")
                 runOnUiThread {
                     if (gen != playGen) return@runOnUiThread
                     updateLiveBanner()
@@ -724,6 +734,7 @@ class X4KPlayerAty : ComponentActivity() {
         errorShown = false
         loadingFading = false
         softRestarts = 0
+        renderReattach = false
         skipProbePosMs = -1L
         skipProbeAtMs = 0L
         skipProbeMuteUntilMs = 0L
@@ -738,6 +749,8 @@ class X4KPlayerAty : ComponentActivity() {
         recapSkipped = false
         scrubbing = false
         previewSeekMs = -1L
+        seekHoldTargetMs = -1L
+        seekHoldUntilMs = 0L
         durationMs = -1L
         declaredDurationMs = 0L
         declaredLanguages = emptyList()
@@ -1085,6 +1098,12 @@ class X4KPlayerAty : ComponentActivity() {
                         handler.postDelayed({ playerView?.let { X4KTitan.setAspect(it, aspect) } }, delay)
                     }
                     handler.post(poller)
+                    // Red de seguridad del primer render: si este play se adelantó al attach
+                    // (motor precalentado → montaje en `onCreate`), el contenedor puede haber
+                    // quedado sin su vista de render. Se comprueba dos veces y se re-emite una
+                    // sola vez — el mismo play que hace el zap, sin cambiar de canal.
+                    handler.postDelayed({ playerView?.let { ensureRenderViewAttached(it) } }, RENDER_CHECK_MS)
+                    handler.postDelayed({ playerView?.let { ensureRenderViewAttached(it) } }, RENDER_CHECK_LATE_MS)
                     if (liveMode && code.isNotBlank()) {
                         loadEpg(code)
                     }
@@ -1100,8 +1119,61 @@ class X4KPlayerAty : ComponentActivity() {
             }
             attemptPlay(1)
         }
-        if (introView == null) startPlayback() else pendingPlay = startPlayback
+        // El motor crea su vista de render DENTRO del play y solo la añade al contenedor si
+        // `ed.e` ya está anclada a la ventana: con el motor precalentado, `mountUi` corre en
+        // `onCreate` (antes del attach) y el primer canal quedaba en negro hasta cambiar de
+        // canal. El primer play espera a que la vista esté en la ventana.
+        val startWhenReady: () -> Unit = { startPlaybackWhenAttached(v, startPlayback) }
+        if (introView == null) startWhenReady() else pendingPlay = startWhenReady
     }
+
+    /**
+     * Arranca [action] cuando la vista del motor ya está anclada a su ventana.
+     *
+     * El motor crea su vista de render (SurfaceView / TextureView) dentro del `play` y solo la
+     * añade al contenedor si `ed.e` ya pasó por `onAttachedToWindow` (`ad.c.c(...)`). Con el
+     * motor precalentado (`isConfigured` → montaje en 0 ms), el play ocurría en `onCreate` y el
+     * render nunca llegaba al contenedor: video negro con audio, hasta que un zap volvía a
+     * llamar al motor con la vista ya anclada.
+     */
+    private fun startPlaybackWhenAttached(v: View, action: () -> Unit) {
+        if (isFinishing || isDestroyed) return
+        if (v.isAttachedToWindow) {
+            action()
+            return
+        }
+        v.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(view: View) {
+                view.removeOnAttachStateChangeListener(this)
+                if (isFinishing || isDestroyed) return
+                // Un frame para que la ventana publique el contenedor antes del play.
+                view.post(action)
+            }
+
+            override fun onViewDetachedFromWindow(view: View) = Unit
+        })
+    }
+
+    /**
+     * Red de seguridad del primer render: si tras el play el contenedor del motor sigue sin
+     * su vista de render, se re-emite UNA vez con la vista ya anclada — exactamente lo que
+     * hacía el zap manual, pero sin cambiar de canal.
+     */
+    private fun ensureRenderViewAttached(v: View) {
+        val group = v as? ViewGroup ?: return
+        if (!shouldReattachRender(isPlayerActive, v.isAttachedToWindow, group.childCount, renderReattach)) return
+        if (curMedias.isEmpty()) return
+        renderReattach = true
+        Log.w(TAG, "sin vista de render tras el play: se re-emite una vez (${if (liveMode) "live" else "vod"} $curCode)")
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+            "PLAYER_RENDER_REATTACH", "modo=${if (liveMode) "live" else "vod"}",
+        )
+        X4KTitan.play(v, if (liveMode) "live" else "vod", curCode, curTitle, curMedias)
+    }
+
+    /** Comprobaciones de la vista de render tras el play (la segunda si el attach tardó). */
+    private val RENDER_CHECK_MS = 800L
+    private val RENDER_CHECK_LATE_MS = 2_400L
 
     // ---------------------------------------------------------------- palette & icons
 
@@ -1461,7 +1533,9 @@ class X4KPlayerAty : ComponentActivity() {
             progressTintList = android.content.res.ColorStateList.valueOf(blue)
             progressBackgroundTintList = android.content.res.ColorStateList.valueOf(0x3DFFFFFF)
             thumbTintList = android.content.res.ColorStateList.valueOf(blueBright)
-            minimumHeight = dp(24)
+            // Móvil: un poco más de alto para acertar el minuto con el dedo (el área táctil
+            // crece con el control); en la tele se queda compacta.
+            minimumHeight = dp(if (isTv) 24 else 32)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (fromUser) {
@@ -1471,14 +1545,23 @@ class X4KPlayerAty : ComponentActivity() {
                     }
                 }
                 override fun onStartTrackingTouch(sb: SeekBar?) {
+                    // Un toque previo en el video dejó programado «ocultar en 300 ms»: si
+                    // vence a mitad del arrastre, la barra desaparece y el minuto elegido se
+                    // pierde. Elegir un minuto cancela ese ocultado.
+                    handler.removeCallbacks(pendingControlHide)
                     scrubbing = true
                     scheduleHide()
                 }
                 override fun onStopTrackingTouch(sb: SeekBar?) {
                     val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
-                    val targetMs = if (total > 0 && sb != null) (sb.progress.toLong() * total) / 1000L else 0L
-                    playerView?.let { com.chronosbvrx.visionplus.data.xuper.X4KTitan.seekTo(it, targetMs) }
-                    noteAppSeek()
+                    // Sin duración conocida la barra no puede elegir un minuto: no se toca el
+                    // motor (antes un toque mandaba el video al segundo 0).
+                    if (total > 0 && sb != null) {
+                        val targetMs = (sb.progress.toLong() * total) / 1000L
+                        playerView?.let { com.chronosbvrx.visionplus.data.xuper.X4KTitan.seekTo(it, targetMs) }
+                        holdSeekBarAt(targetMs)
+                        noteAppSeek()
+                    }
                     scrubbing = false
                     scheduleHide()
                 }
@@ -1930,7 +2013,9 @@ class X4KPlayerAty : ComponentActivity() {
                 }
             }
         }
-        overlay.setOnClickListener { }
+        // El overlay NO es clickable: un toque en una zona vacía tiene que llegar al catcher
+        // de gestos (que muestra/oculta los controles con la política del móvil). Antes el
+        // listener vacío se comía esos toques y la barra no se ocultaba nunca.
         overlay.visibility = if (controlsVisible) View.VISIBLE else View.GONE
         root.addView(
             overlay,
@@ -2737,7 +2822,12 @@ class X4KPlayerAty : ComponentActivity() {
             id = View.generateViewId()
             visibility = View.GONE
             isFocusable = false
-            setOnClickListener { if (canExecuteControlAction()) skipIntroNow() }
+            setOnClickListener {
+                // En el móvil la píldora se ve también con los controles cerrados (como
+                // Netflix): el toque debe funcionar al primero. El candado de 220 ms solo
+                // protege al mando, que repite la tecla al abrir el menú.
+                if (!isTv || canExecuteControlAction()) skipIntroNow()
+            }
         }
         pill.withIcon(R.drawable.ic_vp_forward)
         pill.tvControl(0xCC0A0F18.toInt(), 12)
@@ -2756,7 +2846,7 @@ class X4KPlayerAty : ComponentActivity() {
                 Gravity.BOTTOM or Gravity.END,
             ).apply {
                 rightMargin = dp(24)
-                bottomMargin = dp(if (isTv) 138 else 118)
+                bottomMargin = dp(if (isTv) 138 else 124)
             },
         )
         // Aviso discreto de escena post-créditos: no es botón (no roba foco), se muestra
@@ -5034,7 +5124,8 @@ class X4KPlayerAty : ComponentActivity() {
      * (∓10 s) lo cancela y la barra no parpadea.
      */
     private val pendingControlHide = Runnable {
-        if (!errorShown && !picking && introView == null && resumeOverlay == null && !nextVisible) {
+        // Nunca se oculta con el dedo en la barra: el arrastre/la selección manda.
+        if (!scrubbing && !errorShown && !picking && introView == null && resumeOverlay == null && !nextVisible) {
             hideControls()
         }
     }
@@ -5195,7 +5286,7 @@ class X4KPlayerAty : ComponentActivity() {
                     skipProbePosMs = pos
                     skipProbeAtMs = probeAt
                 }
-                if (!scrubbing) {
+                if (!scrubbing && !seekBarHoldActive(pos)) {
                     if (total > 0) {
                         val target = ((pos * 1000) / total).toInt().coerceIn(0, 1000)
                         if (seekBar?.progress != target) seekBar?.progress = target
@@ -5235,12 +5326,39 @@ class X4KPlayerAty : ComponentActivity() {
         val total = resolveStableTotalDuration(declaredDurationMs, durationMs, currentPos, liveMode)
         val targetPos = if (total > 0) (currentPos + deltaMs).coerceIn(0L, total) else (currentPos + deltaMs).coerceAtLeast(0L)
         X4KTitan.seekTo(v, targetPos)
+        holdSeekBarAt(targetPos)
         noteAppSeek()
-        if (total > 0) {
-            seekBar?.progress = ((targetPos * 1000) / total).toInt().coerceIn(0, 1000)
-        }
-        timeNow?.text = fmt(targetPos)
         scheduleHide()
+    }
+
+    /**
+     * Deja la barra en el minuto elegido mientras el motor procesa el seek. Sin esto, el
+     * siguiente tic del sondeo (500 ms) devolvía el pulgar a la posición vieja y el usuario
+     * creía que su toque no había funcionado. Se suelta cuando el motor llega (±2 s) o al
+     * vencer el margen.
+     */
+    private fun holdSeekBarAt(targetMs: Long, holdMs: Long = 1_800L) {
+        if (liveMode) return
+        val target = targetMs.coerceAtLeast(0L)
+        seekHoldTargetMs = target
+        seekHoldUntilMs = android.os.SystemClock.elapsedRealtime() + holdMs
+        val total = resolveStableTotalDuration(declaredDurationMs, durationMs, target, liveMode)
+        if (total > 0) {
+            seekBar?.progress = ((target * 1000) / total).toInt().coerceIn(0, 1000)
+        }
+        timeNow?.text = fmt(target)
+    }
+
+    /** true mientras la barra debe seguir en el destino pedido (el motor aún no llega). */
+    private fun seekBarHoldActive(pos: Long): Boolean {
+        val active = seekHoldActive(
+            holdTargetMs = seekHoldTargetMs,
+            holdUntilMs = seekHoldUntilMs,
+            nowMs = android.os.SystemClock.elapsedRealtime(),
+            enginePosMs = pos,
+        )
+        if (!active) seekHoldTargetMs = -1L
+        return active
     }
 
     private fun progressMs(): Long {
@@ -5311,6 +5429,7 @@ class X4KPlayerAty : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.activityResumed()
         // Red de seguridad del «Camino B»: la actividad se queda residente detrás, pero
         // si el sistema la trae al frente cuando YA no hay reproducción (salida normal,
         // proceso :x4k congelado o tarea huérfana) se cierra sola. Jamás un fondo negro
@@ -5558,6 +5677,11 @@ class X4KPlayerAty : ComponentActivity() {
                 retryControlFocus(target, attempts - 1)
             }
         }, 160L)
+    }
+
+    override fun onPause() {
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.activityPaused()
+        super.onPause()
     }
 
     override fun onStop() {

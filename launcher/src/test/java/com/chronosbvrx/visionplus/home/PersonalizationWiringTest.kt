@@ -19,9 +19,37 @@ class PersonalizationWiringTest {
         assertTrue(screen.contains("ManageChannelsDialog("))
         assertTrue(screen.contains("ManageAppsDialog("))
         assertTrue(screen.contains("ManageRowsDialog("))
+        assertTrue(screen.contains("ManageTabsDialog("))
+        assertTrue(screen.contains("PresetsDialog("))
         assertTrue(screen.contains("DisplaySettingsDialog("))
         assertTrue(screen.contains("ItemActionsDialog("))
         assertTrue(screen.contains("updateConfig"))
+    }
+
+    @Test
+    fun theLauncherAlsoCustomizesItsTabBarAndShipsPresets() {
+        val config = require("src/main/java/com/chronosbvrx/visionplus/home/data/HomeConfig.kt")
+        assertTrue("orden de pestañas", config.contains("tabOrder"))
+        assertTrue("pestañas ocultas", config.contains("hiddenTabs"))
+        assertTrue("plantillas", config.contains("LauncherPreset"))
+        assertTrue("TV primero", config.contains("TV_FIRST"))
+        assertTrue("Cine", config.contains("CINEMA"))
+        assertTrue("Solo lo mío", config.contains("JUST_MINE"))
+        assertTrue("Niños", config.contains("KIDS"))
+
+        val personalize = require("src/main/java/com/chronosbvrx/visionplus/home/ui/Personalize.kt")
+        assertTrue(personalize.contains("ManageTabsDialog"))
+        assertTrue(personalize.contains("PresetsDialog"))
+        assertTrue(personalize.contains("Pestañas"))
+        assertTrue(personalize.contains("Plantillas"))
+        assertTrue("la pestaña sin fuentes se explica", personalize.contains("Sin fuentes en este equipo"))
+
+        val screen = require("src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt")
+        assertTrue(screen.contains("PersonalizePage.TABS"))
+        assertTrue(screen.contains("PersonalizePage.PRESETS"))
+        assertTrue(screen.contains("it.withPreset(preset)"))
+        assertTrue(screen.contains("visibleTabs(config, inputsAvailable)"))
+        assertTrue(screen.contains("inputsAvailable = inputsAvailable,"))
     }
 
     @Test

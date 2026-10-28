@@ -128,7 +128,6 @@ import com.chronosbvrx.visionplus.ui.sports.GeeZapSignals
 import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.markers.MarkersStore
 import com.chronosbvrx.visionplus.data.markers.autoSkipTarget
-import com.chronosbvrx.visionplus.data.markers.canShowSkipPill
 import com.chronosbvrx.visionplus.data.markers.creditsCardStartMs
 import com.chronosbvrx.visionplus.data.markers.parseMarkers
 import com.chronosbvrx.visionplus.data.markers.skipIntroWindow
@@ -1217,15 +1216,29 @@ private fun PlayerCore(
     // El botón solo sale cuando el video ya se está viendo (no en la pantalla de carga),
     // y nunca sobre el diálogo de reanudar.
     val videoReady = !isLive && !introPlaying && !buffering && positionMs > 0L
-    val showSkip = canShowSkipPill(
+    val showSkip = skipPillVisibleFor(
         hasTarget = skipTarget != null,
         buttonMode = skipMode == com.chronosbvrx.visionplus.ui.settings.VisionSettings.SKIP_INTRO_BUTTON,
         videoReady = videoReady,
         blocked = error != null || (!resumeConsumed && resumeEntry != null),
+        isTv = isTv,
+        controlsVisible = controls.visible,
     )
     fun skipIntro() {
         val target = skipTargetNow(positionMs) ?: return
-        if (!canExecuteControlAction()) return
+        // En el móvil la píldora es un botón táctil visible sobre el video: exigir que los
+        // controles estén abiertos hacía que el primer toque no hiciera nada. El candado de
+        // 220 ms solo protege al mando, que puede repetir la tecla.
+        if (!canPressSkipPill(
+                isTv = isTv,
+                controlsVisible = controls.visible,
+                nowMs = android.os.SystemClock.uptimeMillis(),
+                lastWakeupMs = lastWakeupAtMs,
+            )
+        ) {
+            return
+        }
+        if (isTv && swallowWakeupKey != null) return
         if (target.first.contains("resumen")) recapUsed = true else skipUsed = true
         player.seekTo(target.second)
         if (isTv) controls.hide()
@@ -1690,10 +1703,20 @@ private fun PlayerCore(
                                 durationMs = totalDur,
                                 bufferedFraction = bufferedFraction,
                                 focused = barFocused,
-                                onDrag = { dragValue = it; controls.bump() },
+                                // Sin duración real la barra no puede elegir un minuto: antes un
+                                // toque la mandaba al medio y el seek caía en 0 (reiniciaba).
+                                onDrag = {
+                                    if (totalDur > 0) {
+                                        dragValue = it
+                                        controls.bump()
+                                    }
+                                },
                                 onDragEnd = {
-                                    dragValue?.let { player.seekTo(it.toLong()) }
+                                    val target = dragValue
                                     dragValue = null
+                                    if (target != null && totalDur > 0) {
+                                        player.seekTo(target.toLong().coerceIn(0L, totalDur))
+                                    }
                                 },
                                 modifier = Modifier
                                     .weight(1f)
@@ -1917,7 +1940,7 @@ private fun PlayerCore(
             }
         }
 
-        if (showSkip && controls.visible) {
+        if (showSkip) {
             SkipPill(
                 label = skipTarget?.first ?: "Omitir intro",
                 onClick = { skipIntro() },

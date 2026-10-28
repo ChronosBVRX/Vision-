@@ -143,6 +143,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.activityResumed()
         RemoteBus.attach(remoteSink)
         // Al volver del sistema (otra app, pantalla apagada) la red pudo cambiar sin que el
         // callback lo alcance: se revalida antes de pintar, para entrar/salir del Modo Sin
@@ -164,6 +165,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.activityPaused()
         RemoteBus.detach(remoteSink)
         super.onPause()
     }

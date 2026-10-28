@@ -11,19 +11,29 @@ Ciclo propio en el worker (cada EPG_INTERVAL_SECONDS, 4 horas por defecto).
 
 import asyncio
 import gzip
+import json
 import logging
 import os
 import random
-import re
-import unicodedata
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+
+from epg_channels import (
+    canonical_channel,
+    channel_country,
+    epg_norms_for,
+)
 
 log = logging.getLogger("epg")
 
 UA = "VisionPlusSync/1.0 (epg)"
 
+# Cada feed pertenece a un país: la guía se guarda como `<país>:<cadena>` para no
+# mezclar señales hermanas de países distintos (HBO México ≠ HBO Chile; Canal 5
+# de Honduras ≠ Canal 5 de México). Los feeds de deportes de EE. UU. traen los
+# canales de franquicia (NFL/NBA/MLB), que no existen en el catálogo: no estorban,
+# pero tampoco cuentan como cobertura.
 FEEDS: tuple[str, ...] = (
     "https://epgshare01.online/epgshare01/epg_ripper_MX1.xml.gz",
     "https://epgshare01.online/epgshare01/epg_ripper_DIRECTVSPORTS1.xml.gz",
@@ -31,128 +41,39 @@ FEEDS: tuple[str, ...] = (
     "https://epgshare01.online/epgshare01/epg_ripper_AR1.xml.gz",
     "https://epgshare01.online/epgshare01/epg_ripper_CL1.xml.gz",
     "https://epgshare01.online/epgshare01/epg_ripper_US_SPORTS1.xml.gz",
+    "https://epgshare01.online/epgshare01/epg_ripper_PE1.xml.gz",
+    "https://epgshare01.online/epgshare01/epg_ripper_EC1.xml.gz",
 )
+
+FEED_COUNTRIES: dict[str, str] = {
+    "epg_ripper_MX1.xml.gz": "mx",
+    "epg_ripper_DIRECTVSPORTS1.xml.gz": "ar",
+    "epg_ripper_CO1.xml.gz": "co",
+    "epg_ripper_AR1.xml.gz": "ar",
+    "epg_ripper_CL1.xml.gz": "cl",
+    "epg_ripper_US_SPORTS1.xml.gz": "us",
+    "epg_ripper_PE1.xml.gz": "pe",
+    "epg_ripper_EC1.xml.gz": "ec",
+}
+
+
+def feed_country(url: str) -> str:
+    """País del feed por su nombre de archivo (``mx``, ``co``…)."""
+    return FEED_COUNTRIES.get(url.split("/")[-1], "")
+
 
 UPSERT_SQL = """
 insert into epg_programs (
-    id, channel_id, channel_name, norm_name, title, description, start_time, end_time, updated_at
-) values ($1, $2, $3, $4, $5, $6, $7, $8, now())
+    id, channel_id, channel_name, norm_name, country, title, description,
+    start_time, end_time, updated_at
+) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
 on conflict (id) do update set
+    country = excluded.country,
     title = excluded.title,
     description = excluded.description,
     end_time = excluded.end_time,
     updated_at = now()
 """
-
-NOISE_WORDS = {
-    "fhd", "uhd", "hd", "sd", "4k", "24", "7", "vip", "latino", "latam",
-    "espana", "mexico", "mex", "colombia", "col", "chile", "cl", "argentina", "ar",
-    "es", "pe", "rd", "gt", "sv", "ni", "hn", "pa", "uy", "central", "usa", "us",
-    "plus", "east", "west", "pc", "tv", "de", "del", "la", "el", "los", "las", "en"
-}
-
-
-def canonical_channel(text: str) -> str:
-    """Normaliza un nombre de canal a un token canónico compartido."""
-    if not text:
-        return ""
-    t = "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn").lower()
-    t = re.sub(r"\(.*?\)|\[.*?\]", " ", t)
-    t = re.sub(r"[^a-z0-9]+", " ", t)
-    tokens = [tok for tok in t.split() if tok]
-    if not tokens:
-        return ""
-
-    # Reglas específicas de canales y cadenas clave
-    if any(tok in ("estrellas", "lasestrellas") for tok in tokens) or ("2" in tokens and ("canal" in tokens or "xew" in tokens)):
-        return "lasestrellas"
-    if "azteca" in tokens:
-        if any(tok in ("1", "uno", "un") for tok in tokens):
-            return "azteca1"
-        if "7" in tokens or "siete" in tokens:
-            return "azteca7"
-        if "deportes" in tokens:
-            return "aztecadeportes"
-        if "noticias" in tokens or "adn" in tokens or "40" in tokens:
-            return "adn40"
-        return "azteca"
-    if "tudn" in tokens:
-        return "tudn"
-    if "cinemax" in tokens:
-        return "cinemax"
-    if "warner" in tokens:
-        return "warner"
-    if "sony" in tokens:
-        return "sony"
-    if "hbo" in tokens:
-        if "family" in tokens:
-            return "hbofamily"
-        if "plus" in tokens:
-            return "hboplus"
-        if "mundi" in tokens:
-            return "hbomundi"
-        if "pop" in tokens:
-            return "hbopop"
-        if "xtreme" in tokens:
-            return "hboxtreme"
-        if "signature" in tokens:
-            return "hbosignature"
-        if "2" in tokens:
-            return "hbo2"
-        return "hbo"
-    if "fox" in tokens and "sports" in tokens:
-        if "premium" in tokens:
-            return "foxsportspremium"
-        if "2" in tokens:
-            return "foxsports2"
-        if "3" in tokens:
-            return "foxsports3"
-        return "foxsports"
-    if "espn" in tokens:
-        if "2" in tokens:
-            return "espn2"
-        if "3" in tokens:
-            return "espn3"
-        if "4" in tokens:
-            return "espn4"
-        if "5" in tokens:
-            return "espn5"
-        if "extra" in tokens:
-            return "espnextra"
-        if "premium" in tokens:
-            return "espnpremium"
-        return "espn"
-    if "claro" in tokens and "sports" in tokens:
-        if "2" in tokens:
-            return "clarosports2"
-        return "clarosports1"
-    if "directv" in tokens or "dsports" in tokens:
-        if "2" in tokens:
-            return "dsports2"
-        if "plus" in tokens:
-            return "dsportsplus"
-        return "dsports"
-    if "win" in tokens and "sports" in tokens:
-        if "plus" in tokens or "online" in tokens:
-            return "winsportsplus"
-        return "winsports"
-    if "5" in tokens and ("canal" in tokens or "xhgc" in t or "xhpnh" in t):
-        return "canal5"
-    if "9" in tokens and ("canal" in tokens or "xeq" in t):
-        return "canal9"
-    if "11" in tokens and ("canal" in tokens or "once" in tokens):
-        return "canal11"
-    if "14" in tokens and "canal" in tokens:
-        return "canal14"
-    if "22" in tokens and "canal" in tokens:
-        return "canal22"
-    if "tvc" in tokens and "deportes" in tokens:
-        return "tvcdeportes"
-
-    filtered = [tok for tok in tokens if tok not in NOISE_WORDS]
-    if len(filtered) > 1 and filtered[0] == "canal":
-        filtered = filtered[1:]
-    return "".join(filtered) if filtered else "".join(tokens)
 
 
 def parse_xmltv_date(raw: str) -> datetime | None:
@@ -168,8 +89,13 @@ def parse_xmltv_date(raw: str) -> datetime | None:
             return None
 
 
-def fetch_and_parse_feed(url: str) -> tuple[dict[str, tuple[str, str]], list[dict]]:
-    """Descarga y parsea un feed XMLTV comprimido en memoria."""
+def fetch_and_parse_feed(url: str, country: str | None = None) -> tuple[dict[str, tuple[str, str]], list[dict]]:
+    """Descarga y parsea un feed XMLTV comprimido en memoria.
+
+    ``country`` es el país del feed (``mx``, ``cl``…): la clave de la guía queda
+    como ``<país>:<cadena>``. Si no se indica, se deduce del nombre del archivo.
+    """
+    country = country if country is not None else feed_country(url)
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=30) as resp:
         with gzip.GzipFile(fileobj=resp) as gz:
@@ -181,11 +107,13 @@ def fetch_and_parse_feed(url: str) -> tuple[dict[str, tuple[str, str]], list[dic
         cid = ch.get("id", "").strip()
         dn = ch.find("display-name")
         name = dn.text.strip() if dn is not None and dn.text else cid
-        c1 = canonical_channel(name)
-        c2 = canonical_channel(cid)
-        chosen_canon = c1 or c2
-        if cid and chosen_canon:
-            channel_map[cid] = (name, chosen_canon)
+        chosen_canon = canonical_channel(name) or canonical_channel(cid)
+        if not chosen_canon:
+            continue
+        # Si el nombre no trae país, el del feed es la verdad (es su parrilla).
+        norm = f"{country}:{chosen_canon}" if country else chosen_canon
+        if cid:
+            channel_map[cid] = (name, norm)
 
     programs: list[dict] = []
     for p in root.findall("programme"):
@@ -193,7 +121,7 @@ def fetch_and_parse_feed(url: str) -> tuple[dict[str, tuple[str, str]], list[dic
         meta = channel_map.get(ch_id)
         if not meta:
             continue
-        ch_name, canon = meta
+        ch_name, norm = meta
         start = parse_xmltv_date(p.get("start"))
         stop = parse_xmltv_date(p.get("stop"))
         if not start or not stop or stop <= start:
@@ -204,12 +132,14 @@ def fetch_and_parse_feed(url: str) -> tuple[dict[str, tuple[str, str]], list[dic
             continue
         desc_el = p.find("desc")
         desc = desc_el.text.strip() if desc_el is not None and desc_el.text else ""
-        pid = f"{canon}:{start.isoformat()}"
+        # El país va en el id: dos feeds con la misma cadena y hora ya no se pisan.
+        pid = f"{norm}:{start.isoformat()}"
         programs.append({
             "id": pid,
             "channel_id": ch_id,
             "channel_name": ch_name,
-            "norm_name": canon,
+            "norm_name": norm,
+            "country": country,
             "title": title,
             "description": desc,
             "start_time": start,
@@ -223,13 +153,16 @@ async def sync_epg(pool) -> int:
     """Sincroniza todos los feeds de FEEDS en la base de datos."""
     total_inserted = 0
     loop_runner = asyncio.get_running_loop()
+    feeds_stats: dict[str, dict] = {}
 
     for url in FEEDS:
         feed_name = url.split("/")[-1]
+        country = feed_country(url)
         try:
             _, programs = await loop_runner.run_in_executor(None, fetch_and_parse_feed, url)
             if not programs:
                 log.info("epg %s: sin programas válidos", feed_name)
+                feeds_stats[feed_name] = {"country": country, "programs": 0, "channels": 0}
                 continue
 
             params = [
@@ -238,6 +171,7 @@ async def sync_epg(pool) -> int:
                     p["channel_id"],
                     p["channel_name"],
                     p["norm_name"],
+                    p["country"],
                     p["title"],
                     p["description"],
                     p["start_time"],
@@ -254,19 +188,58 @@ async def sync_epg(pool) -> int:
                     await conn.executemany(UPSERT_SQL, chunk)
 
             total_inserted += len(programs)
-            log.info("epg %s: %s programas sincronizados", feed_name, len(programs))
+            channels = len({p["norm_name"] for p in programs})
+            feeds_stats[feed_name] = {
+                "country": country,
+                "programs": len(programs),
+                "channels": channels,
+            }
+            log.info(
+                "epg %s [%s]: %s programas, %s canales",
+                feed_name, country or "?", len(programs), channels,
+            )
         except Exception:
             log.exception("epg %s: error al procesar feed", feed_name)
+            feeds_stats[feed_name] = {"country": country, "programs": 0, "channels": 0, "error": True}
 
-    # Prunear programas que terminaron hace más de 6 horas
+    # Prunear programas que terminaron hace más de 6 horas. Además se limpian las
+    # filas del formato viejo (sin país): su clave no es la que consulta la app y
+    # podían mezclar señales de varios países en la misma cadena.
     try:
         async with pool.acquire() as conn:
             deleted = await conn.execute("delete from epg_programs where end_time < now() - interval '6 hours'")
             log.info("epg: limpieza completada (%s)", deleted)
+            if total_inserted > 0:
+                legacy = await conn.execute("delete from epg_programs where country = ''")
+                log.info("epg: filas del formato viejo retiradas (%s)", legacy)
+            health = await conn.fetchrow(
+                """
+                select count(*) filter (where end_time > now()) as future,
+                       count(distinct norm_name) as norms,
+                       count(distinct country) as countries
+                from epg_programs
+                """
+            )
+            stats = {
+                "at": datetime.now(timezone.utc).isoformat(),
+                "programs": total_inserted,
+                "future": int(health["future"] or 0),
+                "norms": int(health["norms"] or 0),
+                "countries": int(health["countries"] or 0),
+                "feeds": feeds_stats,
+            }
+            await conn.execute(
+                """
+                insert into sync_meta (key, value, updated_at) values ('epg_last_cycle', $1, now())
+                on conflict (key) do update set value = excluded.value, updated_at = excluded.updated_at
+                """,
+                json.dumps(stats, ensure_ascii=False),
+            )
     except Exception:
         log.exception("epg: error al limpiar programas caducados")
 
     return total_inserted
+
 
 
 async def loop(pool) -> None:

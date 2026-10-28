@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import urllib.request
 
 log = logging.getLogger("diag")
@@ -46,6 +47,13 @@ CATALOG_STALE_HOURS = int(os.environ.get("DIAG_CATALOG_STALE_HOURS", "10"))
 DEEP_STALE_DAYS = int(os.environ.get("DIAG_DEEP_STALE_DAYS", "8"))
 HEALTH_COOLDOWN_HOURS = int(os.environ.get("DIAG_HEALTH_COOLDOWN_HOURS", "12"))
 
+# Salud de la guía EPG: el worker la refresca cada 4 h; si pasa de 8 h sin escribir
+# o quedan muy pocos programas vigentes, el «AHORA» del launcher, la barra del
+# reproductor y la agenda de deportes se quedan mintiendo en silencio.
+EPG_STALE_HOURS = int(os.environ.get("DIAG_EPG_STALE_HOURS", "8"))
+EPG_MIN_FUTURE = int(os.environ.get("DIAG_EPG_MIN_FUTURE", "500"))
+EPG_ALERT_KEY = "health_epg_alert_at"
+
 # --- Canario de builds nuevos: si una versión recién publicada rompe el reproductor, se frena
 # sola la oferta de actualizaciones (`ota_paused`) para que no se la lleven más equipos. El
 # forzado (`min_version_code`) sigue vigente porque `forced` gana sobre `paused` en la app.
@@ -64,6 +72,17 @@ QUALITY_MIN_SESSIONS = int(os.environ.get("DIAG_QUALITY_MIN_SESSIONS", "20"))
 QUALITY_COOLDOWN_HOURS = float(os.environ.get("DIAG_QUALITY_COOLDOWN_HOURS", "24"))
 QUALITY_ALERT_KEY = "quality_alert_at"
 QUALITY_WINDOW_DAYS = 7
+
+# --- Salud del disco: Docker vive en `/` (133 GB) y los backups de Supabase en
+# `/var/oled` (15 GB). Un store que crece sin control (imágenes/logs) o un backup que no
+# rota puede llenar el disco y tumbar la API con «No space left on device» (pasó el
+# 2026-10-24: 8 × 500 en /v1/index). Se avisa con poco margen y con enfriamiento.
+DISK_ROOT_MIN_PCT = float(os.environ.get("DIAG_DISK_ROOT_MIN_PCT", "10"))
+DISK_ROOT_MIN_FREE_GB = float(os.environ.get("DIAG_DISK_ROOT_MIN_FREE_GB", "5"))
+DISK_OLED_MIN_PCT = float(os.environ.get("DIAG_DISK_OLED_MIN_PCT", "10"))
+DISK_OLED_MIN_FREE_GB = float(os.environ.get("DIAG_DISK_OLED_MIN_FREE_GB", "1"))
+DISK_ALERT_KEY = "health_disk_alert_at"
+DISK_COOLDOWN_HOURS = float(os.environ.get("DIAG_DISK_COOLDOWN_HOURS", "12"))
 
 # Códigos que ya sabemos que dejan el reproductor sin arrancar. OJO: NO todo `PLAYER_*` cuenta —
 # `PLAYER_FRAME_SKIP`, `PLAYER_SOFT_RESTART`, `PLAYER_FAILOVER*`, `PLAYER_SELF_HEAL` y
@@ -802,6 +821,50 @@ def health_alert_text(kind: str, last: dt.datetime, now: dt.datetime) -> str:
     )
 
 
+def epg_should_alert(
+    last: dt.datetime | None,
+    now: dt.datetime,
+    future: int,
+    *,
+    previous: dt.datetime | None = None,
+    stale_hours: int = EPG_STALE_HOURS,
+    min_future: int = EPG_MIN_FUTURE,
+    cooldown_hours: int = HEALTH_COOLDOWN_HOURS,
+) -> bool:
+    """¿Toca avisar de la guía? (puro): sin datos, vieja o casi vacía."""
+    if previous is not None and now - previous < dt.timedelta(hours=cooldown_hours):
+        return False
+    if last is None:
+        return True
+    if now - last > dt.timedelta(hours=stale_hours):
+        return True
+    return future < min_future
+
+
+def epg_alert_text(
+    last: dt.datetime | None,
+    now: dt.datetime,
+    future: int,
+    norms: int,
+) -> str:
+    """Aviso humano de la guía (dos capas, como el resto del bot)."""
+    if last is None:
+        when, age = "nunca", "sin datos"
+    else:
+        hours = int((now - last).total_seconds() // 3600)
+        when, age = _mx_stamp(last), f"hace {hours} h"
+    return (
+        "🟠 La guía de TV (EPG) dejó de actualizarse\n\n"
+        f"Última actualización: {when} ({age}).\n"
+        f"Programas vigentes: {future} en {norms} canales.\n"
+        "La guía alimenta el «AHORA» del launcher, la barra del reproductor y la "
+        "agenda de deportes.\n\n"
+        "👉 Revisar en el VPS: `docker compose logs --tail 120 sync | grep -i epg` "
+        "y `curl -H \"X-Api-Key: …\" https://visionplusv2.duckdns.org/v1/epg/health`.\n\n"
+        "Aviso automático de Vision+ · EPG"
+    )
+
+
 async def _stamp_health_alert(conn, key: str, now: dt.datetime) -> None:
     await conn.execute(
         """
@@ -951,7 +1014,7 @@ async def catalog_health(pool) -> int:
             )
             alerts = await conn.fetch(
                 "select key, updated_at from sync_meta where key in "
-                "('health_cycle_alert_at', 'health_deep_alert_at')"
+                "('health_cycle_alert_at', 'health_deep_alert_at', 'health_epg_alert_at')"
             )
             last_alert = {row["key"]: row["updated_at"] for row in alerts}
             sent = 0
@@ -971,6 +1034,29 @@ async def catalog_health(pool) -> int:
                     continue
                 await asyncio.to_thread(send_alert, health_alert_text(kind, last, now))
                 await _stamp_health_alert(conn, alert_key, now)
+                sent += 1
+
+            # La guía EPG no es parte del índice, pero alimenta el «AHORA» del
+            # launcher, la barra del reproductor y la agenda de deportes: si el
+            # worker deja de escribirla, se avisa igual que el catálogo.
+            epg = await conn.fetchrow(
+                """
+                select max(updated_at) as last,
+                       count(*) filter (where end_time > now()) as future,
+                       count(distinct norm_name) as norms
+                from epg_programs
+                """
+            )
+            epg_last = epg["last"] if epg else None
+            epg_future = int(epg["future"] or 0) if epg else 0
+            epg_norms = int(epg["norms"] or 0) if epg else 0
+            if epg_should_alert(
+                epg_last, now, epg_future, previous=last_alert.get(EPG_ALERT_KEY)
+            ):
+                await asyncio.to_thread(
+                    send_alert, epg_alert_text(epg_last, now, epg_future, epg_norms)
+                )
+                await _stamp_health_alert(conn, EPG_ALERT_KEY, now)
                 sent += 1
             return sent
     except Exception:  # noqa: BLE001 - la salud del catálogo no tumba el triage
@@ -1024,6 +1110,136 @@ def quality_alert_text(sessions: int, crashed: int, version: str, pct: float) ->
         f"ventana={QUALITY_WINDOW_DAYS} días\n\n"
         "Aviso automático de Vision+ · calidad"
     )
+
+
+def _disk_gb(value: int) -> float:
+    return value / (1024 ** 3)
+
+
+def disk_is_low(
+    free_bytes: int,
+    total_bytes: int,
+    *,
+    min_pct: float,
+    min_free_gb: float,
+) -> bool:
+    """¿Queda poco espacio? Puro: por porcentaje O por GB libres (lo que se cumpla)."""
+    if total_bytes <= 0:
+        return False
+    if free_bytes <= 0:
+        return True
+    pct = 100.0 * free_bytes / total_bytes
+    return pct < min_pct or _disk_gb(free_bytes) < min_free_gb
+
+
+def disk_should_alert(
+    root_free: int,
+    root_total: int,
+    oled_free: int,
+    oled_total: int,
+    hours_since_alert: float | None,
+    *,
+    cooldown_hours: float = DISK_COOLDOWN_HOURS,
+) -> bool:
+    """¿Toca avisar del disco? (puro, testeable). Respeta el enfriamiento."""
+    if hours_since_alert is not None and hours_since_alert < cooldown_hours:
+        return False
+    return disk_is_low(
+        root_free, root_total, min_pct=DISK_ROOT_MIN_PCT, min_free_gb=DISK_ROOT_MIN_FREE_GB
+    ) or disk_is_low(
+        oled_free, oled_total, min_pct=DISK_OLED_MIN_PCT, min_free_gb=DISK_OLED_MIN_FREE_GB
+    )
+
+
+def _disk_line(label: str, free: int, total: int) -> str:
+    pct = (100.0 * free / total) if total > 0 else 0.0
+    return f"{label}: {_disk_gb(free):.1f} GB libres de {_disk_gb(total):.1f} GB ({pct:.0f} %)"
+
+
+def _disk_lines(root_free: int, root_total: int, oled_free: int, oled_total: int) -> str:
+    # `/var/oled` no está montado dentro del contenedor del worker: si no se ve, no se
+    # inventa una línea con 0 GB (el disco crítico es `/`, donde vive Docker).
+    lines = [_disk_line("/ (Docker + sistema)", root_free, root_total)]
+    if oled_total > 0:
+        lines.append(_disk_line("/var/oled (backups)", oled_free, oled_total))
+    return "\n".join(lines)
+
+
+def disk_alert_text(root_free: int, root_total: int, oled_free: int, oled_total: int) -> str:
+    """Aviso humano + técnico del disco (dos capas, como el resto del bot)."""
+    return (
+        "🔴 El disco del VPS se está llenando\n\n"
+        f"{_disk_lines(root_free, root_total, oled_free, oled_total)}\n\n"
+        "Si `/` se llena, la API responde `No space left on device` y los sitios se caen "
+        "(pasó el 24/10 con la base de Vision+).\n\n"
+        "👉 Revisar en el VPS: `df -h / /var/oled`, `docker system df`, "
+        "`docker image prune -f` y `docker builder prune -f --keep-storage 1GB`; "
+        "y que los backups roten (`/opt/streaming-backend/backups` y "
+        "`/var/oled/supabase-backups`).\n\n"
+        "— Detalles técnicos —\n"
+        f"root_free={root_free} root_total={root_total} "
+        f"oled_free={oled_free} oled_total={oled_total}\n\n"
+        "Aviso automático de Vision+ · disco"
+    )
+
+
+def disk_recovered_text(root_free: int, root_total: int, oled_free: int, oled_total: int) -> str:
+    return (
+        "✅ El disco del VPS volvió a tener espacio\n\n"
+        f"{_disk_lines(root_free, root_total, oled_free, oled_total)}\n\n"
+        "Se puede volver a desplegar y respaldar sin riesgo.\n\n"
+        "Aviso automático de Vision+ · disco"
+    )
+
+
+async def disk_health(pool) -> int:
+    """Vigila el espacio libre de `/` y `/var/oled` y avisa al Telegram.
+
+    Corre en el mismo loop del triage. El estado vive en `sync_meta` para no repetir el
+    aviso cada 5 min; al recuperarse se manda un aviso de vuelta a la normalidad y se
+    limpia, para que un nuevo llenado vuelva a alertar.
+    """
+    now = dt.datetime.now(dt.timezone.utc)
+    try:
+        root = shutil.disk_usage("/")
+        try:
+            oled = shutil.disk_usage("/var/oled")
+            oled_free, oled_total = oled.free, oled.total
+        except OSError:
+            oled_free, oled_total = 0, 0
+        root_low = disk_is_low(
+            root.free, root.total, min_pct=DISK_ROOT_MIN_PCT, min_free_gb=DISK_ROOT_MIN_FREE_GB
+        )
+        oled_low = disk_is_low(
+            oled_free, oled_total, min_pct=DISK_OLED_MIN_PCT, min_free_gb=DISK_OLED_MIN_FREE_GB
+        )
+        async with pool.acquire() as conn:
+            state = await conn.fetchrow(
+                "select updated_at from sync_meta where key = $1", DISK_ALERT_KEY
+            )
+            hours = (now - state["updated_at"]).total_seconds() / 3600 if state else None
+            if disk_should_alert(root.free, root.total, oled_free, oled_total, hours):
+                await asyncio.to_thread(
+                    send_alert, disk_alert_text(root.free, root.total, oled_free, oled_total)
+                )
+                await _stamp_health_alert(conn, DISK_ALERT_KEY, now)
+                log.warning(
+                    "disco bajo: / %.1f/%.1f GB · /var/oled %.1f/%.1f GB",
+                    _disk_gb(root.free), _disk_gb(root.total),
+                    _disk_gb(oled_free), _disk_gb(oled_total),
+                )
+                return 1
+            if state and not root_low and not oled_low:
+                await asyncio.to_thread(
+                    send_alert, disk_recovered_text(root.free, root.total, oled_free, oled_total)
+                )
+                await conn.execute("delete from sync_meta where key = $1", DISK_ALERT_KEY)
+                log.info("disco recuperado")
+                return 1
+            return 0
+    except Exception:  # noqa: BLE001 - el aviso de disco no tumba el worker
+        log.exception("la salud del disco no se pudo revisar")
+        return 0
 
 
 async def quality_slo(pool) -> int:
@@ -1102,4 +1318,8 @@ async def loop(pool) -> None:
             await quality_slo(pool)
         except Exception:  # noqa: BLE001 - el SLO de calidad no tumba el worker
             log.exception("SLO de calidad falló")
+        try:
+            await disk_health(pool)
+        except Exception:  # noqa: BLE001 - el aviso de disco no tumba el worker
+            log.exception("salud del disco falló")
         await asyncio.sleep(INTERVAL)

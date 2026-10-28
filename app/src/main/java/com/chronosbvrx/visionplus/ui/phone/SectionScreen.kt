@@ -115,6 +115,11 @@ fun SectionScreen(
     }
 
     val loaded = rows
+    // Sin repetir tarjeta entre categorías: si una película salió en la fila de
+    // arriba (estrenos, Drama…), no vuelve a aparecer en Suspenso/Comedia. El
+    // servidor ya indexa un género primario por título; esto cubre la caché vieja
+    // y a los servidores anteriores.
+    val displayRows = remember(loaded) { loaded?.let { Popularity.disjointRows(it) } }
     val isTablet = isLandscapeTablet()
     val gridColumns = if (isTablet) 5 else 3
 
@@ -177,9 +182,10 @@ fun SectionScreen(
                 )
             }
             else -> {
+                val rowsFinal = displayRows.orEmpty()
                 // Selector horizontal de categorías (Chips / Pills)
-                val categoryChips = remember(loaded) {
-                    val genres = loaded.map { it.title.trim() }.filter { it.isNotBlank() }.distinct()
+                val categoryChips = remember(rowsFinal) {
+                    val genres = rowsFinal.map { it.title.trim() }.filter { it.isNotBlank() }.distinct()
                     listOf(CHIP_ALL) + genres
                 }
 
@@ -211,9 +217,19 @@ fun SectionScreen(
                         ),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        itemsIndexed(loaded, key = { _, row -> row.id }) { index, row ->
-                            // Reordenado por impacto en cliente: robusto ante caché vieja del servidor.
-                            val ranked = remember(row.films) { Popularity.reorderRow(row.films) }
+                        itemsIndexed(rowsFinal, key = { _, row -> row.id }) { index, row ->
+                            // Las filas curadas del servidor (estrenos/tendencias) conservan
+                            // SU orden (es lo que las hace cambiar); los géneros se rankean
+                            // por impacto como antes.
+                            val ranked = remember(row.films, row.id) {
+                                if (row.id.endsWith("-estrenos") || row.id == "estrenos" ||
+                                    row.id == "tendencias"
+                                ) {
+                                    row.films
+                                } else {
+                                    Popularity.reorderRow(row.films)
+                                }
+                            }
                             CuratedSectionModule(
                                 row = row.copy(films = ranked),
                                 rowIndex = index,
@@ -224,11 +240,11 @@ fun SectionScreen(
                     }
                 } else {
                     // Modo 2: Vista de Catálogo Completo en Cuadrícula (Grid paginada)
-                    val categoryRow = remember(loaded, activeCategory) {
-                        loaded.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
+                    val categoryRow = remember(rowsFinal, activeCategory) {
+                        rowsFinal.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
                     }
-                    val films = remember(categoryRow, loaded) {
-                        val raw = categoryRow?.films ?: loaded.flatMap { it.films }
+                    val films = remember(categoryRow, rowsFinal) {
+                        val raw = categoryRow?.films ?: rowsFinal.flatMap { it.films }
                             .filter { it.synopsis.contains(activeCategory, ignoreCase = true) }
                             .distinctBy { it.id }
                         Popularity.reorderRow(raw)

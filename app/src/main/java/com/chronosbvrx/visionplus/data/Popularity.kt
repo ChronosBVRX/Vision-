@@ -222,26 +222,54 @@ object Popularity {
 
     /**
      * El Top de popularidad real: los más populares del catálogo entero, sin importar
-     * el año. La hilera «tendencias» del servidor llega ya rankeada (todo el catálogo);
-     * el pool local solo rellena cuando un servidor viejo aún no la sirve.
+     * el año. La hilera «tendencias» del servidor llega ya rankeada con popularidad
+     * refrescada, tendencia semanal y recién llegados: **se respeta su orden**. Antes
+     * se reordenaba aquí por popularidad cruda y eso congelaba el Top 10 en los
+     * mismos títulos aunque el servidor ya hubiera cambiado la fila.
      */
     internal fun topPopular(ranking: List<Film>, pool: List<Film>, limit: Int = 10, yearNow: Int = nowYear()): List<Film> {
-        val ranked = dedupe(
-            (ranking + pool)
-                .filter { it.videoUrl.isNotBlank() && it.popularity > 0.0 }
-                .sortedWith(
-                    compareByDescending<Film> { it.popularity }
-                        .thenByDescending { it.voteCount }
-                        .thenByDescending { it.score }
-                        .thenByDescending { it.year },
-                ),
-        )
+        val ranked = dedupe(ranking.filter { it.videoUrl.isNotBlank() })
         if (ranked.size >= limit) return ranked.take(limit)
-        // Relleno (catálogo aún sin clasificar por TMDB): el motor de siempre, sin
-        // volver a pintar lo que la popularidad ya puso arriba.
-        val fill = topTrending(pool, limit = limit + ranked.size, yearNow = yearNow)
-            .filterNot { it in ranked }
-        return dedupe(ranked + fill).take(limit)
+        // Relleno (servidor viejo o catálogo chico): manda la popularidad cruda,
+        // igual que antes, y solo entra lo que tiene ALGUNA señal (populares, votos
+        // o rating): el relleno sin datos no corona un Top 10.
+        val used = ranked.map { repeatKey(it) }.toHashSet()
+        val fill = dedupe(
+            pool.filter {
+                it.videoUrl.isNotBlank() &&
+                    (it.popularity > 0.0 || it.voteCount > 0 || it.score > 0.0)
+            },
+        )
+            .filterNot { repeatKey(it) in used }
+            .sortedWith(
+                compareByDescending<Film> { it.popularity }
+                    .thenByDescending { it.voteCount }
+                    .thenByDescending { it.score }
+                    .thenByDescending { it.year }
+                    .thenByDescending { rankScore(it, yearNow) }
+                    .thenBy { it.title },
+            )
+        return (ranked + fill).take(limit)
+    }
+
+    /**
+     * Filas de una sección sin repetir tarjeta entre categorías: recorre en orden y
+     * quita de cada fila lo que ya salió arriba. Si una fila quedaría mutilada (menos
+     * de [minKeep]) se conserva completa: es preferible una repetición a una categoría
+     * vacía. Con los géneros primarios del servidor apenas hay nada que quitar; esto
+     * protege también contra la caché vieja y servidores anteriores.
+     */
+    internal fun disjointRows(rows: List<CatalogRow>, minKeep: Int = 6): List<CatalogRow> {
+        val used = HashSet<String>()
+        return rows.mapNotNull { row ->
+            val base = dedupe(row.films)
+            val fresh = base.filterNot { repeatKey(it) in used }
+            // Una fila que solo repetiría lo ya mostrado no se pinta.
+            if (fresh.isEmpty()) return@mapNotNull null
+            val films = if (fresh.size >= minKeep) fresh else base
+            used += films.map { repeatKey(it) }
+            row.copy(films = films)
+        }
     }
 
     /**
@@ -266,7 +294,8 @@ object Popularity {
      */
     internal fun homePool(rows: List<CatalogRow>, indexRows: List<CatalogRow>): List<Film> {
         val curatedIndex = indexRows.filter {
-            it.id == "tendencias" || it.id == "estrenos" || it.id == "recomendados" || it.id.startsWith("genero-")
+            it.id == "tendencias" || it.id == "estrenos" || it.id == "recomendados" ||
+                it.id.startsWith("genero-") || it.id.startsWith("tema-")
         }
         val ownRows = rows.filterNot { it.id.startsWith("xtv-masnew") }
         val all = (ownRows + curatedIndex).flatMap { it.films }
@@ -312,16 +341,41 @@ object Popularity {
         // «las mismas películas en las dos filas». Si el catálogo reciente es muy chico,
         // se permite el traslape antes que dejar la fila a medias.
         val top10Keys = top10.map { repeatKey(it) }.toHashSet()
-        val freshRecent = pool.filterNot { repeatKey(it) in top10Keys }
-        val premieres = realPremieres(freshRecent, limit = 15, yearNow = yearNow)
-            .takeIf { it.size >= 6 }
-            ?: realPremieres(pool, limit = 15, yearNow = yearNow)
+        // «Novedades» usa el orden curado del servidor: recién llegados al catálogo
+        // primero y después lo del año por impacto. Antes se recalculaba aquí con
+        // `realPremieres` y el orden nuevo del servidor se perdía (la fila se quedaba
+        // con los mismos títulos). Si el servidor es viejo o no trae la fila, se cae
+        // al motor local de siempre.
+        val serverPremieres = indexRows.firstOrNull { it.id == "estrenos" }?.films.orEmpty()
+            .filter { it.videoUrl.isNotBlank() && it.posterUrl.isNotBlank() }
+            .filterNot { repeatKey(it) in top10Keys }
+        val fromServer = dedupe(serverPremieres).take(15)
+        val premieres = fromServer.ifEmpty {
+            realPremieres(pool.filterNot { repeatKey(it) in top10Keys }, limit = 15, yearNow = yearNow)
+                .takeIf { it.size >= 6 }
+                ?: realPremieres(pool, limit = 15, yearNow = yearNow)
+        }
         val premieresFinal = premieres.ifEmpty {
             rows.firstOrNull { it.id == "estrenos" }?.films?.take(15).orEmpty()
         }
+        // Colecciones temáticas (Día de Muertos, Halloween, Navidad…). Van después de
+        // Novedades y antes de «Populares de la semana»; no repiten el Top 10/Novedades
+        // y tampoco se repiten entre sí. «Tendencias del mundo» se queda en Categorías:
+        // el Inicio ya tiene «Populares de la semana».
+        val topRowKeys = (top10 + premieresFinal).map { repeatKey(it) }.toHashSet()
+        val themeCandidates = indexRows
+            .filter { it.id.startsWith("tema-") && it.id != "tema-tendencias-mundo" }
+            .map { row ->
+                val base = dedupe(row.films)
+                val fresh = base.filterNot { repeatKey(it) in topRowKeys }
+                row.copy(films = if (fresh.size >= 4) fresh else base)
+            }
+            .filter { it.films.size >= 4 }
+        val themeRows = disjointRows(themeCandidates, minKeep = 4).take(4)
         // Las filas por tipo tampoco repiten lo ya visto arriba; con catálogo pequeño
         // (M3U/seed) se conserva la fila completa para no dejarla mutilada.
-        val usedByTopRows = (top10 + premieresFinal).map { repeatKey(it) }.toMutableSet()
+        val usedByTopRows = (top10 + premieresFinal + themeRows.flatMap { it.films })
+            .map { repeatKey(it) }.toMutableSet()
         val kindRows = HOME_KIND_ROWS.mapNotNull { (kind, label) ->
             // Se miran 40 candidatos para poder saltar los 25 que ya usaron las filas
             // de arriba y aun así llenar la hilera con 20 tarjetas nuevas.
@@ -340,6 +394,7 @@ object Popularity {
             top10 = top10,
             premieres = premieresFinal,
             kindRows = kindRows,
+            themeRows = themeRows,
             hero = pickHero(top10, premieresFinal, pool.firstOrNull()),
         )
     }
@@ -351,5 +406,6 @@ internal data class HomeCurated(
     val top10: List<Film> = emptyList(),
     val premieres: List<Film> = emptyList(),
     val kindRows: List<CatalogRow> = emptyList(),
+    val themeRows: List<CatalogRow> = emptyList(),
     val hero: Film? = null,
 )

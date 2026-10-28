@@ -2,6 +2,7 @@ package com.chronosbvrx.visionplus.ui.tv
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -161,6 +162,15 @@ fun TvLiveScreen(
         if (!FocusRescue.screenHasFocus && channels.isNotEmpty()) landing.request()
     }
 
+    // Al cerrar el buscador (Atrás) el teclado en pantalla desaparece y con él el control que
+    // tenía el foco: sin esto la primera tecla del mando se perdía hasta que el rescate global
+    // la recuperaba. Se devuelve el foco al primer canal en cuanto el panel se cierra.
+    LaunchedEffect(searchOpen) {
+        if (searchOpen) return@LaunchedEffect
+        delay(120)
+        if (!FocusRescue.screenHasFocus) landing.request()
+    }
+
     // Cambiar de lista, grupo o pestaña limpia el filtro de país: se hace en el toque
     // concreto y NO en un efecto del primer pase, que al volver del reproductor borraba la
     // selección que la persona había hecho (el filtro se restaura con `rememberSaveable`).
@@ -194,7 +204,7 @@ fun TvLiveScreen(
             LazyRow(
                 contentPadding = PaddingValues(start = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.height(40.dp).fillMaxWidth()
+                modifier = Modifier.height(40.dp).fillMaxWidth().focusGroup()
             ) {
                 item(key = "all_countries") {
                     TvCountryChip(
@@ -234,7 +244,7 @@ fun TvLiveScreen(
                     }
                 }
             } else {
-                LazyColumn(Modifier.width(SIDE_COLUMN).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                LazyColumn(Modifier.width(SIDE_COLUMN).fillMaxHeight().focusGroup(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     item(key = "fav") {
                         TvRailRow(
                             label = "Favoritos",
@@ -273,7 +283,7 @@ fun TvLiveScreen(
                     }
                 }
             }
-            LazyColumn(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp)) {
+            LazyColumn(Modifier.weight(1f).fillMaxHeight().focusGroup(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp)) {
                 when {
                     state.loading && state.channels.isEmpty() -> item {
                         Column(Modifier.padding(top = 24.dp)) {

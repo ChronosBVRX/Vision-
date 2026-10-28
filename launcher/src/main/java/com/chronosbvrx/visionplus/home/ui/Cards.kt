@@ -37,6 +37,8 @@ import com.chronosbvrx.visionplus.home.contract.ContinueItem
 import com.chronosbvrx.visionplus.home.contract.FeedItem
 import com.chronosbvrx.visionplus.home.contract.LiveItem
 import com.chronosbvrx.visionplus.home.data.AppEntry
+import com.chronosbvrx.visionplus.home.data.TvInputSource
+import com.chronosbvrx.visionplus.home.data.TvSourceKind
 
 /** Póster 2:3 con su etiqueta debajo. El foco lo pone [FocusableSurface]. */
 @Composable
@@ -334,6 +336,62 @@ fun AppTile(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+/** La entrada de video del televisor: TV abierta o HDMI, con su icono real si el equipo lo da. */
+@Composable
+fun InputCard(
+    item: TvInputSource,
+    width: Dp,
+    height: Dp,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Column(modifier.width(width)) {
+        FocusableSurface(onClick = onClick, modifier = Modifier.width(width).height(height)) {
+            Box(Modifier.fillMaxSize().background(HomeColors.Surface)) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 40.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    InputIcon(item, size = 46)
+                }
+                Badge(
+                    text = when (item.kind) {
+                        TvSourceKind.TUNER -> "TV ABIERTA"
+                        TvSourceKind.HDMI -> if (item.port > 0) "HDMI ${item.port}" else "HDMI"
+                        TvSourceKind.OTHER -> "ENTRADA"
+                    },
+                    color = if (item.kind == TvSourceKind.TUNER) HomeColors.Success else HomeColors.Blue,
+                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                )
+                Column(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.72f))
+                        .padding(horizontal = 9.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        item.label,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        if (item.kind == TvSourceKind.TUNER) "TV en vivo del televisor" else "Fuente de video",
+                        color = HomeColors.TextFaint,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
     }
 }
 

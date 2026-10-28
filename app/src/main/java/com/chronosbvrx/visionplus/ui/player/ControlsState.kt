@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.chronosbvrx.visionplus.data.markers.canShowSkipPill
 import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import kotlinx.coroutines.delay
 
@@ -613,6 +614,64 @@ internal fun positionSkipExcessMs(
     if (wallMs <= 0L || wallMs > 5_000L) return 0L
     val excess = posMs - (lastPosMs + wallMs)
     return if (excess > toleranceMs) excess else 0L
+}
+
+/**
+ * ¿Se puede pulsar «Omitir intro/resumen» AHORA? En el móvil la píldora es un blanco táctil
+ * visible sobre el video: se toca con los controles cerrados y no pasa por el candado del
+ * mando. En la tele sí manda el candado de 220 ms (el OK repetido no puede saltar dos veces).
+ */
+internal fun canPressSkipPill(
+    isTv: Boolean,
+    controlsVisible: Boolean,
+    nowMs: Long,
+    lastWakeupMs: Long,
+    cooldownMs: Long = CONTROL_ACTION_COOLDOWN_MS,
+): Boolean = !isTv || (controlsVisible && canExecuteControlAction(nowMs, lastWakeupMs, cooldownMs))
+
+/**
+ * La píldora de intro se ve con los controles abiertos y, en el móvil, también cerrados
+ * (como Netflix): un solo toque, sin abrir antes la barra.
+ */
+internal fun skipPillVisibleFor(
+    hasTarget: Boolean,
+    buttonMode: Boolean,
+    videoReady: Boolean,
+    blocked: Boolean,
+    isTv: Boolean,
+    controlsVisible: Boolean,
+): Boolean = canShowSkipPill(hasTarget, buttonMode, videoReady, blocked) && (controlsVisible || !isTv)
+
+/**
+ * Red de seguridad del primer render: el motor crea su vista de render (SurfaceView /
+ * TextureView) DENTRO del `play` (`ed.e.A()` → `ad.c.a()`) y solo la añade al contenedor si
+ * `ed.e` ya está anclada a la ventana (`ad.c.c(...)` se fija en `onAttachedToWindow`). Si tras
+ * el play el contenedor sigue sin hijos, ese play se adelantó al attach y el canal queda en
+ * negro hasta cambiar de canal (el zap vuelve a llamar al motor ya anclado): hay que
+ * re-emitirlo UNA vez.
+ */
+internal fun shouldReattachRender(
+    isPlayerActive: Boolean,
+    attached: Boolean,
+    renderChildren: Int,
+    alreadyRetried: Boolean,
+): Boolean = isPlayerActive && attached && !alreadyRetried && renderChildren <= 0
+
+/**
+ * Mientras el motor procesa un seek pedido por la persona, la barra debe seguir en el minuto
+ * elegido: sin esto el siguiente tic del sondeo devolvía el pulgar a la posición vieja y el
+ * toque parecía no haber funcionado. Se suelta cuando el motor llega (±[settleMs]) o al vencer.
+ */
+internal fun seekHoldActive(
+    holdTargetMs: Long,
+    holdUntilMs: Long,
+    nowMs: Long,
+    enginePosMs: Long,
+    settleMs: Long = 2_000L,
+): Boolean {
+    if (holdTargetMs < 0L) return false
+    if (nowMs >= holdUntilMs) return false
+    return kotlin.math.abs(enginePosMs - holdTargetMs) > settleMs
 }
 
 @Composable

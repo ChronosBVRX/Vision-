@@ -147,7 +147,10 @@ class HomeConfigTest {
             FeedRow(id = "premieres", label = "Novedades"),
         )
         val config = HomeConfig(rowOrder = listOf("channels", "top10", "apps"))
-        assertEquals(listOf("channels", "top10", "apps", "premieres", "continue", "live"), homeRowOrder(config, feedRows))
+        assertEquals(
+            listOf("channels", "top10", "apps", "premieres", "continue", "live", "inputs"),
+            homeRowOrder(config, feedRows),
+        )
         val entries = homeRowEntries(config, feedRows)
         assertEquals("Mis canales", entries.first { it.id == "channels" }.label)
         assertEquals("Top 10", entries.first { it.id == "top10" }.label)
@@ -201,5 +204,104 @@ class HomeConfigTest {
             channelFavorites = listOf("canal5"),
         )
         assertEquals(legacy, chooseConfig(primary, legacy))
+    }
+
+    @Test
+    fun theStartTabAndTheTvInputsSurviveTheJsonRoundTrip() {
+        val original = HomeConfig(
+            startTab = StartTab.INPUTS,
+            hiddenInputs = setOf("hw:1", "hw:2"),
+        )
+        val restored = HomeConfig.fromJson(original.toJson())
+        assertEquals(StartTab.INPUTS, restored.startTab)
+        assertEquals(setOf("hw:1", "hw:2"), restored.hiddenInputs)
+        assertEquals(original, restored)
+    }
+
+    @Test
+    fun aConfigFromVersionOneReceivesTheInputsRowInPlace() {
+        // Lo que guardó la versión anterior (sin entradas y sin pestaña inicial).
+        val old = """{"version":1,"rowOrder":["continue","channels","live","apps","top10"],"hiddenRows":[]}"""
+        val migrated = HomeConfig.fromJson(old)
+        assertEquals(
+            listOf("continue", "channels", "live", "inputs", "apps", "top10"),
+            migrated.rowOrder,
+        )
+        // La preferencia nueva arranca en su default y no pisa lo que ya había.
+        assertEquals(StartTab.HOME, migrated.startTab)
+        assertTrue(migrated.hiddenInputs.isEmpty())
+    }
+
+    @Test
+    fun theCurrentVersionNeverReinsertsARowTheUserRemoved() {
+        val raw = """{"version":${HomeConfig.VERSION},"rowOrder":["channels","apps"]}"""
+        assertEquals(listOf("channels", "apps"), HomeConfig.fromJson(raw).rowOrder)
+    }
+
+    @Test
+    fun hidingATvInputIsLocalAndReversible() {
+        val hidden = HomeConfig().toggleInputHidden("hw:2")
+        assertTrue("hw:2" in hidden.hiddenInputs)
+        assertTrue(hidden.hasCustomization())
+        assertTrue(hidden.toggleInputHidden("hw:2").hiddenInputs.isEmpty())
+        assertTrue(hidden.resetInputs().hiddenInputs.isEmpty())
+        assertEquals(HomeConfig(), hidden.resetAll())
+    }
+
+    @Test
+    fun theTabsKeepTheirOrderAndHomeCanNeverBeHidden() {
+        val moved = HomeConfig().moveTab("apps", -1)
+        assertTrue("apps" in moved.tabOrder)
+        assertTrue(moved.tabOrder.indexOf("apps") < HomeConfig.DEFAULT_TAB_ORDER.indexOf("apps"))
+        // Inicio es la puerta de vuelta: ni se mueve ni se oculta.
+        assertEquals(HomeConfig(), HomeConfig().moveTab("home", 1))
+        assertEquals(HomeConfig(), HomeConfig().toggleTab("home"))
+        // El resto sí se oculta y se restaura.
+        val hidden = HomeConfig().toggleTab("movies")
+        assertTrue("movies" in hidden.hiddenTabs)
+        assertTrue(hidden.toggleTab("movies").hiddenTabs.isEmpty())
+        assertEquals(HomeConfig(), hidden.resetTabs())
+    }
+
+    @Test
+    fun theTabOrderSurvivesTheJsonRoundTrip() {
+        val original = HomeConfig(
+            tabOrder = HomeConfig.DEFAULT_TAB_ORDER,
+            hiddenTabs = setOf("events", "series"),
+        )
+        val restored = HomeConfig.fromJson(original.toJson())
+        assertEquals(original.tabOrder, restored.tabOrder)
+        assertEquals(setOf("events", "series"), restored.hiddenTabs)
+        assertEquals(original, restored)
+    }
+
+    @Test
+    fun thePresetsPutTheRightRowsFirstAndCanBeUndone() {
+        val tv = HomeConfig().withPreset(LauncherPreset.TV_FIRST)
+        assertEquals(listOf("continue", "channels", "live", "inputs", "apps"), tv.rowOrder.take(5))
+        assertEquals("home", tv.tabOrder.first())
+        assertTrue("live" !in tv.hiddenRows)
+
+        val cinema = HomeConfig(channelFavorites = listOf("c5")).withPreset(LauncherPreset.CINEMA)
+        assertEquals(listOf("continue", "top10", "premieres"), cinema.rowOrder.take(3))
+        assertTrue("live" in cinema.hiddenRows)
+        assertTrue("inputs" in cinema.hiddenRows)
+        assertEquals("movies", cinema.tabOrder.getOrNull(1))
+        // La plantilla no toca los favoritos de canales ni la pestaña inicial.
+        assertEquals(listOf("c5"), cinema.channelFavorites)
+        assertEquals(StartTab.HOME, cinema.startTab)
+
+        val mine = HomeConfig().withPreset(LauncherPreset.JUST_MINE)
+        assertEquals(listOf("continue", "channels", "apps"), mine.rowOrder.take(3))
+        assertTrue("home-kind-movie" in mine.hiddenRows)
+        assertTrue("live" in mine.hiddenTabs)
+
+        val kids = HomeConfig().withPreset(LauncherPreset.KIDS)
+        assertEquals(listOf("home-kind-kids", "home-kind-anime"), kids.rowOrder.take(2))
+        assertTrue("home-kind-movie" in kids.hiddenRows)
+        assertTrue("movies" in kids.hiddenTabs)
+
+        // Deshacer es el reset de siempre.
+        assertEquals(HomeConfig(), kids.resetAll())
     }
 }
