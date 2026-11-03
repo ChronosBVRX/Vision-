@@ -69,6 +69,25 @@ class TvHeroWiringTest {
     }
 
     @Test
+    fun theHeroScrimCoversTheTopAndTheBottom() {
+        val screen = source("ui/tv/TvHomeScreen.kt")
+        assertTrue("el velo de la tele cubre el borde superior", screen.contains("0f to VisionBlack.copy(alpha = 0.58f)"))
+        assertTrue("y sigue cubriendo el inferior", screen.contains("1f to VisionBlack"))
+        assertTrue("el hero recorta el zoom", screen.contains("clipToBounds()"))
+        val mobile = source("ui/home/HomeScreen.kt")
+        assertTrue("el velo móvil también cubre arriba", mobile.contains("0f to Color.Black.copy(alpha = 0.35f)"))
+        val launcher = listOf(
+            File("launcher/src/main/java/com/chronosbvrx/visionplus/home/ui/Hero.kt"),
+            File("../launcher/src/main/java/com/chronosbvrx/visionplus/home/ui/Hero.kt"),
+        ).firstOrNull { it.exists() }
+        assertNotNull("falta el hero del launcher", launcher)
+        assertTrue(
+            "el launcher ya cubre el borde superior",
+            launcher!!.readText().contains("0f to HomeColors.Black.copy(alpha = 0.58f)"),
+        )
+    }
+
+    @Test
     fun returningToTheHeroAnchorsTheFullBanner() {
         val screen = source("ui/tv/TvHomeScreen.kt")
         assertTrue(screen.contains("heroActionTick"))

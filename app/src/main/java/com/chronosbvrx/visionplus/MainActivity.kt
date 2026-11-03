@@ -1,7 +1,9 @@
 package com.chronosbvrx.visionplus
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
@@ -46,6 +48,7 @@ import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.data.CatalogSeed
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.XuperCatalog
+import com.chronosbvrx.visionplus.data.games.GameDeepLink
 import com.chronosbvrx.visionplus.data.gate.GateClient
 import com.chronosbvrx.visionplus.data.homefeed.HomeFeedStore
 import com.chronosbvrx.visionplus.data.launcher.LauncherWatchNext
@@ -63,8 +66,13 @@ import com.chronosbvrx.visionplus.ui.PhoneApp
 import com.chronosbvrx.visionplus.ui.Route
 import com.chronosbvrx.visionplus.ui.TvApp
 import com.chronosbvrx.visionplus.ui.brand.VisionSplash
+import com.chronosbvrx.visionplus.ui.components.LocalPosterActions
+import com.chronosbvrx.visionplus.ui.components.PosterActionsController
+import com.chronosbvrx.visionplus.ui.components.PosterActionsDialog
 import com.chronosbvrx.visionplus.ui.launcherRouteFor
 import com.chronosbvrx.visionplus.ui.liveRouteFor
+import com.chronosbvrx.visionplus.ui.player.PipMode
+import com.chronosbvrx.visionplus.ui.player.PipSession
 import com.chronosbvrx.visionplus.ui.showsFloatingClock
 import com.chronosbvrx.visionplus.ui.systemAnimationsOff
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
@@ -92,6 +100,9 @@ class MainActivity : ComponentActivity() {
 
     /** El servidor del control remoto; solo existe en la televisión. */
     private var remoteServer: RemoteServer? = null
+
+    /** PiP del reproductor ExoPlayer (deportes, archivo/M3U y búnker): acción play/pausa. */
+    private var pipReceiver: BroadcastReceiver? = null
 
     /** True cuando el Inicio ya se pintó al menos una vez (no adelantar el motor en el arranque). */
     @Volatile private var appBooted = false
@@ -162,12 +173,44 @@ class MainActivity : ComponentActivity() {
         if (isTv && appBooted && EngineWarmup.shouldWarm(this) && !EngineWarmup.isWarmFresh(this)) {
             EngineWarmup.requestWarm(this)
         }
+        updatePipParams()
     }
 
     override fun onPause() {
         com.chronosbvrx.visionplus.data.diag.Diagnostics.activityPaused()
         RemoteBus.detach(remoteSink)
         super.onPause()
+    }
+
+    /** Android 8–11: al salir de la app con un reproductor ExoPlayer activo. */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (android.os.Build.VERSION.SDK_INT < 31 &&
+            !isTv && PipSession.canEnter(this) && !PipMode.isActivityInPip(this)
+        ) {
+            val playing = runCatching { PipSession.current()?.playing?.invoke() == true }.getOrDefault(false)
+            runCatching { PipMode.enter(this, playing) }
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        PipSession.markInPip(isInPictureInPictureMode)
+        updatePipParams()
+    }
+
+    /**
+     * Refleja la sesión del reproductor en los parámetros del sistema. En Android 12+ con
+     * `autoEnter` el usuario solo tiene que salir de la app; en 8–11 lo cubre `onUserLeaveHint`.
+     */
+    private fun updatePipParams() {
+        if (isTv || !PipMode.isSupported(this)) return
+        val canEnter = runCatching { PipSession.canEnter(this) }.getOrDefault(false)
+        val playing = runCatching { PipSession.current()?.playing?.invoke() == true }.getOrDefault(false)
+        runCatching { PipMode.update(this, playing, autoEnter = canEnter) }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -189,6 +232,9 @@ class MainActivity : ComponentActivity() {
             remoteServer?.stop()
             remoteServer = null
         }
+        PipMode.unregister(this, pipReceiver)
+        pipReceiver = null
+        if (isFinishing) PipSession.clear()
         super.onDestroy()
     }
 
@@ -209,6 +255,17 @@ class MainActivity : ComponentActivity() {
         // En la tele no hay barra de estado/navegación: el Inicio va a pantalla completa
         // (igual que Vision+ Home). En el móvil se conservan.
         if (isTv) hideSystemBars()
+        // Anuncio LAN de «qué está reproduciendo» (mDNS + HTTP de solo lectura). Se arranca
+        // desde la actividad (en primer plano) y el servicio lo mantiene si la app pasa atrás.
+        runCatching {
+            androidx.core.content.ContextCompat.startForegroundService(
+                this,
+                Intent(
+                    this,
+                    com.chronosbvrx.visionplus.data.netshare.NowPlayingService::class.java,
+                ),
+            )
+        }
         // Latido de la apertura: denominador del «% de sesiones sin crash» en la telemetría.
         com.chronosbvrx.visionplus.data.diag.Diagnostics.sessionStart()
         com.chronosbvrx.visionplus.ui.settings.VisionSettings.init(this)
@@ -217,6 +274,17 @@ class MainActivity : ComponentActivity() {
         // Control remoto por LAN: solo la tele escucha (el teléfono es el que manda órdenes).
         if (isTv) {
             remoteServer = RemoteServer(this).also { runCatching { it.start() } }
+        }
+        // PiP solo en móvil: el reproductor ExoPlayer vive dentro de esta actividad y necesita
+        // un receptor para el play/pausa del cuadro. En la tele no se registra nada.
+        if (!isTv && PipMode.isSupported(this)) {
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action == PipMode.ACTION_TOGGLE) PipSession.toggle()
+                }
+            }
+            pipReceiver = receiver
+            runCatching { PipMode.register(this, receiver) }
         }
         // Tarjeta del launcher en arranque en frío: la película/capítulo entra en la ruta base.
         if (savedInstanceState == null) {
@@ -227,6 +295,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             VisionTheme {
                 CompositionLocalProvider(LocalReducedEffects provides DevicePerformance.shouldReduceEffects(this, com.chronosbvrx.visionplus.ui.settings.VisionSettings.effectsMode)) {
+                    // Menú contextual de pósters (OK largo): una sola instancia para toda la app.
+                    val posterActions = remember { PosterActionsController() }
                     var needsActivation by rememberSaveable {
                         mutableStateOf(ACTIVATION_REQUIRED && !GateClient.isActivated(this@MainActivity))
                     }
@@ -254,7 +324,10 @@ class MainActivity : ComponentActivity() {
                     val exitGuard = remember { com.chronosbvrx.visionplus.ui.BackExitGuard() }
                     var exitHint by remember { mutableStateOf(false) }
                     var exitPresses by remember { mutableIntStateOf(0) }
-                    BackHandler(enabled = !needsActivation && navigator.stack.size <= 1) {
+                    // La salida con aviso es la MISMA para el Atrás del shell (TvApp) y para el
+                    // respaldo de aquí: en el Inicio el primer Atrás sube el foco a la barra y
+                    // arma el aviso; el segundo cierra. En el móvil se comporta como siempre.
+                    val requestExit: () -> Unit = {
                         if (exitGuard.press(System.currentTimeMillis())) {
                             exitHint = false
                             com.chronosbvrx.visionplus.ui.exitAppCleanly(this@MainActivity)
@@ -262,6 +335,9 @@ class MainActivity : ComponentActivity() {
                             exitHint = true
                             exitPresses++
                         }
+                    }
+                    BackHandler(enabled = !needsActivation && navigator.stack.size <= 1) {
+                        requestExit()
                     }
                     LaunchedEffect(exitPresses) {
                         if (exitPresses == 0) return@LaunchedEffect
@@ -377,6 +453,10 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // La sesión del reproductor (alta/baja o play/pausa) actualiza las acciones
+                    // y la entrada automática al PiP, sin crecer la firma de PlayerCore.
+                    LaunchedEffect(PipSession.revision) { updatePipParams() }
+
                     // Al salir de un reproductor interno (ExoPlayer vive en esta actividad) y al
                     // navegar, el canal «Continuar viendo» del launcher se pone al día solo.
                     LaunchedEffect(nav.stack.size) {
@@ -384,6 +464,7 @@ class MainActivity : ComponentActivity() {
                             LauncherWatchNext.syncAsync(this@MainActivity, delayMs = 1_500L)
                         }
                     }
+                    CompositionLocalProvider(LocalPosterActions provides posterActions) {
                     Box(Modifier.fillMaxSize().background(VisionBlack)) {
                         if (needsActivation) {
                             ActivationScreen(
@@ -392,9 +473,9 @@ class MainActivity : ComponentActivity() {
                             )
                         } else if (!splashVisible || bootReady) {
                             if (isTv) {
-                                TvApp(catalog, navigator) {
+                                TvApp(catalog, navigator, onExitToLauncher = {
                                     com.chronosbvrx.visionplus.ui.exitAppCleanly(this@MainActivity)
-                                }
+                                }, onExitRequest = requestExit)
                             } else {
                                 PhoneApp(catalog, navigator) {
                                     com.chronosbvrx.visionplus.ui.exitAppCleanly(this@MainActivity)
@@ -451,6 +532,18 @@ class MainActivity : ComponentActivity() {
                         RemoteBus.pairingPin.value?.let { pin ->
                             RemotePairingPin(pin, isTv)
                         }
+                        // Menú contextual de una tarjeta (OK largo / pulsación larga): ficha,
+                        // favoritos y «Ver más tarde» desde donde esté mirando.
+                        PosterActionsDialog(
+                            film = posterActions.film,
+                            onDismiss = { posterActions.dismiss() },
+                            onOpenFilm = { film ->
+                                posterActions.dismiss()
+                                navigator.push(Route.Title(film))
+                            },
+                            onChanged = { catalog.refreshPersonal() },
+                        )
+                    }
                     }
                 }
             }
@@ -473,6 +566,11 @@ class MainActivity : ComponentActivity() {
         if ("title".equals(uri.host, ignoreCase = true)) return titleRouteFor(uri)
         // El control remoto y nuestro propio launcher abren canales con `visionplus://live/<código>`.
         if ("live".equals(uri.host, ignoreCase = true)) return liveRouteFor(this, uri)
+        // Vision+ Play: los enlaces de invitación son solo para el teléfono.
+        if ("play".equals(uri.host, ignoreCase = true)) {
+            if (isTv) return null
+            return GameDeepLink.joinCode(uri)?.let { Route.GameRoom(it) }
+        }
         return launcherRouteFor(this, uri)
     }
 
@@ -485,6 +583,8 @@ class MainActivity : ComponentActivity() {
         }
         "live" -> Route.Live
         "library" -> Route.Library
+        "games" -> Route.Games
+        "downloads" -> Route.Downloads
         "sports" -> {
             // El launcher manda el partido: la pantalla de Deportes abre su selector.
             uri.getQueryParameter("event")?.takeIf { it.isNotBlank() }?.let { event ->
@@ -581,6 +681,8 @@ private fun remoteRouteLabel(route: Route): String = when (route) {
     Route.Search -> "Buscador"
     Route.Assistant -> "Asistente"
     Route.Remote -> "Control remoto"
+    Route.Games -> "Juegos"
+    is Route.GameRoom -> "Sala ${route.code}"
     is Route.Title -> route.film.title
     is Route.Category -> route.title
     is Route.Section -> route.title

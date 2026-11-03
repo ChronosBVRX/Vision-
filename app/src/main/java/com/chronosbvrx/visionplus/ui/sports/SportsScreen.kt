@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.sports
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,12 +23,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,8 +59,10 @@ import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.data.sports.SportsReminder
 import com.chronosbvrx.visionplus.data.sports.SportsSource
 import com.chronosbvrx.visionplus.ui.components.EmptyState
+import com.chronosbvrx.visionplus.ui.notify.rememberNotifyGate
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
@@ -83,8 +91,16 @@ fun SportsScreen(
     var pickingId by remember { mutableStateOf(returnedFromPlayer ?: DeportesReturn.pickingId) }
     var league by remember { mutableStateOf(DeportesReturn.league) }
     var channels by remember { mutableStateOf(DeportesReturn.channels) }
+    var searchOpen by remember { mutableStateOf(false) }
+    var reminderTick by remember { mutableStateOf(0) }
     val picking = remember(pickingId, gee.events) {
         pickingId?.let { id -> gee.events.firstOrNull { it.id == id } }
+    }
+    // Al abrir el selector se comprueban AHORA las señales de ESE partido: el
+    // vigilante global tiene tope y un «Caído» viejo del servidor no debe tapar
+    // una señal que sí responde.
+    LaunchedEffect(pickingId, picking?.links?.size) {
+        picking?.let { gee.refreshChecksFor(it) }
     }
     // Un partido pedido desde el héroe/launcher se abre en SU deporte y SU día; al volver
     // del reproductor no se toca la selección (se regresa a la que la persona dejó).
@@ -98,6 +114,7 @@ fun SportsScreen(
         }
     }
     val context = LocalContext.current
+    val notifyGate = rememberNotifyGate()
     // El contexto del partido que viaja al reproductor (su aviso de cable usa la misma interfaz
     // que la TV en vivo: liga, marcador y dónde se transmite). La lista de fuentes es
     // exclusivamente de GeeSports.
@@ -112,17 +129,26 @@ fun SportsScreen(
                 scoreLine = geeScoreLine(event),
                 guide = event.broadcasts,
                 signals = event.links.size,
+                homeName = event.homeName.ifBlank { event.teamA },
+                awayName = event.awayName.ifBlank { event.teamB },
+                homeLogo = event.homeLogo,
+                awayLogo = event.awayLogo,
+                homeScore = event.scoreHome,
+                awayScore = event.scoreAway,
+                dateIso = event.dateIso,
+                leagueId = event.leagueId,
             )
         }
     }
 
     val events = gee.selectedEvents
-    val isFootball = (gee.selectedCategory ?: "Football").equals("Football", ignoreCase = true)
-    val leagues = remember(events, isFootball) {
-        if (!isFootball) emptyList() else GeeAgenda.leagueNames(events)
-    }
-    val filtered = remember(events, league, isFootball) {
-        if (!isFootball) events else events.filter { GeeAgenda.matchesLeague(it, league) }
+    // Ligas/series de CUALQUIER deporte: sirve para fútbol (Liga MX), básquet (NBA)
+    // y motor (NASCAR, WRC, MotoGP…). El chip viejo se ignora si ya no existe.
+    val leagues = remember(events) { GeeAgenda.leagueNames(events) }
+    val leagueLogos = remember(events) { GeeAgenda.leagueLogos(events) }
+    val activeLeague = remember(league, leagues) { league?.takeIf { it in leagues } }
+    val filtered = remember(events, activeLeague) {
+        events.filter { GeeAgenda.matchesLeague(it, activeLeague) }
     }
     // El reloj de la agenda: cada 30 s las fases se recalculan solas (el candado de
     // «aún no comienza» se abre al llegar la hora, sin tocar nada).
@@ -138,8 +164,9 @@ fun SportsScreen(
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
-                delay(GEE_LINKS_REFRESH_MS)
+                // Fresco al entrar (y al volver del reproductor), luego cada 5 min.
                 gee.refreshLinks(force = true)
+                delay(GEE_LINKS_REFRESH_MS)
             }
         }
     }
@@ -149,7 +176,7 @@ fun SportsScreen(
     // El reloj entra en la llave: al pasar el tiempo los bloques se rearman solos.
     val now = gee.clockMs
     val sections = remember(filtered, now) { GeeAgenda.sections(filtered, now) }
-    val days = remember { (0..7).map { SportsSource.shift(SportsSource.todayIso(), it) } }
+    val days = remember { (0..1).map { SportsSource.shift(SportsSource.todayIso(), it) } }
     val liveCount = remember(filtered, now) {
         filtered.count { it.live || GeeAgenda.phaseOf(it, now) == GeeAgenda.Phase.Live }
     }
@@ -179,24 +206,110 @@ fun SportsScreen(
                 )
                 Text(countText, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
             }
+            IconButton(onClick = {
+                searchOpen = !searchOpen
+                if (!searchOpen) {
+                    gee.clearSearch()
+                } else {
+                    channels = false
+                    DeportesReturn.channels = false
+                }
+            }) {
+                Icon(
+                    if (searchOpen) Icons.Default.Close else Icons.Default.Search,
+                    contentDescription = if (searchOpen) "Cerrar búsqueda" else "Buscar partido",
+                    tint = Color.White,
+                )
+            }
             IconButton(onClick = { gee.refresh(force = true) }) {
                 Icon(Icons.Default.Refresh, contentDescription = "Actualizar", tint = Color.White)
             }
+        }
+        if (searchOpen) {
+            OutlinedTextField(
+                value = gee.searchQuery,
+                onValueChange = gee::updateSearchQuery,
+                placeholder = { Text("Buscar equipo, liga o canal") },
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = VisionTextSecondary) },
+                trailingIcon = {
+                    if (gee.searchQuery.isNotBlank()) {
+                        IconButton(onClick = { gee.clearSearch() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Limpiar búsqueda", tint = Color.White)
+                        }
+                    }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedContainerColor = VisionSurface,
+                    unfocusedContainerColor = VisionSurface,
+                    focusedBorderColor = VisionBlue,
+                    unfocusedBorderColor = VisionSurfaceHigh,
+                    cursorColor = VisionBlue,
+                    focusedPlaceholderColor = VisionTextSecondary,
+                    unfocusedPlaceholderColor = VisionTextSecondary,
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp),
+            )
         }
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 16.dp),
             modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
         ) {
+            item(key = "scope") {
+                FilterChip(
+                    selected = !gee.showAll,
+                    onClick = {
+                        channels = false
+                        DeportesReturn.channels = false
+                        league = null
+                        DeportesReturn.league = null
+                        gee.toggleShowAll()
+                    },
+                    label = { Text(if (gee.showAll) "Todas" else "Principal") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = VisionBlue,
+                        selectedLabelColor = Color.White,
+                        containerColor = VisionSurface,
+                        labelColor = VisionTextSecondary,
+                    ),
+                    border = null,
+                )
+            }
             items(gee.categories, key = { it }) { category ->
                 FilterChip(
                     selected = !channels && gee.selectedCategory == category,
                     onClick = {
                         channels = false
                         DeportesReturn.channels = false
+                        league = null
+                        DeportesReturn.league = null
                         gee.selectCategory(category)
                     },
                     label = { Text(geeCategoryLabel(category)) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = VisionBlue,
+                        selectedLabelColor = Color.White,
+                        containerColor = VisionSurface,
+                        labelColor = VisionTextSecondary,
+                    ),
+                    border = null,
+                )
+            }
+            item(key = "favoritos") {
+                FilterChip(
+                    selected = gee.favoritesOnly,
+                    onClick = {
+                        channels = false
+                        DeportesReturn.channels = false
+                        gee.toggleFavoritesOnly()
+                    },
+                    label = { Text("Favoritos") },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = VisionBlue,
                         selectedLabelColor = Color.White,
@@ -212,6 +325,8 @@ fun SportsScreen(
                     onClick = {
                         channels = true
                         DeportesReturn.channels = true
+                        searchOpen = false
+                        gee.clearSearch()
                     },
                     label = { Text("Canales") },
                     colors = FilterChipDefaults.filterChipColors(
@@ -251,7 +366,7 @@ fun SportsScreen(
                     )
                 }
             }
-            if (isFootball && leagues.isNotEmpty()) {
+            if (leagues.isNotEmpty()) {
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -259,7 +374,7 @@ fun SportsScreen(
                 ) {
                     item(key = "liga_all") {
                         FilterChip(
-                            selected = league == null,
+                            selected = activeLeague == null,
                             onClick = {
                                 league = null
                                 DeportesReturn.league = null
@@ -276,12 +391,26 @@ fun SportsScreen(
                     }
                     items(leagues, key = { "liga_$it" }) { name ->
                         FilterChip(
-                            selected = league == name,
+                            selected = activeLeague == name,
                             onClick = {
-                                league = if (league == name) null else name
+                                league = if (activeLeague == name) null else name
                                 DeportesReturn.league = league
                             },
                             label = { Text(name, maxLines = 1) },
+                            leadingIcon = leagueLogos[name]?.let { logo ->
+                                {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(logo)
+                                            .size(28, 28)
+                                            .crossfade(false)
+                                            .build(),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        contentScale = ContentScale.Fit,
+                                    )
+                                }
+                            },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = VisionBlue,
                                 selectedLabelColor = Color.White,
@@ -297,7 +426,18 @@ fun SportsScreen(
                 gee.loading && filtered.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Cargando…", color = VisionTextSecondary)
                 }
-                filtered.isEmpty() -> EmptyState("Sin eventos", subtitle = "No hay eventos de este deporte en este momento.")
+                filtered.isEmpty() -> {
+                    val subtitle = when {
+                        gee.favoritesOnly && gee.favoriteTeams.isEmpty() ->
+                            "Abre un partido y marca «Favorito» para seguirlo aquí."
+                        gee.favoritesOnly ->
+                            "No hay partidos de tus equipos favoritos en este día."
+                        gee.searchQuery.isNotBlank() ->
+                            "No hay partidos que coincidan con \"${gee.searchQuery}\"."
+                        else -> "No hay eventos de este deporte en este momento."
+                    }
+                    EmptyState("Sin eventos", subtitle = subtitle)
+                }
                 else -> {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 150.dp),
@@ -316,7 +456,11 @@ fun SportsScreen(
                                 GeeSectionHeader(section.title, section.events.size)
                             }
                             gridItems(section.events, key = { it.id }) { event ->
-                                GeeEventTile(event, now) {
+                                GeeEventTile(
+                                    event = event,
+                                    nowMs = now,
+                                    favorite = gee.isFavorite(event),
+                                ) {
                                     // Abrir el menú de otro partido ya no es «volver a lo que veías».
                                     DeportesReturn.forgetWatching()
                                     DeportesReturn.pickingId = event.id
@@ -335,6 +479,7 @@ fun SportsScreen(
             title = geeEventTitle(event),
             subtitle = geeEventSubtitle(event),
             links = event.links,
+            xtv = event.xtv,
             onDismiss = {
                 DeportesReturn.pickingId = null
                 DeportesReturn.forgetWatching()
@@ -350,6 +495,29 @@ fun SportsScreen(
             checks = gee.checks,
             eventInfo = pickingInfo,
             playingUrl = DeportesReturn.watchingUrl,
+            favorite = gee.isFavorite(event),
+            onToggleFavorite = { gee.toggleFavorite(event) },
+            canRemind = GeeAgenda.phaseOf(event, now) == GeeAgenda.Phase.Soon &&
+                GeeAgenda.startMs(event) != null,
+            reminderActive = remember(event.id, reminderTick) {
+                SportsReminder.isActive(context, event)
+            },
+            onRemind = { minutes ->
+                notifyGate {
+                    val ok = SportsReminder.schedule(context, event, minutes)
+                    reminderTick++
+                    Toast.makeText(
+                        context,
+                        if (ok) "Te avisaremos $minutes min antes" else "Ya no da tiempo para ese aviso",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            },
+            onClearReminder = {
+                SportsReminder.clear(context, event)
+                reminderTick++
+                Toast.makeText(context, "Aviso quitado", Toast.LENGTH_SHORT).show()
+            },
         )
     }
 }
@@ -406,7 +574,12 @@ private fun GeeSectionHeader(title: String, count: Int) {
  * Mismo ADN visual que la de Smart TV (misma lógica pura en [GeeTiles]).
  */
 @Composable
-private fun GeeEventTile(event: GeeSportsSource.GeeEvent, nowMs: Long, onClick: () -> Unit) {
+private fun GeeEventTile(
+    event: GeeSportsSource.GeeEvent,
+    nowMs: Long,
+    favorite: Boolean,
+    onClick: () -> Unit,
+) {
     val (home, away) = GeeTiles.teams(event)
     val hasTeams = home.isNotBlank()
 
@@ -418,6 +591,13 @@ private fun GeeEventTile(event: GeeSportsSource.GeeEvent, nowMs: Long, onClick: 
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    geeSportIcon(event.category),
+                    contentDescription = null,
+                    tint = VisionBlueBright,
+                    modifier = Modifier.size(13.dp),
+                )
+                Spacer(Modifier.width(5.dp))
                 if (event.leagueLogo.isNotBlank()) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
@@ -439,6 +619,15 @@ private fun GeeEventTile(event: GeeSportsSource.GeeEvent, nowMs: Long, onClick: 
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (favorite) {
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = "Favorito",
+                        tint = Color(0xFFFFC107),
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
                 GeeStateBadge(event, compact = true, nowMs = nowMs)
             }
             Spacer(Modifier.height(8.dp))

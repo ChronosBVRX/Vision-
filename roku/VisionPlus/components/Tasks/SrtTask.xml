@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="SrtTask" extends="Task">
+    <interface>
+        <field id="url" type="string" />
+        <field id="cues" type="array" alwaysNotify="true" />
+    </interface>
+    <script type="text/brightscript" uri="pkg:/source/srt.brs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/SrtTask.brs" />
+</component>

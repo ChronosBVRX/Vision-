@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.tv
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -20,9 +21,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
@@ -121,36 +128,56 @@ internal fun TvCompactAction(
     icon: ImageVector? = null,
     /** El botón principal del hero es BLANCO (como en Vision+ Home). */
     primary: Boolean = false,
+    /** Altura explícita; el hero usa 44 dp en vez de la altura de pestaña. */
+    height: Dp = TAB_HEIGHT,
+    /** Botón secundario de vidrio: sin borde y con foco blanco/texto oscuro. */
+    soft: Boolean = false,
     onFocusChanged: (Boolean) -> Unit = {},
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     LaunchedEffect(focused) { onFocusChanged(focused) }
-    val ink = if (primary) Color(0xFF070B13) else Color.White
+    val scale by animateFloatAsState(if (focused) 1.04f else 1f, label = "compact-action-scale")
+    val ink = if (primary || soft) Color(0xFF070B13) else Color.White
     Surface(
         onClick = onClick,
-        modifier = modifier.height(TAB_HEIGHT),
+        modifier = modifier
+            .height(height)
+            .graphicsLayer { scaleX = scale; scaleY = scale },
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (primary) Color.White else VisionSurfaceHigh,
-            focusedContainerColor = if (primary) Color.White else VisionBlue,
-            pressedContainerColor = if (primary) Color.White else VisionBlue,
-            contentColor = ink,
+            containerColor = when {
+                primary -> Color.White
+                soft -> Color(0x1AFFFFFF)
+                else -> VisionSurfaceHigh
+            },
+            focusedContainerColor = if (primary || soft) Color.White else VisionBlue,
+            pressedContainerColor = if (primary || soft) Color.White else VisionBlue,
+            contentColor = if (soft && !focused) Color.White else ink,
             focusedContentColor = ink,
             pressedContentColor = ink,
         ),
         border = ClickableSurfaceDefaults.border(
             border = if (primary) Border(BorderStroke(2.dp, Color.White)) else Border.None,
-            focusedBorder = Border(BorderStroke(2.dp, if (primary) VisionBlue else Color.White)),
+            focusedBorder = when {
+                soft -> Border.None
+                primary -> Border(BorderStroke(2.dp, VisionBlue))
+                else -> Border(BorderStroke(2.dp, Color.White))
+            },
             pressedBorder = Border.None,
         ),
         interactionSource = interaction,
     ) {
-        Box(Modifier.fillMaxHeight().padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (icon != null) Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(20.dp))
-                Text(label, color = ink.copy(alpha = if (focused) 1f else 0.95f), maxLines = 1)
+                if (icon != null) Icon(icon, contentDescription = null, tint = if (soft && !focused) Color.White else ink, modifier = Modifier.size(19.dp))
+                Text(
+                    label,
+                    color = if (soft && !focused) Color.White else ink.copy(alpha = if (focused) 1f else 0.95f),
+                    fontWeight = if (primary) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                )
             }
         }
     }
@@ -168,6 +195,7 @@ internal fun TvChoiceChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
+    logo: String? = null,
     compact: Boolean = false,
 ) {
     Surface(
@@ -192,7 +220,18 @@ internal fun TvChoiceChip(
                 vertical = if (compact) 5.dp else 10.dp,
             ),
         ) {
-            if (icon != null) {
+            if (logo != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(logo)
+                        .size(32, 32)
+                        .crossfade(false)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            } else if (icon != null) {
                 Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
             }
             Text(label, style = MaterialTheme.typography.labelLarge, color = Color.White, maxLines = 1)

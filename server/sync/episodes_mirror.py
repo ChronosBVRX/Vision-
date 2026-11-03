@@ -6,9 +6,11 @@ petición. Este módulo drena esa cola en su propio loop corto: baja la lista de
 portal con la sesión que el worker ya mantiene en `portal_sessions`.
 
 Reglas de oro (las mismas de `api/portal.py`, sin excepciones):
-- **Jamás acuña sesión**: si el token no sirve, la cola se re-agenda (15 min) y
-  el ciclo del worker se encarga de renovar. Acuñar desde aquí patearía a los
-  equipos (cada mint es expulsar a otra sesión con el mismo SN).
+- **Sesión propia del worker**: al empezar una pasada se valida con
+  `session_for(pool)`; solo renueva si el portal ya la rechazó y usa el SN
+  propio del worker (`device_slots` status `worker`). Sin slot propio no se
+  acuña: la cola se re-agenda y el ciclo XTV renueva. Acuñar con el SN
+  compartido patearía a los equipos.
 - **Presupuesto**: `EPISODES_MAX_PER_CYCLE` refs por pasada, con pausa corta
   entre cada una. La ficha de un usuario jamás debe significar un golpe al
   portal por sí sola.
@@ -29,7 +31,7 @@ from typing import Any
 
 import asyncpg
 
-from xtv import XtvClient, XTV_USER_ID
+from xtv import XtvClient, XTV_USER_ID, session_for
 
 log = logging.getLogger("sync.episodes")
 
@@ -69,7 +71,7 @@ META_PREWARM_PER_CYCLE = int(os.environ.get("EPISODES_META_PREWARM_MAX_PER_CYCLE
 # app trata en SESSION_CODE_RX + la patada clásica aaa100083). Con uno de estos
 # la cola entera se re-agenda: renovar NO es cosa de este loop.
 _SESSION_RX = re.compile(
-    r"portal\s*(?:10000[1-5]|20000[0-2]|30000[1-2])|aaa100083|其他设备登录|账号已经在其他设备"
+    r"portal\s*(?:10000[1-5]|20000[0-2]|30000[1-2])|aaa1000(?:27|83)|其他设备登录|账号已经在其他设备"
 )
 # Contenido que el portal declara inexistente (100006 剧集=colección de capítulos,
 # 100008 节目=programa). Es determinista: la ficha la pediría mil veces y el portal
@@ -246,26 +248,30 @@ async def drain(pool: asyncpg.Pool) -> int:
     refs = claims(rows, MAX_PER_CYCLE)
     if not refs:
         return 0
-    # La sesión del worker vive en la base (la mantiene el ciclo XTV; aquí solo
-    # se lee). Sin token no se martilla: la cola atrasa 15 min y ya.
-    row = await pool.fetchrow(
-        """
-        select (select user_token from portal_sessions where portal = 'xtv') as token,
-               (select user_id from device_slots where status = 'worker' limit 1) as user_id
-        """
-    )
-    token = ((row["token"] if row else "") or "").strip()
-    user_id = ((row["user_id"] if row else "") or "").strip() or XTV_USER_ID
-    if not token:
+    # La sesión del worker se VALIDA aquí (session_for solo renueva si el portal ya
+    # la rechazó y usa el SN propio del worker). Antes solo se leía el token: si
+    # caducaba, la cola de episodios quedaba atascada hasta el ciclo XTV de 6 h y
+    # las fichas no recibían nombres/miniaturas.
+    try:
+        token, user_id = await session_for(pool)
+    except Exception as exc:  # noqa: BLE001 - sin sesión no se martilla
         await pool.execute(
             "update episode_mirror set next_try_at = now() + make_interval(secs => $1) "
             "where status = 'pending' and ref = any($2::text[])",
             SESSION_BACKOFF_S, refs,
         )
-        log.info("episodios: sin sesión del worker en la base; %s refs esperan", len(refs))
+        log.warning("episodios: sin sesión válida del worker (%s); %s refs esperan", exc, len(refs))
+        return 0
+    if not (token or "").strip():
+        await pool.execute(
+            "update episode_mirror set next_try_at = now() + make_interval(secs => $1) "
+            "where status = 'pending' and ref = any($2::text[])",
+            SESSION_BACKOFF_S, refs,
+        )
+        log.info("episodios: sin token del worker; %s refs esperan", len(refs))
         return 0
 
-    client = XtvClient(token, user_id)
+    client = XtvClient(token, user_id or XTV_USER_ID)
     ok = failed = 0
     for i, ref in enumerate(refs):
         attempts = next((int(r["attempts"]) for r in rows if r["ref"] == ref), 0)

@@ -2,6 +2,7 @@
 
 package com.chronosbvrx.visionplus.home.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -61,9 +62,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -105,7 +103,8 @@ private fun PersonalizePanel(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Box(Modifier.fillMaxSize().background(HomeColors.Deep).dialogRootFocus(focus)) {
+        BackHandler(onBack = onDismiss)
+        Box(Modifier.fillMaxSize().background(HomeColors.Deep).dialogRootFocus(focus).dismissOnBack(onDismiss).consumeLongPressRelease()) {
             Column(
                 Modifier
                     .fillMaxSize()
@@ -140,8 +139,6 @@ fun PersonalizeHubDialog(
     onChannels: () -> Unit,
     onApps: () -> Unit,
     onRows: () -> Unit,
-    onTabs: () -> Unit,
-    onPresets: () -> Unit,
     onAppearance: () -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit,
@@ -193,22 +190,6 @@ fun PersonalizeHubDialog(
                     title = "Filas del Inicio",
                     detail = "${config.rowOrder.size - config.hiddenRows.size} visibles · orden y tarjetas",
                     onClick = onRows,
-                )
-            }
-            item {
-                PersonalizeRow(
-                    icon = Icons.Rounded.Tab,
-                    title = "Pestañas",
-                    detail = "${config.tabOrder.count { it !in config.hiddenTabs }} en la barra · orden y visibilidad",
-                    onClick = onTabs,
-                )
-            }
-            item {
-                PersonalizeRow(
-                    icon = Icons.Rounded.AutoAwesome,
-                    title = "Plantillas",
-                    detail = "TV primero, Cine, Solo lo mío o Niños en un toque",
-                    onClick = onPresets,
                 )
             }
             item {
@@ -284,16 +265,16 @@ internal fun ItemActionsDialog(
 ) {
     val focus = rememberDialogFocus()
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        BackHandler(onBack = onDismiss)
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.74f))
                 .dialogRootFocus(focus)
+                .dismissOnBack(onDismiss)
                 // Si el menú salió con OK largo, el KeyUp que se está soltando no debe
                 // activar la primera acción. Lo consume esta ventana.
-                .onPreviewKeyEvent { event ->
-                    event.type == KeyEventType.KeyUp && TvPressGuard.takeKeyUp()
-                },
+                .consumeLongPressRelease(),
             contentAlignment = Alignment.Center,
         ) {
             val maxPanelHeight = maxHeight * 0.92f

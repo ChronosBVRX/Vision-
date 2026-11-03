@@ -2,6 +2,7 @@ package com.chronosbvrx.visionplus.home.data
 
 import android.media.tv.TvInputInfo
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -71,6 +72,14 @@ class TvInputsTest {
         assertTrue(visibleInputs(all, emptySet()).isNotEmpty())
         assertEquals("dtv", tunerOf(all)?.id)
         assertEquals(null, tunerOf(all.filter { it.kind != TvSourceKind.TUNER }))
+    }
+
+    @Test
+    fun videoAppsThatPretendToBeTvInputsAreNotListedAsEntries() {
+        assertTrue(isMediaAppInput("com.google.android.videos"))
+        assertTrue(isMediaAppInput("com.google.android.youtube.tv"))
+        assertFalse(isMediaAppInput("com.android.tv"))
+        assertFalse(isMediaAppInput("com.tcl.tv"))
     }
 
     @Test

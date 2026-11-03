@@ -2,6 +2,7 @@ package com.chronosbvrx.visionplus.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -24,6 +25,41 @@ class TvMenuTest {
     fun sportsSitsRightAfterLiveTv() {
         val labels = TV_RAIL_SPECS.map { it.label }
         assertEquals(labels.indexOf("En vivo") + 1, labels.indexOf("Deportes en vivo"))
+    }
+
+    @Test
+    fun liveAndSportsShareOneDropDownInsteadOfTwoSaturatedTabs() {
+        val entries = com.chronosbvrx.visionplus.ui.tv.TV_TOP_ENTRIES
+        assertEquals(
+            "TV en vivo y Deportes deben ser un solo destino «En vivo»",
+            1,
+            entries.count { it is com.chronosbvrx.visionplus.ui.tv.TvTopEntry.LiveHub },
+        )
+        assertTrue(
+            "no deben quedar pestañas separadas de TV en vivo ni Deportes",
+            entries.none {
+                it is com.chronosbvrx.visionplus.ui.tv.TvTopEntry.Tab &&
+                    (it.tab == com.chronosbvrx.visionplus.ui.tv.TvTopTab.LIVE ||
+                        it.tab == com.chronosbvrx.visionplus.ui.tv.TvTopTab.SPORTS)
+            },
+        )
+        assertTrue(com.chronosbvrx.visionplus.ui.tv.liveHubSelected(com.chronosbvrx.visionplus.ui.tv.TvTopTab.LIVE))
+        assertTrue(com.chronosbvrx.visionplus.ui.tv.liveHubSelected(com.chronosbvrx.visionplus.ui.tv.TvTopTab.SPORTS))
+        org.junit.Assert.assertFalse(
+            com.chronosbvrx.visionplus.ui.tv.liveHubSelected(com.chronosbvrx.visionplus.ui.tv.TvTopTab.HOME),
+        )
+    }
+
+    @Test
+    fun theTopBarAlsoOffersGamesWithAWordNotJustAnIcon() {
+        val games = com.chronosbvrx.visionplus.ui.tv.TvTopTab.entries
+            .firstOrNull { it.target == Route.Games }
+        assertNotNull("la barra superior de la tele debe ofrecer Juegos", games)
+        assertEquals("Juegos", games?.label)
+        assertEquals(
+            games,
+            com.chronosbvrx.visionplus.ui.tv.tvTopTabFor(Route.Games),
+        )
     }
 
     @Test

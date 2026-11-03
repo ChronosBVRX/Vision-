@@ -169,6 +169,8 @@ internal fun parseBanners(json: String): List<HeroSlide> {
                 subtitle = item.optString("subtitle"),
                 eyebrow = item.optString("eyebrow"),
                 badge = item.optString("badge").ifBlank { if (live) "EN VIVO" else "PRÓXIMO" },
+                backdrop = item.optString("backdrop").ifBlank { item.optString("poster") },
+                poster = item.optString("poster"),
                 league = item.optString("league"),
                 leagueLogo = item.optString("leagueLogo"),
                 homeName = item.optString("homeName"),

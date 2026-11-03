@@ -1,10 +1,19 @@
 package com.chronosbvrx.visionplus.ui.tv
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
@@ -13,7 +22,10 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.sports.SportsSource
+import com.chronosbvrx.visionplus.ui.player.MatchCenterHud
+import com.chronosbvrx.visionplus.ui.player.MatchHudPage
 import com.chronosbvrx.visionplus.ui.sports.DeportesReturn
+import com.chronosbvrx.visionplus.ui.sports.GeeZapSignals
 import com.chronosbvrx.visionplus.ui.theme.VisionTheme
 import org.junit.After
 import org.junit.Assert.assertTrue
@@ -22,6 +34,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
@@ -32,6 +45,7 @@ import java.io.File
 @OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34], qualifiers = "w960dp-h540dp-land-television")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TvSportsMosaicTest {
     @get:Rule
     val compose = createComposeRule()
@@ -120,6 +134,9 @@ class TvSportsMosaicTest {
         assertText("mosaico", "América")
         assertText("mosaico", "Guadalajara")
         assertText("mosaico", "EN VIVO")
+        // El héroe compacto deja ver al menos DOS líneas del mosaico: el siguiente
+        // partido (fila 2, bajo el héroe y la fila de "En vivo") ya está en pantalla.
+        compose.onNodeWithText("Liverpool", useUnmergedTree = true).assertIsDisplayed()
         assertTrue("Al entrar, algo debe tener el foco", focusedCount() >= 1)
 
         // La navegación con el mando sigue viva (sin crashes ni foco muerto).
@@ -141,10 +158,51 @@ class TvSportsMosaicTest {
     }
 
     @Test
-    fun dayAndLeagueFiltersShareOneRowWithTheCountInTheHeader() {
+    fun theHudScoreIsNotSqueezedToTheLeftNumber() {
+        compose.setContent {
+            VisionTheme {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    MatchCenterHud(
+                        info = GeeZapSignals.EventInfo(
+                            title = "Liverpool vs Arsenal",
+                            league = "Premier League",
+                            scoreLine = "2 - 1 · 78'",
+                            homeName = "Liverpool",
+                            awayName = "Arsenal",
+                            dateIso = "",
+                        ),
+                        page = MatchHudPage.SUMMARY,
+                        currentSignal = "PREMIER SPORTS FHD",
+                        signalType = "DASH · ClearKey",
+                        signalIndex = 1,
+                        signalCount = 3,
+                        isTv = true,
+                        onPageChange = {},
+                        onSourceClick = {},
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        val text = compose.onNodeWithTag("match_hud_score_text").fetchSemanticsNode().boundsInRoot
+        val box = compose.onNodeWithTag("match_hud_score").fetchSemanticsNode().boundsInRoot
+        val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val hud = compose.onNodeWithTag("match_hud").fetchSemanticsNode().boundsInRoot
+        assertTrue(
+            "el marcador no debe recortarse al número izquierdo (ancho=${text.width} caja=${box.width} hud=$hud root=$root)",
+            text.width >= 50f,
+        )
+        assertTrue("la caja del marcador debe tener ancho propio (caja=${box.width})", box.width >= 120f)
+        assertTrue("la caja del marcador debe dar aire al texto (caja=${box.width}, texto=${text.width})", box.width > text.width)
+    }
+
+    @Test
+    fun dayAndLeagueFiltersAndScopeShareCompactRows() {
         start()
-        // El encabezado lleva el conteo en línea (ya no es una fila propia).
-        assertText("encabezado", "eventos")
+        // El alcance («Principal»/«Todas las ligas») vive en la fila de chips, sin encabezado
+        // ni conteo que empujen el mosaico hacia abajo.
+        assertText("alcance", "Principal")
         // Días y ligas comparten fila.
         assertText("filtros", "Hoy")
         assertText("filtros", "Todas")

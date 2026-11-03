@@ -1,0 +1,35 @@
+VISION+ FIESTA 3.0 — BETA 9
+==========================
+
+CANAL BETA (actualización desde la app):
+- En el celular y en la tele: Ajustes > Actualizaciones y Sistema >
+  Canal de pruebas (beta): Sí > Buscar actualizaciones.
+- El actualizador lee el release con tag "beta" y ofrece la 2.5.220.
+- La estable /releases/latest sigue en 2.5.204; la beta no la pisa.
+
+ENTREGA PUBLICADA:
+https://github.com/ChronosBVRX/Vision-/releases/tag/beta
+APK: VisionPlus.apk (2.5.220/vc459)
+Incluye Deportes + los seis juegos. Usa el backend de producción.
+
+BETA LOCAL (sin VPS):
+APK: VisionPlus-Fiesta-3.0-beta3.apk
+Firma: histórica 9593cb0d…
+SHA-256: 429a501884ce5b772878c51b4f990586f95fe7f89abe8bdf7115fed54f68dd1b
+
+1) Levanta el servidor local en este PC:
+   ./tools/run_fiesta_beta.sh
+
+   La beta local apunta a http://192.168.1.131:8100
+   Si cambia la IP del PC, hay que recompilar con:
+   ./gradlew :app:assembleNormalRelease --offline -PfiestsBaseUrl=http://NUEVA_IP:8100
+   y volver a inyectar/firmar (ver docs/BETA_FIESTA_3.0.md).
+
+2) Instala la beta en la tele:
+   adb install -r beta/VisionPlus-Fiesta-3.0-beta3.apk
+   (o copia el APK a la tele y ábrelo con un instalador)
+
+3) Abre Vision+ > Juegos. Elige Familiar o Sin filtro.
+   La tele crea la sala; los teléfonos entran con el código/QR.
+
+No es OTA. No se publicó como estable.

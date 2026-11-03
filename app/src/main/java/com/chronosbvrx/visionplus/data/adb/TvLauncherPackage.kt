@@ -48,6 +48,8 @@ internal class ReleaseApkStore(
     private val minBytes: Long,
     private val userAgent: String,
     private val bundledAsset: String? = null,
+    /** Corte entre lecturas: el launcher es pequeño y, si la red está lenta, hay respaldo local. */
+    private val readTimeoutMs: Int = 120_000,
 ) {
 
     var state: ApkState by mutableStateOf(ApkState.Idle)
@@ -55,6 +57,11 @@ internal class ReleaseApkStore(
 
     fun reset() {
         state = ApkState.Idle
+    }
+
+    /** Deja el estado «listo» para un APK que no vino de una descarga (p. ej. el del teléfono). */
+    fun announce(apk: Apk) {
+        state = ready(apk)
     }
 
     /** Lo que ya está en el teléfono, sin tocar la red. */
@@ -137,8 +144,8 @@ internal class ReleaseApkStore(
         runCatching { part.delete() }
         val connection = (URL(TvLauncherPackage.releaseUrl(asset)).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
-            // El APK de Vision+ pesa ~82 MB: un Wi-Fi lento no puede cortar la descarga a los 45 s.
-            readTimeout = 120_000
+            // El APK de Vision+ pesa ~97 MB: un Wi-Fi lento no puede cortar la descarga a los 45 s.
+            readTimeout = readTimeoutMs
             instanceFollowRedirects = true
             setRequestProperty("Accept", "application/octet-stream")
             setRequestProperty("User-Agent", userAgent)
@@ -198,6 +205,7 @@ internal object TvLauncherPackage {
         minBytes = 500_000L,
         userAgent = "visionplus-tv-installer/${BuildConfig.VERSION_NAME}",
         bundledAsset = BUNDLED,
+        readTimeoutMs = 30_000,
     )
 
     val state: ApkState get() = store.state
@@ -271,6 +279,29 @@ internal object TvAppPackage {
     suspend fun cached(context: Context): Apk? = store.cached(context)
 
     suspend fun resolve(context: Context): Apk? = store.resolve(context)
+
+    /**
+     * El APK de la propia app instalada en el teléfono. Instalarlo en la tele evita bajar 97 MB
+     * del release cuando el teléfono ya tiene exactamente la versión que va a usar.
+     */
+    fun local(context: Context): Apk? {
+        val source = context.applicationInfo?.sourceDir?.takeIf { it.isNotBlank() } ?: return null
+        val file = File(source)
+        if (!file.isFile || file.length() <= 20_000_000L) return null
+        @Suppress("DEPRECATION")
+        val archive = context.packageManager.getPackageArchiveInfo(file.absolutePath, 0) ?: return null
+        if (archive.packageName != HomeContract.APP_PACKAGE) return null
+        val code = if (Build.VERSION.SDK_INT >= 28) archive.longVersionCode else archive.versionCode.toLong()
+        return Apk(
+            file = file,
+            versionName = archive.versionName.orEmpty(),
+            versionCode = code,
+            fromRelease = false,
+        )
+    }
+
+    /** Refleja en la interfaz el APK local que se está instalando. */
+    fun announce(apk: Apk) = store.announce(apk)
 
     /** La versión de Vision+ del último release («2.5.171»), cacheada una hora. */
     suspend fun latestVersion(context: Context): String? = withContext(Dispatchers.IO) {

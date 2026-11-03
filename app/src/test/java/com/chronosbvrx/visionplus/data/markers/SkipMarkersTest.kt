@@ -186,6 +186,20 @@ class SkipMarkersTest {
     }
 
     @Test
+    fun withoutCreditsTheLastMinuteOffersTheNextChapter() {
+        val none = EpisodeMarkers()
+        assertEquals(44 * 60_000L - 60_000L, creditsFallbackStartMs(none, 44 * 60_000L))
+        // Con marcador válido manda el marcador, no el fallback.
+        val good = EpisodeMarkers(creditsStartMs = 2_289_000L, creditsEndMs = 2_582_000L)
+        assertNull(creditsFallbackStartMs(good, 44 * 60_000L))
+        // Un marcador que no cabe en la duración real también deja actuar al fallback.
+        val wrong = EpisodeMarkers(creditsStartMs = 300_000L)
+        assertEquals(44 * 60_000L - 60_000L, creditsFallbackStartMs(wrong, 44 * 60_000L))
+        // Capítulos muy cortos no muestran la tarjeta.
+        assertNull(creditsFallbackStartMs(none, 4 * 60_000L))
+    }
+
+    @Test
     fun postCreditsAreRecognizedAndBlockTheFastAdvance() {
         val markers = EpisodeMarkers(
             creditsStartMs = 2_289_000L,

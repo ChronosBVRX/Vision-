@@ -31,8 +31,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus.home"
         minSdk = 24
         targetSdk = 35
-        versionCode = 24
-        versionName = "1.3.1"
+        versionCode = 39
+        versionName = "1.3.16"
     }
 
     signingConfigs {

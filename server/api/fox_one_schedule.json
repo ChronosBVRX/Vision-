@@ -1,0 +1,230 @@
+{
+ "asOf": "2026-11-02T05:14:54.933395+00:00",
+ "source": "Calendario público Fox One (empaquetado; la API no responde desde el VPS)",
+ "events": [
+  {
+   "home": "Brest",
+   "away": "Lorient",
+   "title": "2/11 01:30 PM CDMX - FC Lorient vs Brest",
+   "start": 1793647800.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "León Femenil",
+   "away": "Atlético De San Luis",
+   "title": "2/11 07:00 PM CDMX - León vs Atlético San Luis",
+   "start": 1793667600.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Bayern Munich",
+   "away": "Atlético de Madrid",
+   "title": "03/11 08:50 AM CDMX - Atlético de Madrid (ESP) vs Bayern München (GER)",
+   "start": 1793717400.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Sporting CP",
+   "away": "Shakhtar Donetsk",
+   "title": "03/11 11:30 AM CDMX - FC Shakhtar Donetsk (UKR) vs Sporting Clube de Portugal (POR)",
+   "start": 1793727000.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "PSG",
+   "away": "Villarreal",
+   "title": "03/11 13:45 AM CDMX - Villarreal CF (ESP) vs Paris Saint-Germain (FRA)",
+   "start": 1793735100.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Bayern Munich",
+   "away": "Atlético de Madrid",
+   "title": "03/11 13:45 AM CDMX - Atlético de Madrid (ESP) vs Bayern München (GER)",
+   "start": 1793735100.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "LOSC Lille",
+   "away": "Bodø/Glimt",
+   "title": "03/11 13:45 AM CDMX - FK Bodø/Glimt (NOR) vs LOSC Lille (FRA)",
+   "start": 1793735100.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Real Betis",
+   "away": "Borussia Dortmund",
+   "title": "04/11 08:50 AM CDMX - Borussia Dortmund (GER) vs Real Betis Balompié (ESP)",
+   "start": 1793803800.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Real Madrid",
+   "away": "AEK Atenas",
+   "title": "4/11 11:30 AM CDMX - AEK Athens (GRE) vs Real Madrid C.F. (ESP)",
+   "start": 1793813400.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Manchester City",
+   "away": "RB Leipzig",
+   "title": "4/11 1:45 PM CDMX - RB Leipzig (GER) vs Manchester City (ENG)",
+   "start": 1793821500.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Club Brugge",
+   "away": "PSV",
+   "title": "4/11 1:45 PM CDMX - PSV Eindhoven (NED) vs Club Brugge KV (BEL)",
+   "start": 1793821500.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Napoli",
+   "away": "FC Porto",
+   "title": "4/11 1:45 PM CDMX - FC Porto (POR) vs SSC Napoli (ITA)",
+   "start": 1793821500.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Sabah FK",
+   "away": "Viking FK",
+   "title": "4/11 1:45 PM CDMX - Viking FK (NOR) vs Sabah FC (AZE)",
+   "start": 1793821500.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Charros de Jalisco",
+   "away": "Algodoneros de Guasave",
+   "title": "4/11 7:20 PM CDMX - Algodoneros de Guasave vs Charros de Jalisco",
+   "start": 1793841600.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Ravens",
+   "away": "Jaguars",
+   "title": "5/11 7:00 PM CDMX - Jaguars vs Ravens",
+   "start": 1793926800.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Tottenham",
+   "away": "Leeds United",
+   "title": "07/11 6:20 AM CDMX - Leeds United vs Tottenham",
+   "start": 1794054000.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Everton",
+   "away": "Chelsea",
+   "title": "07/11 6:35 AM CDMX - Chelsea vs Everton",
+   "start": 1794054900.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Inter",
+   "away": "Milan",
+   "title": "07/11 07:50 AM CDMX - Milan vs Inter",
+   "start": 1794059400.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "SV 07 Elversberg",
+   "away": "Borussia Dortmund",
+   "title": "07/11 08:20 AM CDMX - Borussia Dortmund vs Elversberg",
+   "start": 1794061200.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Bayern Munich",
+   "away": "FSV Mainz 05",
+   "title": "07/11 08:20 AM CDMX - Mainz vs Bayern Munich",
+   "start": 1794061200.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Augsburg",
+   "away": "RB Leipzig",
+   "title": "07/11 08:20 AM CDMX - RB Leipzig vs Augsburg",
+   "start": 1794061200.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Eintracht Frankfurt",
+   "away": "SC Paderborn 07",
+   "title": "07/11 08:20 AM CDMX - Paderborn vs Eintracht Frankfurt",
+   "start": 1794061200.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Newcastle",
+   "away": "Fulham",
+   "title": "07/11 08:30 AM CDMX - Fulham vs Newcastle United",
+   "start": 1794061800.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Paris FC",
+   "away": "Auxerre",
+   "title": "07/11 10:00 AM CDMX - AJ Auxerre vs Paris FC",
+   "start": 1794067200.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Manchester City",
+   "away": "Nottingham Forest",
+   "title": "07/11 11:00 AM CDMX - Nottingham Forest vs Manchester City",
+   "start": 1794070800.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "Werder Bremen",
+   "away": "VFB Stuttgart",
+   "title": "07/11 11:20 AM CDMX - VFB Stuttgart vs Werder Bremen",
+   "start": 1794072000.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "TROYES",
+   "away": "PSG",
+   "title": "07/11 01:30 PM CDMX - Paris Saint-Germain vs Troyes",
+   "start": 1794079800.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  },
+  {
+   "home": "NOAPS Championship",
+   "away": "NASCAR O´Reilly",
+   "title": "07/11 04:00 PM CDMX - NOAPS Championship",
+   "start": 1794088800.0,
+   "mirror": "FOX+",
+   "source": "calendario Fox One"
+  }
+ ]
+}

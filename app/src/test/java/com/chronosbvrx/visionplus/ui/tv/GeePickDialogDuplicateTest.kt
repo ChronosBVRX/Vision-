@@ -5,12 +5,20 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.chronosbvrx.visionplus.data.LiveChannel
+import com.chronosbvrx.visionplus.data.games.GameQuestion
 import com.chronosbvrx.visionplus.data.gee.GeeHealth
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.data.games.NarratorMood
+import com.chronosbvrx.visionplus.ui.games.GameOptions
+import com.chronosbvrx.visionplus.ui.games.NarratorView
+import com.chronosbvrx.visionplus.ui.games.TvGameLobby
+import com.chronosbvrx.visionplus.ui.games.NarratorBubble
 import com.chronosbvrx.visionplus.ui.sports.GeeLinkPickDialog
 import com.chronosbvrx.visionplus.ui.player.AudioAndSubtitlesDialog
 import com.chronosbvrx.visionplus.ui.player.PlayerMenuState
@@ -72,7 +80,7 @@ class GeePickDialogDuplicateTest {
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        assertText("Transmisiones de GeeSports:")
+        assertText("Transmisiones disponibles:")
         assertAbsent("Canales posibles:")
     }
 
@@ -92,7 +100,7 @@ class GeePickDialogDuplicateTest {
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        assertText("Transmisiones de GeeSports:")
+        assertText("Transmisiones disponibles:")
         assertAbsent("Canales posibles:")
     }
 
@@ -115,7 +123,7 @@ class GeePickDialogDuplicateTest {
         compose.waitForIdle()
         // Con el partido aún cerrado no se ofrecen señales; solo el aviso.
         assertText("podrás verlo cuando el partido esté en vivo")
-        assertAbsent("Transmisiones de GeeSports:")
+        assertAbsent("Transmisiones disponibles:")
         assertAbsent("Canales posibles:")
     }
 
@@ -137,7 +145,7 @@ class GeePickDialogDuplicateTest {
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
         assertText("podrás verlo cuando el partido esté en vivo")
-        assertAbsent("Transmisiones de GeeSports:")
+        assertAbsent("Transmisiones disponibles:")
         assertAbsent("Canales posibles:")
     }
 
@@ -180,7 +188,7 @@ class GeePickDialogDuplicateTest {
         // Solo los enlaces de GeeSports: sin la línea/canal de la guía.
         assertText("FANCODE FHD")
         assertText("ESPN")
-        assertText("Viendo")
+        assertText("Seleccionada")
         assertAbsent("Se transmite en: ESPN")
         assertAbsent("Canal en vivo · ESPN")
         assertAbsent("Canales posibles:")
@@ -317,7 +325,7 @@ class GeePickDialogDuplicateTest {
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        assertText("Transmisiones de GeeSports:")
+        assertText("Transmisiones disponibles:")
         assertText("TUDN MEXICO FHD")
         assertText("Caído")
         assertAbsent("Canales posibles:")
@@ -328,7 +336,7 @@ class GeePickDialogDuplicateTest {
     }
 
     @Test
-    fun aDeclaredNameWithoutUrlIsNotOfferedAtAll() {
+    fun aDeclaredNameWithoutUrlStillAppearsButCannotBePlayed() {
         val pending = GeeSportsSource.GeeLink(
             name = "TUDN US",
             link = "",
@@ -337,6 +345,7 @@ class GeePickDialogDuplicateTest {
             drm = "",
             alive = null,
         )
+        var played: LiveChannel? = null
         compose.setContent {
             VisionTheme {
                 GeeLinkPickDialog(
@@ -344,19 +353,23 @@ class GeePickDialogDuplicateTest {
                     subtitle = "Liga MX · Hoy 19:00",
                     links = listOf(pending),
                     onDismiss = {},
-                    onPlay = { _: LiveChannel -> },
+                    onPlay = { played = it },
                 )
             }
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        assertText("Sin enlaces disponibles")
-        assertAbsent("TUDN US")
-        assertAbsent("La fuente aún no publica su señal")
+        assertText("TUDN US")
+        assertText("Sin señal")
+        assertText("La fuente aún no publica su señal")
+        assertAbsent("Sin enlaces disponibles")
+        compose.onNodeWithText("TUDN US").performClick()
+        compose.waitForIdle()
+        assertNull(played)
     }
 
     @Test
-    fun theListShowsTheGeeLinkAndTheZappingHint() {
+    fun theListShowsTheChannelNameButNeverTheSourceAddress() {
         val live = GeeSportsSource.GeeLink(
             name = "TUDN MEXICO FHD",
             link = "https://otte.cache.aiv-cdn.net/bom-nitro/live/clients/dash/enc/x/out/v1/abc/cenc.mpd|user-agent=UA",
@@ -378,11 +391,15 @@ class GeePickDialogDuplicateTest {
         }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        assertText("Transmisiones de GeeSports:")
-        assertText("otte.cache.aiv-cdn.net")
+        assertText("Transmisiones disponibles:")
+        assertText("TUDN MEXICO FHD")
+        assertText("DASH · ClearKey")
+        // La dirección técnica pertenece al reproductor, no a la lista.
+        assertAbsent("otte.cache.aiv-cdn.net")
+        assertAbsent("http")
         assertAbsent("user-agent=")
-        assertText("cambia entre ellas")
-        assertText("Arriba/Abajo durante la reproducción")
+        assertText("Arriba/Abajo cambia solo entre las señales disponibles de este partido")
+        assertText("elige otra de la lista")
     }
 
     @Test
@@ -415,6 +432,76 @@ class GeePickDialogDuplicateTest {
     }
 
     @Test
+    fun theGameQuestionRendersItsFourOptions() {
+        val question = GameQuestion(
+            id = "q1",
+            kind = "year",
+            prompt = "¿En qué año se estrenó «Prueba»?",
+            options = listOf("2019", "2020", "2021", "2022"),
+            art = "",
+            difficulty = 1,
+        )
+        compose.setContent {
+            VisionTheme {
+                GameOptions(
+                    question = question,
+                    selected = -1,
+                    correct = -1,
+                    reveal = false,
+                    enabled = true,
+                    onAnswer = {},
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(400)
+        compose.waitForIdle()
+        assertText("A.  2019")
+        assertText("B.  2020")
+        assertText("C.  2021")
+        assertText("D.  2022")
+    }
+
+    @Test
+    fun theTvGameLobbyShowsTheCodeAndTheJoinHint() {
+        compose.setContent {
+            VisionTheme {
+                TvGameLobby(
+                    code = "ABC234",
+                    displayCode = "ABC-234",
+                    players = emptyList(),
+                    onBack = {},
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(800)
+        compose.waitForIdle()
+        assertText("ABC-234")
+        assertText("Escanea el QR con Vision+ en tu teléfono")
+        assertText("Esperando jugadores")
+        assertText("El primero que entre será el anfitrión")
+    }
+
+    @Test
+    fun theNarratorImageLoadsInTheGamesScreen() {
+        compose.setContent {
+            VisionTheme { NarratorView(NarratorMood.Idle, size = 120.dp, animated = false) }
+        }
+        compose.mainClock.advanceTimeBy(300)
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Narradora de Vision+ Play").assertExists()
+    }
+
+    @Test
+    fun theNarratorBubbleShowsTheGamesCopy() {
+        compose.setContent {
+            VisionTheme { NarratorBubble("¿Jugamos una trivia?") }
+        }
+        compose.mainClock.advanceTimeBy(300)
+        compose.waitForIdle()
+        assertText("¿Jugamos una trivia?")
+    }
+
+    @Test
     fun aFreshCheckThatFoundItDeadBeatsAHealthyServerVerdict() {
         val reported = GeeSportsSource.GeeLink(
             name = "TUDN MEXICO FHD",
@@ -440,5 +527,82 @@ class GeePickDialogDuplicateTest {
         compose.waitForIdle()
         assertText("Caído")
         assertAbsent("Disponible")
+    }
+
+    @Test
+    fun theTvPickerNeverPointsFocusAtARequesterThatMayNotBeComposed() {
+        // Crash real en la tele: al bajar rápido en la lista de fuentes, `focusProperties`
+        // apuntaba a `rowFocus[index+1]` (fila aún no compuesta) o a `closeFocus` (pie aún
+        // no montado) y el mando lanzaba «FocusRequester is not initialized».
+        val source = java.io.File(
+            "src/main/java/com/chronosbvrx/visionplus/ui/tv/TvGeeSportsTabs.kt",
+        ).readText()
+        assertTrue("el selector debe existir", source.contains("TvGeeLinkPickDialog"))
+        assertTrue(
+            "no debe haber focusProperties con requesters de filas/pie",
+            !source.contains("down = rowFocus") && !source.contains("up = rowFocus"),
+        )
+    }
+
+
+    @Test
+    fun tvPickerShowsTheXtvSecondOptionFirstAndPlaysIt() {
+        var played: LiveChannel? = null
+        compose.setContent {
+            VisionTheme {
+                TvGeeLinkPickDialog(
+                    title = "Pachuca vs Tigres UANL",
+                    subtitle = "Liga MX · Hoy 19:00",
+                    links = emptyList(),
+                    onDismiss = {},
+                    onPlay = { played = it },
+                    xtv = listOf(
+                        GeeSportsSource.XtvOption(
+                            name = "AYM Sports México",
+                            code = "xtvlive:cyx_AYM",
+                            country = "México",
+                            verified = true,
+                            recommended = true,
+                            note = "FOX básico confirmado por EPG FOX básico; AYM es el espejo.",
+                        ),
+                    ),
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertText("En tu TV")
+        assertText("Recomendado · FOX básico confirmado")
+        // La fila está compuesta y es la primera; el canal XTV lo entrega
+        // `xtvPickRows` (probado en GeePicksTest) y el reproductor lo abre.
+        assertTrue(played == null)
+    }
+
+    @Test
+    fun tvPickerPrefersGeeSportsWhenItHasAPlayableSource() {
+        compose.setContent {
+            VisionTheme {
+                TvGeeLinkPickDialog(
+                    title = "Deportivo vs Osasuna",
+                    subtitle = "LaLiga · Hoy 14:00",
+                    links = listOf(link("BEIN3 SPORTS FHD")),
+                    onDismiss = {},
+                    onPlay = { _: LiveChannel -> },
+                    xtv = listOf(
+                        GeeSportsSource.XtvOption(
+                            name = "ESPN / Star+ HD",
+                            code = "xtvlive:ST☆R+HD_cyx",
+                            country = "Internacional",
+                            recommended = false,
+                            note = "Disney+ (señal); no es ESPN en vivo",
+                        ),
+                    ),
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertText("BEIN3 SPORTS FHD")
+        assertAbsent("ESPN / Star+ HD")
     }
 }

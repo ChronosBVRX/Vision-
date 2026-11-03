@@ -7,6 +7,9 @@ import sys
 
 os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:5432/test")
 os.environ.setdefault("API_KEY", "test-key")
+# Los tests no tocan la API pública de Fox One; el EPG básico empaquetado sí
+# se lee (es local) para probar la regla Pachuca-Tigres → AYM.
+os.environ.setdefault("FOX_SCHEDULE_OFFLINE", "1")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for sub in ("sync", "api"):

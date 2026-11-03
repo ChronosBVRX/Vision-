@@ -24,8 +24,12 @@ data class RemoteUiState(
     val tvs: List<RemoteTv> = emptyList(),
     val tv: RemoteTv? = null,
     val error: String? = null,
-    /** Qué está viendo la tele. */
+    /** Qué está viendo la tele (texto de respaldo para teles viejas). */
     val now: String = "",
+    /** Estado estructurado de la reproducción; inactivo si la tele está en el menú. */
+    val nowPlaying: NowPlaying = NowPlaying(),
+    /** Momento (elapsedRealtime) en que llegó el último estado, para interpolar el avance. */
+    val nowReceivedAt: Long = 0L,
     val paired: Boolean = false,
 )
 
@@ -125,7 +129,15 @@ object RemoteClient {
         disconnect(keepList = true)
         rememberTv(context, tv)
         val myGen = ++gen
-        state.value = state.value.copy(status = RemoteStatus.CONNECTING, tv = tv, error = null, now = "", paired = false)
+        state.value = state.value.copy(
+            status = RemoteStatus.CONNECTING,
+            tv = tv,
+            error = null,
+            now = "",
+            nowPlaying = NowPlaying(),
+            nowReceivedAt = 0L,
+            paired = false,
+        )
         thread(name = "remote-connect", isDaemon = true) {
             try {
                 val s = Socket()
@@ -134,10 +146,20 @@ object RemoteClient {
                     runCatching { s.close() }
                     return@thread
                 }
+                s.soTimeout = 15_000
                 socket = s
                 val writer = BufferedWriter(OutputStreamWriter(s.getOutputStream(), Charsets.UTF_8))
                 out = writer
                 send(RemoteMsg(t = RemoteProto.HELLO, name = deviceName(), token = tokenFor(context, tv)))
+                // La tele puede estar en el menú sin mandar estado: un ping cada 5 s mantiene
+                // viva la conexión y detecta el socket muerto en 15 s (readLine con timeout).
+                thread(name = "remote-heartbeat", isDaemon = true) {
+                    while (gen == myGen && socket === s) {
+                        runCatching { Thread.sleep(5_000) }
+                        if (gen != myGen || socket !== s) break
+                        send(RemoteMsg(t = RemoteProto.PING))
+                    }
+                }
                 val reader = BufferedReader(InputStreamReader(s.getInputStream(), Charsets.UTF_8))
                 while (gen == myGen) {
                     val line = reader.readLine() ?: break
@@ -173,7 +195,11 @@ object RemoteClient {
                 state.value = state.value.copy(status = RemoteStatus.NEED_PIN, error = "PIN incorrecto")
             }
             RemoteProto.NOW -> {
-                state.value = state.value.copy(now = msg.screen.orEmpty())
+                state.value = state.value.copy(
+                    now = msg.screen.orEmpty(),
+                    nowPlaying = NowPlaying.fromMsg(msg),
+                    nowReceivedAt = android.os.SystemClock.elapsedRealtime(),
+                )
             }
             RemoteProto.PONG -> Unit
         }
@@ -181,7 +207,14 @@ object RemoteClient {
 
     private fun fail(myGen: Int, message: String) {
         if (gen != myGen) return
-        state.value = state.value.copy(status = RemoteStatus.ERROR, error = message)
+        state.value = state.value.copy(
+            status = RemoteStatus.ERROR,
+            error = message,
+            now = "",
+            nowPlaying = NowPlaying(),
+            nowReceivedAt = 0L,
+        )
+        runCatching { socket?.close() }
         socket = null
         out = null
     }
@@ -201,6 +234,8 @@ object RemoteClient {
             status = RemoteStatus.IDLE,
             tv = if (keepList) state.value.tv else null,
             now = "",
+            nowPlaying = NowPlaying(),
+            nowReceivedAt = 0L,
             paired = false,
         )
     }
@@ -210,6 +245,18 @@ object RemoteClient {
     fun sendKey(code: Int, action: String = RemoteProto.ACTION_TAP) {
         if (!RemoteKeys.isAllowed(code)) return
         send(RemoteMsg(t = RemoteProto.KEY, code = code, action = action))
+    }
+
+    /** Salto absoluto desde la barra de progreso del teléfono. */
+    fun sendSeek(positionMs: Long) {
+        if (positionMs < 0L) return
+        send(RemoteMsg(t = RemoteProto.SEEK, pos = positionMs))
+    }
+
+    /** Play/pausa, siguiente, anterior o detener sin inyectar una tecla. */
+    fun sendCommand(command: String) {
+        if (command.isBlank()) return
+        send(RemoteMsg(t = RemoteProto.CMD, cmd = command))
     }
 
     /** Le entrega el código de sincronización a la tele (ella lo adopta y empieza a sincronizar). */

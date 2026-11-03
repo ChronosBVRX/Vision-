@@ -3,6 +3,7 @@ package com.chronosbvrx.visionplus.data.subs
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.chronosbvrx.visionplus.data.xuper.XuperCrypto
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -170,9 +171,25 @@ class SubsTest {
     fun labelsAndLocalNames() {
         assertEquals("Español", languageName("es"))
         assertEquals("Inglés", languageName("EN"))
+        assertEquals("Español", languageName("es-MX"))
+        assertEquals("Español", languageName("Spanish"))
+        assertEquals("Portugués", languageName("pt-BR"))
         assertEquals("", languageName("xx"))
         assertEquals("A812_us", fileNameSafe("A812/us"))
         assertEquals("es_0.srt", SubsStore.srtFileName(SubEntry("es", "http://x", "srt", 0)))
         assertEquals("es_3.srt", SubsStore.srtFileName(SubEntry("ES ", "http://x", "SRT", 3)))
+    }
+
+    @Test
+    fun spanishIsFirstAndRegionalTagsCount() {
+        val entries = listOf(
+            SubEntry("en", "http://en", "srt", 0),
+            SubEntry("es-MX", "http://es", "srt", 1),
+            SubEntry("pt-BR", "http://pt", "srt", 2),
+        )
+        val ordered = orderSubsForPicker(entries, currentLang = "")
+        assertEquals("es-MX", ordered.first().language)
+        assertTrue(isSpanishSubtitle(entries[1]))
+        assertFalse(isSpanishSubtitle(entries[0]))
     }
 }

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="GamesScreen" extends="Group">
+    <interface>
+        <field id="action" type="string" alwaysNotify="true" />
+        <field id="payload" type="assocarray" alwaysNotify="true" />
+        <field id="load" type="integer" alwaysNotify="true" />
+    </interface>
+    <script type="text/brightscript" uri="pkg:/source/core.brs" />
+    <script type="text/brightscript" uri="pkg:/components/GamesScreen.brs" />
+    <children>
+        <Rectangle width="1920" height="1080" color="0x070B13FF" />
+        <Label text="Vision+ Play" translation="[96,150]" width="900" height="60" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
+        <Label text="La sala se crea desde la app móvil. Aquí ves el catálogo y las reglas." translation="[98,212]" width="1400" height="32" font="font:SmallSystemFont" color="0x9BA8BDFF" />
+        <MarkupGrid id="grid" translation="[96,270]" width="1728" height="700" numColumns="4" itemSize="[380,220]" itemSpacing="[18,18]" itemComponentName="GameCard" />
+        <Label id="detail" text="" translation="[96,760]" width="1500" height="120" font="font:SmallSystemFont" color="0xFFFFFFFF" wrap="true" />
+        <Label id="loading" text="Cargando Vision+ Play…" translation="[96,300]" width="900" height="50" font="font:MediumBoldSystemFont" color="0x9BA8BDFF" visible="true" />
+        <Label id="errorLabel" text="" translation="[96,300]" width="1400" height="100" font="font:MediumSystemFont" color="0xFF4B4BFF" wrap="true" visible="false" />
+    </children>
+</component>

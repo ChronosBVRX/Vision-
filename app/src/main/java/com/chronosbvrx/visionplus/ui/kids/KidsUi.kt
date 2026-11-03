@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.kids
 
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import android.widget.Toast
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +61,7 @@ fun MobileKidsPinDialog(setup: Boolean, onOk: (String) -> Unit, onDismiss: () ->
     var error by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.dismissOnBack { onDismiss() },
         title = { Text(if (setup) "Crear PIN de niños" else "PIN de niños") },
         text = {
             Column {

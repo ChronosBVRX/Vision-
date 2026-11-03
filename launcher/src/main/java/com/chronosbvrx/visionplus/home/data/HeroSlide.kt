@@ -3,6 +3,7 @@ package com.chronosbvrx.visionplus.home.data
 import com.chronosbvrx.visionplus.home.contract.HeroItem
 import com.chronosbvrx.visionplus.home.contract.MediaKind
 import com.chronosbvrx.visionplus.home.contract.SportsItem
+import com.chronosbvrx.visionplus.home.contract.SportsLeagues
 import com.chronosbvrx.visionplus.home.contract.VisionLinks
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -125,13 +126,19 @@ internal fun pickSportsSlides(
     nowMs: Long = System.currentTimeMillis(),
     liveLimit: Int = 2,
     soonLimit: Int = 2,
+    mainOnly: Boolean = true,
 ): List<HeroSlide> {
-    val slides = items.mapNotNull { sportsSlide(it, nowMs) }.distinctBy { it.id }
+    val slides = items
+        .asSequence()
+        .filter { !mainOnly || SportsLeagues.isMain(it.league, it.category) }
+        .mapNotNull { sportsSlide(it, nowMs) }
+        .distinctBy { it.id }
+        .toList()
     val live = slides.filter { it.live }
         .sortedWith(compareBy<HeroSlide> { leagueRank(it.league) }.thenBy { it.startMs.takeIf { s -> s > 0 } ?: Long.MAX_VALUE })
         .take(liveLimit.coerceAtLeast(0))
     val soon = slides.filterNot { it.live }
-        .sortedBy { it.startMs.takeIf { s -> s > 0 } ?: Long.MAX_VALUE }
+        .sortedWith(compareBy<HeroSlide> { leagueRank(it.league) }.thenBy { it.startMs.takeIf { s -> s > 0 } ?: Long.MAX_VALUE })
         .take(soonLimit.coerceAtLeast(0))
     return live + soon
 }
@@ -185,26 +192,14 @@ internal fun heroDayLabel(startMs: Long, nowMs: Long = System.currentTimeMillis(
     return label.replaceFirstChar { it.uppercase() }
 }
 
-/** Prioridad de ligas para el hero (las que más mueven a la gente primero). */
+/**
+ * Prioridad de ligas para el hero (las que más mueven a la gente primero).
+ * Nombre exacto + alias: las segundas divisiones y las copias femeniles no
+ * heredan el puesto de su liga matriz.
+ */
 internal fun leagueRank(league: String): Int {
-    val name = league.lowercase(Locale.ROOT)
-    return when {
-        "liga mx" in name -> 0
-        "champions" in name -> 1
-        "laliga" in name || "la liga" in name -> 2
-        "premier" in name -> 3
-        "serie a" in name -> 4
-        "bundesliga" in name -> 5
-        "ligue 1" in name -> 6
-        "libertadores" in name -> 7
-        "sudamericana" in name -> 8
-        "mls" in name -> 9
-        "nfl" in name -> 10
-        "nba" in name -> 11
-        "mlb" in name -> 12
-        "formula 1" in name || "f1" in name -> 13
-        else -> 50
-    }
+    val priority = SportsLeagues.leaguePriority(league)
+    return if (priority < SportsLeagues.MAIN_LEAGUES.size) priority else 50
 }
 
 private val MX_ZONE: TimeZone = TimeZone.getTimeZone("America/Mexico_City")

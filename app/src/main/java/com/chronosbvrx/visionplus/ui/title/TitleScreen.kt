@@ -28,13 +28,16 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,15 +52,26 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import android.widget.Toast
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.PlaybackHistory
+import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.UserLibrary
+import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.metaLine
+import com.chronosbvrx.visionplus.data.mirror.EpisodeMirror
 import com.chronosbvrx.visionplus.data.scoreLabel
+import com.chronosbvrx.visionplus.data.shouldKeep
 import com.chronosbvrx.visionplus.ui.player.episodeRowLabel
+import com.chronosbvrx.visionplus.ui.player.episodeSelectorLabel
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.ui.EpisodePlay
+import com.chronosbvrx.visionplus.ui.resumeEpisodePlay
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
+import kotlinx.coroutines.launch
 import com.chronosbvrx.visionplus.ui.isLandscapeTablet
 import com.chronosbvrx.visionplus.ui.isLandscapePhone
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
@@ -84,6 +98,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.chronosbvrx.visionplus.ui.components.PosterCard
+import com.chronosbvrx.visionplus.ui.components.rememberPosterLongClick
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionRatingGold
@@ -125,12 +140,48 @@ fun TitleScreen(
     val seasonIdx = film.seasons.indexOfFirst { it.titleId == activeId }.coerceAtLeast(0)
     val seasonIdList = remember(film.id) { film.seasons.map { it.titleId } }
     val seasonNameList = remember(film.id) { film.seasons.map { if (it.n <= 0) "Completa" else "T${it.n}" } }
+    // La duración de una serie NO es la de sus capítulos: el detalle de la temporada
+    // suele traer la duración del contenedor (p. ej. 1 h 40) y el capítulo dura 42 min.
+    // Para series se deja 0 y el reproductor resuelve la duración real del capítulo.
     var itemDurationMs by remember(film.id, activeId) {
-        mutableStateOf(if (film.durationMin > 0) film.durationMin * 60_000L else 0L)
+        mutableStateOf(
+            if (film.seasons.isEmpty() && film.durationMin > 0) film.durationMin * 60_000L else 0L,
+        )
     }
     var description by remember(film.id) { mutableStateOf(film.synopsis) }
     var episodePrograms by remember(film.id) { mutableStateOf<List<X4KApi.EpisodeProgram>>(emptyList()) }
+    var episodeInfo by remember(film.id, activeId) {
+        mutableStateOf<Map<String, EpisodeMirror.EpisodeInfo>>(emptyMap())
+    }
     var watchedTick by remember(film.id) { mutableStateOf(0) }
+    // Recuerdo de la serie: la ficha ofrece «Continuar donde te quedaste» sin reabrir el
+    // reproductor a ciegas. Se relee al volver del reproductor (el proceso :x4k escribe el
+    // XML y la copia en memoria puede quedarse atrás).
+    var resumeEntry by remember(film.id) { mutableStateOf<ResumeEntry?>(null) }
+    var autoSeasonApplied by remember(film.id) { mutableStateOf(false) }
+    val resumeScope = rememberCoroutineScope()
+    fun reloadResume() {
+        resumeScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val entry = runCatching {
+                com.chronosbvrx.visionplus.data.resumeEntryForSeries(
+                    PlaybackHistory.list(context),
+                    film,
+                )
+            }.getOrNull()
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                resumeEntry = entry
+            }
+        }
+    }
+    LaunchedEffect(film.id) { reloadResume() }
+    val resumeLifecycle = LocalLifecycleOwner.current
+    DisposableEffect(resumeLifecycle, film.id) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) reloadResume()
+        }
+        resumeLifecycle.lifecycle.addObserver(observer)
+        onDispose { resumeLifecycle.lifecycle.removeObserver(observer) }
+    }
     // El selector de temporada/capítulo del botón «Ver en la TV» (solo series, y solo cuando
     // el control remoto tiene una conexión viva).
     var castPicker by remember(film.id) { mutableStateOf(false) }
@@ -146,26 +197,30 @@ fun TitleScreen(
                 episodePrograms = programs
             }
             val detail = X4KApi.detailFor(context, activeId)
-            if (programs.isEmpty()) {
-                val fallbackEps = X4KApi.parsePlayEpisodePrograms(detail?.optJSONObject("play"))
-                if (fallbackEps.isNotEmpty()) {
-                    episodePrograms = fallbackEps
+            val fallbackEps = if (programs.isEmpty()) {
+                X4KApi.parsePlayEpisodePrograms(detail?.optJSONObject("play")).also {
+                    if (it.isNotEmpty()) episodePrograms = it
                 }
+            } else {
+                emptyList()
             }
             if (detail == null) return@LaunchedEffect
             val parsed = parseDetail(detail.optJSONObject("play"))
             languages = parsed.first
             qualities = parsed.second
             val item = detail.optJSONObject("item")
+            val seriesLike = programs.size > 1 || fallbackEps.size > 1 || film.seasons.size > 1
             val durMs = X4KApi.extractDurationMs(item).takeIf { it > 0L } ?: X4KApi.extractDurationMs(detail)
-            if (durMs > 0L) itemDurationMs = durMs
+            // El detalle de la temporada no es la duración del capítulo: en series se deja
+            // que el reproductor use la duración real que reporta el motor.
+            if (seriesLike) itemDurationMs = 0L else if (durMs > 0L) itemDurationMs = durMs
             if (item == null) return@LaunchedEffect
             val duration = prettyDuration(item.optString("duration").ifBlank { if (durMs > 0) "${durMs / 60_000} min" else "" })
             val year = item.optString("releaseTime").take(4).takeIf { it.length == 4 } ?: ""
             val subs = item.optString("subsInfo").split(',').map { it.trim() }.filter { it.isNotBlank() }
             itemLine = listOfNotNull(
                 year.ifBlank { null },
-                duration.ifBlank { null },
+                duration.takeIf { !seriesLike && it.isNotBlank() },
                 subs.takeIf { it.isNotEmpty() }
                     ?.let { list -> "Subtítulos: " + list.joinToString(" · ") { audioLabel(it) } },
             ).joinToString("   ·   ")
@@ -177,6 +232,29 @@ fun TitleScreen(
                 item.optString("description"),
             )
         }
+    }
+
+    // Metadatos por capítulo (nombre real y miniatura de TMDB) de la temporada activa:
+    // el espejo del VPS los guarda y el selector los pinta cuando existen.
+    LaunchedEffect(activeId, episodePrograms) {
+        episodeInfo = if (isXtv && episodePrograms.isNotEmpty()) {
+            runCatching { EpisodeMirror.infos(activeId) }.getOrDefault(emptyMap())
+        } else {
+            emptyMap()
+        }
+    }
+
+    // Al abrir una serie con historial, la ficha aterriza en la temporada donde se quedó.
+    LaunchedEffect(resumeEntry, film.id) {
+        val entry = resumeEntry ?: return@LaunchedEffect
+        if (autoSeasonApplied) return@LaunchedEffect
+        val targetId = entry.seasonIds.getOrNull(entry.seasonIndex)?.takeIf { it.isNotBlank() }
+            ?: entry.seriesId
+        val target = film.seasons.firstOrNull { it.titleId == targetId }
+        if (target != null && selectedSeason?.titleId == film.seasons.firstOrNull()?.titleId) {
+            selectedSeason = target
+        }
+        autoSeasonApplied = true
     }
 
     LaunchedEffect(film.id) {
@@ -199,6 +277,30 @@ fun TitleScreen(
     val seasonTitlePrefix = if (film.seasons.size > 1) " · $activeSeasonLabel" else ""
     // Solo es serie con 2+ capítulos o 2+ temporadas: 1 capítulo suelto del portal es película.
     val isSeriesTitle = episodes.size > 1 || film.seasons.size > 1
+
+    // El historial ya trae el capítulo y el minuto: la ficha puede ofrecer reanudar sin
+    // esperar a que la temporada termine de cargar sus programas.
+    val resumableEntry = resumeEntry?.takeIf { shouldKeep(it.positionMs, it.durationMs) }
+    val resumePlay = remember(resumableEntry, film, activeId, seasonNameList, episodeNames, episodeNumbers) {
+        resumableEntry?.let { entry ->
+            val entrySeason = entry.seasonIds.getOrNull(entry.seasonIndex)
+                ?: entry.seriesId.takeIf { it.isNotBlank() }
+            val sameSeason = entrySeason == null || entrySeason == activeId
+            resumeEpisodePlay(
+                entry = entry,
+                film = film,
+                seasonNames = seasonNameList,
+                episodeNames = if (sameSeason) episodeNames else emptyList(),
+                episodeNumbers = if (sameSeason) episodeNumbers else emptyList(),
+            )
+        }
+    }
+    val resumeLabel = resumableEntry?.let { entry ->
+        listOfNotNull(
+            com.chronosbvrx.visionplus.data.episodeLabelOf(entry).takeIf { it.isNotBlank() },
+            formatResume(entry.positionMs),
+        ).joinToString(" · ")
+    }
 
     // Descargas del dispositivo (reactivas): alimentan los botones por capítulo y de temporada.
     val downloads by OfflineRegistry.downloadsFlow.collectAsState()
@@ -274,6 +376,10 @@ fun TitleScreen(
         )
     }
     val playButtonLabel = when {
+        // Con historial, el botón principal empieza el siguiente capítulo desde cero;
+        // la opción de reanudar el minuto exacto vive justo encima, bien diferenciada.
+        isSeriesTitle && resumableEntry != null ->
+            "Reproducir$seasonTitlePrefix · Capítulo ${nextEpisodeIndex + 1}"
         isSeriesTitle && watchedCount > 0 ->
             "Continuar$seasonTitlePrefix · Capítulo ${nextEpisodeIndex + 1}"
         isSeriesTitle ->
@@ -307,6 +413,29 @@ fun TitleScreen(
                             )
                         }
                         Spacer(Modifier.height(16.dp))
+                        if (resumePlay != null && resumeLabel != null) {
+                            OutlinedButton(
+                                onClick = { onPlay(resumePlay) },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                                modifier = Modifier.fillMaxWidth().height(46.dp),
+                            ) {
+                                Icon(
+                                    VisionIcons.Play,
+                                    contentDescription = null,
+                                    tint = VisionBlueBright,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Continuar donde te quedaste · $resumeLabel",
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
                         PrimaryButton(
                             label = playButtonLabel,
                             onClick = {
@@ -535,6 +664,7 @@ fun TitleScreen(
                                 seriesTitle = film.title,
                                 onSelectSeason = { selectedSeason = it },
                                 episodePrograms = episodePrograms,
+                                episodeInfo = episodeInfo,
                                 watchedCount = watchedCount,
                                 nextEpisodeIndex = nextEpisodeIndex,
                                 watchedTick = watchedTick,
@@ -642,6 +772,7 @@ private fun RelatedSection(films: List<Film>, onOpenFilm: (Film) -> Unit) {
                     modifier = Modifier.width(118.dp),
                     meta = film.metaLine(),
                     score = film.score,
+                    onLongClick = rememberPosterLongClick(film),
                     onClick = { onOpenFilm(film) },
                 )
             }
@@ -657,6 +788,7 @@ private fun MobileSeriesSelectorSection(
     seriesTitle: String,
     onSelectSeason: (com.chronosbvrx.visionplus.data.SeasonRef) -> Unit,
     episodePrograms: List<X4KApi.EpisodeProgram>,
+    episodeInfo: Map<String, EpisodeMirror.EpisodeInfo>,
     watchedCount: Int,
     nextEpisodeIndex: Int,
     watchedTick: Int,
@@ -833,7 +965,11 @@ private fun MobileSeriesSelectorSection(
                         UserLibrary.isEpisodeWatched(context, activeId, index + 1)
                     }
                     val isNext = index == nextEpisodeIndex
-                    val epTitle = episodeRowLabel(ep.name, index + 1, seriesTitle)
+                    val info = episodeInfo[ep.contentId]
+                    val epNumber = ep.number.takeIf { it > 0 } ?: (index + 1)
+                    val epName = info?.title?.takeIf { it.isNotBlank() } ?: ep.name
+                    val epTitle = episodeSelectorLabel(epNumber, epName, seriesTitle)
+                    val still = info?.still?.takeIf { it.isNotBlank() }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -854,19 +990,23 @@ private fun MobileSeriesSelectorSection(
                             )
                             Spacer(Modifier.width(6.dp))
                         }
-                        // Miniatura con la portada de la serie (el portal no trae stills por
-                        // episodio): la cifra del capítulo vive sobre el arte, como en los
-                        // productos grandes.
+                        // Miniatura del capítulo: la imagen real de la BD (TMDB) cuando
+                        // existe; si no, la portada de la serie, como siempre.
+                        val image = still ?: posterUrl.takeIf { it.isNotBlank() }
+                        val wide = still != null
                         Box(
                             Modifier
-                                .width(40.dp)
-                                .height(58.dp)
+                                .width(if (wide) 64.dp else 40.dp)
+                                .height(if (wide) 40.dp else 58.dp)
                                 .clip(RoundedCornerShape(7.dp))
                                 .background(VisionSurfaceHigh),
                         ) {
-                            if (posterUrl.isNotBlank()) {
+                            if (image != null) {
                                 AsyncImage(
-                                    model = ImageRequest.Builder(context).data(posterUrl).size(80, 116).build(),
+                                    model = ImageRequest.Builder(context)
+                                        .data(image)
+                                        .size(if (wide) 192 else 80, if (wide) 120 else 116)
+                                        .build(),
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize(),
@@ -879,7 +1019,7 @@ private fun MobileSeriesSelectorSection(
                                     .padding(horizontal = 5.dp, vertical = 1.dp),
                             ) {
                                 Text(
-                                    "C${index + 1}",
+                                    "C$epNumber",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
@@ -893,7 +1033,7 @@ private fun MobileSeriesSelectorSection(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White,
                                 fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
                             if (watched) {

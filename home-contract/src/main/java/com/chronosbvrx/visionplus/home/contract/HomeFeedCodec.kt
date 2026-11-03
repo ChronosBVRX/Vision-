@@ -49,6 +49,7 @@ object HomeFeedCodec {
                     put("durationMs", item.durationMs)
                     put("episode", item.episode)
                     put("playLink", item.playLink)
+                    put("openLink", item.openLink)
                 })
             }
         })
@@ -167,6 +168,7 @@ object HomeFeedCodec {
                         durationMs = o.optLong("durationMs"),
                         episode = o.optString("episode"),
                         playLink = o.optString("playLink"),
+                        openLink = o.optString("openLink"),
                     )
                 },
                 live = root.optJSONArray("live").objects { o ->

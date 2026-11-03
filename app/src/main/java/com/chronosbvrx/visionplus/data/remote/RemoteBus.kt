@@ -2,6 +2,8 @@ package com.chronosbvrx.visionplus.data.remote
 
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.mutableStateOf
 import java.net.URLEncoder
 
@@ -35,6 +37,67 @@ object RemoteBus {
 
     /** Lo que la tele está mostrando, para que el teléfono lo refleje. */
     val screen = mutableStateOf("")
+
+    /**
+     * Estado estructurado de lo que se reproduce (título, minuto, duración, pausa…).
+     * El reproductor nativo lo empuja por [RemoteBridge]; ExoPlayer lo publica en proceso.
+     */
+    val playback = mutableStateOf(NowPlaying())
+
+    /** El reproductor Compose (ExoPlayer) que está al frente en el proceso principal. */
+    interface PlayerSink {
+        fun onSeek(positionMs: Long)
+        fun onCommand(command: String)
+    }
+
+    @Volatile
+    private var playerSink: PlayerSink? = null
+
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+
+    /** ¿Hay algo reproduciendo en la tele (nativo o ExoPlayer)? */
+    fun isPlayingNow(): Boolean = playback.value.active
+
+    fun attachPlayer(sink: PlayerSink) {
+        playerSink = sink
+    }
+
+    fun detachPlayer(sink: PlayerSink) {
+        if (playerSink === sink) playerSink = null
+    }
+
+    /** El reproductor nativo (u otro) avisa su estado; el servidor lo reenvía al teléfono. */
+    fun publishPlayback(state: NowPlaying) {
+        playback.value = state
+    }
+
+    fun clearPlayback() {
+        playback.value = NowPlaying()
+    }
+
+    /**
+     * Una orden del teléfono al reproductor que esté al frente. El nativo escucha por
+     * [RemoteBridge] (`:x4k`); ExoPlayer, que vive en este proceso, por [PlayerSink].
+     */
+    fun sendPlayerSeek(positionMs: Long) {
+        val target = positionMs.coerceAtLeast(0L)
+        val local = playerSink
+        if (local != null) {
+            mainHandler.post { local.onSeek(target) }
+        } else if (RemoteBridge.hasPlayer()) {
+            RemoteBridge.sendSeek(target)
+        }
+    }
+
+    fun sendPlayerCommand(command: String) {
+        if (command.isBlank()) return
+        val local = playerSink
+        if (local != null) {
+            mainHandler.post { local.onCommand(command) }
+        } else if (RemoteBridge.hasPlayer()) {
+            RemoteBridge.sendCommand(command)
+        }
+    }
 
     /**
      * PIN que la tele debe mostrar porque un teléfono quiere emparejarse. Null cuando nadie está

@@ -31,9 +31,15 @@ object VisionSettings {
     private const val KEY_SUB_POSITION = "sub_position"
     private const val KEY_SUB_OFFSET_MS = "sub_offset_ms"
     private const val KEY_AUTO_DOWNLOAD_NEXT = "auto_download_next"
+    private const val KEY_PIP_DOWNLOADS = "pip_downloads"
+    private const val KEY_IMAGE_PRESET = "x4k_image_preset"
+    private const val KEY_IMAGE_PRESET_USER_SET = "x4k_image_preset_user_set"
+    private const val KEY_ADVANCED_RENDERER = "x4k_advanced_renderer"
 
     val qualityOptions = listOf("Auto", "1080p", "720p", "480p")
-    val aspectOptions = listOf("Ajustar (16:9)", "Rellenar pantalla")
+    /** Modos del motor X4K: 0 original, 1 rellenar, 4 16:9, 5 4:3. */
+    val aspectModes = listOf(0, 1, 4, 5)
+    val aspectOptions = listOf("Original (ajustar)", "Rellenar pantalla", "16:9", "4:3")
     val liveBufferOptions = listOf("Rápido (0.5s)", "Estable (3s)")
 
     /** «Omitir intro»: botón durante la entrada (como Netflix), automático o desactivado. */
@@ -69,7 +75,28 @@ object VisionSettings {
     var subOffsetMs by mutableIntStateOf(0)
     /** Con WiFi, al terminar un capítulo baja solo el siguiente (un paso de maratón). */
     var autoDownloadNext by mutableStateOf(false)
+    /**
+     * Picture-in-picture en descargas: apagado por defecto. El búnker usa `FLAG_SECURE`
+     * para impedir capturas/grabación; habilitar esto quita esa protección SOLO mientras
+     * el cuadro flotante está visible (decisión explícita del usuario, no del sistema).
+     */
+    var pipDownloads by mutableStateOf(false)
     var cacheSizeBytes by mutableLongStateOf(0L)
+
+    // Mejora de imagen del reproductor nativo X4K (Nivel 1: matriz de color sobre TextureView).
+    const val IMAGE_OFF = "off"
+    const val IMAGE_CINE = "cine"
+    const val IMAGE_NITIDO = "nitido"
+    const val IMAGE_NIGHT = "night"
+    const val IMAGE_VIVID = "vivid"
+    const val IMAGE_CALIDO = "calido"
+    const val IMAGE_FRIO = "frio"
+    const val IMAGE_DEFAULT = IMAGE_OFF
+    val imagePresetOptions =
+        listOf(IMAGE_CINE, IMAGE_NITIDO, IMAGE_NIGHT, IMAGE_VIVID, IMAGE_CALIDO, IMAGE_FRIO, IMAGE_OFF)
+    var imagePreset by mutableStateOf(IMAGE_DEFAULT)
+    /** Renderer GL propio (experimental) para shaders en todas las versiones. */
+    var advancedRenderer by mutableStateOf(false)
 
     var effectsMode by mutableStateOf(EffectsMode.AUTO)
 
@@ -93,6 +120,9 @@ object VisionSettings {
         subPosition = p.getString(KEY_SUB_POSITION, SUB_POS_BOTTOM) ?: SUB_POS_BOTTOM
         subOffsetMs = p.getInt(KEY_SUB_OFFSET_MS, 0)
         autoDownloadNext = p.getBoolean(KEY_AUTO_DOWNLOAD_NEXT, false)
+        pipDownloads = p.getBoolean(KEY_PIP_DOWNLOADS, false)
+        imagePreset = imagePresetOf(context)
+        advancedRenderer = p.getBoolean(KEY_ADVANCED_RENDERER, false)
         effectsMode = DevicePerformance.getEffectsMode(context)
         refreshCacheSize(context)
     }
@@ -201,6 +231,69 @@ object VisionSettings {
             .edit().putBoolean(KEY_AUTO_DOWNLOAD_NEXT, enabled).apply()
     }
 
+    /** Lectura directa para el proceso `:x4k` y para el reproductor ExoPlayer. */
+    fun pipDownloadsAllowed(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_PIP_DOWNLOADS, false)
+
+    fun setPipDownloads(context: Context, enabled: Boolean) {
+        pipDownloads = enabled
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_PIP_DOWNLOADS, enabled).apply()
+    }
+
+    /** Normaliza el preset guardado; cualquier valor desconocido vuelve al default seguro. */
+    fun normalizeImagePreset(raw: String?): String = when (raw?.trim()?.lowercase()) {
+        IMAGE_OFF -> IMAGE_OFF
+        IMAGE_NITIDO -> IMAGE_NITIDO
+        IMAGE_NIGHT -> IMAGE_NIGHT
+        IMAGE_VIVID -> IMAGE_VIVID
+        IMAGE_CALIDO -> IMAGE_CALIDO
+        IMAGE_FRIO -> IMAGE_FRIO
+        IMAGE_CINE -> IMAGE_CINE
+        else -> IMAGE_DEFAULT
+    }
+
+    /** Lectura directa para el proceso `:x4k`, sin depender de [init]. */
+    fun imagePresetOf(context: Context): String {
+        val p = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        // 2.5.235 aplicaba Cine por defecto. Un filtro de color en la TextureView puede
+        // hacer que el vídeo pierda frames en equipos modestos y el audio se adelante.
+        // A partir de 2.5.236 solo se activa si la persona lo eligió explícitamente.
+        if (!p.getBoolean(KEY_IMAGE_PRESET_USER_SET, false)) return IMAGE_OFF
+        return normalizeImagePreset(p.getString(KEY_IMAGE_PRESET, IMAGE_DEFAULT))
+    }
+
+    fun setImagePreset(context: Context, preset: String) {
+        val clean = normalizeImagePreset(preset)
+        imagePreset = clean
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_IMAGE_PRESET, clean)
+            .putBoolean(KEY_IMAGE_PRESET_USER_SET, true)
+            .apply()
+    }
+
+    fun advancedRendererOf(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_ADVANCED_RENDERER, false)
+
+    fun setAdvancedRenderer(context: Context, enabled: Boolean) {
+        advancedRenderer = enabled
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_ADVANCED_RENDERER, enabled).apply()
+    }
+
+    fun imagePresetLabel(preset: String): String = when (normalizeImagePreset(preset)) {
+        IMAGE_OFF -> "Original"
+        IMAGE_NITIDO -> "Nítido"
+        IMAGE_NIGHT -> "Noche"
+        IMAGE_VIVID -> "Vivo"
+        IMAGE_CALIDO -> "Cálido"
+        IMAGE_FRIO -> "Frío"
+        else -> "Original"
+    }
+
     // ------------------------------------------------- idioma de audio por serie
     // Se recuerda la última elección por serie (el anime en japonés no se re-elige
     // en cada capítulo). Mismo prefs: lo escribe y lo lee el proceso `:x4k`.
@@ -261,6 +354,16 @@ object VisionSettings {
         defaultAspect = aspect
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putInt(KEY_DEFAULT_ASPECT, aspect).apply()
+    }
+
+    fun aspectLabel(aspect: Int): String {
+        val index = aspectModes.indexOf(aspect)
+        return aspectOptions.getOrElse(if (index >= 0) index else 0) { aspectOptions[0] }
+    }
+
+    fun nextAspect(aspect: Int): Int {
+        val index = aspectModes.indexOf(aspect).coerceAtLeast(0)
+        return aspectModes[(index + 1) % aspectModes.size]
     }
 
     fun setLiveBuffer(context: Context, buffer: String) {

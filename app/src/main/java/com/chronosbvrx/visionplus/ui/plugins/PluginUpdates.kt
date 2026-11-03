@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.plugins
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.data.Release
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
@@ -99,7 +101,12 @@ fun AppUpdatesDialog(release: Release?, onDismiss: () -> Unit) {
     // (y la oferta vuelve en la próxima apertura; el "skip" no se recuerda).
     val forced = AppUpdate.forced(context)
     Dialog(onDismissRequest = { if (!updater.running && !forced) onDismiss() }) {
-        Surface(shape = RoundedCornerShape(16.dp), color = VisionSurface, modifier = Modifier.widthIn(max = 560.dp)) {
+        BackHandler { if (!updater.running && !forced) onDismiss() }
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = VisionSurface,
+            modifier = Modifier.widthIn(max = 560.dp).dismissOnBack { if (!updater.running && !forced) onDismiss() },
+        ) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(PluginUpdatesCopy.TITLE, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.SemiBold)
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -20,7 +20,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -37,6 +39,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.chronosbvrx.visionplus.ui.LocalReducedEffects
 import com.chronosbvrx.visionplus.ui.cardFocusScale
+import com.chronosbvrx.visionplus.ui.components.posterLongPressKeys
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import androidx.compose.foundation.border
@@ -135,9 +138,13 @@ fun TvPosterCard(
     score: Double = 0.0,
     badge: String? = null,
     rank: Int? = null,
-    /** Ancho del póster. El Inicio lo calcula con [tvRowMetrics] para que quepan 3 filas. */
+    /** Ancho del póster. El Inicio lo calcula con [tvRowMetrics] (148 dp). */
     cardWidth: Dp = 140.dp,
+    /** Alto explícito; por defecto conserva la proporción 2:3. */
+    cardHeight: Dp = cardWidth * 1.5f,
     onFocus: () -> Unit = {},
+    /** OK largo (o Menú/Info): menú de favoritos / Ver más tarde, sin salir de la fila. */
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -145,9 +152,13 @@ fun TvPosterCard(
 
     Card(
         onClick = onClick,
+        onLongClick = onLongClick,
         modifier = modifier
             .width(cardWidth)
-            .aspectRatio(2f / 3f)
+            .height(cardHeight)
+            // OK corto = abrir; OK largo = menú contextual. La pulsación se consume para
+            // que al soltar no se abra además la ficha.
+            .posterLongPressKeys(onClick = onClick, onLongClick = onLongClick)
             // La tarjeta se anuncia con el nombre del título (lector de pantalla y guardianes
             // del regreso): antes el nodo enfocable no llevaba identidad propia.
             .semantics { contentDescription = title }
@@ -169,7 +180,7 @@ fun TvPosterCard(
                     model = ImageRequest.Builder(context)
                         .data(imageUrl)
                         .crossfade(if (reduced) 0 else 150)
-                        .size(320, 480)
+                        .size(480, 720)
                         .build(),
                     // La tarjeta ya se anuncia con el título: la imagen no repite el nombre.
                     contentDescription = null,
@@ -198,8 +209,8 @@ fun TvPosterCard(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
-                        .background(Color.Black.copy(alpha = 0.62f), shape = RoundedCornerShape(50))
-                        .padding(horizontal = 7.dp, vertical = 3.dp),
+                        .background(Color(0x99000000), shape = RoundedCornerShape(50))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -209,7 +220,7 @@ fun TvPosterCard(
                             VisionIcons.Rating,
                             contentDescription = null,
                             tint = VisionRatingGold,
-                            modifier = Modifier.size(12.dp),
+                            modifier = Modifier.size(10.dp),
                         )
                         Text(
                             text = formatted,
@@ -229,8 +240,8 @@ fun TvPosterCard(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(8.dp)
-                        .background(VisionBlue, shape = RoundedCornerShape(50))
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                        .background(Color(0x99000000), shape = RoundedCornerShape(50))
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
                 ) {
                     Text(
                         text = badge.uppercase(),
@@ -244,22 +255,27 @@ fun TvPosterCard(
                 }
             }
 
-            // Variante Top 10 con Número (Rank). La cifra acompaña el tamaño del póster: en las
-            // filas compactas (3 visibles) 44 sp se comerían media tarjeta.
+            // Top 10: la cifra es la protagonista, con una sombra oscura suave
+            // detrás para leerse sobre cualquier póster.
             if (rank != null && rank in 1..10) {
-                val rankSize = (cardWidth.value * 0.31f).sp
+                val rankSize = (cardWidth.value * 0.42f).sp
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .offset(x = 6.dp, y = 6.dp),
+                        .offset(x = 4.dp, y = 0.dp),
                 ) {
                     Text(
                         text = rank.toString(),
                         style = TextStyle(
                             fontSize = rankSize,
                             fontWeight = FontWeight.Black,
-                            drawStyle = Stroke(width = 4f, join = StrokeJoin.Round),
+                            drawStyle = Stroke(width = 5f, join = StrokeJoin.Round),
                             color = VisionBlueBright,
+                            shadow = Shadow(
+                                color = Color.Black.copy(alpha = 0.65f),
+                                offset = Offset(2f, 3f),
+                                blurRadius = 12f,
+                            ),
                         ),
                     )
                     Text(
@@ -269,6 +285,11 @@ fun TvPosterCard(
                             fontWeight = FontWeight.Black,
                             brush = Brush.verticalGradient(
                                 listOf(Color.White, VisionBlueBright, VisionSurfaceHigh),
+                            ),
+                            shadow = Shadow(
+                                color = Color.Black.copy(alpha = 0.55f),
+                                offset = Offset(2f, 3f),
+                                blurRadius = 10f,
                             ),
                         ),
                     )
@@ -350,21 +371,24 @@ fun TvRowLabel(text: String, height: Dp, icon: ImageVector? = null, topTen: Bool
         contentAlignment = Alignment.CenterStart,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (topTen) {
-                // El sello vive DENTRO de la altura de la etiqueta: con filas compactas un
-                // badge de 34 dp se metía sobre el póster (y chocaba con su nota).
-                TvTopTenBadge(
-                    modifier = Modifier.padding(end = 10.dp),
-                    size = height.coerceIn(20.dp, 34.dp),
+            // Sin recuadro de fondo: el ícono queda limpio en cian junto al título.
+            if (icon != null) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = Color(0xFF67E8F9),
+                    modifier = Modifier.size(20.dp),
                 )
-            } else if (icon != null) {
-                Icon(icon, contentDescription = null, tint = VisionBlueBright, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
             }
             Text(
                 text,
-                style = MaterialTheme.typography.titleSmall,
-                color = VisionTextSecondary,
+                style = TextStyle(
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp,
+                ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

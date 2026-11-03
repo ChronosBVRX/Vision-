@@ -70,6 +70,8 @@ internal fun showsFloatingClock(isTv: Boolean, route: Route): Boolean =
         route !is Route.Player &&
         route !is Route.LivePlayer &&
         route !is Route.Search &&
+        // Vision+ Play tiene su propio HUD: la píldora taparía el juego.
+        route != Route.Games && route !is Route.GameRoom &&
         // Ajustes ya tiene la hora en la barra superior: la píldora flotante la duplicaría.
         route != Route.Settings
 

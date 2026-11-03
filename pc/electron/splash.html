@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --blue: #2d7df6;
+    --blue-bright: #6ba6ff;
+    --bg: #05070c;
+    --muted: #9ba8bd;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    color: #f4f7fc;
+    font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    overflow: hidden;
+    user-select: none;
+  }
+  .splash {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+    background:
+      radial-gradient(circle at 78% 0%, rgba(45,125,246,.23), transparent 42%),
+      radial-gradient(circle at 8% 110%, rgba(10,79,196,.18), transparent 45%),
+      var(--bg);
+    border: 1px solid rgba(107,166,255,.22);
+    border-radius: 18px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.55);
+  }
+  .logo {
+    width: min(300px, 64vw);
+    height: auto;
+    filter: drop-shadow(0 0 18px rgba(45,125,246,.35));
+  }
+  .title {
+    font-size: 15px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: #fff;
+    font-weight: 600;
+    margin-top: -4px;
+  }
+  .status {
+    font-size: 13px;
+    color: var(--muted);
+    min-height: 18px;
+    text-align: center;
+    padding: 0 24px;
+  }
+  .track {
+    width: min(400px, 72vw);
+    height: 6px;
+    border-radius: 99px;
+    background: rgba(255,255,255,.10);
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.4);
+  }
+  .bar {
+    width: 5%;
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--blue), var(--blue-bright));
+    transition: width .35s ease;
+    box-shadow: 0 0 14px rgba(45,125,246,.8);
+  }
+  .pct {
+    font-size: 11px;
+    color: var(--blue-bright);
+    letter-spacing: .12em;
+    font-variant-numeric: tabular-nums;
+  }
+  .foot {
+    position: absolute;
+    bottom: 18px;
+    font-size: 10px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: rgba(155,168,189,.65);
+  }
+</style>
+</head>
+<body>
+  <div class="splash">
+    <img class="logo" src="vision_logo_horizontal.png" alt="Vision+">
+    <div class="title">Cargando Vision+</div>
+    <div class="track"><div class="bar" id="bar"></div></div>
+    <div class="status" id="status">Iniciando motor local…</div>
+    <div class="pct" id="pct">5%</div>
+    <div class="foot">Vision+ PC</div>
+  </div>
+  <script>
+    window.setProgress = function (pct, text) {
+      var value = Math.max(0, Math.min(100, Number(pct) || 0));
+      var bar = document.getElementById('bar');
+      var status = document.getElementById('status');
+      var label = document.getElementById('pct');
+      if (bar) bar.style.width = value + '%';
+      if (label) label.textContent = Math.round(value) + '%';
+      if (status && text) status.textContent = text;
+    };
+  </script>
+</body>
+</html>

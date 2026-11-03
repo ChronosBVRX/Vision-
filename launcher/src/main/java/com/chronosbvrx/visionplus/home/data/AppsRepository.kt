@@ -344,7 +344,9 @@ class AppsRepository(context: Context) {
 
     private fun iconOf(info: android.content.pm.ResolveInfo): ImageBitmap? = runCatching {
         val drawable: Drawable = info.loadIcon(pm)
-        drawable.toBitmap(width = 128, height = 128).asImageBitmap()
+        // 192 px: suficiente para llenar una baldosa de 96 dp en una tele 1080p sin
+        // ampliar el icono original (antes se veía blando al agrandarlo).
+        drawable.toBitmap(width = 192, height = 192).asImageBitmap()
     }.getOrNull()
 }
 

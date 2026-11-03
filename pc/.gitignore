@@ -1,0 +1,19 @@
+# Salidas del empaquetado y binarios descargados.
+build/
+runtime/*.exe
+runtime/node.exe
+runtime/ffmpeg.exe
+runtime/*.zip
+runtime/*.tar.xz
+launcher/*.pdb
+electron/node_modules/
+electron/dist/
+electron/app/
+electron/service/
+electron/runtime/
+electron/LEEME.txt
+electron/icon.ico
+
+# Datos locales del servidor de desarrollo.
+data/
+dev-data/

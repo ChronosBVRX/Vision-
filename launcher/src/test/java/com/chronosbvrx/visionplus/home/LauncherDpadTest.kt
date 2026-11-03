@@ -65,11 +65,13 @@ class LauncherDpadTest {
     @Test
     fun theChromeAlwaysHasAWayDown() {
         val chrome = ui("Chrome.kt")
-        assertTrue("las pestañas recuerdan su último foco", chrome.contains("focusGroup().focusRestorer()"))
-        assertTrue("perfil baja al contenido", chrome.contains("ProfileChip(name = profile, compact = compact, downTarget = downTarget)"))
+        assertTrue("el botón de Inicio del sistema baja al contenido", chrome.contains("downTarget = downTarget"))
         assertTrue("buscar baja al contenido", chrome.contains("ChromeIcon(Icons.Rounded.Search, \"Buscar\", onSearch, downTarget)"))
-        assertTrue("ajustes baja al contenido", chrome.contains("Icons.Rounded.Settings, \"Ajustes\", onCommandCenter, downTarget"))
-        assertTrue("el chip implementa el atajo", chrome.contains("Modifier.softFocusDown(downTarget)"))
+        assertTrue("la red es solo un indicador, no una opción del TV", chrome.contains("NetworkChip(network = network, compact = compact)"))
+        assertFalse("fuera el acceso a Wi-Fi del televisor", chrome.contains("onWifi"))
+        assertTrue("centro de control baja al contenido", chrome.contains("onCommandCenter,") && chrome.contains("downTarget,"))
+        assertTrue("ajustes de Vision+ bajan al contenido", chrome.contains("Icons.Rounded.Settings, \"Ajustes de Vision+\", onVisionSettings, downTarget"))
+        assertTrue("el sistema implementa el atajo", chrome.contains("Modifier.softFocusDown(downTarget)"))
     }
 
     @Test
@@ -136,6 +138,44 @@ class LauncherDpadTest {
             "las filas no se encierran en un focusGroup que bloquea Arriba",
             surfaces.contains("modifier = Modifier.focusGroup().focusRestorer(),"),
         )
+    }
+
+    @Test
+    fun backGoesToTheSystemBarBeforeLeavingTheSection() {
+        val screen = require("src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt")
+        // Misma dinámica que Vision+: el primer Atrás sube el foco a la barra de sistema; el
+        // segundo, dentro de la ventana, vuelve a Inicio. Con el mando ya en la barra, Atrás
+        // actúa de una vez.
+        assertTrue("guardián del Atrás en dos pasos", screen.contains("LauncherBackToTopGuard()"))
+        assertTrue("la barra sabe si tiene el foco", screen.contains("topBarFocused = it.hasFocus"))
+        assertTrue("el primer Atrás enfoca el Inicio del sistema", screen.contains("requestFocusSafely(tabLanding)"))
+        assertTrue("solo si el foco no está ya en la barra", screen.contains("!topBarFocused && backToTop.press(now)"))
+        assertTrue("si no aterriza, el Atrás no se come", screen.contains("if (requestFocusSafely(tabLanding)) return@BackHandler"))
+        assertFalse("la barra ya no tiene pestañas desplazables", screen.contains("topTabsState"))
+
+        val chrome = ui("Chrome.kt")
+        assertTrue("el foco inicial cae en el botón de Inicio", chrome.contains("activeTabRequester"))
+
+        val guard = ui("BackToTop.kt")
+        assertTrue("ventana de 2.5 s", guard.contains("LAUNCHER_BACK_TO_TOP_MS = 2_500L"))
+        assertTrue("política pura", guard.contains("class LauncherBackToTopGuard"))
+        assertTrue("se desarma al cambiar de pantalla", guard.contains("fun disarm()"))
+    }
+
+    @Test
+    fun theLongPressKeepsTheMenuOpenWhileTheKeyIsHeld() {
+        val components = ui("Components.kt")
+        // Regresión real: el candado vencía a los 2.5 s y, si la persona seguía apretando OK
+        // mientras leía el menú, al soltar se activaba la primera acción («Abrir» en una app).
+        assertTrue("el candado ya no vence por tiempo", !components.contains("pendingAt = System.currentTimeMillis()"))
+        assertTrue("come el KeyUp aunque tarde", components.contains("fun consumeRelease(): Boolean"))
+        assertTrue("un OK nuevo lo desarma", components.contains("fun noteKeyDown(repeatCount: Int)"))
+        assertTrue(
+            "solo cuando el mando estuvo callado (los mandos que repiten con repeatCount=0 no lo desarman)",
+            components.contains("now - lastOkAt >= quietMs"),
+        )
+        assertTrue("los diálogos consumen el KeyUp del OK largo", ui("DialogBack.kt").contains("fun Modifier.consumeLongPressRelease()"))
+        assertTrue("el menú de la tarjeta lo usa", ui("Personalize.kt").contains(".consumeLongPressRelease()"))
     }
 
     private fun require(rel: String): String {

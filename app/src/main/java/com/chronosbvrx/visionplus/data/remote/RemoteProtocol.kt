@@ -43,6 +43,8 @@ data class RemoteMsg(
      */
     val series: String? = null,
     val seasonIndex: Int? = null,
+    /** Índice del capítulo activo dentro de la temporada (para la tarjeta del teléfono). */
+    val episodeIndex: Int? = null,
     val seasonIds: List<String>? = null,
     val seasonNames: List<String>? = null,
     /**
@@ -54,6 +56,23 @@ data class RemoteMsg(
     val syncCode: String? = null,
     /** Qué está viendo la tele (para el teléfono). */
     val screen: String? = null,
+    /** Segunda línea del contenido: temporada/capítulo o contexto del canal. */
+    val subtitle: String? = null,
+    /** La tele está reproduciendo (true) o en pausa (false). */
+    val playing: Boolean? = null,
+    /** Minuto exacto de la reproducción en la tele. */
+    val positionMs: Long? = null,
+    /** Duración conocida del contenido (0 si aún no se sabe o es en vivo). */
+    val durationMs: Long? = null,
+    /** ¿La barra de progreso se puede mover? En vivo no. */
+    val canSeek: Boolean? = null,
+    /** Hay un capítulo siguiente/anterior en la serie. */
+    val hasNext: Boolean? = null,
+    val hasPrev: Boolean? = null,
+    /** Cuándo se tomó el estado (epoch ms), para no pintar datos viejos. */
+    val updatedAt: Long? = null,
+    /** Una orden tipada del teléfono: playpause, next, previous, stop. */
+    val cmd: String? = null,
     val reason: String? = null,
     val msg: String? = null,
     /** Puerto de control de la tele (va en la baliza del descubrimiento). */
@@ -66,6 +85,95 @@ data class RemoteMsg(
     val id: String? = null,
     val proto: Int = REMOTE_PROTO,
 )
+
+/**
+ * Lo que la tele está reproduciendo, ya estructurado para que el teléfono pinte una tarjeta
+ * «Ahora en la tele»: título, póster, minuto, duración, pausa y contexto de la serie.
+ *
+ * Es el mismo dato que viaja en el mensaje [RemoteProto.NOW]. Los campos son opcionales en el
+ * cable para que un teléfono viejo siga leyendo solo el texto de [screen].
+ */
+data class NowPlaying(
+    /** [RemoteProto.KIND_VOD], [RemoteProto.KIND_LIVE] o [RemoteProto.KIND_IDLE]. */
+    val kind: String = RemoteProto.KIND_IDLE,
+    /** Texto de una línea para el teléfono viejo (o el nombre de la pantalla si no hay play). */
+    val screen: String = "",
+    val title: String = "",
+    val subtitle: String = "",
+    /** Canal en vivo (nombre real del canal); vacío en VOD. */
+    val channel: String = "",
+    /** Logo real del canal en vivo (URL); vacío en VOD. */
+    val channelLogo: String = "",
+    /** Programa actual de la EPG (vivo) o el título del VOD. */
+    val program: String = "",
+    /** Sinopsis/descripción del programa actual o contexto del VOD. */
+    val description: String = "",
+    val poster: String = "",
+    val ref: String = "",
+    val playing: Boolean = false,
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
+    val canSeek: Boolean = false,
+    val seasonIndex: Int = 0,
+    val episodeIndex: Int = 0,
+    val hasNext: Boolean = false,
+    val hasPrev: Boolean = false,
+    /** Epoch ms del momento en que la tele tomó el estado (0 = dato viejo/desconocido). */
+    val updatedAt: Long = 0L,
+) {
+    val active: Boolean get() = kind == RemoteProto.KIND_VOD || kind == RemoteProto.KIND_LIVE
+    val live: Boolean get() = kind == RemoteProto.KIND_LIVE
+
+    /** Lo que se pinta en una línea cuando no hay tarjeta estructurada. */
+    val line: String
+        get() = listOf(title, subtitle).filter { it.isNotBlank() }.joinToString(" · ")
+            .ifBlank { screen }
+
+    fun asMsg(): RemoteMsg = RemoteMsg(
+        t = RemoteProto.NOW,
+        screen = screen.ifBlank { line }.ifBlank { title },
+        kind = kind.takeIf { it == RemoteProto.KIND_VOD || it == RemoteProto.KIND_LIVE },
+        title = title.takeIf { it.isNotBlank() },
+        subtitle = subtitle.takeIf { it.isNotBlank() },
+        poster = poster.takeIf { it.isNotBlank() },
+        ref = ref.takeIf { it.isNotBlank() },
+        playing = playing.takeIf { active },
+        positionMs = positionMs.takeIf { active },
+        durationMs = durationMs.takeIf { active },
+        canSeek = canSeek.takeIf { active },
+        seasonIndex = seasonIndex.takeIf { active && it > 0 },
+        episodeIndex = episodeIndex.takeIf { active && it > 0 },
+        hasNext = hasNext.takeIf { active },
+        hasPrev = hasPrev.takeIf { active },
+        updatedAt = updatedAt.takeIf { it > 0 },
+    )
+
+    companion object {
+        fun fromMsg(msg: RemoteMsg): NowPlaying {
+            val kind = msg.kind.orEmpty()
+            if (kind != RemoteProto.KIND_VOD && kind != RemoteProto.KIND_LIVE) {
+                return NowPlaying(kind = RemoteProto.KIND_IDLE, screen = msg.screen.orEmpty())
+            }
+            return NowPlaying(
+                kind = kind,
+                screen = msg.screen.orEmpty(),
+                title = msg.title.orEmpty(),
+                subtitle = msg.subtitle.orEmpty(),
+                poster = msg.poster.orEmpty(),
+                ref = msg.ref.orEmpty(),
+                playing = msg.playing == true,
+                positionMs = msg.positionMs ?: 0L,
+                durationMs = msg.durationMs ?: 0L,
+                canSeek = msg.canSeek == true,
+                seasonIndex = msg.seasonIndex ?: 0,
+                episodeIndex = msg.episodeIndex ?: 0,
+                hasNext = msg.hasNext == true,
+                hasPrev = msg.hasPrev == true,
+                updatedAt = msg.updatedAt ?: 0L,
+            )
+        }
+    }
+}
 
 /** Tipos de mensaje y valores de sus campos. */
 object RemoteProto {
@@ -85,10 +193,24 @@ object RemoteProto {
     const val SYNC = "sync"
     const val SYNC_OK = "syncok"
 
+    /** Órdenes tipadas del teléfono al reproductor (no dependen del foco del mando). */
+    const val CMD = "cmd"
+    /** Salto absoluto a un minuto concreto (`pos`). */
+    const val SEEK = "seek"
+
     const val ACTION_TAP = "tap"
     const val ACTION_DOWN = "down"
     const val ACTION_UP = "up"
 
+    const val CMD_PLAY_PAUSE = "playpause"
+    const val CMD_NEXT = "next"
+    const val CMD_PREVIOUS = "previous"
+    const val CMD_STOP = "stop"
+    /** Abre en la tele su selector nativo de audio/subtítulos (se navega con el D-pad). */
+    const val CMD_AUDIO = "audio"
+    const val CMD_SUBTITLES = "subtitles"
+
+    const val KIND_IDLE = "idle"
     const val KIND_VOD = "vod"
     const val KIND_LIVE = "live"
 

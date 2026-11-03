@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="LiveScreen" extends="Group">
+    <interface>
+        <field id="action" type="string" alwaysNotify="true" />
+        <field id="payload" type="assocarray" alwaysNotify="true" />
+        <field id="load" type="integer" alwaysNotify="true" />
+    </interface>
+    <script type="text/brightscript" uri="pkg:/source/core.brs" />
+    <script type="text/brightscript" uri="pkg:/source/store.brs" />
+    <script type="text/brightscript" uri="pkg:/components/LiveScreen.brs" />
+    <children>
+        <Rectangle width="1920" height="1080" color="0x070B13FF" />
+        <Rectangle width="8" height="46" translation="[96,150]" color="0x2D7DF6FF" />
+        <Label text="TV en vivo" translation="[120,144]" width="800" height="54" font="font:LargeBoldSystemFont" color="0xF4F7FCFF" />
+        <Label id="status" text="Canales del portal Xuper · guía del VPS" translation="[122,204]" width="1500" height="28" font="font:SmallSystemFont" color="0x9BA8BDFF" />
+        <LabelList id="cats" translation="[96,250]" width="300" height="830" itemSize="[300,44]" itemSpacing="[0,4]" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" color="0x9BA8BDFF" focusedColor="0xFFFFFFFF" />
+        <MarkupGrid id="grid" translation="[420,250]" width="1400" height="760" numColumns="4" itemSize="[300,210]" itemSpacing="[14,14]" itemComponentName="ChannelCard" />
+        <Label id="loading" text="Cargando canales..." translation="[440,300]" width="1100" height="50" font="font:MediumBoldSystemFont" color="0x9BA8BDFF" visible="true" />
+        <Label id="errorLabel" text="" translation="[440,300]" width="1450" height="100" font="font:MediumSystemFont" color="0xFF4B4BFF" wrap="true" visible="false" />
+    </children>
+</component>

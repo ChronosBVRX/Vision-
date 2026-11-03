@@ -31,6 +31,14 @@ class TrackLangTest {
     }
 
     @Test
+    fun aDeclaredCodecIsNotALanguage() {
+        // El portal también puede declarar el códec: mostrarlo como idioma sería mentir.
+        assertEquals("", trackDisplayLang("aac", "ac3"))
+        assertEquals("", trackDisplayLang("", "aac"))
+        assertEquals("spa", trackDisplayLang("aac", "spa"))
+    }
+
+    @Test
     fun duplicatesGetTrackSuffix() {
         assertEquals(
             listOf("Español", "Español · Pista 4", "Inglés"),

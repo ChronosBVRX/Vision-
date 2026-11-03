@@ -52,6 +52,7 @@ import com.chronosbvrx.visionplus.data.offline.OfflineDownloadManager
 import com.chronosbvrx.visionplus.data.offline.OfflineRegistry
 import com.chronosbvrx.visionplus.data.offline.OfflineStoragePolicy
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
+import com.chronosbvrx.visionplus.ui.components.rememberPosterLongClick
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
@@ -374,6 +375,7 @@ fun TvDownloadsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (index == 0) Modifier.landingFocus(landing) else Modifier),
+                        onLongClick = rememberPosterLongClick(item.toFilm()),
                         onClick = { onPlayFilm(item.toFilm()) },
                     )
                     Spacer(Modifier.height(6.dp))

@@ -79,6 +79,55 @@ class VisionSettingsTest {
     }
 
     @Test
+    fun imagePresetStartsOffAndOnlyAppliesWhenTheUserChoosesIt() {
+        // 2.5.236: apagado por defecto. El filtro en la TextureView puede costar frames
+        // en equipos modestos y desfasar el audio; solo se enciende si se elige.
+        assertEquals(VisionSettings.IMAGE_OFF, VisionSettings.imagePreset)
+        assertEquals(VisionSettings.IMAGE_OFF, VisionSettings.imagePresetOf(context))
+        assertEquals("Original", VisionSettings.imagePresetLabel(VisionSettings.IMAGE_OFF))
+
+        VisionSettings.setImagePreset(context, VisionSettings.IMAGE_NIGHT)
+        assertEquals(VisionSettings.IMAGE_NIGHT, VisionSettings.imagePreset)
+        assertEquals(VisionSettings.IMAGE_NIGHT, VisionSettings.imagePresetOf(context))
+        assertEquals("Noche", VisionSettings.imagePresetLabel(VisionSettings.IMAGE_NIGHT))
+
+        VisionSettings.init(context)
+        assertEquals(VisionSettings.IMAGE_NIGHT, VisionSettings.imagePreset)
+
+        VisionSettings.setImagePreset(context, VisionSettings.IMAGE_OFF)
+        assertEquals(VisionSettings.IMAGE_OFF, VisionSettings.imagePresetOf(context))
+        assertEquals("Original", VisionSettings.imagePresetLabel(VisionSettings.IMAGE_OFF))
+    }
+
+    @Test
+    fun aPresetFromTheOldDefaultDoesNotLeakIntoTheSafeDefault() {
+        context.getSharedPreferences("vision_settings", Context.MODE_PRIVATE)
+            .edit()
+            .putString("x4k_image_preset", VisionSettings.IMAGE_CINE)
+            .remove("x4k_image_preset_user_set")
+            .commit()
+        assertEquals(VisionSettings.IMAGE_OFF, VisionSettings.imagePresetOf(context))
+    }
+
+    @Test
+    fun invalidImagePresetFallsBackToOff() {
+        VisionSettings.setImagePreset(context, "no-existe")
+        assertEquals(VisionSettings.IMAGE_OFF, VisionSettings.imagePreset)
+        assertEquals(VisionSettings.IMAGE_OFF, VisionSettings.imagePresetOf(context))
+    }
+
+    @Test
+    fun pipForDownloadsIsOffByDefaultAndOnlyTheUserTurnsItOn() {
+        assertFalse(VisionSettings.pipDownloads)
+        assertFalse(VisionSettings.pipDownloadsAllowed(context))
+        VisionSettings.setPipDownloads(context, true)
+        assertTrue(VisionSettings.pipDownloads)
+        assertTrue(VisionSettings.pipDownloadsAllowed(context))
+        VisionSettings.init(context)
+        assertTrue(VisionSettings.pipDownloads)
+    }
+
+    @Test
     fun autoPlayNextAndAutoResumePersist() {
         VisionSettings.setAutoPlayNext(context, false)
         VisionSettings.setAutoResume(context, false)

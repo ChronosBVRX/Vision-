@@ -72,6 +72,7 @@ import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
+import com.chronosbvrx.visionplus.ui.components.rememberPosterLongClick
 import com.chronosbvrx.visionplus.ui.theme.VisionRatingGold
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
@@ -214,7 +215,7 @@ fun TvCategoryScreen(
             val genres = loadedDisjoint.map { it.title.trim() }.filter { it.isNotBlank() }.distinct()
             listOf(CHIP_ALL) + genres
         } else {
-            listOf(CHIP_ALL, "Mejor valoradas", "Novedades", "Recomendado para ti")
+            listOf(CHIP_ALL, "Mejor valoradas", "Novedades")
         }
     }
 
@@ -254,7 +255,15 @@ fun TvCategoryScreen(
                     }
                 } else {
                     val premiereRow = loadedDisjoint.firstOrNull { it.id.endsWith("-estrenos") }
-                    val otherRows = loadedDisjoint.filterNot { it.id.endsWith("-estrenos") }
+                    val otherRows = loadedDisjoint
+                        .filterNot { it.id.endsWith("-estrenos") }
+                        .sortedBy {
+                            when {
+                                it.id.contains("nueva", ignoreCase = true) ||
+                                    it.title.contains("nueva", ignoreCase = true) -> 0
+                                else -> 1
+                            }
+                        }
 
                     if (premiereRow != null) {
                         item(key = premiereRow.id) {
@@ -272,21 +281,6 @@ fun TvCategoryScreen(
                                 total = premiereRow.total,
                             )
                         }
-                    }
-                    item(key = "foryou") {
-                        SectionRow(
-                            label = "Recomendado para ti",
-                            films = forYou,
-                            isTopRow = false,
-                            onOpenFilm = onOpenFilm,
-                            onSeeAll = { selectedCategory = "Recomendado para ti" },
-                            returnRequester = returnRequester,
-                            returnFilmId = returnFilmId,
-                            entryRequester = rowEntry,
-                            isReturnRow = returnRow == "Recomendado para ti",
-                            onRowFocus = { returnRow = "Recomendado para ti" },
-                            total = 0,
-                        )
                     }
                     itemsIndexed(otherRows, key = { _, row -> row.id }) { index, row ->
                         val isTop = premiereRow == null && index == 0
@@ -333,21 +327,6 @@ fun TvCategoryScreen(
                         entryRequester = rowEntry,
                         isReturnRow = returnRow == "Novedades",
                         onRowFocus = { returnRow = "Novedades" },
-                        total = 0,
-                    )
-                }
-                item(key = "foryou") {
-                    SectionRow(
-                        label = "Recomendado para ti",
-                        films = forYou,
-                        isTopRow = false,
-                        onOpenFilm = onOpenFilm,
-                        onSeeAll = { selectedCategory = "Recomendado para ti" },
-                        returnRequester = returnRequester,
-                        returnFilmId = returnFilmId,
-                        entryRequester = rowEntry,
-                        isReturnRow = returnRow == "Recomendado para ti",
-                        onRowFocus = { returnRow = "Recomendado para ti" },
                         total = 0,
                     )
                 }
@@ -601,6 +580,7 @@ private fun TvCategoryGrid(
                                     else -> Modifier
                                 },
                             ),
+                            onLongClick = rememberPosterLongClick(film),
                             onClick = { onOpenFilm(film) },
                         )
                         Text(
@@ -804,6 +784,7 @@ private fun SectionRow(
                         idx == 0 && entryRequester != null -> Modifier.focusRequester(entryRequester)
                         else -> Modifier
                     },
+                    onLongClick = rememberPosterLongClick(film),
                     onClick = { onOpenFilm(film) },
                 )
                 Text(

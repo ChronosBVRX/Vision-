@@ -88,14 +88,48 @@ internal fun orderSubsForPicker(langs: List<SubEntry>, currentLang: String): Lis
         out += it
         rest.remove(it)
     }
-    val spanish = rest.filter { it.langKey == "es" || it.langKey == "spa" || it.langKey == "esp" }
+    val spanish = rest.filter { isSpanishSubtitle(it) }
     out += spanish
     out += rest.filter { it !in spanish }
     return out
 }
 
+/** ¿La pista de subtítulos es español? Acepta «es», «spa», «es-MX», «Español Latino»… */
+internal fun isSpanishSubtitle(entry: SubEntry): Boolean {
+    val key = entry.langKey
+    return key == "spa" || key == "esp" || key.startsWith("es-") || key == "es" ||
+        key.startsWith("espanol") || key.startsWith("español") ||
+        key.startsWith("spanish") || key.startsWith("latino")
+}
+
+/** Base del idioma: «es-MX» → «es», «Spanish» → «es», «Inglés» → «en». */
+private fun languageBase(raw: String): String {
+    val clean = raw.trim().lowercase().replace('_', '-')
+    if (clean.isEmpty()) return ""
+    val base = clean.substringBefore('-').trim()
+    return when {
+        clean.startsWith("espanol") || clean.startsWith("español") ||
+            clean.startsWith("spanish") || clean.startsWith("latino") -> "es"
+        clean.startsWith("ingles") || clean.startsWith("inglés") ||
+            clean.startsWith("english") -> "en"
+        clean.startsWith("portugues") || clean.startsWith("portugués") ||
+            clean.startsWith("portuguese") -> "pt"
+        clean.startsWith("frances") || clean.startsWith("francés") ||
+            clean.startsWith("french") -> "fr"
+        clean.startsWith("aleman") || clean.startsWith("alemán") ||
+            clean.startsWith("german") -> "de"
+        clean.startsWith("italiano") || clean.startsWith("italian") -> "it"
+        clean.startsWith("japones") || clean.startsWith("japonés") ||
+            clean.startsWith("japanese") -> "ja"
+        clean.startsWith("coreano") || clean.startsWith("korean") -> "ko"
+        clean.startsWith("chino") || clean.startsWith("chinese") -> "zh"
+        clean.startsWith("ruso") || clean.startsWith("russian") -> "ru"
+        else -> base
+    }
+}
+
 /** Nombre del idioma para la UI; cadena vacía si el código no se conoce. */
-internal fun languageName(code: String): String = when (code.trim().lowercase()) {
+internal fun languageName(code: String): String = when (languageBase(code)) {
     "spa", "es", "esp" -> "Español"
     "eng", "en" -> "Inglés"
     "por", "pt" -> "Portugués"

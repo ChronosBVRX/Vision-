@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="HomeScreen" extends="Group">
+    <interface>
+        <field id="action" type="string" alwaysNotify="true" />
+        <field id="payload" type="assocarray" alwaysNotify="true" />
+        <field id="load" type="integer" alwaysNotify="true" />
+    </interface>
+    <script type="text/brightscript" uri="pkg:/source/core.brs" />
+    <script type="text/brightscript" uri="pkg:/source/store.brs" />
+    <script type="text/brightscript" uri="pkg:/components/HomeScreen.brs" />
+    <children>
+        <Rectangle width="1920" height="1080" color="0x070B13FF" />
+        <Poster id="heroBackdrop" width="1920" height="420" translation="[0,124]" loadDisplayMode="scaleToFill" />
+        <Poster uri="pkg:/images/gradient_hero.png" width="1920" height="420" translation="[0,124]" loadDisplayMode="scaleToFill" />
+        <Rectangle width="1920" height="16" translation="[0,544]" color="0x070B13FF" />
+        <Group id="hero" translation="[0,0]">
+            <Poster id="badgeBg" uri="pkg:/images/badge_blue.png" width="360" height="40" translation="[96,158]" loadDisplayMode="scaleToFill" />
+            <Label id="badge" text="" translation="[110,158]" width="332" height="40" vertAlign="center" font="font:SmallBoldSystemFont" color="0x67E8F9FF" />
+            <Label id="heroTitle" text="" translation="[96,210]" width="1000" height="86" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" wrap="true" ellipsisText="..." />
+            <Label id="heroMeta" text="" translation="[98,300]" width="1000" height="30" font="font:SmallBoldSystemFont" color="0xD9E1EEFF" />
+            <Label id="heroText" text="" translation="[98,336]" width="880" height="76" font="font:SmallSystemFont" color="0x9BA8BDFF" wrap="true" ellipsisText="..." />
+            <HeroButton id="btnPlay" translation="[96,424]" primary="true" label="Reproducir" icon="pkg:/images/icon_play.png" />
+            <HeroButton id="btnDetails" translation="[432,424]" label="Detalles" icon="pkg:/images/icon_info.png" />
+            <HeroButton id="btnFav" translation="[768,424]" label="Favorito" icon="pkg:/images/icon_heart.png" />
+        </Group>
+        <RowList id="rows" translation="[96,544]" width="1728" height="536" itemSize="[1728,560]" rowSpacings="[16]" itemComponentName="PosterCard" />
+        <Label id="loading" text="Cargando tu contenido…" translation="[96,260]" width="900" height="50" font="font:MediumBoldSystemFont" color="0x9BA8BDFF" visible="true" />
+        <Label id="errorLabel" text="" translation="[96,260]" width="1400" height="100" font="font:MediumSystemFont" color="0xFF4B4BFF" wrap="true" visible="false" />
+    </children>
+</component>

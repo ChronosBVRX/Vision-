@@ -67,7 +67,7 @@ class TitleRelatedWiringTest {
     fun theSeriesSelectorWasCompacted() {
         val mobile = source("ui/title/TitleScreen.kt")
         assertTrue("temporada compacta", mobile.contains("padding(horizontal = 10.dp, vertical = 5.dp)"))
-        assertTrue("miniatura compacta", mobile.contains(".width(40.dp)"))
+        assertTrue("miniatura compacta", mobile.contains(".width(if (wide) 64.dp else 40.dp)"))
         val tv = source("ui/tv/TvTitleScreen.kt")
         assertTrue("tarjeta de capítulo compacta", tv.contains("Column(Modifier.width(168.dp))"))
         assertTrue("chip de temporada compacto", tv.contains("padding(horizontal = 11.dp, vertical = 5.dp)"))

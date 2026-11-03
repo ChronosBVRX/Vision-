@@ -43,10 +43,14 @@ import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.ResumeCard
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.data.allFilms
+import com.chronosbvrx.visionplus.data.continueOpensSeries
+import com.chronosbvrx.visionplus.data.episodeLabelOf
 import com.chronosbvrx.visionplus.data.formatResume
+import com.chronosbvrx.visionplus.data.resumeSeriesFilm
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.components.PosterCard
+import com.chronosbvrx.visionplus.ui.components.rememberPosterLongClick
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.isLandscapeTablet
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
@@ -214,6 +218,7 @@ fun LibraryScreen(
                     meta = film.metaLine(),
                     score = film.score,
                     badge = if (film.year >= 2025) "NUEVO" else null,
+                    onLongClick = rememberPosterLongClick(film),
                     onClick = { onOpenFilm(film) },
                 )
             }
@@ -226,23 +231,28 @@ fun LibraryScreen(
 private fun HistoryCard(card: ResumeCard, onResume: (ResumeCard) -> Unit, onOpenFilm: (Film) -> Unit) {
     val film = card.film
     val displayTitle = film?.title ?: card.entry.title
-    val episode = if (card.entry.title != displayTitle) {
-        card.entry.title.removePrefix(displayTitle).trim(' ', '·')
-    } else {
-        ""
-    }
+    val opensSeries = continueOpensSeries(card) && card.completed
+    val nextUp = card.completed && card.hasNext && opensSeries
+    val episode = if (nextUp) "Siguiente capítulo"
+    else episodeLabelOf(card.entry).takeIf { it.isNotBlank() }
+        ?: if (card.entry.title != displayTitle) {
+            card.entry.title.removePrefix(displayTitle).trim(' ', '·')
+        } else {
+            ""
+        }
     Column {
         PosterCard(
             title = displayTitle,
             imageUrl = film?.posterUrl ?: card.entry.posterUrl.takeIf { it.isNotBlank() },
             meta = episode.ifBlank { film?.metaLine() },
             badge = if (card.completed) "VISTO" else null,
+            onLongClick = rememberPosterLongClick(film ?: resumeSeriesFilm(card.entry)),
             onClick = {
-                if (card.completed) {
-                    if (film != null) onOpenFilm(film)
-                    else onResume(card.copy(entry = card.entry.copy(positionMs = 0L)))
-                } else {
-                    onResume(card)
+                when {
+                    opensSeries -> onOpenFilm(film ?: resumeSeriesFilm(card.entry))
+                    card.completed && film != null -> onOpenFilm(film)
+                    card.completed -> onResume(card.copy(entry = card.entry.copy(positionMs = 0L)))
+                    else -> onResume(card)
                 }
             },
         )
@@ -261,7 +271,12 @@ private fun HistoryCard(card: ResumeCard, onResume: (ResumeCard) -> Unit, onOpen
             )
         }
         Text(
-            if (card.completed) "Visto" else "Continuar en " + formatResume(card.entry.positionMs),
+            when {
+                nextUp -> "Siguiente capítulo"
+                card.completed -> "Visto"
+                opensSeries -> "Serie · Continuar en " + formatResume(card.entry.positionMs)
+                else -> "Continuar en " + formatResume(card.entry.positionMs)
+            },
             style = MaterialTheme.typography.bodySmall,
             color = VisionTextSecondary,
             maxLines = 1,

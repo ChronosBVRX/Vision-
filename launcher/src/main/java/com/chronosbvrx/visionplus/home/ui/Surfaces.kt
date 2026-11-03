@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,6 +39,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
@@ -93,6 +96,7 @@ import com.chronosbvrx.visionplus.home.data.AppEntry
 import com.chronosbvrx.visionplus.home.data.HeroSlide
 import com.chronosbvrx.visionplus.home.data.HomeConfig
 import com.chronosbvrx.visionplus.home.data.TvInputSource
+import com.chronosbvrx.visionplus.home.data.TvSourceKind
 import com.chronosbvrx.visionplus.home.data.favoriteChannels
 import com.chronosbvrx.visionplus.home.data.homeRowOrder
 import com.chronosbvrx.visionplus.home.data.visibleApps
@@ -101,10 +105,11 @@ import com.chronosbvrx.visionplus.home.data.visibleInputs
 import com.chronosbvrx.visionplus.home.data.HomeUpdate
 
 /**
- * El Inicio: hero + «Seguir viendo» + TV en vivo + apps + las filas del catálogo.
+ * El escritorio: Bento de sistema (destacado + Vision+ TV + entradas), fila de apps y
+ * «Seguir viendo» antes de las filas del catálogo.
  *
- * Todo lo que se pinta viene del feed de Vision+; si el feed aún no llegó, la pantalla sigue
- * siendo un launcher (hero de marca + apps), nunca un hueco.
+ * Todo lo que se pinta viene del feed de Vision+; si el feed aún no llegó, la tarjeta
+ * destacada usa la marca y las apps siguen funcionando: nunca un hueco.
  */
 @Composable
 fun HomeSurface(
@@ -112,7 +117,6 @@ fun HomeSurface(
     hero: List<HeroSlide>,
     apps: List<AppEntry>,
     recentApps: List<String>,
-    inputs: List<TvInputSource>,
     config: HomeConfig,
     metrics: HomeMetrics,
     heroReduced: Boolean,
@@ -121,6 +125,7 @@ fun HomeSurface(
     landing: FocusRequester,
     listState: LazyListState,
     tabLanding: FocusRequester? = null,
+    visionInstalled: Boolean = true,
     onHeroPlay: (HeroSlide) -> Unit,
     onHeroOpen: (HeroSlide) -> Unit,
     onItem: (FeedItem) -> Unit,
@@ -129,14 +134,9 @@ fun HomeSurface(
     onChannelLongClick: (LiveItem) -> Unit,
     onApp: (AppEntry) -> Unit,
     onAppLongClick: (AppEntry) -> Unit,
-    onInput: (TvInputSource) -> Unit,
-    onSeeInputs: () -> Unit,
-    onSeeLive: () -> Unit,
-    onSeeApps: () -> Unit,
+    onVisionDestination: (VisionDestination) -> Unit,
     onOpenHistory: () -> Unit,
     onOpenVision: () -> Unit,
-    onSystemSettings: () -> Unit,
-    onOpenSports: () -> Unit = {},
     onPrimaryFocus: (Boolean) -> Unit = {},
 ) {
     val feedRows = feed?.rows.orEmpty()
@@ -148,14 +148,28 @@ fun HomeSurface(
     val favChannels = remember(feed?.live, config) {
         favoriteChannels(feed?.live.orEmpty(), config)
     }
-    val inputItems = remember(inputs, config) {
-        visibleInputs(inputs, config.hiddenInputs)
-    }
     val appsView = remember(apps, config, recentApps) {
         visibleApps(apps, config, recentApps)
     }
+    // La app principal tiene su propia tarjeta grande: no se repite en la fila de apps.
+    val otherApps = remember(appsView) {
+        appsView.filter {
+            it.packageName != com.chronosbvrx.visionplus.home.contract.HomeContract.APP_PACKAGE &&
+                dashboardAppAllowed(it.packageName)
+        }
+    }
     val continueItems = feed?.continueWatching.orEmpty()
     val limit = config.display.itemsPerRow
+    val appsVisible = "apps" !in config.hiddenRows
+    val continueVisible = "continue" !in config.hiddenRows
+    val dashboardRows = remember(rowIds, config.hiddenRows) {
+        rowIds.filterNot { it == "continue" || it == "inputs" || it == "apps" }
+    }
+    val tileWidth = if (compact) 108.dp else 124.dp
+    val tileHeight = if (compact) 66.dp else 76.dp
+    val bentoHeight = if (compact) 238.dp else 300.dp
+    val gap = if (compact) 14.dp else 18.dp
+
     // El LazyColumn solo compone lo visible: al enfocar la última fila visible, la flecha
     // Abajo no encontraba la siguiente (todavía no existía) y el mando se quedaba ahí. Al
     // enfocar una fila se deja asomado un «pico» de la vecina para que siempre haya destino.
@@ -175,54 +189,106 @@ fun HomeSurface(
             rowScope.launch { runCatching { listState.animateScrollBy(-above) } }
         }
     }
+
     CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollBringIntoView) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 36.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(gap),
         ) {
-            item("hero") {
-                if (hero.isEmpty()) {
-                    BrandHero(
-                        metrics = metrics,
-                        landing = landing,
-                        upTarget = tabLanding,
-                        onOpenVision = onOpenVision,
-                        onSystemSettings = onSystemSettings,
-                        onPrimaryFocus = onPrimaryFocus,
-                    )
-                } else {
-                    HeroStage(
-                        items = hero,
-                        metrics = metrics,
-                        reduced = heroReduced,
-                        landing = landing,
-                        upTarget = tabLanding,
-                        paused = heroPaused,
-                        onPlay = onHeroPlay,
-                        onOpen = onHeroOpen,
-                        onSportsHub = onOpenSports,
-                        onControlFocus = onPrimaryFocus,
-                    )
-                }
-            }
-            rowIds.forEach { id ->
-                if (id in config.hiddenRows) return@forEach
-                when (id) {
-                    "continue" -> if (continueItems.isNotEmpty()) {
-                        item("continue") {
-                            Box(Modifier.onFocusChanged { if (it.hasFocus) revealRowPeek("continue") }) {
-                                ContinueRow(
-                                    items = continueItems.take(limit),
-                                    metrics = metrics,
-                                    onOpen = onContinue,
-                                    onSeeAll = onOpenHistory,
+            item("dashboard-bento") {
+                BoxWithConstraints(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = metrics.horizontalPadding),
+                ) {
+                    val wide = maxWidth >= 760.dp
+                    if (wide) {
+                        Row(
+                            Modifier.fillMaxWidth().height(bentoHeight),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            BentoHeroCard(
+                                hero = hero,
+                                metrics = metrics,
+                                height = bentoHeight,
+                                reduced = heroReduced,
+                                landing = landing,
+                                upTarget = tabLanding,
+                                paused = heroPaused,
+                                onPlay = onHeroPlay,
+                                onOpen = onHeroOpen,
+                                onOpenVision = onOpenVision,
+                                onPrimaryFocus = onPrimaryFocus,
+                                modifier = Modifier.weight(0.65f),
+                            )
+                            Column(
+                                Modifier.weight(0.35f).height(bentoHeight),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                VisionAccessCard(
+                                    installed = visionInstalled,
+                                    onClick = onOpenVision,
+                                    modifier = Modifier.weight(0.36f),
+                                )
+                                VisionShortcutsCard(
+                                    onOpen = onVisionDestination,
+                                    modifier = Modifier.weight(0.64f),
                                 )
                             }
                         }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            BentoHeroCard(
+                                hero = hero,
+                                metrics = metrics,
+                                height = bentoHeight,
+                                reduced = heroReduced,
+                                landing = landing,
+                                upTarget = tabLanding,
+                                paused = heroPaused,
+                                onPlay = onHeroPlay,
+                                onOpen = onHeroOpen,
+                                onOpenVision = onOpenVision,
+                                onPrimaryFocus = onPrimaryFocus,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            VisionAccessCard(
+                                installed = visionInstalled,
+                                onClick = onOpenVision,
+                                modifier = Modifier.fillMaxWidth().height(94.dp),
+                            )
+                            VisionShortcutsCard(
+                                onOpen = onVisionDestination,
+                                modifier = Modifier.fillMaxWidth().height(146.dp),
+                            )
+                        }
                     }
-
+                }
+            }
+            if (appsVisible || continueVisible) {
+                item("dashboard-bottom") {
+                    Box(Modifier.padding(horizontal = metrics.horizontalPadding)) {
+                        DashboardAppsAndContinue(
+                            apps = otherApps,
+                            appsVisible = appsVisible,
+                            installed = visionInstalled,
+                            continueItem = if (continueVisible) continueItems.firstOrNull() else null,
+                            tileWidth = tileWidth,
+                            tileHeight = tileHeight,
+                            onVision = onOpenVision,
+                            onApp = onApp,
+                            onAppLongClick = onAppLongClick,
+                            onContinue = onContinue,
+                            onOpenHistory = onOpenHistory,
+                        )
+                    }
+                }
+            }
+            dashboardRows.forEach { id ->
+                if (id in config.hiddenRows) return@forEach
+                when (id) {
                     "channels" -> if (favChannels.isNotEmpty()) {
                         item("channels") {
                             Box(Modifier.onFocusChanged { if (it.hasFocus) revealRowPeek("channels") }) {
@@ -234,14 +300,17 @@ fun HomeSurface(
                                     limit = limit,
                                     showEpg = config.display.showEpg,
                                     onOpen = { item -> onLive(item, favChannels, "Mis canales") },
-                                    onSeeAll = onSeeLive,
+                                    onSeeAll = { onVisionDestination(VisionDestination.LIVE) },
                                     onLongClick = onChannelLongClick,
                                 )
                             }
                         }
                     }
 
-                    "live" -> if (liveItems.isNotEmpty()) {
+                    // Si la persona ya fijó sus canales, «Mis canales» es la fila buena:
+                    // repetir el catálogo entero debajo solo alarga el Inicio. La parrilla
+                    // completa sigue a un OK en la pestaña «En vivo».
+                    "live" -> if (favChannels.isEmpty() && liveItems.isNotEmpty()) {
                         item("live") {
                             Box(Modifier.onFocusChanged { if (it.hasFocus) revealRowPeek("live") }) {
                                 LiveRow(
@@ -252,35 +321,8 @@ fun HomeSurface(
                                     limit = limit,
                                     showEpg = config.display.showEpg,
                                     onOpen = { item -> onLive(item, liveItems, "Todos los canales") },
-                                    onSeeAll = onSeeLive,
+                                    onSeeAll = { onVisionDestination(VisionDestination.LIVE) },
                                     onLongClick = onChannelLongClick,
-                                )
-                            }
-                        }
-                    }
-
-                    "inputs" -> if (inputItems.isNotEmpty()) {
-                        item("inputs") {
-                            Box(Modifier.onFocusChanged { if (it.hasFocus) revealRowPeek("inputs") }) {
-                                InputsRow(
-                                    items = inputItems.take(limit),
-                                    metrics = metrics,
-                                    onOpen = onInput,
-                                    onSeeAll = onSeeInputs,
-                                )
-                            }
-                        }
-                    }
-
-                    "apps" -> if (appsView.isNotEmpty()) {
-                        item("apps") {
-                            Box(Modifier.onFocusChanged { if (it.hasFocus) revealRowPeek("apps") }) {
-                                AppsRow(
-                                    apps = appsView.take(limit),
-                                    metrics = metrics,
-                                    onOpen = onApp,
-                                    onLongClick = onAppLongClick,
-                                    onSeeAll = onSeeApps,
                                 )
                             }
                         }
@@ -453,6 +495,74 @@ fun OutdatedVisionBanner(
     }
 }
 
+/** Aviso de una versión NUEVA del propio launcher (solo se muestra si es más nueva). */
+@Composable
+fun LauncherUpdateBanner(
+    current: String,
+    latest: String,
+    state: HomeUpdate.State,
+    canInstall: Boolean,
+    onUpdate: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    primaryModifier: Modifier = Modifier,
+) {
+    val busy = state is HomeUpdate.State.Checking || state is HomeUpdate.State.Downloading
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(HomeShapes.panel)
+            .background(HomeColors.Surface)
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(Icons.Rounded.Download, null, tint = HomeColors.BlueBright, modifier = Modifier.size(26.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Vision+ Home tiene una versión nueva",
+                color = HomeColors.Text,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                when {
+                    !canInstall ->
+                        "Permite «Instalar apps desconocidas» para Vision+ Home (un paso del sistema) y vuelve aquí."
+                    state is HomeUpdate.State.Checking -> "Comprobando la versión publicada…"
+                    state is HomeUpdate.State.Downloading -> "Descargando… ${state.percent} %"
+                    state is HomeUpdate.State.Ready -> "Descarga lista: confirma la instalación en la pantalla del sistema."
+                    state is HomeUpdate.State.UpToDate -> "Ya tienes la última versión."
+                    state is HomeUpdate.State.Failed -> "No se pudo: ${state.message}"
+                    else -> "v$current → v$latest · solo se instala si es más nueva"
+                },
+                color = HomeColors.TextDim,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (state is HomeUpdate.State.Downloading) {
+                Spacer(Modifier.height(6.dp))
+                ThinProgress(state.percent)
+            }
+        }
+        HomeButton(
+            label = when {
+                !canInstall -> "Permitir instalación"
+                state is HomeUpdate.State.Downloading -> "${state.percent} %"
+                state is HomeUpdate.State.Checking -> "Comprobando…"
+                state is HomeUpdate.State.Ready -> "Instalando…"
+                state is HomeUpdate.State.Failed -> "Reintentar"
+                else -> "Actualizar a v$latest"
+            },
+            onClick = { if (!busy) onUpdate() },
+            icon = if (canInstall) Icons.Rounded.Download else Icons.Rounded.Lock,
+            primary = true,
+            modifier = primaryModifier,
+        )
+        HomeButton(label = "Ahora no", onClick = onDismiss, icon = Icons.Rounded.Close, primary = false)
+    }
+}
+
 /** Aviso honesto cuando Vision+ no está instalado: el launcher se pone completo él solo. */
 @Composable
 fun MissingVisionBanner(
@@ -535,19 +645,21 @@ private fun PosterRow(
             modifier = Modifier.padding(horizontal = metrics.horizontalPadding),
         )
         Spacer(Modifier.height(10.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
-            horizontalArrangement = Arrangement.spacedBy(metrics.gap),
-            verticalAlignment = Alignment.Top,
-        ) {
-            rowItemsIndexed(row.items.take(limit), key = { _, item -> item.ref.ifBlank { item.title } }) { index, item ->
-                PosterCard(
-                    item = item,
-                    width = metrics.posterWidth,
-                    height = metrics.posterHeight,
-                    rank = if (row.kind == RowKind.TOP10) index + 1 else null,
-                    onClick = { onOpen(item) },
-                )
+        CardFocusScope(Modifier.fillMaxWidth()) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
+                horizontalArrangement = Arrangement.spacedBy(metrics.gap),
+                verticalAlignment = Alignment.Top,
+            ) {
+                rowItemsIndexed(row.items.take(limit), key = { _, item -> item.ref.ifBlank { item.title } }) { index, item ->
+                    PosterCard(
+                        item = item,
+                        width = metrics.posterWidth,
+                        height = metrics.posterHeight,
+                        rank = if (row.kind == RowKind.TOP10) index + 1 else null,
+                        onClick = { onOpen(item) },
+                    )
+                }
             }
         }
     }
@@ -569,18 +681,69 @@ private fun ContinueRow(
             modifier = Modifier.padding(horizontal = metrics.horizontalPadding),
         )
         Spacer(Modifier.height(10.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
-            horizontalArrangement = Arrangement.spacedBy(metrics.gap),
-            verticalAlignment = Alignment.Top,
-        ) {
-            rowItems(items, key = { it.key }) { item ->
-                ContinueCard(
-                    item = item,
-                    width = metrics.continueWidth,
-                    height = metrics.continueHeight,
-                    onClick = { onOpen(item) },
-                )
+        CardFocusScope(Modifier.fillMaxWidth()) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
+                horizontalArrangement = Arrangement.spacedBy(metrics.gap),
+                verticalAlignment = Alignment.Top,
+            ) {
+                rowItems(items, key = { it.key }) { item ->
+                    ContinueCard(
+                        item = item,
+                        width = metrics.continueWidth,
+                        height = metrics.continueHeight,
+                        onClick = { onOpen(item) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Entradas compactas: todos los iconos a la vista, sin scroll horizontal. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CompactInputsRow(
+    items: List<TvInputSource>,
+    showTvLive: Boolean,
+    metrics: HomeMetrics,
+    onOpen: (TvInputSource) -> Unit,
+    onTvLive: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        SectionHeader(
+            title = "Entradas de la tele",
+            subtitle = if (showTvLive) {
+                "TV en vivo, TV abierta y HDMI"
+            } else {
+                "TV abierta y HDMI · todo a un OK"
+            },
+            modifier = Modifier.padding(horizontal = metrics.horizontalPadding),
+        )
+        Spacer(Modifier.height(8.dp))
+        CardFocusScope(Modifier.fillMaxWidth()) {
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = metrics.horizontalPadding),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (showTvLive) {
+                    CompactTvLiveCard(
+                        width = 124.dp,
+                        height = 84.dp,
+                        onClick = onTvLive,
+                    )
+                }
+                items.forEach { item ->
+                    CompactInputCard(
+                        item = item,
+                        width = 124.dp,
+                        height = 84.dp,
+                        onClick = { onOpen(item) },
+                    )
+                }
             }
         }
     }
@@ -608,21 +771,23 @@ private fun LiveRow(
             modifier = Modifier.padding(horizontal = metrics.horizontalPadding),
         )
         Spacer(Modifier.height(10.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
-            horizontalArrangement = Arrangement.spacedBy(metrics.gap),
-            verticalAlignment = Alignment.Top,
-        ) {
-            rowItems(items.take(limit), key = { it.code }) { item ->
-                ChannelCard(
-                    item = item,
-                    height = metrics.channelHeight,
-                    modifier = Modifier.width(metrics.channelWidth),
-                    nowMs = nowMs,
-                    showEpg = showEpg,
-                    onLongClick = { onLongClick(item) },
-                    onClick = { onOpen(item) },
-                )
+        CardFocusScope(Modifier.fillMaxWidth()) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
+                horizontalArrangement = Arrangement.spacedBy(metrics.gap),
+                verticalAlignment = Alignment.Top,
+            ) {
+                rowItems(items.take(limit), key = { it.code }) { item ->
+                    ChannelCard(
+                        item = item,
+                        height = metrics.channelHeight,
+                        modifier = Modifier.width(metrics.channelWidth),
+                        nowMs = nowMs,
+                        showEpg = showEpg,
+                        onLongClick = { onLongClick(item) },
+                        onClick = { onOpen(item) },
+                    )
+                }
             }
         }
     }
@@ -645,51 +810,19 @@ private fun AppsRow(
             modifier = Modifier.padding(horizontal = metrics.horizontalPadding),
         )
         Spacer(Modifier.height(10.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
-            horizontalArrangement = Arrangement.spacedBy(metrics.gap),
-        ) {
-            rowItems(apps, key = { it.packageName }) { app ->
-                AppTile(
-                    app = app,
-                    tile = metrics.appTile,
-                    onClick = { onOpen(app) },
-                    onLongClick = { onLongClick(app) },
-                )
-            }
-        }
-    }
-}
-
-/** Las entradas del televisor en el Inicio: TV abierta y HDMI a un OK de distancia. */
-@Composable
-private fun InputsRow(
-    items: List<TvInputSource>,
-    metrics: HomeMetrics,
-    onOpen: (TvInputSource) -> Unit,
-    onSeeAll: () -> Unit,
-) {
-    Column(Modifier.fillMaxWidth()) {
-        SectionHeader(
-            title = "Entradas de la tele",
-            subtitle = "TV abierta y tus HDMI",
-            actionLabel = "Ver todas",
-            onAction = onSeeAll,
-            modifier = Modifier.padding(horizontal = metrics.horizontalPadding),
-        )
-        Spacer(Modifier.height(10.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
-            horizontalArrangement = Arrangement.spacedBy(metrics.gap),
-            verticalAlignment = Alignment.Top,
-        ) {
-            rowItems(items, key = { it.id.ifBlank { it.label } }) { item ->
-                InputCard(
-                    item = item,
-                    width = metrics.channelWidth,
-                    height = metrics.channelHeight,
-                    onClick = { onOpen(item) },
-                )
+        CardFocusScope(Modifier.fillMaxWidth()) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = metrics.horizontalPadding),
+                horizontalArrangement = Arrangement.spacedBy(metrics.gap),
+            ) {
+                rowItems(apps, key = { it.packageName }) { app ->
+                    AppTile(
+                        app = app,
+                        tile = metrics.appTile,
+                        onClick = { onOpen(app) },
+                        onLongClick = { onLongClick(app) },
+                    )
+                }
             }
         }
     }
@@ -736,6 +869,7 @@ fun LiveSurface(
                 maxWidth >= 720.dp -> 4
                 else -> 3
             }
+            CardFocusScope(Modifier.fillMaxSize()) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 modifier = Modifier.fillMaxSize().focusGroup().focusRestorer(),
@@ -828,6 +962,7 @@ fun LiveSurface(
                     )
                 }
             }
+            }
         }
     }
 }
@@ -890,6 +1025,7 @@ fun InputsSurface(
             }
             val usable = maxWidth - metrics.horizontalPadding * 2 - metrics.gap * (columns - 1)
             val cellWidth = usable / columns
+            CardFocusScope(Modifier.fillMaxSize()) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 modifier = Modifier.fillMaxSize().focusGroup().focusRestorer(),
@@ -942,6 +1078,7 @@ fun InputsSurface(
                         onClick = { onOpen(item) },
                     )
                 }
+            }
             }
         }
     }
@@ -1517,6 +1654,7 @@ fun CatalogSurface(
             }
             val usable = maxWidth - metrics.horizontalPadding * 2 - metrics.gap * (columns - 1)
             val cellWidth = usable / columns
+            CardFocusScope(Modifier.fillMaxSize()) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 modifier = Modifier.fillMaxSize().focusGroup().focusRestorer(),
@@ -1570,6 +1708,7 @@ fun CatalogSurface(
                     )
                 }
             }
+            }
         }
     }
 }
@@ -1609,6 +1748,7 @@ fun AppsSurface(
                 maxWidth >= 720.dp -> 6
                 else -> 5
             }
+            CardFocusScope(Modifier.fillMaxSize()) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 modifier = Modifier.fillMaxSize().focusGroup().focusRestorer(),
@@ -1693,6 +1833,7 @@ fun AppsSurface(
                         )
                     }
                 }
+            }
             }
         }
     }

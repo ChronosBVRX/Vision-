@@ -1,6 +1,10 @@
 # Plan de implementación — «Vision+ Play» (trivia, charadas y juegos de sala)
 
 **Estado:** listo para ejecutar. **Fecha:** 2026-10-27.
+**Fase 4 (2026-10-29):** el módulo creció a **7 juegos** (El Impostor, Duelo de
+Dibujo Ciego, Subasta Ciega y Falso Conocimiento) con público, háptica, SFX y
+medallas automáticas. Ver `docs/ENTREGA_GAMES_FASE4.md` para el contrato y los
+assets; este documento conserva el plan original de trivia/charadas/apuestas.
 **Ejecuta:** agente/sesión de implementación. **Revisa y publica:** el dueño del proyecto.
 
 > **Antes de este documento, lee `docs/HANDOFF_MAESTRO.md`**: ahí está todo el contexto del
@@ -381,6 +385,25 @@ Puerta: partida real en la TCL + 3 teléfonos; se cumplen los números de §9.
 Entrega: equipos, mazos, tarjeta privada, apuestas.
 
 Puerta: una noche de juego completa sin reiniciar la app.
+
+**Implementado 2026-10-28 (rama local, sin OTA ni despliegue):** selector de tres
+juegos con jugadores/duración/rondas, sala inmersiva a pantalla completa, mazo
+privado de Charadas (el título solo viaja al teléfono del actor, todos contra
+todos por turnos), apuesta con tres pistas y multiplicador x3/x2/x1, presentadora
+con poses y voces nuevas (ComfyUI + Qwen3-TTS local), arte 16:9 para las
+tarjetas y ritmo por teléfonos. La Puerta sigue pendiente: falta probarlo en una
+noche real con varias personas y desplegar `server/api/app.py` +
+`server/sync/schema.sql` al VPS. Los equipos de Charadas quedan como mejora
+posterior; esta entrega conserva el puntaje individual y rota al actor.
+
+**Ajustes posteriores (2026-10-28):** la voz de la presentadora ahora suena en
+la **tele** (`NarratorAudio` exige `DeviceKind.isTelevision`), no en los teléfonos;
+las 20 frases se reescribieron con humor mexicano ligero y se regeneraron con
+Qwen3-TTS; Trivia dejó de ser solo «General» y tiene secciones `cine`, `series`,
+`anime`, `infantil`, `novelas` (con `GET /v1/game/packs` y reclasificación de las
+preguntas viejas). Las poses se verificaron: la primera tanda de IA daba IoU
+0.97–0.99 y movía el emblema a la cara; la versión final articula los brazos del
+maestro (IoU 0.87–0.94) y conserva al personaje.
 
 ### Fase 4 — Packs de temporada, «¿Quién es más…?», reportes, ranking
 

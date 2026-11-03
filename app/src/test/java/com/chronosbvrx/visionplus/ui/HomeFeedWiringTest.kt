@@ -33,7 +33,7 @@ class HomeFeedWiringTest {
         )
         val store = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedStore.kt")
         assertTrue("el refresco vive en segundo plano", store.contains("Dispatchers.IO"))
-        assertTrue("el provider sirve primero el disco", store.contains("if (target.exists() && age in 0..STALE_MS)"))
+        assertTrue("el provider sirve primero el disco", store.contains("if (!historyDirty && age in 0..STALE_MS)"))
         assertTrue("nunca se queda sin respuesta", store.contains("HomeFeed(meta = meta(app))"))
     }
 
@@ -94,6 +94,58 @@ class HomeFeedWiringTest {
     }
 
     @Test
+    fun continueWatchingOfASeriesOpensItsTitleAndSitsOnTop() {
+        val phone = require("src/main/java/com/chronosbvrx/visionplus/ui/home/HomeScreen.kt")
+        val tv = require("src/main/java/com/chronosbvrx/visionplus/ui/tv/TvHomeScreen.kt")
+        for ((name, source) in listOf("móvil" to phone, "TV" to tv)) {
+            assertTrue("$name usa la regla única de serie", source.contains("continueOpensSeries(card)"))
+            assertTrue("$name abre la ficha de la serie", source.contains("onOpenFilm("))
+            assertTrue("$name tiene ficha de respaldo", source.contains("resumeSeriesFilm(card.entry)"))
+        }
+        // En el móvil la fila se pinta antes de las categorías (Top 10, Novedades…).
+        val continueAt = phone.indexOf("item(key = \"continue\")")
+        val topAt = phone.indexOf("item(key = \"home_top10\")")
+        assertTrue("«Seguir viendo» va antes del Top 10", continueAt in 0 until topAt)
+        // En la tele la fuente única de filas también la coloca arriba.
+        val slots = tv.indexOf("if (continueCards.isNotEmpty()) add(HomeRowSlot.Continue(continueCards))")
+        val top10 = tv.indexOf("if (top10.isNotEmpty()) add(HomeRowSlot.Top10(top10))")
+        assertTrue("la tele pinta «Seguir viendo» antes del Top 10", slots in 0 until top10)
+
+        val store = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedStore.kt")
+        assertTrue("el feed del launcher abre la ficha en series", store.contains("openLink = if (episode)"))
+        val launcher = File("launcher/src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt")
+            .takeIf { it.exists() }
+            ?: File("../launcher/src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt")
+        assertNotNull("falta LauncherScreen.kt", launcher)
+        assertTrue(
+            "el launcher prefiere la ficha de la serie",
+            launcher!!.readText().contains("item.openLink.ifBlank { item.playLink }"),
+        )
+    }
+
+    @Test
+    fun theLauncherFeedRefreshesAsSoonAsTheHistoryChanges() {
+        val store = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedStore.kt")
+        assertTrue("detecta la escritura del historial", store.contains("PlaybackHistory.lastChangedAt(context)"))
+        assertTrue("parche barato de Seguir viendo", store.contains("fun refreshContinueNow"))
+        assertTrue("no espera el freno de 20 s", store.contains("if (!force && !historyChanged && now - lastRefreshAt < REFRESH_THROTTLE_MS) return"))
+        assertTrue("el provider reconstruye al detectar el cambio", store.contains("if (historyDirty)"))
+        assertTrue("el rebuild completo también parchea primero", store.contains("if (historyChanged) runCatching { refreshContinueNow(app) }"))
+        val repository = File("launcher/src/main/java/com/chronosbvrx/visionplus/home/data/FeedRepository.kt")
+            .takeIf { it.exists() }
+            ?: File("../launcher/src/main/java/com/chronosbvrx/visionplus/home/data/FeedRepository.kt")
+        assertNotNull(repository)
+        assertTrue("el launcher observa el provider", repository!!.readText().contains("registerContentObserver"))
+        val screen = File("launcher/src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt")
+            .takeIf { it.exists() }
+            ?: File("../launcher/src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt")
+        assertNotNull(screen)
+        val text = screen!!.readText()
+        assertTrue("se refresca al volver del reproductor", text.contains("Lifecycle.Event.ON_RESUME"))
+        assertTrue("escucha los avisos del feed", text.contains("feeds.observe"))
+    }
+
+    @Test
     fun theLiveFeedPutsMexicoFirst() {
         val store = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedStore.kt")
         assertTrue("ordena México primero", store.contains("val mexico = all.filter { isMexico(it.name) }"))
@@ -107,6 +159,24 @@ class HomeFeedWiringTest {
         for (host in listOf("watch", "live", "title", "open")) {
             assertTrue("falta el host $host en el filtro VIEW", manifest.contains("android:host=\"$host\""))
         }
+    }
+
+    @Test
+    fun theGameJoinPathNeverRestrictsTheLauncherLinks() {
+        // Regresión real: un pathPrefix en el MISMO intent-filter se aplica a todos los
+        // hosts (watch/live/title/open quedaron exigiendo /join y el launcher no abría nada).
+        val manifest = require("src/main/AndroidManifest.xml")
+        val filters = manifest.split("<intent-filter>").drop(1).map { it.substringBefore("</intent-filter>") }
+        val launcher = filters.first { it.contains("android:host=\"watch\"") }
+        for (host in listOf("watch", "live", "title", "open")) {
+            assertTrue("el filtro del launcher debe declarar $host", launcher.contains("android:host=\"$host\""))
+        }
+        assertFalse(
+            "el pathPrefix de Vision+ Play no puede viajar en el filtro del launcher",
+            launcher.contains("pathPrefix") || launcher.contains("pathPattern"),
+        )
+        val play = filters.first { it.contains("android:host=\"play\"") }
+        assertTrue("Play conserva su ruta /join en un filtro propio", play.contains("android:pathPrefix=\"/join\""))
     }
 
     @Test

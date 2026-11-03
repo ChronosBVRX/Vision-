@@ -21,35 +21,7 @@ object GeeAgenda {
     data class Section(val title: String, val events: List<GeeEvent>)
 
     /** Ligas con protagonismo (chips y orden). Liga MX siempre primero. */
-    val MAIN_LEAGUES = listOf(
-        "Liga MX",
-        "UEFA Champions League",
-        "Premier League",
-        "LaLiga",
-        "Serie A",
-        "Bundesliga",
-        "Ligue 1",
-        "Copa Libertadores",
-        "Copa Sudamericana",
-        "Liga Profesional Argentina",
-        "Brasileirão",
-        "MLS",
-        "Liga de Expansión MX",
-        "Eredivisie",
-        "Primeira Liga",
-    )
-
-    /** Cómo se llaman en el CMS/agenda algunas de las ligas grandes. */
-    private val LEAGUE_ALIASES = mapOf(
-        "champions league" to "UEFA Champions League",
-        "uefa champions league" to "UEFA Champions League",
-        "liga profesional de futbol" to "Liga Profesional Argentina",
-        "ligapro" to "Liga Profesional Argentina",
-        "primeira liga" to "Primeira Liga",
-        "brasileirao" to "Brasileirão",
-        "eredivisie" to "Eredivisie",
-        "liga de expansion mx" to "Liga de Expansión MX",
-    )
+    val MAIN_LEAGUES = com.chronosbvrx.visionplus.home.contract.SportsLeagues.MAIN_LEAGUES
 
     private val MX_ZONE: TimeZone = TimeZone.getTimeZone("America/Mexico_City")
     private val startCache = ConcurrentHashMap<String, Long>()
@@ -103,28 +75,36 @@ object GeeAgenda {
     }
 
     /** La liga del evento: la que cruza la agenda o el nombre del CMS sin la cola. */
-    fun leagueLabel(event: GeeEvent): String {
-        val raw = event.leagueLabel.ifBlank { event.name.substringBefore(',').trim() }
-        val folded = fold(raw)
-        for ((alias, canonical) in LEAGUE_ALIASES) {
-            if (folded == alias || folded.startsWith("$alias,") || folded.startsWith(alias)) return canonical
-        }
-        return raw
-    }
+    fun leagueLabel(event: GeeEvent): String =
+        com.chronosbvrx.visionplus.home.contract.SportsLeagues.canonical(
+            event.leagueLabel.ifBlank { event.name.substringBefore(',').trim() },
+        )
 
     /** Menor = más protagonismo (las ligas grandes al frente). */
-    fun leaguePriority(label: String): Int {
-        val folded = fold(label)
-        val index = MAIN_LEAGUES.indexOfFirst { fold(it) == folded }
-        return if (index >= 0) index else MAIN_LEAGUES.size
-    }
+    fun leaguePriority(label: String): Int =
+        com.chronosbvrx.visionplus.home.contract.SportsLeagues.leaguePriority(label)
 
-    /** Las ligas presentes entre los eventos, con las grandes al frente. */
-    fun leagueNames(events: List<GeeEvent>): List<String> = events
+    /**
+     * Las ligas presentes entre los eventos, con las grandes al frente.
+     * Con [mainOnly] solo salen las de Tier 1 (modo «Principal»).
+     */
+    fun leagueNames(events: List<GeeEvent>, mainOnly: Boolean = false): List<String> = events
+        .asSequence()
+        .filter { !mainOnly || SportsRelevance.isMain(it) }
         .map { leagueLabel(it) }
         .filter { it.isNotBlank() }
         .distinct()
         .sortedWith(compareBy({ leaguePriority(it) }, { it }))
+        .toList()
+
+    /** Logo de cada liga presente (el primero que lo traiga). */
+    fun leagueLogos(events: List<GeeEvent>): Map<String, String> = buildMap {
+        for (event in events) {
+            val name = leagueLabel(event)
+            val logo = event.leagueLogo.trim()
+            if (name.isNotBlank() && logo.isNotBlank() && !containsKey(name)) put(name, logo)
+        }
+    }
 
     /** ¿Este evento es del filtro de liga elegido? (null = todas). */
     fun matchesLeague(event: GeeEvent, league: String?): Boolean =

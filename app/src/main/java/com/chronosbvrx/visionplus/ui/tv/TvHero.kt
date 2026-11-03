@@ -3,6 +3,8 @@ package com.chronosbvrx.visionplus.ui.tv
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.banners.HomeBanner
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.data.gee.SportsRelevance
+import com.chronosbvrx.visionplus.home.contract.SportsLeagues
 import com.chronosbvrx.visionplus.home.contract.durationLabel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -61,16 +63,27 @@ internal fun pickTvSports(
     nowMs: Long = System.currentTimeMillis(),
     liveLimit: Int = 2,
     soonLimit: Int = 2,
+    mainOnly: Boolean = true,
 ): List<TvHeroItem> {
-    val items = events.mapNotNull { event -> event.toTvHero(nowMs) }.distinctBy { it.key }
+    val items = events
+        .asSequence()
+        .filter { it.visible && (!mainOnly || SportsRelevance.isMain(it)) }
+        .mapNotNull { event -> event.toTvHero(nowMs) }
+        .distinctBy { it.key }
+        .toList()
     val live = items.filter { it.live }
         .sortedWith(
             compareBy<TvHeroItem> { tvLeagueRank(it.event?.leagueLabel.orEmpty()) }
                 .thenBy { geeStartMs(it.event) },
         )
         .take(liveLimit.coerceAtLeast(0))
+    // El «próximo» también se ordena por relevancia: el partido de las 09:00 de una
+    // liga menor no debe tapar al de las 09:15 de LaLiga.
     val soon = items.filterNot { it.live }
-        .sortedBy { geeStartMs(it.event) }
+        .sortedWith(
+            compareBy<TvHeroItem> { tvLeagueRank(it.event?.leagueLabel.orEmpty()) }
+                .thenBy { geeStartMs(it.event) },
+        )
         .take(soonLimit.coerceAtLeast(0))
     return live + soon
 }
@@ -169,26 +182,14 @@ private fun GeeSportsSource.GeeEvent.toTvHero(nowMs: Long): TvHeroItem? {
 private fun GeeSportsSource.GeeEvent.statusDetail(): String =
     detail.ifBlank { if (status.equals("in", true)) "EN VIVO" else "" }
 
-/** Prioridad de ligas para el hero de la tele (las que más mueven a la gente primero). */
+/**
+ * Prioridad de ligas para el hero de la tele (las que más mueven a la gente primero).
+ * Compara nombres/exactos y alias: «LaLiga 2», «Serie A Women» o «Russian Premier
+ * League» no pueden colarse como si fueran LaLiga, Serie A o Premier League.
+ */
 internal fun tvLeagueRank(league: String): Int {
-    val name = league.lowercase(Locale.ROOT)
-    return when {
-        "liga mx" in name -> 0
-        "champions" in name -> 1
-        "laliga" in name || "la liga" in name -> 2
-        "premier" in name -> 3
-        "serie a" in name -> 4
-        "bundesliga" in name -> 5
-        "ligue 1" in name -> 6
-        "libertadores" in name -> 7
-        "sudamericana" in name -> 8
-        "mls" in name -> 9
-        "nfl" in name -> 10
-        "nba" in name -> 11
-        "mlb" in name -> 12
-        "formula 1" in name || "f1" in name -> 13
-        else -> 50
-    }
+    val priority = SportsLeagues.leaguePriority(league)
+    return if (priority < SportsLeagues.MAIN_LEAGUES.size) priority else 50
 }
 
 private val MX_ZONE: TimeZone = TimeZone.getTimeZone("America/Mexico_City")

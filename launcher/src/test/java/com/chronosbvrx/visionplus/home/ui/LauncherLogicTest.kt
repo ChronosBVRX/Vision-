@@ -128,6 +128,34 @@ class LauncherLogicTest {
         assertEquals(1, tabs.count { it == HomeTab.HOME })
     }
 
+    @Test
+    fun liveTvAndSportsShareOneDropDownInTheChrome() {
+        val entries = visibleTopEntries(listOf(HomeTab.HOME, HomeTab.LIVE, HomeTab.EVENTS, HomeTab.MOVIES))
+        assertEquals(
+            listOf(
+                HomeTopEntry.Tab(HomeTab.HOME),
+                HomeTopEntry.LiveHub,
+                HomeTopEntry.Tab(HomeTab.MOVIES),
+            ),
+            entries,
+        )
+        assertTrue(liveHubActive(HomeTab.LIVE))
+        assertTrue(liveHubActive(HomeTab.EVENTS))
+        org.junit.Assert.assertFalse(liveHubActive(HomeTab.HOME))
+    }
+
+    @Test
+    fun ifOnlyOneLiveSectionIsVisibleItStaysAsItsOwnTab() {
+        assertEquals(
+            listOf(HomeTopEntry.Tab(HomeTab.HOME), HomeTopEntry.Tab(HomeTab.LIVE)),
+            visibleTopEntries(listOf(HomeTab.HOME, HomeTab.LIVE)),
+        )
+        assertEquals(
+            listOf(HomeTopEntry.Tab(HomeTab.HOME), HomeTopEntry.Tab(HomeTab.EVENTS)),
+            visibleTopEntries(listOf(HomeTab.HOME, HomeTab.EVENTS)),
+        )
+    }
+
     private fun item(ref: String, title: String, kind: String) = FeedItem(
         ref = ref,
         title = title,

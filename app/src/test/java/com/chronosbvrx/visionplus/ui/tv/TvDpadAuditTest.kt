@@ -43,15 +43,25 @@ class TvDpadAuditTest {
     @Test
     fun closingTheLiveSearchRestoresTheFocus() {
         val live = tv("TvLiveScreen.kt")
-        assertTrue("al cerrar el buscador vuelve el foco", live.contains("LaunchedEffect(searchOpen)"))
         assertTrue(
-            "los canales navegan como grupo",
-            live.contains("LazyColumn(Modifier.weight(1f).fillMaxHeight().focusGroup()"),
+            "al cerrar el buscador vuelve el foco",
+            live.contains("LaunchedEffect(searchOpen, countryPicker)"),
         )
-        assertTrue(
-            "los géneros navegan como grupo",
-            live.contains("LazyColumn(Modifier.width(SIDE_COLUMN).fillMaxHeight().focusGroup()"),
-        )
+        assertTrue("el carrusel es horizontal", live.contains("LazyRow("))
+        assertTrue("el héroe usa la guía", live.contains("TvLiveHero("))
+        assertTrue("hay botón visible de búsqueda", live.contains("Icons.Default.Search"))
+        assertTrue("el buscador tiene resultados con logo", live.contains("TvLiveSearchResult("))
+        assertTrue("también busca por voz", live.contains("countryFromSpeech("))
+    }
+
+    @Test
+    fun liveSearchGivesTheKeyboardFocusAndVoiceFallback() {
+        val live = tv("TvLiveScreen.kt")
+        assertTrue("el foco inicial reintenta hasta aterrizar", live.contains("val keyboardFocus = rememberDialogFocus()"))
+        assertTrue("la primera tecla usa el foco verificado", live.contains(".dialogFocus(keyboardFocus)"))
+        assertTrue("el dictado tiene reconocedor nativo de respaldo", live.contains("SpeechRecognizer.createSpeechRecognizer"))
+        val manifest = source("src/main/AndroidManifest.xml")
+        assertTrue("el micrófono se pide solo al dictar", manifest.contains("android.permission.RECORD_AUDIO"))
     }
 
     @Test
@@ -66,9 +76,12 @@ class TvDpadAuditTest {
     @Test
     fun theHomeKeepsTheNextRowReachableWithTheRemote() {
         val home = tv("TvHomeScreen.kt")
-        // El LazyColumn solo compone lo visible: al enfocar una tarjeta se deja asomar un pico
-        // de la fila siguiente (y de la anterior) para que Abajo/Arriba siempre tengan destino.
-        assertTrue("deja asomar la siguiente fila", home.contains("revealNextRowPeek(slotIndex)"))
+        // El LazyColumn solo compone lo visible: al cambiar de FILA se deja asomar un pico
+        // de la siguiente (y de la anterior) para que Abajo/Arriba siempre tengan destino.
+        // El foco horizontal dentro de la misma fila NO debe volver a pedir el pico.
+        assertTrue("la fila es la dueña del peek", home.contains("focusedRow = slotIndex"))
+        assertTrue("el peek se dispara al cambiar de fila", home.contains("LaunchedEffect(focusedRow)"))
+        assertFalse("ninguna tarjeta lanza el peek al moverse en horizontal", home.contains("revealNextRowPeek(slotIndex)"))
         assertTrue("el pico se calcula con el layout real", home.contains("visibleItemsInfo.firstOrNull { it.index == rowIndex }"))
         assertTrue("también deja asomar la fila anterior", home.contains("firstVisible > 0"))
         assertFalse(

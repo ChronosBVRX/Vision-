@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Theaters
@@ -23,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -37,9 +39,11 @@ import kotlinx.coroutines.launch
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.ui.about.TvAboutScreen
+import com.chronosbvrx.visionplus.ui.games.GamesComingSoonScreen
 import com.chronosbvrx.visionplus.ui.player.LivePlayerScreen
 import com.chronosbvrx.visionplus.ui.player.PlayerScreen
 import com.chronosbvrx.visionplus.ui.tv.FocusRescue
+import com.chronosbvrx.visionplus.ui.tv.LandingFocus
 import com.chronosbvrx.visionplus.ui.tv.TvCategoriesScreen
 import com.chronosbvrx.visionplus.ui.tv.TvHomeScreen
  
@@ -51,7 +55,9 @@ import com.chronosbvrx.visionplus.ui.tv.TvSportsScreen
 import com.chronosbvrx.visionplus.ui.tv.TvCategoryScreen
 import com.chronosbvrx.visionplus.ui.tv.TvLibraryScreen
 import com.chronosbvrx.visionplus.ui.tv.TvDownloadsScreen
+import com.chronosbvrx.visionplus.ui.tv.TvAppUpdatesDialog
 import com.chronosbvrx.visionplus.ui.tv.TvTitleScreen
+import com.chronosbvrx.visionplus.ui.plugins.appUpdateBadgeCount
 import com.chronosbvrx.visionplus.ui.tv.landingFocus
 import com.chronosbvrx.visionplus.ui.kids.rememberLockedIndexRows
 import com.chronosbvrx.visionplus.ui.tv.rememberLandingFocus
@@ -71,15 +77,53 @@ internal val TV_RAIL_SPECS = listOf(
     TvRailSpec("Series", Icons.Default.Theaters, Route.Section("series", "Series")),
     TvRailSpec("En vivo", Icons.Default.LiveTv, Route.Live),
     TvRailSpec("Deportes en vivo", Icons.Default.SportsSoccer, Route.Sports),
+    TvRailSpec("Juegos", Icons.Default.Casino, Route.Games),
     TvRailSpec("Mi lista", Icons.Default.Bookmark, Route.Library),
 )
 
 /** The TV's shell: Home with its rail, and every other place full screen with Back to return. */
 @Composable
-fun TvApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit = {}) {
+fun TvApp(
+    catalog: XuperCatalog,
+    nav: Navigator,
+    onExitToLauncher: () -> Unit = {},
+    /** Arma/confirma el cierre con aviso del Inicio (lo provee MainActivity). */
+    onExitRequest: () -> Unit = {},
+) {
     val route = nav.current
     LaunchedEffect(route) { com.chronosbvrx.visionplus.data.diag.Diagnostics.screen(route.toString()) }
-    BackHandler(enabled = nav.stack.size > 1 && route !is Route.Player && route !is Route.LivePlayer) { nav.pop() }
+    // Atrás en dos pasos: en las pantallas con barra superior (Inicio, Películas, Series, TV en
+    // vivo, Mi lista…) el primer Atrás sube el foco a la selección de arriba en vez de salir; el
+    // segundo, dentro de la ventana, sí sale (vuelve atrás o cierra la app en el Inicio). Si el
+    // mando ya está en la barra, el Atrás sale de una vez, como siempre. La política pura vive
+    // en `BackToTopGuard`.
+    val backToTop = remember { com.chronosbvrx.visionplus.ui.BackToTopGuard() }
+    val topBarLanding = remember { com.chronosbvrx.visionplus.ui.tv.LandingFocus() }
+    var topBarFocused by remember { mutableStateOf(false) }
+    val hasTopBar = com.chronosbvrx.visionplus.ui.tv.tvTopBarVisible(route)
+    val atRoot = nav.stack.size <= 1
+    // Cambiar de pantalla invalida el armado: el Atrás de la pantalla nueva empieza de cero.
+    LaunchedEffect(route) { backToTop.disarm() }
+    BackHandler(enabled = route !is Route.Player && route !is Route.LivePlayer) {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (hasTopBar && !topBarFocused && backToTop.press(now)) {
+            val composed = topBarLanding.attached
+            topBarLanding.request()
+            // Si la barra no está compuesta en este frame (Modo Sin Conexión, por ejemplo) la
+            // tecla NO se come: sigue su curso normal.
+            if (composed || topBarLanding.focused || topBarFocused) {
+                // En el Inicio este mismo toque ya arma la salida: el siguiente Atrás cierra.
+                if (atRoot) onExitRequest()
+                return@BackHandler
+            }
+        }
+        if (atRoot) {
+            onExitRequest()
+        } else {
+            backToTop.disarm()
+            nav.pop()
+        }
+    }
     // Each place keeps its saved state (scroll, the card Back returns to) while another one is on top.
     val saved = rememberSaveableStateHolder()
     // Al volver: el riel recuerda su último botón y las secciones, la última tarjeta abierta.
@@ -126,6 +170,8 @@ fun TvApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit = 
                 liveReturn = liveReturn,
                 onChannelPick = { liveReturn = it },
                 onExitToLauncher = onExitToLauncher,
+                topBarLanding = topBarLanding,
+                onTopBarFocusChanged = { topBarFocused = it },
             )
         }
     }
@@ -144,9 +190,37 @@ private fun TvRoute(
     liveReturn: String? = null,
     onChannelPick: (String) -> Unit = {},
     onExitToLauncher: () -> Unit = {},
+    topBarLanding: LandingFocus? = null,
+    onTopBarFocusChanged: (Boolean) -> Unit = {},
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // Campana y recarga del Inicio viven ahora en la barra superior, no flotando
+    // encima de los pósters. El estado es de la pantalla completa de la tele.
+    var showPluginUpdates by rememberSaveable { mutableStateOf(false) }
+    val updatesBadge = appUpdateBadgeCount()
+    LaunchedEffect(route, updatesBadge) {
+        if (route == Route.Home && updatesBadge > 0) {
+            val latest = com.chronosbvrx.visionplus.data.AppUpdate.latest?.version.orEmpty()
+            val skipped = context.getSharedPreferences("updates", 0).getString("skipped", "")
+            if (latest.isNotBlank() &&
+                (com.chronosbvrx.visionplus.data.AppUpdate.forced(context) || skipped != latest)
+            ) {
+                showPluginUpdates = true
+            }
+        }
+    }
+    if (showPluginUpdates) {
+        TvAppUpdatesDialog(onDismiss = {
+            showPluginUpdates = false
+            if (!com.chronosbvrx.visionplus.data.AppUpdate.forced(context)) {
+                com.chronosbvrx.visionplus.data.AppUpdate.latest?.version?.let { version ->
+                    context.getSharedPreferences("updates", 0).edit()
+                        .putString("skipped", version).apply()
+                }
+            }
+        })
+    }
     val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
     val rows = catalog.rows
     // El índice remoto manda en Categorías y Búsqueda; Home conserva las filas curadas.
@@ -233,10 +307,16 @@ private fun TvRoute(
             com.chronosbvrx.visionplus.ui.tv.TvTopBar(
                 active = com.chronosbvrx.visionplus.ui.tv.tvTopTabFor(route),
                 onTab = { tab -> guardedGo(tab.target, viaTab = true) },
+                onRoute = { route -> guardedGo(route, viaTab = true) },
                 onSearch = { guardedGo(Route.Search, viaTab = false) },
                 onSettings = { guardedGo(Route.Settings, viaTab = false) },
                 // El chip del perfil abre «Perfiles» desde cualquier pantalla.
                 onProfile = { showProfiles = true },
+                updatesBadge = updatesBadge,
+                onNotifications = { showPluginUpdates = true },
+                onReload = { scope.launch { catalog.load() } },
+                landing = topBarLanding,
+                onFocusChanged = onTopBarFocusChanged,
             )
         }
         Box(Modifier.weight(1f)) {
@@ -347,6 +427,11 @@ private fun TvRoute(
             returnChannelCode = liveReturn,
         )
         Route.Sports -> TvSportsScreen(onPlay = { nav.push(Route.LivePlayer(it)) })
+        // Vision+ Play sigue en preparación: la pestaña no abre el tablero de juegos.
+        Route.Games, is Route.GameRoom -> GamesComingSoonScreen(
+            isTv = true,
+            onBack = { nav.pop() },
+        )
         Route.Settings -> TvSettingsScreen()
         Route.About -> TvAboutScreen()
         else -> Unit

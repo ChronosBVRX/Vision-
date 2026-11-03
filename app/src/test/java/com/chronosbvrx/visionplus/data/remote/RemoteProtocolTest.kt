@@ -89,6 +89,63 @@ class RemoteProtocolTest {
     }
 
     @Test
+    fun theNowPlayingStateRoundTripsWithItsProgress() {
+        val now = NowPlaying(
+            kind = RemoteProto.KIND_VOD,
+            screen = "Tierra de Mafia · T2 · C5 · El ajuste",
+            title = "Tierra de Mafia",
+            subtitle = "T2 · C5 · El ajuste",
+            poster = "https://img/poster.jpg",
+            ref = "xtv:EP5",
+            playing = true,
+            positionMs = 754_000L,
+            durationMs = 3_600_000L,
+            canSeek = true,
+            seasonIndex = 1,
+            episodeIndex = 4,
+            hasNext = true,
+            hasPrev = true,
+            updatedAt = 1_729_000_000_000L,
+        )
+        val back = NowPlaying.fromMsg(RemoteProto.decode(RemoteProto.encode(now.asMsg()))!!)
+        assertEquals(RemoteProto.KIND_VOD, back.kind)
+        assertEquals("Tierra de Mafia", back.title)
+        assertEquals("T2 · C5 · El ajuste", back.subtitle)
+        assertEquals("https://img/poster.jpg", back.poster)
+        assertEquals(754_000L, back.positionMs)
+        assertEquals(3_600_000L, back.durationMs)
+        assertTrue(back.playing)
+        assertTrue(back.canSeek)
+        assertTrue(back.hasNext)
+        assertTrue(back.hasPrev)
+        assertEquals(1, back.seasonIndex)
+        assertEquals(4, back.episodeIndex)
+    }
+
+    @Test
+    fun aMenuStateHasNoPlaybackFields() {
+        val msg = NowPlaying(kind = RemoteProto.KIND_IDLE, screen = "Inicio").asMsg()
+        assertNull(msg.kind)
+        assertNull(msg.playing)
+        assertNull(msg.positionMs)
+        assertEquals("Inicio", msg.screen)
+        assertEquals(RemoteProto.KIND_IDLE, NowPlaying.fromMsg(msg).kind)
+    }
+
+    @Test
+    fun seekAndTypedCommandsTravelOnTheWire() {
+        val seek = RemoteProto.decode(RemoteProto.encode(RemoteMsg(t = RemoteProto.SEEK, pos = 125_000L)))
+        assertEquals(RemoteProto.SEEK, seek?.t)
+        assertEquals(125_000L, seek?.pos)
+
+        val cmd = RemoteProto.decode(
+            RemoteProto.encode(RemoteMsg(t = RemoteProto.CMD, cmd = RemoteProto.CMD_PLAY_PAUSE)),
+        )
+        assertEquals(RemoteProto.CMD, cmd?.t)
+        assertEquals(RemoteProto.CMD_PLAY_PAUSE, cmd?.cmd)
+    }
+
+    @Test
     fun allowlistBlocksTheDangerousKeys() {
         // El D-pad, la reproducción y el volumen entran.
         assertTrue(RemoteKeys.isAllowed(RemoteKeys.UP))

@@ -153,10 +153,17 @@ class LauncherActivity : ComponentActivity() {
         }
     }
 
-    /** El launcher nunca se cierra con Atrás; Compose lo maneja y aquí no se deja salir. */
+    /**
+     * El launcher nunca se cierra con Atrás; la navegación (barra de sistema, secciones y
+     * paneles) la resuelve Compose. OJO: hay que ENTREGAR la tecla al `OnBackPressedDispatcher`; si se
+     * deja un `onBackPressed` vacío (como antes), el `BackHandler` de Compose nunca se enteraba
+     * y Atrás no hacía nada en Android 13/14. Solo se ignora si no hay ningún callback (un
+     * Inicio no debe cerrarse jamás).
+     */
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        // No-op a propósito: la navegación (pestañas y paneles) la resuelve LauncherScreen.
+        if (!onBackPressedDispatcher.hasEnabledCallbacks()) return
+        onBackPressedDispatcher.onBackPressed()
     }
 
     private companion object {

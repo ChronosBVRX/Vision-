@@ -236,8 +236,18 @@ def _shift_sql(clause: str, shift: int = 2) -> str:
     return re.sub(r"\$(\d+)", lambda m: f"${int(m.group(1)) + shift}", clause)
 
 
-def section_filters(anime_ids: list[str], novela_ids: list[str]) -> dict[str, tuple[str, list]]:
-    """Los WHERE mutuamente excluyentes de cada sección (con el filtro de nicho)."""
+def section_filters(
+    anime_series_ids: list[str],
+    novela_ids: list[str],
+    anime_movie_ids: list[str] | None = None,
+) -> dict[str, tuple[str, list]]:
+    """Los WHERE mutuamente excluyentes de cada sección (con el filtro de nicho).
+
+    Anime es solo animación japonesa **en serie**; sus películas viven en Películas.
+    Series nunca acepta películas. Películas incluye las películas de anime.
+    """
+    anime_movie_ids = anime_movie_ids or []
+    anime_all_ids = list(dict.fromkeys([*anime_series_ids, *anime_movie_ids]))
     series_shelf = (
         "exists (select 1 from title_categories tc2 where tc2.title_id = t.id"
         " and tc2.category_id = 'xtv-series-all')"
@@ -245,26 +255,26 @@ def section_filters(anime_ids: list[str], novela_ids: list[str]) -> dict[str, tu
     return {
         "anime": (
             "t.id = any($1::text[]) and " + NOT_UNMATCHED,
-            [anime_ids],
+            [anime_series_ids],
         ),
         "novelas": (
             "t.id = any($1::text[]) and " + NOT_UNMATCHED,
             [novela_ids],
         ),
         "movies": (
-            "t.kind = 'movie' and coalesce(t.program_type, '') not in ('series', 'teleplay', 'anime')"
+            "(t.kind = 'movie' or t.id = any($1::text[]))"
+            " and coalesce(t.program_type, '') not in ('series', 'teleplay', 'anime')"
+            " and not (t.id = any($2::text[])) and not (t.id = any($3::text[]))"
             f" and not ({series_shelf})"
-            " and not (t.id = any($1::text[])) and not (t.id = any($2::text[]))"
             " and " + NOT_UNMATCHED,
-            [anime_ids, novela_ids],
+            [anime_movie_ids, anime_series_ids, novela_ids],
         ),
         "series": (
-            "(t.program_type in ('series', 'teleplay')"
-            " or (t.kind = 'series' and coalesce(t.program_type, '') not in ('movie', 'anime'))"
-            f" or {series_shelf})"
+            "t.kind = 'series' and coalesce(t.program_type, '') not in ('movie', 'anime')"
             " and not (t.id = any($1::text[])) and not (t.id = any($2::text[]))"
+            f" and not ({series_shelf})"
             " and " + NOT_UNMATCHED,
-            [anime_ids, novela_ids],
+            [anime_all_ids, novela_ids],
         ),
     }
 
@@ -418,10 +428,10 @@ async def build_section_genres(pool, genres_by_id=None, meta=None) -> int:
 
     Cada hilera `xtv-{sección}-genero-{slug}` solo trae títulos de su sección
     con aislamiento estricto (mutuamente excluyentes):
-      - Anime: todo contenido anime (cine y series anime). Jamás entra a Películas, Series ni Novelas.
+      - Anime: solo series de animación japonesa. Sus películas van a Películas.
       - Novelas: telenovelas (latinas, turcas, etc.). Jamás entra a Series ni Películas.
-      - Películas: solo largometrajes/cine. Jamás entra Anime, Series ni Novelas.
-      - Series: solo series de televisión generales. Jamás entra Anime ni Novelas.
+      - Películas: largometrajes/cine, incluidas las películas de anime. Jamás entra Series ni Novelas.
+      - Series: solo series de televisión generales. Jamás entra películas, anime ni novelas.
 
     Además, cada título vive en UNA sola hilera de género (su primario): la misma
     película ya no aparece en Drama, Suspenso y Comedia a la vez.
@@ -442,17 +452,27 @@ async def build_section_genres(pool, genres_by_id=None, meta=None) -> int:
         # 1. Identificación exhaustiva de Anime:
         anime_rows = await conn.fetch(
             """
-            select distinct t.id from titles t
-            left join title_categories tc on tc.title_id = t.id
-            where t.kind = 'anime'
-               or 'Anime' = any(t.genres)
-               or 'Animación Japonesa' = any(t.genres)
-               or tc.category_id = 'xtv-anime-all'
-               or (tc.category_id like 'xtv-anime-%' and tc.category_id not like 'xtv-anime-genero-%')
-               or tc.category_id = 'masmobile_animes'
+            select distinct t.id,
+                   coalesce(t.program_type, '') as program_type,
+                   coalesce(t.duration_min, 0) as duration_min
+              from titles t
+              left join title_categories tc on tc.title_id = t.id
+             where t.kind = 'anime'
+                or 'Anime' = any(t.genres)
+                or 'Animación Japonesa' = any(t.genres)
+                or tc.category_id = 'xtv-anime-all'
+                or (tc.category_id like 'xtv-anime-%' and tc.category_id not like 'xtv-anime-genero-%')
+                or tc.category_id = 'masmobile_animes'
             """
         )
-        anime_ids = [r["id"] for r in anime_rows]
+        anime_all_ids = [r["id"] for r in anime_rows]
+        # Película de anime = la que trae duración de largometraje y no es una
+        # temporada de serie. Las series de anime tienen duration_min 0.
+        anime_movie_ids = [
+            r["id"] for r in anime_rows
+            if r["duration_min"] and int(r["duration_min"]) > 0
+        ]
+        anime_series_ids = [r["id"] for r in anime_rows if r["id"] not in anime_movie_ids]
 
         # 2. Identificación exhaustiva de Novelas (excluyendo Anime):
         novela_rows = await conn.fetch(
@@ -475,11 +495,11 @@ async def build_section_genres(pool, genres_by_id=None, meta=None) -> int:
                or lower(t.synopsis) like '%novela colombiana%'
               )
             """,
-            anime_ids,
+            anime_all_ids,
         )
         novela_ids = [r["id"] for r in novela_rows]
 
-        filters = section_filters(anime_ids, novela_ids)
+        filters = section_filters(anime_series_ids, novela_ids, anime_movie_ids)
         genres_by_id = genres_by_id if genres_by_id is not None else await _genres_by_title(conn)
         meta = meta if meta is not None else await _title_meta(conn)
 

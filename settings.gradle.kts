@@ -16,10 +16,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Emparejamiento ADB por Wi-Fi desde el móvil (LibADB, de App Manager).
+        // Kadb publica su SPAKE2 de emparejamiento por Wi-Fi solo en JitPack.
         maven("https://jitpack.io") {
             content {
-                includeGroupByRegex("com\\.github\\.MuntashirAkon.*")
+                includeGroup("com.github.Flyfish233")
             }
         }
     }

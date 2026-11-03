@@ -7,6 +7,7 @@ Todos los endpoints /v1/* requieren el header X-Api-Key.
 """
 
 import asyncio
+import difflib
 import hmac
 import json
 import logging
@@ -19,7 +20,7 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import asyncpg
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query, Request
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query, Request, Response
 from starlette.middleware.gzip import GZipMiddleware
 
 import markers as skip_markers
@@ -27,6 +28,7 @@ import portal as portal_search
 import slots as device_slots
 import episodes as episodes_mirror
 import banners as launcher_banners
+import sports_map
 import sync as device_sync
 from epg_channels import canonical_channel, channel_country, epg_norms_for
 
@@ -53,9 +55,15 @@ pool: asyncpg.Pool | None = None
 async def lifespan(_: FastAPI):
     global pool
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4, command_timeout=15)
+    games_task = asyncio.create_task(_games_sweep_loop())
     try:
         yield
     finally:
+        games_task.cancel()
+        try:
+            await games_task
+        except asyncio.CancelledError:
+            pass
         await pool.close()
         pool = None
 
@@ -1431,7 +1439,8 @@ async def sports(
                away_id, away_name, away_abbr, away_logo, away_score,
                kickoff, status, status_detail, venue, broadcasts, channels
         from sports_matches
-        where (kickoff at time zone $1::text)::date
+        where league_id not like '%/%'
+          and (kickoff at time zone $1::text)::date
                   >= coalesce($2::text::date, (now() at time zone $1::text)::date)
           and (kickoff at time zone $1::text)::date
                   < coalesce($2::text::date, (now() at time zone $1::text)::date) + $3::int
@@ -1448,6 +1457,60 @@ async def sports(
         "date": date,
         "days": days,
         "matches": enriched,
+    }
+
+
+@app.get("/v1/sports/channels")
+async def sports_channels(
+    country: str | None = Query(default=None, max_length=40),
+    brand: str | None = Query(default=None, max_length=60),
+    q: str | None = Query(default=None, max_length=60),
+    general: int = Query(default=1, ge=0, le=1),
+    limit: int = Query(default=0, ge=0, le=1000),
+    x_api_key: str | None = Header(default=None),
+):
+    """Mapa propio de la parrilla deportiva XTV: marca, feed, país y dueño.
+
+    Es la segunda opción junto a la agenda de GeeSports: sirve para saber qué
+    canal de la casa corresponde a cada emisora que publica ESPN. `general=1`
+    incluye las emisoras generalistas que también transmiten deporte (Canal 5,
+    Azteca 7, Telemundo, Univision…).
+    """
+    require_key(x_api_key)
+    return sports_map.map_payload(
+        country=country,
+        brand=brand,
+        q=q,
+        include_general=bool(general),
+        limit=limit or None,
+    )
+
+
+@app.get("/v1/sports/options")
+async def sports_options(
+    date: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    days: int = Query(default=1, ge=1, le=8),
+    country: str = Query(default="México", max_length=40),
+    x_api_key: str | None = Header(default=None),
+):
+    """Agenda ESPN + opciones XTV por partido, país y emisora.
+
+    No modifica `/v1/sports` ni la lista de GeeSports: entrega una capa aparte
+    para cuando el canal principal no está en la parrilla y hay que buscar la
+    señal hermana en otro país (p. ej. TUDN MX ↔ TUDN USA).
+    """
+    require_key(x_api_key)
+    payload = await sports(date=date, days=days, x_api_key=x_api_key)
+    matches = [
+        sports_map.options_for_event(match, preferred=country)
+        for match in (payload.get("matches") or [])
+    ]
+    return {
+        "timezone": payload.get("timezone"),
+        "date": payload.get("date"),
+        "days": payload.get("days"),
+        "country": country,
+        "matches": matches,
     }
 
 
@@ -1537,30 +1600,43 @@ async def gee38_events(
     category: str | None = Query(default=None, max_length=40),
     day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     days: int = Query(default=0, ge=0, le=30),
+    scope: str | None = Query(default=None, pattern=r"^(main|all)$"),
     x_api_key: str | None = Header(default=None),
 ):
     """Eventos deportivos (fútbol, básquet, F1…). `day`(+`days`) acota por fecha
-    del evento; `category` filtra por deporte (p. ej. Football)."""
+    del evento; `category` filtra por deporte (p. ej. Football); `scope=main`
+    deja solo Tier 1 (portada/«Principal») y `scope=all` conserva todo."""
     require_key(x_api_key)
     where = ["kind = 'event'"]
     args: list = []
     if category:
         args.append(category.strip())
         where.append(f"category ilike ${len(args)}")
+    requested_first: date | None = None
+    requested_last: date | None = None
     if day:
         try:
-            first = date.fromisoformat(day)
+            requested_first = date.fromisoformat(day)
         except ValueError:
             raise HTTPException(status_code=400, detail="fecha inválida")
-        args.append(first.isoformat())
-        if days > 0:
-            args.append((first + timedelta(days=days)).isoformat())
-            where.append(
-                f"payload->>'date_iso' >= ${len(args) - 1}"
-                f" and payload->>'date_iso' < ${len(args)}"
-            )
-        else:
-            where.append(f"payload->>'date_iso' = ${len(args)}")
+        requested_last = requested_first + timedelta(days=days)
+        # El CMS publica la fecha/hora en UTC y la app pide en hora de México. Un
+        # partido de las 19:05 del día D puede estar guardado como D+1 en UTC: si
+        # solo se cargara D..D+days, su tarjeta salía SIN `link_names` (el bug de
+        # las listas vacías en los partidos de la noche / eventos secundarios).
+        load_lo = requested_first - timedelta(days=1)
+        load_hi = requested_first + timedelta(days=days + 2)
+    else:
+        # La respuesta arma la semana completa (ayer..+7) para el Inicio y el
+        # launcher: se cargan los metadatos de TODA esa ventana, no solo del día.
+        load_lo = date.today() - timedelta(days=2)
+        load_hi = date.today() + timedelta(days=9)
+    args.append(load_lo.isoformat())
+    args.append(load_hi.isoformat())
+    where.append(
+        f"payload->>'date_iso' >= ${len(args) - 1}"
+        f" and payload->>'date_iso' < ${len(args)}"
+    )
     rows = await db().fetch(
         f"select id, payload from gee38_catalog where {' and '.join(where)} order by sort",
         *args,
@@ -1576,6 +1652,7 @@ async def gee38_events(
     for event in events:
         _gee_fix_event_times(event)
         _gee_fix_logos(event)
+        _gee_complete_event_links(event)
     if not events:
         return {"events": events}
     entries = await _gee_window_matches(events)
@@ -1601,44 +1678,61 @@ async def gee38_events(
     out: list[dict] = []
     for event in events:
         category = (event.get("category") or "").strip().lower()
-        if category not in GEE_ALLOWED_SPORTS:
+        has_sources = _gee_event_has_sources(event)
+        # Los deportes desconocidos solo pasan si el CMS trae una lista real:
+        # así Cricket/AFL/WWE de la app original también aparecen, sin inventar
+        # categorías vacías.
+        if category not in GEE_ALLOWED_SPORTS and not has_sources:
             continue
         pair = _gee_pair_key(event.get("team_a", ""), event.get("team_b", ""))
         if pair:
-            bucket = pair_links.setdefault(pair, [])
-            known = {link.get("url") or link.get("link") for link in bucket}
+            bucket = pair_links.setdefault(
+                _gee_gender_key(event.get("event")) + "|" + pair, []
+            )
+            known = {_gee_link_key(link) for link in bucket}
             for link in event.get("links") or []:
-                key = link.get("url") or link.get("link")
-                if key and key not in known:
+                key = _gee_link_key(link)
+                if key[1] and key not in known:
                     bucket.append(link)
                     known.add(key)
         is_football = category == "football"
-        match = _gee_find_match(event, entries) if is_football else None
+        match = _gee_find_match(event, entries) if _gee_sport_for_category(category) else None
         if match is not None:
-            if not _gee_league_allowed_match(match):
-                continue  # liga no principal: ni tarjeta ni evento
-            _gee_apply_match(event, match)
-            if _gee_date_of(match.get("kickoff")) in near:
-                match_id = str(match.get("id") or "")
-                bucket = links_by_match.setdefault(match_id, [])
-                known = {link.get("url") or link.get("link") for link in bucket}
-                for link in event.get("links") or []:
-                    key = link.get("url") or link.get("link")
-                    if key not in known:
-                        bucket.append(link)
-                        known.add(key)
-                names = declared_by_match.setdefault(match_id, [])
-                for name in event.get("link_names") or []:
-                    clean = str(name or "").strip()
-                    if clean and clean not in names:
-                        names.append(clean)
-                continue  # el partido se sirve como tarjeta única (abajo)
-            if _gee_league_allowed_event(event):
+            if _gee_league_allowed_match(match):
+                _gee_apply_match(event, match)
+                if _gee_date_of(match.get("kickoff")) in near:
+                    match_id = str(match.get("id") or "")
+                    bucket = links_by_match.setdefault(match_id, [])
+                    known = {_gee_link_key(link) for link in bucket}
+                    for link in event.get("links") or []:
+                        key = _gee_link_key(link)
+                        if key[1] and key not in known:
+                            bucket.append(link)
+                            known.add(key)
+                    incoming = [
+                        str(name or "").strip()
+                        for name in (event.get("link_names") or [])
+                        if str(name or "").strip()
+                    ]
+                    declared_by_match[match_id] = _gee_merge_declared(
+                        declared_by_match.get(match_id, []), incoming
+                    )
+                    continue  # el partido se sirve como tarjeta única (abajo)
+                if _gee_event_visible(event) and _gee_league_allowed_event(event):
+                    out.append(event)
+                continue
+            # Liga fuera de la agenda principal: si el CMS la publica con sus
+            # fuentes, se sirve tal cual (la app original también la enseña).
+            if _gee_event_visible(event) and (
+                has_sources or _gee_league_allowed_event(event)
+            ):
                 out.append(event)
             continue
-        if is_football and not _gee_league_allowed_event(event):
-            continue
-        out.append(event)
+        # Sin partido en la agenda: se sirve el evento del CMS si tiene lista.
+        if _gee_event_visible(event) and (
+            has_sources or not is_football or _gee_league_allowed_event(event)
+        ):
+            out.append(event)
     for match, _home, _away, _dt in entries:
         if not _gee_league_allowed_match(match):
             continue
@@ -1648,14 +1742,20 @@ async def gee38_events(
         card_links = list(links_by_match.get(match_id, []))
         home = (match.get("home") or {}).get("name") or ""
         away = (match.get("away") or {}).get("name") or ""
-        extra = pair_links.get(_gee_pair_key(home, away), [])
+        # El bucket va por CRUCE + GÉNERO: los enlaces de un Santos-Necaxa femenil
+        # no entran en la tarjeta varonil, pero las señales hermanas del mismo
+        # partido (otro día, otro nombre de canal) sí.
+        extra = pair_links.get(
+            _gee_gender_key(match.get("league", {}).get("name")) + "|" + _gee_pair_key(home, away),
+            [],
+        )
         if extra:
             # Sin duplicados por URL; si la copia del cruce viene sondeada y la primera
             # no, se queda la sondeada (los badges de la app son del momento).
-            index = {(link.get("url") or link.get("link")): i for i, link in enumerate(card_links)}
+            index = {_gee_link_key(link): i for i, link in enumerate(card_links)}
             for link in extra:
-                key = link.get("url") or link.get("link")
-                if not key:
+                key = _gee_link_key(link)
+                if not key[1]:
                     continue
                 previous = index.get(key)
                 if previous is None:
@@ -1665,6 +1765,36 @@ async def gee38_events(
                     card_links[previous] = link
         card_links.sort(key=_gee_link_rank)  # vivos primero (estable dentro del grupo)
         out.append(_gee_match_card(match, card_links, declared_by_match.get(match_id, [])))
+    # Los eventos que no tienen tarjeta de agenda también se completan con los
+    # enlaces de sus entradas hermanas (el CMS publica varias por partido) y con
+    # TODOS los nombres declarados. Sin esto, un evento suelto enseñaba menos
+    # fuentes que la app original.
+    for card in out:
+        # Las tarjetas de la agenda ya salen completas de `_gee_match_card` (enlaces
+        # ordenados por parrilla + nombres declarados). Completarlas otra vez con
+        # slots de OTRO payload las desalinearía.
+        if str(card.get("id") or "").startswith("espn:"):
+            continue
+        pair = _gee_pair_key(card.get("team_a", ""), card.get("team_b", ""))
+        extra = pair_links.get(_gee_gender_key(card.get("event")) + "|" + pair) or []
+        if extra:
+            links = [lk for lk in (card.get("links") or []) if isinstance(lk, dict)]
+            known = {_gee_link_key(lk) for lk in links if _gee_link_url(lk)}
+            for link in extra:
+                key = _gee_link_key(link)
+                if key[1] and key not in known:
+                    links.append(link)
+                    known.add(key)
+            card["links"] = links
+        _gee_complete_event_links(card)
+    # Un mismo partido puede llegar dos veces (tarjeta ESPN + evento del CMS con
+    # los equipos escritos distinto): se fusiona en UNA con la lista más completa.
+    out = _gee_merge_fixture_cards(out)
+    out = [_gee_mark_tier(card) for card in out]
+    if scope == "main":
+        # «Principal»: solo Tier 1. El catálogo completo sigue en scope=all y en
+        # la búsqueda; así se limpia la portada sin perder fuentes secundarias.
+        out = [card for card in out if card.get("tier") == 1]
     # Una tarjeta por id: la app las pinta con `key = id` y un duplicado revienta la lista.
     deduped: list[dict] = []
     seen_ids: set[str] = set()
@@ -1675,7 +1805,98 @@ async def gee38_events(
                 continue
             seen_ids.add(card_id)
         deduped.append(card)
+    if requested_first is not None:
+        # La consulta carga días extra por el desfase UTC↔México; la respuesta
+        # respeta exactamente el rango pedido (la app solo pinta Hoy/Mañana).
+        wanted_days: set[str] = set()
+        if requested_last == requested_first:
+            wanted_days.add(requested_first.isoformat())
+        else:
+            cursor = requested_first
+            while cursor < requested_last:
+                wanted_days.add(cursor.isoformat())
+                cursor += timedelta(days=1)
+        deduped = [card for card in deduped if (card.get("date_iso") or "") in wanted_days]
+    else:
+        # Sin `day` se sirve la semana (ayer..+7); la consulta carga un día extra
+        # por el desfase UTC y no debe devolver partidos ya vencidos.
+        deduped = [card for card in deduped if (card.get("date_iso") or "") in near]
+    # Segunda opción propia: canales XTV para CADA tarjeta final (incluidas las
+    # de agenda, no solo los eventos crudos del CMS), con la regla Fox. Campo
+    # ADITIVO: no cambia `links`, `broadcasts` ni la agenda de GeeSports.
+    for card in deduped:
+        card["xtv"] = sports_map.options_for_gee_event(card)
     return {"events": deduped}
+
+
+@app.get("/v1/gee38/health")
+async def gee38_health(x_api_key: str | None = Header(default=None)):
+    """Estado de la fuente deportiva: frescura de metadatos y listas alineadas.
+
+    `ok=false` significa que el worker dejó de refrescar `events.txt` o que algún
+    evento tiene menos filas que nombres declarados: exactamente la regresión que
+    hacía que Vision+ enseñara menos fuentes que la app original.
+    """
+    require_key(x_api_key)
+    stats = await db().fetchrow(
+        """
+        select count(*) as total,
+               count(*) filter (
+                   where jsonb_array_length(coalesce(payload->'link_names', '[]'::jsonb)) > 0
+               ) as with_names,
+               count(*) filter (
+                   where jsonb_array_length(coalesce(payload->'link_names', '[]'::jsonb)) > 0
+                     and jsonb_array_length(coalesce(payload->'link_names', '[]'::jsonb))
+                         <> jsonb_array_length(coalesce(payload->'links', '[]'::jsonb))
+               ) as mismatched,
+               count(*) filter (
+                   where jsonb_array_length(coalesce(payload->'links', '[]'::jsonb)) > 0
+               ) as with_links,
+               max(updated_at) as last_event
+        from gee38_catalog
+        where kind = 'event'
+        """
+    )
+    groups = await db().fetchval("select count(*) from gee38_catalog where kind = 'group'")
+    meta_rows = await db().fetch(
+        "select k, v from gee38_meta where k in ('meta_at', 'hot_at', 'full_at')"
+    )
+    stamps: dict[str, str | None] = {"meta_at": None, "hot_at": None, "full_at": None}
+    for row in meta_rows:
+        value = _gee_payload(row["v"])
+        at = str(value.get("at") or "").strip() if isinstance(value, dict) else ""
+        if at:
+            stamps[row["k"]] = at
+    newest = stats["last_event"]
+    newest_iso = newest.isoformat() if newest else None
+    reference = stamps["meta_at"] or stamps["hot_at"] or stamps["full_at"] or newest_iso
+    age_seconds = None
+    if reference:
+        try:
+            when = datetime.fromisoformat(reference.replace("Z", "+00:00"))
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=timezone.utc)
+            age_seconds = max(0, int((datetime.now(timezone.utc) - when).total_seconds()))
+        except ValueError:
+            age_seconds = None
+    tolerance = 15 * 60
+    mismatched = int(stats["mismatched"] or 0)
+    fresh = age_seconds is not None and age_seconds <= tolerance
+    return {
+        # `mismatched` es informativo del payload crudo: la API completa las filas
+        # al servir. Lo que no puede pasar es que `events.txt` deje de refrescarse.
+        "ok": fresh and int(stats["with_names"] or 0) > 0,
+        "events": int(stats["total"] or 0),
+        "withNames": int(stats["with_names"] or 0),
+        "withLinks": int(stats["with_links"] or 0),
+        "rawMismatched": mismatched,
+        "groups": int(groups or 0),
+        "metaAt": stamps["meta_at"],
+        "hotAt": stamps["hot_at"],
+        "fullAt": stamps["full_at"],
+        "ageSeconds": age_seconds,
+        "toleranceSeconds": tolerance,
+    }
 
 
 @app.post("/v1/gee38/feedback")
@@ -1745,6 +1966,62 @@ GEE_TEAM_ALIASES = {
     "tigres": {"uanl"},
     "mexico": {"mex"},
     "mex": {"mexico"},
+    "pumas": {"unam"},
+    "unam": {"pumas"},
+    "juarez": {"bravos"},
+    "bravos": {"juarez"},
+    # Nombres que el CMS y la agenda escriben distinto. La lista es corta y
+    # deliberada: el parecido por prefijo cubre el resto sin fusionar equipos
+    # distintos («Manchester United» ≠ «Manchester City»).
+    "lyon": {"lyonnais"},
+    "lyonnais": {"lyon"},
+    "inter": {"internazionale", "internacional"},
+    "internazionale": {"inter", "milan"},
+    "internacional": {"inter"},
+    "milan": {"milano"},
+    "milano": {"milan"},
+    "psg": {"paris", "saint", "germain"},
+    "paris": {"psg"},
+    "saint": {"psg"},
+    "germain": {"psg"},
+    "munich": {"munchen"},
+    "munchen": {"munich"},
+    "cologne": {"koln"},
+    "koln": {"cologne"},
+    "nottm": {"nottingham"},
+    "nottingham": {"nottm"},
+    "wed": {"wednesday"},
+    "wednesday": {"wed"},
+    "wolves": {"wolverhampton", "wanderers"},
+    "wolverhampton": {"wolves"},
+    "spurs": {"tottenham", "hotspur"},
+    "tottenham": {"spurs"},
+    "hotspur": {"spurs"},
+    "gladbach": {"monchengladbach"},
+    "monchengladbach": {"gladbach"},
+    "bsc": {"berlin"},
+    "berlin": {"bsc"},
+    "hamburger": {"hamburg"},
+    "hamburg": {"hamburger"},
+    "rennes": {"rennais"},
+    "rennais": {"rennes"},
+    "brest": {"brestois"},
+    "brestois": {"brest"},
+    "cp": {"lisbon", "lisboa"},
+    "lisbon": {"cp", "lisboa"},
+    "lisboa": {"cp", "lisbon"},
+    "depor": {"deportivo"},
+    "deportivo": {"depor"},
+}
+
+# Nombres completos que el CMS escribe distinto y que no se pueden resolver
+# solo con tokens (si «racing» se aliasara a «santander», Racing Club de
+# Argentina se confundiría con Racing de Santander).
+GEE_TEAM_PHRASES = {
+    "real racing club": "racing santander",
+    "real racing club de santander": "racing santander",
+    "racing de santander": "racing santander",
+    "real racing club santander": "racing santander",
 }
 
 
@@ -1752,9 +2029,12 @@ def _gee_tokens(text: str) -> set[str]:
     """Tokens significativos de un nombre de equipo (corta < 4 salvo los clásicos)."""
     out: set[str] = set()
     for token in _fold(text).split():
-        if token in GEE_TEAM_STOP:
+        if token in GEE_TEAM_STOP or token.isdigit():
             continue
-        if len(token) >= 4 or token in ("psg", "leon", "roma", "ajax", "boca", "cruz"):
+        if len(token) >= 4 or token in (
+            "psg", "rb", "vfb", "vfl", "tsg", "bsc", "cp", "st", "fc",
+            "leon", "roma", "ajax", "boca", "cruz",
+        ):
             out.add(token)
     return out
 
@@ -1764,6 +2044,93 @@ def _gee_expand(tokens: set[str]) -> set[str]:
     for token in tokens:
         out |= GEE_TEAM_ALIASES.get(token, set())
     return out
+
+
+def _gee_common_prefix(a: str, b: str) -> int:
+    size = 0
+    for left, right in zip(a, b):
+        if left != right:
+            break
+        size += 1
+    return size
+
+
+def _gee_team_similarity(left, right) -> float:
+    """Parecido entre dos nombres de equipo, de 0 a 1.
+
+    Acepta el nombre o el conjunto de tokens ya expandido (`_gee_match_entry`
+    precalcula los de la agenda). Reglas, en orden:
+    1. Mismos tokens (o uno contenido en el otro) → 0.95. Así «AC Milan» = «Milan»
+       y «Brighton & Hove Albion» = «Brighton», pero «Manchester United» ≠
+       «Manchester City» (comparten ciudad, no el equipo).
+    2. Prefijo largo («Lyon» / «Olympique Lyonnais», «Inter» / «Internazionale»).
+    3. Parecido global como último recurso, siempre por debajo del umbral.
+    """
+    if isinstance(left, str):
+        left = GEE_TEAM_PHRASES.get(_fold(left), left)
+    if isinstance(right, str):
+        right = GEE_TEAM_PHRASES.get(_fold(right), right)
+    left_tokens = _gee_expand(left if isinstance(left, set) else _gee_tokens(left))
+    right_tokens = _gee_expand(right if isinstance(right, set) else _gee_tokens(right))
+    if not left_tokens or not right_tokens:
+        return 0.0
+    if left_tokens == right_tokens:
+        return 1.0
+    shared = left_tokens & right_tokens
+    # «Racing Club» (Argentina) y «Racing Santander» comparten «racing», pero
+    # son equipos distintos. Santander solo aparece en el nombre español.
+    if "racing" in shared and ("santander" in left_tokens) != ("santander" in right_tokens):
+        return 0.0
+    if shared:
+        if left_tokens <= right_tokens or right_tokens <= left_tokens:
+            return 0.95
+        dice = 2.0 * len(shared) / (len(left_tokens) + len(right_tokens))
+        # Un solo token compartido (la ciudad) no basta para el mismo equipo.
+        return min(0.9, dice)
+    prefix = 0.0
+    for a in left_tokens:
+        for b in right_tokens:
+            if len(a) < 4 or len(b) < 4:
+                continue
+            size = _gee_common_prefix(a, b)
+            if size >= 4:
+                prefix = max(prefix, min(0.9, 0.55 + size * 0.05))
+    if prefix:
+        return prefix
+    ratio = difflib.SequenceMatcher(
+        None, " ".join(sorted(left_tokens)), " ".join(sorted(right_tokens))
+    ).ratio()
+    return min(0.55, ratio * 0.7)
+
+
+def _gee_team_pair_similarity(
+    team_a: str, team_b: str, home: str, away: str
+) -> float:
+    """Parecido del cruce completo, aceptando el orden invertido del CMS."""
+    direct = min(_gee_team_similarity(team_a, home), _gee_team_similarity(team_b, away))
+    reverse = min(_gee_team_similarity(team_a, away), _gee_team_similarity(team_b, home))
+    return max(direct, reverse)
+
+
+def _gee_event_visible(event: dict) -> bool:
+    """La app original descarta `visible=false`; Vision+ también debe hacerlo."""
+    return event.get("visible") is not False
+
+
+def _gee_event_has_sources(event: dict) -> bool:
+    """¿El evento trae algo que mostrar? (nombres declarados o direcciones)."""
+    if _gee_link_names(event):
+        return True
+    for link in event.get("links") or []:
+        if not isinstance(link, dict):
+            continue
+        if (
+            _gee_link_url(link)
+            or str(link.get("link") or "").strip()
+            or str(link.get("token_api") or "").strip()
+        ):
+            return True
+    return False
 
 
 def _gee_dt(iso: str | None) -> datetime | None:
@@ -1804,11 +2171,27 @@ def _gee_match_entry(match: dict) -> tuple[dict, set[str], set[str], datetime | 
     )
 
 
+def _gee_gender_key(text: str) -> str:
+    """«w» o «m» para separar los buckets de enlaces por competición/género."""
+    return "w" if _gee_is_women(text) else "m"
+
+
+def _gee_is_women(text: str) -> bool:
+    """¿La competición es femenil? Evita cruzar Liga MX Femenil con Liga MX."""
+    folded = _fold(text or "")
+    return "women" in folded or "femen" in folded
+
+
 def _gee_find_match(event: dict, entries: list[tuple]) -> dict | None:
     """El partido de la agenda que corresponde al evento (equipos + horario).
 
-    Fuerte = ambos equipos caben en el texto del evento; débil = al menos un
-    token por equipo; el horario (36 h de margen) desempata."""
+    El CMS y ESPN escriben los equipos distinto («Olympique Lyonnais» / «Lyon»,
+    «Inter» / «Internazionale», «AC Milan» / «Milan»). Comparar solo tokens
+    exactos dejaba la tarjeta de ESPN SIN la lista de canales mientras el evento
+    suelto del CMS sí la tenía (dos tarjetas del mismo partido). Aquí manda el
+    parecido de los DOS equipos, con el horario (36 h) como desempate; el deporte
+    sigue siendo un candado duro.
+    """
     name = event.get("event") or ""
     team_a = (event.get("team_a") or "").strip()
     team_b = (event.get("team_b") or "").strip()
@@ -1816,25 +2199,39 @@ def _gee_find_match(event: dict, entries: list[tuple]) -> dict | None:
         return None
     if _fold(team_a) == _fold(name) or _fold(team_b) == _fold(name):
         return None  # el CMS repite la liga: no hay equipos reales que cruzar
-    hay = _gee_expand(_gee_tokens(f"{name} {team_a} {team_b}"))
     event_dt = _gee_event_dt(event)
+    wanted = _gee_sport_for_category(event.get("category") or "")
+    league_name = _gee_norm_league(name)
     best: dict | None = None
     best_score = float("-inf")
     for match, home, away, match_dt in entries:
         if not home or not away:
             continue
-        strong = home <= hay and away <= hay
-        shared = len(home & hay) + len(away & hay)
-        if not strong and shared < 2:
+        if wanted and _gee_sport_of_league_id((match.get("league") or {}).get("id") or "") != wanted:
+            continue
+        teams = _gee_team_pair_similarity(team_a, team_b, home, away)
+        if teams < 0.6:
             continue
         dist_min = None
         if event_dt and match_dt:
             dist_min = abs((event_dt - match_dt).total_seconds()) / 60.0
             if dist_min > 36 * 60:
                 continue
-        score = (1000.0 if strong else 0.0) + shared * 10.0
+        # La liga desempata dos partidos del mismo deporte a la misma hora.
+        match_league = _gee_norm_league((match.get("league") or {}).get("name") or "")
+        # Un Santos-Necaxa femenil no puede cruzar al Santos-Necaxa varonil: los
+        # equipos y la fecha coinciden, pero es OTRO partido (y sus enlaces son otros).
+        if _gee_is_women(name) != _gee_is_women(match_league):
+            continue
+        league_bonus = 0.0
+        if league_name and match_league:
+            if league_name == match_league:
+                league_bonus = 30.0
+            elif league_name in match_league or match_league in league_name:
+                league_bonus = 15.0
+        score = teams * 1000.0 + league_bonus
         if dist_min is not None:
-            score -= min(dist_min, 600.0) / 10.0
+            score -= min(dist_min, 600.0) / 6.0
         if score > best_score:
             best_score = score
             best = match
@@ -1856,6 +2253,7 @@ def _gee_apply_match(event: dict, match: dict) -> dict:
     }
     event["league_label"] = league.get("name") or ""
     event["league_logo"] = league.get("logo") or ""
+    event["league_id"] = league.get("id") or event.get("league_id") or ""
     event["home_name"] = home.get("name") or event.get("team_a") or ""
     event["away_name"] = away.get("name") or event.get("team_b") or ""
     event["home_logo"] = home.get("logo") or event.get("flag_a") or ""
@@ -1870,8 +2268,13 @@ def _gee_apply_match(event: dict, match: dict) -> dict:
 
 
 def _gee_enrich_event(event: dict, entries: list[tuple]) -> dict:
-    """Adjunta al evento el marcador/logos/estado del partido que le corresponde."""
-    if (event.get("category") or "").strip().lower() != "football":
+    """Adjunta al evento el marcador/logos/estado del partido que le corresponde.
+
+    Sirve para fútbol y para los deportes de equipo (NBA, NFL, MLB, NHL): cada
+    evento solo se cruza con partidos de SU deporte. Los deportes sin agenda de
+    equipos (F1, por ejemplo) pasan intactos.
+    """
+    if not _gee_sport_for_category(event.get("category") or ""):
         return event
     match = _gee_find_match(event, entries)
     if not match:
@@ -1991,10 +2394,83 @@ GEE_LEAGUE_NAMES = {
     "primeira liga", "liga portugal", "fifa world cup", "copa mundial",
 }
 
-# Los deportes que sí se muestran (los demás no se sirven).
-GEE_ALLOWED_SPORTS = {
-    "football", "basketball", "american football", "motorsports", "baseball", "tennis",
+# Tier 1 = portada/«Principal». Se compara el nombre normalizado completo, nunca
+# por subcadena: «LaLiga 2» no es LaLiga ni «Russian Premier League» es Premier.
+GEE_MAIN_LEAGUE_NAMES = {
+    "liga mx", "liga de expansion mx",
+    "uefa champions league", "uefa europa league",
+    "laliga", "premier league", "serie a", "bundesliga", "ligue 1",
+    "copa libertadores", "copa sudamericana",
+    "liga profesional argentina", "liga profesional de futbol",
+    "brasileirao", "campeonato brasileiro serie a",
+    "mls", "major league soccer", "primeira liga", "liga portugal",
+    "liga portugal betclic", "eredivisie", "vriendenloterij eredivisie",
+    "copa del mundo", "fifa world cup", "copa mundial",
+    "eurocopa", "uefa euro", "copa america",
+    "concacaf nations league", "copa oro", "concacaf gold cup",
+    "nba", "nfl", "mlb", "nhl", "formula 1", "formula one", "f1",
+    "motogp", "nascar", "ufc", "mma", "mixed martial arts", "boxeo", "boxing",
 }
+
+# Señales de una categoría inferior. Se evalúan después de la lista principal,
+# porque «Liga de Expansión MX» es principal aunque contenga «expansion».
+GEE_SECONDARY_MARKERS = (
+    " 2", " ii", " b", "women", "femen", "femenil", "u17", "u18", "u19",
+    "u20", "u21", "u23", "youth", "juvenil", "reserve", "reservas",
+    "championship", "segunda", "primera b", "serie b", "2 bundesliga",
+    "ligue 2", "laliga 2", "liga 2", "liga 1 te apuesto", "primera a",
+    "primera division", "segunda division", "a-league", "k league",
+    "j1 league", "j2 league", "allsvenskan", "super lig", "süper lig",
+    "scottish", "russian premier", "kenya premier", "indian super",
+    "canadian premier", "nwsl", "wsl", "liga f", "liga mx femenil",
+)
+
+# Los deportes que sí se muestran (los demás no se sirven). Solo aparecen si
+# GeeSports publica eventos de ese deporte con sus fuentes; no se inventan.
+GEE_ALLOWED_SPORTS = {
+    "football", "basketball", "american football", "motorsports", "baseball", "hockey",
+    "tennis", "fighting", "boxing", "mma", "pelea", "peleas", "boxeo",
+    "motorsport",
+}
+
+# Ligas de equipo de otros deportes que el worker sincroniza (`deporte/slug`).
+GEE_MULTISPORT_LEAGUE_IDS = {
+    "basketball/nba", "basketball/euroleague",
+    "football/nfl", "baseball/mlb", "hockey/nhl",
+}
+
+# Categoría de GeeSports → deporte de ESPN (para no cruzar un partido de NBA
+# con uno de Liga MX aunque compartan un nombre de equipo).
+GEE_SPORT_FOR_CATEGORY = {
+    "football": "soccer",
+    "basketball": "basketball",
+    "american football": "football",
+    "baseball": "baseball",
+    "hockey": "hockey",
+    "tennis": "tennis",
+}
+
+GEE_CATEGORY_FOR_SPORT = {
+    "soccer": "Football",
+    "basketball": "Basketball",
+    "football": "American Football",
+    "baseball": "Baseball",
+    "hockey": "Hockey",
+    "tennis": "Tennis",
+}
+
+
+def _gee_sport_of_league_id(league_id: str) -> str:
+    value = (league_id or "").strip().lower()
+    return value.split("/", 1)[0] if "/" in value else "soccer"
+
+
+def _gee_sport_for_category(category: str) -> str:
+    return GEE_SPORT_FOR_CATEGORY.get((category or "").strip().lower(), "")
+
+
+def _gee_category_for_sport(sport: str) -> str:
+    return GEE_CATEGORY_FOR_SPORT.get((sport or "").strip().lower(), "Football")
 
 
 def _gee_norm_league(text: str) -> str:
@@ -2007,12 +2483,213 @@ def _gee_norm_league(text: str) -> str:
 
 def _gee_league_allowed_match(match: dict) -> bool:
     league = match.get("league") or {}
-    return (league.get("id") or "") in GEE_LEAGUE_IDS
+    league_id = (league.get("id") or "") or ""
+    if "/" in league_id:
+        return league_id in GEE_MULTISPORT_LEAGUE_IDS
+    return league_id in GEE_LEAGUE_IDS
 
 
 def _gee_league_allowed_event(event: dict) -> bool:
     label = event.get("league_label") or event.get("event") or ""
     return _gee_norm_league(label) in GEE_LEAGUE_NAMES
+
+
+def _gee_is_secondary_league(label: str) -> bool:
+    folded = f" {_gee_norm_league(label)} "
+    return any(f" {_gee_norm_league(marker)} " in folded for marker in GEE_SECONDARY_MARKERS)
+
+
+def _gee_tier_for(league_id: str, league_label: str, category: str) -> int:
+    """1 = principal, 2 = secundaria, 3 = nicho.
+
+    Manda el `league_id` de la agenda; si no hay, se compara el nombre normalizado
+    completo. Un deporte fuera de la lista principal siempre es Tier 3.
+    """
+    sport = (category or "").strip().lower()
+    if sport not in GEE_ALLOWED_SPORTS:
+        return 3
+    league_id = (league_id or "").strip()
+    if league_id in GEE_LEAGUE_IDS or league_id in GEE_MULTISPORT_LEAGUE_IDS:
+        return 1
+    label = _gee_norm_league(league_label)
+    if not label:
+        return 2
+    if label in GEE_MAIN_LEAGUE_NAMES:
+        return 1
+    if _gee_is_secondary_league(label):
+        return 2
+    return 2
+
+
+def _gee_mark_tier(card: dict) -> dict:
+    league = card.get("league") if isinstance(card.get("league"), dict) else {}
+    tier = _gee_tier_for(
+        str(card.get("league_id") or league.get("id") or ""),
+        str(card.get("league_label") or card.get("event") or ""),
+        str(card.get("category") or ""),
+    )
+    card["tier"] = tier
+    card["featured"] = tier == 1
+    return card
+
+
+def _gee_link_names(event: dict) -> list[str]:
+    """Los nombres que la fuente declara para el evento, en su orden y sin vacíos."""
+    names: list[str] = []
+    for raw in event.get("link_names") or []:
+        clean = str(raw or "").strip()
+        if clean:
+            names.append(clean)
+    return names
+
+
+def _gee_link_url(link: dict) -> str:
+    return str(link.get("url") or link.get("link") or "").strip()
+
+
+def _gee_merge_declared(existing: list[str], incoming: list[str]) -> list[str]:
+    """Une nombres declarados conservando las repeticiones del MISMO evento.
+
+    La app original puede listar dos veces el mismo nombre («ESPN HD» en dos
+    ranuras). Vision+ no debe colapsarlas: si una entrada hermana repite el
+    nombre, se conserva el máximo de apariciones, no una por nombre.
+    """
+    result = list(existing)
+    have: dict[str, int] = {}
+    for name in result:
+        have[name] = have.get(name, 0) + 1
+    want: dict[str, int] = {}
+    for name in incoming:
+        want[name] = want.get(name, 0) + 1
+    for name in incoming:
+        while have.get(name, 0) < want.get(name, 0):
+            result.append(name)
+            have[name] = have.get(name, 0) + 1
+    return result
+
+
+def _gee_link_key(link: dict) -> tuple[str, str]:
+    """Identidad de una fila: nombre + dirección (o el token de un `embed`).
+
+    No se deduplica solo por URL: la app original puede declarar dos nombres
+    distintos («FASTER QUALITY» y «XTREME +FHD») apuntando al mismo stream y
+    ambos son filas de la lista. Solo se colapsa la MISMA fila repetida.
+    """
+    url = _gee_link_url(link)
+    token = str(link.get("token_api") or "").strip()
+    return _fold(str(link.get("name") or "")), (url or ("embed:" + token if token else ""))
+
+
+def _gee_assign_link_slots(names: list[str], links: list[dict]) -> None:
+    """Coloca cada enlace en su ranura de `link_names` por NOMBRE actual.
+
+    La app original muestra `link_names` y al tocar una fila resuelve
+    `pro[indice]`. Cuando el CMS añade/reordena nombres, los slots guardados
+    quedan corridos: manda el nombre coincidente y solo los enlaces sin nombre
+    conocido conservan su slot. Así una lista nueva de 12 nombres no se recorta
+    a los 8 de una copia vieja.
+    """
+    positions: dict[str, list[int]] = {}
+    for index, name in enumerate(names):
+        positions.setdefault(_fold(name), []).append(index)
+    used: set[int] = set()
+    matched: set[int] = set()
+    for link in links:
+        for index in positions.get(_fold(str(link.get("name") or "")), []):
+            if index not in used:
+                link["slot"] = index
+                used.add(index)
+                matched.add(id(link))
+                break
+    for link in links:
+        if id(link) in matched:
+            continue
+        slot = link.get("slot")
+        if isinstance(slot, int) and 0 <= slot < len(names) and slot not in used:
+            used.add(slot)
+        else:
+            link.pop("slot", None)
+
+
+def _gee_pending_link(name: str, slot: int) -> dict:
+    """Una ranura declarada por la fuente que aún no publica su dirección."""
+    return {
+        "name": name,
+        "link": "",
+        "url": "",
+        "headers": {},
+        "scheme": 0,
+        "drm": "",
+        "type": "hls",
+        "alive": None,
+        "checked_at": None,
+        "pending": True,
+        "slot": slot,
+    }
+
+
+def _gee_complete_event_links(event: dict) -> dict:
+    """Deja la lista COMPLETA, como la app original: una fila por `link_names`.
+
+    El CMS publica los nombres del evento aparte del archivo `pro` y ambos pueden
+    no coincidir: un `pro` parcial (o con los nombres de otro partido) hacía que
+    Vision+ enseñara menos fuentes que la app original. Aquí se cruzan por ranura
+    (la misma que usa su reproductor) y los nombres sin dirección se entregan como
+    ranuras pendientes, visibles pero sin reproducir hasta que la fuente las sirva.
+    """
+    names = _gee_link_names(event)
+    links = [dict(link) for link in event.get("links") or [] if isinstance(link, dict)]
+    if not names:
+        event["links"] = links
+        event["link_names"] = [
+            str(link.get("name") or "").strip() for link in links if str(link.get("name") or "").strip()
+        ]
+        event["total"] = len(links)
+        event["alive"] = sum(1 for link in links if link.get("alive") is True)
+        return event
+
+    _gee_assign_link_slots(names, links)
+    by_slot: dict[int, dict] = {}
+
+    def _rank(link: dict, slot: int) -> tuple:
+        # Primero la identidad (nombre declarado para la ranura); después la que
+        # responde. El `pro` a veces trae el nombre de otro partido o los índices
+        # cambiaron, y no queremos pegar la URL de un canal a otro nombre.
+        name_ok = 0 if _fold(str(link.get("name") or "")) == _fold(names[slot]) else 1
+        return (name_ok, _gee_link_rank(link))
+
+    for link in links:
+        url = _gee_link_url(link)
+        if not url and not str(link.get("token_api") or "").strip():
+            continue
+        slot = link.get("slot")
+        if not isinstance(slot, int) or not (0 <= slot < len(names)):
+            continue  # fuera de los nombres declarados: la app original no lo enseña
+        previous = by_slot.get(slot)
+        if previous is None:
+            by_slot[slot] = link
+        elif _rank(link, slot) < _rank(previous, slot):
+            # Misma fuente/ranura: se queda la mejor copia, no se duplica la fila.
+            by_slot[slot] = link
+
+    out: list[dict] = []
+    for index, name in enumerate(names):
+        link = by_slot.pop(index, None)
+        if link is None:
+            out.append(_gee_pending_link(name, index))
+            continue
+        filled = dict(link)
+        filled["name"] = name
+        filled["slot"] = index
+        filled.pop("pending", None)
+        if not _gee_link_url(filled) and str(filled.get("token_api") or "").strip():
+            filled["resolvable"] = True
+        out.append(filled)
+    event["links"] = out
+    event["link_names"] = names
+    event["total"] = len(out)
+    event["alive"] = sum(1 for link in out if link.get("alive") is True)
+    return event
 
 
 def _gee_match_card(match: dict, links: list[dict], declared: list[str] | None = None) -> dict:
@@ -2029,39 +2706,38 @@ def _gee_match_card(match: dict, links: list[dict], declared: list[str] | None =
     solas con el canal 100 % confirmado del catálogo de la casa (respaldo automático).
     """
     links = _gee_broadcast_filter(links, match)
-    served = {str(link.get("name") or "").strip().lower() for link in links}
-    for name in declared or []:
-        clean = str(name or "").strip()
-        if not clean or clean.lower() in served:
-            continue
-        served.add(clean.lower())
-        links.append({
-            "name": clean,
-            "link": "",
-            "url": "",
-            "headers": {},
-            "scheme": 0,
-            "drm": "",
-            "type": "hls",
-            "alive": None,
-            "checked_at": None,
-            "pending": True,  # la fuente aún no publica su dirección: se resuelve en la app
-        })
+    names = [str(name or "").strip() for name in (declared or []) if str(name or "").strip()]
+    # Los enlaces de entradas hermanas del mismo cruce también entran: si traen un
+    # nombre que el evento actual no declara, se añade al final (nunca se pierde una
+    # fuente viva por una copia del CMS más pobre).
+    known = {_fold(name) for name in names}
+    for link in links:
+        clean = str(link.get("name") or "").strip()
+        if clean and _fold(clean) not in known:
+            names.append(clean)
+            known.add(_fold(clean))
+    if not names:
+        names = [
+            str(link.get("name") or "").strip()
+            for link in links
+            if str(link.get("name") or "").strip()
+        ]
     home = match.get("home") or {}
     away = match.get("away") or {}
     league = match.get("league") or {}
+    sport = match.get("sport") or _gee_sport_of_league_id(league.get("id") or "")
+    category = _gee_category_for_sport(sport)
     kickoff = _gee_dt(match.get("kickoff"))
     status = (match.get("status") or "").strip()
-    alive = sum(1 for link in links if link.get("alive"))
     guide: list[str] = []
     for name in list(match.get("broadcasts") or []) + list(match.get("channels") or []):
         clean = (name or "").strip()
         if clean and clean not in guide:
             guide.append(clean)
-    return {
+    card = {
         "id": "espn:" + str(match.get("id") or ""),
-        "category": "Football",
-        "event": (league.get("name") or "").strip() or "Fútbol",
+        "category": category,
+        "event": (league.get("name") or "").strip() or ("Fútbol" if sport == "soccer" else category),
         "logo": league.get("logo") or "",
         "team_a": home.get("name") or "",
         "team_b": away.get("name") or "",
@@ -2070,9 +2746,9 @@ def _gee_match_card(match: dict, links: list[dict], declared: list[str] | None =
         "time": kickoff.strftime("%H:%M:%S") if kickoff else "",
         "visible": True,
         "priority": 0,
-        "link_names": [link.get("name") or "" for link in links],
+        "link_names": names,
         "links": links,
-        "alive": alive,
+        "alive": sum(1 for link in links if link.get("alive")),
         "total": len(links),
         "home_name": home.get("name") or "",
         "away_name": away.get("name") or "",
@@ -2081,6 +2757,11 @@ def _gee_match_card(match: dict, links: list[dict], declared: list[str] | None =
         "league_label": league.get("name") or "",
         "league_logo": league.get("logo") or "",
         "league_id": league.get("id") or "",
+        "tier": _gee_tier_for(
+            str(league.get("id") or ""),
+            str(league.get("name") or ""),
+            category,
+        ),
         "broadcasts": guide[:8],
         "guide": guide[:8],
         "score": {
@@ -2091,6 +2772,179 @@ def _gee_match_card(match: dict, links: list[dict], declared: list[str] | None =
             "live": status == "in",
         },
     }
+    return _gee_complete_event_links(card)
+
+
+def _gee_sport_family(category: str) -> str:
+    """Familia de deporte para fusionar etiquetas del CMS que significan lo mismo.
+
+    El CMS publica la misma pelea como «Boxing» y «Mixed Martial Arts»; la app
+    original la enseña una vez. No se cruzan fútbol con fútbol americano.
+    """
+    value = (category or "").strip().lower()
+    if value in ("boxing", "mma", "mixed martial arts", "fighting", "pelea", "peleas", "boxeo"):
+        return "fighting"
+    if value in ("motorsports", "motorsport"):
+        return "motorsports"
+    return value
+
+
+def _gee_time_minutes(event: dict) -> int | None:
+    """Minutos desde medianoche de `time` (HH:MM:SS); None si no se puede leer."""
+    parts = str(event.get("time") or "").strip().split(":")
+    if len(parts) < 2:
+        return None
+    try:
+        return int(parts[0]) * 60 + int(parts[1])
+    except ValueError:
+        return None
+
+
+def _gee_same_fixture(left: dict, right: dict) -> bool:
+    """¿Dos tarjetas son el mismo partido aunque los nombres no coincidan?
+
+    Se exige la misma familia de deporte y el mismo día (ya en hora de México) y
+    que los DOS equipos se parezcan. No fusiona «Manchester United» con
+    «Manchester City» ni dos partidos distintos de la misma liga a la misma hora.
+    En deportes con doble cartelera (MLB/NBA/NHL) dos juegos de los mismos equipos
+    el mismo día se separan por la hora; en pelea se tolera el desfase del CMS.
+    """
+    family = _gee_sport_family(left.get("category") or "")
+    if family != _gee_sport_family(right.get("category") or ""):
+        return False
+    if (left.get("date_iso") or "") != (right.get("date_iso") or ""):
+        return False
+    left_a, left_b = left.get("team_a") or "", left.get("team_b") or ""
+    right_a, right_b = right.get("team_a") or "", right.get("team_b") or ""
+    if not left_a or not left_b or not right_a or not right_b:
+        return False
+    if _gee_team_pair_similarity(left_a, left_b, right_a, right_b) < 0.75:
+        return False
+    left_min = _gee_time_minutes(left)
+    right_min = _gee_time_minutes(right)
+    if left_min is None or right_min is None:
+        return True
+    gap = abs(left_min - right_min)
+    # Dos juegos de los mismos equipos el mismo día (doble cartelera) suelen
+    # estar a 3+ horas; una pelea duplicada por el CMS puede diferir ~2.5 h.
+    limit = 120 if family in ("baseball", "basketball", "hockey", "american football") else 300
+    return gap <= limit
+
+
+def _gee_merge_links(primary: list[dict], secondary: list[dict]) -> list[dict]:
+    """Une dos listas de enlaces sin perder filas declaradas ni duplicar la misma."""
+    out: list[dict] = []
+    index: dict[tuple[str, str], int] = {}
+    for link in list(primary) + list(secondary):
+        if not isinstance(link, dict):
+            continue
+        key = _gee_link_key(link)
+        if not key[0] and not key[1]:
+            continue
+        previous = index.get(key)
+        if previous is None:
+            index[key] = len(out)
+            out.append(dict(link))
+            continue
+        current = out[previous]
+        # Misma fila: se queda la copia con dirección y la que responde.
+        if not _gee_link_url(current) and _gee_link_url(link):
+            out[previous] = dict(link)
+        elif current.get("alive") is not True and link.get("alive") is True:
+            out[previous] = dict(link)
+    return out
+
+
+def _gee_merge_fixture_cards(cards: list[dict]) -> list[dict]:
+    """Una sola tarjeta por partido, con la lista MÁS COMPLETA de la fuente.
+
+    El CMS puede publicar el mismo partido con nombres distintos a los de ESPN
+    («Olympique Lyonnais» vs «Lyon») y el cruce no siempre los une. Sin esto, la
+    app enseñaba dos tarjetas: una con la lista y otra sin ella. La tarjeta de la
+    agenda aporta marcador/escudos; los nombres y enlaces se toman de la copia
+    más rica y se fusionan las demás.
+    """
+    # Solo se comparan tarjetas del mismo deporte y día: un catálogo completo
+    # (sin filtro de fecha) no paga un O(n²) contra todos los eventos.
+    buckets: dict[tuple[str, str], list[dict]] = {}
+    for card in cards:
+        key = (
+            _gee_sport_family(card.get("category") or ""),
+            (card.get("date_iso") or "").strip(),
+        )
+        buckets.setdefault(key, []).append(card)
+
+    merged_out: list[dict] = []
+    for bucket in buckets.values():
+        groups: list[list[dict]] = []
+        for card in bucket:
+            for group in groups:
+                if any(_gee_same_fixture(card, other) for other in group):
+                    group.append(card)
+                    break
+            else:
+                groups.append([card])
+        merged_out.extend(_gee_merge_groups(groups))
+    return merged_out
+
+
+def _gee_merge_groups(groups: list[list[dict]]) -> list[dict]:
+    merged_out: list[dict] = []
+    for group in groups:
+        if len(group) == 1:
+            merged_out.append(group[0])
+            continue
+        agenda = next(
+            (card for card in group if str(card.get("id") or "").startswith("espn:")),
+            None,
+        )
+        # La tarjeta del CMS con `links_ref` es la fuente AUTORIZADA del partido.
+        # La de agenda (ESPN) puede traer enlaces heredados de un hermano del mismo
+        # cruce pero de OTRA competición (Santos-Necaxa femenil): si hay CMS con
+        # enlaces, sus nombres y URLs mandan y la agenda no contamina la lista.
+        cms_with_links = [
+            card for card in group
+            if not str(card.get("id") or "").startswith("espn:")
+            and str(card.get("links_ref") or "").strip()
+            and any(
+                isinstance(link, dict) and (
+                    _gee_link_url(link)
+                    or str(link.get("link") or "").strip()
+                    or str(link.get("token_api") or "").strip()
+                )
+                for link in (card.get("links") or [])
+            )
+        ]
+        base = agenda or max(
+            group,
+            key=lambda card: (
+                len(card.get("link_names") or []),
+                len(card.get("links") or []),
+            ),
+        )
+        names_base = max(
+            cms_with_links or group,
+            key=lambda card: (
+                len(card.get("link_names") or []),
+                len(card.get("links") or []),
+            ),
+        )
+        names = [str(n).strip() for n in (names_base.get("link_names") or []) if str(n).strip()]
+        links: list[dict] = []
+        for card in group:
+            if cms_with_links and not str(card.get("links_ref") or "").strip():
+                continue
+            links = _gee_merge_links(links, list(card.get("links") or []))
+            incoming = [str(n).strip() for n in (card.get("link_names") or []) if str(n).strip()]
+            names = _gee_merge_declared(names, incoming)
+        merged = dict(base)
+        merged["link_names"] = names
+        merged["links"] = links
+        merged.pop("total", None)
+        merged.pop("alive", None)
+        _gee_complete_event_links(merged)
+        merged_out.append(merged)
+    return merged_out
 
 
 async def _gee_window_matches(events: list[dict]) -> list[tuple]:
@@ -2117,7 +2971,12 @@ async def _gee_window_matches(events: list[dict]) -> list[tuple]:
             lo,
             hi,
         )
-        return [_gee_match_entry(sport_match(record)) for record in rows]
+        out = []
+        for record in rows:
+            match = sport_match(record)
+            match["sport"] = _gee_sport_of_league_id((match.get("league") or {}).get("id") or "")
+            out.append(_gee_match_entry(match))
+        return out
     except Exception:  # noqa: BLE001 - sin agenda, los eventos salen sin marcador
         return []
 
@@ -2153,20 +3012,27 @@ def _epg_program(row) -> dict:
 
 
 def _epg_unique(rows) -> list:
-    """Quita filas repetidas cuando dos señales de la misma cadena comparten parrilla.
+    """Una sola parrilla por canal: quita duplicados y ventanas solapadas.
 
-    La ventana (inicio, fin) es la identidad real del programa: dos señales de la
-    misma cadena pueden titularlo distinto («Live: Fútbol…» vs «Monterrey vs.
-    Guadalajara») pero es el mismo bloque. Se conserva la primera.
+    Los feeds pueden traer dos copias desplazadas de la misma cadena (Sony) o
+    varias señales de la misma marca con la misma ventana. Antes se deduplicaba
+    solo la ventana exacta; las copias desplazadas quedaban y la app podía
+    mostrar el programa equivocado. Se ordena por inicio y se descarta cualquier
+    fila que empiece antes de que termine la anterior (la primera fuente manda).
     """
     seen: set[tuple] = set()
     out = []
+    last_end = None
     for row in rows:
         key = (row["start_time"], row["end_time"])
         if key in seen:
             continue
+        start = row["start_time"]
+        if last_end is not None and start < last_end:
+            continue
         seen.add(key)
         out.append(row)
+        last_end = row["end_time"]
     return out
 
 
@@ -3402,3 +4268,787 @@ async def sync_forget(
     sync_id = _sync_id_or_401(x_sync_code)
     await db().execute("delete from sync_items where sync_id = $1", sync_id)
     return {"ok": True}
+
+
+# ----- Vision+ Play: salas de trivia (árbitro en el VPS) -----
+# El estado de una sala vive en memoria (decenas de KB): si la API se reinicia,
+# la sala muere y la app lo dice. Solo el resultado final se guarda en Postgres.
+# La lógica pura está en `games.py`; el banco, en `sync/trivia_bank.py`.
+
+import games as vision_games  # noqa: E402  (import local para no ensuciar el bloque de arriba)
+import game_decks as vision_decks  # noqa: E402
+
+GAME_MAX_BODY = 64 * 1024
+GAME_MAX_ROOMS = 100
+GAME_JOIN_RATE = 10  # por IP y minuto
+GAME_ANSWER_RATE = 30  # por jugador y minuto
+
+_GAME_ROOMS: dict[str, vision_games.Room] = {}
+_GAME_JOIN_BUCKET: dict[str, list[float]] = {}
+_GAME_CREATE_BUCKET: dict[str, list[float]] = {}
+_GAME_ANSWER_BUCKET: dict[str, list[float]] = {}
+_GAME_REPORT_BUCKET: dict[str, list[float]] = {}
+
+
+def _game_int(value, default: int, low: int, high: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = default
+    return max(low, min(high, number))
+
+
+def _game_text(value, limit: int) -> str:
+    return str(value or "").strip().replace("\x00", "")[:limit]
+
+
+def _game_json(value):
+    """jsonb de asyncpg puede llegar como str; nunca dejamos pasar basura."""
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError):
+            return None
+    return value
+
+
+async def _game_body(request: Request) -> dict:
+    raw = await request.body()
+    if len(raw) > GAME_MAX_BODY:
+        raise HTTPException(status_code=413, detail="cuerpo demasiado grande")
+    try:
+        body = json.loads(raw.decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    return body
+
+
+def _game_code(raw) -> str:
+    code = vision_games.normalize_code(raw)
+    if not code:
+        raise HTTPException(status_code=400, detail="código de sala inválido")
+    return code
+
+
+def _game_group_id(raw) -> str:
+    """El `sync_id` del código de continuidad rota el banco por familia."""
+    clean = device_sync.normalize_code(raw)
+    return device_sync.code_id(clean) if clean else ""
+
+
+def _game_room(code: str) -> vision_games.Room:
+    room = _GAME_ROOMS.get(code)
+    if room is None or room.phase == "closed":
+        raise HTTPException(status_code=404, detail="la sala se cerró")
+    return room
+
+
+def _game_host(room: vision_games.Room, token: str | None) -> None:
+    if not room.host_ok(token):
+        raise HTTPException(status_code=403, detail="solo el anfitrión puede hacer eso")
+
+
+def _game_player(room: vision_games.Room, token: str | None) -> vision_games.Player:
+    player = room.player_by_token(token)
+    if player is None:
+        raise HTTPException(status_code=410, detail="token de jugador inválido")
+    return player
+
+
+def _game_snapshot(room: vision_games.Room, role: str, since: int, now: float,
+                   player_id: str | None = None, *, display_authorized: bool = False):
+    snap = room.snapshot(
+        role, since, now, player_id,
+        display_authorized=display_authorized,
+    )
+    if snap is None:
+        return Response(status_code=204)
+    return snap
+
+
+async def _game_questions(pack: str, rounds: int, group_id: str) -> list[dict]:
+    """Saca preguntas del banco, evitando las ya servidas a este grupo."""
+    wanted = max(1, min(rounds, vision_games.MAX_ROUNDS)) + 4
+    async with db().acquire() as conn:
+        rows = await conn.fetch(
+            """
+            select q.id, q.kind, q.payload, q.answer_key, q.difficulty, q.pack
+            from trivia_questions q
+            where ($1 = '' or $1 = 'general' or q.pack = $1)
+              and not exists (
+                  select 1 from trivia_served s
+                  where s.question_id = q.id and s.group_id = $2
+                    and s.served_at > now() - interval '90 days'
+              )
+            order by random()
+            limit $3
+            """,
+            pack, group_id, wanted,
+        )
+        if len(rows) < wanted:
+            fill = await conn.fetch(
+                """
+                select q.id, q.kind, q.payload, q.answer_key, q.difficulty, q.pack
+                from trivia_questions q
+                where ($1 = '' or $1 = 'general' or q.pack = $1)
+                order by coalesce(
+                    (select max(s.served_at) from trivia_served s
+                     where s.question_id = q.id and s.group_id = $2),
+                    to_timestamp(0)
+                ) asc, random()
+                limit $3
+                """,
+                pack, group_id, wanted - len(rows),
+            )
+            rows = list(rows) + list(fill)
+        selected: list[dict] = []
+        seen: set[str] = set()
+        for row in rows:
+            qid = str(row["id"])
+            if qid in seen:
+                continue
+            payload = _game_json(row["payload"])
+            if not isinstance(payload, dict):
+                continue
+            seen.add(qid)
+            selected.append({
+                "id": qid,
+                "kind": str(row["kind"] or ""),
+                "payload": payload,
+                "answer_key": str(row["answer_key"] or ""),
+                "difficulty": int(row["difficulty"] or 1),
+                "pack": str(row["pack"] or "general"),
+            })
+        if group_id and selected:
+            await conn.executemany(
+                """
+                insert into trivia_served (question_id, group_id, served_at)
+                values ($1, $2, now()) on conflict do nothing
+                """,
+                [(item["id"], group_id) for item in selected],
+            )
+    if not selected:
+        raise HTTPException(status_code=503, detail="no hay preguntas disponibles")
+    return selected
+
+
+async def _game_charada_deck(rounds: int, code: str) -> list[dict]:
+    """Mazo de Charadas: títulos con póster, populares y reconocibles."""
+    need = max(1, rounds) * (vision_games.CHARADA_MAX_PASSES + 1) + 6
+    async with db().acquire() as conn:
+        rows = await conn.fetch(
+            """
+            select t.id, t.title, t.year, t.poster_url, t.kind, t.genres
+            from titles t
+            where coalesce(t.poster_url, '') <> ''
+              and length(t.title) between 2 and 90
+              and t.title not ilike '%(trailer)%'
+              and (t.popularity > 0 or t.vote_count >= 50)
+            order by random()
+            limit $1
+            """,
+            need * 2,
+        )
+    deck = vision_games.build_charada_deck([dict(row) for row in rows], rounds, code)
+    if not deck:
+        raise HTTPException(status_code=503, detail="no hay cartas disponibles")
+    return deck
+
+
+async def _game_wager_rounds(rounds: int, code: str) -> list[dict]:
+    """Rondas de Apuesta a la pista: títulos con sinopsis, reparto y póster."""
+    want = max(1, rounds) * 3 + 24
+    async with db().acquire() as conn:
+        rows = await conn.fetch(
+            """
+            select t.id, t.title, t.year, t.kind, t.poster_url, t.synopsis,
+                   t.cast_list, t.director, t.genres, t.popularity, t.vote_count
+            from titles t
+            where coalesce(t.poster_url, '') <> ''
+              and length(t.synopsis) >= 60
+              and length(t.title) between 2 and 90
+              and t.title not ilike '%(trailer)%'
+              and (t.popularity > 0 or t.vote_count >= 50)
+            order by t.popularity desc nulls last, random()
+            limit $1
+            """,
+            want,
+        )
+    deck = vision_games.build_wager_rounds([dict(row) for row in rows], rounds, code)
+    if not deck:
+        raise HTTPException(status_code=503, detail="no hay pistas disponibles")
+    return deck
+
+
+def _game_party_deck(game: str, rounds: int, code: str) -> list[dict]:
+    """Mazos locales de los juegos de fiesta (sin DB, respuesta instantánea)."""
+    if game == "impostor":
+        return vision_decks.build_impostor_deck(rounds, code)
+    if game == "dibujo":
+        return vision_decks.build_drawing_deck(rounds, code)
+    if game == "subasta":
+        return vision_decks.build_auction_deck(rounds, code)
+    if game == "fibbage":
+        return vision_decks.build_fibbage_deck(rounds, code)
+    return []
+
+
+async def _persist_game_result(room: vision_games.Room) -> None:
+    if not room.started_at or not room.players:
+        return
+    try:
+        result = room.result()
+        ended = room.ended_at or time.time()
+        await db().execute(
+            """
+            insert into game_results (game, mode, pack, players, rounds, started_at, ended_at)
+            values ($1, $2, $3, $4::jsonb, $5,
+                    to_timestamp($6::double precision), to_timestamp($7::double precision))
+            """,
+            result.get("game", "trivia"), result["mode"], result["pack"],
+            json.dumps(result["players"], ensure_ascii=False),
+            result["rounds"], result["startedAt"] / 1000.0, ended,
+        )
+    except Exception:  # noqa: BLE001 - el resultado no puede tumbar la sala
+        log.exception("Play: no se pudo guardar el resultado de la sala")
+
+
+async def _games_sweep_loop() -> None:
+    """Cierra salas vencidas o inactivas cada minuto y guarda su resultado."""
+    while True:
+        await asyncio.sleep(60)
+        now = time.time()
+        for code, room in list(_GAME_ROOMS.items()):
+            try:
+                room.tick(now)
+                if room.phase == "closed":
+                    await _persist_game_result(room)
+                    _GAME_ROOMS.pop(code, None)
+            except Exception:  # noqa: BLE001
+                log.exception("Play: el barrendero falló con la sala %s", code)
+
+
+@app.post("/v1/game/rooms")
+async def game_create(
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+    x_sync_code: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    body = await _game_body(request)
+    ip = request.client.host if request.client else "?"
+    if not _diag_rate_ok(_GAME_CREATE_BUCKET, ip, time.time(), limit=GAME_JOIN_RATE, window=60):
+        raise HTTPException(status_code=429, detail="demasiadas salas; espera un momento")
+    if len(_GAME_ROOMS) >= GAME_MAX_ROOMS:
+        raise HTTPException(status_code=409, detail="hay demasiadas salas abiertas")
+
+    mode = _game_text(body.get("mode"), 12).lower() or "remote"
+    if mode not in vision_games.MODES:
+        raise HTTPException(status_code=400, detail="modo inválido")
+    game = _game_text(body.get("game"), 16).lower() or "trivia"
+    if game not in vision_games.GAMES:
+        raise HTTPException(status_code=400, detail="juego inválido")
+    default_rounds = vision_games.game_default_rounds(game)
+    rounds = _game_int(body.get("rounds"), default_rounds, 1, vision_games.MAX_ROUNDS)
+    question_seconds = _game_int(
+        body.get("questionSeconds"), vision_games.QUESTION_SECONDS,
+        vision_games.MIN_QUESTION_SECONDS, vision_games.MAX_QUESTION_SECONDS,
+    )
+    charada_seconds = _game_int(
+        body.get("charadaSeconds"), vision_games.CHARADA_SECONDS, 15, 120,
+    )
+    wager_seconds = _game_int(body.get("wagerSeconds"), vision_games.WAGER_SECONDS, 5, 30)
+    clue_seconds = _game_int(body.get("clueSeconds"), vision_games.CLUE_SECONDS, 5, 60)
+    max_players = _game_int(body.get("maxPlayers"), vision_games.MAX_PLAYERS, 1, vision_games.HARD_MAX_PLAYERS)
+    rules_version = _game_int(body.get("rulesVersion"), 2, 1, 2)
+    fair = bool(body.get("fair"))
+    family_mode = bool(body.get("family", True))
+    solo_test = bool(body.get("soloTest", False))
+    pack = _game_text(body.get("pack"), 32) or ("general" if game == "trivia" else game)
+    host_name = vision_games.clean_name(body.get("hostName") or "Anfitrión") or "Anfitrión"
+    group_id = _game_group_id(x_sync_code)
+
+    code = ""
+    for _ in range(8):
+        candidate = vision_games.generate_code()
+        if candidate not in _GAME_ROOMS:
+            code = candidate
+            break
+    if not code:
+        raise HTTPException(status_code=503, detail="no se pudo crear la sala")
+
+    if game in vision_games.fiesta_engine.FIESTA_GAMES:
+        questions = []
+        deck = []
+    elif game == "charadas":
+        questions: list[dict] = []
+        deck = await _game_charada_deck(rounds, code)
+    elif game == "wager":
+        questions = []
+        deck = await _game_wager_rounds(rounds, code)
+    elif game in ("impostor", "dibujo", "subasta", "fibbage"):
+        questions = []
+        deck = _game_party_deck(game, rounds, code)
+    else:
+        questions = await _game_questions(pack, rounds, group_id)
+        deck = []
+
+    host_token = vision_games.new_token()
+    player_token = vision_games.new_token() if mode != "display" else ""
+    now = time.time()
+    try:
+        room = vision_games.create_room(
+            code, host_name, host_token, player_token, questions,
+            game=game, deck=deck, mode=mode, pack=pack, rounds=rounds,
+            question_seconds=question_seconds, charada_seconds=charada_seconds,
+            wager_seconds=wager_seconds, clue_seconds=clue_seconds,
+            fair=fair, max_players=max_players, rules_version=rules_version,
+            family_mode=family_mode, solo_test=solo_test, now=now,
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="no se pudo crear la sala")
+    _GAME_ROOMS[code] = room
+    role = "display" if mode == "display" else "player"
+    return {
+        "code": code,
+        "displayCode": vision_games.format_code(code),
+        "hostToken": host_token,
+        "playerToken": player_token,
+        "playerId": room.host_id,
+        "hostId": room.host_id,
+        "mode": mode,
+        "game": room.game,
+        "rounds": room.rounds,
+        "expiresAt": int((now + vision_games.ROOM_TTL_SECONDS) * 1000),
+        "snapshot": room.snapshot(
+            role, 0, now, room.host_id, display_authorized=True,
+        ),
+    }
+
+
+@app.post("/v1/game/rooms/{code}/join")
+async def game_join(
+    code: str,
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    room = _game_room(_game_code(code))
+    ip = request.client.host if request.client else "?"
+    if not _diag_rate_ok(_GAME_JOIN_BUCKET, ip, time.time(), limit=GAME_JOIN_RATE, window=60):
+        raise HTTPException(status_code=429, detail="demasiados intentos; espera un momento")
+    body = await _game_body(request)
+    name = vision_games.clean_name(body.get("name"))
+    if not name:
+        raise HTTPException(status_code=400, detail="apodo inválido")
+    spectator = bool(body.get("spectator"))
+    now = time.time()
+    room.tick(now)
+    if room.phase == "closed":
+        raise HTTPException(status_code=404, detail="la sala se cerró")
+    token = vision_games.new_token()
+    player = room.add_player(name, token, now, spectator=spectator)
+    if player is None:
+        raise HTTPException(status_code=409, detail="la sala está llena o la partida ya empezó")
+    return {
+        "playerToken": token,
+        "playerId": player.id,
+        "spectator": spectator,
+        "snapshot": room.snapshot("player", 0, now, player.id),
+    }
+
+
+@app.post("/v1/game/rooms/{code}/rejoin")
+async def game_rejoin(
+    code: str,
+    x_api_key: str | None = Header(default=None),
+    x_game_player: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    room = _game_room(_game_code(code))
+    player = _game_player(room, x_game_player)
+    now = time.time()
+    room.tick(now)
+    if room.phase == "closed":
+        raise HTTPException(status_code=404, detail="la sala se cerró")
+    room.rejoin(x_game_player or "", now)
+    return {
+        "playerToken": x_game_player,
+        "playerId": player.id,
+        "snapshot": room.snapshot("player", 0, now, player.id),
+    }
+
+
+@app.get("/v1/game/rooms/{code}/state")
+async def game_state(
+    code: str,
+    x_api_key: str | None = Header(default=None),
+    x_game_player: str | None = Header(default=None),
+    x_game_host: str | None = Header(default=None),
+    since: int = Query(default=0, ge=0),
+    role: str = Query(default="player"),
+):
+    require_key(x_api_key)
+    if role not in vision_games.ROLES:
+        raise HTTPException(status_code=400, detail="rol inválido")
+    room = _game_room(_game_code(code))
+    # Compatibilidad de transición: una TV vieja (2.5.200) puede seguir leyendo
+    # el estado público, pero sin el póster de Apuesta. La TV nueva manda su
+    # host token y recibe la pista visual completa.
+    display_authorized = bool(role == "display" and room.host_ok(x_game_host))
+    now = time.time()
+    player = None
+    if role == "player":
+        player = _game_player(room, x_game_player)
+        player.connected = True
+        player.last_seen = now
+    room.touch(now)
+    room.tick(now)
+    if room.phase == "closed":
+        _GAME_ROOMS.pop(room.code, None)
+        raise HTTPException(status_code=404, detail="la sala se cerró")
+    return _game_snapshot(
+        room, role, since, now, player.id if player else None,
+        display_authorized=display_authorized,
+    )
+
+
+@app.post("/v1/game/rooms/{code}/answer")
+async def game_answer(
+    code: str,
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+    x_game_player: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    room = _game_room(_game_code(code))
+    player = _game_player(room, x_game_player)
+    now = time.time()
+    if not _diag_rate_ok(_GAME_ANSWER_BUCKET, f"{room.code}|{player.id}", now,
+                         limit=GAME_ANSWER_RATE, window=60):
+        raise HTTPException(status_code=429, detail="demasiadas respuestas")
+    body = await _game_body(request)
+    round_no = _game_int(body.get("round"), 0, 0, vision_games.MAX_ROUNDS)
+    option = _game_int(body.get("option"), -1, -1, 3)
+    if round_no <= 0 or option < 0:
+        raise HTTPException(status_code=400, detail="respuesta inválida")
+    room.tick(now)
+    if room.phase == "closed":
+        raise HTTPException(status_code=404, detail="la sala se cerró")
+    accepted, reason = room.answer(player.id, round_no, option, now)
+    return {"accepted": accepted, "reason": reason, "receivedAt": int(now * 1000)}
+
+
+@app.post("/v1/game/rooms/{code}/wager")
+async def game_wager(
+    code: str,
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+    x_game_player: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    room = _game_room(_game_code(code))
+    player = _game_player(room, x_game_player)
+    body = await _game_body(request)
+    round_no = _game_int(body.get("round"), 0, 0, vision_games.MAX_ROUNDS)
+    points = body.get("points", vision_games.WAGER_MIN)
+    if round_no <= 0:
+        raise HTTPException(status_code=400, detail="ronda inválida")
+    now = time.time()
+    room.tick(now)
+    if room.phase == "closed":
+        raise HTTPException(status_code=404, detail="la sala se cerró")
+    accepted, reason = room.wager(player.id, round_no, points, now)
+    return {"accepted": accepted, "reason": reason, "wager": player.wager}
+
+
+@app.post("/v1/game/rooms/{code}/charada")
+async def game_charada(
+    code: str,
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+    x_game_player: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    room = _game_room(_game_code(code))
+    player = _game_player(room, x_game_player)
+    body = await _game_body(request)
+    action = _game_text(body.get("action"), 16).lower()
+    if action not in ("correct", "pass", "correcto", "pasar"):
+        raise HTTPException(status_code=400, detail="acción inválida")
+    now = time.time()
+    room.tick(now)
+    if room.phase == "closed":
+        raise HTTPException(status_code=404, detail="la sala se cerró")
+    accepted, reason = room.charada_action(player.id, action, now)
+    return {"accepted": accepted, "reason": reason}
+
+
+@app.post("/v1/game/rooms/{code}/action")
+async def game_action(
+    code: str,
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+    x_game_player: str | None = Header(default=None),
+):
+    """Acciones de los juegos de fiesta: dibujar, mentir, votar o pujar.
+
+    La tele nunca manda acciones: solo el teléfono de un jugador (o del
+    público) puede escribir, votar o pujar. El servidor valida fase y ronda.
+    """
+    require_key(x_api_key)
+    room = _game_room(_game_code(code))
+    player = _game_player(room, x_game_player)
+    body = await _game_body(request)
+    round_no = _game_int(body.get("round"), 0, 0, vision_games.MAX_ROUNDS)
+    kind = _game_text(body.get("kind"), 24).lower()
+    text = _game_text(body.get("text"), 180)
+    target = _game_text(body.get("target"), 40)
+    index = body.get("index", 0)
+    if round_no <= 0 or not kind:
+        raise HTTPException(status_code=400, detail="acción inválida")
+    now = time.time()
+    # Los trazos parciales son una emisión de baja frecuencia (cada ~2.5 s)
+    # y no deben consumir el presupuesto de votos/pujas del jugador.
+    if kind != "draw_partial" and not _diag_rate_ok(
+        _GAME_ANSWER_BUCKET, f"{room.code}|{player.id}", now,
+        limit=GAME_ANSWER_RATE, window=60,
+    ):
+        raise HTTPException(status_code=429, detail="demasiadas acciones")
+    room.tick(now)
+    if room.phase == "closed":
+        raise HTTPException(status_code=404, detail="la sala se cerró")
+    accepted, reason = room.act(
+        player.id, round_no, kind, now,
+        text=text, target=target, bid=body.get("bid", 0),
+        strokes=body.get("strokes"), index=index,
+        power=_game_text(body.get("power"), 16).lower(),
+        wire=_game_text(body.get("wire"), 12).lower(),
+        choices=body.get("choices"),
+        selected=body.get("selected"),
+        amount=body.get("amount", 0),
+        vote=bool(body.get("vote")),
+    )
+    if not accepted and reason == "cerca":
+        raise HTTPException(
+            status_code=400,
+            detail="¡Demasiado cerca del título real! Disimula un poco más.",
+        )
+    # Idempotencia de red: un doble toque, un reintento o una acción que llega
+    # justo después del cambio de fase no debe convertirse en un error visible.
+    # El cliente recibe 200 con `ignored=True` y sigue su polling normal.
+    is_fiesta = getattr(room, "fiesta", None) is not None
+    ignored = bool(
+        is_fiesta
+        and not accepted
+        and reason in {"duplicada", "fase", "ronda", "turno", "duelo"}
+    )
+    return {
+        "accepted": accepted,
+        "ignored": ignored,
+        "reason": reason,
+        "phase": room.phase,
+        "receivedAt": int(now * 1000),
+        "points": int(player.score),
+        "coins": int(player.coins),
+    }
+
+
+@app.post("/v1/game/rooms/{code}/ready")
+async def game_ready(
+    code: str,
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+    x_game_player: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    room = _game_room(_game_code(code))
+    player = _game_player(room, x_game_player)
+    body = await _game_body(request)
+    round_no = _game_int(body.get("round"), 0, 0, vision_games.MAX_ROUNDS)
+    if round_no <= 0:
+        raise HTTPException(status_code=400, detail="ronda inválida")
+    now = time.time()
+    room.tick(now)
+    if room.phase == "closed":
+        raise HTTPException(status_code=404, detail="la sala se cerró")
+    ok = room.ready(player.id, round_no, now)
+    return {"ok": ok, "ready": bool(ok and player.ready_round >= round_no)}
+
+
+@app.post("/v1/game/rooms/{code}/host/{action}")
+async def game_host_action(
+    code: str,
+    action: str,
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+    x_game_host: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    room = _game_room(_game_code(code))
+    _game_host(room, x_game_host)
+    now = time.time()
+    room.tick(now)
+    if action == "start":
+        if not room.start(now):
+            raise HTTPException(status_code=409, detail="la partida ya empezó o faltan jugadores")
+    elif action == "next":
+        if room.phase == "reveal" and not room.all_ready():
+            raise HTTPException(status_code=409, detail="faltan jugadores por continuar")
+        if not room.next_round(now):
+            raise HTTPException(status_code=409, detail="solo se avanza en el reveal")
+    elif action == "close":
+        room.close(now, "host")
+        await _persist_game_result(room)
+        _GAME_ROOMS.pop(room.code, None)
+        return {"ok": True, "closed": True}
+    elif action == "kick":
+        body = await _game_body(request)
+        player_id = _game_text(body.get("playerId"), 16)
+        if not player_id or not room.kick(player_id, now):
+            raise HTTPException(status_code=404, detail="jugador no encontrado")
+    else:
+        raise HTTPException(status_code=404, detail="acción desconocida")
+    return {"ok": True, "phase": room.phase, "rev": room.rev}
+
+
+@app.post("/v1/game/rooms/{code}/reaction")
+async def game_reaction(
+    code: str,
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+    x_game_player: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    room = _game_room(_game_code(code))
+    player = _game_player(room, x_game_player)
+    body = await _game_body(request)
+    kind = _game_int(body.get("kind"), -1, -1, 5)
+    now = time.time()
+    room.tick(now)
+    if room.phase == "closed":
+        raise HTTPException(status_code=404, detail="la sala se cerró")
+    if not room.react(player.id, kind, now):
+        raise HTTPException(status_code=429, detail="espera un momento entre reacciones")
+    return {"ok": True}
+
+
+@app.post("/v1/game/rooms/{code}/report")
+async def game_report(
+    code: str,
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+    x_game_player: str | None = Header(default=None),
+    x_game_host: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    room = _game_room(_game_code(code))
+    player = room.player_by_token(x_game_player)
+    if player is None and not room.host_ok(x_game_host):
+        raise HTTPException(status_code=410, detail="token inválido")
+    reporter_id = player.id if player is not None else "host"
+    if not _diag_rate_ok(
+        _GAME_REPORT_BUCKET, f"{room.code}|{reporter_id}", time.time(),
+        limit=5, window=60,
+    ):
+        raise HTTPException(status_code=429, detail="demasiados reportes")
+    body = await _game_body(request)
+    question_id = _game_text(body.get("questionId"), 64)
+    if not any(q["id"] == question_id for q in room.questions):
+        raise HTTPException(status_code=404, detail="pregunta no encontrada")
+    reason = _game_text(body.get("reason"), 120)
+    before = room.reports.get(question_id, 0)
+    count = room.report(question_id, reporter_id)
+    duplicate = count == before
+    persisted = False
+    if not duplicate:
+        try:
+            await db().execute(
+                "insert into trivia_reports (question_id, reason) values ($1, $2)",
+                question_id, reason,
+            )
+            persisted = True
+        except Exception:  # noqa: BLE001 - el reporte no puede tumbar la partida
+            log.exception("Play: no se pudo guardar el reporte")
+    # No borrar preguntas en caliente: un reporte no debe ser un botón de
+    # destrucción de contenido. El equipo editorial revisa la bandera.
+    return {
+        "ok": True,
+        "reports": count,
+        "persisted": persisted,
+        "duplicate": duplicate,
+        "flagged": count >= 3,
+    }
+
+
+@app.get("/v1/game/catalog")
+async def game_catalog(x_api_key: str | None = Header(default=None)):
+    require_key(x_api_key)
+    return {"games": vision_games.catalog()}
+
+
+@app.get("/v1/game/packs")
+async def game_packs(x_api_key: str | None = Header(default=None)):
+    require_key(x_api_key)
+    titles = {
+        "general": "General",
+        "cine": "Cine",
+        "series": "Series",
+        "anime": "Anime",
+        "infantil": "Infantil",
+        "novelas": "Novelas",
+    }
+    counts: dict[str, int] = {}
+    total = 0
+    try:
+        rows = await db().fetch(
+            "select coalesce(pack, 'general') as pack, count(*) as n "
+            "from trivia_questions group by coalesce(pack, 'general')"
+        )
+        counts = {str(row["pack"]): int(row["n"] or 0) for row in rows}
+        total = sum(counts.values())
+    except Exception:  # noqa: BLE001 - la salud de packs no debe romper la API
+        log.exception("Play: no se pudieron contar los packs")
+    packs = []
+    for pack_id, title in titles.items():
+        questions = total if pack_id == "general" else counts.get(pack_id, 0)
+        packs.append({
+            "id": pack_id,
+            "title": title,
+            "active": questions > 0,
+            "questions": questions,
+        })
+    return {"packs": packs}
+
+
+@app.get("/v1/game/health")
+async def game_health(x_api_key: str | None = Header(default=None)):
+    require_key(x_api_key)
+    rooms = len(_GAME_ROOMS)
+    try:
+        row = await db().fetchrow(
+            "select count(*) as n, max(created_at) as last from trivia_questions"
+        )
+        served = await db().fetchval("select count(*) from trivia_served")
+        questions = int(row["n"] or 0) if row else 0
+        version = int(row["last"].timestamp()) if row and row["last"] else 0
+        return {
+            "ok": True,
+            "rooms": rooms,
+            "questions": questions,
+            "served": int(served or 0),
+            "version": version,
+            "maxRooms": GAME_MAX_ROOMS,
+        }
+    except Exception:  # noqa: BLE001 - la salud no debe romper por la DB
+        return {
+            "ok": True,
+            "rooms": rooms,
+            "questions": 0,
+            "served": 0,
+            "version": 0,
+            "db": False,
+            "maxRooms": GAME_MAX_ROOMS,
+        }

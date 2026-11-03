@@ -93,6 +93,10 @@ EVENTS_LINKS_MAX = 320
 HOT_LINKS_SECONDS = int(os.environ.get("GEE38_HOT_SECONDS", "300") or "300")
 HOT_LINKS_MAX = int(os.environ.get("GEE38_HOT_MAX", "60") or "60")
 
+# La lista de fuentes vive en `link_names` de `events.txt` y el CMS la cambia durante
+# el día. Se relee sola cada 2 min, sin esperar al ciclo completo ni al pase de enlaces.
+META_REFRESH_SECONDS = max(60, int(os.environ.get("GEE38_META_SECONDS", "120") or "120"))
+
 
 # ----------------------------------------------------------------------------
 # Cifrado
@@ -256,16 +260,23 @@ def split_link(raw: str) -> tuple[str, dict]:
 
 
 def parse_pro(data: bytes) -> list[dict]:
-    """pro/<x>.txt descifrado → enlaces finales jugables."""
+    """pro/<x>.txt descifrado → enlaces finales jugables.
+
+    Cada enlace conserva su `slot` (índice en el archivo `pro`): la app original
+    muestra los nombres del EVENTO (`link_names`) y al tocar la fila i resuelve
+    `pro[i]`. Ese índice es la identidad real de la fuente, no el nombre que el
+    CMS ponga en el archivo —que rota y a veces trae el de otro partido.
+    """
     raw = json.loads(data)
     out = []
-    for item in raw if isinstance(raw, list) else []:
+    for slot, item in enumerate(raw if isinstance(raw, list) else []):
         if not isinstance(item, dict):
             continue
         raw_link = str(item.get("link", "")).strip()
-        if not raw_link:
+        token_api = str(item.get("tokenApi", "") or "").strip()
+        if not raw_link and not token_api:
             continue
-        url, headers = split_link(raw_link)
+        url, headers = split_link(raw_link) if raw_link else ("", {})
         api = str(item.get("api", "")).strip()
         drm = api if ":" in api else ""
         scheme = _safe_int(item.get("scheme"), 0)
@@ -280,6 +291,11 @@ def parse_pro(data: bytes) -> list[dict]:
             "type": "dash" if is_dash else "hls",
             "alive": None,                  # se llena en el sondeo
             "checked_at": None,
+            "slot": slot,                   # posición dentro de pro/<…>.txt
+            # Los enlaces `embed` no traen URL: se resuelven al tocarlos en la app
+            # (WebView), igual que la app original. No son «caídos».
+            "token_api": token_api,
+            "resolvable": bool(token_api) and not raw_link,
         })
     return out
 
@@ -411,6 +427,44 @@ def _fetch(path_or_url: str, timeout: int = 25) -> str:
         return resp.read().decode("utf-8", "replace")
 
 
+# ETag por archivo del CMS: el latido de metadatos pide `events.txt` cada 2 min,
+# pero si no cambió el hosting responde 304 (sin cuerpo) y no gastamos los ~375 KB.
+_ETAGS: dict[str, str] = {}
+
+# Último conteo aceptado de `events.txt`: si el CMS devuelve una copia a medias
+# (visto en vivo: 79 vs cientos) no se toma como buena hasta reintentar.
+_META_EVENT_COUNT = 0
+
+
+async def _fetch_conditional(path_or_url: str, timeout: int = 25) -> str | None:
+    """Como `_fetch`, pero con `If-None-Match`; devuelve None si el CMS da 304."""
+
+    def _go() -> str | None:
+        url = _busted_url(path_or_url)
+        headers = {
+            "User-Agent": UA,
+            "Accept": "*/*",
+            "Cache-Control": "no-cache",
+        }
+        etag = _ETAGS.get(path_or_url)
+        if etag:
+            headers["If-None-Match"] = etag
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                body = resp.read().decode("utf-8", "replace")
+                fresh_etag = resp.headers.get("ETag")
+                if fresh_etag:
+                    _ETAGS[path_or_url] = fresh_etag
+                return body
+        except urllib.error.HTTPError as exc:
+            if exc.code == 304:
+                return None
+            raise
+
+    return await asyncio.to_thread(_go)
+
+
 async def _fetch_async(path_or_url: str, timeout: int = 25) -> str:
     return await asyncio.to_thread(_fetch, path_or_url, timeout)
 
@@ -450,6 +504,13 @@ async def _probe_many(links: list[dict]) -> None:
     sem = asyncio.Semaphore(PROBE_CONCURRENCY)
 
     async def _one(link: dict) -> None:
+        # Las ranuras declaradas sin dirección no se sondean (no hay URL).
+        if not _link_url(link):
+            # Una ranura `embed` no tiene URL todavía: no se marca caída.
+            if link.get("token_api"):
+                link["alive"] = None
+                link["checked_at"] = datetime.utcnow().isoformat(timespec="seconds")
+            return
         async with sem:
             await _probe(link)
 
@@ -464,6 +525,145 @@ def _sort_links(links: list[dict]) -> list[dict]:
     origen dentro de cada grupo (el CMS publica su mejor opción primero y los
     hermanos del mismo cruce entran por cercanía: la app toma el primero)."""
     return sorted(links, key=lambda lk: _ALIVE_ORDER.get(lk.get("alive"), 1))
+
+
+def _clean_link_names(names) -> list[str]:
+    out: list[str] = []
+    for raw in names or []:
+        clean = str(raw or "").strip()
+        if clean:
+            out.append(clean)
+    return out
+
+
+def _link_url(link: dict) -> str:
+    return str(link.get("url") or link.get("link") or "").strip()
+
+
+def _assign_link_slots(names: list[str], links: list[dict]) -> None:
+    """Coloca cada enlace en su ranura de `link_names`.
+
+    Manda el NOMBRE actual del evento (el CMS reordena/añade nombres y el `pro`
+    cambia de índices): si un enlace guardado se llama como una ranura, se mueve
+    ahí aunque su slot viejo fuera otro. Solo los enlaces sin nombre coincidente
+    conservan su slot. Así una lista vieja de 8 fuentes no tapa una nueva de 12.
+    """
+    positions: dict[str, list[int]] = {}
+    for index, name in enumerate(names):
+        positions.setdefault(_norm_team(name), []).append(index)
+    used: set[int] = set()
+    matched: set[int] = set()
+    for link in links:
+        for index in positions.get(_norm_team(str(link.get("name") or "")), []):
+            if index not in used:
+                link["slot"] = index
+                used.add(index)
+                matched.add(id(link))
+                break
+    for link in links:
+        if id(link) in matched:
+            continue
+        slot = link.get("slot")
+        if isinstance(slot, int) and 0 <= slot < len(names) and slot not in used:
+            used.add(slot)
+        else:
+            link.pop("slot", None)
+
+
+def _pending_link(name: str, slot: int) -> dict:
+    """Ranura declarada por la fuente que todavía no publica su dirección."""
+    return {
+        "name": name,
+        "link": "",
+        "url": "",
+        "headers": {},
+        "scheme": 0,
+        "drm": "",
+        "type": "hls",
+        "alive": None,
+        "checked_at": None,
+        "pending": True,
+        "slot": slot,
+    }
+
+
+def _merge_links_for_event(
+    previous: list[dict],
+    fresh: list[dict],
+    names: list[str],
+    cap: int = 32,
+) -> list[dict]:
+    """Une la lista nueva con la guardada y la deja COMPLETA como la app original.
+
+    El CMS rota `pro/<…>.txt` y a veces lo publica a medias: la pasada caliente
+    reemplazaba una lista rica (9 fuentes, varias vivas) por una copia parcial
+    (2) y la app enseñaba menos que la original. Aquí manda la lista nueva cuando
+    la ranura coincide, pero jamás se pierde una fuente guardada que siga viva.
+    Los nombres del evento (`link_names`) se conservan todos: las ranuras que no
+    tengan dirección quedan como pendientes y la app las muestra sin inventar.
+    """
+    names = _clean_link_names(names)
+    old = [dict(link) for link in previous or [] if isinstance(link, dict)]
+    new = [dict(link) for link in fresh or [] if isinstance(link, dict)]
+    _assign_link_slots(names, old)
+    _assign_link_slots(names, new)
+
+    if not names:
+        merged: list[dict] = []
+        seen: set[str] = set()
+        for link in new + old:
+            url = _link_url(link)
+            token = str(link.get("token_api") or "").strip()
+            if not url and not token:
+                continue
+            key = url or ("embed:" + token)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(link)
+        return _sort_links(merged)[:cap]
+
+    slots: dict[int, tuple[dict, int]] = {}  # slot -> (enlace, 0=nuevo / 1=guardado)
+
+    def rank(link: dict, slot: int, source: int) -> tuple:
+        # Primero la identidad (nombre declarado para esa ranura); después la que
+        # responde. Si el `pro` nuevo trae nombres de otro partido, gana la copia
+        # guardada con el nombre correcto aunque el índice del archivo haya cambiado.
+        name_ok = 0 if _norm_team(str(link.get("name") or "")) == _norm_team(names[slot]) else 1
+        return (name_ok, _ALIVE_ORDER.get(link.get("alive"), 1), source)
+
+    def add(link: dict, source: int) -> None:
+        url = _link_url(link)
+        if not url and not str(link.get("token_api") or "").strip():
+            return
+        slot = link.get("slot")
+        if not isinstance(slot, int) or not (0 <= slot < len(names)):
+            return  # fuera de los nombres declarados: la app original no lo enseña
+        current = slots.get(slot)
+        if current is None:
+            slots[slot] = (link, source)
+            return
+        if rank(link, slot, source) < rank(current[0], slot, current[1]):
+            # Misma fuente/ranura: se queda la mejor copia, no se duplica la fila.
+            slots[slot] = (link, source)
+
+    for link in new:
+        add(link, 0)
+    for link in old:
+        add(link, 1)
+
+    out: list[dict] = []
+    for index, name in enumerate(names):
+        current = slots.pop(index, None)
+        if current is None:
+            out.append(_pending_link(name, index))
+            continue
+        filled = dict(current[0])
+        filled["name"] = name
+        filled["slot"] = index
+        filled.pop("pending", None)
+        out.append(filled)
+    return out[:cap]
 
 
 # ----------------------------------------------------------------------------
@@ -664,6 +864,20 @@ def _team_pair_key(team_a: str, team_b: str) -> str:
     return "|".join(sorted((a, b)))
 
 
+def _competition_pair_key(event: dict) -> str:
+    """Cruce + competición: Liga MX varonil y femenil son partidos DISTINTOS.
+
+    El CMS publica ambos con los mismos equipos y día; sin la competición, los
+    enlaces de un Santos-Necaxa femenil contaminaban el Santos-Necaxa varonil
+    (el Fox Deportes de la mujeril abría otro partido).
+    """
+    pair = _team_pair_key(event.get("team_a", ""), event.get("team_b", ""))
+    if not pair:
+        return ""
+    competition = _norm_team(event.get("event") or "")
+    return f"{competition}|{pair}" if competition else pair
+
+
 def _day_distance(day: str, other: str) -> int:
     try:
         return abs((date.fromisoformat(day) - date.fromisoformat(other)).days)
@@ -689,12 +903,14 @@ def _merge_sibling_links(
 
     def add(link: dict) -> None:
         url = str(link.get("url") or link.get("link") or "").strip()
-        if not url:
+        token = str(link.get("token_api") or "").strip()
+        if not url and not token:
             return
-        prev = best.get(url)
+        key = url or ("embed:" + token)
+        prev = best.get(key)
         # El propio manda; un hermano solo pisa si está vivo y el propio no.
         if prev is None or (link.get("alive") and not prev.get("alive")):
-            best[url] = link
+            best[key] = link
 
     for link in own:
         add(link)
@@ -706,6 +922,8 @@ def _merge_sibling_links(
         ),
     )
     for _day, links in ordered:
+        if _day_distance(_day, own_day) > 120:
+            continue  # una revancha de otra temporada no comparte transmisión
         for link in links:
             add(link)
     return _sort_links(list(best.values()))[:cap]
@@ -735,7 +953,7 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
     # viene pobre (un enlace muerto) y la buena vive en otra entrada.
     pair_links: dict[str, list[tuple[str, list[dict]]]] = {}
     for value in old.values():
-        pair = _team_pair_key(value.get("team_a", ""), value.get("team_b", ""))
+        pair = _competition_pair_key(value)
         if not pair:
             continue
         stored = [lk for lk in (value.get("links") or []) if isinstance(lk, dict)]
@@ -744,6 +962,9 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
     for ev in sorted(events, key=lambda e: _event_rank(e, today)):
         eid = _event_id(ev)
         seen_ids.append(eid)
+        previous_links = [
+            lk for lk in ((old.get(eid) or {}).get("links") or []) if isinstance(lk, dict)
+        ]
         links: list[dict] = []
         fetched = False
         wanted = ev["visible"] or (ev["date_iso"] in window_str)
@@ -756,12 +977,14 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
                 _gap_log(f"evento {ev['event'][:40]} sin enlaces", exc)
         if not fetched:
             # Sin presupuesto este ciclo: conserva los enlaces del ciclo anterior.
-            links = (old.get(eid) or {}).get("links") or []
-        pair = _team_pair_key(ev.get("team_a", ""), ev.get("team_b", ""))
+            links = list(previous_links)
+        pair = _competition_pair_key(ev)
         if pair and pair_links.get(pair):
             links = _merge_sibling_links(links, str(ev.get("date_iso") or ""), pair_links[pair])
-        else:
-            links = _sort_links(links)
+        # La lista nueva puede venir parcial (visto en vivo: 9 fuentes guardadas y
+        # el CMS publica un `pro` de 2): nunca se pierde una fuente anterior viva y
+        # `link_names` queda completo, como en la app original.
+        links = _merge_links_for_event(previous_links, links, ev.get("link_names") or [])
         # El sondeo va sobre la lista FINAL (hermanos incluidos): los badges de
         # «EN VIVO / Caído» que ve el usuario son del momento, no de hace días.
         if links and ev["date_iso"] in window_str:
@@ -803,6 +1026,7 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
         if day not in window_str:
             continue
         links = [lk for lk in (value.get("links") or []) if isinstance(lk, dict)]
+        previous_links = list(links)
         # La entrada rotó fuera de events.txt (el CMS publica a medias y va rotando), pero su
         # archivo `pro/<…>.txt` puede seguir publicado CON MÁS enlaces que los guardados: se
         # RE-DESCARGA para que la lista del partido no se quede congelada. Visto en vivo
@@ -822,10 +1046,11 @@ async def _sync_events(pool: asyncpg.Pool, key: bytes, meta: dict) -> int:
                 )
         # Aunque la entrada venga vacía, sus hermanos del mismo cruce la completan:
         # primero se fusiona y luego se sondea el conjunto final.
-        pair = _team_pair_key(value.get("team_a", ""), value.get("team_b", ""))
+        pair = _competition_pair_key(value)
         if pair and pair_links.get(pair):
             links = _merge_sibling_links(links, day, pair_links[pair])
-        if not links:
+        links = _merge_links_for_event(previous_links, links, value.get("link_names") or [])
+        if not any(_link_url(lk) for lk in links):
             continue
         await _probe_many(links)
         links = _sort_links(links)
@@ -974,6 +1199,126 @@ async def _resolve_key_auto(pool: asyncpg.Pool) -> bytes | None:
     return None
 
 
+async def _refresh_event_metadata(pool: asyncpg.Pool, key: bytes) -> int:
+    """Actualiza `link_names`/`links_ref` de los eventos con el `events.txt` actual.
+
+    La app original lee la lista de canales del EVENTO (`link_names`), no del
+    archivo `pro`. El CMS cambia esa lista durante el día (visto en vivo:
+    Man City-Brighton pasó de 8 a 12 nombres) mientras nuestro ciclo completo
+    solo corría cada 30 min. El pase caliente refresca los metadatos para que la
+    lista no se quede congelada aunque los enlaces se renueven cada 5 min.
+    """
+    global _META_EVENT_COUNT
+    try:
+        body = await _fetch_conditional("events.txt")
+    except Exception as exc:  # noqa: BLE001 - sin metadatos frescos se conserva lo guardado
+        _gap_log("events.txt para metadatos del pase caliente", exc)
+        return 0
+    if body is None:
+        # 304: el archivo no cambió; el latido cuenta como fresco sin bajar 375 KB.
+        try:
+            await _meta_set(
+                pool, "meta_at", {"at": datetime.utcnow().isoformat(timespec="seconds")}
+            )
+        except Exception:
+            log.exception("gee38: no se pudo sellar meta_at (304)")
+        return 0
+    try:
+        events = parse_events(decrypt_body(body, key))
+    except Exception as exc:  # noqa: BLE001
+        _gap_log("events.txt para metadatos del pase caliente", exc)
+        return 0
+    if _META_EVENT_COUNT >= 80 and len(events) < _META_EVENT_COUNT * 0.5:
+        log.warning(
+            "gee38: events.txt vino a medias en metadatos (%s vs %s); reintento",
+            len(events), _META_EVENT_COUNT,
+        )
+        try:
+            fallback = await _fetch_events_full(key, attempts=3)
+            if len(fallback) > len(events):
+                events = fallback
+        except Exception as exc:  # noqa: BLE001
+            _gap_log("events.txt incompleto en metadatos", exc)
+    if not events:
+        return 0
+    _META_EVENT_COUNT = len(events)
+    by_id = {_event_id(ev): ev for ev in events}
+    if not by_id:
+        return 0
+    today = date.today()
+    low = (today - timedelta(days=7)).isoformat()
+    high = (today + timedelta(days=2)).isoformat()
+    try:
+        rows = await pool.fetch(
+            """
+            select id, payload from gee38_catalog
+             where kind = 'event'
+               and coalesce(payload->>'date_iso', '') between $1 and $2
+            """,
+            low,
+            high,
+        )
+    except Exception:
+        log.exception("gee38: no se pudieron leer los eventos para refrescar metadatos")
+        return 0
+    updated = 0
+    links_budget = 30
+    for row in rows:
+        value = row["payload"]
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                continue
+        if not isinstance(value, dict):
+            continue
+        current = by_id.get(row["id"])
+        if current is None:
+            continue
+        names = _clean_link_names(current.get("link_names") or [])
+        ref = str(current.get("links_ref") or "").strip()
+        changed = False
+        if names and value.get("link_names") != names:
+            value["link_names"] = names
+            changed = True
+        if ref and value.get("links_ref") != ref:
+            value["links_ref"] = ref
+            changed = True
+        if not changed:
+            continue
+        previous_links = [lk for lk in (value.get("links") or []) if isinstance(lk, dict)]
+        fresh: list[dict] = []
+        if ref and links_budget > 0:
+            try:
+                fresh = parse_pro(decrypt_body(await _fetch_async(ref), key))
+                links_budget -= 1
+            except Exception as exc:  # noqa: BLE001 - se conservan los guardados
+                _gap_log(f"metadatos {str(value.get('event') or '')[:40]} sin enlaces", exc)
+        links = _merge_links_for_event(previous_links, fresh, names)
+        if links:
+            await _probe_many(links)
+            links = _sort_links(links)
+            value["links"] = links
+            value["alive"] = sum(1 for lk in links if lk.get("alive"))
+            value["total"] = len(links)
+        try:
+            await pool.execute(
+                "update gee38_catalog set payload = $2::jsonb, updated_at = now() where id = $1",
+                row["id"],
+                json.dumps(value, ensure_ascii=False),
+            )
+            updated += 1
+        except Exception:
+            log.exception("gee38: no se pudo guardar metadatos de %s", row["id"])
+    try:
+        await _meta_set(
+            pool, "meta_at", {"at": datetime.utcnow().isoformat(timespec="seconds")}
+        )
+    except Exception:
+        log.exception("gee38: no se pudo sellar meta_at")
+    return updated
+
+
 async def _refresh_hot_links(pool: asyncpg.Pool, key: bytes) -> int:
     """Re-descarga y sondea los enlaces de los partidos de la ventana (cada 5 min).
 
@@ -995,7 +1340,11 @@ async def _refresh_hot_links(pool: asyncpg.Pool, key: bytes) -> int:
              where kind = 'event'
                and coalesce(payload->>'date_iso', '') between $1 and $2
                and jsonb_array_length(coalesce(payload->'links', '[]'::jsonb)) > 0
-             order by (coalesce(payload->>'date_iso', '') = $3) desc,
+             order by (
+                 jsonb_array_length(coalesce(payload->'link_names', '[]'::jsonb))
+                 > jsonb_array_length(coalesce(payload->'links', '[]'::jsonb))
+             ) desc,
+             (coalesce(payload->>'date_iso', '') = $3) desc,
              (
                  select min(coalesce(lk->>'checked_at', ''))
                    from jsonb_array_elements(
@@ -1025,14 +1374,18 @@ async def _refresh_hot_links(pool: asyncpg.Pool, key: bytes) -> int:
             continue
         ref = str(value.get("links_ref") or "").strip()
         links = [lk for lk in (value.get("links") or []) if isinstance(lk, dict)]
+        previous_links = list(links)
         if ref:
             try:
                 fresh = parse_pro(decrypt_body(await _fetch_async(ref), key))
                 if fresh:
-                    links = fresh
+                    # Nunca reemplazar una lista rica por una copia parcial del CMS.
+                    links = _merge_links_for_event(
+                        previous_links, fresh, value.get("link_names") or []
+                    )
             except Exception as exc:  # noqa: BLE001 - se conservan los guardados
                 _gap_log(f"caliente {str(value.get('event') or '')[:40]} sin enlaces", exc)
-        if not links:
+        if not any(_link_url(lk) for lk in links):
             continue
         await _probe_many(links)
         links = _sort_links(links)
@@ -1048,6 +1401,12 @@ async def _refresh_hot_links(pool: asyncpg.Pool, key: bytes) -> int:
             updated += 1
         except Exception:
             log.exception("gee38: no se pudo guardar el evento caliente %s", row["id"])
+    try:
+        await _meta_set(
+            pool, "hot_at", {"at": datetime.utcnow().isoformat(timespec="seconds")}
+        )
+    except Exception:
+        log.exception("gee38: no se pudo sellar hot_at")
     if updated:
         log.info("gee38: %s eventos con enlaces frescos", updated)
     return updated
@@ -1063,33 +1422,60 @@ async def sync(pool: asyncpg.Pool) -> int:
     await _meta_set(pool, "app", app)
     groups = await _sync_groups(pool, key, app)
     events = await _sync_events(pool, key, app)
+    try:
+        await _meta_set(
+            pool, "full_at", {"at": datetime.utcnow().isoformat(timespec="seconds")}
+        )
+    except Exception:
+        log.exception("gee38: no se pudo sellar full_at")
     log.info("gee38: %s grupos + %s eventos actualizados (v%s)", groups, events, app.get("app_version"))
     return groups + events
 
 
 async def loop(pool: asyncpg.Pool) -> None:
-    """Tarea de fondo: ciclo completo + refresco caliente de enlaces."""
+    """Tareas de fondo: ciclo completo, metadatos cada 2 min y enlaces cada 5 min.
+
+    El usuario ve la lista de fuentes de `events.txt` (`link_names`), así que los
+    metadatos tienen su propio latido corto; el ciclo completo (catálogo/grupos) y
+    el sondeo de enlaces pueden seguir con sus intervalos largos sin recortar la
+    lista de ningún evento.
+    """
     if os.environ.get("GEE38_SYNC", "1") != "1":
         log.info("gee38: deshabilitado por entorno")
         return
     interval = max(300, int(os.environ.get("GEE38_INTERVAL_SECONDS", "1800") or "1800"))
     hot = max(60, HOT_LINKS_SECONDS)
-    log.info("gee38: ciclo completo cada %s s; enlaces calientes cada %s s", interval, hot)
+    meta = META_REFRESH_SECONDS
+    log.info(
+        "gee38: ciclo completo cada %s s; metadatos cada %s s; enlaces calientes cada %s s",
+        interval, meta, hot,
+    )
     next_full = time.monotonic()
+    next_meta = time.monotonic() + meta
     while True:
-        if time.monotonic() >= next_full:
+        now = time.monotonic()
+        stored = await _meta_get(pool, "key")
+        key = base64.b64decode(stored) if isinstance(stored, str) and stored else None
+        if key and now >= next_meta:
+            try:
+                updated = await _refresh_event_metadata(pool, key)
+                if updated:
+                    log.info("gee38: %s eventos con metadatos frescos", updated)
+            except Exception:  # noqa: BLE001 - no debe tumbar el ciclo completo
+                log.exception("gee38: falló el refresco de metadatos")
+            next_meta = time.monotonic() + meta
+        if now >= next_full:
             try:
                 await sync(pool)
                 next_full = time.monotonic() + interval
+                next_meta = time.monotonic() + meta
             except Exception:  # noqa: BLE001 - se reintenta pronto
                 log.exception("gee38: el ciclo falló")
                 next_full = time.monotonic() + 300
-        else:
+        elif key:
             try:
-                stored = await _meta_get(pool, "key")
-                if isinstance(stored, str) and stored:
-                    await _refresh_hot_links(pool, base64.b64decode(stored))
+                await _refresh_hot_links(pool, key)
             except Exception:  # noqa: BLE001 - no debe tumbar el ciclo completo
                 log.exception("gee38: falló el refresco caliente")
-        wait = min(float(hot), max(30.0, next_full - time.monotonic()))
+        wait = max(15.0, min(float(meta), float(hot), max(30.0, next_full - time.monotonic())))
         await asyncio.sleep(wait)

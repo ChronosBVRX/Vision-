@@ -1,0 +1,162 @@
+[
+  {
+    "id": "tutorial_trivia_v2",
+    "variants": [
+      "Ocho rondas con piso caliente. Si entran en racha pueden congelar o sabotear a sus rivales, y los que fallen van directo a la jaula de castigo.",
+      "Bienvenidos a Trivia Vision. Respondan rápido, usen sus puntos para atacar a la mesa y rueguen no caer en los cables de castigo.",
+      "Aquí no basta con saber de cine y series. Armen su racha para lanzar ataques y sobrevivan hasta el asalto final."
+    ]
+  },
+  {
+    "id": "tutorial_wager_v2",
+    "variants": [
+      "Póker de pistas en marcha. Todos ponen cien puntos en el pozo: pueden plantarse con el póster pixelado para cobrar por cuatro o pagar por otra pista.",
+      "Tienen mil puntos de banca. Bloqueen temprano si reconocen la imagen o compren pistas en su teléfono, pero cuidado con las apuestas en contra.",
+      "Entre menos pistas compren en su teléfono, mayor será su tajada del pozo. ¿Se plantan a ciegas o pagan por ver más?"
+    ]
+  },
+  {
+    "id": "tutorial_charada_v2",
+    "variants": [
+      "Luz, cámara y acción. El director impone la regla, el actor hace mímica, el saboteador intenta confundirlos y el resto toca el timbre en su teléfono.",
+      "Bienvenidos al set de rodaje. Si saben la película toquen el botón de corte en su teléfono, pero cuidado: hay un saboteador infiltrado en la sala.",
+      "Un actor en escena y un saboteador oculto gritando pistas falsas. Toquen el timbre en su teléfono cuando tengan el título exacto."
+    ]
+  },
+  {
+    "id": "tutorial_impostor_v2",
+    "variants": [
+      "Uno de ustedes es el impostor, pero ahora hay un detective y un cómplice en la mesa. Superen el interrogatorio y la coartada rápida antes de votar.",
+      "Miren su teléfono en secreto. Hagan preguntas inteligentes, fíjense bien en los números de la coartada y atrapen al infiltrado.",
+      "Nadie está a salvo en esta sala. El cómplice protegerá al impostor y el detective buscará la verdad antes de que se acabe el tiempo."
+    ]
+  },
+  {
+    "id": "tutorial_drawing_v2",
+    "variants": [
+      "Taller caótico abierto. Adivinen el dibujo antes de que termine para ganar bono de clarividente, inventen títulos falsos y repartan sus medallas de crítico.",
+      "El artista tiene el lienzo listo. En la segunda ronda la tinta es limitada y en la tercera dibujaremos con linterna a oscuras.",
+      "Observen cada trazo, engañen a sus amigos con un título creíble y usen su corona o su bomba para premiar o castigar el ingenio."
+    ]
+  },
+  {
+    "id": "tutorial_auction_v2",
+    "variants": [
+      "Bienvenidos al mercado negro. Seis lotes con una carta pública y una secreta que solo conocen los informantes. Si empatan en la cima, ambos pierden.",
+      "Administren sus mil monedas. Escuchen a los informantes, cuidado con las falsas alarmas y sobrevivan al lote maldito de la cuarta ronda.",
+      "Pujen en múltiplos de cincuenta. Cada maletín esconde una sorpresa secreta: ¿le creen al informante o van a pujar a ciegas?"
+    ]
+  },
+  {
+    "id": "tutorial_fibbage_v2",
+    "variants": [
+      "Escriban una mentira creíble para completar el dato. Pueden envenenar su texto, usar el escáner una vez por partida o apostar con certeza total.",
+      "Hora de mentir con estilo. Cuidado dónde pisan porque hay mentiras envenenadas en el tablero que les pueden robar sus puntos.",
+      "Encuentren la verdad entre las trampas de sus amigos. En la última ronda todos los puntos valen el doble."
+    ]
+  },
+  {
+    "id": "trivia_attack_window",
+    "variants": [
+      "Ventana de ataque abierta. Los jugadores en racha pueden lanzar hielo, censura o parásito ahora mismo.",
+      "Seis segundos para sabotear. Si tienen racha activa, elijan a su víctima en el teléfono.",
+      "Hora de jugar sucio. ¿Van a congelar al líder o se van a colgar como parásitos de su respuesta?"
+    ]
+  },
+  {
+    "id": "trivia_punishment_wires",
+    "variants": [
+      "A la jaula de castigo. Los que acertaron eligen qué cable explota; los que fallaron tienen diez segundos para cortar uno y rezar.",
+      "Fallaron la pregunta y toca pagar. Corten un cable en su teléfono sin caer en la trampa de la mesa.",
+      "Hora de cortar cables. Si eligen el cable que votó la mayoría, pierden quinientos puntos de golpe."
+    ]
+  },
+  {
+    "id": "wager_side_bet_alert",
+    "variants": [
+      "Hay apuestas laterales en la mesa. Alguien acaba de apostar a que el jugador que se plantó en la primera pista se equivocó.",
+      "Dudan de tu respuesta. Acaban de meter puntos en contra del jugador que bloqueó en la etapa uno.",
+      "Guerra de nervios en el pozo: alguien apostó a que esa respuesta temprana es un farol."
+    ]
+  },
+  {
+    "id": "charada_director_pick",
+    "variants": [
+      "El director acaba de imponer su condición de rodaje. Actor, tienes que cumplirla si quieres el bono completo.",
+      "Regla del director activada en pantalla. A ver cómo se las arregla el actor con esa restricción.",
+      "Orden directa desde la silla del director. El rodaje arranca con dificultad extra."
+    ]
+  },
+  {
+    "id": "charada_buzz_pause",
+    "variants": [
+      "Corte en el set. Reloj pausado siete segundos: di el título en voz alta y que el actor confirme en su teléfono.",
+      "Alguien tocó el timbre. Tienes siete segundos para decir tu respuesta antes de que siga corriendo el tiempo.",
+      "Silencio en el estudio, tenemos timbre activo. Actor, marca en tu teléfono si acertó o si pierde puntos."
+    ]
+  },
+  {
+    "id": "charada_saboteur_win",
+    "variants": [
+      "Tiempo agotado y nadie adivinó. El saboteador infiltrado cumplió su misión y se lleva seiscientos puntos limpios.",
+      "Rodaje saboteado con éxito. El infiltrado los desvió a todos y se embolsa el premio de la ronda.",
+      "Victoria para el saboteador secreto. Se acabó el reloj sin aciertos en el estudio."
+    ]
+  },
+  {
+    "id": "impostor_coartada_start",
+    "variants": [
+      "Coartada rápida: tienen ocho segundos para marcar un número del cero al nueve en su teléfono sin hablar.",
+      "Todos al teléfono. Marquen su escala de coartada ahora mismo; veamos quién se sale del promedio.",
+      "Prueba de detector en vivo. Elijan su número del cero al nueve antes de pasar a la votación."
+    ]
+  },
+  {
+    "id": "drawing_ink_limit",
+    "variants": [
+      "Ronda de tinta cara. Si el artista logra que adivinen gastando la mitad de la tinta o menos, cobra bono doble.",
+      "Cuidado con cada línea, artista: en esta ronda el bote de tinta es limitado. Menos trazos significan más puntos.",
+      "Ahorren tinta. Si el dibujo se entiende usando menos del cincuenta por ciento del tanque, el premio se duplica."
+    ]
+  },
+  {
+    "id": "drawing_flashlight_round",
+    "variants": [
+      "Se fue la luz en el taller. En esta ronda solo verán lo que ilumine la linterna en la pantalla.",
+      "Ronda a oscuras activada. Sigan el foco de la linterna para descubrir qué está trazando el artista.",
+      "Apagón en el lienzo. Presten mucha atención por dónde pasa el reflector antes de escribir su título."
+    ]
+  },
+  {
+    "id": "auction_cursed_lot",
+    "variants": [
+      "Atención: este es el lote maldito. El ganador se lleva el botín, pero el segundo lugar también pierde sus monedas.",
+      "Ronda cuatro con trampa mortal: aquí el segundo postor más alto también paga su puja sin llevarse nada.",
+      "Mucho cuidado al pujar en el lote maldito. Quedarse en segundo lugar sale carísimo en este turno."
+    ]
+  },
+  {
+    "id": "auction_ghost_alarm",
+    "variants": [
+      "Alerta en la bóveda: alguien activó una falsa alarma de puja alta... ¿o será que sí metieron quinientas monedas?",
+      "Sonó la sirena del mercado negro. Alguien quiere asustar a la sala con una puja fantasma.",
+      "Humo en la subasta. Activaron la alerta de puja fuerte; ustedes deciden si es verdad o puro farol."
+    ]
+  },
+  {
+    "id": "auction_shield_reflect",
+    "variants": [
+      "Robo rebotado por el escudo reflector. El ladrón salió trasquilado y pierde doscientos cincuenta puntos.",
+      "Intentaron asaltar a un jugador blindado. El escudo se rompe y le devuelve el golpe directo al atacante.",
+      "Karma instantáneo en la bóveda: el escudo reflector bloqueó el robo y castigó al ladrón."
+    ]
+  },
+  {
+    "id": "fibbage_poison_hit",
+    "variants": [
+      "Cayeron en una mentira envenenada. El autor no solo gana los votos, también les acaba de robar trescientos puntos.",
+      "Trampa mortal activada: esa respuesta tenía veneno puro y les acaba de vaciar el marcador.",
+      "Se tragaron el cebo con todo y veneno. Trescientos puntos robados directamente del bolsillo de los incautos."
+    ]
+  }
+]

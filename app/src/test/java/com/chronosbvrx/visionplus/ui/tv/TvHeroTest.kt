@@ -52,6 +52,7 @@ class TvHeroTest {
         status: String = "in",
         detail: String = "67'",
         league: String = "Liga MX",
+        leagueId: String = "mex.1",
         dateIso: String = "2026-10-26",
         time: String = "20:00:00",
     ) = GeeSportsSource.GeeEvent(
@@ -73,7 +74,7 @@ class TvHeroTest {
         awayLogo = "https://img/cruzazul.png",
         leagueLabel = league,
         leagueLogo = "https://img/ligamx.png",
-        leagueId = "mex.1",
+        leagueId = leagueId,
         scoreHome = 2,
         scoreAway = 1,
         live = live,
@@ -152,6 +153,43 @@ class TvHeroTest {
     fun ligaMxRanksAboveEuropeanLeagues() {
         assertTrue(tvLeagueRank("Liga MX") < tvLeagueRank("LaLiga"))
         assertTrue(tvLeagueRank("UEFA Champions League") < tvLeagueRank("Premier League"))
+    }
+
+    @Test
+    fun secondaryCompetitionsNeverInheritTheRankOfTheirParentLeague() {
+        assertTrue(tvLeagueRank("LaLiga 2") > tvLeagueRank("LaLiga"))
+        assertTrue(tvLeagueRank("Serie A Women") > tvLeagueRank("Serie A"))
+        assertTrue(tvLeagueRank("2. Bundesliga") > tvLeagueRank("Bundesliga"))
+        assertTrue(tvLeagueRank("Russian Premier League") > tvLeagueRank("Premier League"))
+        assertTrue(tvLeagueRank("Kenya Premier League") > tvLeagueRank("Premier League"))
+        assertTrue(tvLeagueRank("Championship") > tvLeagueRank("UEFA Champions League"))
+        assertTrue(tvLeagueRank("Liga MX Femenil") > tvLeagueRank("Liga MX"))
+    }
+
+    @Test
+    fun aSecondaryLeagueNeverEntersTheTvHeroEvenWhenItIsLive() {
+        val minor = event(id = "minor", league = "LaLiga 2", leagueId = "")
+        val main = event(id = "main", league = "LaLiga", leagueId = "esp.1")
+        val items = buildTvHeroItems(
+            banners = listOf(banner()),
+            events = listOf(minor, main),
+            catalogFilms = listOf(film()),
+            nowMs = geeStartMs(main) + 30 * 60 * 1000L,
+        )
+        assertTrue(items.none { it.event?.id == "minor" })
+        assertTrue(items.any { it.event?.id == "main" })
+    }
+
+    @Test
+    fun aHiddenEventNeverReachesTheTvHero() {
+        val hidden = event(id = "hidden").copy(visible = false)
+        val items = buildTvHeroItems(
+            banners = listOf(banner()),
+            events = listOf(hidden),
+            catalogFilms = listOf(film()),
+            nowMs = geeStartMs(hidden) + 30 * 60 * 1000L,
+        )
+        assertTrue(items.none { it.event != null })
     }
 
     @Test

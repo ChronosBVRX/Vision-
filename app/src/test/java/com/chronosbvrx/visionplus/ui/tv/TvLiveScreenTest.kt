@@ -82,11 +82,10 @@ class TvLiveScreenTest {
 
         start(Route.Home, Route.Live)
         assertLanded("TvLiveScreen")
-        press(Key.DirectionDown)
-        press(Key.DirectionDown)
-        press(Key.DirectionLeft)
+        // Un solo OK abre el canal (antes el primero solo actualizaba el hero).
+        press(Key.DirectionRight)
         press(Key.DirectionCenter)
-        assertLanded("TvLiveScreen category picked")
+        assertTrue("Un OK debe abrir el reproductor", nav.current is Route.LivePlayer)
     }
 
     @Test

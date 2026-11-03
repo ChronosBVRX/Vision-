@@ -140,10 +140,12 @@ class RemoteServer(private val context: Context) {
         }
     }
 
-    /** Le manda a todos los teléfonos autorizados lo que la tele está mostrando. */
+    /** Le manda a los teléfonos autorizados lo que la tele está mostrando/reproduciendo. */
     private fun watchNow() {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
+                // Respaldo para lanzamientos viejos que no traen el Messenger del proceso
+                // principal (el camino normal es RemoteBridge).
                 intent?.getStringExtra(RemoteBus.EXTRA_NOW)?.let { RemoteBus.publishScreen(it) }
             }
         }
@@ -161,14 +163,29 @@ class RemoteServer(private val context: Context) {
         thread(name = "remote-now", isDaemon = true) {
             var last = ""
             while (running.get()) {
-                val now = RemoteBus.screen.value
-                if (now != last) {
-                    last = now
-                    clients.forEach { it.send(RemoteMsg(t = RemoteProto.NOW, screen = now)) }
+                val now = nowMessage()
+                val line = RemoteProto.encode(now)
+                if (line != last) {
+                    last = line
+                    // Solo un teléfono emparejado puede ver el título, el póster o el minuto.
+                    clients.filter { it.authorized }.forEach { it.send(now) }
                 }
                 runCatching { Thread.sleep(400) }
             }
         }
+    }
+
+    /**
+     * Lo que se manda como `now`: si hay una reproducción viva y reciente, su estado completo;
+     * si no, el nombre de la pantalla del menú (comportamiento de siempre).
+     */
+    private fun nowMessage(): RemoteMsg {
+        val playback = RemoteBus.playback.value
+        val fresh = playback.active &&
+            (playback.updatedAt <= 0L || System.currentTimeMillis() - playback.updatedAt < 5_000L)
+        if (fresh) return playback.asMsg()
+        val screen = RemoteBus.screen.value
+        return RemoteMsg(t = RemoteProto.NOW, screen = screen)
     }
 
     // --- Un teléfono ------------------------------------------------------------------------
@@ -176,7 +193,7 @@ class RemoteServer(private val context: Context) {
     private inner class Client(private val socket: Socket) {
         private val out: BufferedWriter =
             BufferedWriter(OutputStreamWriter(socket.getOutputStream(), Charsets.UTF_8))
-        @Volatile private var authorized = false
+        @Volatile var authorized = false
         @Volatile private var name = ""
         @Volatile private var attempts = 0
         private var reader: BufferedReader? = null
@@ -225,7 +242,7 @@ class RemoteServer(private val context: Context) {
                         if (tokens.firstOrNull() != tok) saveTokens(RemotePairing.addToken(tokens, tok))
                         RemoteBus.clients.value = clients.count { it.authorized }
                         send(RemoteMsg(t = RemoteProto.HELLO, name = deviceName, model = deviceModel, paired = true, id = tvId))
-                        send(RemoteMsg(t = RemoteProto.NOW, screen = RemoteBus.screen.value))
+                        send(nowMessage())
                     } else {
                         // Primera vez: la tele enseña el PIN (solo ahora, porque alguien lo pidió).
                         RemoteBus.pairingPin.value = pin
@@ -245,7 +262,7 @@ class RemoteServer(private val context: Context) {
                         RemoteBus.pairedWith.value = name
                         RemoteBus.clients.value = clients.count { it.authorized }
                         send(RemoteMsg(t = RemoteProto.OK, token = token, name = deviceName, id = tvId))
-                        send(RemoteMsg(t = RemoteProto.NOW, screen = RemoteBus.screen.value))
+                        send(nowMessage())
                     } else {
                         attempts++
                         RemoteBus.pairingPin.value = pin
@@ -265,6 +282,16 @@ class RemoteServer(private val context: Context) {
                 RemoteProto.OPEN -> {
                     if (!authorized) return
                     launchOpen(msg)
+                }
+
+                RemoteProto.SEEK -> {
+                    if (!authorized) return
+                    RemoteBus.sendPlayerSeek(msg.pos ?: return)
+                }
+
+                RemoteProto.CMD -> {
+                    if (!authorized) return
+                    RemoteBus.sendPlayerCommand(msg.cmd.orEmpty())
                 }
 
                 RemoteProto.SYNC -> {

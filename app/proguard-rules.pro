@@ -71,11 +71,13 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 
-# --- ADB por Wi-Fi desde el teléfono (LibADB + BouncyCastle + Conscrypt + SPAKE2) ---
+# --- ADB por Wi-Fi desde el teléfono (Kadb + BouncyCastle + Conscrypt + SPAKE2) ---
 # El emparejamiento y el shell remoto usan reflexión/JCA: sin estos keep el release (R8)
 # perdería los proveedores y el flujo «Inicio en la TV» solo funcionaría en debug.
--keep class io.github.muntashirakon.adb.** { *; }
--dontwarn io.github.muntashirakon.adb.**
+# Kadb: shell v2/clásico, sync y pairing por reflexión.
+-keep class com.flyfishxu.kadb.** { *; }
+-dontwarn com.flyfishxu.kadb.**
+-dontwarn org.lsposed.hiddenapibypass.**
 -keep class org.bouncycastle.** { *; }
 -dontwarn org.bouncycastle.**
 -keep class org.conscrypt.** { *; }
@@ -83,3 +85,10 @@
 -keep class com.google.security.spake2.** { *; }
 -dontwarn com.google.security.spake2.**
 -keep class * extends java.security.Provider { *; }
+
+
+# --- Visión+ Play: escáner QR del teléfono (JourneyApps/ZXing) ---
+# La CaptureActivity y los decodificadores se resuelven por nombre desde el manifest y el
+# runtime; sin keep, R8 puede dejar el escáner en blanco en el release.
+-keep class com.journeyapps.barcodescanner.** { *; }
+-keep class com.google.zxing.** { *; }

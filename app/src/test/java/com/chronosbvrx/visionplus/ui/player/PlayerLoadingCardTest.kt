@@ -60,6 +60,14 @@ class PlayerLoadingCardTest {
     }
 
     @Test
+    fun episodeSelectorShowsNumberAndNameWhenAvailable() {
+        assertEquals("C3 · El titán bestia", episodeSelectorLabel(3, "El titán bestia", "Ataque a los Titanes"))
+        // El nombre técnico del portal no se cuela como si fuera el nombre real.
+        assertEquals("Capítulo 3", episodeSelectorLabel(3, "Ataque a los Titanes T2_03", "Ataque a los Titanes"))
+        assertEquals("Capítulo 3", episodeSelectorLabel(3, "Capítulo 3", "Ataque a los Titanes"))
+    }
+
+    @Test
     fun genericEpisodeNamesAreSuppressed() {
         val generic = listOf("Capítulo 3", "Capitulo 3", "Episodio 3", "3", "capítulo 3")
         for (name in generic) {

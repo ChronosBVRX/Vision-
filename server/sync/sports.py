@@ -33,6 +33,7 @@ log = logging.getLogger("sports")
 MX = timezone(timedelta(hours=-6))
 
 ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{slug}/scoreboard?dates={day}"
+ESPN_SPORT_URL = "https://site.api.espn.com/apis/site/v2/sports/{sport}/{slug}/scoreboard?dates={day}"
 UA = "VisionPlusSync/1.0 (agenda de futbol)"
 
 LSTV_URL = "https://www.livesoccertv.com/es/schedules/{day}/"
@@ -184,6 +185,17 @@ LEAGUES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("concacaf.nations.league", "Concacaf Nations League", ("TUDN", "Canal 5", "Azteca 7", "ESPN", "Universo", "Telemundo")),
     ("concacaf.gold", "Copa Oro", ("TUDN", "Canal 5", "Azteca 7", "ESPN", "Universo", "Telemundo")),
     ("fifa.world", "Copa del Mundo", ("TUDN", "Canal 5", "Azteca 7", "ESPN", "Fox Sports", "Telemundo", "Universo")),
+)
+
+# Otros deportes de equipo: mismo parser ESPN, otra ruta. El `league_id` lleva el
+# deporte delante (`basketball/nba`) para que la API sepa con qué eventos de
+# GeeSports cruzarlo y la app pinte la categoría correcta.
+OTHER_LEAGUES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
+    ("basketball", "nba", "NBA", ("ESPN", "ESPN 2", "TNT Sports", "Max")),
+    ("basketball", "euroleague", "EuroLeague", ("ESPN", "ESPN 2", "Movistar Deportes")),
+    ("football", "nfl", "NFL", ("ESPN", "Fox Sports", "Canal 5", "Televisa")),
+    ("baseball", "mlb", "MLB", ("ESPN", "Fox Sports", "MLB Network")),
+    ("hockey", "nhl", "NHL", ("ESPN", "TNT Sports")),
 )
 
 UPSERT_SQL = """
@@ -446,20 +458,27 @@ def _parse_event(
     }
 
 
-async def _fetch(
+async def _fetch_league(
     sem: asyncio.Semaphore,
-    league: tuple,
+    sport: str,
+    slug: str,
+    name: str,
+    channels: tuple[str, ...],
     day: date,
     lstv_matches: list[dict] | None = None,
 ) -> list[dict]:
-    slug, name, channels = league
+    """Baja una competición de ESPN. `soccer` conserva su slug; el resto lleva
+    `deporte/slug` en `league_id` para que la API sepa cruzarlo con GeeSports."""
     async with sem:
+        url = (
+            ESPN_URL.format(slug=slug, day=day.strftime("%Y%m%d"))
+            if sport == "soccer"
+            else ESPN_SPORT_URL.format(sport=sport, slug=slug, day=day.strftime("%Y%m%d"))
+        )
         try:
-            data = await asyncio.to_thread(
-                _get, ESPN_URL.format(slug=slug, day=day.strftime("%Y%m%d"))
-            )
+            data = await asyncio.to_thread(_get, url)
         except Exception as exc:  # noqa: BLE001 - una liga caída no tumba el ciclo
-            log.warning("ESPN %s %s no respondió: %s", slug, day, exc)
+            log.warning("ESPN %s/%s %s no respondió: %s", sport, slug, day, exc)
             return []
     league_logo = ""
     for entry in data.get("leagues") or []:
@@ -467,12 +486,23 @@ async def _fetch(
             league_logo = logo.get("href") or ""
             break
         break
+    league_id = slug if sport == "soccer" else f"{sport}/{slug}"
     out = []
     for event in data.get("events") or []:
-        parsed = _parse_event(event, slug, name, league_logo, channels, lstv_matches)
+        parsed = _parse_event(event, league_id, name, league_logo, channels, lstv_matches)
         if parsed:
             out.append(parsed)
     return out
+
+
+async def _fetch(
+    sem: asyncio.Semaphore,
+    league: tuple,
+    day: date,
+    lstv_matches: list[dict] | None = None,
+) -> list[dict]:
+    slug, name, channels = league
+    return await _fetch_league(sem, "soccer", slug, name, channels, day, lstv_matches)
 
 
 async def _sync_days(pool, days: list[date]) -> int:
@@ -490,6 +520,10 @@ async def _sync_days(pool, days: list[date]) -> int:
         _fetch(sem, league, day, lstv_by_day.get(day))
         for day in days
         for league in LEAGUES
+    ), *(
+        _fetch_league(sem, sport, slug, name, channels, day)
+        for day in days
+        for sport, slug, name, channels in OTHER_LEAGUES
     ))
     rows = [row for group in groups for row in group]
     if rows:

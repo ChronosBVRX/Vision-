@@ -1,7 +1,9 @@
 package com.chronosbvrx.visionplus.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +55,7 @@ import java.util.Locale
  * variante Top 10 con número de posición gigante estilizado, y decodificación acotada para
  * bajo consumo de RAM en dispositivos limitados.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PosterCard(
     title: String,
@@ -64,11 +67,22 @@ fun PosterCard(
     rank: Int? = null,
     /** «También: …» bajo la ficha (nombre original del buscador). */
     altTitle: String? = null,
+    /** OK largo (mando) o pulsación larga (dedo): menú de favoritos / Ver más tarde. */
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
     val reduced = LocalReducedEffects.current
-    Column(modifier = modifier.clickable(onClick = onClick)) {
+    Column(
+        modifier = modifier
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                },
+            ),
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()

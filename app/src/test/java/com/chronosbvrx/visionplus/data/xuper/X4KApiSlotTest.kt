@@ -63,7 +63,7 @@ class X4KApiSlotTest {
         assertEquals("cyx-AMC", arr.optJSONObject(0)?.optString("channelCode"))
         assertEquals("cyx-AMC", arr.optJSONObject(0)?.optString("name"))
         // El nombre camuflado se traduce igual que en el catálogo.
-        assertEquals("ESPN / Star+ HD", arr.optJSONObject(1)?.optString("name"))
+        assertEquals("Disney+ (Elite Sports Hub)", arr.optJSONObject(1)?.optString("name"))
     }
 
     @Test

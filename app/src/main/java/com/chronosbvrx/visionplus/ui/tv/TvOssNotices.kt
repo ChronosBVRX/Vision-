@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.tv
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +32,7 @@ import com.chronosbvrx.visionplus.ui.settings.OSS_INTRO
 import com.chronosbvrx.visionplus.ui.settings.OSS_NOTICES
 import com.chronosbvrx.visionplus.ui.settings.OssNotice
 import com.chronosbvrx.visionplus.ui.settings.ossNoticeText
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.delay
@@ -60,13 +62,15 @@ internal fun TvOssNoticesDialog(onDismiss: () -> Unit) {
         onDismissRequest = { if (notice != null) open = null else onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        BackHandler { if (notice != null) open = null else onDismiss() }
         Column(
             Modifier
                 .fillMaxSize()
                 .background(VisionBlack)
                 .padding(horizontal = 48.dp, vertical = 28.dp)
                 .verticalScroll(rememberScrollState())
-                .modalFocusTrap(),
+                .modalFocusTrap()
+                .dismissOnBack { if (notice != null) open = null else onDismiss() },
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(notice?.name ?: "Licencias de software libre", style = MaterialTheme.typography.titleLarge, color = Color.White)

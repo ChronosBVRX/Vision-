@@ -16,8 +16,9 @@ import kotlin.concurrent.thread
  *
  * - Se lee al arrancar y cada 6 h; si no hay red, valen los flags cacheados y, si no hay
  *   ninguno, los defaults seguros (todo activo).
- * - Flags honrados hoy: `downloads_enabled` (apaga las descargas) y
- *   `diagnostics_forced_off` (apaga el diagnóstico aunque el usuario lo tenga activo).
+ * - Flags honrados hoy: `downloads_enabled` (apaga las descargas),
+ *   `diagnostics_forced_off` (apaga el diagnóstico aunque el usuario lo tenga activo) y
+ *   `pip_enabled` (apaga el Picture-in-Picture si un fabricante se comporta mal).
  */
 object RemoteConfig {
 

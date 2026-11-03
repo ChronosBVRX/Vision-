@@ -76,7 +76,10 @@ import kotlinx.coroutines.withContext
 /** Pestañas de Ajustes en Smart TV. */
 enum class TvSettingsTab(val label: String) {
     PLAYBACK("Reproducción"),
-    SYSTEM("Sistema y Rendimiento"),
+    SCREEN("Pantalla y rendimiento"),
+    SYSTEM("Sistema y red"),
+    ACCOUNT("Cuenta y perfiles"),
+    UPDATES("Actualizaciones"),
 }
 
 /** "Ajustes" en Smart TV con navegación D-pad: riel de categorías a la izquierda y opciones a la derecha. */
@@ -114,7 +117,10 @@ fun TvSettingsScreen(initialTab: TvSettingsTab = TvSettingsTab.PLAYBACK) {
         ) {
             when (tab) {
                 TvSettingsTab.PLAYBACK -> TvPlaybackTab()
-                TvSettingsTab.SYSTEM -> TvSystemTab()
+                TvSettingsTab.SCREEN -> TvSystemTab(showPerformance = true)
+                TvSettingsTab.SYSTEM -> TvSystemTab(showNetwork = true)
+                TvSettingsTab.ACCOUNT -> TvSystemTab(showAccount = true)
+                TvSettingsTab.UPDATES -> TvSystemTab(showUpdates = true)
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -208,9 +214,8 @@ private fun ColumnScope.TvPlaybackTab() {
     }
     Note("Resolución inicial para series y películas con múltiples calidades.")
 
-    val aspectLabel = if (s.defaultAspect == 0) "Ajustar (16:9)" else "Rellenar pantalla (Zoom)"
-    TvActionOption("Ajuste de pantalla: $aspectLabel") {
-        s.setDefaultAspect(context, if (s.defaultAspect == 0) 1 else 0)
+    TvActionOption("Ajuste de pantalla: ${s.aspectLabel(s.defaultAspect)}") {
+        s.setDefaultAspect(context, s.nextAspect(s.defaultAspect))
     }
     Note("Define cómo se escala el reproductor en pantalla por defecto.")
 
@@ -255,7 +260,12 @@ private fun ColumnScope.TvPlaybackTab() {
 }
 
 @Composable
-private fun ColumnScope.TvSystemTab() {
+private fun ColumnScope.TvSystemTab(
+    showPerformance: Boolean = false,
+    showNetwork: Boolean = false,
+    showAccount: Boolean = false,
+    showUpdates: Boolean = false,
+) {
     val context = LocalContext.current
     val s = VisionSettings
     val update = rememberUpdateCheck()
@@ -269,6 +279,7 @@ private fun ColumnScope.TvSystemTab() {
     var showProfiles by rememberSaveable { mutableStateOf(false) }
     if (showProfiles) TvProfilesDialog(onDismiss = { showProfiles = false })
 
+    if (showPerformance) {
     TvSectionTitle("Rendimiento y Pantalla")
     val mode = s.effectsMode
     val modeLabel = when (mode) {
@@ -302,6 +313,9 @@ private fun ColumnScope.TvSystemTab() {
         Toast.makeText(context, "Historial de reproducción vaciado", Toast.LENGTH_SHORT).show()
     }
 
+    }
+
+    if (showNetwork) {
     TvSectionTitle("Diagnóstico y Red")
     Note("Conexión: ${s.getNetworkInfo(context)}")
     Note("Servidor de streaming: En línea (XTV Masnew)")
@@ -345,6 +359,9 @@ private fun ColumnScope.TvSystemTab() {
         Note("Los teléfonos tendrán que emparejar de nuevo con el PIN que muestre la tele.")
     }
 
+    }
+
+    if (showAccount) {
     TvSectionTitle("Perfiles")
     TvActionOption(
         "Cambiar de perfil (${com.chronosbvrx.visionplus.data.profile.ProfileStore.active(context).name})",
@@ -360,6 +377,9 @@ private fun ColumnScope.TvSystemTab() {
     TvSectionTitle("Mi actividad")
     TvActivityRows()
 
+    }
+
+    if (showUpdates) {
     TvSectionTitle("Vision+ Home (launcher)")
     TvLauncherRows()
 
@@ -380,6 +400,7 @@ private fun ColumnScope.TvSystemTab() {
     Note("Encendido recibes cada versión de pruebas en cuanto se publica; apagado solo las oficiales.")
     TvActionOption(if (update.checking) "Buscando…" else "Buscar actualizaciones") { update.run() }
     TvActionOption("Licencias de software libre") { showNotices = true }
+    }
 }
 
 /**

@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.player
 
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -17,8 +18,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
@@ -27,18 +31,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.ScreenRotation
@@ -63,6 +72,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,13 +101,20 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import com.chronosbvrx.visionplus.data.remote.NowPlaying
+import com.chronosbvrx.visionplus.data.remote.RemoteBus
+import com.chronosbvrx.visionplus.data.remote.RemoteProto
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -124,7 +141,10 @@ import com.chronosbvrx.visionplus.DevicePerformance
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.ResumeInfo
+import com.chronosbvrx.visionplus.data.sports.MatchStats
+import com.chronosbvrx.visionplus.data.sports.SportsStatsSource
 import com.chronosbvrx.visionplus.ui.sports.GeeZapSignals
+import com.chronosbvrx.visionplus.ui.sports.GeeTiles
 import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.markers.MarkersStore
 import com.chronosbvrx.visionplus.data.markers.autoSkipTarget
@@ -144,6 +164,7 @@ import com.chronosbvrx.visionplus.ui.formatDuration
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionLiveRed
+import com.chronosbvrx.visionplus.ui.theme.VisionRatingGold
 import com.chronosbvrx.visionplus.ui.tv.landingFocus
 import com.chronosbvrx.visionplus.ui.tv.modalFocusTrap
 import com.chronosbvrx.visionplus.ui.tv.rememberLandingFocus
@@ -158,9 +179,6 @@ private const val SEEK_STEP_MS = 10_000L
 /** The Vision+ pre-roll: "Omitir" appears after this long. */
 private const val BRAND_SKIP_DELAY_MS = 2_000L
 
-/** El zapping a dos toques: la segunda flecha consecutiva dentro de esta ventana cambia de canal. */
-private const val ZAP_ARM_MS = 2_500L
-
 /** The TV's overscan safe zone around the controls. */
 private val SAFE_H = 44.dp
 private val SAFE_V = 44.dp
@@ -171,6 +189,14 @@ internal object IntroSession {
 }
 
 /** The player for a catalog film: media3 ExoPlayer under Vision's controls, with the pre-roll first. */
+/**
+ * Logo del canal en vivo para el reproductor ExoPlayer (el nativo lo lleva en el intent).
+ * No cambia la firma gigante de [PlayerCore]; solo es el arte que viaja al JSON de la red.
+ */
+private object LiveArtwork {
+    @Volatile var logo: String = ""
+}
+
 @Composable
 fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: EpisodePlay? = null, resumeMs: Long = 0) {
     // Al abrir una película alimenta las recomendaciones del inicio.
@@ -218,9 +244,11 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
         return
     }
     // An XTV film (`xtv:<contentId>`) or live channel (`xtvlive:<code>`): the portal mints the
-    // play codes here and the X4K engine (its own process) does the streaming. The handoff
-    // screen holds the room until the player takes over.
-    if (film.videoUrl.startsWith("xtv:") || film.videoUrl.startsWith("xtvlive:")) {
+    // play codes here and the X4K engine (its own process) does the streaming. El capítulo
+    // XTV también entra aquí aunque la ficha de la serie traiga otra URL base: así TODO el
+    // VOD de Xuper usa el mismo reproductor, con sus idiomas y subtítulos reales.
+    val xtvEpisode = episode?.code?.startsWith("xtv:") == true
+    if (film.videoUrl.startsWith("xtv:") || film.videoUrl.startsWith("xtvlive:") || xtvEpisode) {
         // El motor nativo solo puede con una cosa a la vez y la descarga lo ocupa entero:
         // con una descarga activa se ofrece pausarla antes de abrir (nunca se cruzan).
         EngineDownloadGate(isTv = isTv, onCancel = onBack) {
@@ -234,7 +262,7 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
             XtvHandoff(
                 title = film.title + (ep?.titleSuffix.orEmpty()),
                 prepare = {
-                    if (live) com.chronosbvrx.visionplus.data.xuper.X4KApi.playLive(context, code, film.title)
+                    if (live) com.chronosbvrx.visionplus.data.xuper.X4KApi.playLive(context, code, film.title, logo = film.posterUrl)
                     else if (ep != null) com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(
                         context, ep.code, film.title + ep.titleSuffix, seriesId = ep.seriesId,
                         episodeIds = ep.episodeIds, episodeNames = ep.episodeNames,
@@ -308,6 +336,7 @@ fun LivePlayerScreen(
                         channel.name,
                         channelCodes = channelCodes,
                         groupTitle = groupTitle,
+                        logo = channel.logo.orEmpty(),
                     )
                 },
                 onDone = onBack,
@@ -371,12 +400,17 @@ fun LivePlayerScreen(
                         target.name,
                         channelCodes = channelCodes,
                         groupTitle = groupTitle,
+                        logo = target.logo.orEmpty(),
                     )
                 },
                 onDone = onBack,
             )
         }
         return
+    }
+    LaunchedEffect(channel.url) { LiveArtwork.logo = channel.logo.orEmpty() }
+    DisposableEffect(channel.url) {
+        onDispose { if (LiveArtwork.logo == channel.logo.orEmpty()) LiveArtwork.logo = "" }
     }
     val zapTargets = remember(streamUrl, channel) {
         buildList {            add(
@@ -466,6 +500,11 @@ private fun PlayerCore(
     // Encadenado offline: el capítulo descargado en curso y su «siguiente descargado».
     // El búnker permite saltar de capítulo sin red, igual que la app lo hace en línea.
     val isVault = url.startsWith("vault:")
+    // El cuadro flotante se lee como estado: al entrar se ocultan controles/modales y al
+    // volver se restauran. La actividad principal es la dueña de los parámetros del sistema.
+    val inPip = PipSession.inPip
+    val pipAvailable = !isTv && PipMode.isSupported(context) &&
+        PipRules.canUsePipFor(isVault, com.chronosbvrx.visionplus.ui.settings.VisionSettings.pipDownloads)
     fun vaultMarkersFor(vaultUrl: String): String {
         if (!vaultUrl.startsWith("vault:")) return ""
         return runCatching {
@@ -586,6 +625,8 @@ private fun PlayerCore(
     AutoHideEffect(controls, playing)
     val menu = rememberPlayerMenuState()
     var showTracks by remember { mutableStateOf(false) }
+    var showAspect by remember { mutableStateOf(false) }
+    var aspectMode by remember { mutableIntStateOf(com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultAspect) }
     var skipUsed by remember { mutableStateOf(false) }
     var recapUsed by remember { mutableStateOf(false) }
     // Historial («Seguir viendo»): minuto guardado y diálogo de continuar.
@@ -727,6 +768,13 @@ private fun PlayerCore(
     var zapIndex by remember { mutableStateOf(0) }
     var showZapList by remember { mutableStateOf(false) }
     var showLiveInfo by remember { mutableStateOf(false) }
+    var liveInfoPage by remember { mutableIntStateOf(0) }
+    // Match Center HUD del evento deportivo: una sola tarjeta inferior con pestañas.
+    var matchHudPage by remember { mutableStateOf(MatchHudPage.SUMMARY) }
+    val showMatchHud = isLive && eventInfo != null && !inPip
+    LaunchedEffect(eventInfo?.title, eventInfo?.dateIso) {
+        matchHudPage = MatchHudPage.SUMMARY
+    }
     var failovers by remember { mutableStateOf(0) }
     var fellBackToXtv by remember { mutableStateOf(false) }
     val canZap = isLive && zapTargets.size > 1 && !introPlaying
@@ -750,6 +798,9 @@ private fun PlayerCore(
         if (index < 0 || index >= zapTargets.size || index == zapIndex) return
         val target = zapTargets[index]
         zapIndex = index
+        if (eventInfo != null) {
+            com.chronosbvrx.visionplus.ui.sports.DeportesReturn.updateWatchingUrl(target.url)
+        }
         recovering = false
         pendingRecoverySeekMs = 0L
         stallStartedAtMs = 0L
@@ -1017,6 +1068,7 @@ private fun PlayerCore(
 
     // Progress is polled: the position moves continuously and has no listener of its own.
     LaunchedEffect(player) {
+        var lastRemoteAt = 0L
         while (true) {
             positionMs = player.currentPosition.coerceAtLeast(0L)
             val d = player.duration
@@ -1074,6 +1126,31 @@ private fun PlayerCore(
                     Toast.LENGTH_SHORT,
                 ).show()
             }
+            val remoteNow = System.currentTimeMillis()
+            if (remoteNow - lastRemoteAt >= 900L) {
+                lastRemoteAt = remoteNow
+                RemoteBus.publishPlayback(
+                    NowPlaying(
+                        kind = if (isLive) RemoteProto.KIND_LIVE else RemoteProto.KIND_VOD,
+                        screen = listOf(title, subtitle).filter { it.isNotBlank() }.joinToString(" · "),
+                        title = title,
+                        subtitle = subtitle,
+                        channel = if (isLive) title else "",
+                        channelLogo = if (isLive) LiveArtwork.logo else "",
+                        program = if (isLive) subtitle.ifBlank { title } else title,
+                        description = subtitle,
+                        poster = resumeInfo?.posterUrl.orEmpty(),
+                        ref = url,
+                        playing = player.playWhenReady,
+                        positionMs = positionMs,
+                        durationMs = if (durationMs > 0) durationMs else declaredDurationMs,
+                        canSeek = !isLive && (durationMs > 0 || declaredDurationMs > 0),
+                        hasNext = nextVault != null,
+                        hasPrev = !isLive,
+                        updatedAt = remoteNow,
+                    ),
+                )
+            }
             delay(500)
         }
     }
@@ -1106,10 +1183,12 @@ private fun PlayerCore(
     }
 
     // Leaving the app pauses; coming back leaves it paused with the controls up.
+    // Excepción: en PiP la actividad puede recibir ON_STOP y el video DEBE seguir.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
+            val inPipNow = PipSession.inPip || PipMode.isActivityInPip(activity)
+            if (event == Lifecycle.Event.ON_STOP && !inPipNow) {
                 saveHistory()
                 player.pause()
                 controls.bump()
@@ -1125,26 +1204,33 @@ private fun PlayerCore(
     // Full screen while the player is open: system bars hidden, back to normal on leaving.
     DisposableEffect(activity, url) {
         val window = activity?.window
-        if (url.startsWith("vault:")) {
-            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-        }
         val insets = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
         insets?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         insets?.hide(WindowInsetsCompat.Type.systemBars())
         onDispose {
-            if (url.startsWith("vault:")) {
-                window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-            }
             insets?.show(WindowInsetsCompat.Type.systemBars())
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
 
+    // Anti-grabación del búnker. En PiP se apaga SOLO si el usuario habilitó el ajuste
+    // explícito de descargas; fuera de PiP (o con el ajuste apagado) sigue activo.
+    DisposableEffect(activity, url, inPip) {
+        val window = activity?.window
+        val secure = url.startsWith("vault:") &&
+            !(inPip && com.chronosbvrx.visionplus.ui.settings.VisionSettings.pipDownloadsAllowed(context))
+        if (secure) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        onDispose {
+            if (secure) window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
     var swallowWakeupKey by remember { mutableStateOf<Key?>(null) }
     var lastWakeupAtMs by remember { mutableLongStateOf(0L) }
-    // Zapping a dos toques: la última flecha armada y su momento (Arriba/Abajo del vivo).
-    var lastZapKey by remember { mutableStateOf<Key?>(null) }
-    var lastZapAtMs by remember { mutableLongStateOf(0L) }
 
     fun canExecuteControlAction(): Boolean {
         if (!controls.visible || swallowWakeupKey != null) return false
@@ -1165,37 +1251,108 @@ private fun PlayerCore(
         controls.bump()
     }
 
+    fun enterPipFromButton() {
+        val ok = activity?.let { PipMode.enter(it, playing) } == true
+        if (!ok) Toast.makeText(context, "Picture-in-picture no está disponible", Toast.LENGTH_SHORT).show()
+    }
+
+    // La actividad principal necesita saber qué se está viendo y cómo pausarlo/reanudarlo.
+    // Se registra en un holder de proceso (no se toca la firma gigante de PlayerCore).
+    DisposableEffect(player, isVault) {
+        val session = PipSession.Active(
+            isVault = isVault,
+            isLive = isLive,
+            title = currentTitle,
+            playing = { player.playWhenReady },
+            toggle = { togglePlayPause() },
+            close = {
+                player.pause()
+                onBack()
+            },
+        )
+        PipSession.attach(session)
+        onDispose { PipSession.detach(session) }
+    }
+    LaunchedEffect(playing) { PipSession.bump() }
+
+    var pipWasActive by remember { mutableStateOf(false) }
+    LaunchedEffect(inPip) {
+        if (inPip) {
+            pipWasActive = true
+            if (introPlaying) startMainItem()
+            val pending = if (!resumeConsumed) resumeEntry else null
+            if (pending != null) acceptResume(pending.positionMs)
+            showTracks = false
+            showZapList = false
+            showLiveInfo = false
+            controls.hide()
+        } else if (pipWasActive) {
+            pipWasActive = false
+            controls.bump()
+        }
+    }
+
+    // El control remoto del teléfono también manda sobre ExoPlayer (deportes, M3U, búnker).
+    DisposableEffect(player, isLive) {
+        val sink = object : RemoteBus.PlayerSink {
+            override fun onSeek(positionMs: Long) {
+                val max = if (durationMs > 0) durationMs else Long.MAX_VALUE
+                player.seekTo(positionMs.coerceIn(0L, max))
+                controls.bump()
+            }
+
+            override fun onCommand(command: String) {
+                when (command) {
+                    RemoteProto.CMD_PLAY_PAUSE -> togglePlayPause()
+                    RemoteProto.CMD_NEXT -> if (nextVault != null) playNextVault()
+                    RemoteProto.CMD_PREVIOUS -> if (!isLive) player.seekTo(0L)
+                    RemoteProto.CMD_AUDIO, RemoteProto.CMD_SUBTITLES -> showTracks = true
+                    RemoteProto.CMD_STOP -> player.pause()
+                }
+            }
+        }
+        RemoteBus.attachPlayer(sink)
+        onDispose {
+            RemoteBus.detachPlayer(sink)
+            RemoteBus.clearPlayback()
+        }
+    }
+
     // The video surface takes the D-pad while the controls are hidden (and is the screen's landing).
     val surface = rememberLandingFocus()
     var rewindFocused by remember { mutableStateOf(false) }
     var playPauseFocused by remember { mutableStateOf(false) }
     var forwardFocused by remember { mutableStateOf(false) }
     var tracksFocused by remember { mutableStateOf(false) }
+    var aspectFocused by remember { mutableStateOf(false) }
     val barFocus = remember { FocusRequester() }
     val resumeFocus = remember { FocusRequester() }
     val rewindFocus = remember { FocusRequester() }
     val playPauseFocus = remember { FocusRequester() }
     val forwardFocus = remember { FocusRequester() }
     val tracksFocus = remember { FocusRequester() }
+    val aspectFocus = remember { FocusRequester() }
     val skipFocus = remember { FocusRequester() }
     val brandSkipFocus = remember { FocusRequester() }
     val nextCardFocus = remember { FocusRequester() }
     val zapListFocus = remember { FocusRequester() }
     val liveInfoFocus = remember { FocusRequester() }
+    // En vivo no hay pausa: el foco del mando aterriza en la primera píldora real.
+    val liveLeadFocus = if (canZap) zapListFocus else liveInfoFocus
     var skipFocused by remember { mutableStateOf(false) }
     var brandSkipFocused by remember { mutableStateOf(false) }
     var nextCardFocused by remember { mutableStateOf(false) }
     var zapListFocused by remember { mutableStateOf(false) }
     var liveInfoFocused by remember { mutableStateOf(false) }
     val hasControlFocus = barFocused || rewindFocused || playPauseFocused || forwardFocused ||
-        tracksFocused || skipFocused || zapListFocused || liveInfoFocused
+        tracksFocused || aspectFocused || skipFocused || zapListFocused || liveInfoFocused
 
     // Si el botón de audio/subtítulos deja de existir (el video no tiene opciones), el foco
     // no puede quedar huérfano: vuelve a play/pausa para que el mando siga respondiendo.
     LaunchedEffect(menu.hasAnyChoices) {
         if (!menu.hasAnyChoices && tracksFocused) {
             tracksFocused = false
-            if (controls.visible) runCatching { playPauseFocus.requestFocus() }
+            if (controls.visible) runCatching { if (isLive) liveLeadFocus.requestFocus() else playPauseFocus.requestFocus() }
         }
     }
 
@@ -1267,7 +1424,7 @@ private fun PlayerCore(
     // TV: the overlay's play/pause takes focus as it opens; the video takes it back as it closes.
     // Repeated until it holds, since a request made while the overlay is still appearing can be dropped.
     // With the controls hidden, the surface ALWAYS holds focus so the first D-pad click only wakes the menu.
-    LaunchedEffect(controls.visible, isTv, brandSkipVisible, introPlaying, nextVault?.id) {
+    LaunchedEffect(controls.visible, isTv, brandSkipVisible, introPlaying, nextVault?.id, isLive, canZap) {
         if (!isTv) return@LaunchedEffect
         repeat(40) {
             val held = when {
@@ -1282,7 +1439,7 @@ private fun PlayerCore(
                 when {
                     nextVault != null -> nextCardFocus.requestFocus()
                     brandSkipVisible -> brandSkipFocus.requestFocus()
-                    controls.visible && !introPlaying -> playPauseFocus.requestFocus()
+                    controls.visible && !introPlaying -> if (isLive) liveLeadFocus.requestFocus() else playPauseFocus.requestFocus()
                     else -> surface.request()
                 }
             }
@@ -1331,28 +1488,55 @@ private fun PlayerCore(
             .background(Color.Black)
             .landingFocus(surface)
             .onPreviewKeyEvent { e ->
-                // Zapping del vivo a dos toques (como el reproductor nativo): el primer
-                // Arriba/Abajo arma la señal y despierta los controles; el segundo
-                // consecutivo dentro de la ventana cambia al siguiente canal del evento.
+                // En los extremos de la fila de píldoras, la flecha se consume: el foco
+                // se queda en la última/primera píldora y no salta a la raíz ni «regresa solo».
+                if (e.type == KeyEventType.KeyDown && controls.visible) {
+                    if (e.key == Key.DirectionRight && aspectFocused) return@onPreviewKeyEvent true
+                    if (e.key == Key.DirectionLeft &&
+                        ((canZap && zapListFocused) || (!canZap && liveInfoFocused))
+                    ) {
+                        return@onPreviewKeyEvent true
+                    }
+                }
+                // Zapping del vivo: Arriba/Abajo cambia de señal al instante y, si el
+                // menú estaba oculto, lo despierta. El ciclo es solo entre las señales
+                // disponibles de ESTE evento (las arma el selector del partido).
                 if (canZap && (e.key == Key.DirectionUp || e.key == Key.DirectionDown)) {
                     if (e.type != KeyEventType.KeyDown) {
                         if (swallowWakeupKey != null) swallowWakeupKey = null
                         return@onPreviewKeyEvent true
                     }
                     if (e.nativeKeyEvent.repeatCount > 0) return@onPreviewKeyEvent true
-                    val nowMs = android.os.SystemClock.uptimeMillis()
-                    if (lastZapKey == e.key && nowMs - lastZapAtMs < ZAP_ARM_MS) {
-                        lastZapAtMs = nowMs
-                        zapStep(if (e.key == Key.DirectionDown) 1 else -1)
+                    zapStep(if (e.key == Key.DirectionDown) 1 else -1)
+                    controls.bump()
+                    return@onPreviewKeyEvent true
+                }
+                // Match Center HUD: Izquierda/Derecha recorre las páginas; Arriba/Abajo ya
+                // cambió de señal (y con una sola señal se consume sin robar el foco). OK
+                // oculta el menú, como Atrás. Cada tecla reinicia el auto-ocultado.
+                if (showMatchHud && controls.visible &&
+                    !showZapList && !showTracks && !showAspect && !showLiveInfo
+                ) {
+                    val hudKey = e.key == Key.DirectionLeft || e.key == Key.DirectionRight ||
+                        e.key == Key.DirectionUp || e.key == Key.DirectionDown ||
+                        e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                    if (hudKey) {
+                        if (e.type == KeyEventType.KeyDown) {
+                            when (e.key) {
+                                Key.DirectionLeft -> {
+                                    matchHudPage = matchHudPageAfter(matchHudPage, -1)
+                                    controls.bump()
+                                }
+                                Key.DirectionRight -> {
+                                    matchHudPage = matchHudPageAfter(matchHudPage, 1)
+                                    controls.bump()
+                                }
+                                Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> controls.hide()
+                                else -> controls.bump()
+                            }
+                        }
                         return@onPreviewKeyEvent true
                     }
-                    lastZapKey = e.key
-                    lastZapAtMs = nowMs
-                    swallowWakeupKey = e.key
-                    lastWakeupAtMs = nowMs
-                    controls.bump()
-                    if (isTv) runCatching { playPauseFocus.requestFocus() }
-                    return@onPreviewKeyEvent true
                 }
                 if (swallowWakeupKey != null && shouldClearSwallowedWakeup(android.os.SystemClock.uptimeMillis(), lastWakeupAtMs)) {
                     // El UP se perdió (o el mando no lo manda): la tecla no puede quedar muerta.
@@ -1382,11 +1566,20 @@ private fun PlayerCore(
                         isErrorShown = error != null,
                     )
                     if (action == PlayerKeyDownAction.WAKE_CONTROLS_ONLY) {
+                        // Si el menú YA está visible pero perdió el foco, no se
+                        // traga la tecla: se repara el foco y se deja que el D-pad
+                        // siga navegando. Traga solo cuando de verdad estaba oculto.
+                        if (controls.visible) {
+                            if (isTv && !introPlaying) {
+                                runCatching { if (isLive) liveLeadFocus.requestFocus() else playPauseFocus.requestFocus() }
+                            }
+                            return@onPreviewKeyEvent false
+                        }
                         swallowWakeupKey = e.key
                         lastWakeupAtMs = android.os.SystemClock.uptimeMillis()
                         controls.bump()
                         if (isTv && !introPlaying) {
-                            runCatching { playPauseFocus.requestFocus() }
+                            runCatching { if (isLive) liveLeadFocus.requestFocus() else playPauseFocus.requestFocus() }
                         }
                         return@onPreviewKeyEvent true
                     }
@@ -1440,18 +1633,32 @@ private fun PlayerCore(
                 }
             },
             // El pre-roll llena la pantalla (con recorte prudente); la película va encuadrada.
+            // En PiP siempre FIT: el cuadro conserva la proporción del video, sin recortes.
             update = { view ->
                 view.resizeMode = if (introPlaying) {
                     AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                } else if (com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultAspect == 1) {
+                } else if (inPip) {
+                    AspectRatioFrameLayout.RESIZE_MODE_FIT
+                } else if (aspectMode == 1 || aspectMode == 4) {
                     AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                } else if (aspectMode == 5) {
+                    AspectRatioFrameLayout.RESIZE_MODE_FILL
                 } else {
                     AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
             },
         )
 
-        if (buffering && error == null) {
+        // Defensa en profundidad: si el usuario fuerza PiP desde el sistema con una descarga
+        // y el ajuste está apagado, el cuadro no expone el video (queda negro). `FLAG_SECURE`
+        // sigue activo; esto cubre equipos donde el compositor no lo respeta.
+        if (inPip && isVault &&
+            !com.chronosbvrx.visionplus.ui.settings.VisionSettings.pipDownloadsAllowed(context)
+        ) {
+            Box(Modifier.fillMaxSize().background(Color.Black))
+        }
+
+        if (buffering && error == null && !inPip) {
             // Primera conexión (antes del primer frame): tarjeta de carga de marca, la
             // misma del reproductor de TV En vivo. Buffering intermedio: spinner simple.
             if (!introPlaying && positionMs <= 0) {
@@ -1469,7 +1676,7 @@ private fun PlayerCore(
             }
         }
 
-        if (recovering && error == null) {
+        if (recovering && error == null && !inPip) {
             // Reconexión automática en curso: píldora discreta, no vuelve al spinner grande.
             Box(
                 Modifier
@@ -1497,7 +1704,7 @@ private fun PlayerCore(
             }
         }
 
-        error?.let { message ->
+        if (!inPip) error?.let { message ->
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(message, color = Color.White, style = MaterialTheme.typography.titleMedium)
                 Button(
@@ -1534,8 +1741,8 @@ private fun PlayerCore(
             }
         }
         val pendingResume = if (!resumeConsumed && !autoResumeSetting) resumeEntry else null
-        LaunchedEffect(pendingResume) {
-            if (pendingResume != null) {
+        LaunchedEffect(pendingResume, inPip) {
+            if (pendingResume != null && !inPip) {
                 player.pause()
                 if (isTv) {
                     delay(300)
@@ -1543,31 +1750,29 @@ private fun PlayerCore(
                 }
             }
         }
-        pendingResume?.let { entry ->
-            AlertDialog(
-                onDismissRequest = { acceptResume(entry.positionMs) },
-                modifier = Modifier.modalFocusTrap(),
-                title = { Text(entry.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                text = {
-                    Text(
-                        "Continuar en " + formatResume(entry.positionMs) +
-                            (if (entry.durationMs > 0) " de " + formatResume(entry.durationMs) else ""),
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = { acceptResume(entry.positionMs) },
-                        modifier = Modifier.focusRequester(resumeFocus),
-                    ) { Text("Continuar") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { acceptResume(0) }) { Text("Desde el inicio") }
-                },
-            )
+        if (!inPip) pendingResume?.let { entry ->
+            PlayerMenuSurface(
+                title = entry.title,
+                subtitle = "Continuar en " + formatResume(entry.positionMs) +
+                    (if (entry.durationMs > 0) " de " + formatResume(entry.durationMs) else ""),
+                uppercaseTitle = false,
+                onDismiss = { acceptResume(entry.positionMs) },
+            ) {
+                MenuOption(
+                    label = "Continuar",
+                    selected = true,
+                    icon = Icons.Default.PlayArrow,
+                    modifier = Modifier.focusRequester(resumeFocus),
+                ) { acceptResume(entry.positionMs) }
+                MenuOption(
+                    label = "Desde el inicio",
+                    icon = Icons.Default.Replay10,
+                ) { acceptResume(0) }
+            }
         }
 
         AnimatedVisibility(
-            visible = controls.visible && error == null,
+            visible = controls.visible && error == null && !inPip,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize(),
@@ -1602,6 +1807,24 @@ private fun PlayerCore(
                     .then(if (isTv) Modifier.padding(horizontal = SAFE_H, vertical = SAFE_V) else Modifier),
             ) {
                 if (isLive) {
+                    if (showMatchHud) {
+                        // El HUD concentra todo abajo; arriba solo queda el Atrás táctil.
+                        if (!isTv) {
+                            IconButton(
+                                onClick = { if (canExecuteControlAction()) onBack() },
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .systemBarsPadding()
+                                    .padding(4.dp),
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Atrás",
+                                    tint = Color.White,
+                                )
+                            }
+                        }
+                    } else {
                     // Aviso de cable: la MISMA interfaz que la TV en vivo (panel con la píldora
                     // EN VIVO, la etiqueta del grupo/liga, el título y las líneas de guía).
                     Row(
@@ -1627,6 +1850,7 @@ private fun PlayerCore(
                             isTv = isTv,
                             modifier = if (isTv) Modifier.fillMaxWidth(0.62f) else Modifier.weight(1f),
                         )
+                    }
                     }
                 } else if (isTv) {
                     Column(
@@ -1759,8 +1983,10 @@ private fun PlayerCore(
                     }
                     // La fila de controles del EN VIVO es la de la TV en vivo: píldoras etiquetadas
                     // (Canales / Información, con las funciones propias del reproductor en línea
-                    // —pausa y audio— en la misma piel). En el móvil la fila se desliza.
+                    // —pausa y audio— en la misma piel). En el móvil la fila se desliza. En un
+                    // evento deportivo el Match Center HUD ocupa su lugar.
                     if (isLive && !introPlaying) {
+                        if (!showMatchHud) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1772,57 +1998,51 @@ private fun PlayerCore(
                                 PlayerPill(
                                     icon = Icons.Default.Tv,
                                     label = "Canales",
+                                    blockLeft = true,
                                     onClick = { if (canExecuteControlAction()) { showZapList = true; controls.bump() } },
-                                    modifier = if (!isTv) Modifier else Modifier
+                                    focusModifier = if (!isTv) Modifier else Modifier
                                         .focusRequester(zapListFocus)
                                         .onFocusChanged { zapListFocused = it.isFocused }
-                                        .focusProperties { left = playPauseFocus; right = liveInfoFocus; up = playPauseFocus; down = zapListFocus },
+                                        
                                 )
                             }
                             PlayerPill(
                                 icon = Icons.Default.Info,
                                 label = "Información",
-                                onClick = { if (canExecuteControlAction()) { showLiveInfo = true; controls.bump() } },
-                                modifier = if (!isTv) Modifier else Modifier
+                                blockLeft = !canZap,
+                                onClick = {
+                                    if (canExecuteControlAction()) {
+                                        liveInfoPage = 0
+                                        showLiveInfo = true
+                                        controls.bump()
+                                    }
+                                },
+                                focusModifier = if (!isTv) Modifier else Modifier
                                     .focusRequester(liveInfoFocus)
                                     .onFocusChanged { liveInfoFocused = it.isFocused }
-                                    .focusProperties {
-                                        left = if (canZap) zapListFocus else playPauseFocus
-                                        right = playPauseFocus
-                                        up = playPauseFocus
-                                        down = liveInfoFocus
-                                    },
-                            )
-                            PlayerPill(
-                                icon = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                label = if (playing) "Pausa" else "Reproducir",
-                                onClick = { if (canExecuteControlAction()) togglePlayPause() },
-                                modifier = if (!isTv) Modifier else Modifier
-                                    .focusRequester(playPauseFocus)
-                                    .onFocusChanged { playPauseFocused = it.isFocused }
-                                    .focusProperties {
-                                        left = liveInfoFocus
-                                        right = if (menu.hasAnyChoices) tracksFocus else playPauseFocus
-                                        up = playPauseFocus
-                                        down = playPauseFocus
-                                    },
+                                    
                             )
                             if (menu.hasAnyChoices) {
                                 PlayerPill(
                                     icon = Icons.Default.Subtitles,
                                     label = "Audio y subtítulos",
                                     onClick = { if (canExecuteControlAction()) { showTracks = true; controls.bump() } },
-                                    modifier = if (!isTv) Modifier else Modifier
+                                    focusModifier = if (!isTv) Modifier else Modifier
                                         .focusRequester(tracksFocus)
                                         .onFocusChanged { tracksFocused = it.isFocused }
-                                        .focusProperties {
-                                            left = playPauseFocus
-                                            right = if (canZap) zapListFocus else playPauseFocus
-                                            up = playPauseFocus
-                                            down = tracksFocus
-                                        },
+                                        
                                 )
                             }
+                            PlayerPill(
+                                icon = Icons.Default.Tv,
+                                label = "Pantalla",
+                                blockRight = true,
+                                onClick = { if (canExecuteControlAction()) { showAspect = true; controls.bump() } },
+                                focusModifier = if (!isTv) Modifier else Modifier
+                                    .focusRequester(aspectFocus)
+                                    .onFocusChanged { aspectFocused = it.isFocused }
+                                    
+                            )
                             if (!isTv) {
                                 val activity = context.findActivity()
                                 PlayerPill(
@@ -1837,6 +2057,14 @@ private fun PlayerCore(
                                     },
                                 )
                             }
+                            if (pipAvailable) {
+                                PlayerPill(
+                                    icon = Icons.Default.PictureInPictureAlt,
+                                    label = "PiP",
+                                    onClick = { enterPipFromButton() },
+                                )
+                            }
+                        }
                         }
                     } else {
                     Row(
@@ -1900,6 +2128,23 @@ private fun PlayerCore(
                                     },
                             )
                         }
+                        if (!introPlaying) {
+                            TransportButton(
+                                icon = Icons.Default.Tv,
+                                contentDescription = "Relación de aspecto",
+                                onClick = { if (canExecuteControlAction()) { showAspect = true; controls.bump() } },
+                                iconSize = 26.dp,
+                                modifier = if (!isTv) Modifier else Modifier
+                                    .focusRequester(aspectFocus)
+                                    .onFocusChanged { aspectFocused = it.isFocused }
+                                    .focusProperties {
+                                        left = if (menu.hasAnyChoices) tracksFocus else playPauseFocus
+                                        right = aspectFocus
+                                        up = playPauseFocus
+                                        down = aspectFocus
+                                    },
+                            )
+                        }
                         if (isLive && zapTargets.size > 1 && !introPlaying) {
                             TransportButton(
                                 icon = Icons.Default.Tv,
@@ -1933,14 +2178,45 @@ private fun PlayerCore(
                                     tint = Color.White,
                                 )
                             }
+                            if (pipAvailable) {
+                                TransportButton(
+                                    icon = Icons.Default.PictureInPictureAlt,
+                                    contentDescription = "Picture-in-picture",
+                                    onClick = { enterPipFromButton() },
+                                    iconSize = 24.dp,
+                                )
+                            }
                         }
                     }
                     }
                 }
+                if (showMatchHud) {
+                    MatchCenterHud(
+                        info = eventInfo!!,
+                        page = matchHudPage,
+                        currentSignal = currentTitle,
+                        signalType = zapSignalType(
+                            currentTargetUrl,
+                            currentTargetDrmType,
+                            currentTargetDrmKey,
+                        ),
+                        signalIndex = zapIndex + 1,
+                        signalCount = zapTargets.size.coerceAtLeast(1),
+                        isTv = isTv,
+                        onPageChange = { matchHudPage = it },
+                        onSourceClick = {
+                            if (zapTargets.size > 1) {
+                                showZapList = true
+                                controls.bump()
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                }
             }
         }
 
-        if (showSkip) {
+        if (showSkip && !inPip) {
             SkipPill(
                 label = skipTarget?.first ?: "Omitir intro",
                 onClick = { skipIntro() },
@@ -1963,7 +2239,7 @@ private fun PlayerCore(
         }
 
         // The pre-roll's skip: no overlay chrome, just the pill once it appears.
-        if (brandSkipVisible) {
+        if (brandSkipVisible && !inPip) {
             SkipPill(
                 label = "Omitir",
                 onClick = { startMainItem() },
@@ -1980,7 +2256,7 @@ private fun PlayerCore(
         }
 
         // «A continuación»: el siguiente capítulo YA descargado, sin tocar la red (maratón offline).
-        nextVault?.let { next ->
+        if (!inPip) nextVault?.let { next ->
             val nextFilm = remember(next.id) { next.toFilm() }
             Column(
                 modifier = Modifier
@@ -2039,7 +2315,19 @@ private fun PlayerCore(
         }
     }
 
-    if (showTracks) {
+    if (showAspect && !inPip) {
+        AspectRatioDialog(
+            current = aspectMode,
+            onPick = { mode ->
+                aspectMode = mode
+                showAspect = false
+                com.chronosbvrx.visionplus.ui.settings.VisionSettings.setDefaultAspect(context, mode)
+                controls.bump()
+            },
+            onDismiss = { showAspect = false },
+        )
+    }
+    if (showTracks && !inPip) {
         AudioAndSubtitlesDialog(
             state = menu,
             onPickAudio = { applyAudioChoice(it) },
@@ -2047,7 +2335,7 @@ private fun PlayerCore(
             onDismiss = { showTracks = false },
         )
     }
-    if (showZapList) {
+    if (showZapList && !inPip) {
         ZapListDialog(
             targets = zapTargets,
             currentIndex = zapIndex,
@@ -2058,7 +2346,7 @@ private fun PlayerCore(
             },
         )
     }
-    if (showLiveInfo && isLive) {
+    if (showLiveInfo && isLive && !inPip) {
         GeeMatchInfoDialog(
             title = eventInfo?.title?.takeIf { it.isNotBlank() } ?: currentTitle,
             subtitle = currentSubtitle,
@@ -2069,6 +2357,8 @@ private fun PlayerCore(
             signalType = zapSignalType(currentTargetUrl, currentTargetDrmType, currentTargetDrmKey),
             signals = zapTargets.map { it.name },
             currentIndex = zapIndex,
+            info = eventInfo,
+            initialPage = liveInfoPage,
             onDismiss = { showLiveInfo = false },
         )
     }
@@ -2202,22 +2492,45 @@ private fun TransportButton(
  * (`pill()` del reproductor nativo): fondo oscuro redondeado, icono y palabra; al enfocar se pinta
  * de azul, igual que con el mando.
  */
+
 @Composable
 private fun PlayerPill(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    focusModifier: Modifier = Modifier,
     iconTint: Color = Color.White,
+    blockLeft: Boolean = false,
+    blockRight: Boolean = false,
 ) {
-    var focused by remember { mutableStateOf(false) }
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
     Surface(
         color = if (focused) VisionBlue else Color(0xCC1B2538),
         shape = RoundedCornerShape(50),
         modifier = modifier
             .clip(RoundedCornerShape(50))
-            .clickable(onClick = onClick)
-            .onFocusChanged { focused = it.isFocused },
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+            )
+            .then(focusModifier)
+            // El foco explícito comparte la misma fuente de interacción: así el
+            // resaltado azul y el mando hablan del MISMO nodo enfocado.
+            .focusable(interactionSource = interaction)
+            .then(
+                if (blockLeft || blockRight) {
+                    Modifier.onPreviewKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        (blockLeft && event.key == Key.DirectionLeft) ||
+                            (blockRight && event.key == Key.DirectionRight)
+                    }
+                } else {
+                    Modifier
+                },
+            ),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -2231,10 +2544,363 @@ private fun PlayerPill(
 }
 
 /**
- * El aviso de cable del reproductor en vivo: la MISMA interfaz que la TV en vivo (panel oscuro,
- * píldora EN VIVO con punto, etiqueta del grupo/liga, título grande y líneas de guía con etiqueta
- * azul), adaptada a lo que un partido sabe contar — la señal en pantalla y el marcador.
+ * Resumen compacto de estadísticas sobre los controles. No intenta enseñarlo todo:
+ * las cifras imprescindibles y una invitación a abrir la tarjeta completa, donde
+ * el mando puede recorrer todas las cifras y cambiar a Alineaciones.
  */
+@Composable
+private fun MatchStatsPanel(
+    info: com.chronosbvrx.visionplus.ui.sports.GeeZapSignals.EventInfo,
+    signalName: String,
+    signalIndex: Int,
+    signalCount: Int,
+    isTv: Boolean,
+    onOpen: () -> Unit,
+) {
+    val context = LocalContext.current
+    val key = "${info.homeName}|${info.awayName}|${info.dateIso}|${info.leagueId}"
+    var stats by remember(key) { mutableStateOf<MatchStats?>(null) }
+    var loading by remember(key) {
+        mutableStateOf(info.homeName.isNotBlank() && info.awayName.isNotBlank())
+    }
+    LaunchedEffect(key) {
+        if (info.homeName.isBlank() || info.awayName.isBlank()) {
+            loading = false
+            stats = null
+            return@LaunchedEffect
+        }
+        loading = true
+        stats = runCatching {
+            SportsStatsSource.load(
+                context = context,
+                homeName = info.homeName,
+                awayName = info.awayName,
+                dateIso = info.dateIso,
+                leagueId = info.leagueId,
+            )
+        }.getOrNull()
+        loading = false
+    }
+
+    val homeName = info.homeName.ifBlank { stats?.home?.name.orEmpty() }.ifBlank { "Local" }
+    val awayName = info.awayName.ifBlank { stats?.away?.name.orEmpty() }.ifBlank { "Visitante" }
+    val homeLogo = info.homeLogo.ifBlank { stats?.home?.logo.orEmpty() }
+    val awayLogo = info.awayLogo.ifBlank { stats?.away?.logo.orEmpty() }
+    val homeGoals = stats?.goals.orEmpty().filter { _geeSameTeam(it.team, homeName) }
+    val awayGoals = stats?.goals.orEmpty().filter { _geeSameTeam(it.team, awayName) }
+    val score = info.scoreLine.ifBlank {
+        if (info.homeScore != null && info.awayScore != null) "${info.homeScore} - ${info.awayScore}" else "VS"
+    }
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val panelMaxHeight = if (isTv) {
+        (screenHeight * 0.34f).coerceAtLeast(160.dp).coerceAtMost(230.dp)
+    } else {
+        220.dp
+    }
+    // Nada de «cuadro pegado»: un velo que nace oscuro a la izquierda y se disuelve
+    // hacia la derecha, como las tarjetas de FIFA. Los logos, el marcador y los
+    // goleadores ocupan el ancho que antes quedaba vacío.
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(if (isTv) 0.72f else 1f)
+            .widthIn(max = 860.dp)
+            .heightIn(max = panelMaxHeight)
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        Color(0xF2070B13),
+                        Color(0xD90A1220),
+                        Color(0x660A1220),
+                        Color(0x000A1220),
+                    ),
+                ),
+            )
+            .pointerInput(Unit) { detectTapGestures { onOpen() } }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FifaTeamBadge(homeLogo, homeName, end = false, modifier = Modifier.weight(1f))
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.widthIn(min = 130.dp, max = 210.dp),
+                ) {
+                    Text(
+                        score,
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(Modifier.size(5.dp).background(VisionLiveRed, CircleShape))
+                        Text(
+                            "EN VIVO",
+                            color = VisionLiveRed,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black,
+                        )
+                        if (signalCount > 1) {
+                            Text(
+                                "$signalIndex/$signalCount",
+                                color = Color.White.copy(alpha = 0.55f),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                    if (info.league.isNotBlank()) {
+                        Text(
+                            info.league,
+                            color = VisionBlueBright,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                FifaTeamBadge(awayLogo, awayName, end = true, modifier = Modifier.weight(1f))
+            }
+
+            if (homeGoals.isNotEmpty() || awayGoals.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    FifaGoalColumn(homeGoals, end = false, modifier = Modifier.weight(1f))
+                    FifaGoalColumn(awayGoals, end = true, modifier = Modifier.weight(1f))
+                }
+            }
+
+            val current = stats
+            if (current != null) {
+                val keys = remember(current) { matchStatLabels(current) }
+                if (keys.isNotEmpty()) {
+                    keys.take(3).forEach { label ->
+                        MatchStatRow(
+                            label = label,
+                            home = current.home.values[label].orEmpty(),
+                            away = current.away.values[label].orEmpty(),
+                        )
+                    }
+                } else {
+                    Text(
+                        "Sin cifras publicadas todavía.",
+                        color = Color.White.copy(alpha = 0.62f),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            } else {
+                Text(
+                    if (loading) "Cargando estadísticas del partido…"
+                    else "La fuente aún no publica estadísticas de este partido.",
+                    color = Color.White.copy(alpha = 0.68f),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Text(
+                "OK · Estadísticas completas",
+                color = VisionBlueBright.copy(alpha = 0.82f),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FifaTeamBadge(logo: String, name: String, end: Boolean, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (end) Arrangement.End else Arrangement.Start,
+    ) {
+        if (!end) FifaTeamLogo(logo, name)
+        Text(
+            name,
+            color = Color.White,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = if (end) TextAlign.End else TextAlign.Start,
+            modifier = Modifier.padding(horizontal = 8.dp).weight(1f, fill = false),
+        )
+        if (end) FifaTeamLogo(logo, name)
+    }
+}
+
+@Composable
+private fun FifaTeamLogo(logo: String, name: String) {
+    Box(
+        modifier = Modifier.size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (logo.isNotBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current).data(logo).size(68, 68).crossfade(false).build(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().padding(3.dp),
+                contentScale = ContentScale.Fit,
+            )
+        } else {
+            Text(
+                GeeTiles.monogram(name),
+                color = Color.White.copy(alpha = 0.75f),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FifaGoalColumn(goals: List<com.chronosbvrx.visionplus.data.sports.GoalEvent>, end: Boolean, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = if (end) Alignment.End else Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        goals.take(3).forEach { goal ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    Icons.Default.SportsSoccer,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.72f),
+                    modifier = Modifier.size(10.dp),
+                )
+                Text(
+                    "${goal.minute} ${goal.player}${if (goal.ownGoal) " (OG)" else if (goal.penalty) " (P)" else ""}",
+                    color = Color.White.copy(alpha = 0.78f),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (goals.size > 3) {
+            Text(
+                "+${goals.size - 3} gol(es)",
+                color = Color.White.copy(alpha = 0.52f),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+private fun _geeSameTeam(team: String, name: String): Boolean {
+    val a = team.lowercase().replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+    val b = name.lowercase().replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+    if (a.isBlank() || b.isBlank()) return false
+    return a == b || a.contains(b) || b.contains(a) ||
+        a.split(" ").any { it.length >= 4 && b.contains(it) } ||
+        b.split(" ").any { it.length >= 4 && a.contains(it) }
+}
+
+@Composable
+private fun MatchTeamHeader(home: String, away: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            home,
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "ESTADÍSTICAS",
+            color = Color.White.copy(alpha = 0.48f),
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+        )
+        Text(
+            away,
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun MatchStatRow(label: String, home: String, away: String) {
+    val homeValue = home.ifBlank { "—" }
+    val awayValue = away.ifBlank { "—" }
+    val homeWeight = statWeight(home)
+    val awayWeight = statWeight(away)
+    val total = homeWeight + awayWeight
+    val homeFraction = if (total <= 0f) 0.5f else (homeWeight / total).coerceIn(0.12f, 0.88f)
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                homeValue,
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                label,
+                color = Color.White.copy(alpha = 0.62f),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1.25f),
+            )
+            Text(
+                awayValue,
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                textAlign = TextAlign.End,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(Modifier.fillMaxWidth().height(3.dp)) {
+            Box(
+                Modifier
+                    .weight(homeFraction)
+                    .fillMaxHeight()
+                    .background(VisionBlueBright, RoundedCornerShape(2.dp)),
+            )
+            Spacer(Modifier.width(4.dp))
+            Box(
+                Modifier
+                    .weight(1f - homeFraction)
+                    .fillMaxHeight()
+                    .background(VisionLiveRed, RoundedCornerShape(2.dp)),
+            )
+        }
+    }
+}
+
+internal fun statWeight(value: String): Float =
+    value.replace(',', '.')
+        .filter { it.isDigit() || it == '.' }
+        .toFloatOrNull()
+        ?.coerceAtLeast(0f)
+        ?: 0f
+
 @Composable
 private fun LiveCableBanner(
     title: String,
@@ -2380,7 +3046,8 @@ private fun EngineDownloadGate(isTv: Boolean, onCancel: () -> Unit, content: @Co
         blocking?.let { item ->
             AlertDialog(
                 onDismissRequest = { if (!pausing) onCancel() },
-                modifier = Modifier.modalFocusTrap(),
+                modifier = Modifier.modalFocusTrap()
+                    .dismissOnBack { if (!pausing) onCancel() },
                 title = { Text("Descarga en curso") },
                 text = {
                     Text(

@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.phone
 
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import android.widget.Toast
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -17,15 +18,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -43,12 +53,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.chronosbvrx.visionplus.BuildConfig
 import com.chronosbvrx.visionplus.EffectsMode
 import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.ui.components.VisionChip
+import com.chronosbvrx.visionplus.ui.player.PipMode
 import com.chronosbvrx.visionplus.ui.plugins.AppUpdatesDialog
 import com.chronosbvrx.visionplus.ui.settings.OssNoticesDialog
 import com.chronosbvrx.visionplus.ui.settings.ProfilesSettingsSection
@@ -67,13 +79,18 @@ import com.chronosbvrx.visionplus.ui.settings.rememberUpdateCheck
 import com.chronosbvrx.visionplus.ui.kids.ActivitySettingsBlock
 import com.chronosbvrx.visionplus.ui.kids.KidsSettingsBlock
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
+import com.chronosbvrx.visionplus.ui.theme.VisionTextPrimary
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.launch
 
 private enum class SettingsTab(val label: String) {
+    MY_TV("Mi tele"),
     PLAYBACK("Reproducción"),
-    SYSTEM("Sistema"),
-    INSTALL_TV("Instalar en TV"),
+    SCREEN("Pantalla y rendimiento"),
+    SYSTEM("Sistema y red"),
+    ACCOUNT("Cuenta y perfiles"),
+    UPDATES("Actualizaciones"),
 }
 
 /**
@@ -82,7 +99,7 @@ private enum class SettingsTab(val label: String) {
  */
 @Composable
 fun SettingsScreen(contentPadding: PaddingValues) {
-    var tab by rememberSaveable { mutableStateOf(SettingsTab.PLAYBACK) }
+    var tab by rememberSaveable { mutableStateOf(SettingsTab.MY_TV) }
     val scroll = rememberSaveable(tab, saver = ScrollState.Saver) { ScrollState(0) }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -107,7 +124,7 @@ fun SettingsScreen(contentPadding: PaddingValues) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     SettingsTab.entries.forEach { t ->
-                        VisionChip(t.label, t == tab) { tab = t }
+                        SettingsTabChip(t, t == tab) { tab = t }
                     }
                 }
                 TabRowEdges(tabsScroll, Modifier.matchParentSize())
@@ -119,9 +136,12 @@ fun SettingsScreen(contentPadding: PaddingValues) {
                     .padding(horizontal = SETTINGS_MARGIN),
             ) {
                 when (tab) {
+                    SettingsTab.MY_TV -> TvHomeSetupSection()
                     SettingsTab.PLAYBACK -> PlaybackTab()
+                    SettingsTab.SCREEN -> ScreenTab()
                     SettingsTab.SYSTEM -> SystemTab()
-                    SettingsTab.INSTALL_TV -> TvInstallTab()
+                    SettingsTab.ACCOUNT -> AccountTab()
+                    SettingsTab.UPDATES -> UpdatesTab()
                 }
                 Spacer(Modifier.height(contentPadding.calculateBottomPadding() + 32.dp))
             }
@@ -130,12 +150,36 @@ fun SettingsScreen(contentPadding: PaddingValues) {
 }
 
 /**
- * Pestaña propia del TELÉFONO: instala Vision+ y Vision+ Home en las teles de la casa por ADB
- * inalámbrico y deja el launcher como Inicio, sin PC y sin descargar nada a mano.
+ * Una categoría de Ajustes con su icono. En el teléfono se desplazan en horizontal, como el
+ * riel de categorías de la tele.
  */
 @Composable
-private fun TvInstallTab() {
-    TvHomeSetupSection()
+private fun SettingsTabChip(tab: SettingsTab, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(tab.label) },
+        leadingIcon = {
+            Icon(tab.icon(), contentDescription = null, modifier = Modifier.size(18.dp))
+        },
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = VisionSurfaceHigh,
+            labelColor = VisionTextPrimary,
+            iconColor = VisionTextSecondary,
+            selectedContainerColor = VisionBlue,
+            selectedLabelColor = Color.White,
+            selectedLeadingIconColor = Color.White,
+        ),
+    )
+}
+
+private fun SettingsTab.icon(): ImageVector = when (this) {
+    SettingsTab.MY_TV -> Icons.Rounded.Tv
+    SettingsTab.PLAYBACK -> Icons.Rounded.PlayArrow
+    SettingsTab.SCREEN -> Icons.Rounded.Tune
+    SettingsTab.SYSTEM -> Icons.Rounded.Settings
+    SettingsTab.ACCOUNT -> Icons.Rounded.Person
+    SettingsTab.UPDATES -> Icons.Rounded.SystemUpdate
 }
 
 @Composable
@@ -211,11 +255,19 @@ private fun PlaybackTab() {
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 s.aspectOptions.forEachIndexed { index, label ->
-                    VisionChip(label, selected = s.defaultAspect == index) {
-                        s.setDefaultAspect(context, index)
+                    VisionChip(label, selected = s.defaultAspect == s.aspectModes.getOrElse(index) { 0 }) {
+                        s.setDefaultAspect(context, s.aspectModes.getOrElse(index) { 0 })
                     }
                 }
             }
+        }
+        if (PipMode.isSupported(context)) {
+            SettingsSwitchRow(
+                title = "Picture-in-picture en descargas",
+                checked = s.pipDownloads,
+                onCheckedChange = { s.setPipDownloads(context, it) },
+                supporting = "Apagado por defecto. Permite que un título descargado siga en el cuadro flotante; mientras está en PiP se desactiva la protección anti-grabación de esa ventana.",
+            )
         }
     }
 
@@ -295,15 +347,68 @@ private fun PlaybackTab() {
 }
 
 @Composable
+private fun ScreenTab() {
+    val context = LocalContext.current
+    val s = VisionSettings
+
+    SettingsSection("Rendimiento") {
+        SettingsBlock {
+            val modeLabel = when (s.effectsMode) {
+                EffectsMode.AUTO -> "Automático"
+                EffectsMode.LIGHT -> "Ligero"
+                EffectsMode.FULL -> "Máxima calidad"
+            }
+            Text("Efectos de la interfaz", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                s.effectsMode.note,
+                style = MaterialTheme.typography.bodySmall,
+                color = VisionTextSecondary,
+                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
+            )
+            OutlinedButton(onClick = { s.cycleEffectsMode(context) }) {
+                Text(modeLabel)
+            }
+        }
+        SettingsBlock {
+            Text("Buffer de canales en vivo", style = MaterialTheme.typography.bodyLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                s.liveBufferOptions.forEach { b ->
+                    VisionChip(b, selected = s.liveBuffer == b) {
+                        s.setLiveBuffer(context, b)
+                    }
+                }
+            }
+        }
+    }
+
+    SettingsSection("Almacenamiento") {
+        SettingsRow(
+            title = "Caché de imágenes y catálogo",
+            supporting = "${s.formatBytes(s.cacheSizeBytes)} en el teléfono",
+            onClick = {
+                if (s.clearCache(context)) {
+                    Toast.makeText(context, "Caché liberada", Toast.LENGTH_SHORT).show()
+                }
+            },
+        ) {
+            Text("Limpiar", color = VisionBlue, style = MaterialTheme.typography.labelLarge)
+        }
+        SettingsDestructiveRow(
+            title = "Vaciar «Seguir viendo»",
+            supporting = "Quita el historial de reproducción de este equipo",
+            onClick = {
+                s.clearPlaybackHistory(context)
+                com.chronosbvrx.visionplus.data.sync.SyncStore.syncAsync(context, force = true)
+                Toast.makeText(context, "Historial vaciado", Toast.LENGTH_SHORT).show()
+            },
+        )
+    }
+}
+
+@Composable
 private fun SystemTab() {
     val context = LocalContext.current
     val s = VisionSettings
-    val update = rememberUpdateCheck()
-    if (update.available != null) {
-        AppUpdatesDialog(release = update.available!!, onDismiss = { update.available = null })
-    }
-    var showNotices by rememberSaveable { mutableStateOf(false) }
-    if (showNotices) OssNoticesDialog(onDismiss = { showNotices = false })
     var showReportDialog by rememberSaveable { mutableStateOf(false) }
     var showSlotDialog by rememberSaveable { mutableStateOf(false) }
     var slotTick by remember { mutableStateOf(0) }
@@ -321,105 +426,34 @@ private fun SystemTab() {
         )
     }
 
-    SettingsSection("Rendimiento y Pantalla") {
-        SettingsBlock {
-            val modeLabel = when (s.effectsMode) {
-                EffectsMode.AUTO -> "Automático (Detecta dispositivo)"
-                EffectsMode.LIGHT -> "Modo ligero (Sin animaciones pesadas)"
-                EffectsMode.FULL -> "Máxima calidad (Efectos completos)"
-            }
-            Text("Rendimiento de interfaz", style = MaterialTheme.typography.bodyLarge)
-            Text(
-                s.effectsMode.note,
-                style = MaterialTheme.typography.bodySmall,
-                color = VisionTextSecondary,
-                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
-            )
-            OutlinedButton(onClick = { s.cycleEffectsMode(context) }) {
-                Text(modeLabel)
-            }
-        }
-        SettingsBlock {
-            Text("Buffer de canales en vivo", style = MaterialTheme.typography.bodyLarge)
-            Text(
-                "Margen de precarga antes de reproducir la transmisión.",
-                style = MaterialTheme.typography.bodySmall,
-                color = VisionTextSecondary,
-                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                s.liveBufferOptions.forEach { b ->
-                    VisionChip(b, selected = s.liveBuffer == b) {
-                        s.setLiveBuffer(context, b)
-                    }
-                }
-            }
-        }
-    }
-
-    SettingsSection("Almacenamiento y Datos") {
-        SettingsRow(
-            title = "Caché de imágenes y catálogo",
-            supporting = "${s.formatBytes(s.cacheSizeBytes)} en almacenamiento local",
-            onClick = {
-                if (s.clearCache(context)) {
-                    Toast.makeText(context, "Caché liberada correctamente", Toast.LENGTH_SHORT).show()
-                }
-            },
-        ) {
-            Text("Limpiar", color = VisionBlue, style = MaterialTheme.typography.labelLarge)
-        }
-        SettingsDestructiveRow(
-            title = "Vaciar historial de reproducción",
-            supporting = "Elimina todos los títulos de la fila «Seguir viendo»",
-            onClick = {
-                s.clearPlaybackHistory(context)
-                com.chronosbvrx.visionplus.data.sync.SyncStore.syncAsync(context, force = true)
-                Toast.makeText(context, "Historial de reproducción vaciado", Toast.LENGTH_SHORT).show()
-            },
-        )
-    }
-
-    SettingsSection("Modo niños") {
-        KidsSettingsBlock()
-    }
-
-    ProfilesSettingsSection()
-
-    SyncSettingsSection()
-
-    SettingsSection("Mi actividad") {
-        ActivitySettingsBlock()
-    }
-
-    SettingsSection("Diagnóstico de Red") {
+    SettingsSection("Red") {
         SettingsValueRow(
             title = "Conexión a internet",
             value = s.getNetworkInfo(context),
-            supporting = "Tipo de interfaz de red activa en el dispositivo",
+            supporting = "Wi-Fi o datos del teléfono",
         )
         SettingsValueRow(
             title = "Servidor de streaming",
-            value = "En línea (XTV)",
-            supporting = "Catálogo multimedia y canales en directo",
+            value = "En línea",
+            supporting = "Catálogo y canales en directo",
         )
     }
 
-    SettingsSection("Diagnóstico y Soporte") {
+    SettingsSection("Diagnóstico y soporte") {
         SettingsSwitchRow(
             title = "Enviar diagnósticos",
             checked = s.diagnosticsEnabled,
             onCheckedChange = { s.setDiagnosticsEnabled(context, it) },
-            supporting = "Crashes y errores técnicos se envían al servidor para corregirlos. Sin datos personales ni historial.",
+            supporting = "Errores técnicos, sin datos personales ni historial.",
         )
         SettingsRow(
             title = "Reportar un problema",
-            supporting = "Cuéntanos qué pasó; se adjunta el estado técnico (sin datos personales)",
+            supporting = "Cuéntanos qué pasó",
             onClick = { showReportDialog = true },
         )
         SettingsRow(
             title = "Identidad del equipo",
-            supporting = "Sesión del portal: $slotStatus",
+            supporting = slotStatus,
             onClick = { showSlotDialog = true },
         )
     }
@@ -436,49 +470,70 @@ private fun SystemTab() {
             },
         )
     }
+}
 
-    SettingsSection("Actualizaciones y Sistema") {
+@Composable
+private fun AccountTab() {
+    SettingsSection("Modo niños") {
+        KidsSettingsBlock()
+    }
+    ProfilesSettingsSection()
+    SyncSettingsSection()
+    SettingsSection("Mi actividad") {
+        ActivitySettingsBlock()
+    }
+}
+
+@Composable
+private fun UpdatesTab() {
+    val context = LocalContext.current
+    val update = rememberUpdateCheck()
+    if (update.available != null) {
+        AppUpdatesDialog(release = update.available!!, onDismiss = { update.available = null })
+    }
+    var showNotices by rememberSaveable { mutableStateOf(false) }
+    if (showNotices) OssNoticesDialog(onDismiss = { showNotices = false })
+
+    SettingsSection("Actualizaciones") {
         var beta by remember { mutableStateOf(com.chronosbvrx.visionplus.data.AppUpdate.betaChannel(context)) }
         SettingsSwitchRow(
             title = "Canal de pruebas (beta)",
             checked = beta,
-            supporting = if (beta) {
-                "Recibes cada versión de pruebas en cuanto se publica"
-            } else {
-                "Solo versiones oficiales; enciéndelo para probar las betas"
-            },
+            supporting = if (beta) "Recibes las versiones de prueba." else "Solo versiones oficiales.",
             onCheckedChange = { on ->
                 com.chronosbvrx.visionplus.data.AppUpdate.setBetaChannel(context, on)
                 beta = on
                 Toast.makeText(
                     context,
-                    if (on) "Canal de pruebas activado: buscando la última beta…" else "Vuelves al canal oficial",
+                    if (on) "Canal beta activado" else "Canal oficial",
                     Toast.LENGTH_SHORT,
                 ).show()
-                // Al encenderlo se revisa YA: si hay una beta más nueva, sale el aviso sin esperar.
                 update.run()
             },
         )
         SettingsRow(
             title = if (update.checking) "Buscando…" else "Buscar actualizaciones",
-            supporting = "Versión instalada: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
+            supporting = "Instalada: v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
             enabled = !update.checking,
             onClick = { update.run() },
         )
+    }
+
+    SettingsSection("Información") {
         SettingsNavRow(
             title = "Licencias de software libre",
-            supporting = "Bibliotecas de terceros de código abierto que usa Vision+",
+            supporting = "Bibliotecas de código abierto",
             onClick = { showNotices = true },
         )
     }
 }
 
-/** Reporte manual con texto libre: se adjunta al diagnóstico técnico (sin datos personales). */
 @Composable
 private fun DiagnosticsReportDialog(onDismiss: () -> Unit, onSend: (String) -> Unit) {
     var text by rememberSaveable { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.dismissOnBack { onDismiss() },
         title = { Text("Reportar un problema") },
         text = {
             Column {

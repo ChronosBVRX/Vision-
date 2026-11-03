@@ -58,6 +58,12 @@ internal object LiveTaxonomy {
         if (n.isBlank()) return@computeIfAbsent GENRE_ENTERTAINMENT
         // Religión primero: "VISIÓN" también aparece en canales deportivos laicos.
         if (containsAny(n, RELIGION_ANY)) return@computeIfAbsent GENRE_RELIGION
+        // El portal llama «TNT SPORTS HD» a TNT (entretenimiento); TNT Sports
+        // real es «TNT SPORTS HD+»/«FHD» (Chile). La app lo muestra como TNT HD.
+        // OJO: el «+» desaparece al normalizar; «TNT SPORTS HD+» sí es deporte.
+        if (n == "TNT SPORTS HD" && !raw.contains("+")) return@computeIfAbsent GENRE_SERIES
+        // Elite Sports Hub es la pantalla de Disney+ (no ESPN, no deporte).
+        if (n.startsWith("ELITE SPORTS HUB")) return@computeIfAbsent GENRE_SERIES
         // Deportes antes que música ("TRACE SPORTS") y que series ("FOX SPORTS" vs "FOX").
         if (containsAny(n, SPORTS_ANY) || hasToken(n, SPORTS_TOKENS)) return@computeIfAbsent GENRE_SPORTS
         // Cine antes que series ("SONY MOVIES" es cine; "STARZ" contiene "STAR").
@@ -106,6 +112,123 @@ internal object LiveTaxonomy {
         }
         COUNTRY_INTL
     }
+
+    /**
+     * Dueño/proveedor de la señal cuando la marca se repite entre países.
+     * El caso que motivó esto: «Fox Sports» mexicano (Lauman) vs «Fox Deportes»
+     * y «Fox Sports USA» (Disney). Vacío si no hay una pista fiable.
+     */
+    fun providerFor(name: String): String {
+        val n = norm(name)
+        if (n.isBlank()) return ""
+        if (n.contains("FOX SPORTS")) {
+            val lauman = n.contains("CENTRAL") || n.contains(" PREMIUM") ||
+                n.contains(" MX") || n.contains("MEXICO")
+            return if (lauman) "Fox Sports (Lauman)" else "Fox Sports (Disney)"
+        }
+        if (n.contains("FOX DEPORTES") || n.contains("FOX DEPORTE") || n.contains("FOX SOCCER")) {
+            return "Fox (Disney)"
+        }
+        if (n.contains("FOX ONE")) return "Fox Corporation"
+        if (n.contains("AYM SPORTS")) return "AYM (FOX básico)"
+        if (n.contains("FOX ESP")) return "Fox (España)"
+        if (n.contains("FOX NEWS") || n.contains("FOX 5") || n.contains("FOX 40")) {
+            return "Fox (EE. UU.)"
+        }
+        if (n.contains("ESPN")) return "ESPN (Disney)"
+        if (n.contains("TUDN") || n.contains("UNIVISION")) return "TUDN (Televisa/Univision)"
+        if (n.contains("TNT SPORTS")) return "TNT Sports (Warner Bros. Discovery)"
+        if (n.contains("WIN SPORTS")) return "Win Sports (Colombia)"
+        return ""
+    }
+
+    /**
+     * Nota corta para la ficha del canal cuando el nombre NO dice todo:
+     * el Fox nuevo (FOX ONE/AYM) frente al Fox viejo (Lauman) y los camuflajes.
+     */
+    fun noteFor(name: String): String {
+        val n = norm(name)
+        if (n.isBlank()) return ""
+        return when {
+            n.contains("FOX ONE") -> "Fox Corporation · FOX+ premium (eventos en vivo)"
+            n.contains("AYM SPORTS") -> "FOX básico (Cuadro Titular/FOX 365); no es FOX+"
+            n == "TNT SPORTS HD" || n == "TNT HD" -> "TNT (entretenimiento); no es TNT Sports"
+            n.contains("TNT SPORTS PREMIUM") || n.contains("ESTADIO TNT SPORTS") ||
+                n.contains("TNT SPORTS FHD") || n.contains("TNT SPORTS HD+") ->
+                "TNT Sports Chile; no es el TNT de entretenimiento"
+            name.contains("☆") || n.contains("STAR CHANNEL") -> "Star Channel (Disney)"
+            n.contains("BITME") -> "BitMe (infantil/juvenil)"
+            n.startsWith("ELITE SPORTS HUB") || n.startsWith("DISNEY") ->
+                "Disney+ (señal de catálogo); no es ESPN en vivo"
+            n.contains("FOX SPORTS PREMIUM") -> "Fox Sports Premium (Lauman); peleas; no es FOX+"
+            n.contains("FOX SPORTS") -> "Fox Sports (Lauman); sin derechos del nuevo Fox"
+            n.contains("SONY CENTRAL") -> "Cine; no es deporte"
+            n.contains("ELITE SPORTS") -> "ESPN/Star+ (señal camuflada)"
+            else -> ""
+        }
+    }
+
+    /**
+     * Canales de referencia, de más a menos popular. No hay métricas de audiencia en
+     * la fuente XTV/M3U; este ranking curado reproduce lo que la gente más busca y
+     * deja el resto en orden alfabético (México primero).
+     */
+    private val POPULAR_CHANNELS = listOf(
+        // México: señal abierta y deportes primero.
+        "CANAL 5", "LAS ESTRELLAS", "AZTECA 7", "TUDN", "FOX SPORTS", "ESPN",
+        "CANAL 2", "AZTECA UNO", "CANAL 6", "MULTIMEDIOS", "IMAGEN", "MILENIO",
+        "ADN40", "A MAS", "CANAL 22", "ONCE", "CANAL 11", "TVC", "ENLACE",
+        "GOLDEN", "BANDAMAX", "TELEHIT", "DE PELICULA", "TLNOVELAS",
+        "DISTRITO COMEDIA", "BITME", "FORO TV", "INGENIO", "AZTECA INTERNACIONAL",
+        // Internacional / streaming y cine.
+        "HBO", "STAR CHANNEL", "CINEMAX", "SPACE", "TNT", "UNIVERSAL", "SYFY",
+        "AMC", "SONY", "WARNER", "DISCOVERY", "HISTORY", "NAT GEO", "CARTOON",
+        "NICK", "DISNEY", "BABY TV", "CNN", "FOX NEWS", "BBC", "DW", "TELEMUNDO",
+        "UNIVISION", "UNIVERSO", "BEIN", "DAZN", "CLARO", "SKY", "DIRECTV",
+        "MOVISTAR", "TYC", "WIN SPORTS", "FOX DEPORTES", "FOX ONE", "TNT SPORTS",
+        "LA LIGA", "NBA", "MLB", "NFL", "GOLF", "TENNIS", "UFC", "WWE", "MTV",
+        "VH1", "COMEDY CENTRAL", "USA NETWORK", "TBS", "TRUTV", "FX", "AXN",
+        "LIFETIME", "HALLMARK", "STARZ", "SHOWTIME", "PARAMOUNT", "CINECANAL",
+        "PASIONES", "GALAVISION",
+    )
+
+    /**
+     * Posición de un canal en el ranking curado. Los canales con número se comparan
+     * como palabra completa para que «CANAL 5» no se coma «CANAL 50».
+     */
+    fun popularityRank(name: String): Int {
+        val n = norm(name)
+        if (n.isBlank()) return POPULAR_CHANNELS.size
+        val padded = " $n "
+        val index = POPULAR_CHANNELS.indexOfFirst { needle ->
+            if (needle.any { it.isDigit() } || needle.length <= 3) {
+                padded.contains(" $needle ")
+            } else {
+                n.contains(needle)
+            }
+        }
+        return if (index >= 0) index else POPULAR_CHANNELS.size
+    }
+
+    /** «A&E HD», «A&E FHD» y «A&E» son la MISMA señal: una sola tarjeta por canal. */
+    private val QUALITY_TAG = Regex("\\b(fhd|uhd|hd|sd|4k|h265|hevc|h264)\\b")
+    private val NON_ALNUM = Regex("[^a-z0-9]+")
+
+    fun channelKey(name: String): String =
+        // El «+» NO es calidad: «WIN Sports+» y «TNT Sports HD+» son canales
+        // distintos de «WIN Sports»/«TNT Sports HD». Sin esto, el deduplicado
+        // de TV en vivo conservaba el primero y escondía la señal correcta.
+        name.lowercase()
+            .replace("+", " plus ")
+            .replace(QUALITY_TAG, " ")
+            .replace(NON_ALNUM, "")
+
+    /** Orden de la parrilla: populares primero, luego México, luego alfabético. */
+    val POPULARITY_ORDER: Comparator<String> = compareBy<String>(
+        { popularityRank(it) },
+        { countryFor(it) != "México" },
+        { it },
+    )
 
     /** El grupo a mostrar: respeta el `group-title` del M3U y clasifica lo genérico. */
     fun groupOf(name: String, group: String): String =
@@ -179,7 +302,7 @@ internal object LiveTaxonomy {
         "TVG NETWORK", "TVG 2", "OVACION", "ESTADIO TNT", "CLARO SPORTS",
         "MOVISTAR DEPORTES", "FOX DEPORTE", "FOX SPORT", "TNT SPORT", "WIN SPORT",
         "BALLY", "NESN", "YES NETWORK", "SPORTSNET", "SPORTSMAX", "DIRECTV SPORT",
-        "ESPN", "FOX RACING", "FOX SOCCER", "TD+", "TD", "PREMIER LEAGUE", "CHAMPIONS",
+        "ESPN", "FOX ONE", "FOX RACING", "FOX SOCCER", "TD+", "TD", "PREMIER LEAGUE", "CHAMPIONS",
     )
     private val SPORTS_TOKENS = setOf("FUT", "MMA", "OLN")
 
@@ -237,7 +360,7 @@ internal object LiveTaxonomy {
         "AXN", "AMC", "WARNER", "FX", "TNT", "CRIME", "SERIE", "STAR CHANNEL",
         "STAR PLUS", "I SAT", "USA NETWORK", "CALLE 13", "A3S",
         "UNIVERSAL CHANNEL", "UNIVERSAL PREMIER", "SONY CENTRAL", "SONY HD",
-        "FOX HD", "FOX ONE", "FOX ESP",
+        "FOX HD", "FOX ESP",
     )
 
     private val ENTERTAINMENT_ANY = listOf(
@@ -292,6 +415,25 @@ internal object LiveTaxonomy {
     )
 
     private val COUNTRY_BRANDS = listOf(
+        // Fox: la señal mexicana es de Lauman; las de EE. UU./LatAm son de Disney.
+        // Los tokens explícitos (MX/USA/ARG/CHILE…) siguen mandando antes que esto.
+        "FOX SPORTS CENTRAL" to "México",
+        "FOX SPORTS 2 CENTRAL" to "México",
+        "FOX SPORTS 3 CENTRAL" to "México",
+        "FOX SPORTS PREMIUM" to "México",
+        "FOX ONE" to "México",
+        "AYM SPORTS" to "México",
+        // TNT Sports genéricos/Premium/Estadio son feeds de Chile; «TNT SPORTS
+        // HD» sin + es TNT entretenimiento y se muestra como TNT HD.
+        "TNT SPORTS CHILE" to "Chile",
+        "TNT SPORTS PREMIUM" to "Chile",
+        "ESTADIO TNT SPORTS" to "Chile",
+        "TNT SPORTS FHD" to "Chile",
+        "FOX DEPORTES" to "EE. UU.",
+        "FOX DEPORTE" to "EE. UU.",
+        "FOX SOCCER" to "EE. UU.",
+        "FOX 40" to "EE. UU.",
+        "FOX 5" to "EE. UU.",
         // Desempates: la frase larga manda sobre la marca corta.
         "CANCAO NOVA" to "Brasil",
         "ANTENA LATINA" to "R. Dominicana",

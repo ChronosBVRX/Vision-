@@ -5,6 +5,8 @@ import android.content.pm.ProviderInfo
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.PlaybackHistory
+import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.SeasonRef
 import com.chronosbvrx.visionplus.home.contract.HomeContract
 import com.chronosbvrx.visionplus.home.contract.HomeFeedCodec
@@ -57,6 +59,38 @@ class HomeFeedStoreTest {
         assertTrue("el feed debe quedar en disco", file.exists())
         assertNotNull("el JSON servido debe decodificar", HomeFeedCodec.decode(first))
         assertEquals("mientras esté fresco, se sirve el mismo JSON", first, HomeFeedStore.readOrBuild(context))
+    }
+
+    @Test
+    fun aNewHistoryEntryRebuildsTheFeedWithoutWaitingForTheCache() {
+        PlaybackHistory.clear(context)
+        HomeFeedStore.file(context).delete()
+        // Primer feed sin historial.
+        val before = HomeFeedCodec.decode(HomeFeedStore.readOrBuild(context))!!
+        assertTrue(before.continueWatching.isEmpty())
+
+        val entry = ResumeEntry(
+            key = "xtv:abc", title = "Serie · T1 · C1", xtvCode = "abc",
+            seriesId = "serie-1", episodeIds = listOf("a", "b"), episodeIndex = 0,
+            seasonIds = listOf("serie-1"), seasonNames = listOf("T1"), seasonIndex = 0,
+            positionMs = 120_000L, durationMs = 600_000L,
+            updatedAt = System.currentTimeMillis() + 5_000L,
+        )
+        PlaybackHistory.save(context, entry, immediate = true)
+        // El archivo del feed sigue «fresco», pero el historial es más nuevo: el provider
+        // debe reconstruir y devolver «Seguir viendo» al instante.
+        val after = HomeFeedCodec.decode(HomeFeedStore.readOrBuild(context))!!
+        assertTrue("el feed debe incluir el nuevo recuerdo", after.continueWatching.any { it.key == "xtv:abc" })
+        assertTrue("el launcher abre la ficha de la serie", after.continueWatching.first().openLink.startsWith("visionplus://title/"))
+        assertTrue("y conserva el enlace de reanudación", after.continueWatching.first().playLink.startsWith("visionplus://watch/"))
+    }
+
+    @Test
+    fun historyNewerDetectsAnyWriteAfterTheFeed() {
+        assertTrue(HomeFeedStore.historyIsNewer(latestUpdatedAt = 12_000L, feedWrittenAt = 10_000L))
+        assertTrue(HomeFeedStore.historyIsNewer(latestUpdatedAt = 10_500L, feedWrittenAt = 10_000L))
+        assertFalse(HomeFeedStore.historyIsNewer(latestUpdatedAt = 10_000L, feedWrittenAt = 10_000L))
+        assertFalse(HomeFeedStore.historyIsNewer(latestUpdatedAt = 0L, feedWrittenAt = 10_000L))
     }
 
     @Test

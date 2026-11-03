@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.settings
 
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -195,6 +196,7 @@ internal fun ProfilesSettingsSection() {
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
+            modifier = Modifier.dismissOnBack { confirmDelete = false },
             title = { Text("¿Borrar «${active.name}»?") },
             text = {
                 Text(
@@ -234,6 +236,7 @@ private fun NameDialog(
     var name by remember(initial) { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.dismissOnBack { onDismiss() },
         title = { Text(title) },
         text = {
             OutlinedTextField(

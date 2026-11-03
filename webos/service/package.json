@@ -1,0 +1,8 @@
+{
+  "name": "com.chronosbvrx.visionplus.webos.service",
+  "version": "0.2.0",
+  "description": "Vision+ catalog and playback resolver for webOS",
+  "main": "index.js",
+  "private": true,
+  "license": "Apache-2.0"
+}

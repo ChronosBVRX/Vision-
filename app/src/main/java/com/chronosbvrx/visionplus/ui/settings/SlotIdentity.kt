@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.settings
 
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,6 +43,7 @@ fun SlotCodeDialog(onDismiss: () -> Unit, onRedeemed: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = { if (!working) onDismiss() },
+        modifier = Modifier.dismissOnBack { if (!working) onDismiss() },
         title = { Text("Identidad del equipo") },
         text = {
             Column(Modifier.fillMaxWidth()) {

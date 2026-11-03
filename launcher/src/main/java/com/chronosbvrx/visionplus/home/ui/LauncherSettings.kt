@@ -2,6 +2,7 @@
 
 package com.chronosbvrx.visionplus.home.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -60,36 +61,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.chronosbvrx.visionplus.home.data.HomeConfig
 import com.chronosbvrx.visionplus.home.data.HomeUpdate
-import com.chronosbvrx.visionplus.home.data.StartTab
 import com.chronosbvrx.visionplus.home.data.TvInputSource
 import com.chronosbvrx.visionplus.home.data.TvSourceKind
 import com.chronosbvrx.visionplus.home.data.tvInputSubtitle
-import com.chronosbvrx.visionplus.home.data.visibleInputs
 
 /** Las secciones de los ajustes del launcher. */
 enum class LauncherSettingsSection(val label: String, val detail: String) {
-    STARTUP("Inicio", "Pestaña y fila de entradas"),
-    INPUTS("Entradas", "TV abierta y HDMI"),
-    SYSTEM("Sistema", "Red, pantalla y sonido"),
+    STARTUP("Inicio", "Inicio del sistema y personalización"),
     UPDATES("Actualizaciones", "Launcher y Vision+"),
     ABOUT("Acerca de", "Versión y autoría"),
-}
-
-/** Las páginas del sistema que el launcher abre sin obligarte a buscar en Ajustes. */
-enum class LauncherSystemPage(val label: String) {
-    WIFI("Wi-Fi y red"),
-    DISPLAY("Pantalla"),
-    SOUND("Sonido"),
-    STORAGE("Almacenamiento"),
-    DATE("Fecha y hora"),
-    LANGUAGE("Idioma y región"),
-    ACCESSIBILITY("Accesibilidad"),
-    SCREENSAVER("Protector de pantalla"),
-    APP_LIST("Apps del sistema"),
-    DEFAULT_APPS("Apps predeterminadas"),
-    SETTINGS("Ajustes de la tele"),
 }
 
 /**
@@ -99,35 +80,14 @@ enum class LauncherSystemPage(val label: String) {
 class LauncherSettingsActions(
     val onDismiss: () -> Unit,
     val onSection: (LauncherSettingsSection) -> Unit = {},
-    val onStartTab: (StartTab) -> Unit = {},
-    val onToggleInputsRow: () -> Unit = {},
-    val onToggleInput: (String) -> Unit = {},
-    val onRefreshInputs: () -> Unit = {},
-    val onOpenInput: (TvInputSource) -> Unit = {},
-    val onOpenLive: () -> Unit = {},
+    val onOpenPersistent: () -> Unit = {},
     val onPersonalize: () -> Unit = {},
-    val onSystemPage: (LauncherSystemPage) -> Unit = {},
     val onRequestHome: () -> Unit = {},
     val onHomeSettings: () -> Unit = {},
     val onUpdateHome: () -> Unit = {},
+    val onCheckHome: () -> Unit = {},
     val onUpdateVision: () -> Unit = {},
 )
-
-/** Lo que se ve del equipo en la sección «Sistema», ya resuelto fuera de la interfaz. */
-data class LauncherSystemInfo(
-    val device: String = "",
-    val network: String = "",
-    val storage: String = "",
-)
-
-/** La siguiente pestaña al pulsar OK sobre la preferencia (ciclo, como el resto del panel). */
-internal fun nextStartTab(current: StartTab, inputsAvailable: Boolean = true): StartTab {
-    // En una TV box no se ofrece arrancar en «Entradas»: no existen ahí.
-    val all = StartTab.entries.filter { inputsAvailable || it != StartTab.INPUTS }
-    if (all.isEmpty()) return StartTab.HOME
-    val index = all.indexOf(current)
-    return if (index < 0) all.first() else all[(index + 1) % all.size]
-}
 
 /**
  * Los ajustes PROPIOS del launcher, separados de «Personalizar Inicio»: aquí vive lo que hace
@@ -138,15 +98,13 @@ internal fun nextStartTab(current: StartTab, inputsAvailable: Boolean = true): S
 fun LauncherSettingsDialog(
     section: LauncherSettingsSection,
     profileName: String,
-    config: HomeConfig,
-    inputs: List<TvInputSource>,
     homeVersion: String,
     visionInstalled: Boolean,
     visionVersion: String,
     latestVisionVersion: String,
     homeDefault: Boolean,
     currentHome: String?,
-    system: LauncherSystemInfo,
+    persistentActive: Boolean,
     updateState: HomeUpdate.State,
     visionState: HomeUpdate.State,
     actions: LauncherSettingsActions,
@@ -155,8 +113,9 @@ fun LauncherSettingsDialog(
         onDismissRequest = actions.onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        BackHandler(onBack = actions.onDismiss)
         val focus = rememberDialogFocus()
-        Box(Modifier.fillMaxSize().background(HomeColors.Deep).dialogRootFocus(focus)) {
+        Box(Modifier.fillMaxSize().background(HomeColors.Deep).dialogRootFocus(focus).dismissOnBack(actions.onDismiss)) {
             Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 24.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -210,21 +169,9 @@ fun LauncherSettingsDialog(
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         when (section) {
                             LauncherSettingsSection.STARTUP -> StartupSection(
-                                config = config,
-                                hasInputs = inputs.isNotEmpty(),
                                 homeDefault = homeDefault,
                                 currentHome = currentHome,
-                                actions = actions,
-                            )
-
-                            LauncherSettingsSection.INPUTS -> InputsSection(
-                                inputs = inputs,
-                                config = config,
-                                actions = actions,
-                            )
-
-                            LauncherSettingsSection.SYSTEM -> SystemSection(
-                                system = system,
+                                persistentActive = persistentActive,
                                 actions = actions,
                             )
 
@@ -300,32 +247,25 @@ private fun RailItem(
 
 @Composable
 private fun StartupSection(
-    config: HomeConfig,
-    hasInputs: Boolean,
     homeDefault: Boolean,
     currentHome: String?,
+    persistentActive: Boolean,
     actions: LauncherSettingsActions,
 ) {
     SettingsList {
         item { SettingsHeader("Inicio", "El launcher abre como tú lo dejes, no como el fabricante quiera.") }
         item {
             SettingsValueRow(
-                title = "Pestaña al abrir",
-                detail = "Al encender la tele · el botón Home siempre vuelve a Inicio",
-                value = config.startTab.label,
-                onClick = { actions.onStartTab(nextStartTab(config.startTab, inputsAvailable = hasInputs)) },
+                title = "Modo persistente",
+                detail = if (persistentActive) {
+                    "Activo · si el sistema intenta abrir su Inicio, Vision+ Home vuelve al frente"
+                } else {
+                    "Actívalo en Accesibilidad · evita que Google TV vuelva a su Inicio"
+                },
+                value = if (persistentActive) "Activo" else "Activar",
+                icon = Icons.Rounded.Accessibility,
+                onClick = actions.onOpenPersistent,
             )
-        }
-        if (hasInputs) {
-            item {
-                val visible = "inputs" !in config.hiddenRows
-                SettingsValueRow(
-                    title = "Fila de entradas en el Inicio",
-                    detail = "TV abierta y HDMI · solo las fuentes que reporta este equipo",
-                    value = if (visible) "Sí" else "No",
-                    onClick = actions.onToggleInputsRow,
-                )
-            }
         }
         item {
             SettingsValueRow(
@@ -365,183 +305,6 @@ private fun StartupSection(
 }
 
 @Composable
-private fun InputsSection(
-    inputs: List<TvInputSource>,
-    config: HomeConfig,
-    actions: LauncherSettingsActions,
-) {
-    val visible = visibleInputs(inputs, config.hiddenInputs)
-    SettingsList {
-        item {
-            SettingsHeader(
-                "Entradas de la tele",
-                "El launcher muestra solo las fuentes que el equipo reporta: TV abierta, HDMI y las demás.",
-            )
-        }
-        if (inputs.isEmpty()) {
-            item {
-                SettingsCard(
-                    title = "Este equipo no tiene entradas de TV",
-                    body = "En una tele verás TV abierta y sus HDMI. Una TV box o una PC no tienen sintonizador ni entradas de video, así que el launcher no muestra la sección en vez de inventarla.",
-                ) {
-                    HomeButton(
-                        label = "Buscar de nuevo",
-                        onClick = actions.onRefreshInputs,
-                        icon = Icons.Rounded.Refresh,
-                        primary = true,
-                    )
-                    HomeButton(
-                        label = "Abrir TV en vivo",
-                        onClick = actions.onOpenLive,
-                        icon = Icons.Rounded.LiveTv,
-                        primary = false,
-                    )
-                }
-            }
-        } else {
-            item {
-                Text(
-                    "${visible.size} visibles de ${inputs.size} · OK abre la fuente, el ojo la oculta",
-                    color = HomeColors.TextFaint,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-            }
-            items(inputs, key = { it.id.ifBlank { it.label } }) { item ->
-                InputSettingsRow(
-                    item = item,
-                    hidden = item.id in config.hiddenInputs,
-                    onOpen = { actions.onOpenInput(item) },
-                    onToggle = { actions.onToggleInput(item.id) },
-                )
-            }
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HomeButton(
-                        label = "Buscar de nuevo",
-                        onClick = actions.onRefreshInputs,
-                        icon = Icons.Rounded.Refresh,
-                        primary = false,
-                    )
-                    HomeButton(
-                        label = "Ajustes de la tele",
-                        onClick = { actions.onSystemPage(LauncherSystemPage.SETTINGS) },
-                        icon = Icons.Rounded.Settings,
-                        primary = false,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun InputSettingsRow(
-    item: TvInputSource,
-    hidden: Boolean,
-    onOpen: () -> Unit,
-    onToggle: () -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = 62.dp)
-            .focusGroup()
-            .padding(horizontal = 4.dp, vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        FocusableSurface(
-            onClick = onOpen,
-            shape = HomeShapes.panel,
-            modifier = Modifier.weight(1f),
-            focusedScale = 1.01f,
-        ) { focused ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(if (focused) HomeColors.SurfaceHigh else HomeColors.Surface)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                InputIcon(item, size = 34)
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        item.label,
-                        color = if (hidden) HomeColors.TextFaint else HomeColors.Text,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        tvInputSubtitle(item),
-                        color = HomeColors.TextFaint,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                    )
-                }
-                Text(
-                    if (hidden) "Oculta" else "Ver",
-                    color = if (hidden) HomeColors.TextFaint else HomeColors.BlueBright,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        }
-        MiniAction(
-            icon = if (hidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-            label = if (hidden) "Mostrar ${item.label}" else "Ocultar ${item.label}",
-            onClick = onToggle,
-        )
-    }
-}
-
-@Composable
-private fun SystemSection(system: LauncherSystemInfo, actions: LauncherSettingsActions) {
-    SettingsList {
-        item {
-            SettingsHeader(
-                "Sistema",
-                listOf(system.device, system.network, system.storage)
-                    .filter { it.isNotBlank() }
-                    .joinToString(" · "),
-            )
-        }
-        val pages = listOf(
-            LauncherSystemPage.WIFI to Icons.Rounded.Wifi,
-            LauncherSystemPage.DISPLAY to Icons.Rounded.Tv,
-            LauncherSystemPage.SOUND to Icons.AutoMirrored.Rounded.VolumeUp,
-            LauncherSystemPage.STORAGE to Icons.Rounded.Storage,
-            LauncherSystemPage.DATE to Icons.Rounded.Schedule,
-            LauncherSystemPage.LANGUAGE to Icons.Rounded.Language,
-            LauncherSystemPage.ACCESSIBILITY to Icons.Rounded.Accessibility,
-            LauncherSystemPage.SCREENSAVER to Icons.Rounded.Image,
-            LauncherSystemPage.APP_LIST to Icons.Rounded.Apps,
-            LauncherSystemPage.DEFAULT_APPS to Icons.Rounded.SettingsRemote,
-        )
-        items(pages, key = { it.first.name }) { page ->
-            SettingsValueRow(
-                title = page.first.label,
-                detail = "Se abre la pantalla del sistema",
-                value = "",
-                icon = page.second,
-                onClick = { actions.onSystemPage(page.first) },
-            )
-        }
-        item {
-            SettingsValueRow(
-                title = "Ajustes de la tele",
-                detail = "Todas las opciones del equipo",
-                value = "",
-                icon = Icons.Rounded.Settings,
-                onClick = { actions.onSystemPage(LauncherSystemPage.SETTINGS) },
-            )
-        }
-    }
-}
-
-@Composable
 private fun UpdatesSection(
     homeVersion: String,
     visionInstalled: Boolean,
@@ -554,33 +317,53 @@ private fun UpdatesSection(
     SettingsList {
         item { SettingsHeader("Actualizaciones", "Todo se descarga del release oficial de Vision+, sin tienda.") }
         item {
+            val launcherPending = HomeUpdate.launcherPending()
+            val launcherLatest = HomeUpdate.launcherLatest
             SettingsValueRow(
                 title = "Vision+ Home",
                 detail = when (updateState) {
-                    HomeUpdate.State.Idle -> "Launcher de la tele · v$homeVersion"
+                    HomeUpdate.State.Idle -> when {
+                        launcherPending && launcherLatest != null ->
+                            "v$homeVersion → v${launcherLatest.versionName}"
+                        // Una caché vieja puede traer una «última publicada» MENOR que la
+                        // instalada; nunca se enseña como si fuera más nueva.
+                        launcherLatest != null &&
+                            HomeUpdate.isOlder(homeVersion, launcherLatest.versionName) ->
+                            "v$homeVersion · última publicada v${launcherLatest.versionName}"
+                        else -> "Launcher de la tele · v$homeVersion · estás al día"
+                    }
                     HomeUpdate.State.Checking -> "Buscando la última versión…"
                     is HomeUpdate.State.Downloading -> "Descargando… ${updateState.percent} %"
                     HomeUpdate.State.Ready -> "Descarga lista: confirma en la pantalla del sistema"
+                    HomeUpdate.State.UpToDate -> "v$homeVersion · ya es la última versión"
                     is HomeUpdate.State.Failed -> "No se pudo: ${updateState.message}"
                 },
-                value = "v$homeVersion",
+                value = if (launcherPending) "Actualizar" else "Al día",
                 icon = Icons.Rounded.Download,
-                onClick = actions.onUpdateHome,
+                onClick = { if (launcherPending) actions.onUpdateHome() else actions.onCheckHome() },
             )
         }
         item {
+            // Una beta instalada (p. ej. 2.5.191) puede ser MÁS NUEVA que el release estable
+            // (2.5.186): jamás se ofrece «Actualizar» hacia atrás ni se pinta una flecha que
+            // parezca un downgrade.
+            val visionOlder = visionVersion.isNotBlank() && latestVisionVersion.isNotBlank() &&
+                HomeUpdate.isOlder(visionVersion, latestVisionVersion)
             SettingsValueRow(
                 title = if (visionInstalled) "Vision+" else "Instalar Vision+",
                 detail = when {
                     !visionInstalled -> "El launcher se baja la app del release oficial"
                     visionVersion.isBlank() -> "Instalada, pero no responde al Inicio"
-                    latestVisionVersion.isNotBlank() && visionVersion != latestVisionVersion ->
-                        "v$visionVersion → v$latestVisionVersion"
+                    visionOlder -> "v$visionVersion → v$latestVisionVersion"
                     else -> "v$visionVersion · es la que abre el contenido"
                 },
-                value = if (visionInstalled) "Actualizar" else "Instalar",
+                value = when {
+                    !visionInstalled -> "Instalar"
+                    visionOlder -> "Actualizar"
+                    else -> "Al día"
+                },
                 icon = Icons.Rounded.SettingsRemote,
-                onClick = actions.onUpdateVision,
+                onClick = { if (!visionInstalled || visionOlder) actions.onUpdateVision() },
             )
         }
         item {
@@ -588,6 +371,7 @@ private fun UpdatesSection(
                 HomeUpdate.State.Checking -> "Buscando Vision+ en el release…"
                 is HomeUpdate.State.Downloading -> "Descargando Vision+… ${visionState.percent} %"
                 HomeUpdate.State.Ready -> "Descarga lista: confirma en la pantalla del sistema"
+                HomeUpdate.State.UpToDate -> "Vision+: ya tienes la última versión"
                 is HomeUpdate.State.Failed -> "Vision+: ${visionState.message}"
                 HomeUpdate.State.Idle -> ""
             }

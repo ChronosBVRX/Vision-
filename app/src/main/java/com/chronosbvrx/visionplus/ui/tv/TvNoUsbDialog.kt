@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.tv
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +30,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 
 /**
@@ -45,12 +47,14 @@ fun TvNoUsbDialog(onDismiss: () -> Unit) {
     }
 
     Dialog(onDismissRequest = onDismiss) {
+        BackHandler(onBack = onDismiss)
         Box(
             modifier = Modifier
                 .widthIn(min = 480.dp, max = 560.dp)
                 .background(Color(0xFF101726), RoundedCornerShape(16.dp))
                 .border(1.5.dp, VisionBlue.copy(alpha = 0.8f), RoundedCornerShape(16.dp))
-                .padding(32.dp),
+                .padding(32.dp)
+                .dismissOnBack(onDismiss),
             contentAlignment = Alignment.Center,
         ) {
             Column(

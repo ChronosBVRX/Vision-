@@ -102,10 +102,10 @@ class TvRescueTest {
     fun returnRowIndexMirrorsTheHomeColumn() {
         val top10 = listOf(film("t1"), film("t2"))
         val premieres = listOf(film("e1"))
-        // billboard(0) + hubs(1) → Top 10 en 2, Estrenos en 3.
+        // billboard(0) → Top 10 en 1, Estrenos en 2.
         assertEquals(0, homeReturnRowIndex("hero", "hero", top10, premieres, emptyList(), emptyList(), emptyList(), emptyList(), false, false))
-        assertEquals(2, homeReturnRowIndex("t2", "hero", top10, premieres, emptyList(), emptyList(), emptyList(), emptyList(), false, false))
-        assertEquals(3, homeReturnRowIndex("e1", "hero", top10, premieres, emptyList(), emptyList(), emptyList(), emptyList(), false, false))
+        assertEquals(1, homeReturnRowIndex("t2", "hero", top10, premieres, emptyList(), emptyList(), emptyList(), emptyList(), false, false))
+        assertEquals(2, homeReturnRowIndex("e1", "hero", top10, premieres, emptyList(), emptyList(), emptyList(), emptyList(), false, false))
         // Sin regreso o sin fila: no se revela nada.
         assertEquals(-1, homeReturnRowIndex(null, "hero", top10, premieres, emptyList(), emptyList(), emptyList(), emptyList(), false, false))
         assertEquals(-1, homeReturnRowIndex("fantasma", "hero", top10, premieres, emptyList(), emptyList(), emptyList(), emptyList(), false, false))
@@ -113,24 +113,24 @@ class TvRescueTest {
 
     @Test
     fun returnRowIndexCountsTheWeeklyTrendingRow() {
-        // La fila «Populares de la semana» se pinta entre Estrenos y «Seguir viendo»: el
+        // La fila «Populares de la semana» se pinta entre Estrenos y «Porque viste X»: el
         // índice del regreso DEBE contarla o revela la fila de arriba y el foco del mando
         // se pierde (el caso real que reportó el usuario al volver de una serie).
         val top10 = listOf(film("t1"))
         val trending = listOf(film("w1"))
         val own = listOf(CatalogRow("home-kind-series", "Series", listOf(film("s1"))))
-        // 0 billboard, 1 hubs, 2 top10, 3 trending, 4 propia (sin estrenos ni continue).
+        // 0 billboard, 1 top10, 2 trending, 3 propia (sin estrenos ni continue).
         assertEquals(
-            3,
+            2,
             homeReturnRowIndex("w1", "hero", top10, emptyList(), trending, emptyList(), emptyList(), emptyList(), false, false),
         )
         assertEquals(
-            4,
+            3,
             homeReturnRowIndex("s1", "hero", top10, emptyList(), trending, emptyList(), own, emptyList(), false, false),
         )
         // Sin la fila (servidor viejo o sin internet), el índice baja uno y sigue exacto.
         assertEquals(
-            3,
+            2,
             homeReturnRowIndex("s1", "hero", top10, emptyList(), emptyList(), emptyList(), own, emptyList(), false, false),
         )
     }
@@ -140,36 +140,36 @@ class TvRescueTest {
         val cards = listOf(card("c1"))
         val own = listOf(CatalogRow("home-kind-series", "Series", listOf(film("s1"))))
         val other = listOf(CatalogRow("portal", "Portal", listOf(film("p1"))))
-        // 0 billboard, 1 hubs, 2 continue (sin top10/estrenos), 3 propia, 4 resto.
+        // 0 billboard, 1 continue (sin top10/estrenos), 2 propia, 3 resto.
         assertEquals(
-            2,
+            1,
             homeReturnRowIndex("c1", "hero", emptyList(), emptyList(), emptyList(), cards, own, other, false, false),
         )
         assertEquals(
-            3,
+            2,
             homeReturnRowIndex("s1", "hero", emptyList(), emptyList(), emptyList(), cards, own, other, false, false),
         )
         assertEquals(
-            4,
+            3,
             homeReturnRowIndex("p1", "hero", emptyList(), emptyList(), emptyList(), cards, own, other, false, false),
         )
         // «Seguir viendo» también casa por clave del historial o código XTV.
         assertEquals(
-            2,
+            1,
             homeReturnRowIndex("xtv:abc", "hero", emptyList(), emptyList(), emptyList(), listOf(card("xtv:abc")), emptyList(), emptyList(), false, false),
         )
     }
 
     @Test
     fun returnRowIndexSkipsPlaceholders() {
-        // Con fantasmas de carga hay una fila extra (índice 2): todo se recorre uno.
+        // Con fantasmas de carga hay una fila extra: todo se recorre uno.
         val top10 = listOf(film("t1"))
         assertEquals(
-            3,
+            2,
             homeReturnRowIndex("t1", "hero", top10, emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), showPlaceholders = true, showNoRows = false),
         )
         assertEquals(
-            3,
+            2,
             homeReturnRowIndex("t1", "hero", top10, emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), showPlaceholders = false, showNoRows = true),
         )
     }
@@ -202,20 +202,21 @@ class TvRescueTest {
         )
         assertEquals(
             listOf(
-                "billboard", "home_quick_hubs", "home_top10", "home_estrenos", "home_trending_week",
-                "continue", "home_because", "home_follow", "home-kind-series", "portal", "end_spacer",
+                "billboard", "continue", "home_top10", "home_estrenos",
+                "home_trending_week", "home_because", "home_follow", "home-kind-series", "portal",
+                "end_spacer",
             ),
             slots.map { it.key },
         )
         assertEquals("el héroe vive en la fila 0", 0, homeRowIndexOf(slots, "hero"))
+        assertEquals("«Seguir viendo» va antes de toda categoría", 1, homeRowIndexOf(slots, "c1"))
         assertEquals(2, homeRowIndexOf(slots, "t1"))
         assertEquals(3, homeRowIndexOf(slots, "e1"))
         assertEquals(4, homeRowIndexOf(slots, "w1"))
-        assertEquals(5, homeRowIndexOf(slots, "c1"))
-        assertEquals("la fila nueva se cuenta para el regreso", 6, homeRowIndexOf(slots, "b1"))
-        assertEquals("la agenda también", 7, homeRowIndexOf(slots, "f1"))
-        assertEquals(8, homeRowIndexOf(slots, "s1"))
-        assertEquals(9, homeRowIndexOf(slots, "p1"))
+        assertEquals("la fila nueva se cuenta para el regreso", 5, homeRowIndexOf(slots, "b1"))
+        assertEquals("la agenda también", 6, homeRowIndexOf(slots, "f1"))
+        assertEquals(7, homeRowIndexOf(slots, "s1"))
+        assertEquals(8, homeRowIndexOf(slots, "p1"))
         assertEquals(-1, homeRowIndexOf(slots, "fantasma"))
         assertEquals(-1, homeRowIndexOf(slots, null))
 
@@ -231,7 +232,7 @@ class TvRescueTest {
             showPlaceholders = true,
             showNoRows = false,
         )
-        assertEquals(listOf("billboard", "home_quick_hubs", "home_status", "home_top10", "end_spacer"), withStatus.map { it.key })
+        assertEquals(listOf("billboard", "home_status", "home_top10", "end_spacer"), withStatus.map { it.key })
     }
 
     // ---------------------------------------------------------- foco a prueba de balas

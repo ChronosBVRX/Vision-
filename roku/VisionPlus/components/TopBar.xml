@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="TopBar" extends="Rectangle">
+    <interface>
+        <field id="action" type="string" alwaysNotify="true" />
+        <field id="payload" type="assocarray" alwaysNotify="true" />
+        <field id="active" type="string" />
+        <field id="profile" type="string" />
+    </interface>
+    <script type="text/brightscript" uri="pkg:/source/core.brs" />
+    <script type="text/brightscript" uri="pkg:/source/store.brs" />
+    <script type="text/brightscript" uri="pkg:/components/TopBar.brs" />
+    <children>
+        <Poster id="brand" uri="pkg:/images/logo_horizontal.png" width="240" height="66" translation="[74,29]" loadDisplayMode="scaleToFit" />
+        <Label id="tv" text="TV" translation="[326,38]" width="80" height="48" font="font:MediumBoldSystemFont" color="0x9BA8BDFF" />
+        <Group id="tabHost" />
+        <Label id="clock" text="" translation="[1318,38]" width="80" height="48" horizAlign="right" font="font:MediumSystemFont" color="0x9BA8BDFF" />
+        <Group id="profileGroup" translation="[1410,30]">
+            <Poster id="profileBg" uri="pkg:/images/pill_dark.png" width="220" height="56" translation="[0,4]" loadDisplayMode="scaleToFill" />
+            <Poster id="avatar" uri="pkg:/images/avatar_bg.png" width="44" height="44" translation="[8,10]" />
+            <Label id="avatarText" text="P" translation="[8,10]" width="44" height="44" horizAlign="center" vertAlign="center" font="font:SmallBoldSystemFont" color="0xFFFFFFFF" />
+            <Label id="profileName" text="Principal" translation="[60,4]" width="150" height="56" vertAlign="center" font="font:SmallSystemFont" color="0xFFFFFFFF" ellipsisText="..." />
+        </Group>
+        <Group id="searchGroup" translation="[1644,30]">
+            <Poster id="searchBg" uri="pkg:/images/pill_dark.png" width="160" height="56" translation="[0,4]" loadDisplayMode="scaleToFill" />
+            <Poster id="searchIcon" uri="pkg:/images/icon_search.png" width="28" height="28" translation="[14,18]" />
+            <Label id="searchText" text="Buscar" translation="[50,4]" width="100" height="56" vertAlign="center" font="font:SmallSystemFont" color="0xFFFFFFFF" />
+        </Group>
+        <Group id="settingsGroup" translation="[1824,30]">
+            <Poster id="settingsBg" uri="pkg:/images/settings_circle.png" width="56" height="56" />
+            <Poster id="settingsIcon" uri="pkg:/images/icon_settings.png" width="28" height="28" translation="[14,14]" />
+        </Group>
+        <Group id="menuPanel" visible="false">
+            <Poster uri="pkg:/images/panel_dark.png" width="520" height="250" loadDisplayMode="scaleToFill" />
+            <Label id="menuTitle" text="" translation="[22,14]" width="476" height="34" font="font:SmallBoldSystemFont" color="0x6BA6FFFF" />
+            <Poster id="menuBg0" uri="pkg:/images/pill_dark.png" width="480" height="52" translation="[20,58]" loadDisplayMode="scaleToFill" />
+            <Label id="menuLabel0" text="" translation="[36,58]" width="448" height="52" vertAlign="center" font="font:SmallSystemFont" color="0xFFFFFFFF" />
+            <Poster id="menuBg1" uri="pkg:/images/pill_dark.png" width="480" height="52" translation="[20,116]" loadDisplayMode="scaleToFill" />
+            <Label id="menuLabel1" text="" translation="[36,116]" width="448" height="52" vertAlign="center" font="font:SmallSystemFont" color="0xFFFFFFFF" />
+            <Poster id="menuBg2" uri="pkg:/images/pill_dark.png" width="480" height="52" translation="[20,174]" loadDisplayMode="scaleToFill" />
+            <Label id="menuLabel2" text="" translation="[36,174]" width="448" height="52" vertAlign="center" font="font:SmallSystemFont" color="0xFFFFFFFF" />
+        </Group>
+    </children>
+</component>

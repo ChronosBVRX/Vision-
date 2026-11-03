@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.remote
 
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -81,6 +82,7 @@ internal fun CastEpisodeDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.dismissOnBack { onDismiss() },
         containerColor = VisionSurface,
         titleContentColor = VisionTextPrimary,
         textContentColor = VisionTextSecondary,

@@ -27,6 +27,7 @@ import schedule
 import search_text
 import sports
 import tmdb
+import trivia_bank
 import xtv
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -244,6 +245,12 @@ async def main() -> None:
                     await search_text.rebuild(pool)
                 except Exception:  # noqa: BLE001
                     log.exception("el texto de búsqueda no se pudo mantener")
+                try:
+                    # Vision+ Play: banco de preguntas generado del catálogo. Respeta
+                    # TRIVIA_MIN_HOURS y TRIVIA_BANK_CAP; no toca la versión del índice.
+                    await trivia_bank.run(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el banco de preguntas de Vision+ Play falló")
                 try:
                     # Mapeo TMDB→MAL para AniSkip: semanal o si está vacío (no toca versión).
                     await aniskip.sync(pool)

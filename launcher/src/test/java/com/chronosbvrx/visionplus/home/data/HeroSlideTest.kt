@@ -159,4 +159,26 @@ class HeroSlideTest {
         assertTrue(leagueRank("Liga MX") < leagueRank("LaLiga"))
         assertTrue(leagueRank("UEFA Champions League") < leagueRank("Premier League"))
     }
+
+    @Test
+    fun secondaryCompetitionsNeverInheritTheRankOfTheirParentLeague() {
+        assertTrue(leagueRank("LaLiga 2") > leagueRank("LaLiga"))
+        assertTrue(leagueRank("Serie A Women") > leagueRank("Serie A"))
+        assertTrue(leagueRank("Russian Premier League") > leagueRank("Premier League"))
+        assertTrue(leagueRank("Championship") > leagueRank("UEFA Champions League"))
+    }
+
+    @Test
+    fun aSecondaryLeagueNeverEntersTheLauncherHeroEvenWhenItIsLive() {
+        val minor = sport("minor", now - 20 * 60 * 1000L, live = true, league = "LaLiga 2")
+        val main = sport("main", now - 10 * 60 * 1000L, live = true, league = "LaLiga")
+        val slides = composeHeroSlides(
+            banners = listOf(movie("m1")),
+            feedHero = emptyList(),
+            sports = listOf(minor, main),
+            nowMs = now,
+        )
+        assertTrue(slides.none { it.id == "sports:minor" })
+        assertTrue(slides.any { it.id == "sports:main" })
+    }
 }

@@ -126,6 +126,20 @@ internal fun creditsCardStartMs(markers: EpisodeMarkers, durationMs: Long): Long
     return start
 }
 
+/**
+ * Últimos segundos del capítulo cuando la base NO trae marcador de créditos: el jugador
+ * ofrece «Siguiente capítulo» para no obligar a esperar el final. Solo se usa si hay un
+ * capítulo siguiente (lo decide el reproductor); «Seguir viendo» deja terminar la escena.
+ */
+internal fun creditsFallbackStartMs(markers: EpisodeMarkers, durationMs: Long): Long? {
+    if (durationMs < 5 * 60_000L) return null
+    // Si la base trae un marcador válido, ese manda; el fallback es solo para cuando no
+    // hay créditos conocidos (o el marcador no cabe en la duración real).
+    if (creditsCardStartMs(markers, durationMs) != null) return null
+    val start = durationMs - 60_000L
+    return if (start > 5 * 60_000L) start else null
+}
+
 /** Momento en el que el modo rápido puede arrancar el siguiente (fin de créditos). */
 internal fun creditsAutoAtMs(markers: EpisodeMarkers, durationMs: Long): Long? {
     val start = creditsCardStartMs(markers, durationMs) ?: return null

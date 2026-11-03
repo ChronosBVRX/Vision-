@@ -1,0 +1,12 @@
+{
+  "rootDir": ".",
+  "files": [
+    "source/**/*.brs",
+    "components/**/*.xml",
+    "components/**/*.brs"
+  ],
+  "stagingDir": ".build",
+  "createPackage": false,
+  "diagnosticLevel": "warn",
+  "sourceMap": false
+}

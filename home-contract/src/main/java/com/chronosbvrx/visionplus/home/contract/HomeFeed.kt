@@ -60,7 +60,13 @@ data class ContinueItem(
     val durationMs: Long = 0L,
     /** «T2 · C3» cuando es capítulo. */
     val episode: String = "",
+    /** Reproduce/reanuda en el minuto exacto. */
     val playLink: String = "",
+    /**
+     * Abre la ficha de la serie (solo capítulos): el launcher manda al menú de la serie
+     * para elegir capítulo o usar «Continuar donde te quedaste». Vacío en películas.
+     */
+    val openLink: String = "",
 )
 
 /** Un canal de TV en vivo con su guía (cuando el EPG ya está en caché). */

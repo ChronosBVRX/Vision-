@@ -11,6 +11,8 @@ data class LiveChannel(
     val origin: String? = null,
     val drmKey: String? = null,
     val drmType: String? = null,
+    /** Dial del portal cuando lo publica; null si la fuente no trae número. */
+    val number: Int? = null,
 ) {
     /** El grupo final: respeta group-title del M3U y clasifica lo genérico. */
     fun effectiveGroup(): String = LiveTaxonomy.groupOf(name, group)

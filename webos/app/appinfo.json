@@ -1,0 +1,18 @@
+{
+  "id": "com.chronosbvrx.visionplus.webos",
+  "version": "0.2.0",
+  "vendor": "ChronosBVRX",
+  "type": "web",
+  "main": "index.html",
+  "title": "Vision+",
+  "icon": "images/icon.png",
+  "largeIcon": "images/icon-large.png",
+  "resolution": "1920x1080",
+  "bgColor": "#070B13",
+  "bgImage": "",
+  "spinnerOnLaunch": false,
+  "uiRevision": 2,
+  "disableBackHistoryAPI": true,
+  "requiredPermissions": [],
+  "requiredACG": []
+}

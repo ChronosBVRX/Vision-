@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.home.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -82,6 +83,7 @@ fun SearchSurface(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        BackHandler(onBack = onDismiss)
         var query by remember { mutableStateOf("") }
         var results by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
         var searching by remember { mutableStateOf(false) }
@@ -123,7 +125,7 @@ fun SearchSurface(
             searched = true
         }
 
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.82f)).dialogRootFocus(focus)) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.82f)).dialogRootFocus(focus).dismissOnBack(onDismiss).consumeLongPressRelease()) {
             Column(
                 Modifier
                     .fillMaxSize()

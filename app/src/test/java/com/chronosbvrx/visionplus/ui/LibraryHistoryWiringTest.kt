@@ -25,6 +25,16 @@ class LibraryHistoryWiringTest {
             assertTrue("$name reanuda", text.contains("onResume"))
             assertTrue("$name marca los terminados", text.contains("VISTO"))
             assertTrue("$name pinta el avance", text.contains("card.progress"))
+            assertTrue("$name manda las series a su ficha", text.contains("continueOpensSeries(card)"))
+            assertTrue(
+                "$name reanuda directo las series en curso y deja la ficha para las terminadas",
+                text.contains("continueOpensSeries(card) && card.completed"),
+            )
+        }
+        val home = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/home/HomeScreen.kt")
+        val tvHome = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/tv/TvHomeScreen.kt")
+        for ((name, text) in listOf("móvil" to home, "TV" to tvHome)) {
+            assertTrue("$name reanuda series en curso", text.contains("continueOpensSeries(card) && card.completed"))
         }
         val phoneApp = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/PhoneApp.kt")
         val tvApp = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/TvApp.kt")
@@ -46,6 +56,9 @@ class LibraryHistoryWiringTest {
         val native = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
         val exo = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
         assertTrue("el nativo guarda al terminar", native.contains("forceFinished = true"))
+        assertTrue("el nativo marca los créditos como terminado", native.contains("isFinishedAtExit"))
+        assertTrue("el nativo usa el marcador de créditos", native.contains("creditsCardStartMs(currentMarkers()"))
+        assertTrue("el nativo guarda el final al salir en títulos", native.contains("finished && total > 0L"))
         assertTrue("el nativo no degrada un terminado en el stop", native.contains("finishedSaved"))
         assertFalse("el nativo ya no borra al terminar", native.contains("PlaybackHistory.delete(this, curCode)"))
         assertTrue("el ExoPlayer guarda el fin del búnker", exo.contains("saveHistory(finished = true)"))

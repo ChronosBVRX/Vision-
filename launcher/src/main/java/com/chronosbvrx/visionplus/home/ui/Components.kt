@@ -1,10 +1,10 @@
 package com.chronosbvrx.visionplus.home.ui
 
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +26,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,31 +57,107 @@ import kotlinx.coroutines.launch
 
 /**
  * La tecla OK de un mando repite mientras se mantiene. Si el menú se abre a mitad de la
- * pulsación, la ventana nueva recibiría el KeyUp y activaría su primer botón: este candado se
- * come EXACTAMENTE ese KeyUp, lo reciba la tarjeta o el diálogo. Se vence solo para no dejar
- * una tecla muda si el equipo nunca entrega el KeyUp.
+ * pulsación, la ventana nueva recibiría el KeyUp y activaría su primer botón («Abrir» en una
+ * app): este candado se come ese KeyUp, lo reciba la tarjeta o el diálogo.
+ *
+ * La versión anterior vencía a los 2.5 s. Eso fallaba justo con la pulsación sostenida: la
+ * persona abre el menú, sigue apretando mientras lo lee y, al soltar después de ese tiempo,
+ * el KeyUp ya no se comía y la app se abría sola (el menú parecía cerrarse). Ahora el candado
+ * NO vence por tiempo: come todos los KeyUp hasta que llega un OK nuevo y deliberado —un
+ * KeyDown con `repeatCount == 0` DESPUÉS de haber visto el KeyUp de la pulsación que abrió el
+ * menú—. Las repeticiones del mando (`repeatCount > 0`) nunca lo desarman.
  */
-internal object TvPressGuard {
-    private var pendingAt = 0L
+internal class PressReleaseGuard(
+    /**
+     * Silencio mínimo entre dos OK para considerarlos pulsaciones distintas. Los mandos
+     * repiten cada 40-120 ms; un botón que se acaba de soltar y se vuelve a pulsar deja un
+     * hueco perceptible. El reloj se inyecta en las pruebas.
+     */
+    private val quietMs: Long = 400L,
+    private val clock: () -> Long = { android.os.SystemClock.uptimeMillis() },
+) {
+    private var armed = false
+    private var lastOkAt = 0L
 
-    fun expectKeyUp() {
-        pendingAt = System.currentTimeMillis()
+    fun expectRelease() {
+        armed = true
+        lastOkAt = clock()
     }
 
-    fun takeKeyUp(): Boolean {
-        if (pendingAt == 0L) return false
-        val expired = System.currentTimeMillis() - pendingAt > 2_500L
-        pendingAt = 0L
-        return !expired
+    fun consumeRelease(): Boolean {
+        if (!armed) return false
+        lastOkAt = clock()
+        return true
+    }
+
+    /** Hay un OK largo pendiente de soltar: ningún click debe dispararse todavía. */
+    fun isArmed(): Boolean = armed
+
+    /**
+     * Un OK nuevo solo puede desarmar el candado si el mando estuvo callado [quietMs]. Así se
+     * cubren los dos tipos de control remoto que rompían el OK largo:
+     * - los que repiten con `repeatCount > 0`, y
+     * - los que mandan cada repetición como un `KeyDown` nuevo con `repeatCount == 0`.
+     * En ambos, mientras la persona siga apretando los eventos llegan seguidos y el candado
+     * permanece armado; al soltar, el primer OK deliberado (después del silencio) vuelve a
+     * funcionar con normalidad.
+     */
+    fun noteKeyDown(repeatCount: Int) {
+        if (!armed) return
+        val now = clock()
+        if (repeatCount == 0 && now - lastOkAt >= quietMs) {
+            armed = false
+        } else {
+            // Sigue siendo la misma pulsación (o una repetición): mantiene vivo el candado.
+            lastOkAt = now
+        }
     }
 }
+
+internal object TvPressGuard {
+    private val guard = PressReleaseGuard()
+
+    fun expectKeyUp() = guard.expectRelease()
+
+    fun takeKeyUp(): Boolean = guard.consumeRelease()
+
+    /** Un OK nuevo (ya soltado el anterior) cancela el candado. */
+    fun noteKeyDown(repeatCount: Int) = guard.noteKeyDown(repeatCount)
+
+    /** Un click con el candado armado es la cola del OK largo, no una pulsación nueva. */
+    fun isArmed(): Boolean = guard.isArmed()
+}
+
+/** ¿Es la tecla OK del mando/teclado? */
+internal fun isOkKeyCode(nativeKeyCode: Int): Boolean =
+    nativeKeyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+        nativeKeyCode == android.view.KeyEvent.KEYCODE_ENTER ||
+        nativeKeyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
 
 /** Cuánto hay que mantener OK para que salga el menú de opciones (como en un launcher). */
 internal const val LONG_PRESS_MS = 550L
 
 /**
+ * Una fila que se «apaga» cuando el mando se posa en una de sus tarjetas. El estado vive en la
+ * fila, no en cada tarjeta: así todas las demás bajan al 75 % y la enfocada es la única que
+ * manda (10-foot UI).
+ */
+val LocalCardRowActive = compositionLocalOf { false }
+
+@Composable
+fun CardFocusScope(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    var rowActive by remember { mutableStateOf(false) }
+    Box(modifier = modifier.onFocusChanged { rowActive = it.hasFocus }) {
+        CompositionLocalProvider(LocalCardRowActive provides rowActive) {
+            content()
+        }
+    }
+}
+
+/**
  * La tarjeta enfocable del sistema. Un solo lugar define cómo se siente el mando en TODA la
- * pantalla: anillo blanco, sombra azul y un escalado corto (que se apaga en equipos modestos).
+ * pantalla: escala suave elástica, borde blanco nítido y sombra ambiental. Las tarjetas que no
+ * tienen el foco bajan su opacidad para dirigir la vista al elemento activo.
  *
  * `onLongClick` funciona con el dedo Y con el mando: se mantiene OK (o se pulsa Menú/Info en
  * el control) y salen las opciones de la app o del canal.
@@ -91,10 +169,13 @@ fun FocusableSurface(
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     shape: Shape = HomeShapes.card,
-    focusedScale: Float = 1.045f,
+    focusedScale: Float = 1.06f,
+    /** Las apps se pintan a sangre: sin borde cuando no tienen el foco. */
+    showIdleBorder: Boolean = true,
     content: @Composable (focused: Boolean) -> Unit,
 ) {
     val reduced = LocalReducedEffects.current
+    val rowActive = LocalCardRowActive.current
     val scope = rememberCoroutineScope()
     var focused by remember { mutableStateOf(false) }
     var longPressFired by remember { mutableStateOf(false) }
@@ -102,31 +183,75 @@ fun FocusableSurface(
     var longPressJob by remember { mutableStateOf<Job?>(null) }
     val scale by animateFloatAsState(
         targetValue = if (focused && !reduced) focusedScale else 1f,
-        animationSpec = tween(durationMillis = 120),
+        animationSpec = if (reduced) {
+            tween(durationMillis = 120)
+        } else {
+            tween(
+                durationMillis = 200,
+                easing = CubicBezierEasing(0.34f, 1.56f, 0.64f, 1f),
+            )
+        },
         label = "focusScale",
     )
+    val cardAlpha by animateFloatAsState(
+        targetValue = if (rowActive && !focused) 0.75f else 1f,
+        animationSpec = tween(durationMillis = if (reduced) 100 else 160),
+        label = "cardFocusDim",
+    )
     val interaction = remember { MutableInteractionSource() }
+    val ringWidth = when {
+        focused -> 2.dp
+        showIdleBorder -> 1.dp
+        else -> 0.dp
+    }
     Box(
         modifier = modifier
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                alpha = cardAlpha
             }
-            .clip(shape)
             .then(
-                if (focused) {
-                    Modifier.border(2.dp, Color.White, shape)
+                if (focused && !reduced) {
+                    Modifier.shadow(
+                        elevation = 24.dp,
+                        shape = shape,
+                        clip = false,
+                        ambientColor = Color.White.copy(alpha = 0.18f),
+                        spotColor = Color.Black.copy(alpha = 0.85f),
+                    )
                 } else {
-                    Modifier.border(1.dp, HomeColors.Stroke, shape)
+                    Modifier
                 },
             )
+            .clip(shape)
+            .then(
+                when {
+                    focused -> Modifier.background(
+                        Brush.linearGradient(
+                            listOf(
+                                Color.White,
+                                HomeColors.Cyan.copy(alpha = 0.95f),
+                                Color.White.copy(alpha = 0.78f),
+                            ),
+                        ),
+                    )
+                    showIdleBorder -> Modifier.background(HomeColors.Stroke)
+                    else -> Modifier
+                },
+            )
+            .padding(ringWidth)
+            .clip(shape)
             // El observador va ANTES del clickable: así ve el nodo enfocable que crea.
             .onFocusChanged { focused = it.isFocused }
             .onPreviewKeyEvent { event ->
                 val native = event.nativeKeyEvent.keyCode
-                val isOk = native == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
-                    native == android.view.KeyEvent.KEYCODE_ENTER ||
-                    native == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+                val isOk = isOkKeyCode(native)
+                // Un OK nuevo y deliberado (después de soltar el que abrió el menú) rearma el
+                // click normal; las repeticiones del mando no cuentan.
+                if (isOk && event.type == KeyEventType.KeyDown) {
+                    TvPressGuard.noteKeyDown(event.nativeKeyEvent.repeatCount)
+                }
                 // El KeyUp del OK largo que abrió un menú no debe activar NADA (ni esta
                 // tarjeta ni el primer botón del diálogo que acaba de recibir el foco).
                 if (event.type == KeyEventType.KeyUp && isOk && TvPressGuard.takeKeyUp()) {
@@ -140,6 +265,8 @@ fun FocusableSurface(
                     longPressJob?.cancel()
                     longPressJob = null
                     longPressFired = false
+                    // OJO: no se arma el candado —la tecla que se suelta es Menú, no OK— para
+                    // que el primer OK dentro del menú funcione a la primera.
                     onLongClick.invoke()
                     return@onPreviewKeyEvent true
                 }
@@ -185,8 +312,14 @@ fun FocusableSurface(
                 interactionSource = interaction,
                 indication = null,
                 onClick = {
-                    // Tras un OK largo, el KeyUp no debe abrir además la app/canal.
-                    if (suppressClick) suppressClick = false else onClick()
+                    // Tras un OK largo, el KeyUp no debe abrir además la app/canal. Se
+                    // comprueban las DOS vías: la tarjeta que abrió el menú (`suppressClick`)
+                    // y la acción del diálogo que acaba de recibir el foco (candado global).
+                    if (suppressClick || TvPressGuard.isArmed()) {
+                        suppressClick = false
+                    } else {
+                        onClick()
+                    }
                 },
                 onLongClick = onLongClick,
             ),
@@ -195,7 +328,11 @@ fun FocusableSurface(
     }
 }
 
-/** Botón del hero y de los paneles: el primario es blanco (como el mando de una tele). */
+/**
+ * Botón del hero y de los paneles. El primario es SIEMPRE blanco sólido con texto oscuro
+ * (alto contraste al enfocar); el secundario es vidrio esmerilado: blanco al 10 %, borde fino
+ * y un velo que se aclara con el foco.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeButton(
@@ -209,29 +346,60 @@ fun HomeButton(
     val reduced = LocalReducedEffects.current
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (focused && !reduced) 1.06f else 1f,
-        animationSpec = tween(120),
+        targetValue = if (focused && !reduced) 1.045f else 1f,
+        animationSpec = if (reduced) {
+            tween(120)
+        } else {
+            tween(200, easing = CubicBezierEasing(0.34f, 1.56f, 0.64f, 1f))
+        },
         label = "buttonScale",
     )
-    val background = when {
-        primary && focused -> Color.White
-        primary -> Color.White.copy(alpha = 0.94f)
-        focused -> Color.White.copy(alpha = 0.24f)
-        else -> Color.White.copy(alpha = 0.12f)
+    val outerBrush = when {
+        primary && focused -> Brush.linearGradient(
+            listOf(Color.White, HomeColors.Cyan.copy(alpha = 0.92f), Color.White),
+        )
+        primary -> Brush.linearGradient(
+            listOf(Color.White, Color(0xFFE8F4FF), Color.White.copy(alpha = 0.92f)),
+        )
+        focused -> Brush.linearGradient(
+            listOf(
+                Color.White.copy(alpha = 0.78f),
+                HomeColors.Cyan.copy(alpha = 0.55f),
+                Color.White.copy(alpha = 0.24f),
+            ),
+        )
+        else -> Brush.linearGradient(
+            listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.22f)),
+        )
+    }
+    val innerBrush = when {
+        primary -> Brush.verticalGradient(listOf(Color.White, Color(0xFFF1F7FF)))
+        focused -> Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.08f)),
+        )
+        else -> Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = 0.11f), Color.White.copy(alpha = 0.055f)),
+        )
     }
     val foreground = if (primary) Color(0xFF05070C) else Color.White
-    Row(
+    Box(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(HomeShapes.pill)
-            .background(background)
             .then(
                 if (focused) {
-                    Modifier.border(2.dp, if (primary) HomeColors.Blue else Color.White, HomeShapes.pill)
+                    Modifier.shadow(
+                        elevation = 20.dp,
+                        shape = HomeShapes.button,
+                        clip = false,
+                        ambientColor = HomeColors.Cyan.copy(alpha = 0.26f),
+                        spotColor = Color.Black.copy(alpha = 0.78f),
+                    )
                 } else {
                     Modifier
                 },
             )
+            .clip(HomeShapes.button)
+            .background(outerBrush)
             .onFocusChanged {
                 focused = it.isFocused
                 onFocusChanged(it.isFocused)
@@ -241,14 +409,27 @@ fun HomeButton(
                 indication = null,
                 onClick = onClick,
             )
-            .padding(horizontal = 22.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(1.dp),
     ) {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, tint = foreground, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(9.dp))
+        Row(
+            modifier = Modifier
+                .clip(HomeShapes.buttonInner)
+                .background(innerBrush)
+                .padding(horizontal = 22.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = foreground, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(9.dp))
+            }
+            Text(
+                label,
+                color = foreground,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
         }
-        Text(label, color = foreground, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -295,13 +476,18 @@ fun SectionHeader(
 
 /** Barra de avance fina (3 dp) que no roba foco. */
 @Composable
-fun ThinProgress(progress: Int, modifier: Modifier = Modifier, color: Color = HomeColors.Blue) {
+fun ThinProgress(
+    progress: Int,
+    modifier: Modifier = Modifier,
+    color: Color = HomeColors.Cyan,
+    height: Dp = 3.dp,
+) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(3.dp)
+            .height(height)
             .clip(RoundedCornerShape(50))
-            .background(Color.White.copy(alpha = 0.18f)),
+            .background(Color.Black.copy(alpha = 0.58f)),
     ) {
         Box(
             Modifier

@@ -18,7 +18,7 @@ object GeeHealth {
     data class Check(val alive: Boolean, val atMs: Long)
 
     /** Tope de señales por pasada: nunca debe competir con la reproducción. */
-    const val MAX_PER_PASS = 16
+    const val MAX_PER_PASS = 96
 
     /** Cada cuánto se revisa todo. */
     const val INTERVAL_MS = 30_000L

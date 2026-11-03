@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.home
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -66,8 +67,11 @@ class LauncherHomeRoleWiringTest {
         val overlays = source("ui/Overlays.kt")
         assertTrue("el centro de control no recibe la acción directa", overlays.contains("onRequestHome"))
         assertTrue("falta el botón para ponerlo como Inicio", overlays.contains("Poner Vision+ Home como Inicio"))
-        assertTrue("falta la opción manual", overlays.contains("Cambiar el Inicio (ajustes)"))
-        assertTrue("no se muestra cuando ya es el Inicio", overlays.contains("Vision+ Home ya es tu Inicio"))
+        assertFalse("fuera las opciones del televisor", overlays.contains("Cambiar el Inicio (ajustes)"))
+        assertFalse("el estado del Inicio vive en Ajustes, no en el centro de control", overlays.contains("Vision+ Home ya es tu Inicio"))
+
+        val settings = source("ui/LauncherSettings.kt")
+        assertTrue("la puerta manual vive en los ajustes del launcher", settings.contains("Cambiar el Inicio"))
     }
 
     @Test

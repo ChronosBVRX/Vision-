@@ -2,6 +2,7 @@ package com.chronosbvrx.visionplus.data.xuper
 
 import android.content.Context
 import android.util.Log
+import android.view.Surface
 import android.view.View
 import com.chronosbvrx.visionplus.BuildConfig
 import dalvik.system.DexClassLoader
@@ -27,7 +28,9 @@ internal fun trackDisplayLang(engineLang: String, declaredLang: String?): String
     val e = engineLang.trim().lowercase()
     if (e.length in 2..4 && e.all { it.isLetter() } && e !in TRACK_CODECS) return e
     val d = declaredLang?.trim().orEmpty().lowercase()
-    if (d.isNotEmpty()) return d
+    // El portal a veces declara el códec («aac», «ac3») en vez del idioma. Eso no es un
+    // idioma: si se mostrara tal cual, el menú diría «AAC / AC3» y elegiría a ciegas.
+    if (d.isNotEmpty() && d !in TRACK_CODECS) return d
     return ""
 }
 
@@ -994,6 +997,125 @@ object X4KTitan {
         } catch (e: Exception) {
             Log.w(TAG, "sendEntriesCdnList falló: ${e.cause ?: e}")
             false
+        }
+    }
+
+    /**
+     * Retira la superficie de render del motor para entregarle una propia (renderer GL).
+     * `ed.e` conserva el programa y el audio; solo pierde la TextureView.
+     */
+    fun detachRenderView(view: View, context: Context): Boolean {
+        val player = view.javaClass.methods.firstOrNull {
+            it.name == "getMPlayer" && it.parameterCount == 0
+        }?.invoke(view)
+        if (player == null) {
+            Log.w(TAG, "detachRenderView: la vista no expone getMPlayer")
+            return false
+        }
+        return try {
+            val method = player.javaClass.methods.firstOrNull {
+                it.parameterCount == 2 &&
+                    it.parameterTypes[0] == Context::class.java &&
+                    it.parameterTypes[1] == java.lang.Integer.TYPE
+            } ?: return false
+            method.invoke(player, context, 0)
+            Log.i(TAG, "detachRenderView: superficie del motor retirada")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "detachRenderView falló: ${e.cause ?: e}")
+            false
+        }
+    }
+
+    /** Devuelve la TextureView nativa del motor (fallback del renderer GL). */
+    fun restoreRenderView(view: View, context: Context): Boolean {
+        val player = view.javaClass.methods.firstOrNull {
+            it.name == "getMPlayer" && it.parameterCount == 0
+        }?.invoke(view) ?: return false
+        return try {
+            val method = player.javaClass.methods.firstOrNull {
+                it.parameterCount == 2 &&
+                    it.parameterTypes[0] == Context::class.java &&
+                    it.parameterTypes[1] == java.lang.Integer.TYPE
+            } ?: return false
+            method.invoke(player, context, 2)
+            Log.i(TAG, "restoreRenderView: TextureView nativa restaurada")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "restoreRenderView falló: ${e.cause ?: e}")
+            false
+        }
+    }
+
+    /**
+     * Entrega al reproductor activo una superficie propia (SurfaceTexture del renderer GL).
+     * Usa el método `M0(Surface, surfaceId)` que ya usa el motor para su propia vista.
+     */
+    fun attachSurface(surface: Surface?): Boolean {
+        val engine = activeEngine() ?: run {
+            Log.w(TAG, "attachSurface: motor no activo")
+            return false
+        }
+        return try {
+            runCatching {
+                engine.javaClass.declaredFields.firstOrNull { it.name == "s" }?.apply {
+                    isAccessible = true
+                    setBoolean(engine, false)
+                }
+            }
+            val method = engine.javaClass.methods.firstOrNull {
+                it.parameterCount == 2 &&
+                    it.parameterTypes[0] == Surface::class.java &&
+                    it.parameterTypes[1] == String::class.java
+            }
+            if (method != null) {
+                method.invoke(engine, surface, "vision-gl")
+                Log.i(TAG, "attachSurface: ${if (surface == null) "null" else "GL"} conectada")
+                return true
+            }
+            // Respaldo: IMediaPlayer directo.
+            val player = engine.javaClass.declaredFields.firstOrNull { it.name == "n" }
+                ?.apply { isAccessible = true }?.get(engine)
+            val setSurface = player?.javaClass?.methods?.firstOrNull {
+                it.name == "setSurface" && it.parameterCount == 1 &&
+                    it.parameterTypes[0] == Surface::class.java
+            } ?: return false
+            setSurface.invoke(player, surface)
+            Log.i(TAG, "attachSurface: IMediaPlayer.setSurface directo")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "attachSurface falló: ${e.cause ?: e}")
+            false
+        }
+    }
+
+    /** Tamaño real del vídeo que reporta el motor (0,0 si todavía no lo sabe). */
+    fun videoSize(): Pair<Int, Int> {
+        val engine = activeEngine() ?: return 0 to 0
+        return try {
+            val player = engine.javaClass.declaredFields.firstOrNull { it.name == "n" }
+                ?.apply { isAccessible = true }?.get(engine) ?: return 0 to 0
+            val width = player.javaClass.methods.firstOrNull {
+                it.name == "getVideoWidth" && it.parameterCount == 0
+            }?.invoke(player) as? Number
+            val height = player.javaClass.methods.firstOrNull {
+                it.name == "getVideoHeight" && it.parameterCount == 0
+            }?.invoke(player) as? Number
+            (width?.toInt() ?: 0) to (height?.toInt() ?: 0)
+        } catch (_: Exception) {
+            0 to 0
+        }
+    }
+
+    private fun activeEngine(): Any? {
+        val f = facade ?: return null
+        return try {
+            val field = f.javaClass.declaredFields.firstOrNull { it.name == "b" }
+                ?.apply { isAccessible = true }
+            val engines = field?.get(f) as? Array<*> ?: return null
+            engines.getOrNull(0)
+        } catch (_: Exception) {
+            null
         }
     }
 

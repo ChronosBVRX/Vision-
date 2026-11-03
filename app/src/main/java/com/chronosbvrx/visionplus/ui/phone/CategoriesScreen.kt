@@ -52,6 +52,7 @@ import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.ui.Route
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.components.PosterCard
+import com.chronosbvrx.visionplus.ui.components.rememberPosterLongClick
 import com.chronosbvrx.visionplus.ui.isLandscapeTablet
 import coil.compose.AsyncImage
 
@@ -126,6 +127,7 @@ fun CategoriesScreen(
                     meta = film.metaLine(),
                     score = film.score,
                     badge = if (film.year >= 2025) "NUEVO" else null,
+                    onLongClick = rememberPosterLongClick(film),
                     onClick = { onOpenFilm(film) },
                 )
             }

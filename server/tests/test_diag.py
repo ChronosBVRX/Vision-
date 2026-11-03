@@ -248,6 +248,21 @@ def test_health_alert_text_says_what_happened_and_what_to_check():
     assert "df -h /var/oled" in deep
 
 
+def test_gee38_health_text_names_the_real_problem():
+    import datetime as dt
+
+    now = dt.datetime(2026, 10, 31, 12, tzinfo=dt.timezone.utc)
+    stale = diag.gee38_alert_text(0, now - dt.timedelta(minutes=40), now)
+    assert "events.txt" in stale and "hace 40 min" in stale
+    assert "v1/gee38/health" in stale
+    broken = diag.gee38_alert_text(3, now, now)
+    assert "desalineada" in broken and "3 eventos" in broken
+    assert "link_names" in broken
+    assert diag._gee38_stamp('{"at": "2026-10-31T11:58:00"}') == dt.datetime(
+        2026, 10, 31, 11, 58, tzinfo=dt.timezone.utc
+    )
+
+
 # ----- canario de builds nuevos (frena la oferta solo si un build sale roto) -----
 
 

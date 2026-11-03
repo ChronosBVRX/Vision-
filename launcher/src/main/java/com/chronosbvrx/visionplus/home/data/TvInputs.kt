@@ -94,6 +94,16 @@ internal fun orderTvInputs(items: List<TvInputSource>): List<TvInputSource> = it
             .thenBy(String.CASE_INSENSITIVE_ORDER) { it.label },
     )
 
+/**
+ * Paquetes de apps de video que se registran como `TvInputService` sin ser una fuente
+ * física del televisor. Mostrarlas como «Entradas» confunde: no abren TV abierta ni HDMI.
+ */
+internal fun isMediaAppInput(packageName: String): Boolean = packageName in setOf(
+    "com.google.android.videos",
+    "com.google.android.youtube.tv",
+    "com.google.android.apps.youtube.tv",
+)
+
 /** Identidad física de la fuente: un HDMI repetido es el mismo puerto, no dos tarjetas. */
 internal fun sourceKey(item: TvInputSource): String {
     val port = if (item.kind == TvSourceKind.HDMI) {
@@ -128,7 +138,13 @@ class TvInputsRepository(context: Context) {
     private fun readInputs(): List<TvInputSource> = runCatching {
         val manager = app.getSystemService(Context.TV_INPUT_SERVICE) as? TvInputManager
             ?: return@runCatching emptyList()
-        manager.tvInputList.orEmpty().mapNotNull { info -> sourceOf(info) }.let(::orderTvInputs)
+        manager.tvInputList.orEmpty()
+            // Apps de video (Google Play Películas, YouTube…) se anuncian como «TV input»
+            // pero no son una entrada del televisor. Se descartan para no llenar el Inicio
+            // de tarjetas que no abren TV abierta ni un HDMI.
+            .filterNot { isMediaAppInput(it.serviceInfo?.packageName.orEmpty()) }
+            .mapNotNull { info -> sourceOf(info) }
+            .let(::orderTvInputs)
     }.getOrDefault(emptyList())
 
     private fun sourceOf(info: TvInputInfo): TvInputSource? = runCatching {

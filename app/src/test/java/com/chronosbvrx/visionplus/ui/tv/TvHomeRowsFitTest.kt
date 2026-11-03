@@ -18,8 +18,9 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Compone tres filas reales del Inicio con el tamaño de una tele 1080p (540 dp) y comprueba que la
- * tercera queda DENTRO de la pantalla. Es el guardián del pedido: al menos 3 filas visibles.
+ * Compone una fila real del Inicio con el tamaño de una tele 1080p (540 dp) y comprueba
+ * que el póster grande queda DENTRO de la pantalla. El Inicio desplaza; ya no encoge
+ * el póster para meter tres filas.
  */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -40,7 +41,7 @@ class TvHomeRowsFitTest {
     )
 
     @Test
-    fun threeCatalogRowsFitOnTheTvScreen() {
+    fun theLargePosterRowFitsOnTheTvScreen() {
         compose.setContent {
             VisionTheme {
                 Column(Modifier.fillMaxSize()) {

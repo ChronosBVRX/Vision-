@@ -1,0 +1,86 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "juggernautXL_v9Rundiffusion.safetensors"
+    }
+  },
+  "2": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "cute friendly floating robot mascot, Pixar 3D render, front view, symmetrical, dark navy blue glossy rounded body, a wide blank dark glass panel across the chest, small rounded head with two big friendly glowing cyan eyes and a happy smile, a glowing plus sign antenna on top, short stubby arms, small hover thrusters, cyan and violet neon accents, soft studio lighting, centered, full body, plain flat green studio background, high detail, family friendly video game mascot, no text, no letters, no logo, no watermark",
+      "clip": [
+        "1",
+        1
+      ]
+    }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "text, letters, logo, watermark, human, realistic photo, scary, weapon, extra limbs, deformed, blurry, cropped, busy background, multiple characters, green spill on the robot, green reflections, chest text, chest letters",
+      "clip": [
+        "1",
+        1
+      ]
+    }
+  },
+  "4": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    }
+  },
+  "5": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 777002,
+      "steps": 30,
+      "cfg": 6.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1.0,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "2",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "4",
+        0
+      ]
+    }
+  },
+  "6": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "5",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    }
+  },
+  "7": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "narrator",
+      "images": [
+        "6",
+        0
+      ]
+    }
+  }
+}

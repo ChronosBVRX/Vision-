@@ -1,7 +1,9 @@
 package com.chronosbvrx.visionplus.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import org.junit.Test
 
 /**
@@ -227,6 +229,116 @@ class LiveTaxonomyTest {
         assertEquals("Chile", countries.last())
         assertTrue(countries.contains("México"))
         assertTrue(countries.contains("Chile"))
+    }
+
+    @Test
+    fun `popular channels come first without prefix collisions`() {
+        val names = listOf(
+            "CANAL 50 HD", "HBO HD", "TUDN MX HD", "CANAL 5 HD",
+            "LAS ESTRELLAS HD", "AZTECA 7 HD",
+        )
+        assertEquals(
+            listOf(
+                "CANAL 5 HD", "LAS ESTRELLAS HD", "AZTECA 7 HD",
+                "TUDN MX HD", "HBO HD", "CANAL 50 HD",
+            ),
+            names.sortedWith(LiveTaxonomy.POPULARITY_ORDER),
+        )
+        // «CANAL 5» no debe arrastrar a «CANAL 50».
+        assertTrue(
+            LiveTaxonomy.popularityRank("CANAL 5 HD") <
+                LiveTaxonomy.popularityRank("CANAL 50 HD"),
+        )
+    }
+
+    @Test
+    fun `fox feeds are separated by country and owner`() {
+        mapOf(
+            "Fox Sports Central HD" to "México",
+            "Fox Sports 2 Central HD" to "México",
+            "Fox Sports 3 Central HD" to "México",
+            "Fox Sports Premium MX HD" to "México",
+            "Fox Sports 1 MX" to "México",
+            "Fox Deportes HD" to "EE. UU.",
+            "FOX SOCCER PLUS HD" to "EE. UU.",
+            "FOX SPORTS 1 USA HD" to "EE. UU.",
+            "FOX SPORTS AR HD" to "Argentina",
+            "FOX SPORTS CHILE HD" to "Chile",
+            "FOX ESP HD" to "España",
+            "FOX ONE" to "México",
+            "AYM SPORTS MEXICO" to "México",
+        ).forEach { (name, country) -> assertEquals(name, country, LiveTaxonomy.countryFor(name)) }
+
+        mapOf(
+            "Fox Sports Central HD" to "Fox Sports (Lauman)",
+            "Fox Sports 2 Central HD" to "Fox Sports (Lauman)",
+            "Fox Sports Premium MX HD" to "Fox Sports (Lauman)",
+            "Fox Sports 1 MX" to "Fox Sports (Lauman)",
+            "Fox Deportes HD" to "Fox (Disney)",
+            "FOX SOCCER PLUS HD" to "Fox (Disney)",
+            "FOX SPORTS 1 USA HD" to "Fox Sports (Disney)",
+            "FOX SPORTS AR HD" to "Fox Sports (Disney)",
+            "FOX ONE" to "Fox Corporation",
+            "AYM SPORTS MEXICO" to "AYM (FOX básico)",
+            "FOX ESP HD" to "Fox (España)",
+            "ESPN HD" to "ESPN (Disney)",
+        ).forEach { (name, owner) -> assertEquals(name, owner, LiveTaxonomy.providerFor(name)) }
+    }
+
+    @Test
+    fun `fox one is sports from fox corporation and aym is basic fox`() {
+        assertEquals("Deportes", LiveTaxonomy.genreFor("FOX ONE"))
+        assertEquals("México", LiveTaxonomy.countryFor("FOX ONE"))
+        assertEquals("Fox Corporation", LiveTaxonomy.providerFor("FOX ONE"))
+        assertTrue(LiveTaxonomy.noteFor("FOX ONE").contains("FOX+"))
+        assertTrue(LiveTaxonomy.noteFor("AYM SPORTS MEXICO").contains("FOX básico"))
+        assertTrue(LiveTaxonomy.noteFor("Fox Sports Premium MX HD").contains("no es FOX+"))
+        assertEquals("Fox Sports (Lauman)", LiveTaxonomy.providerFor("Fox Sports Premium MX HD"))
+        assertEquals("Series", LiveTaxonomy.genreFor("Sony Central HD"))
+    }
+
+    @Test
+    fun `tnt entertainment and tnt sports chile are kept apart`() {
+        assertEquals("Series", LiveTaxonomy.genreFor("TNT SPORTS HD"))
+        assertTrue(LiveTaxonomy.noteFor("TNT SPORTS HD").contains("TNT"))
+        assertEquals("Chile", LiveTaxonomy.countryFor("TNT SPORTS FHD"))
+        assertEquals("Chile", LiveTaxonomy.countryFor("TNT SPORTS PREMIUM HD"))
+        assertEquals("Chile", LiveTaxonomy.countryFor("ESTADIO TNT SPORTS"))
+        assertTrue(LiveTaxonomy.noteFor("TNT SPORTS FHD").contains("Chile"))
+        // El «+» distingue canales; HD/FHD siguen siendo la misma señal.
+        assertNotEquals(
+            LiveTaxonomy.channelKey("WIN Sports+ COL HD"),
+            LiveTaxonomy.channelKey("WIN Sports COL HD"),
+        )
+        assertNotEquals(
+            LiveTaxonomy.channelKey("TNT SPORTS HD+"),
+            LiveTaxonomy.channelKey("TNT SPORTS HD"),
+        )
+        assertEquals(
+            LiveTaxonomy.channelKey("A&E HD"),
+            LiveTaxonomy.channelKey("A&E FHD"),
+        )
+    }
+
+    @Test
+    fun `masked names are shown with their real identity`() {
+        assertEquals("TNT HD", X4KApi.displayChannelName("cyx_TNTSports3", "TNT SPORTS HD"))
+        assertEquals("BitMe HD", X4KApi.displayChannelName("cyx_BitMe☆", "ANIMAL PLANET HD+"))
+        assertEquals("Star Channel HD", X4KApi.displayChannelName("cyx-FoxHD", "ST☆R HD"))
+        assertEquals(
+            "Disney+ (Elite Sports Hub)",
+            X4KApi.displayChannelName("ST☆R+HD_cyx", "Elite Sports Hub HD"),
+        )
+    }
+
+    @Test
+    fun `elite sports hub is disney plus not live espn`() {
+        assertEquals("Series", LiveTaxonomy.genreFor("Elite Sports Hub HD"))
+        assertTrue(LiveTaxonomy.noteFor("Elite Sports Hub HD").contains("Disney+"))
+        assertEquals(
+            "Disney+ (Elite Sports Hub)",
+            X4KApi.displayChannelName("ST☆R+HD_cyx", "Elite Sports Hub HD"),
+        )
     }
 
     @Test

@@ -36,6 +36,8 @@ data class ResumeCard(
     val progress: Float,
     /** Llegó al final (o a los créditos): el historial lo muestra como «Visto». */
     val completed: Boolean = false,
+    /** Es serie y quedan capítulos/temporadas: «Seguir viendo» ofrece el siguiente. */
+    val hasNext: Boolean = false,
 )
 
 /** Lo mínimo para guardar/continuar en el reproductor ExoPlayer (no-XTV). */
@@ -52,10 +54,10 @@ object PlaybackHistory {
     internal const val MIN_KEEP_MS = 15_000L
 
     /** Con este margen al final se da por terminada (no se ofrece continuar). */
-    internal const val FINISH_MARGIN_MS = 60_000L
+    internal const val FINISH_MARGIN_MS = 120_000L
 
-    /** Al terminar del todo (créditos), con este margen menor también se borra. */
-    internal const val END_MARGIN_MS = 30_000L
+    /** Al terminar del todo (créditos), con este margen también se borra. */
+    internal const val END_MARGIN_MS = 120_000L
 
     /** Al saltar a otro capítulo con este margen o menos del final, el saliente cuenta como visto. */
     internal const val WATCHED_SKIP_MARGIN_MS = 120_000L
@@ -74,6 +76,13 @@ object PlaybackHistory {
 
     fun list(context: Context): List<ResumeEntry> =
         prune(listFresh(context), System.currentTimeMillis())
+
+    /**
+     * Marca de la última escritura del historial (mtime del XML). Sirve para que el feed
+     * del launcher detecte también un vaciado o un borrado, donde no hay `updatedAt` nuevo.
+     */
+    fun lastChangedAt(context: Context): Long =
+        runCatching { prefsFile(context).lastModified() }.getOrDefault(0L)
 
     /**
      * El historial tal como está en disco. El reproductor vive en `:x4k` y escribe ahí el minuto:
@@ -126,10 +135,18 @@ object PlaybackHistory {
         write(prefs(context), clean, immediate = true)
     }
 
-    /** Entradas + fichas del catálogo como tarjetas, solo lo reanudable y una por serie. */
+    /**
+     * Entradas + fichas del catálogo como tarjetas, una por serie. Incluye lo reanudable y
+     * también la serie cuyo último capítulo terminó pero tiene siguiente: en ese caso la
+     * tarjeta abre la ficha y ofrece «Siguiente capítulo», en vez de desaparecer de la fila.
+     */
     fun continueCards(context: Context, films: List<Film>, limit: Int = 10): List<ResumeCard> =
         matchCards(
-            latestBySeries(list(context).filter { shouldKeep(it.positionMs, it.durationMs) }),
+            latestBySeries(
+                list(context).filter {
+                    shouldKeep(it.positionMs, it.durationMs) || hasNextEpisode(it)
+                },
+            ),
             films,
         ).take(limit)
 
@@ -226,15 +243,43 @@ object PlaybackHistory {
 /** Vale la pena recordarla: arrancada y lejos del final. */
 internal fun shouldKeep(positionMs: Long, durationMs: Long): Boolean =
     positionMs >= PlaybackHistory.MIN_KEEP_MS &&
-        (durationMs <= 0 || positionMs <= durationMs - PlaybackHistory.FINISH_MARGIN_MS)
+        (durationMs <= 0 ||
+            (positionMs <= durationMs - PlaybackHistory.FINISH_MARGIN_MS &&
+                !isFinished(positionMs, durationMs)))
 
 /** Terminada: al reabrirla se empieza de cero. */
 internal fun isFinished(positionMs: Long, durationMs: Long): Boolean =
     durationMs > 0 && positionMs >= durationMs - PlaybackHistory.END_MARGIN_MS
 
+/**
+ * ¿La persona salió cuando ya solo quedaban créditos/títulos? Los márgenes solos fallan
+ * con créditos largos: si hay marcador de créditos válido, manda ese. Si no, el margen
+ * de [isFinished] cubre los últimos dos minutos.
+ */
+internal fun isFinishedAtExit(
+    positionMs: Long,
+    durationMs: Long,
+    creditsStartMs: Long? = null,
+): Boolean {
+    if (durationMs <= 0L) return false
+    if (creditsStartMs != null && creditsStartMs > 0L &&
+        positionMs >= (creditsStartMs - 5_000L).coerceAtLeast(0L)
+    ) {
+        return true
+    }
+    return isFinished(positionMs, durationMs)
+}
+
 /** Un recuerdo de capítulo: con 2+ capítulos o temporadas es serie (la misma regla de la app). */
 internal fun isEpisodeEntry(e: ResumeEntry): Boolean =
     e.episodeIds.size > 1 || e.seasonIds.size > 1
+
+/** Quedan capítulos en esta temporada o una temporada siguiente por abrir. */
+internal fun hasNextEpisode(e: ResumeEntry): Boolean {
+    if (!isEpisodeEntry(e)) return false
+    if (e.episodeIds.isNotEmpty() && e.episodeIndex + 1 < e.episodeIds.size) return true
+    return e.seasonIds.isNotEmpty() && e.seasonIndex + 1 < e.seasonIds.size
+}
 
 /**
  * La serie de un capítulo tal como el usuario la ve: el nombre base del título («Serie · T2 · C3»).
@@ -259,6 +304,62 @@ internal fun latestBySeries(entries: List<ResumeEntry>): List<ResumeEntry> {
     }
 }
 
+/**
+ * El recuerdo más reciente de ESTA serie (el capítulo donde se quedó), o null si no hay.
+ * El `seriesId` del historial es la temporada activa, no el id del grupo: por eso también
+ * se comparan las temporadas de la ficha y el nombre base (historiales viejos).
+ */
+internal fun resumeEntryForSeries(entries: List<ResumeEntry>, film: Film): ResumeEntry? {
+    val seasonIds = film.seasons.mapTo(HashSet()) { it.titleId }
+    val base = resumeTitleKey(film.title)
+    return entries.firstOrNull { e ->
+        isEpisodeEntry(e) && (
+            e.seriesId in seasonIds ||
+                e.seriesId == film.id ||
+                (base.isNotBlank() && resumeTitleKey(e.title) == base)
+            )
+    }
+}
+
+/** «T2 · C3» del recuerdo, sin el nombre de la serie: el rótulo corto de las tarjetas. */
+internal fun episodeLabelOf(entry: ResumeEntry): String {
+    if (!isEpisodeEntry(entry)) return ""
+    val season = entry.seasonNames.getOrNull(entry.seasonIndex)?.takeIf { it.isNotBlank() }
+    val chapter = "C${entry.episodeIndex + 1}"
+    return listOfNotNull(season, chapter).joinToString(" · ")
+}
+
+/**
+ * «Seguir viendo» abre la ficha de la serie (para elegir capítulo o reanudar), no el
+ * reproductor. Las películas y los recuerdos sin ficha siguen reanudando directo.
+ */
+internal fun continueOpensSeries(card: ResumeCard): Boolean = isEpisodeEntry(card.entry)
+
+/**
+ * Ficha mínima de una serie cuando el catálogo ya no tiene la tarjeta: conserva el id de
+ * la temporada activa y su enlace XTV para que la ficha cargue los capítulos igual.
+ */
+internal fun resumeSeriesFilm(entry: ResumeEntry): Film {
+    val base = normalizeDisplayName(entry.title)
+        .substringBefore(" · T")
+        .substringBefore(" · C")
+        .trim()
+        .ifBlank { entry.title }
+    val seasonId = entry.seriesId
+        .ifBlank { entry.seasonIds.getOrNull(entry.seasonIndex).orEmpty() }
+        .ifBlank { entry.key }
+    return Film(
+        id = seasonId,
+        title = base,
+        year = 0,
+        durationMin = 0,
+        synopsis = "",
+        posterUrl = entry.posterUrl,
+        videoUrl = if (seasonId.isNotBlank()) "xtv:$seasonId" else entry.videoUrl,
+        sourceUrl = if (seasonId.isNotBlank()) "xtv" else "",
+    )
+}
+
 /** Saltar a este margen o menos del final cuenta como visto (los créditos al frente). */
 internal fun shouldCountWatchedOnSkip(positionMs: Long, durationMs: Long): Boolean =
     durationMs > PlaybackHistory.WATCHED_MIN_DURATION_MS &&
@@ -281,31 +382,69 @@ internal fun formatResume(ms: Long): String {
     return if (h > 0) "$h:%02d:%02d".format(m, s) else "%02d:%02d".format(m, s)
 }
 
+/** Clave de la obra: nombre sin sufijo de temporada/capítulo, normalizado. */
+internal fun resumeTitleKey(raw: String): String =
+    normalizeDisplayName(raw)
+        .substringBefore(" · T")
+        .substringBefore(" · C")
+        .trim()
+        .lowercase()
+
+/** Tipos del catálogo que son serie aunque la ficha aún no traiga temporadas cargadas. */
+private fun isSeriesKind(kind: String): Boolean =
+    kind.trim().lowercase() in setOf("series", "serie", "anime", "kids", "teleplay", "novela")
+
 /** Cada recuerdo con su ficha (cuando el catálogo aún la trae). Puro, testeable con lookup O(1). */
 internal fun matchCards(entries: List<ResumeEntry>, films: List<Film>): List<ResumeCard> {
     if (entries.isEmpty()) return emptyList()
     val byXtvCode = HashMap<String, Film>(films.size)
     val byUrl = HashMap<String, Film>(films.size)
     val byId = HashMap<String, Film>(films.size)
+    // Las series se reconocen por la temporada activa (`seriesId` del historial), no por
+    // el código del capítulo: sin estos índices, la tarjeta se quedaba sin ficha y
+    // «Seguir viendo» no podía abrir el menú de la serie.
+    val bySeasonId = HashMap<String, Film>(films.size * 2)
+    val bySeriesTitle = HashMap<String, Film>(films.size)
+    val byTitle = HashMap<String, Film>(films.size)
     for (f in films) {
         byId.putIfAbsent(f.id, f)
         if (f.videoUrl.isNotBlank()) byUrl.putIfAbsent(f.videoUrl, f)
         if (f.videoUrl.startsWith("xtv:")) {
             byXtvCode.putIfAbsent(f.videoUrl.removePrefix("xtv:"), f)
         }
+        f.seasons.forEach { season -> bySeasonId.putIfAbsent(season.titleId, f) }
+        val titleKey = resumeTitleKey(f.title)
+        if (titleKey.isNotBlank()) {
+            byTitle.putIfAbsent(titleKey, f)
+            if (f.seasons.isNotEmpty() || isSeriesKind(f.kind)) bySeriesTitle.putIfAbsent(titleKey, f)
+        }
     }
     return entries.map { entry ->
-        val film = if (entry.xtvCode.isNotBlank()) {
+        val direct = if (entry.xtvCode.isNotBlank()) {
             byXtvCode[entry.xtvCode] ?: byId[entry.xtvCode] ?: byId["xtv:${entry.xtvCode}"]
         } else {
             byUrl[entry.videoUrl] ?: byId[entry.key]
         }
+        val seriesFilm = if (isEpisodeEntry(entry)) {
+            entry.seriesId.takeIf { it.isNotBlank() }?.let { bySeasonId[it] ?: byId[it] }
+                ?: entry.seasonIds.firstNotNullOfOrNull { bySeasonId[it] }
+                ?: bySeriesTitle[resumeTitleKey(entry.title)]
+        } else {
+            null
+        }
+        val film = direct ?: seriesFilm ?: byTitle[resumeTitleKey(entry.title)]
         val progress = if (entry.durationMs > 0) {
             (entry.positionMs.toFloat() / entry.durationMs).coerceIn(0f, 1f)
         } else {
             0f
         }
-        ResumeCard(entry, film, progress, completed = isFinished(entry.positionMs, entry.durationMs))
+        ResumeCard(
+            entry = entry,
+            film = film,
+            progress = progress,
+            completed = isFinished(entry.positionMs, entry.durationMs),
+            hasNext = hasNextEpisode(entry),
+        )
     }
 }
 

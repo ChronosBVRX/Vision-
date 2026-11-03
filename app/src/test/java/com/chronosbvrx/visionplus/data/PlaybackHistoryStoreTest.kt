@@ -103,7 +103,14 @@ class PlaybackHistoryStoreTest {
             listOf("e2"),
             PlaybackHistory.list(context).map { it.key },
         )
-        assertTrue(PlaybackHistory.continueCards(context, films).isEmpty())
+        val continuing = PlaybackHistory.continueCards(context, films)
+        assertEquals(
+            "el capítulo terminado con siguiente sigue en «Seguir viendo»",
+            listOf("e2"),
+            continuing.map { it.entry.key },
+        )
+        assertTrue(continuing.single().completed)
+        assertTrue("queda el siguiente capítulo", continuing.single().hasNext)
         assertTrue(PlaybackHistory.historyCards(context, films).single().completed)
     }
 

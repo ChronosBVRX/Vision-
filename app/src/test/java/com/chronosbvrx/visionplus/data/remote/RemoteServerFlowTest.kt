@@ -10,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -51,6 +52,7 @@ class RemoteServerFlowTest {
         context.getSharedPreferences("remote_pairing", Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences("sync_state", Context.MODE_PRIVATE).edit().clear().commit()
         RemoteBus.publishScreen("")
+        RemoteBus.clearPlayback()
         RemoteBus.pairingPin.value = null
         RemoteBus.clients.value = 0
         keys.clear()
@@ -293,6 +295,93 @@ class RemoteServerFlowTest {
             val reply = phone.read()
             assertEquals(RemoteProto.SYNC_OK, reply.t)
             assertEquals("ABCDEFGH", com.chronosbvrx.visionplus.data.sync.SyncStore.code(context))
+        }
+    }
+
+    @Test
+    fun thePairedPhoneSeesPlaybackAndCommandsReachThePlayer() {
+        val token = pair(Phone())
+        val seeks = CopyOnWriteArrayList<Long>()
+        val commands = CopyOnWriteArrayList<String>()
+        val sink = object : RemoteBus.PlayerSink {
+            override fun onSeek(positionMs: Long) {
+                seeks += positionMs
+            }
+
+            override fun onCommand(command: String) {
+                commands += command
+            }
+        }
+        RemoteBus.attachPlayer(sink)
+        RemoteBus.publishPlayback(
+            NowPlaying(
+                kind = RemoteProto.KIND_VOD,
+                screen = "Tierra de Mafia · T2 · C5",
+                title = "Tierra de Mafia",
+                subtitle = "T2 · C5",
+                ref = "xtv:EP5",
+                playing = true,
+                positionMs = 754_000L,
+                durationMs = 3_600_000L,
+                canSeek = true,
+                hasNext = true,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
+        try {
+            Phone().use { phone ->
+                phone.send(RemoteMsg(t = RemoteProto.HELLO, token = token))
+                assertEquals(RemoteProto.HELLO, phone.read().t)
+                val now = phone.read()
+                assertEquals(RemoteProto.NOW, now.t)
+                assertEquals(RemoteProto.KIND_VOD, now.kind)
+                assertEquals("Tierra de Mafia", now.title)
+                assertEquals("T2 · C5", now.subtitle)
+                assertEquals(754_000L, now.positionMs)
+                assertEquals(3_600_000L, now.durationMs)
+                assertEquals(true, now.playing)
+                assertEquals(true, now.canSeek)
+
+                phone.send(RemoteMsg(t = RemoteProto.SEEK, pos = 1_200_000L))
+                phone.send(RemoteMsg(t = RemoteProto.CMD, cmd = RemoteProto.CMD_PLAY_PAUSE))
+                val deadline = System.currentTimeMillis() + 3_000
+                while ((seeks.isEmpty() || commands.isEmpty()) && System.currentTimeMillis() < deadline) {
+                    shadowOf(Looper.getMainLooper()).idle()
+                    Thread.sleep(30)
+                }
+                shadowOf(Looper.getMainLooper()).idle()
+                assertEquals(listOf(1_200_000L), seeks)
+                assertEquals(listOf(RemoteProto.CMD_PLAY_PAUSE), commands)
+            }
+        } finally {
+            RemoteBus.detachPlayer(sink)
+            RemoteBus.clearPlayback()
+        }
+    }
+
+    @Test
+    fun anUnpairedPhoneNeverReceivesPlaybackState() {
+        RemoteBus.publishPlayback(
+            NowPlaying(
+                kind = RemoteProto.KIND_VOD,
+                title = "Tierra de Mafia",
+                poster = "https://img/p.jpg",
+                playing = true,
+                positionMs = 123_000L,
+                durationMs = 3_600_000L,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
+        try {
+            Phone().use { phone ->
+                phone.send(RemoteMsg(t = RemoteProto.HELLO, name = "Intruso"))
+                assertEquals(RemoteProto.NEED_PIN, phone.read().t)
+                phone.socket.soTimeout = 700
+                val leaked = runCatching { phone.read() }.getOrNull()
+                assertNull("sin token no se filtra título, póster ni minuto", leaked)
+            }
+        } finally {
+            RemoteBus.clearPlayback()
         }
     }
 

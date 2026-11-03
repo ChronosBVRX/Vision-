@@ -8,6 +8,7 @@ import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.HomeCurated
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.Popularity
+import com.chronosbvrx.visionplus.data.ResumeCard
 import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
@@ -28,6 +29,7 @@ import com.chronosbvrx.visionplus.home.contract.LiveItem
 import com.chronosbvrx.visionplus.home.contract.MediaKind
 import com.chronosbvrx.visionplus.home.contract.RowKind
 import com.chronosbvrx.visionplus.home.contract.SportsItem
+import com.chronosbvrx.visionplus.home.contract.SportsLeagues
 import com.chronosbvrx.visionplus.home.contract.VisionLinks
 import java.io.File
 import kotlin.math.roundToInt
@@ -73,7 +75,7 @@ object HomeFeedStore {
     private const val EPG_FALLBACK_CHANNELS = 120
     private const val EPG_PARALLEL = 8
     private const val EPG_TIMEOUT_MS = 15_000L
-    private const val SPORTS_LIMIT = 250
+    private const val SPORTS_LIMIT = 24
     private const val ROW_LIMIT = 18
 
     /** Canales mexicanos de referencia: primero lo que la gente busca. */
@@ -92,11 +94,8 @@ object HomeFeedStore {
     }
 
     /** «A&E HD», «A&E FHD» y «A&E» son la MISMA señal: una sola tarjeta por canal. */
-    private val QUALITY_TAG = Regex("\\b(fhd|uhd|hd|sd|4k|h265|hevc|h264)\\b")
-    private val NON_ALNUM = Regex("[^a-z0-9]+")
-
     internal fun channelKey(name: String): String =
-        name.lowercase().replace(QUALITY_TAG, " ").replace(NON_ALNUM, "")
+        com.chronosbvrx.visionplus.data.LiveTaxonomy.channelKey(name)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -124,19 +123,66 @@ object HomeFeedStore {
         runCatching { file(context).takeIf { it.exists() }?.readText() }.getOrNull()
 
     /**
+     * ¿El historial cambió después de escribir el feed? El launcher puede volver del
+     * reproductor sin que `MainActivity.onResume` llegue a refrescar; el provider consulta
+     * el feed y debe reconstruirlo en ese momento, no esperar los 10 min de caché.
+     */
+    internal fun historyIsNewer(latestUpdatedAt: Long, feedWrittenAt: Long): Boolean =
+        latestUpdatedAt > feedWrittenAt
+
+    private fun historyChangedSince(context: Context, feedWrittenAt: Long): Boolean {
+        if (feedWrittenAt <= 0L) return true
+        // El mtime del XML cambia al guardar, borrar o vaciar el historial; el `updatedAt`
+        // de la entrada cubre el caso de dos escrituras en el mismo milisegundo.
+        val latestEntry = runCatching { PlaybackHistory.list(context).firstOrNull()?.updatedAt ?: 0L }
+            .getOrDefault(0L)
+        val changedAt = maxOf(PlaybackHistory.lastChangedAt(context), latestEntry)
+        return historyIsNewer(changedAt, feedWrittenAt)
+    }
+
+    /**
      * Lo que responde el provider: el JSON vigente o uno recién construido con las cachés.
      * Nunca lanza y nunca se queda sin respuesta (peor caso: un feed vacío válido).
      */
     fun readOrBuild(context: Context): String {
         val app = context.applicationContext
         val target = file(app)
-        val age = System.currentTimeMillis() - target.lastModified()
-        if (target.exists() && age in 0..STALE_MS) {
-            read(app)?.let { if (it.isNotBlank()) return it }
+        if (target.exists()) {
+            // Camino rápido: el historial cambió (ver/terminar/vaciar) y el feed solo
+            // necesita otra fila «Seguir viendo». Evita reconstruir todo el catálogo
+            // dentro de la consulta del launcher (que tiene tope de 1.5 s).
+            val historyDirty = historyChangedSince(app, target.lastModified())
+            if (historyDirty) {
+                refreshContinueNow(app)?.let { return it }
+            }
+            val age = System.currentTimeMillis() - target.lastModified()
+            if (!historyDirty && age in 0..STALE_MS) {
+                read(app)?.let { if (it.isNotBlank()) return it }
+            }
         }
         val json = runCatching { HomeFeedCodec.encode(build(app)) }
             .getOrElse { HomeFeedCodec.encode(HomeFeed(meta = meta(app))) }
         write(app, json)
+        return json
+    }
+
+    /**
+     * Reemplaza SOLO la fila «Seguir viendo» del feed ya escrito y avisa al launcher.
+     * Es el camino rápido para un cambio de historial: no recalcula héroes, filas ni EPG.
+     * Devuelve el JSON nuevo, o null si aún no hay feed que parchear.
+     */
+    fun refreshContinueNow(context: Context): String? {
+        val app = context.applicationContext
+        val feed = HomeFeedCodec.decode(read(app)) ?: return null
+        val cards = runCatching { PlaybackHistory.continueCards(app, emptyList()) }
+            .getOrDefault(emptyList())
+        val next = feed.copy(
+            meta = feed.meta.copy(generatedAt = System.currentTimeMillis()),
+            continueWatching = continueItemsFromCards(cards),
+        )
+        val json = HomeFeedCodec.encode(next)
+        write(app, json)
+        notifyChange(app)
         return json
     }
 
@@ -147,13 +193,25 @@ object HomeFeedStore {
     fun refreshAsync(context: Context, force: Boolean = false) {
         val app = context.applicationContext
         val now = System.currentTimeMillis()
-        if (!force && now - lastRefreshAt < REFRESH_THROTTLE_MS) return
+        // Un cambio de historial (ver/terminar un capítulo) no puede esperar al freno de
+        // 20 s: el launcher vuelve del reproductor y debe ver «Seguir viendo» al día.
+        val historyChanged = historyChangedSince(app, file(app).lastModified())
+        if (!force && !historyChanged && now - lastRefreshAt < REFRESH_THROTTLE_MS) return
         lastRefreshAt = now
+        val historyAtStart = PlaybackHistory.lastChangedAt(app)
         scope.launch {
+            // Primero el parche barato de «Seguir viendo»: el launcher lo ve al instante
+            // aunque el rebuild completo tarde o el EPG esté en camino.
+            if (historyChanged) runCatching { refreshContinueNow(app) }
             runCatching {
                 val diskOnly = HomeFeedCodec.encode(build(app))
                 write(app, diskOnly)
                 notifyChange(app)
+            }
+            // El rebuild pudo leer el historial justo antes de un cambio: si el XML se
+            // movió durante la construcción, se re-parchea para no dejar el feed atrás.
+            if (PlaybackHistory.lastChangedAt(app) > historyAtStart) {
+                runCatching { refreshContinueNow(app) }
             }
             val epg = runCatching { withTimeoutOrNull(EPG_TIMEOUT_MS) { fetchEpg(app) } }.getOrNull()
             // La agenda deportiva se refresca aquí (el launcher no tiene red propia).
@@ -161,6 +219,9 @@ object HomeFeedStore {
             runCatching {
                 write(app, HomeFeedCodec.encode(build(app, epg.orEmpty())))
                 notifyChange(app)
+            }
+            if (PlaybackHistory.lastChangedAt(app) > historyAtStart) {
+                runCatching { refreshContinueNow(app) }
             }
         }
     }
@@ -327,19 +388,47 @@ object HomeFeedStore {
             film.kind == MediaKind.SERIES || film.kind == MediaKind.ANIME
 
     private fun continueItems(context: Context, films: List<Film>): List<ContinueItem> =
-        PlaybackHistory.continueCards(context, films, limit = 10).mapNotNull { card ->
+        continueItemsFromCards(PlaybackHistory.continueCards(context, films, limit = 10))
+
+    private fun continueItemsFromCards(cards: List<ResumeCard>): List<ContinueItem> =
+        cards.mapNotNull { card ->
             val entry = card.entry
             if (entry.key.isBlank()) return@mapNotNull null
             val episode = isEpisodeEntry(entry)
+            val nextUp = card.completed && card.hasNext && episode
             ContinueItem(
                 key = entry.key,
-                title = if (episode) baseTitle(entry.title) else entry.title,
+                // El mismo nombre que pinta el Inicio de la app (la ficha del catálogo
+                // manda); el título del historial solo rellena cuando no hay ficha.
+                title = if (episode) (card.film?.title ?: baseTitle(entry.title)) else entry.title,
                 poster = card.film?.posterUrl?.takeIf { it.isNotBlank() } ?: entry.posterUrl,
-                progress = (card.progress * 100f).roundToInt().coerceIn(0, 100),
-                positionMs = entry.positionMs,
-                durationMs = entry.durationMs,
-                episode = if (episode) episodeLabel(entry.title) else "",
+                progress = if (nextUp) 0 else (card.progress * 100f).roundToInt().coerceIn(0, 100),
+                positionMs = if (nextUp) 0L else entry.positionMs,
+                durationMs = if (nextUp) 0L else entry.durationMs,
+                episode = when {
+                    nextUp -> "Siguiente capítulo"
+                    episode -> com.chronosbvrx.visionplus.data.episodeLabelOf(entry)
+                        .ifBlank { episodeLabel(entry.title) }
+                    else -> ""
+                },
                 playLink = watchLinkFor(entry, episode),
+                // En series, el launcher abre la ficha: ahí se elige capítulo o se usa
+                // «Continuar donde te quedaste». Si el catálogo ya no tiene la tarjeta,
+                // el enlace usa la temporada del historial para que la ficha cargue igual.
+                openLink = if (episode) {
+                    val film = card.film
+                    val ref = film?.id ?: entry.seriesId
+                        .ifBlank { entry.seasonIds.getOrNull(entry.seasonIndex).orEmpty() }
+                        .ifBlank { entry.key }
+                    VisionLinks.title(
+                        ref = ref,
+                        title = film?.title ?: baseTitle(entry.title),
+                        poster = film?.posterUrl ?: entry.posterUrl,
+                        videoUrl = film?.videoUrl ?: if (ref.isNotBlank()) "xtv:$ref" else "",
+                    )
+                } else {
+                    ""
+                },
             )
         }
 
@@ -402,9 +491,12 @@ object HomeFeedStore {
         val today = com.chronosbvrx.visionplus.data.sports.SportsSource.todayIso()
         GeeSportsSource.cachedEvents(context)
             .asSequence()
-            .filter { it.id.isNotBlank() }
+            .filter { it.id.isNotBlank() && it.visible }
             // La agenda vencida (caché vieja) no debe aparecer como si fuera de hoy.
             .filter { it.dateIso.isBlank() || it.dateIso >= today }
+            // El Inicio y el launcher solo llevan Tier 1: las ligas secundarias
+            // siguen disponibles en Deportes → «Todas las ligas» y en la búsqueda.
+            .filter { SportsLeagues.isMain(GeeAgenda.leagueLabel(it), it.category, it.leagueId) }
             .map { event -> event to GeeAgenda.phaseOf(event, now) }
             .sortedWith(
                 compareBy<Pair<GeeSportsSource.GeeEvent, GeeAgenda.Phase>> {
@@ -414,6 +506,7 @@ object HomeFeedStore {
                         GeeAgenda.Phase.Done -> 2
                     }
                 }
+                    .thenBy { SportsLeagues.leaguePriority(GeeAgenda.leagueLabel(it.first)) }
                     .thenBy { it.first.dateIso }
                     .thenBy { it.first.time },
             )

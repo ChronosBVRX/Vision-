@@ -24,8 +24,20 @@ class DeportesReturnTest {
         assertEquals("espn:123", DeportesReturn.consumeWatchingEvent())
         // La pantalla ya lo consumió: una recomposición no debe reabrir el modal otra vez.
         assertNull(DeportesReturn.consumeWatchingEvent())
-        // El enlace sigue disponible para marcar la opción «Viendo» en el modal.
+        // El enlace sigue disponible para marcar la opción «Seleccionada» en el modal.
         assertEquals("https://cdn.test/tudn.m3u8", DeportesReturn.watchingUrl)
+    }
+
+    @Test
+    fun zappingInsideThePlayerUpdatesTheMarkedSignal() {
+        DeportesReturn.rememberWatching("espn:9", "https://cdn.test/uno.m3u8")
+        DeportesReturn.consumeWatchingEvent()
+        DeportesReturn.updateWatchingUrl("https://cdn.test/dos.m3u8")
+        assertEquals("https://cdn.test/dos.m3u8", DeportesReturn.watchingUrl)
+        // Sin un partido recordado, un cambio suelto no inventa una selección.
+        DeportesReturn.forgetWatching()
+        DeportesReturn.updateWatchingUrl("https://cdn.test/tres.m3u8")
+        assertNull(DeportesReturn.watchingUrl)
     }
 
     @Test
@@ -47,11 +59,14 @@ class DeportesReturnTest {
     }
 
     @Test
-    fun todayAndTheNextDaysAreRespected() {
+    fun todayAndTomorrowAreRespectedAndLaterDaysClampToTomorrow() {
         DeportesReturn.day = "2026-10-26"
         assertEquals("2026-10-26", DeportesReturn.validDay(today = "2026-10-26"))
+        DeportesReturn.day = "2026-10-27"
+        assertEquals("2026-10-27", DeportesReturn.validDay(today = "2026-10-26"))
+        // La agenda ya solo muestra hoy y mañana: un día viejo del proceso se recorta.
         DeportesReturn.day = "2026-10-29"
-        assertEquals("2026-10-29", DeportesReturn.validDay(today = "2026-10-26"))
+        assertEquals("2026-10-27", DeportesReturn.validDay(today = "2026-10-26"))
         DeportesReturn.day = null
         assertNull(DeportesReturn.validDay(today = "2026-10-26"))
     }

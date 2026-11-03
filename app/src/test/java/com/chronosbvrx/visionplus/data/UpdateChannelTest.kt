@@ -38,6 +38,23 @@ class UpdateChannelTest {
     }
 
     @Test
+    fun theVersionCodeDecidesWhenBothManifestsCarryIt() {
+        val stable = release("2.5.210").copy(versionCode = 444)
+        val beta = release("2.5.208").copy(versionCode = 450)
+        // El nombre de la beta es menor, pero su build es más nuevo: manda el versionCode.
+        assertEquals("2.5.208", AppUpdate.pickRelease(stable, beta, AppUpdate.CHANNEL_BETA)?.version)
+        // Sin versionCode se conserva la comparación por nombre.
+        assertEquals("2.5.210", AppUpdate.pickRelease(stable, release("2.5.208"), AppUpdate.CHANNEL_BETA)?.version)
+    }
+
+    @Test
+    fun theManifestCarriesTheBuildNumber() {
+        val source = File("src/main/java/com/chronosbvrx/visionplus/data/AppUpdate.kt").readText()
+        assertTrue("el canal beta no lee el versionCode del manifiesto", source.contains("json.optLong(\"versionCode\""))
+        assertTrue("la oferta no compara el versionCode instalado", source.contains("release.versionCode > currentCode"))
+    }
+
+    @Test
     fun missingSidesDoNotBreakTheChoice() {
         assertNull(AppUpdate.pickRelease(null, null, AppUpdate.CHANNEL_BETA))
         assertEquals("2.5.141", AppUpdate.pickRelease(null, release("2.5.141"), AppUpdate.CHANNEL_BETA)?.version)

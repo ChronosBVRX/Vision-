@@ -78,14 +78,46 @@ object EpisodeMirror {
         for (i in 0 until array.length()) {
             val o = array.optJSONObject(i) ?: continue
             if (o.optString("contentId").trim() != contentId.trim()) continue
-            val info = EpisodeInfo(
-                title = o.optString("title").trim(),
-                overview = o.optString("overview").trim(),
-                still = o.optString("still").trim(),
-            )
-            return info.takeIf { it.title.isNotBlank() || it.overview.isNotBlank() || it.still.isNotBlank() }
+            return infoOf(o)
         }
         return null
+    }
+
+    /**
+     * Todos los metadatos de la temporada, indexados por `contentId`. El selector de
+     * capítulos los pide de una vez: nombre real y miniatura de cada episodio, sin una
+     * consulta por fila. Si la copia en RAM aún no trae metadatos, se refresca una vez
+     * (mismo criterio que [info]); ante cualquier fallo devuelve un mapa vacío y la
+     * tarjeta conserva el nombre del portal y el póster de la serie.
+     */
+    suspend fun infos(seasonId: String): Map<String, EpisodeInfo> {
+        val cached = runCatching { episodes(seasonId) }.getOrNull()
+        val source = if (hasMeta(cached)) cached else {
+            runCatching { episodes(seasonId, force = true) }.getOrNull() ?: cached
+        }
+        return infosFrom(source)
+    }
+
+    /** Filas del espejo → metadatos por capítulo (puro, para tests). */
+    internal fun infosFrom(array: JSONArray?): Map<String, EpisodeInfo> {
+        if (array == null) return emptyMap()
+        val out = LinkedHashMap<String, EpisodeInfo>(array.length())
+        for (i in 0 until array.length()) {
+            val o = array.optJSONObject(i) ?: continue
+            val contentId = o.optString("contentId").trim()
+            if (contentId.isBlank()) continue
+            infoOf(o)?.let { out[contentId] = it }
+        }
+        return out
+    }
+
+    private fun infoOf(o: JSONObject): EpisodeInfo? {
+        val info = EpisodeInfo(
+            title = o.optString("title").trim(),
+            overview = o.optString("overview").trim(),
+            still = o.optString("still").trim(),
+        )
+        return info.takeIf { it.title.isNotBlank() || it.overview.isNotBlank() || it.still.isNotBlank() }
     }
 
     /**

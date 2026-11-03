@@ -54,6 +54,10 @@ def _real_row(status="ok", age_s=0.0, attempts=0, requested_age_s=0.0, payload=N
 def test_ref_accepts_prefixed_and_bare_cid():
     assert api_episodes.valid_ref("xtv:6950367441337182593") == "xtv:6950367441337182593"
     assert api_episodes.valid_ref("6950367441337182593") == "xtv:6950367441337182593"
+    # Los cids del portal también empiezan con letra (Carrie: DC8195…). Antes el
+    # regex exigía [1-9] y el espejo rechazaba esas series con «referencia inválida».
+    assert api_episodes.valid_ref("xtv:DC81956806FD4F759317809F573B670D") == "xtv:DC81956806FD4F759317809F573B670D"
+    assert api_episodes.valid_ref("DC81956806FD4F759317809F573B670D") == "xtv:DC81956806FD4F759317809F573B670D"
 
 
 def test_ref_rejects_other_sources_and_garbage():
@@ -259,6 +263,9 @@ def test_fetch_raises_the_worst_error_when_both_types_fail():
 def test_session_errors_are_detected():
     assert episodes_mirror.classify_error("portal 100002 whatever") == "session"
     assert episodes_mirror.classify_error("portal aaa100083 账号已经在其他设备登录") == "session"
+    # El portal también contesta aaa100027 «登录已过期，请重新登录»: antes se trataba
+    # como red y la cola se quedaba reintentando con el token caducado.
+    assert episodes_mirror.classify_error("net: portal aaa100027 登录已过期，请重新登录！") == "session"
     assert episodes_mirror.classify_error("portal 100009 raro") == "net"
     assert episodes_mirror.classify_error("XTV sin hosts disponibles") == "net"
 

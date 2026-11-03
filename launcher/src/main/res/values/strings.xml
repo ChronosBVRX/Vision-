@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Vision+ Home</string>
+    <string name="guardian_label">Vision+ Home · modo persistente</string>
+    <string name="guardian_description">Mantiene Vision+ Home al frente cuando el sistema intenta volver a su Inicio de fábrica. No lee el contenido de la pantalla ni de las apps.</string>
 </resources>

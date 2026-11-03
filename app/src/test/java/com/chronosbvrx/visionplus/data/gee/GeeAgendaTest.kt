@@ -75,6 +75,18 @@ class GeeAgendaTest {
             event("3", "Liga MX, Apertura", league = "Liga MX"),
         )
         assertEquals(listOf("Liga MX", "Premier League", "Serie B"), GeeAgenda.leagueNames(events))
+        assertEquals(
+            listOf("Liga MX", "Premier League"),
+            GeeAgenda.leagueNames(events, mainOnly = true),
+        )
+    }
+
+    @Test
+    fun secondaryCompetitionsDoNotBecomeMainLeagues() {
+        assertTrue(GeeAgenda.leaguePriority("LaLiga 2") > GeeAgenda.leaguePriority("LaLiga"))
+        assertTrue(GeeAgenda.leaguePriority("Serie A Women") > GeeAgenda.leaguePriority("Serie A"))
+        assertTrue(GeeAgenda.leaguePriority("Russian Premier League") > GeeAgenda.leaguePriority("Premier League"))
+        assertTrue(GeeAgenda.leaguePriority("Championship") > GeeAgenda.leaguePriority("UEFA Champions League"))
     }
 
     @Test

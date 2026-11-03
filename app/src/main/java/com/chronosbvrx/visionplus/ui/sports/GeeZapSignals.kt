@@ -29,6 +29,15 @@ internal object GeeZapSignals {
         /** Cuántas señales trae el evento por la fuente deportiva. */
         val signals: Int = 0,
         val source: String = "Deportes en vivo",
+        /** Equipos y fecha del partido: con esto se buscan sus estadísticas en ESPN. */
+        val homeName: String = "",
+        val awayName: String = "",
+        val homeLogo: String = "",
+        val awayLogo: String = "",
+        val homeScore: Int? = null,
+        val awayScore: Int? = null,
+        val dateIso: String = "",
+        val leagueId: String = "",
         /**
          * El respaldo AUTOMÁTICO del partido: una cadena de su parrilla que sí tenemos en el
          * catálogo de la casa y que la fuente deportiva no puede servir. Solo se usa cuando ya

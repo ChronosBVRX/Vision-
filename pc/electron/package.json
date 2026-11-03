@@ -1,0 +1,58 @@
+{
+  "name": "visionplus-pc",
+  "version": "0.4.0",
+  "description": "Vision+ PC - port portable de Vision+ (Smart TV / webOS) para Windows",
+  "main": "main.js",
+  "author": "ChronosBVRX",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win portable --x64"
+  },
+  "build": {
+    "appId": "com.chronosbvrx.visionplus.pc",
+    "productName": "Vision+ PC",
+    "asar": false,
+    "compression": "normal",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "updater.js",
+      "package.json",
+      "icon.ico",
+      "icon.png",
+      "splash.html",
+      "vision_logo_horizontal.png",
+      "server.js",
+      "LEEME.txt",
+      "app/**/*",
+      "service/**/*",
+      "runtime/ffmpeg.exe",
+      "runtime/FFMPEG-LICENSE.txt"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.ico"
+    },
+    "portable": {
+      "artifactName": "VisionPlusPC-Portable.${ext}",
+      "requestExecutionLevel": "user",
+      "splashImage": "splash.bmp"
+    }
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0"
+  }
+}

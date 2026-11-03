@@ -1,0 +1,3940 @@
+{
+ "generatedAt": "2026-11-01",
+ "source": "XTV tv-en-vivo + ESPN site.api scoreboard",
+ "totalXtvChannels": 1035,
+ "sportsChannels": 258,
+ "byCountry": [
+  [
+   "Internacional",
+   71
+  ],
+  [
+   "EE. UU.",
+   61
+  ],
+  [
+   "México",
+   23
+  ],
+  [
+   "Colombia",
+   23
+  ],
+  [
+   "Chile",
+   17
+  ],
+  [
+   "Ecuador",
+   11
+  ],
+  [
+   "Bolivia",
+   8
+  ],
+  [
+   "LatAm",
+   8
+  ],
+  [
+   "Costa Rica",
+   7
+  ],
+  [
+   "Perú",
+   6
+  ],
+  [
+   "R. Dominicana",
+   4
+  ],
+  [
+   "Canadá",
+   4
+  ],
+  [
+   "Nicaragua",
+   3
+  ],
+  [
+   "El Salvador",
+   3
+  ],
+  [
+   "Honduras",
+   2
+  ],
+  [
+   "Puerto Rico",
+   2
+  ],
+  [
+   "Reino Unido",
+   1
+  ],
+  [
+   "Guatemala",
+   1
+  ],
+  [
+   "Uruguay",
+   1
+  ],
+  [
+   "España",
+   1
+  ],
+  [
+   "Panamá",
+   1
+  ]
+ ],
+ "byBrand": [
+  [
+   "MLB Pass",
+   14
+  ],
+  [
+   "NFL Pass",
+   13
+  ],
+  [
+   "Bally Sports",
+   11
+  ],
+  [
+   "TNT Sports",
+   11
+  ],
+  [
+   "NBA Pass",
+   10
+  ],
+  [
+   "Telemundo",
+   9
+  ],
+  [
+   "Fox Sports",
+   8
+  ],
+  [
+   "Canal 13",
+   7
+  ],
+  [
+   "DAZN",
+   7
+  ],
+  [
+   "RCN",
+   7
+  ],
+  [
+   "Univision",
+   7
+  ],
+  [
+   "Win Sports",
+   7
+  ],
+  [
+   "CARACOL",
+   6
+  ],
+  [
+   "NBC Sports",
+   6
+  ],
+  [
+   "Canal 6",
+   5
+  ],
+  [
+   "Claro Sports",
+   4
+  ],
+  [
+   "Canal 4",
+   4
+  ],
+  [
+   "ECUAVISA",
+   4
+  ],
+  [
+   "TVN",
+   4
+  ],
+  [
+   "UNITEL",
+   4
+  ],
+  [
+   "UniMás",
+   4
+  ],
+  [
+   "TVC Deportes",
+   3
+  ],
+  [
+   "FUTV",
+   3
+  ],
+  [
+   "Fútbol E OPC",
+   3
+  ],
+  [
+   "Gol Perú",
+   3
+  ],
+  [
+   "Golf",
+   3
+  ],
+  [
+   "MLS",
+   3
+  ],
+  [
+   "NBA",
+   3
+  ],
+  [
+   "Sportsmax",
+   3
+  ],
+  [
+   "Sportsnet",
+   3
+  ],
+  [
+   "UFC",
+   3
+  ],
+  [
+   "Canal 5",
+   2
+  ],
+  [
+   "ATB",
+   2
+  ],
+  [
+   "BAND",
+   2
+  ],
+  [
+   "CDO",
+   2
+  ],
+  [
+   "Canal 2",
+   2
+  ],
+  [
+   "Canal 9",
+   2
+  ],
+  [
+   "El Canal del Fútbol",
+   2
+  ],
+  [
+   "Fox Deportes",
+   2
+  ],
+  [
+   "GALAVISION",
+   2
+  ],
+  [
+   "Liga Pro",
+   2
+  ],
+  [
+   "MOVISTAR",
+   2
+  ],
+  [
+   "NESN",
+   2
+  ],
+  [
+   "REPRETEL",
+   2
+  ],
+  [
+   "TVG",
+   2
+  ],
+  [
+   "Universo",
+   2
+  ],
+  [
+   "WWE",
+   2
+  ],
+  [
+   "Win Sports+",
+   2
+  ],
+  [
+   "AYM Sports",
+   1
+  ],
+  [
+   "Azteca 7",
+   1
+  ],
+  [
+   "Fox One",
+   1
+  ],
+  [
+   "Las Estrellas",
+   1
+  ],
+  [
+   "TDN",
+   1
+  ],
+  [
+   "TUDN",
+   1
+  ],
+  [
+   "TV",
+   1
+  ],
+  [
+   "ViX Deportes",
+   1
+  ],
+  [
+   "Altitude Sports",
+   1
+  ],
+  [
+   "Box Nation",
+   1
+  ],
+  [
+   "CANAL",
+   1
+  ],
+  [
+   "CANTINFLAS",
+   1
+  ],
+  [
+   "COMBATE",
+   1
+  ],
+  [
+   "DIRECTV Sports",
+   1
+  ],
+  [
+   "FORMULA",
+   1
+  ],
+  [
+   "Fight Network",
+   1
+  ],
+  [
+   "Fox Racing",
+   1
+  ],
+  [
+   "Fox Soccer Plus",
+   1
+  ],
+  [
+   "HIPODROMO",
+   1
+  ],
+  [
+   "Liga 1",
+   1
+  ],
+  [
+   "Liga 1 Max",
+   1
+  ],
+  [
+   "Liga Boliviana",
+   1
+  ],
+  [
+   "Liga de Campeones",
+   1
+  ],
+  [
+   "MLB Network",
+   1
+  ],
+  [
+   "MUNDO",
+   1
+  ],
+  [
+   "Movistar Deportes",
+   1
+  ],
+  [
+   "NBC",
+   1
+  ],
+  [
+   "NFL Network",
+   1
+  ],
+  [
+   "NFL RedZone",
+   1
+  ],
+  [
+   "NHL",
+   1
+  ],
+  [
+   "OVACION",
+   1
+  ],
+  [
+   "PX Sports",
+   1
+  ]
+ ],
+ "channels": [
+  {
+   "name": "AYM SPORTS MEXICO",
+   "code": "xtvlive:cyx_72567590436840144699737",
+   "country": "México",
+   "brand": "AYM Sports",
+   "feed": "",
+   "owner": "AYM",
+   "quality": "",
+   "general": false,
+   "position": 43,
+   "note": "Emite bloques de FOX One (Cuadro Titular); no los partidos.",
+   "notEventFeed": true
+  },
+  {
+   "name": "Azteca 7 HD",
+   "code": "xtvlive:cyx-AZTECA7HD",
+   "country": "México",
+   "brand": "Azteca 7",
+   "feed": "",
+   "owner": "TV Azteca",
+   "quality": "HD",
+   "general": true,
+   "position": 33
+  },
+  {
+   "name": "CANAL 5 HD",
+   "code": "xtvlive:cyx-Canal5HD",
+   "country": "México",
+   "brand": "Canal 5",
+   "feed": "",
+   "owner": "Televisa",
+   "quality": "HD",
+   "general": true,
+   "position": 130
+  },
+  {
+   "name": "CANAL 6 MX HD",
+   "code": "xtvlive:cyx_565337634321465683603549",
+   "country": "México",
+   "brand": "Canal 6",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 131
+  },
+  {
+   "name": "Claro Sports 1 FHD",
+   "code": "xtvlive:cyx_3F56B0C25C9449DA",
+   "country": "México",
+   "brand": "Claro Sports",
+   "feed": "1",
+   "owner": "Claro",
+   "quality": "FHD",
+   "general": false,
+   "position": 173
+  },
+  {
+   "name": "Claro Sports 1 HD",
+   "code": "xtvlive:cyx-FOXPCOMEDYHD",
+   "country": "México",
+   "brand": "Claro Sports",
+   "feed": "1",
+   "owner": "Claro",
+   "quality": "HD",
+   "general": false,
+   "position": 172
+  },
+  {
+   "name": "Claro Sports 2 FHD",
+   "code": "xtvlive:cyx_30047AD5712F77D8F",
+   "country": "México",
+   "brand": "Claro Sports",
+   "feed": "2",
+   "owner": "Claro",
+   "quality": "FHD",
+   "general": false,
+   "position": 175
+  },
+  {
+   "name": "Claro Sports 2 HD",
+   "code": "xtvlive:cyx_2598C269A6A73C4653",
+   "country": "México",
+   "brand": "Claro Sports",
+   "feed": "2",
+   "owner": "Claro",
+   "quality": "HD",
+   "general": false,
+   "position": 174
+  },
+  {
+   "name": "FOX ONE",
+   "code": "xtvlive:cyx_A4C363F00DD17F7A4",
+   "country": "México",
+   "brand": "Fox One",
+   "feed": "",
+   "owner": "Fox Corporation",
+   "quality": "",
+   "general": false,
+   "position": 1020,
+   "displayName": "FOX One",
+   "verified": true,
+   "verifiedBy": "prueba de campo 2026-11-01 (Xolos vs Atlas)",
+   "rights": [
+    "Fox One",
+    "FOX",
+    "FOX+"
+   ],
+   "note": "Señal de Fox Corporation; probada con Xolos vs Atlas. Es el feed de eventos, no el canal lineal de estudio."
+  },
+  {
+   "name": "Fox Sports 1 MX",
+   "code": "xtvlive:cyx_6500013897995940431506539947",
+   "country": "México",
+   "brand": "Fox Sports",
+   "feed": "1",
+   "owner": "Fox Sports (Lauman)",
+   "quality": "",
+   "general": false,
+   "position": 294,
+   "note": "Fox Sports de Grupo Lauman; sin derechos del nuevo Fox (Champions/Liga MX/Fox One).",
+   "legacy": true
+  },
+  {
+   "name": "Fox Sports 2 Central HD",
+   "code": "xtvlive:cyx_FOXSPORTS2MX☆",
+   "country": "México",
+   "brand": "Fox Sports",
+   "feed": "2",
+   "owner": "Fox Sports (Lauman)",
+   "quality": "HD",
+   "general": false,
+   "position": 296,
+   "note": "Fox Sports de Grupo Lauman; sin derechos del nuevo Fox (Champions/Liga MX/Fox One).",
+   "legacy": true
+  },
+  {
+   "name": "Fox Sports 3 Central FHD",
+   "code": "xtvlive:cyx_E4A3C79453D5BE3D514D56",
+   "country": "México",
+   "brand": "Fox Sports",
+   "feed": "3",
+   "owner": "Fox Sports (Lauman)",
+   "quality": "FHD",
+   "general": false,
+   "position": 298,
+   "note": "Fox Sports de Grupo Lauman; sin derechos del nuevo Fox (Champions/Liga MX/Fox One).",
+   "legacy": true
+  },
+  {
+   "name": "Fox Sports 3 Central HD",
+   "code": "xtvlive:cyx_FOXSPORTS3MX☆",
+   "country": "México",
+   "brand": "Fox Sports",
+   "feed": "3",
+   "owner": "Fox Sports (Lauman)",
+   "quality": "HD",
+   "general": false,
+   "position": 297,
+   "note": "Fox Sports de Grupo Lauman; sin derechos del nuevo Fox (Champions/Liga MX/Fox One).",
+   "legacy": true
+  },
+  {
+   "name": "Fox Sports Central HD",
+   "code": "xtvlive:cyx_FOXSPORTS1MX☆",
+   "country": "México",
+   "brand": "Fox Sports",
+   "feed": "1",
+   "owner": "Fox Sports (Lauman)",
+   "quality": "HD",
+   "general": false,
+   "position": 295,
+   "note": "Fox Sports de Grupo Lauman; sin derechos del nuevo Fox (Champions/Liga MX/Fox One).",
+   "legacy": true
+  },
+  {
+   "name": "Fox Sports Premium MX HD",
+   "code": "xtvlive:cyx_4638912873528168123848955258",
+   "country": "México",
+   "brand": "Fox Sports",
+   "feed": "Premium",
+   "owner": "Fox Sports (Lauman)",
+   "quality": "HD",
+   "general": false,
+   "position": 299,
+   "note": "Fox Sports Premium de Grupo Lauman; muestra peleas; no es FOX+.",
+   "notFoxPlus": true,
+   "legacy": true
+  },
+  {
+   "name": "Las Estrellas Mex HD",
+   "code": "xtvlive:cyx-LasEstrellasHD",
+   "country": "México",
+   "brand": "Las Estrellas",
+   "feed": "",
+   "owner": "Televisa",
+   "quality": "HD",
+   "general": true,
+   "position": 402
+  },
+  {
+   "name": "TDN HD - Centro Feed",
+   "code": "xtvlive:cyx_6347167117076557237292108281",
+   "country": "México",
+   "brand": "TDN",
+   "feed": "",
+   "owner": "Televisa",
+   "quality": "HD",
+   "general": false,
+   "position": 726
+  },
+  {
+   "name": "TUDN MX HD",
+   "code": "xtvlive:cyx-UnivisionTDNFHD",
+   "country": "México",
+   "brand": "TUDN",
+   "feed": "MX",
+   "owner": "TUDN (Televisa/Univision)",
+   "quality": "HD",
+   "general": false,
+   "position": 708
+  },
+  {
+   "name": "TV AZTECA DEPORTES NETWORK HD",
+   "code": "xtvlive:cyx_768AF778AEDC5740CE0B47E7",
+   "country": "México",
+   "brand": "TV",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 688
+  },
+  {
+   "name": "DEPORTES TVC HD",
+   "code": "xtvlive:cyx_TVC ☆",
+   "country": "México",
+   "brand": "TVC Deportes",
+   "feed": "",
+   "owner": "TV Azteca",
+   "quality": "HD",
+   "general": false,
+   "position": 671
+  },
+  {
+   "name": "TVC DEPORTES",
+   "code": "xtvlive:cyx_91332356510586810524",
+   "country": "México",
+   "brand": "TVC Deportes",
+   "feed": "",
+   "owner": "TV Azteca",
+   "quality": "",
+   "general": false,
+   "position": 672
+  },
+  {
+   "name": "TVC DEPORTES2",
+   "code": "xtvlive:cyx_72012974556231609014058871",
+   "country": "México",
+   "brand": "TVC Deportes",
+   "feed": "2",
+   "owner": "TV Azteca",
+   "quality": "",
+   "general": false,
+   "position": 673
+  },
+  {
+   "name": "ViX Deportes",
+   "code": "xtvlive:cyx_07B3E89551B626BA2450",
+   "country": "México",
+   "brand": "ViX Deportes",
+   "feed": "",
+   "owner": "Televisa/Univision",
+   "quality": "",
+   "general": false,
+   "position": 1019
+  },
+  {
+   "name": "ATB",
+   "code": "xtvlive:cyx-ATB",
+   "country": "Bolivia",
+   "brand": "ATB",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": true,
+   "position": 47
+  },
+  {
+   "name": "ATB LPZ opc",
+   "code": "xtvlive:cyx_381935209338558",
+   "country": "Bolivia",
+   "brand": "ATB",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": true,
+   "position": 48
+  },
+  {
+   "name": "Altitude Sports 1 HD",
+   "code": "xtvlive:cyx_52457644155054949",
+   "country": "EE. UU.",
+   "brand": "Altitude Sports",
+   "feed": "",
+   "owner": "Altitude",
+   "quality": "HD",
+   "general": false,
+   "position": 53
+  },
+  {
+   "name": "BAND FHD",
+   "code": "xtvlive:cyx_11454385630887705664502",
+   "country": "Internacional",
+   "brand": "BAND",
+   "feed": "",
+   "owner": "",
+   "quality": "FHD",
+   "general": true,
+   "position": 70
+  },
+  {
+   "name": "BAND NEWS HD",
+   "code": "xtvlive:cyx_695173186838248680387528",
+   "country": "Internacional",
+   "brand": "BAND",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 71
+  },
+  {
+   "name": "BALLY SPORTS ARIZONA HD",
+   "code": "xtvlive:cyx_53839191475099206",
+   "country": "EE. UU.",
+   "brand": "Bally Sports",
+   "feed": "",
+   "owner": "Bally",
+   "quality": "HD",
+   "general": false,
+   "position": 77
+  },
+  {
+   "name": "BALLY SPORTS DETROIT HD",
+   "code": "xtvlive:cyx_416050244809337711",
+   "country": "EE. UU.",
+   "brand": "Bally Sports",
+   "feed": "",
+   "owner": "Bally",
+   "quality": "HD",
+   "general": false,
+   "position": 76
+  },
+  {
+   "name": "BALLY SPORTS GREAT LAKES HD",
+   "code": "xtvlive:cyx_4010149155240519380202",
+   "country": "EE. UU.",
+   "brand": "Bally Sports",
+   "feed": "",
+   "owner": "Bally",
+   "quality": "HD",
+   "general": false,
+   "position": 83
+  },
+  {
+   "name": "BALLY SPORTS KANSAS CITY HD",
+   "code": "xtvlive:cyx_456733780374153",
+   "country": "EE. UU.",
+   "brand": "Bally Sports",
+   "feed": "",
+   "owner": "Bally",
+   "quality": "HD",
+   "general": false,
+   "position": 82
+  },
+  {
+   "name": "BALLY SPORTS MIDWEST HD",
+   "code": "xtvlive:cyx_95064435414374055",
+   "country": "EE. UU.",
+   "brand": "Bally Sports",
+   "feed": "",
+   "owner": "Bally",
+   "quality": "HD",
+   "general": false,
+   "position": 78
+  },
+  {
+   "name": "BALLY SPORTS NORTH PLUS HD",
+   "code": "xtvlive:cyx_95054233086720714061156971",
+   "country": "EE. UU.",
+   "brand": "Bally Sports",
+   "feed": "",
+   "owner": "Bally",
+   "quality": "HD",
+   "general": false,
+   "position": 81
+  },
+  {
+   "name": "BALLY SPORTS OHIO HD",
+   "code": "xtvlive:cyx_86735741074344241536424467",
+   "country": "EE. UU.",
+   "brand": "Bally Sports",
+   "feed": "",
+   "owner": "Bally",
+   "quality": "HD",
+   "general": false,
+   "position": 73
+  },
+  {
+   "name": "BALLY SPORTS SAN DIEGO HD",
+   "code": "xtvlive:cyx_71597935998035596035949541",
+   "country": "EE. UU.",
+   "brand": "Bally Sports",
+   "feed": "",
+   "owner": "Bally",
+   "quality": "HD",
+   "general": false,
+   "position": 79
+  },
+  {
+   "name": "BALLY SPORTS SOUTH HD",
+   "code": "xtvlive:cyx_85905896898952638257232146",
+   "country": "EE. UU.",
+   "brand": "Bally Sports",
+   "feed": "",
+   "owner": "Bally",
+   "quality": "HD",
+   "general": false,
+   "position": 75
+  },
+  {
+   "name": "BALLY SPORTS WEST HD",
+   "code": "xtvlive:cyx_6182824665138337782958548",
+   "country": "EE. UU.",
+   "brand": "Bally Sports",
+   "feed": "",
+   "owner": "Bally",
+   "quality": "HD",
+   "general": false,
+   "position": 74
+  },
+  {
+   "name": "BALLY SPORTS WISCONSIN HD",
+   "code": "xtvlive:cyx_6991832115316606",
+   "country": "EE. UU.",
+   "brand": "Bally Sports",
+   "feed": "",
+   "owner": "Bally",
+   "quality": "HD",
+   "general": false,
+   "position": 80
+  },
+  {
+   "name": "BOX NATION HD",
+   "code": "xtvlive:cyx_091140037840546591",
+   "country": "Reino Unido",
+   "brand": "Box Nation",
+   "feed": "",
+   "owner": "Box Nation",
+   "quality": "HD",
+   "general": false,
+   "position": 72
+  },
+  {
+   "name": "CANAL DEL FUTBOL HD",
+   "code": "xtvlive:cyx_CANALDELFUTBOLSD☆",
+   "country": "Internacional",
+   "brand": "CANAL",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 118
+  },
+  {
+   "name": "CANTINFLAS 24/7 HD",
+   "code": "xtvlive:cyx_5900030544110989",
+   "country": "Internacional",
+   "brand": "CANTINFLAS",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 809
+  },
+  {
+   "name": "CARACOL COL FHD",
+   "code": "xtvlive:cyx_5AF55C2A172D3786FD8CBF83",
+   "country": "Colombia",
+   "brand": "CARACOL",
+   "feed": "",
+   "owner": "",
+   "quality": "FHD",
+   "general": true,
+   "position": 199
+  },
+  {
+   "name": "CARACOL COL HD",
+   "code": "xtvlive:cyx_9881490555304164628541864337",
+   "country": "Colombia",
+   "brand": "CARACOL",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 198
+  },
+  {
+   "name": "CARACOL FHD",
+   "code": "xtvlive:cyx_85948903304174385897187",
+   "country": "Colombia",
+   "brand": "CARACOL",
+   "feed": "",
+   "owner": "",
+   "quality": "FHD",
+   "general": true,
+   "position": 200
+  },
+  {
+   "name": "CARACOL INTERNACIONAL FHD",
+   "code": "xtvlive:cyx_14844688418625177490858",
+   "country": "Colombia",
+   "brand": "CARACOL",
+   "feed": "",
+   "owner": "",
+   "quality": "FHD",
+   "general": true,
+   "position": 203
+  },
+  {
+   "name": "Caracol 2",
+   "code": "xtvlive:cyx_C66BF237FA702B1575E",
+   "country": "Colombia",
+   "brand": "CARACOL",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": true,
+   "position": 201
+  },
+  {
+   "name": "Caracol 3",
+   "code": "xtvlive:cyx_87369643941470677307",
+   "country": "Colombia",
+   "brand": "CARACOL",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": true,
+   "position": 202
+  },
+  {
+   "name": "CDO BASICO HD",
+   "code": "xtvlive:cyx_8646545826126965854252006461",
+   "country": "Internacional",
+   "brand": "CDO",
+   "feed": "",
+   "owner": "CDO",
+   "quality": "HD",
+   "general": false,
+   "position": 192
+  },
+  {
+   "name": "CDO PREMIUM HD",
+   "code": "xtvlive:CDOPREMIUMHD☆",
+   "country": "Internacional",
+   "brand": "CDO",
+   "feed": "",
+   "owner": "CDO",
+   "quality": "HD",
+   "general": false,
+   "position": 193
+  },
+  {
+   "name": "Combate HD",
+   "code": "xtvlive:cyx-CombateHD",
+   "country": "Internacional",
+   "brand": "COMBATE",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 205
+  },
+  {
+   "name": "CANAL 13 CABLE HD",
+   "code": "xtvlive:cyx_13C",
+   "country": "Internacional",
+   "brand": "Canal 13",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 147
+  },
+  {
+   "name": "CANAL 13 CHILE FHD",
+   "code": "xtvlive:cyx_162E6EC3B59FD1E521F1D25B",
+   "country": "Chile",
+   "brand": "Canal 13",
+   "feed": "",
+   "owner": "",
+   "quality": "FHD",
+   "general": true,
+   "position": 145
+  },
+  {
+   "name": "CANAL 13 CHILE HD",
+   "code": "xtvlive:cyx-Canal13ChileHD",
+   "country": "Chile",
+   "brand": "Canal 13",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 143
+  },
+  {
+   "name": "CANAL 13 CHILE HD+",
+   "code": "xtvlive:cyx_8A34CEB6DAC2C0E1ACE843A74",
+   "country": "Chile",
+   "brand": "Canal 13",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 144
+  },
+  {
+   "name": "CANAL 13 CR HD",
+   "code": "xtvlive:cyx_54278751873033899227909",
+   "country": "Costa Rica",
+   "brand": "Canal 13",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 149
+  },
+  {
+   "name": "CANAL 13 GUATEMALA HD",
+   "code": "xtvlive:cyx_754904644950295",
+   "country": "Guatemala",
+   "brand": "Canal 13",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 146
+  },
+  {
+   "name": "CANAL 13 NI HD",
+   "code": "xtvlive:cyx_644445046942038133",
+   "country": "Internacional",
+   "brand": "Canal 13",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 148
+  },
+  {
+   "name": "CANAL 2 NIC HD",
+   "code": "xtvlive:cyx_2232974735687563533888741621",
+   "country": "Nicaragua",
+   "brand": "Canal 2",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 123
+  },
+  {
+   "name": "CANAL 2 SV HD",
+   "code": "xtvlive:cyx_2662717743251145",
+   "country": "El Salvador",
+   "brand": "Canal 2",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 124
+  },
+  {
+   "name": "CANAL 4 NIC HD",
+   "code": "xtvlive:cyx_33BEC243D0F0B446684",
+   "country": "Nicaragua",
+   "brand": "Canal 4",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 954
+  },
+  {
+   "name": "CANAL 4 RD HD",
+   "code": "xtvlive:cyx_BBFCF3AB8813907D",
+   "country": "R. Dominicana",
+   "brand": "Canal 4",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 953
+  },
+  {
+   "name": "CANAL 4 SV HD",
+   "code": "xtvlive:cyx_2E30EA3D416199FB2ADCB1",
+   "country": "El Salvador",
+   "brand": "Canal 4",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 126
+  },
+  {
+   "name": "CANAL 4 UY HD",
+   "code": "xtvlive:cyx_56129004533156624803",
+   "country": "Uruguay",
+   "brand": "Canal 4",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 128
+  },
+  {
+   "name": "CANAL 5 HN HD",
+   "code": "xtvlive:cyx_3271500099060194187",
+   "country": "Honduras",
+   "brand": "Canal 5",
+   "feed": "",
+   "owner": "Televisa",
+   "quality": "HD",
+   "general": true,
+   "position": 129
+  },
+  {
+   "name": "CANAL 6 CR HD",
+   "code": "xtvlive:cyx_65EFDA6B0298F0B47125BFE",
+   "country": "Costa Rica",
+   "brand": "Canal 6",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 956
+  },
+  {
+   "name": "CANAL 6 HN HD",
+   "code": "xtvlive:cyx_EA19AB4D3CD9C9D2D2B661FD",
+   "country": "Honduras",
+   "brand": "Canal 6",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 955
+  },
+  {
+   "name": "CANAL 6 NI HD",
+   "code": "xtvlive:cyx_ADD0ED0B66029BA83D",
+   "country": "Internacional",
+   "brand": "Canal 6",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 957
+  },
+  {
+   "name": "CANAL 6 SV HD",
+   "code": "xtvlive:cyx_AA0492A7B61CA7A5F7BE9DE0",
+   "country": "El Salvador",
+   "brand": "Canal 6",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 127
+  },
+  {
+   "name": "CANAL 9 HD",
+   "code": "xtvlive:cyx-ElNueve",
+   "country": "Internacional",
+   "brand": "Canal 9",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 134
+  },
+  {
+   "name": "CANAL 9 NIC HD",
+   "code": "xtvlive:cyx_CA32A98626848B6B74972B4",
+   "country": "Nicaragua",
+   "brand": "Canal 9",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 958
+  },
+  {
+   "name": "DAZN 1 HD",
+   "code": "xtvlive:cyx_450564103201407390827",
+   "country": "LatAm",
+   "brand": "DAZN",
+   "feed": "1",
+   "owner": "DAZN",
+   "quality": "HD",
+   "general": false,
+   "position": 220
+  },
+  {
+   "name": "DAZN 1 PC",
+   "code": "xtvlive:cyx_C786DD0399E781C3DB5D4",
+   "country": "LatAm",
+   "brand": "DAZN",
+   "feed": "1",
+   "owner": "DAZN",
+   "quality": "",
+   "general": false,
+   "position": 218
+  },
+  {
+   "name": "DAZN 2 PC",
+   "code": "xtvlive:cyx_106EE7B299EBD2B6C440CE",
+   "country": "LatAm",
+   "brand": "DAZN",
+   "feed": "2",
+   "owner": "DAZN",
+   "quality": "",
+   "general": false,
+   "position": 219
+  },
+  {
+   "name": "DAZN 3 HD",
+   "code": "xtvlive:cyx_6271971297793211859319",
+   "country": "LatAm",
+   "brand": "DAZN",
+   "feed": "3",
+   "owner": "DAZN",
+   "quality": "HD",
+   "general": false,
+   "position": 221
+  },
+  {
+   "name": "DAZN 4 HD",
+   "code": "xtvlive:cyx_463420955734696561220601",
+   "country": "LatAm",
+   "brand": "DAZN",
+   "feed": "4",
+   "owner": "DAZN",
+   "quality": "HD",
+   "general": false,
+   "position": 222
+  },
+  {
+   "name": "DAZN Eventos",
+   "code": "xtvlive:cyx_245FF03D48A7BACAD",
+   "country": "LatAm",
+   "brand": "DAZN",
+   "feed": "Eventos",
+   "owner": "DAZN",
+   "quality": "",
+   "general": false,
+   "position": 224
+  },
+  {
+   "name": "DAZN F1 HD",
+   "code": "xtvlive:cyx_DAZNF1HD",
+   "country": "LatAm",
+   "brand": "DAZN",
+   "feed": "F1",
+   "owner": "DAZN",
+   "quality": "HD",
+   "general": false,
+   "position": 223
+  },
+  {
+   "name": "Directv Sports PC",
+   "code": "xtvlive:cyx_DDF490BFAF3D882ACE33C",
+   "country": "LatAm",
+   "brand": "DIRECTV Sports",
+   "feed": "",
+   "owner": "DIRECTV",
+   "quality": "",
+   "general": false,
+   "position": 229
+  },
+  {
+   "name": "Ecuavisa Costa HD",
+   "code": "xtvlive:cyx_29104309387373383780593121",
+   "country": "Ecuador",
+   "brand": "ECUAVISA",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 272
+  },
+  {
+   "name": "Ecuavisa HD",
+   "code": "xtvlive:cyx-EcuavisaHD",
+   "country": "Ecuador",
+   "brand": "ECUAVISA",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 271
+  },
+  {
+   "name": "Ecuavisa Internacional",
+   "code": "xtvlive:cyx_ECUAVISA INTERNACIONAL ☆",
+   "country": "Ecuador",
+   "brand": "ECUAVISA",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": true,
+   "position": 273
+  },
+  {
+   "name": "Ecuavisa Sierra HD",
+   "code": "xtvlive:cyx_2BDE021D98772C56A9B6C3706",
+   "country": "Ecuador",
+   "brand": "ECUAVISA",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 902
+  },
+  {
+   "name": "El canal del futbol Ecuador opc",
+   "code": "xtvlive:cyx_9C33652AFCF28A3E997",
+   "country": "Ecuador",
+   "brand": "El Canal del Fútbol",
+   "feed": "",
+   "owner": "El Canal del Fútbol",
+   "quality": "",
+   "general": false,
+   "position": 1005
+  },
+  {
+   "name": "El canal del fútbol",
+   "code": "xtvlive:cyx_EA78709686E2F2245EB73B1",
+   "country": "Ecuador",
+   "brand": "El Canal del Fútbol",
+   "feed": "",
+   "owner": "El Canal del Fútbol",
+   "quality": "",
+   "general": false,
+   "position": 1004
+  },
+  {
+   "name": "Formula 1 PC",
+   "code": "xtvlive:cyx_8FA89827534EABB21C986F30",
+   "country": "Internacional",
+   "brand": "FORMULA",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": false,
+   "position": 1022
+  },
+  {
+   "name": "FUTV CR FHD",
+   "code": "xtvlive:cyx_BAB08AAA7984E524B73",
+   "country": "Costa Rica",
+   "brand": "FUTV",
+   "feed": "",
+   "owner": "FUTV",
+   "quality": "FHD",
+   "general": false,
+   "position": 318
+  },
+  {
+   "name": "FUTV CR HD",
+   "code": "xtvlive:cyx_FUTV☆",
+   "country": "Costa Rica",
+   "brand": "FUTV",
+   "feed": "",
+   "owner": "FUTV",
+   "quality": "HD",
+   "general": false,
+   "position": 316
+  },
+  {
+   "name": "FUTV CR HD+",
+   "code": "xtvlive:cyx_3CC06487DF4A7D0BB60345B7",
+   "country": "Costa Rica",
+   "brand": "FUTV",
+   "feed": "",
+   "owner": "FUTV",
+   "quality": "HD",
+   "general": false,
+   "position": 317
+  },
+  {
+   "name": "Fight Network HD",
+   "code": "xtvlive:cyx-SportsNetIngHD",
+   "country": "Canadá",
+   "brand": "Fight Network",
+   "feed": "",
+   "owner": "Fight Network",
+   "quality": "HD",
+   "general": false,
+   "position": 312
+  },
+  {
+   "name": "FOX DEPORTE USA HD",
+   "code": "xtvlive:cyx_91F00C12A43F796F2A0038C9",
+   "country": "EE. UU.",
+   "brand": "Fox Deportes",
+   "feed": "",
+   "owner": "Fox (Disney)",
+   "quality": "HD",
+   "general": false,
+   "position": 309
+  },
+  {
+   "name": "Fox Deportes HD",
+   "code": "xtvlive:cyx_2048906655412598358412877046",
+   "country": "EE. UU.",
+   "brand": "Fox Deportes",
+   "feed": "",
+   "owner": "Fox (Disney)",
+   "quality": "HD",
+   "general": false,
+   "position": 300
+  },
+  {
+   "name": "FOX RACING HD",
+   "code": "xtvlive:cyx_521A17DB1052DCE43EF71BCF",
+   "country": "EE. UU.",
+   "brand": "Fox Racing",
+   "feed": "",
+   "owner": "Fox (EE. UU.)",
+   "quality": "HD",
+   "general": false,
+   "position": 305
+  },
+  {
+   "name": "FOX SOCCER PLUS HD",
+   "code": "xtvlive:cyx_72B67A1DDE9F44A7322D2F",
+   "country": "EE. UU.",
+   "brand": "Fox Soccer Plus",
+   "feed": "Plus",
+   "owner": "Fox (Disney)",
+   "quality": "HD",
+   "general": false,
+   "position": 307
+  },
+  {
+   "name": "FOX SPORTS 1 USA HD",
+   "code": "xtvlive:cyx_79E5FFF60F118B5083F14DF",
+   "country": "EE. UU.",
+   "brand": "Fox Sports",
+   "feed": "1",
+   "owner": "Fox Sports (Disney)",
+   "quality": "HD",
+   "general": false,
+   "position": 306,
+   "note": "Fox Sports de Grupo Lauman; sin derechos del nuevo Fox (Champions/Liga MX/Fox One).",
+   "legacy": true
+  },
+  {
+   "name": "FOX SPORTS 2 USA HD",
+   "code": "xtvlive:cyx_956E9A361D5006FDA8007D7F",
+   "country": "EE. UU.",
+   "brand": "Fox Sports",
+   "feed": "2",
+   "owner": "Fox Sports (Disney)",
+   "quality": "HD",
+   "general": false,
+   "position": 308,
+   "note": "Fox Sports de Grupo Lauman; sin derechos del nuevo Fox (Champions/Liga MX/Fox One).",
+   "legacy": true
+  },
+  {
+   "name": "Fútbol E OPC 1",
+   "code": "xtvlive:cyx_6447B3CBA686B98B55EFBAA",
+   "country": "Ecuador",
+   "brand": "Fútbol E OPC",
+   "feed": "",
+   "owner": "Fútbol E OPC",
+   "quality": "",
+   "general": false,
+   "position": 903
+  },
+  {
+   "name": "Fútbol E OPC 3",
+   "code": "xtvlive:cyx_DFAB4011FE2BA7C2B53068AE",
+   "country": "Ecuador",
+   "brand": "Fútbol E OPC",
+   "feed": "",
+   "owner": "Fútbol E OPC",
+   "quality": "",
+   "general": false,
+   "position": 904
+  },
+  {
+   "name": "Fútbol E OPC 4",
+   "code": "xtvlive:cyx_7E99614E44FB0130DE5834C8",
+   "country": "Ecuador",
+   "brand": "Fútbol E OPC",
+   "feed": "",
+   "owner": "Fútbol E OPC",
+   "quality": "",
+   "general": false,
+   "position": 905
+  },
+  {
+   "name": "Galavision East",
+   "code": "xtvlive:GalavisionEast-cyx",
+   "country": "EE. UU.",
+   "brand": "GALAVISION",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": true,
+   "position": 340
+  },
+  {
+   "name": "Galavision West",
+   "code": "xtvlive:GalavisionWest-cyx",
+   "country": "EE. UU.",
+   "brand": "GALAVISION",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": true,
+   "position": 341
+  },
+  {
+   "name": "Gol Peru 2 HD",
+   "code": "xtvlive:cyx_749F230882472E1B4C992A7A",
+   "country": "Perú",
+   "brand": "Gol Perú",
+   "feed": "",
+   "owner": "Gol Perú",
+   "quality": "HD",
+   "general": false,
+   "position": 334
+  },
+  {
+   "name": "Gol Peru FHD",
+   "code": "xtvlive:cyx_FC0A2C7F15CA85B1B705152",
+   "country": "Perú",
+   "brand": "Gol Perú",
+   "feed": "",
+   "owner": "Gol Perú",
+   "quality": "FHD",
+   "general": false,
+   "position": 333
+  },
+  {
+   "name": "Gol Peru PC",
+   "code": "xtvlive:cyx_BF30AB0189D8D01547B",
+   "country": "Perú",
+   "brand": "Gol Perú",
+   "feed": "",
+   "owner": "Gol Perú",
+   "quality": "",
+   "general": false,
+   "position": 335
+  },
+  {
+   "name": "Golf USA HD",
+   "code": "xtvlive:cyx-GolfHDUSA",
+   "country": "EE. UU.",
+   "brand": "Golf",
+   "feed": "",
+   "owner": "Golf",
+   "quality": "HD",
+   "general": false,
+   "position": 342
+  },
+  {
+   "name": "MOVISTAR GOLF HD",
+   "code": "xtvlive:cyx_53262517208963159951",
+   "country": "España",
+   "brand": "Golf",
+   "feed": "",
+   "owner": "Golf",
+   "quality": "HD",
+   "general": false,
+   "position": 426
+  },
+  {
+   "name": "NBC Golf",
+   "code": "xtvlive:cyx_NBCGolf☆",
+   "country": "EE. UU.",
+   "brand": "Golf",
+   "feed": "",
+   "owner": "Golf",
+   "quality": "",
+   "general": false,
+   "position": 478
+  },
+  {
+   "name": "Hipodromo Presidente Remon",
+   "code": "xtvlive:cyx_0523049259487642748507538069",
+   "country": "Internacional",
+   "brand": "HIPODROMO",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": false,
+   "position": 374
+  },
+  {
+   "name": "Liga 1 PE HD",
+   "code": "xtvlive:cyx_BD6B98AE72F0410A043A57B8",
+   "country": "Perú",
+   "brand": "Liga 1",
+   "feed": "",
+   "owner": "Liga 1",
+   "quality": "HD",
+   "general": false,
+   "position": 387
+  },
+  {
+   "name": "Liga 1 Max Peru",
+   "code": "xtvlive:cyx_6033288258774519978098687511",
+   "country": "Perú",
+   "brand": "Liga 1 Max",
+   "feed": "",
+   "owner": "Liga 1",
+   "quality": "",
+   "general": false,
+   "position": 388
+  },
+  {
+   "name": "Liga Boliviana 1",
+   "code": "xtvlive:cyx_130B0BD0B6144A0991BFC7",
+   "country": "Bolivia",
+   "brand": "Liga Boliviana",
+   "feed": "",
+   "owner": "Liga",
+   "quality": "",
+   "general": false,
+   "position": 391
+  },
+  {
+   "name": "LIGA PRO EC 1",
+   "code": "xtvlive:cyx_57E0DD1930DEC346AF2F268",
+   "country": "Ecuador",
+   "brand": "Liga Pro",
+   "feed": "",
+   "owner": "Liga Pro",
+   "quality": "",
+   "general": false,
+   "position": 1015
+  },
+  {
+   "name": "LIGA PRO EC 2",
+   "code": "xtvlive:cyx_8FFB055D67210830F2031FE",
+   "country": "Ecuador",
+   "brand": "Liga Pro",
+   "feed": "",
+   "owner": "Liga Pro",
+   "quality": "",
+   "general": false,
+   "position": 1016
+  },
+  {
+   "name": "Liga de campeones",
+   "code": "xtvlive:cyx_Ligadecampeones☆",
+   "country": "Internacional",
+   "brand": "Liga de Campeones",
+   "feed": "",
+   "owner": "UEFA",
+   "quality": "",
+   "general": false,
+   "position": 392
+  },
+  {
+   "name": "MLB NETWORK HD",
+   "code": "xtvlive:cyx_9260665031817395948701",
+   "country": "EE. UU.",
+   "brand": "MLB Network",
+   "feed": "",
+   "owner": "MLB",
+   "quality": "HD",
+   "general": false,
+   "position": 418
+  },
+  {
+   "name": "MLB PASS 01",
+   "code": "xtvlive:MLB GAME 1 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "1",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 404
+  },
+  {
+   "name": "MLB PASS 02",
+   "code": "xtvlive:MLB GAME 2 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "2",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 405
+  },
+  {
+   "name": "MLB PASS 03",
+   "code": "xtvlive:MLB GAME 3 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "3",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 406
+  },
+  {
+   "name": "MLB PASS 04",
+   "code": "xtvlive:MLB GAME 4 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "4",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 407
+  },
+  {
+   "name": "MLB PASS 05",
+   "code": "xtvlive:MLB GAME 5 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "5",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 408
+  },
+  {
+   "name": "MLB PASS 06",
+   "code": "xtvlive:MLB GAME 6 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "6",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 409
+  },
+  {
+   "name": "MLB PASS 07",
+   "code": "xtvlive:MLB GAME 7 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "7",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 410
+  },
+  {
+   "name": "MLB PASS 08",
+   "code": "xtvlive:MLB GAME 8 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "8",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 411
+  },
+  {
+   "name": "MLB PASS 09",
+   "code": "xtvlive:MLB GAME 9 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "9",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 412
+  },
+  {
+   "name": "MLB PASS 10",
+   "code": "xtvlive:MLB GAME 10 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "10",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 413
+  },
+  {
+   "name": "MLB PASS 11",
+   "code": "xtvlive:MLB GAME 11 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "11",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 414
+  },
+  {
+   "name": "MLB PASS 12",
+   "code": "xtvlive:MLB GAME 12 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "12",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 415
+  },
+  {
+   "name": "MLB PASS 13",
+   "code": "xtvlive:MLB GAME 13 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "13",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 416
+  },
+  {
+   "name": "MLB PASS 14",
+   "code": "xtvlive:MLB GAME 14 HD",
+   "country": "Internacional",
+   "brand": "MLB Pass",
+   "feed": "14",
+   "owner": "MLB",
+   "quality": "",
+   "general": false,
+   "position": 417
+  },
+  {
+   "name": "MLS Season Pass",
+   "code": "xtvlive:cyx_18699693060496379",
+   "country": "Internacional",
+   "brand": "MLS",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": false,
+   "position": 455
+  },
+  {
+   "name": "MLS Season Pass 2",
+   "code": "xtvlive:cyx_794E0B7009FE0B8E78CF5",
+   "country": "Internacional",
+   "brand": "MLS",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": false,
+   "position": 456
+  },
+  {
+   "name": "MLS Season Pass 3",
+   "code": "xtvlive:cyx_2F223080045CC05E1A0",
+   "country": "Internacional",
+   "brand": "MLS",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": false,
+   "position": 457
+  },
+  {
+   "name": "MOVISTAR FORMULA HD",
+   "code": "xtvlive:MOVISTARFormula☆",
+   "country": "Internacional",
+   "brand": "MOVISTAR",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 429
+  },
+  {
+   "name": "MOVISTAR FUTBOL HD",
+   "code": "xtvlive:cyx_235320396019967157182116",
+   "country": "Internacional",
+   "brand": "MOVISTAR",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 999
+  },
+  {
+   "name": "MUNDO TORO HD",
+   "code": "xtvlive:cyx_886815013025254254",
+   "country": "Internacional",
+   "brand": "MUNDO",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 459
+  },
+  {
+   "name": "MOVISTAR DEPORTES PERU HD",
+   "code": "xtvlive:cyx-AD6412F44CA79ffe29A4CA4CA6CD",
+   "country": "Perú",
+   "brand": "Movistar Deportes",
+   "feed": "",
+   "owner": "Movistar",
+   "quality": "HD",
+   "general": false,
+   "position": 432
+  },
+  {
+   "name": "NBA",
+   "code": "xtvlive:cyx_NBA ☆",
+   "country": "Internacional",
+   "brand": "NBA",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": false,
+   "position": 463
+  },
+  {
+   "name": "NBA Eventos",
+   "code": "xtvlive:cyx_7E95BA6378098331FD8BA_720p",
+   "country": "Internacional",
+   "brand": "NBA",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": false,
+   "position": 4
+  },
+  {
+   "name": "NBA FHD",
+   "code": "xtvlive:cyx_3538DA299394A5CF9CA",
+   "country": "Internacional",
+   "brand": "NBA",
+   "feed": "",
+   "owner": "",
+   "quality": "FHD",
+   "general": false,
+   "position": 464
+  },
+  {
+   "name": "NBA PASS 01",
+   "code": "xtvlive:cyx-NBATEAM1",
+   "country": "Internacional",
+   "brand": "NBA Pass",
+   "feed": "1",
+   "owner": "NBA",
+   "quality": "",
+   "general": false,
+   "position": 465
+  },
+  {
+   "name": "NBA PASS 02",
+   "code": "xtvlive:cyx-NBATEAM2",
+   "country": "Internacional",
+   "brand": "NBA Pass",
+   "feed": "2",
+   "owner": "NBA",
+   "quality": "",
+   "general": false,
+   "position": 466
+  },
+  {
+   "name": "NBA PASS 03",
+   "code": "xtvlive:cyx-NBATEAM3",
+   "country": "Internacional",
+   "brand": "NBA Pass",
+   "feed": "3",
+   "owner": "NBA",
+   "quality": "",
+   "general": false,
+   "position": 467
+  },
+  {
+   "name": "NBA PASS 04",
+   "code": "xtvlive:cyx-NBATEAM4",
+   "country": "Internacional",
+   "brand": "NBA Pass",
+   "feed": "4",
+   "owner": "NBA",
+   "quality": "",
+   "general": false,
+   "position": 468
+  },
+  {
+   "name": "NBA PASS 05",
+   "code": "xtvlive:cyx-NBATEAM5",
+   "country": "Internacional",
+   "brand": "NBA Pass",
+   "feed": "5",
+   "owner": "NBA",
+   "quality": "",
+   "general": false,
+   "position": 469
+  },
+  {
+   "name": "NBA PASS 06",
+   "code": "xtvlive:cyx-NBATEAM6",
+   "country": "Internacional",
+   "brand": "NBA Pass",
+   "feed": "6",
+   "owner": "NBA",
+   "quality": "",
+   "general": false,
+   "position": 470
+  },
+  {
+   "name": "NBA PASS 07",
+   "code": "xtvlive:cyx-NBATEAM7",
+   "country": "Internacional",
+   "brand": "NBA Pass",
+   "feed": "7",
+   "owner": "NBA",
+   "quality": "",
+   "general": false,
+   "position": 471
+  },
+  {
+   "name": "NBA PASS 08",
+   "code": "xtvlive:cyx-NBATEAM8",
+   "country": "Internacional",
+   "brand": "NBA Pass",
+   "feed": "8",
+   "owner": "NBA",
+   "quality": "",
+   "general": false,
+   "position": 472
+  },
+  {
+   "name": "NBA PASS 09",
+   "code": "xtvlive:cyx-NBATEAM9",
+   "country": "Internacional",
+   "brand": "NBA Pass",
+   "feed": "9",
+   "owner": "NBA",
+   "quality": "",
+   "general": false,
+   "position": 473
+  },
+  {
+   "name": "NBA PASS 10",
+   "code": "xtvlive:cyx-NBATEAM10",
+   "country": "Internacional",
+   "brand": "NBA Pass",
+   "feed": "10",
+   "owner": "NBA",
+   "quality": "",
+   "general": false,
+   "position": 474
+  },
+  {
+   "name": "NBC Chicago Sports 2 HD",
+   "code": "xtvlive:cyx_6DA39AFCC7929CC0D2689064",
+   "country": "EE. UU.",
+   "brand": "NBC",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 923
+  },
+  {
+   "name": "NBC Sports Boston",
+   "code": "xtvlive:NBC_Sports_Boston_cyx",
+   "country": "EE. UU.",
+   "brand": "NBC Sports",
+   "feed": "",
+   "owner": "NBC",
+   "quality": "",
+   "general": false,
+   "position": 479
+  },
+  {
+   "name": "NBC Sports California",
+   "code": "xtvlive:NBC_Sports_California_cyx",
+   "country": "EE. UU.",
+   "brand": "NBC Sports",
+   "feed": "",
+   "owner": "NBC",
+   "quality": "",
+   "general": false,
+   "position": 481
+  },
+  {
+   "name": "NBC Sports Chicago",
+   "code": "xtvlive:NBC_Sports_Chicago_cyx",
+   "country": "EE. UU.",
+   "brand": "NBC Sports",
+   "feed": "",
+   "owner": "NBC",
+   "quality": "",
+   "general": false,
+   "position": 480
+  },
+  {
+   "name": "NBC Sports Chicago Plus",
+   "code": "xtvlive:NBC_Sports_Chicago_Plus_cyx",
+   "country": "EE. UU.",
+   "brand": "NBC Sports",
+   "feed": "",
+   "owner": "NBC",
+   "quality": "",
+   "general": false,
+   "position": 483
+  },
+  {
+   "name": "NBC Sports Philly Plus",
+   "code": "xtvlive:NBC_Sports_Philly_Plus_cyx",
+   "country": "EE. UU.",
+   "brand": "NBC Sports",
+   "feed": "",
+   "owner": "NBC",
+   "quality": "",
+   "general": false,
+   "position": 482
+  },
+  {
+   "name": "NBC Sports Washington Plus",
+   "code": "xtvlive:NBC_Sports_Washington_Plus_cyx",
+   "country": "EE. UU.",
+   "brand": "NBC Sports",
+   "feed": "",
+   "owner": "NBC",
+   "quality": "",
+   "general": false,
+   "position": 484
+  },
+  {
+   "name": "NESN Boston",
+   "code": "xtvlive:cyx_DD60F7942005093DBC3D78F",
+   "country": "EE. UU.",
+   "brand": "NESN",
+   "feed": "",
+   "owner": "NESN",
+   "quality": "",
+   "general": false,
+   "position": 924
+  },
+  {
+   "name": "NESN Plus",
+   "code": "xtvlive:cyx_60B1C5546D2F7F754CC370A",
+   "country": "EE. UU.",
+   "brand": "NESN",
+   "feed": "",
+   "owner": "NESN",
+   "quality": "",
+   "general": false,
+   "position": 925
+  },
+  {
+   "name": "NFL NETWORK HD",
+   "code": "xtvlive:cyx-NFLNetworkHD",
+   "country": "EE. UU.",
+   "brand": "NFL Network",
+   "feed": "",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 499
+  },
+  {
+   "name": "NFL PASS 01 HD",
+   "code": "xtvlive:cyx_722E7D55C063E76B12604A8B",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "1",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 929
+  },
+  {
+   "name": "NFL PASS 02 HD",
+   "code": "xtvlive:cyx_77090206BBF14097DB92EE47",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "2",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 930
+  },
+  {
+   "name": "NFL PASS 03 HD",
+   "code": "xtvlive:cyx_38E59C440E73383BDA76FB1E",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "3",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 931
+  },
+  {
+   "name": "NFL PASS 04 HD",
+   "code": "xtvlive:cyx_F2F322067E1ECF09D3E7C65D",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "4",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 932
+  },
+  {
+   "name": "NFL PASS 05 HD",
+   "code": "xtvlive:cyx_79B3C4FBA0030114D8167407",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "5",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 933
+  },
+  {
+   "name": "NFL PASS 06 HD",
+   "code": "xtvlive:cyx_A5011418E9B1CB986ABABD56",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "6",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 934
+  },
+  {
+   "name": "NFL PASS 07 HD",
+   "code": "xtvlive:cyx_DF9CCB7307CBDEDDE7826DFE",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "7",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 935
+  },
+  {
+   "name": "NFL PASS 08 HD",
+   "code": "xtvlive:cyx_E4ACCB77306C68CD4DE114A9",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "8",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 936
+  },
+  {
+   "name": "NFL PASS 09 HD",
+   "code": "xtvlive:cyx_9DCAEA6EAB66C049BE927541",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "9",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 937
+  },
+  {
+   "name": "NFL PASS 10 HD",
+   "code": "xtvlive:cyx_F873D8478D1A22CE044F0EBD",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "10",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 938
+  },
+  {
+   "name": "NFL PASS 11 HD",
+   "code": "xtvlive:cyx_BCE48686128AA9E1A5C80AC56",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "11",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 939
+  },
+  {
+   "name": "NFL PASS 12 HD",
+   "code": "xtvlive:cyx_F60C14576E3110F1BF8FF303",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "12",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 940
+  },
+  {
+   "name": "NFL PASS 13 HD",
+   "code": "xtvlive:cyx_F4DB7251B99E99D26CC1FED0",
+   "country": "Internacional",
+   "brand": "NFL Pass",
+   "feed": "13",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 941
+  },
+  {
+   "name": "NFL RED ZONE HD",
+   "code": "xtvlive:cyx_8199604846532346784601621231",
+   "country": "Internacional",
+   "brand": "NFL RedZone",
+   "feed": "RedZone",
+   "owner": "NFL",
+   "quality": "HD",
+   "general": false,
+   "position": 498
+  },
+  {
+   "name": "NHL HD",
+   "code": "xtvlive:cyx_55F948DAA53F6BD25FA615F8",
+   "country": "Internacional",
+   "brand": "NHL",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 926
+  },
+  {
+   "name": "OVACION TV",
+   "code": "xtvlive:cyx_6607055723065287907957474521",
+   "country": "Internacional",
+   "brand": "OVACION",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": false,
+   "position": 511
+  },
+  {
+   "name": "PX SPORTS COL HD",
+   "code": "xtvlive:cyx_1826050668646612110189116152",
+   "country": "Colombia",
+   "brand": "PX Sports",
+   "feed": "",
+   "owner": "PX",
+   "quality": "HD",
+   "general": false,
+   "position": 515
+  },
+  {
+   "name": "RCN COL HD",
+   "code": "xtvlive:cyx_0756318442778639067819638626",
+   "country": "Colombia",
+   "brand": "RCN",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 542
+  },
+  {
+   "name": "RCN FHD",
+   "code": "xtvlive:cyx_409E941493778B5FB7",
+   "country": "Colombia",
+   "brand": "RCN",
+   "feed": "",
+   "owner": "",
+   "quality": "FHD",
+   "general": true,
+   "position": 541
+  },
+  {
+   "name": "RCN HD",
+   "code": "xtvlive:cyx-RCNHD",
+   "country": "Colombia",
+   "brand": "RCN",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 539
+  },
+  {
+   "name": "RCN HD+",
+   "code": "xtvlive:cyx_7D948E6154964B47B1DCAAE",
+   "country": "Colombia",
+   "brand": "RCN",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 540
+  },
+  {
+   "name": "RCN NOVELAS FHD",
+   "code": "xtvlive:cyx_1621549981842122126825888848",
+   "country": "Colombia",
+   "brand": "RCN",
+   "feed": "",
+   "owner": "",
+   "quality": "FHD",
+   "general": true,
+   "position": 544
+  },
+  {
+   "name": "RCN NOVELAS HD",
+   "code": "xtvlive:cyx_Rcnnovelas☆",
+   "country": "Colombia",
+   "brand": "RCN",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 543
+  },
+  {
+   "name": "RCN NUESTRA TElE HD",
+   "code": "xtvlive:cyx_1716735059625347579237843616",
+   "country": "Colombia",
+   "brand": "RCN",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 545
+  },
+  {
+   "name": "RED UNO HD",
+   "code": "xtvlive:cyx_80625311981373264109618962",
+   "country": "Bolivia",
+   "brand": "RED",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 535
+  },
+  {
+   "name": "REPRETEL CANAL 4 CR HD",
+   "code": "xtvlive:cyx_9745437897518267620157404016",
+   "country": "Costa Rica",
+   "brand": "REPRETEL",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 529
+  },
+  {
+   "name": "REPRETEL CANAL 6 CR HD",
+   "code": "xtvlive:cyx-Repretel6",
+   "country": "Costa Rica",
+   "brand": "REPRETEL",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 530
+  },
+  {
+   "name": "Sportsman HD",
+   "code": "xtvlive:cyx-OutdoorHD",
+   "country": "Internacional",
+   "brand": "SPORTSMAN",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 604
+  },
+  {
+   "name": "CDN SPORTSMAX RD HD",
+   "code": "xtvlive:cyx_B5C7A6B54A0F7A80A4F",
+   "country": "R. Dominicana",
+   "brand": "Sportsmax",
+   "feed": "",
+   "owner": "Sportsmax",
+   "quality": "HD",
+   "general": false,
+   "position": 966
+  },
+  {
+   "name": "SPORTS MAX",
+   "code": "xtvlive:cyx_6001952211723857023810272841",
+   "country": "R. Dominicana",
+   "brand": "Sportsmax",
+   "feed": "",
+   "owner": "Sportsmax",
+   "quality": "",
+   "general": false,
+   "position": 595
+  },
+  {
+   "name": "SPORTS MAX 2 HD",
+   "code": "xtvlive:cyx_2310791647557310082075971646",
+   "country": "R. Dominicana",
+   "brand": "Sportsmax",
+   "feed": "",
+   "owner": "Sportsmax",
+   "quality": "HD",
+   "general": false,
+   "position": 596
+  },
+  {
+   "name": "SPECTRUM SPORTSNET",
+   "code": "xtvlive:SPECTRUMSPORTSNET☆",
+   "country": "Canadá",
+   "brand": "Sportsnet",
+   "feed": "",
+   "owner": "Sportsnet",
+   "quality": "",
+   "general": false,
+   "position": 616
+  },
+  {
+   "name": "SPORTSNET 360",
+   "code": "xtvlive:cyx_SPORTSNET360☆",
+   "country": "Canadá",
+   "brand": "Sportsnet",
+   "feed": "",
+   "owner": "Sportsnet",
+   "quality": "",
+   "general": false,
+   "position": 597
+  },
+  {
+   "name": "SPORTSNET ONE CA",
+   "code": "xtvlive:cyx_SPORTSNETONEA☆",
+   "country": "Canadá",
+   "brand": "Sportsnet",
+   "feed": "",
+   "owner": "Sportsnet",
+   "quality": "",
+   "general": false,
+   "position": 598
+  },
+  {
+   "name": "TELEFORMULA",
+   "code": "xtvlive:cyx_Teleformula☆",
+   "country": "Internacional",
+   "brand": "TELEFORMULA",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": false,
+   "position": 714
+  },
+  {
+   "name": "TENNIS CHANNEL HD",
+   "code": "xtvlive:TennisChannel☆",
+   "country": "Internacional",
+   "brand": "TENNIS",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 661
+  },
+  {
+   "name": "ESTADIO TNT SPORTS",
+   "code": "xtvlive:cyx_053453F405BE0EE2B020FAE5",
+   "country": "Chile",
+   "brand": "TNT Sports",
+   "feed": "",
+   "owner": "Warner Bros. Discovery",
+   "quality": "",
+   "general": false,
+   "position": 989
+  },
+  {
+   "name": "TNT SPORTS CHILE 2 HD",
+   "code": "xtvlive:cyx_F4649D6456804C9E853B5EC7",
+   "country": "Chile",
+   "brand": "TNT Sports",
+   "feed": "2",
+   "owner": "Warner Bros. Discovery",
+   "quality": "HD",
+   "general": false,
+   "position": 993
+  },
+  {
+   "name": "TNT SPORTS CHILE 2 HD+",
+   "code": "xtvlive:cyx_137D3CEBB4F8F95624D03D",
+   "country": "Chile",
+   "brand": "TNT Sports",
+   "feed": "2",
+   "owner": "Warner Bros. Discovery",
+   "quality": "HD",
+   "general": false,
+   "position": 994
+  },
+  {
+   "name": "TNT SPORTS CHILE HD",
+   "code": "xtvlive:cyx_A9F70E1DE8D6AEAA4FF0AE4F",
+   "country": "Chile",
+   "brand": "TNT Sports",
+   "feed": "CL",
+   "owner": "Warner Bros. Discovery",
+   "quality": "HD",
+   "general": false,
+   "position": 991
+  },
+  {
+   "name": "TNT SPORTS CHILE HD+",
+   "code": "xtvlive:cyx_D9C311EF4F8A26E5899A2C71",
+   "country": "Chile",
+   "brand": "TNT Sports",
+   "feed": "CL",
+   "owner": "Warner Bros. Discovery",
+   "quality": "HD",
+   "general": false,
+   "position": 992
+  },
+  {
+   "name": "TNT SPORTS ESTADIO HD",
+   "code": "xtvlive:TNTSPORTSESTADIO",
+   "country": "Chile",
+   "brand": "TNT Sports",
+   "feed": "Estadio",
+   "owner": "Warner Bros. Discovery",
+   "quality": "HD",
+   "general": false,
+   "position": 990
+  },
+  {
+   "name": "TNT SPORTS FHD",
+   "code": "xtvlive:cyx_7A1A0524509A17E70D29A64",
+   "country": "Chile",
+   "brand": "TNT Sports",
+   "feed": "",
+   "owner": "Warner Bros. Discovery",
+   "quality": "FHD",
+   "general": false,
+   "position": 631
+  },
+  {
+   "name": "TNT SPORTS HD+",
+   "code": "xtvlive:cyx_622EEA9699C5DBB97E7DEC",
+   "country": "Chile",
+   "brand": "TNT Sports",
+   "feed": "",
+   "owner": "Warner Bros. Discovery",
+   "quality": "HD",
+   "general": false,
+   "position": 630
+  },
+  {
+   "name": "TNT SPORTS PREMIUM FHD",
+   "code": "xtvlive:cyx_TNTSports☆",
+   "country": "Chile",
+   "brand": "TNT Sports",
+   "feed": "Premium",
+   "owner": "Warner Bros. Discovery",
+   "quality": "FHD",
+   "general": false,
+   "position": 634
+  },
+  {
+   "name": "TNT SPORTS PREMIUM HD",
+   "code": "xtvlive:cyx-CDFHD",
+   "country": "Chile",
+   "brand": "TNT Sports",
+   "feed": "Premium",
+   "owner": "Warner Bros. Discovery",
+   "quality": "HD",
+   "general": false,
+   "position": 632
+  },
+  {
+   "name": "TNT SPORTS PREMIUM HD+",
+   "code": "xtvlive:cyx-CDFFHD",
+   "country": "Chile",
+   "brand": "TNT Sports",
+   "feed": "Premium",
+   "owner": "Warner Bros. Discovery",
+   "quality": "HD",
+   "general": false,
+   "position": 633
+  },
+  {
+   "name": "TODO DEPORTES PLUS HD",
+   "code": "xtvlive:cyx_31295552388572332348299",
+   "country": "Internacional",
+   "brand": "TODO",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 670
+  },
+  {
+   "name": "TOROS TV HD",
+   "code": "xtvlive:cyx_178108671728149447807755",
+   "country": "Internacional",
+   "brand": "TOROS",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": false,
+   "position": 1026
+  },
+  {
+   "name": "TUDN USA HD",
+   "code": "xtvlive:TUDNUNIVISION☆",
+   "country": "EE. UU.",
+   "brand": "TUDN USA",
+   "feed": "USA",
+   "owner": "TUDN (Televisa/Univision)",
+   "quality": "HD",
+   "general": false,
+   "position": 717
+  },
+  {
+   "name": "TVG 2 Network",
+   "code": "xtvlive:cyx_CFA68731AB5351BA",
+   "country": "Internacional",
+   "brand": "TVG",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": false,
+   "position": 730
+  },
+  {
+   "name": "TVG Network",
+   "code": "xtvlive:cyx_44841FE7C18C5BF",
+   "country": "Internacional",
+   "brand": "TVG",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": false,
+   "position": 729
+  },
+  {
+   "name": "TVN 2 PAN 2 HD",
+   "code": "xtvlive:cyx_83B143A715069185E6F8F91",
+   "country": "Chile",
+   "brand": "TVN",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 946
+  },
+  {
+   "name": "TVN HD",
+   "code": "xtvlive:cyx-TVNHD",
+   "country": "Chile",
+   "brand": "TVN",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 675
+  },
+  {
+   "name": "TVN HD+",
+   "code": "xtvlive:cyx_8879EB61A590389A8F168919",
+   "country": "Chile",
+   "brand": "TVN",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 676
+  },
+  {
+   "name": "TVN Panama",
+   "code": "xtvlive:cyx_5310555020579518253770763241",
+   "country": "Panamá",
+   "brand": "TVN",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": true,
+   "position": 677
+  },
+  {
+   "name": "TELEMUNDO 51",
+   "code": "xtvlive:cyx_85268768499388002979770162",
+   "country": "EE. UU.",
+   "brand": "Telemundo",
+   "feed": "",
+   "owner": "Telemundo",
+   "quality": "",
+   "general": true,
+   "position": 644
+  },
+  {
+   "name": "TELEMUNDO CHICAGO HD",
+   "code": "xtvlive:cyx_9997752070774716",
+   "country": "EE. UU.",
+   "brand": "Telemundo",
+   "feed": "",
+   "owner": "Telemundo",
+   "quality": "HD",
+   "general": true,
+   "position": 648
+  },
+  {
+   "name": "TELEMUNDO DALLAS US HD",
+   "code": "xtvlive:cyx_00993665136378675",
+   "country": "EE. UU.",
+   "brand": "Telemundo",
+   "feed": "",
+   "owner": "Telemundo",
+   "quality": "HD",
+   "general": true,
+   "position": 649
+  },
+  {
+   "name": "TELEMUNDO EAST HD",
+   "code": "xtvlive:cyx_TELEMUNDO1USA",
+   "country": "EE. UU.",
+   "brand": "Telemundo",
+   "feed": "",
+   "owner": "Telemundo",
+   "quality": "HD",
+   "general": true,
+   "position": 646
+  },
+  {
+   "name": "TELEMUNDO INTERNACIONAL FHD",
+   "code": "xtvlive:cyx_992341D8FC11D9311B12",
+   "country": "EE. UU.",
+   "brand": "Telemundo",
+   "feed": "",
+   "owner": "Telemundo",
+   "quality": "FHD",
+   "general": true,
+   "position": 651
+  },
+  {
+   "name": "TELEMUNDO INTERNACIONAL HD",
+   "code": "xtvlive:TELEMUNDOInternacional",
+   "country": "EE. UU.",
+   "brand": "Telemundo",
+   "feed": "",
+   "owner": "Telemundo",
+   "quality": "HD",
+   "general": true,
+   "position": 650
+  },
+  {
+   "name": "TELEMUNDO MOUNT HD",
+   "code": "xtvlive:cyx_TELEMUNDO3USA",
+   "country": "EE. UU.",
+   "brand": "Telemundo",
+   "feed": "",
+   "owner": "Telemundo",
+   "quality": "HD",
+   "general": true,
+   "position": 1009
+  },
+  {
+   "name": "TELEMUNDO PR HD",
+   "code": "xtvlive:cyx_6855701921916105639651011436",
+   "country": "Puerto Rico",
+   "brand": "Telemundo",
+   "feed": "",
+   "owner": "Telemundo",
+   "quality": "HD",
+   "general": true,
+   "position": 645
+  },
+  {
+   "name": "TELEMUNDO WEST HD",
+   "code": "xtvlive:cyx_TELEMUNDO2USA",
+   "country": "EE. UU.",
+   "brand": "Telemundo",
+   "feed": "",
+   "owner": "Telemundo",
+   "quality": "HD",
+   "general": true,
+   "position": 647
+  },
+  {
+   "name": "TRACE SPORTS HD",
+   "code": "xtvlive:cyx_10040614435769786010833082",
+   "country": "Internacional",
+   "brand": "Trace Sports",
+   "feed": "",
+   "owner": "Trace",
+   "quality": "HD",
+   "general": false,
+   "position": 723
+  },
+  {
+   "name": "UFC Fight Pass",
+   "code": "xtvlive:cyx_UFC☆",
+   "country": "EE. UU.",
+   "brand": "UFC",
+   "feed": "",
+   "owner": "UFC",
+   "quality": "",
+   "general": false,
+   "position": 825
+  },
+  {
+   "name": "UFC Fight Pass 2",
+   "code": "xtvlive:FightNetwork☆",
+   "country": "EE. UU.",
+   "brand": "UFC",
+   "feed": "",
+   "owner": "UFC",
+   "quality": "",
+   "general": false,
+   "position": 826
+  },
+  {
+   "name": "UFC Fight Pass Eventos",
+   "code": "xtvlive:cyx_2077814789B48D9DF517AFEA4D",
+   "country": "EE. UU.",
+   "brand": "UFC",
+   "feed": "",
+   "owner": "UFC",
+   "quality": "",
+   "general": false,
+   "position": 827
+  },
+  {
+   "name": "UNITEL TV",
+   "code": "xtvlive:cyx_8481273536262323649321824744",
+   "country": "Bolivia",
+   "brand": "UNITEL",
+   "feed": "",
+   "owner": "",
+   "quality": "",
+   "general": true,
+   "position": 115
+  },
+  {
+   "name": "Unitel FHD",
+   "code": "xtvlive:cyx_8F0AC645AE8A62785FED7F",
+   "country": "Bolivia",
+   "brand": "UNITEL",
+   "feed": "",
+   "owner": "",
+   "quality": "FHD",
+   "general": true,
+   "position": 854
+  },
+  {
+   "name": "Unitel HD",
+   "code": "xtvlive:cyx-UnitelHD",
+   "country": "Bolivia",
+   "brand": "UNITEL",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 852
+  },
+  {
+   "name": "Unitel HD+",
+   "code": "xtvlive:cyx_4D28A40F26274644F45",
+   "country": "Bolivia",
+   "brand": "UNITEL",
+   "feed": "",
+   "owner": "",
+   "quality": "HD",
+   "general": true,
+   "position": 853
+  },
+  {
+   "name": "USA NETWORK HD",
+   "code": "xtvlive:cyx-SyfyHD",
+   "country": "EE. UU.",
+   "brand": "USA Network",
+   "feed": "",
+   "owner": "NBCUniversal",
+   "quality": "HD",
+   "general": true,
+   "position": 884
+  },
+  {
+   "name": "UNIMAS SALT LAKE HD",
+   "code": "xtvlive:cyx_61346948358218905648115811",
+   "country": "EE. UU.",
+   "brand": "UniMás",
+   "feed": "",
+   "owner": "Univision",
+   "quality": "HD",
+   "general": true,
+   "position": 858
+  },
+  {
+   "name": "Unimas East HD",
+   "code": "xtvlive:UnimasEastHD-cyx",
+   "country": "EE. UU.",
+   "brand": "UniMás",
+   "feed": "",
+   "owner": "Univision",
+   "quality": "HD",
+   "general": true,
+   "position": 847
+  },
+  {
+   "name": "Unimas Miami HD",
+   "code": "xtvlive:cyx_17235354222691305937",
+   "country": "EE. UU.",
+   "brand": "UniMás",
+   "feed": "",
+   "owner": "Univision",
+   "quality": "HD",
+   "general": true,
+   "position": 846
+  },
+  {
+   "name": "Unimas West HD",
+   "code": "xtvlive:UnimasWestHD-cyx",
+   "country": "EE. UU.",
+   "brand": "UniMás",
+   "feed": "",
+   "owner": "Univision",
+   "quality": "HD",
+   "general": true,
+   "position": 848
+  },
+  {
+   "name": "Universo Este",
+   "code": "xtvlive:cyx_UniversoEste",
+   "country": "EE. UU.",
+   "brand": "Universo",
+   "feed": "",
+   "owner": "Telemundo",
+   "quality": "",
+   "general": true,
+   "position": 844
+  },
+  {
+   "name": "Universo Oeste",
+   "code": "xtvlive:cyx_UniversoOeste",
+   "country": "EE. UU.",
+   "brand": "Universo",
+   "feed": "",
+   "owner": "Telemundo",
+   "quality": "",
+   "general": true,
+   "position": 845
+  },
+  {
+   "name": "Univision 23",
+   "code": "xtvlive:cyx_69310531810763281680612709",
+   "country": "EE. UU.",
+   "brand": "Univision",
+   "feed": "",
+   "owner": "Univision",
+   "quality": "",
+   "general": true,
+   "position": 837
+  },
+  {
+   "name": "Univision East FHD",
+   "code": "xtvlive:cyx_ACF15B592CC2223E5B1",
+   "country": "EE. UU.",
+   "brand": "Univision",
+   "feed": "",
+   "owner": "Univision",
+   "quality": "FHD",
+   "general": true,
+   "position": 840
+  },
+  {
+   "name": "Univision East HD",
+   "code": "xtvlive:UnivisionEastHD-cyx",
+   "country": "EE. UU.",
+   "brand": "Univision",
+   "feed": "",
+   "owner": "Univision",
+   "quality": "HD",
+   "general": true,
+   "position": 839
+  },
+  {
+   "name": "Univision PR",
+   "code": "xtvlive:cyx_5085322528864577514028967127",
+   "country": "Puerto Rico",
+   "brand": "Univision",
+   "feed": "",
+   "owner": "Univision",
+   "quality": "",
+   "general": true,
+   "position": 838
+  },
+  {
+   "name": "Univision TND USA HD",
+   "code": "xtvlive:UnivisionTNDUSA-cyx",
+   "country": "EE. UU.",
+   "brand": "Univision",
+   "feed": "",
+   "owner": "Univision",
+   "quality": "HD",
+   "general": true,
+   "position": 843
+  },
+  {
+   "name": "Univision West FHD",
+   "code": "xtvlive:cyx_A0AD482C5182248672FAF",
+   "country": "EE. UU.",
+   "brand": "Univision",
+   "feed": "",
+   "owner": "Univision",
+   "quality": "FHD",
+   "general": true,
+   "position": 842
+  },
+  {
+   "name": "Univision West HD",
+   "code": "xtvlive:UnivisionWetsHD-cyx",
+   "country": "EE. UU.",
+   "brand": "Univision",
+   "feed": "",
+   "owner": "Univision",
+   "quality": "HD",
+   "general": true,
+   "position": 841
+  },
+  {
+   "name": "WWE HD",
+   "code": "xtvlive:cyx_WWE☆",
+   "country": "EE. UU.",
+   "brand": "WWE",
+   "feed": "",
+   "owner": "WWE",
+   "quality": "HD",
+   "general": false,
+   "position": 860
+  },
+  {
+   "name": "WWE PLUS HD",
+   "code": "xtvlive:cyx_681163361998941259703416",
+   "country": "EE. UU.",
+   "brand": "WWE",
+   "feed": "",
+   "owner": "WWE",
+   "quality": "HD",
+   "general": false,
+   "position": 861
+  },
+  {
+   "name": "WIN Sports COL HD",
+   "code": "xtvlive:cyx_492310852366171011443815385",
+   "country": "Colombia",
+   "brand": "Win Sports",
+   "feed": "",
+   "owner": "Win Sports",
+   "quality": "HD",
+   "general": false,
+   "position": 104
+  },
+  {
+   "name": "WIN Sports HD",
+   "code": "xtvlive:cyx-WinsportsHD",
+   "country": "Colombia",
+   "brand": "Win Sports",
+   "feed": "",
+   "owner": "Win Sports",
+   "quality": "HD",
+   "general": false,
+   "position": 103
+  },
+  {
+   "name": "WIN Sports+ COL HD",
+   "code": "xtvlive:cyx_17723435019492563492967967",
+   "country": "Colombia",
+   "brand": "Win Sports",
+   "feed": "",
+   "owner": "Win Sports",
+   "quality": "HD",
+   "general": false,
+   "position": 105
+  },
+  {
+   "name": "Win Sports 1",
+   "code": "xtvlive:cyx_C6B02E912BB60072730146E",
+   "country": "Colombia",
+   "brand": "Win Sports",
+   "feed": "1",
+   "owner": "Win Sports",
+   "quality": "",
+   "general": false,
+   "position": 108
+  },
+  {
+   "name": "Win Sports 2",
+   "code": "xtvlive:cyx_947FE66C3BA0DAB4E20C580",
+   "country": "Colombia",
+   "brand": "Win Sports",
+   "feed": "2",
+   "owner": "Win Sports",
+   "quality": "",
+   "general": false,
+   "position": 109
+  },
+  {
+   "name": "Win Sports 3",
+   "code": "xtvlive:cyx_1C31951D1E320ECA6EAB76F",
+   "country": "Colombia",
+   "brand": "Win Sports",
+   "feed": "3",
+   "owner": "Win Sports",
+   "quality": "",
+   "general": false,
+   "position": 110
+  },
+  {
+   "name": "Win Sports 4",
+   "code": "xtvlive:cyx_5B1B187CE8A36092D6CBB46",
+   "country": "Colombia",
+   "brand": "Win Sports",
+   "feed": "4",
+   "owner": "Win Sports",
+   "quality": "",
+   "general": false,
+   "position": 111
+  },
+  {
+   "name": "WIN SPORTS PLUS+ 2 HD",
+   "code": "xtvlive:cyx_76509F61399DF2FB4A84FE57D",
+   "country": "Colombia",
+   "brand": "Win Sports+",
+   "feed": "Plus",
+   "owner": "Win Sports",
+   "quality": "HD",
+   "general": false,
+   "position": 106
+  },
+  {
+   "name": "WIN SPORTS PLUS+ HD",
+   "code": "xtvlive:cyx_7E39B128CF5D4852846A9A2",
+   "country": "Colombia",
+   "brand": "Win Sports+",
+   "feed": "Plus",
+   "owner": "Win Sports",
+   "quality": "HD",
+   "general": false,
+   "position": 107
+  },
+  {
+   "name": "YES NETWORK USA HD",
+   "code": "xtvlive:cyx_94188912871808018803223787",
+   "country": "EE. UU.",
+   "brand": "YES Network",
+   "feed": "",
+   "owner": "YES",
+   "quality": "HD",
+   "general": false,
+   "position": 881
+  }
+ ],
+ "broadcasters": {
+  "espn": [
+   "ESPN",
+   "Disney",
+   "channel",
+   "LatAm",
+   [
+    "espn",
+    "espn 1"
+   ]
+  ],
+  "espn 2": [
+   "ESPN 2",
+   "Disney",
+   "channel",
+   "LatAm",
+   [
+    "espn 2",
+    "espn2"
+   ]
+  ],
+  "espn 3": [
+   "ESPN 3",
+   "Disney",
+   "channel",
+   "LatAm",
+   [
+    "espn 3",
+    "espn3"
+   ]
+  ],
+  "espn 4": [
+   "ESPN 4",
+   "Disney",
+   "channel",
+   "LatAm",
+   [
+    "espn 4",
+    "espn4"
+   ]
+  ],
+  "espn 5": [
+   "ESPN 5",
+   "Disney",
+   "channel",
+   "LatAm",
+   [
+    "espn 5",
+    "espn5"
+   ]
+  ],
+  "espn 6": [
+   "ESPN 6",
+   "Disney",
+   "channel",
+   "LatAm",
+   [
+    "espn 6",
+    "espn6"
+   ]
+  ],
+  "espn 7": [
+   "ESPN 7",
+   "Disney",
+   "channel",
+   "LatAm",
+   [
+    "espn 7",
+    "espn7"
+   ]
+  ],
+  "espn deportes": [
+   "ESPN Deportes",
+   "Disney",
+   "channel",
+   "EE. UU.",
+   [
+    "espn deportes"
+   ]
+  ],
+  "espn extra": [
+   "ESPN Extra",
+   "Disney",
+   "channel",
+   "LatAm",
+   [
+    "espn extra"
+   ]
+  ],
+  "espn premium": [
+   "ESPN Premium",
+   "Disney",
+   "channel",
+   "LatAm",
+   [
+    "espn premium"
+   ]
+  ],
+  "espn knockout": [
+   "ESPN KnockOut",
+   "Disney",
+   "channel",
+   "LatAm",
+   [
+    "espn knockout"
+   ]
+  ],
+  "fox sports": [
+   "Fox Sports",
+   "Fox",
+   "channel",
+   "LatAm",
+   [
+    "fox sports",
+    "fox sports 1"
+   ]
+  ],
+  "fox sports 1": [
+   "Fox Sports",
+   "Fox",
+   "channel",
+   "LatAm",
+   [
+    "fox sports 1"
+   ]
+  ],
+  "fox sports 2": [
+   "Fox Sports 2",
+   "Fox",
+   "channel",
+   "LatAm",
+   [
+    "fox sports 2"
+   ]
+  ],
+  "fox sports 3": [
+   "Fox Sports 3",
+   "Fox",
+   "channel",
+   "LatAm",
+   [
+    "fox sports 3"
+   ]
+  ],
+  "fox sports premium": [
+   "Fox Sports",
+   "Fox",
+   "channel",
+   "México",
+   [
+    "fox sports premium"
+   ]
+  ],
+  "fox deportes": [
+   "Fox Deportes",
+   "Fox",
+   "channel",
+   "EE. UU.",
+   [
+    "fox deportes"
+   ]
+  ],
+  "fox soccer plus": [
+   "Fox Soccer Plus",
+   "Fox",
+   "channel",
+   "EE. UU.",
+   [
+    "fox soccer plus"
+   ]
+  ],
+  "fox basic": [
+   "FOX",
+   "Fox Corporation",
+   "linear",
+   "México",
+   [
+    "fox",
+    "fox basic"
+   ]
+  ],
+  "fox plus": [
+   "FOX+",
+   "Fox Corporation",
+   "linear",
+   "México",
+   [
+    "fox plus",
+    "fox+"
+   ]
+  ],
+  "fox tubi": [
+   "FOX | Tubi",
+   "Fox Corporation",
+   "linear",
+   "México",
+   [
+    "fox tubi",
+    "tubi"
+   ]
+  ],
+  "fox one": [
+   "FOX One",
+   "Fox Corporation",
+   "channel",
+   "México",
+   [
+    "fox one"
+   ]
+  ],
+  "tudn": [
+   "TUDN",
+   "Televisa/Univision",
+   "channel",
+   "México",
+   [
+    "tudn"
+   ]
+  ],
+  "tudn usa": [
+   "TUDN USA",
+   "Televisa/Univision",
+   "channel",
+   "EE. UU.",
+   [
+    "tudn usa"
+   ]
+  ],
+  "claro sports": [
+   "Claro Sports",
+   "Claro",
+   "channel",
+   "México",
+   [
+    "claro sports"
+   ]
+  ],
+  "tnt sports": [
+   "TNT Sports",
+   "WBD",
+   "channel",
+   "LatAm",
+   [
+    "tnt sports"
+   ]
+  ],
+  "dazn": [
+   "DAZN",
+   "DAZN",
+   "channel",
+   "LatAm",
+   [
+    "dazn"
+   ]
+  ],
+  "bein sports": [
+   "beIN Sports",
+   "beIN",
+   "channel",
+   "Internacional",
+   [
+    "bein sports"
+   ]
+  ],
+  "win sports": [
+   "Win Sports",
+   "Win",
+   "channel",
+   "Colombia",
+   [
+    "win sports"
+   ]
+  ],
+  "tyc sports": [
+   "TyC Sports",
+   "TyC",
+   "channel",
+   "Argentina",
+   [
+    "tyc sports"
+   ]
+  ],
+  "directv sports": [
+   "DIRECTV Sports",
+   "DIRECTV",
+   "channel",
+   "LatAm",
+   [
+    "directv sports"
+   ]
+  ],
+  "sky sports": [
+   "Sky Sports",
+   "Sky",
+   "channel",
+   "México",
+   [
+    "sky sports"
+   ]
+  ],
+  "movistar deportes": [
+   "Movistar Deportes",
+   "Movistar",
+   "channel",
+   "Perú",
+   [
+    "movistar deportes"
+   ]
+  ],
+  "gol peru": [
+   "Gol Perú",
+   "Gol Perú",
+   "channel",
+   "Perú",
+   [
+    "gol peru"
+   ]
+  ],
+  "tvc deportes": [
+   "TVC Deportes",
+   "TV Azteca",
+   "channel",
+   "México",
+   [
+    "tvc deportes"
+   ]
+  ],
+  "aym sports": [
+   "AYM Sports",
+   "AYM",
+   "channel",
+   "México",
+   [
+    "aym sports"
+   ]
+  ],
+  "tdn": [
+   "TDN",
+   "Televisa",
+   "channel",
+   "México",
+   [
+    "tdn"
+   ]
+  ],
+  "univision": [
+   "Univision",
+   "Univision",
+   "channel",
+   "EE. UU.",
+   [
+    "univision"
+   ]
+  ],
+  "unimas": [
+   "UniMás",
+   "Univision",
+   "channel",
+   "EE. UU.",
+   [
+    "unimas"
+   ]
+  ],
+  "telemundo": [
+   "Telemundo",
+   "Telemundo",
+   "channel",
+   "EE. UU.",
+   [
+    "telemundo"
+   ]
+  ],
+  "universo": [
+   "Universo",
+   "Telemundo",
+   "channel",
+   "EE. UU.",
+   [
+    "universo"
+   ]
+  ],
+  "canal 5": [
+   "Canal 5",
+   "Televisa",
+   "channel",
+   "México",
+   [
+    "canal 5"
+   ]
+  ],
+  "azteca 7": [
+   "Azteca 7",
+   "TV Azteca",
+   "channel",
+   "México",
+   [
+    "azteca 7"
+   ]
+  ],
+  "usa network": [
+   "USA Network",
+   "NBCUniversal",
+   "channel",
+   "EE. UU.",
+   [
+    "usa network",
+    "usa net"
+   ]
+  ],
+  "cbs sports network": [
+   "CBS Sports Network",
+   "Paramount",
+   "channel",
+   "EE. UU.",
+   [
+    "cbs sports network"
+   ]
+  ],
+  "nbcsn": [
+   "NBC Sports",
+   "NBC",
+   "channel",
+   "EE. UU.",
+   [
+    "nbcsn"
+   ]
+  ],
+  "space": [
+   "Space",
+   "Warner Bros. Discovery",
+   "channel",
+   "México",
+   [
+    "space"
+   ]
+  ],
+  "nbc sports": [
+   "NBC Sports",
+   "NBC",
+   "channel",
+   "EE. UU.",
+   [
+    "nbc sports"
+   ]
+  ],
+  "paramount plus": [
+   "Paramount+",
+   "Paramount",
+   "ott",
+   "",
+   [
+    "paramount",
+    "paramount plus"
+   ]
+  ],
+  "peacock": [
+   "Peacock",
+   "NBCUniversal",
+   "ott",
+   "EE. UU.",
+   [
+    "peacock"
+   ]
+  ],
+  "max": [
+   "Max",
+   "Warner Bros. Discovery",
+   "ott",
+   "LatAm",
+   [
+    "max",
+    "hbo max"
+   ]
+  ],
+  "disney plus": [
+   "Disney+",
+   "Disney",
+   "ott",
+   "LatAm",
+   [
+    "disney",
+    "disney plus",
+    "disney plus premium"
+   ]
+  ],
+  "vix deportes": [
+   "ViX Deportes",
+   "Televisa/Univision",
+   "channel",
+   "México",
+   [
+    "vix deportes"
+   ]
+  ],
+  "vix": [
+   "ViX",
+   "Televisa/Univision",
+   "ott",
+   "LatAm",
+   [
+    "vix"
+   ]
+  ],
+  "prime video": [
+   "Prime Video",
+   "Amazon",
+   "ott",
+   "LatAm",
+   [
+    "prime video"
+   ]
+  ],
+  "fubotv": [
+   "fuboTV",
+   "fuboTV",
+   "ott",
+   "EE. UU.",
+   [
+    "fubotv"
+   ]
+  ],
+  "fanatiz": [
+   "Fanatiz",
+   "Fanatiz",
+   "ott",
+   "Internacional",
+   [
+    "fanatiz"
+   ]
+  ],
+  "espn plus": [
+   "ESPN+",
+   "Disney",
+   "ott",
+   "EE. UU.",
+   [
+    "espn plus",
+    "espn+"
+   ]
+  ],
+  "sky plus": [
+   "Sky+",
+   "Sky",
+   "ott",
+   "México",
+   [
+    "sky plus",
+    "sky+"
+   ]
+  ],
+  "izzi": [
+   "izzi",
+   "Izzi",
+   "ott",
+   "México",
+   [
+    "izzi"
+   ]
+  ],
+  "tubi": [
+   "Tubi",
+   "Fox",
+   "ott",
+   "EE. UU.",
+   [
+    "tubi"
+   ]
+  ],
+  "fandango": [
+   "Fandango",
+   "Fandango",
+   "ott",
+   "EE. UU.",
+   [
+    "fandango"
+   ]
+  ],
+  "magenta sport": [
+   "MagentaSport",
+   "Telekom",
+   "ott",
+   "Alemania",
+   [
+    "magentasport",
+    "magenta sport"
+   ]
+  ],
+  "sport tv": [
+   "Sport TV",
+   "Sport TV",
+   "ott",
+   "Portugal",
+   [
+    "sport tv"
+   ]
+  ],
+  "btv": [
+   "BTV",
+   "BTV",
+   "ott",
+   "Bulgaria",
+   [
+    "btv online"
+   ]
+  ],
+  "zap": [
+   "ZAP",
+   "ZAP",
+   "ott",
+   "Angola",
+   [
+    "zap"
+   ]
+  ],
+  "sportdigital": [
+   "Sportdigital",
+   "Sportdigital",
+   "ott",
+   "Alemania",
+   [
+    "sportdigital"
+   ]
+  ]
+ },
+ "foxLinear": {
+  "FOX": {
+   "name": "FOX",
+   "owner": "Fox Corporation",
+   "country": "México",
+   "mirror": "AYM SPORTS MEXICO",
+   "mirrorName": "AYM Sports México",
+   "note": "FOX basic: NFL, NASCAR, select Liga MX, Cuadro Titular/FOX 365. AYM es el espejo verificado por Cuadro Titular (prueba 2026-11-01)."
+  },
+  "FOX+": {
+   "name": "FOX+",
+   "owner": "Fox Corporation",
+   "country": "México",
+   "mirror": "FOX ONE",
+   "mirrorName": "FOX One",
+   "note": "FOX+ premium: Champions, Liga MX, Premier, Bundesliga. FOX ONE es el espejo verificado por Xolos vs Atlas (prueba 2026-11-01)."
+  },
+  "FOX | Tubi": {
+   "name": "FOX | Tubi",
+   "owner": "Fox Corporation",
+   "country": "México",
+   "mirror": "",
+   "mirrorName": "",
+   "note": "Señal gratuita de Tubi (NFL, Premier, Liga MX, NASCAR); sin espejo XTV confirmado."
+  },
+  "FOX One": {
+   "name": "FOX One",
+   "owner": "Fox Corporation",
+   "country": "México",
+   "mirror": "FOX ONE",
+   "mirrorName": "FOX One",
+   "note": "Plataforma/eventos de Fox One; el canal FOX ONE de XTV es el espejo verificado."
+  }
+ }
+}

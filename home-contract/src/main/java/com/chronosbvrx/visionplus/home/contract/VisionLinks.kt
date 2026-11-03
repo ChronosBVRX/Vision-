@@ -104,6 +104,12 @@ object VisionLinks {
         if (eventId.isNotBlank()) query("event", eventId)
     }
 
+    /** El hub de Juegos de Vision+ Play. */
+    fun games(): String = "$SCHEME://$HOST_OPEN/games"
+
+    /** Las descargas / contenido sin conexión de Vision+. */
+    fun downloads(): String = "$SCHEME://$HOST_OPEN/downloads"
+
     /** Una sección del catálogo (movies, series, anime…) en Vision+. */
     fun section(name: String): String = "$SCHEME://$HOST_OPEN/section/${enc(name)}"
 

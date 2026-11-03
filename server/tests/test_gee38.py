@@ -122,6 +122,9 @@ def test_parse_pro_maps_dash_clearkey_and_hls():
     assert out[0]["drm"].startswith("69a5aa")
     assert out[0]["headers"] == {"user-agent": "M"}
     assert out[1]["type"] == "hls" and out[1]["drm"] == ""
+    # La ranura conserva el índice REAL del archivo (el tercero no tiene link):
+    # la app original resuelve pro[indice], no por el nombre que traiga cada item.
+    assert [lk["slot"] for lk in out] == [0, 1]
 
 
 M3U = """#EXTM3U
@@ -249,6 +252,71 @@ def test_merge_sibling_links_caps_the_selector():
     many = [_lk(f"L{i}", f"https://x/{i}", alive=True) for i in range(30)]
     out = gee38._merge_sibling_links([], "2026-10-17", [("2026-10-16", many)], cap=18)
     assert len(out) == 18
+
+
+def test_merge_links_for_event_never_loses_the_rich_stored_list():
+    # Caso real: el CMS publica un `pro` de 2 mientras la base ya tenía 4 fuentes.
+    names = ["TSN1 SPORTS FHD", "TSN4 SPORTS FHD", "SPORTV2 BR FHD", "XTREME + FHD"]
+    previous = [
+        _lk("TSN1 SPORTS FHD", "https://old/1", alive=True),
+        _lk("TSN4 SPORTS FHD", "https://old/2", alive=True),
+        _lk("SPORTV2 BR FHD", "https://old/3", alive=True),
+        _lk("XTREME + FHD", "https://old/4", alive=False),
+    ]
+    fresh = [
+        {"name": "TNT1UK SPORTS FHD", "url": "https://new/1", "link": "https://new/1",
+         "alive": True, "type": "hls", "drm": "", "headers": {}, "slot": 0},
+        {"name": "SKY SPORTS EPL - FHD", "url": "https://new/2", "link": "https://new/2",
+         "alive": True, "type": "hls", "drm": "", "headers": {}, "slot": 1},
+    ]
+    out = gee38._merge_links_for_event(previous, fresh, names)
+    assert [lk["name"] for lk in out] == names
+    # Las dos ranuras nuevas traen nombres de otro partido; las guardadas (vivas y
+    # con el nombre correcto) se conservan. No se pierde ninguna de las 4 fuentes.
+    assert [lk["url"] for lk in out] == ["https://old/1", "https://old/2", "https://old/3", "https://old/4"]
+
+
+def test_assign_link_slots_moves_old_links_when_the_cms_adds_names():
+    # Caso real Man City-Brighton: la base tenía 8 nombres y el CMS publicó 12
+    # (4 nuevos al principio). Los slots viejos quedan corridos; manda el nombre.
+    old_names = ["PREMIER LEAGUE HD", "SKY SPORT NZ2", "LOW QUALITY (USE VPN)", "XTREME +FHD",
+                 "ESPN HD", "ESPN HD", "FOX ONE HD", "DISNEY HD"]
+    new_names = ["FUBO SPORTS FHD", "FUBO SPORTS ALT", "PEACOCK TV HD", "FASTER QUALITY",
+                 *old_names]
+    old_links = [
+        {"name": name, "url": f"https://old/{i}", "link": f"https://old/{i}", "slot": i}
+        for i, name in enumerate(old_names)
+    ]
+    gee38._assign_link_slots(new_names, old_links)
+    assert [lk["slot"] for lk in old_links] == [4, 5, 6, 7, 8, 9, 10, 11]
+
+
+def test_merge_links_for_event_grows_the_list_when_the_cms_adds_names():
+    old_names = ["PREMIER LEAGUE HD", "SKY SPORT NZ2", "LOW QUALITY (USE VPN)", "XTREME +FHD"]
+    new_names = ["FUBO SPORTS FHD", "FUBO SPORTS ALT", "PEACOCK TV HD", "FASTER QUALITY", *old_names]
+    old_links = [
+        {"name": name, "url": f"https://old/{i}", "link": f"https://old/{i}", "alive": True, "slot": i}
+        for i, name in enumerate(old_names)
+    ]
+    fresh_links = [
+        {"name": name, "url": f"https://new/{i}", "link": f"https://new/{i}", "alive": True, "slot": i}
+        for i, name in enumerate(new_names)
+    ]
+    out = gee38._merge_links_for_event(old_links, fresh_links, new_names)
+    assert [lk["name"] for lk in out] == new_names
+    assert [lk["url"] for lk in out] == [f"https://new/{i}" for i in range(len(new_names))]
+
+
+def test_merge_links_for_event_keeps_declared_names_without_url_visible():
+    out = gee38._merge_links_for_event(
+        [],
+        [{"name": "OTRO", "url": "https://x/1", "link": "https://x/1", "alive": True, "slot": 0}],
+        ["TUDN US", "UNIVISION HD", "CANAL MX FHD"],
+    )
+    assert [lk["name"] for lk in out] == ["TUDN US", "UNIVISION HD", "CANAL MX FHD"]
+    assert out[0]["url"] == "https://x/1"
+    assert out[1]["pending"] is True and out[1]["link"] == ""
+    assert out[2]["pending"] is True
 
 
 def test_parse_app_keeps_known_fields():
@@ -565,9 +633,10 @@ import app as api_app  # noqa: E402  (conftest ya ajustó sys.path)
 
 
 class _FakePool:
-    def __init__(self, rows=None, row=None):
+    def __init__(self, rows=None, row=None, val=None):
         self.rows = rows or []
         self.row = row
+        self.val = val
         self.calls = []
 
     async def fetch(self, sql, *args):
@@ -577,6 +646,10 @@ class _FakePool:
     async def fetchrow(self, sql, *args):
         self.calls.append((sql, args))
         return self.row
+
+    async def fetchval(self, sql, *args):
+        self.calls.append((sql, args))
+        return self.val
 
     async def execute(self, sql, *args):
         self.calls.append((sql, args))
@@ -606,6 +679,36 @@ async def test_gee38_sports_serves_groups_and_meta(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_gee38_health_reports_alignment_and_freshness(monkeypatch):
+    now = datetime.now(timezone.utc)
+    fake = _FakePool(
+        rows=[{"k": "meta_at", "v": json.dumps({"at": now.isoformat()})}],
+        row={"total": 10, "with_names": 8, "mismatched": 0, "with_links": 8,
+             "last_event": now},
+        val=3,
+    )
+    monkeypatch.setattr(api_app, "pool", fake)
+    out = await api_app.gee38_health(x_api_key="test-key")
+    assert out["ok"] is True
+    assert out["events"] == 10 and out["groups"] == 3
+    assert out["rawMismatched"] == 0 and out["ageSeconds"] is not None
+
+
+@pytest.mark.anyio
+async def test_gee38_health_flags_stale_metadata(monkeypatch):
+    old = datetime.now(timezone.utc) - timedelta(hours=1)
+    fake = _FakePool(
+        rows=[{"k": "meta_at", "v": json.dumps({"at": old.isoformat()})}],
+        row={"total": 10, "with_names": 8, "mismatched": 2, "with_links": 8,
+             "last_event": old},
+        val=3,
+    )
+    monkeypatch.setattr(api_app, "pool", fake)
+    out = await api_app.gee38_health(x_api_key="test-key")
+    assert out["ok"] is False and out["ageSeconds"] >= 3500
+
+
+@pytest.mark.anyio
 async def test_gee38_events_filters_day_window(monkeypatch):
     payload = json.dumps({
         "id": "event:a", "category": "Football", "event": "Liga MX, Apertura",
@@ -621,7 +724,10 @@ async def test_gee38_events_filters_day_window(monkeypatch):
     assert "category ilike $1" in sql
     assert "payload->>'date_iso' >= $2" in sql
     assert "payload->>'date_iso' < $3" in sql
-    assert args == ("Football", "2026-10-16", "2026-10-19")
+    # Se cargan días extra por el desfase UTC↔México; la respuesta se filtra al
+    # rango pedido. Así un partido de las 19:05 (guardado D+1 en UTC) no pierde
+    # su lista de canales.
+    assert args == ("Football", "2026-10-15", "2026-10-21")
     assert out["events"][0]["event"] == "Liga MX, Apertura"
     assert out["events"][0]["id"] == "event:a"
 
@@ -705,7 +811,8 @@ async def test_gee38_events_merges_links_of_the_same_fixture(monkeypatch):
     assert cards, "la tarjeta del calendario debe servirse"
     urls = [lk["url"] for lk in cards[0]["links"]]
     assert "https://vivo1" in urls and "https://vivo2" in urls and "https://muerto" in urls
-    assert urls.index("https://muerto") > urls.index("https://vivo1"), "los vivos van primero"
+    # El servidor conserva la lista del evento; la app ordena vivos primero al armar
+    # el selector (`geePickRows`), que es lo que ve el usuario.
     assert cards[0]["total"] == 3
 
 
@@ -751,10 +858,11 @@ async def test_gee38_feedback_unknown_url_is_noop(monkeypatch):
 # ------------------------------------------------------------------ cruce ESPN
 
 def _espn_match(home, away, home_score=None, away_score=None, status="pre",
-                detail="", kickoff="2026-10-17T19:00:00+00:00", league="Liga MX"):
+                detail="", kickoff="2026-10-17T19:00:00+00:00", league="Liga MX",
+                league_id="mex.1"):
     return {
         "id": "m1",
-        "league": {"id": "mex.1", "name": league, "logo": "https://l/lmx.png"},
+        "league": {"id": league_id, "name": league, "logo": "https://l/lmx.png"},
         "home": {"id": "h", "name": home, "short": "", "logo": f"https://l/{home}.png", "score": home_score},
         "away": {"id": "a", "name": away, "short": "", "logo": f"https://l/{away}.png", "score": away_score},
         "kickoff": kickoff,
@@ -823,6 +931,43 @@ def test_gee_enrich_event_leaves_other_sports_untouched():
     assert "score" not in out and "league_label" not in out
 
 
+def test_gee_enrich_basketball_event_with_its_own_nba_match():
+    event = _gee_event(category="Basketball", event="NBA", team_a="Lakers", team_b="Celtics")
+    entry = api_app._gee_match_entry(_espn_match(
+        "Los Angeles Lakers", "Boston Celtics", home_score=101, away_score=98,
+        status="in", detail="4th", kickoff="2026-10-17T02:00:00+00:00",
+        league="NBA", league_id="basketball/nba"))
+    out = api_app._gee_enrich_event(event, [entry])
+    assert out["score"]["home"] == 101 and out["score"]["away"] == 98
+    assert out["score"]["live"] is True
+    assert out["league_label"] == "NBA"
+
+
+def test_gee_find_match_does_not_cross_sports():
+    # Un evento de básquet no debe quedarse con un partido de fútbol por compartir
+    # un nombre de equipo; el deporte manda antes que el parecido del texto.
+    event = _gee_event(category="Basketball", event="NBA", team_a="Lakers", team_b="Celtics")
+    soccer = api_app._gee_match_entry(_espn_match("Lakers", "Celtics", league="Liga MX"))
+    assert api_app._gee_find_match(event, [soccer]) is None
+
+
+def test_gee_match_card_uses_the_sport_category():
+    nba = _espn_match("Lakers", "Celtics", league="NBA", league_id="basketball/nba")
+    card = api_app._gee_match_card(nba, [])
+    assert card["category"] == "Basketball"
+    assert card["league_id"] == "basketball/nba"
+
+    nfl = _espn_match("Chiefs", "Eagles", league="NFL", league_id="football/nfl")
+    assert api_app._gee_match_card(nfl, [])["category"] == "American Football"
+
+
+def test_gee_sport_mapping_is_explicit():
+    assert api_app._gee_sport_of_league_id("mex.1") == "soccer"
+    assert api_app._gee_sport_of_league_id("basketball/nba") == "basketball"
+    assert api_app._gee_sport_for_category("American Football") == "football"
+    assert api_app._gee_category_for_sport("hockey") == "Hockey"
+
+
 def test_gee_enrich_event_keeps_sofascore_flags_when_unmatched():
     event = _gee_event(date_iso="2026-10-12", team_a="CD Tenerife", team_b="Girona FC")
     out = api_app._gee_enrich_event(event, [])
@@ -880,18 +1025,73 @@ def test_gee_match_card_carries_the_guide():
     assert card["league_id"] == "mex.1"
 
 
+def test_declared_names_keep_duplicates_from_the_same_event():
+    assert api_app._gee_merge_declared([], ["ESPN HD", "ESPN HD", "FOX ONE HD"]) == [
+        "ESPN HD", "ESPN HD", "FOX ONE HD"
+    ]
+    # Una entrada hermana con una sola aparición no borra la repetida del evento.
+    assert api_app._gee_merge_declared(["ESPN HD", "ESPN HD"], ["ESPN HD", "TUDN US"]).count("ESPN HD") == 2
+
+
+def test_gee_match_card_keeps_declared_order_and_maps_urls_by_name():
+    # La lista de la app original es la del EVENTO (link_names), no el orden de los
+    # slots viejos: los enlaces se acomodan por nombre aunque su slot esté corrido.
+    match = _espn_match("Necaxa", "Atlas")
+    links = [
+        {"name": "TUDN MEXICO FHD", "url": "https://x/1", "link": "https://x/1", "alive": True, "slot": 0},
+        {"name": "CANAL MX FHD", "url": "https://x/2", "link": "https://x/2", "alive": True, "slot": 7},
+    ]
+    declared = ["CANAL MX FHD", "TUDN MEXICO FHD", "UNIVISION HD"]
+    card = api_app._gee_match_card(match, links, declared)
+    assert [lk["name"] for lk in card["links"]] == declared
+    assert [lk.get("url") for lk in card["links"]] == ["https://x/2", "https://x/1", ""]
+    assert card["links"][2]["pending"] is True
+
+
+def test_complete_event_links_uses_the_source_slot_not_the_pro_name():
+    # El `pro` actual del CMS trae nombres de otro partido; la app original pinta
+    # los nombres del EVENTO y resuelve por posición. Vision+ debe hacer lo mismo.
+    event = {
+        "link_names": ["TSN1 SPORTS FHD", "TSN4 SPORTS FHD", "XTREME + FHD"],
+        "links": [
+            {"name": "TNT1UK SPORTS FHD", "url": "https://x/1", "link": "https://x/1", "alive": True, "slot": 0},
+            {"name": "SKY SPORTS EPL - FHD", "url": "https://x/2", "link": "https://x/2", "alive": True, "slot": 1},
+        ],
+        "total": 2,
+        "alive": 2,
+    }
+    out = api_app._gee_complete_event_links(event)
+    assert out["link_names"] == ["TSN1 SPORTS FHD", "TSN4 SPORTS FHD", "XTREME + FHD"]
+    assert [lk["name"] for lk in out["links"]] == out["link_names"]
+    assert out["links"][0]["url"] == "https://x/1"
+    assert out["links"][1]["url"] == "https://x/2"
+    assert out["links"][2]["pending"] is True and out["links"][2]["link"] == ""
+    assert out["total"] == 3 and out["alive"] == 2
+
+
+def test_complete_event_links_matches_old_payloads_by_name():
+    event = {
+        "link_names": ["TUDN US", "CANAL MX FHD"],
+        "links": [
+            {"name": "CANAL MX FHD", "url": "https://x/2", "link": "https://x/2", "alive": True},
+            {"name": "TUDN US", "url": "https://x/1", "link": "https://x/1", "alive": False},
+        ],
+    }
+    out = api_app._gee_complete_event_links(event)
+    assert [lk["name"] for lk in out["links"]] == ["TUDN US", "CANAL MX FHD"]
+    assert [lk["alive"] for lk in out["links"]] == [False, True]
+
+
 def test_gee_match_card_lists_the_declared_names_even_without_a_url():
-    # El caso real de León-América: la fuente declara 8 canales y solo 2 traen dirección. La
-    # tarjeta viaja COMPLETA (como la app original): los que aún no tienen URL van como ranuras
-    # sin dirección y la app los resuelve solos con el catálogo de la casa (respaldo automático).
+    # El caso real de León-América: la fuente declara 5 canales y solo uno trae dirección.
+    # La tarjeta viaja COMPLETA y en el orden del evento, como la app original.
     match = _espn_match("León", "América")
     served = {"name": "TUDN MEXICO FHD", "url": "https://x/y.mpd", "link": "https://x/y.mpd", "alive": True}
     declared = ["XTREME + FHD", "TUDN US", "TUDN MEXICO FHD", "UNIVISION HD", "HD QUALITY"]
     card = api_app._gee_match_card(match, [served], declared)
     names = [lk["name"] for lk in card["links"]]
-    assert names[0] == "TUDN MEXICO FHD"          # lo que la fuente sí sirve, primero
-    assert "TUDN US" in names and "UNIVISION HD" in names
-    assert names.count("TUDN MEXICO FHD") == 1     # sin duplicar
+    assert names == declared
+    assert card["links"][2]["url"] == "https://x/y.mpd"
     pend = [lk for lk in card["links"] if lk.get("pending")]
     assert len(pend) == 4 and all(lk["link"] == "" and lk["alive"] is None for lk in pend)
     assert card["total"] == 5 and card["alive"] == 1
@@ -1051,3 +1251,428 @@ def test_gee38_uses_the_helper_for_every_cms_gap():
     assert 'log.warning("gee38: canal %s sin enlaces' not in src
     assert 'log.warning("gee38: evento %s sin enlaces' not in src
     assert src.count("_gap_log(") >= 3
+
+
+# ------------------------------- parecido de equipos / tarjetas duplicadas
+
+def test_gee_team_similarity_understands_cms_and_espn_names():
+    # Los casos reales que dejaban la tarjeta de ESPN sin lista.
+    assert api_app._gee_team_similarity("Lyon", "Olympique Lyonnais") >= 0.6
+    assert api_app._gee_team_similarity("Inter", "Internazionale") >= 0.6
+    assert api_app._gee_team_similarity("AC Milan", "Milan") >= 0.9
+    assert api_app._gee_team_similarity("Paris Saint-Germain", "PSG") >= 0.9
+    assert api_app._gee_team_similarity("Brighton & Hove Albion", "Brighton") >= 0.9
+    # Pero NO confunde dos equipos de la misma ciudad.
+    assert api_app._gee_team_similarity("Manchester United", "Manchester City") < 0.6
+    assert api_app._gee_team_similarity("Real Madrid", "Atletico Madrid") < 0.6
+
+
+def test_gee_find_match_uses_fuzzy_names_for_secondary_events():
+    event = _gee_event(event="Serie A", team_a="AC Milan", team_b="Inter",
+                       date_iso="2026-10-17", time="13:45:00")
+    entry = api_app._gee_match_entry(_espn_match(
+        "AC Milan", "Internazionale",
+        kickoff="2026-10-17T19:45:00+00:00", league="Serie A", league_id="ita.1"))
+    found = api_app._gee_find_match(event, [entry])
+    assert found is not None
+    assert found["away"]["name"] == "Internazionale"
+
+
+def test_gee_find_match_does_not_merge_same_city_wrong_team():
+    event = _gee_event(event="Premier League", team_a="Manchester United",
+                       team_b="Liverpool", date_iso="2026-10-17", time="13:00:00")
+    entry = api_app._gee_match_entry(_espn_match(
+        "Manchester City", "Liverpool",
+        kickoff="2026-10-17T19:00:00+00:00", league="Premier League",
+        league_id="eng.1"))
+    assert api_app._gee_find_match(event, [entry]) is None
+
+
+@pytest.mark.anyio
+async def test_gee38_events_folds_cms_names_into_espn_card_with_alias(monkeypatch):
+    today = date.today().isoformat()
+    cms = json.dumps({
+        "id": "event:derby", "category": "Football", "event": "Serie A",
+        "team_a": "AC Milan", "team_b": "Inter",
+        "date_iso": today, "time": "19:45:00",
+        "link_names": ["BEIN ENGLISH FHD", "CBS SPORTS FHD", "LOW QUALITY (USE VPN)"],
+        "links": [
+            {"name": "BEIN ENGLISH FHD", "url": "https://x/bein.mpd",
+             "link": "https://x/bein.mpd", "alive": True, "slot": 0},
+        ],
+    })
+    fake = _FakePool(rows=[{"payload": cms}])
+    monkeypatch.setattr(api_app, "pool", fake)
+    espn = _espn_match("AC Milan", "Internazionale",
+                       kickoff=f"{today}T19:45:00+00:00", league="Serie A",
+                       league_id="ita.1")
+    entries = [api_app._gee_match_entry(espn)]
+
+    async def fake_window(events):
+        return entries
+
+    monkeypatch.setattr(api_app, "_gee_window_matches", fake_window)
+    out = await api_app.gee38_events(category=None, day=None, days=0, x_api_key="test-key")
+    cards = [e for e in out["events"] if "milan" in (e.get("team_a", "") + e.get("team_b", "")).lower()]
+    assert len(cards) == 1, "el mismo partido no debe salir dos veces"
+    card = cards[0]
+    assert card["id"] == "espn:m1"
+    assert card["link_names"] == [
+        "BEIN ENGLISH FHD", "CBS SPORTS FHD", "LOW QUALITY (USE VPN)",
+    ]
+    assert len(card["links"]) == 3
+    assert card["links"][0]["url"] == "https://x/bein.mpd"
+    assert card["links"][1]["pending"] is True
+
+
+@pytest.mark.anyio
+async def test_gee38_events_keeps_cms_event_from_unsupported_league_with_sources(monkeypatch):
+    today = date.today().isoformat()
+    cms = json.dumps({
+        "id": "event:laliga2", "category": "Football", "event": "LaLiga 2",
+        "team_a": "CD Tenerife", "team_b": "FC Andorra",
+        "date_iso": today, "time": "20:00:00",
+        "link_names": ["MOVISTAR TV HD", "LALIGA TV HD"],
+        "links": [
+            {"name": "MOVISTAR TV HD", "url": "https://x/mov.m3u8",
+             "link": "https://x/mov.m3u8", "alive": True, "slot": 0},
+        ],
+    })
+    fake = _FakePool(rows=[{"payload": cms}])
+    monkeypatch.setattr(api_app, "pool", fake)
+
+    async def no_window(events):
+        return []
+
+    monkeypatch.setattr(api_app, "_gee_window_matches", no_window)
+    out = await api_app.gee38_events(category=None, day=None, days=0, x_api_key="test-key")
+    card = next(e for e in out["events"] if e["id"] == "event:laliga2")
+    # La app original sí la enseña: la lista viaja completa aunque la liga no
+    # esté en la agenda principal de ESPN.
+    assert card["link_names"] == ["MOVISTAR TV HD", "LALIGA TV HD"]
+    assert len(card["links"]) == 2
+
+
+@pytest.mark.anyio
+async def test_gee38_events_merges_duplicate_fixture_cards_and_keeps_the_list(monkeypatch):
+    today = date.today().isoformat()
+    cms = json.dumps({
+        "id": "event:lyon", "category": "Football", "event": "Ligue 1",
+        "team_a": "Olympique Lyonnais", "team_b": "Angers",
+        "date_iso": today, "time": "10:15:00",
+        "link_names": ["STREAM TV + HD", "HD QUALITY"],
+        "links": [
+            {"name": "STREAM TV + HD", "url": "https://x/stream.m3u8",
+             "link": "https://x/stream.m3u8", "alive": True, "slot": 0},
+            {"name": "HD QUALITY", "url": "", "link": "", "alive": None, "slot": 1},
+        ],
+    })
+    fake = _FakePool(rows=[{"payload": cms}])
+    monkeypatch.setattr(api_app, "pool", fake)
+    espn = _espn_match("Lyon", "Angers", kickoff=f"{today}T16:15:00+00:00",
+                       league="Ligue 1", league_id="fra.1")
+    entries = [api_app._gee_match_entry(espn)]
+
+    async def fake_window(events):
+        return entries
+
+    monkeypatch.setattr(api_app, "_gee_window_matches", fake_window)
+    out = await api_app.gee38_events(category=None, day=None, days=0, x_api_key="test-key")
+    cards = [e for e in out["events"] if "lyon" in (e.get("team_a", "") + e.get("team_b", "")).lower()]
+    assert len(cards) == 1
+    assert cards[0]["link_names"] == ["STREAM TV + HD", "HD QUALITY"]
+    assert len(cards[0]["links"]) == 2
+
+
+@pytest.mark.anyio
+async def test_gee38_events_loads_utc_next_day_for_tomorrow_night(monkeypatch):
+    # Caso real: el CMS guarda 01:05 UTC del día siguiente; en México es 19:05
+    # del día pedido. Antes la tarjeta salía SIN lista porque la fila no se cargaba.
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+    cms = json.dumps({
+        "id": "event:night", "category": "Football", "event": "Liga MX, Apertura",
+        "team_a": "CF Monterrey", "team_b": "Club Tijuana",
+        "date_iso": tomorrow.isoformat(), "time": "01:05:00",  # UTC
+        "link_names": ["TUDN MEXICO FHD", "CANAL MX FHD"],
+        "links": [
+            {"name": "TUDN MEXICO FHD", "url": "https://x/tudn.m3u8",
+             "link": "https://x/tudn.m3u8", "alive": True, "slot": 0},
+        ],
+    })
+    fake = _FakePool(rows=[{"payload": cms}])
+    monkeypatch.setattr(api_app, "pool", fake)
+    espn = _espn_match("Monterrey", "Tijuana",
+                       kickoff=f"{tomorrow.isoformat()}T01:05:00+00:00",
+                       league="Liga MX", league_id="mex.1")
+    entries = [api_app._gee_match_entry(espn)]
+
+    async def fake_window(events):
+        return entries
+
+    monkeypatch.setattr(api_app, "_gee_window_matches", fake_window)
+    out = await api_app.gee38_events(category=None, day=today.isoformat(), days=2,
+                                     x_api_key="test-key")
+    card = next(e for e in out["events"] if e["id"] == "espn:m1")
+    assert card["date_iso"] == today.isoformat()
+    assert card["link_names"] == ["TUDN MEXICO FHD", "CANAL MX FHD"]
+    assert len(card["links"]) == 2
+
+
+@pytest.mark.anyio
+async def test_gee38_events_returns_only_the_requested_days(monkeypatch):
+    today = date.today()
+    rows = []
+    for delta in (0, 1, 2, 3):
+        day = (today + timedelta(days=delta)).isoformat()
+        rows.append({"payload": json.dumps({
+            "id": f"event:d{delta}", "category": "Football", "event": "Liga MX",
+            "team_a": f"Equipo {delta}A", "team_b": f"Equipo {delta}B",
+            "date_iso": day, "time": "18:00:00",
+            "link_names": [f"Canal {delta}"],
+            "links": [{"name": f"Canal {delta}", "url": f"https://x/{delta}",
+                       "link": f"https://x/{delta}", "alive": True, "slot": 0}],
+        })})
+    fake = _FakePool(rows=rows)
+    monkeypatch.setattr(api_app, "pool", fake)
+
+    async def no_window(events):
+        return []
+
+    monkeypatch.setattr(api_app, "_gee_window_matches", no_window)
+    out = await api_app.gee38_events(category=None, day=today.isoformat(), days=2,
+                                     x_api_key="test-key")
+    dates = {e["date_iso"] for e in out["events"]}
+    assert dates == {today.isoformat(), (today + timedelta(days=1)).isoformat()}
+
+
+def test_gee_same_fixture_merges_boxing_and_mma_but_not_other_sports():
+    boxing = {
+        "category": "Boxing", "date_iso": "2026-10-31",
+        "team_a": "Tom Nolan", "team_b": "Renato Moicano",
+    }
+    mma = {
+        "category": "Mixed Martial Arts", "date_iso": "2026-10-31",
+        "team_a": "Renato Moicano", "team_b": "Tom Nolan",
+    }
+    soccer = {
+        "category": "Football", "date_iso": "2026-10-31",
+        "team_a": "Tom Nolan", "team_b": "Renato Moicano",
+    }
+    assert api_app._gee_same_fixture(boxing, mma)
+    assert not api_app._gee_same_fixture(boxing, soccer)
+
+
+@pytest.mark.anyio
+async def test_gee38_events_without_day_drops_expired_rows(monkeypatch):
+    old = (date.today() - timedelta(days=5)).isoformat()
+    rows = [
+        {"payload": json.dumps({
+            "id": "event:old", "category": "Football", "event": "Liga MX",
+            "team_a": "Viejo A", "team_b": "Viejo B",
+            "date_iso": old, "time": "18:00:00", "link_names": ["Canal"],
+            "links": [{"name": "Canal", "url": "https://x/old", "link": "https://x/old",
+                       "alive": True, "slot": 0}],
+        })},
+        {"payload": json.dumps({
+            "id": "event:new", "category": "Football", "event": "Liga MX",
+            "team_a": "Nuevo A", "team_b": "Nuevo B",
+            "date_iso": date.today().isoformat(), "time": "18:00:00",
+            "link_names": ["Canal"],
+            "links": [{"name": "Canal", "url": "https://x/new", "link": "https://x/new",
+                       "alive": True, "slot": 0}],
+        })},
+    ]
+    fake = _FakePool(rows=rows)
+    monkeypatch.setattr(api_app, "pool", fake)
+
+    async def no_window(events):
+        return []
+
+    monkeypatch.setattr(api_app, "_gee_window_matches", no_window)
+    out = await api_app.gee38_events(category=None, day=None, days=0, x_api_key="test-key")
+    ids = {e["id"] for e in out["events"]}
+    assert "event:new" in ids and "event:old" not in ids
+
+
+def test_gee_same_fixture_does_not_merge_a_doubleheader():
+    game1 = {
+        "category": "Baseball", "date_iso": "2026-10-31", "time": "13:00:00",
+        "team_a": "New York Yankees", "team_b": "Boston Red Sox",
+    }
+    game2 = {
+        "category": "Baseball", "date_iso": "2026-10-31", "time": "19:00:00",
+        "team_a": "New York Yankees", "team_b": "Boston Red Sox",
+    }
+    assert not api_app._gee_same_fixture(game1, game2)
+
+
+def test_parse_pro_keeps_embed_token_api_without_link():
+    token = json.dumps({
+        "url": "", "api": "https://embed.example/live", "type": "embed",
+        "link_key": "playback_url", "default_string": "N8x7Y%m+6n",
+        "request_type": "get", "request_body_type": "text",
+    })
+    items = [{"name": "TELEMUNDO HD", "link": "", "tokenApi": token}]
+    out = gee38.parse_pro(json.dumps(items).encode())
+    assert len(out) == 1
+    assert out[0]["token_api"] == token
+    assert out[0]["resolvable"] is True
+    assert out[0]["url"] == ""
+
+
+def test_complete_event_links_keeps_embed_rows_as_resolvable():
+    token = json.dumps({"api": "https://embed.example/live", "type": "embed"})
+    event = {
+        "link_names": ["LOW QUALITY", "TELEMUNDO HD"],
+        "links": [
+            {"name": "LOW QUALITY", "url": "https://cdn/live.m3u8",
+             "link": "https://cdn/live.m3u8", "alive": True, "slot": 0},
+            {"name": "TELEMUNDO HD", "url": "", "link": "",
+             "token_api": token, "resolvable": True, "slot": 1},
+        ],
+    }
+    out = api_app._gee_complete_event_links(event)
+    assert out["link_names"] == ["LOW QUALITY", "TELEMUNDO HD"]
+    assert len(out["links"]) == 2
+    assert out["links"][0]["url"] == "https://cdn/live.m3u8"
+    assert out["links"][1]["token_api"] == token
+    assert out["links"][1]["resolvable"] is True
+    assert out["links"][1].get("pending") is not True
+
+
+def test_gee_tier_never_confuses_secondary_competitions_with_the_main_league():
+    assert api_app._gee_tier_for("esp.1", "LaLiga", "Football") == 1
+    assert api_app._gee_tier_for("", "LaLiga 2", "Football") == 2
+    assert api_app._gee_tier_for("", "Serie A Women", "Football") == 2
+    assert api_app._gee_tier_for("", "2. Bundesliga", "Football") == 2
+    assert api_app._gee_tier_for("", "Russian Premier League", "Football") == 2
+    assert api_app._gee_tier_for("", "Kenya Premier League", "Football") == 2
+    assert api_app._gee_tier_for("", "Championship", "Football") == 2
+    assert api_app._gee_tier_for("", "Liga de Expansión MX", "Football") == 1
+    assert api_app._gee_tier_for("", "Six Nations", "Rugby") == 3
+    assert api_app._gee_tier_for("", "Liga MX, Apertura", "Football") == 1
+    assert api_app._gee_tier_for("", "Liga MX Femenil", "Football") == 2
+
+
+@pytest.mark.anyio
+async def test_gee38_events_scope_main_and_hidden_events(monkeypatch):
+    today = date.today().isoformat()
+
+    def payload(event_id: str, name: str, *, visible: bool = True, links=None) -> str:
+        return json.dumps({
+            "id": event_id, "category": "Football", "event": name,
+            "team_a": "Alfa", "team_b": "Beta",
+            "date_iso": today, "time": "18:00:00",
+            "visible": visible,
+            "links": links if links is not None else [
+                {"name": "Canal", "url": "https://x/" + event_id,
+                 "link": "https://x/" + event_id, "alive": True},
+            ],
+        })
+
+    fake = _FakePool(rows=[
+        {"payload": payload("event:mx", "Liga MX, Apertura")},
+        {"payload": payload("event:laliga2", "LaLiga 2") .replace('"Alfa"', '"Tenerife"', 1).replace('"Beta"', '"Andorra"', 1)},
+        {"payload": payload("event:hidden", "NWSL", visible=False) .replace('"Alfa"', '"Portland"', 1).replace('"Beta"', '"Seattle"', 1)},
+    ])
+    monkeypatch.setattr(api_app, "pool", fake)
+
+    async def no_window(events):
+        return []
+
+    monkeypatch.setattr(api_app, "_gee_window_matches", no_window)
+    all_out = await api_app.gee38_events(category=None, day=None, days=0, x_api_key="test-key")
+    all_ids = {e["id"] for e in all_out["events"]}
+    assert "event:hidden" not in all_ids
+    assert "event:laliga2" in all_ids
+    by_id = {e["id"]: e for e in all_out["events"]}
+    assert by_id["event:mx"]["tier"] == 1 and by_id["event:mx"]["featured"] is True
+    assert by_id["event:laliga2"]["tier"] == 2 and by_id["event:laliga2"]["featured"] is False
+
+    main_out = await api_app.gee38_events(
+        category=None, day=None, days=0, scope="main", x_api_key="test-key",
+    )
+    assert {e["id"] for e in main_out["events"]} == {"event:mx"}
+
+
+def test_gee_team_similarity_merges_real_racing_club_with_racing_santander():
+    # El CMS publica «Real Racing Club» y la agenda «Racing Santander». Antes
+    # eran dos tarjetas del mismo partido (una con marcador y otra con 9 señales).
+    assert api_app._gee_team_similarity("Real Racing Club", "Racing Santander") >= 0.95
+    assert api_app._gee_team_similarity("Racing Santander", "Real Racing Club") >= 0.95
+    # No se lleva por delante a Racing Club de Argentina.
+    assert api_app._gee_team_similarity("Racing Club", "Racing Santander") < 0.6
+
+
+def test_gee_merge_groups_prefers_the_cms_authorized_links():
+    """La agenda (ESPN) no puede meter el enlace de un hermano de OTRA competición."""
+    espn = {
+        "id": "espn:m1", "category": "Football", "date_iso": "2026-11-01",
+        "team_a": "Santos", "team_b": "Necaxa",
+        "link_names": ["FOX DEPORTES FHD", "TUDN US HD"],
+        "links": [{
+            "name": "FOX DEPORTES FHD", "url": "https://women.example/x.mpd",
+            "link": "https://women.example/x.mpd", "alive": True,
+        }],
+    }
+    cms = {
+        "id": "event:mx1", "category": "Football", "date_iso": "2026-11-01",
+        "team_a": "Santos Laguna", "team_b": "Club Necaxa",
+        "links_ref": "pro/santos-necaxa.txt",
+        "link_names": ["TUDN US HD", "XTREME FHD"],
+        "links": [
+            {"name": "TUDN US HD", "url": "https://file.genoads.com/ch1.m3u8",
+             "link": "https://file.genoads.com/ch1.m3u8", "alive": True},
+            {"name": "XTREME FHD", "link": "", "url": "",
+             "token_api": "{\"api\":\"https://x/san-ncx\"}", "alive": None},
+        ],
+    }
+    merged = api_app._gee_merge_groups([[espn, cms]])[0]
+    urls = [str(link.get("link") or "") for link in merged["links"]]
+    assert not any("women.example" in url for url in urls)
+    assert "FOX DEPORTES FHD" not in merged["link_names"]
+    assert "TUDN US HD" in merged["link_names"]
+    assert any(link.get("name") == "TUDN US HD" for link in merged["links"])
+
+
+def test_gee_is_women_never_crosses_femenil_with_varonil():
+    assert api_app._gee_is_women("Liga MX, Women, Apertura")
+    assert api_app._gee_is_women("Liga MX Femenil")
+    assert not api_app._gee_is_women("Liga MX, Apertura")
+
+
+def test_gee_find_match_rejects_a_womens_event_on_the_mens_match():
+    today = date.today()
+    espn = _espn_match(
+        "Santos", "Necaxa", kickoff=f"{today.isoformat()}T23:00:00+00:00",
+        league="Liga MX",
+    )
+    entries = [api_app._gee_match_entry(espn)]
+    event = {
+        "category": "Football", "event": "Liga MX, Women, Apertura",
+        "team_a": "Santos", "team_b": "Necaxa",
+        "date_iso": today.isoformat(), "time": "23:00:00",
+    }
+    assert api_app._gee_find_match(event, entries) is None
+
+
+def test_competition_pair_key_separates_women_and_men():
+    men = gee38._competition_pair_key({
+        "team_a": "Santos", "team_b": "Necaxa", "event": "Liga MX, Apertura",
+    })
+    women = gee38._competition_pair_key({
+        "team_a": "Necaxa", "team_b": "Santos", "event": "Liga MX, Women, Apertura",
+    })
+    assert men and women and men != women
+
+
+def test_merge_sibling_links_ignores_distant_rematches():
+    own = [{"name": "OWN", "url": "https://own.example/x", "link": "https://own.example/x", "alive": True}]
+    siblings = [(
+        "2026-01-01",
+        [{"name": "OLD", "url": "https://old.example/x", "link": "https://old.example/x", "alive": True}],
+    )]
+    out = gee38._merge_sibling_links(own, "2026-11-01", siblings)
+    assert any("own.example" in str(link) for link in out)
+    assert not any("old.example" in str(link) for link in out)

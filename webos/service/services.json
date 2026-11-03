@@ -1,0 +1,10 @@
+{
+  "id": "com.chronosbvrx.visionplus.webos.service",
+  "description": "Vision+ catalog, search, episodes, live and playback resolver",
+  "services": [
+    {
+      "name": "com.chronosbvrx.visionplus.webos.service",
+      "description": "Vision+ API client, XTV playback resolver and local media proxy"
+    }
+  ]
+}

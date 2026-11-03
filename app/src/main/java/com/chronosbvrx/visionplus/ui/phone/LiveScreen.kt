@@ -1,7 +1,9 @@
 package com.chronosbvrx.visionplus.ui.phone
 
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -187,10 +190,18 @@ fun LiveScreen(
         }
 
         val channels = remember(baseChannels, selectedGenre, selectedCountry) {
-            baseChannels.filter { ch ->
-                (selectedGenre == null || ch.effectiveGroup() == selectedGenre) &&
-                    (selectedCountry == null || LiveTaxonomy.countryFor(ch.name) == selectedCountry)
-            }
+            baseChannels
+                .filter { ch ->
+                    (selectedGenre == null || ch.effectiveGroup() == selectedGenre) &&
+                        (selectedCountry == null || LiveTaxonomy.countryFor(ch.name) == selectedCountry)
+                }
+                .sortedWith(
+                    compareBy(
+                        { LiveTaxonomy.popularityRank(it.name) },
+                        { LiveTaxonomy.countryFor(it.name) != "México" },
+                        { it.name },
+                    ),
+                )
         }
         val shown = channels
         val activeScopeTitle = when {
@@ -237,6 +248,7 @@ fun LiveScreen(
     if (confirmingDelete) {
         AlertDialog(
             onDismissRequest = { confirmingDelete = false },
+            modifier = Modifier.dismissOnBack { confirmingDelete = false },
             title = { Text(LiveCopy.DELETE_LIST) },
             text = { Text("Se va a quitar Â«${state.selected?.name}Â» del telÃ©fono. La lista en internet no se toca.") },
             confirmButton = {
@@ -280,9 +292,25 @@ private fun CountryChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 /** A channel: its logo (or its initials), its name and its group. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ChannelCard(channel: LiveChannel, onClick: () -> Unit) {
-    Column(modifier = Modifier.clickable(onClick = onClick)) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val favorite = com.chronosbvrx.visionplus.ui.live.LiveFavorites.has(context, channel.url)
+    Column(
+        modifier = Modifier.combinedClickable(
+            onClick = onClick,
+            // En el móvil también: mantener pulsado un canal lo pone/quita de favoritos.
+            onLongClick = {
+                val added = com.chronosbvrx.visionplus.ui.live.LiveFavorites.toggle(channel.url)
+                android.widget.Toast.makeText(
+                    context,
+                    if (added) "«${channel.name}» en favoritos" else "«${channel.name}» fuera de favoritos",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            },
+        ),
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -298,6 +326,22 @@ private fun ChannelCard(channel: LiveChannel, onClick: () -> Unit) {
                 name = channel.name,
                 modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp),
             )
+            if (favorite) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .background(Color.Black.copy(alpha = 0.62f), RoundedCornerShape(50))
+                        .padding(4.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.Star,
+                        contentDescription = "Favorito",
+                        tint = Color(0xFFFFC94D),
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+            }
         }
         Text(
             channel.name,
@@ -326,6 +370,7 @@ private fun AddPlaylistDialog(onDismiss: () -> Unit, onAdd: (String, String) -> 
     val valid = trimmed.startsWith("http://") || trimmed.startsWith("https://")
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.dismissOnBack { onDismiss() },
         title = { Text(LiveCopy.ADD_LIST) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

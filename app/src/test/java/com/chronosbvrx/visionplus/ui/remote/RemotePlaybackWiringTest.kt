@@ -43,6 +43,33 @@ class RemotePlaybackWiringTest {
     }
 
     @Test
+    fun thePhoneShowsTheRealNowPlayingCardAndSendsTypedControls() {
+        val remote = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/remote/RemoteScreen.kt")
+        assertTrue("la tarjeta «Ahora en la tele» existe", remote.contains("NowPlayingCard"))
+        assertTrue("la barra manda un seek absoluto", remote.contains("RemoteClient.sendSeek"))
+        assertTrue("play/pausa/siguiente van como órdenes", remote.contains("RemoteClient.sendCommand"))
+        assertTrue("el vivo no ofrece barra de búsqueda", remote.contains("if (np.live)"))
+        assertTrue("audio/subtítulos se abren desde el teléfono", remote.contains("CMD_AUDIO"))
+        assertTrue(remote.contains("CMD_SUBTITLES"))
+        val phone = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/PhoneApp.kt")
+        assertTrue("la barra persistente usa el estado real", phone.contains("RemoteNowBar"))
+    }
+
+    @Test
+    fun theTvPublishesItsPlaybackOverTheMessengerBridge() {
+        val player = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
+        assertTrue("el nativo instala el puente", player.contains("RemoteBridge.PlayerLink"))
+        assertTrue("publica estado minuto a minuto", player.contains("publishRemoteState"))
+        assertTrue("construye el estado estructurado", player.contains("NowPlaying("))
+        val composed = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
+        assertTrue("ExoPlayer también publica", composed.contains("RemoteBus.publishPlayback"))
+        assertTrue("ExoPlayer recibe las órdenes en el hilo de UI", composed.contains("RemoteBus.attachPlayer"))
+        val server = requireSource("src/main/java/com/chronosbvrx/visionplus/data/remote/RemoteServer.kt")
+        assertTrue("el estado solo va a teléfonos autorizados", server.contains("filter { it.authorized }"))
+        assertTrue("el servidor manda el estado estructurado", server.contains("playback.asMsg()"))
+    }
+
+    @Test
     fun thePlayerReleasesTheEngineWhenItGoesBehind() {
         val player = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
         assertTrue(

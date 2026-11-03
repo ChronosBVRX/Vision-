@@ -31,12 +31,25 @@ android {
     namespace = "com.chronosbvrx.visionplus"
     compileSdk = 36
 
+    androidResources {
+        // La voz de la narradora va en .m4a (AAC-LC): sin comprimir para que
+        // MediaPlayer pueda abrirla con openRawResourceFd como los MP3.
+        noCompress += listOf("m4a")
+    }
+
     defaultConfig {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = 417
-        versionName = "2.5.177"
+        versionCode = (project.findProperty("fiestsVersionCode")?.toString()?.toIntOrNull()) ?: 485
+        versionName = project.findProperty("fiestsVersionName")?.toString() ?: "2.5.245"
+        // Beta Fiesta 3.0: si se compila con -PfiestsBaseUrl=http://IP:8100,
+        // solo el cliente de juegos apunta al servidor local de pruebas.
+        buildConfigField(
+            "String",
+            "FIESTA_BASE_URL",
+            "\"${project.findProperty("fiestsBaseUrl") ?: ""}\"",
+        )
         ndk {
             // Solo ARM: el APK no empaqueta libs x86/x86_64 (los AAR traían credentials/
             // graphics.path de x86_64). En dispositivos x86_64 con traducción ARM (emulador
@@ -110,6 +123,7 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
     }
 }
@@ -204,6 +218,10 @@ configurations.matching { it.name.endsWith("UnitTestRuntimeClasspath") }
         exclude(group = "org.conscrypt", module = "conscrypt-android")
     }
 
+configurations.configureEach {
+    exclude(group = "org.lsposed.hiddenapibypass")
+}
+
 dependencies {
     // El contrato del feed que lee Vision+ Home (launcher): DTOs y deep links compartidos.
     implementation(project(":home-contract"))
@@ -235,16 +253,20 @@ dependencies {
 
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // QR de Vision+ Play: el teléfono escanea la sala de la tele y la TV genera el código.
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    implementation("com.google.zxing:core:3.5.3")
+
     // The one source's engine, packed inside: the 3DES portalCore client and its HLS proxy.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     // ADB por Wi-Fi desde el teléfono (solo móvil): emparejamiento y shell remoto en la tele.
-    implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
-    implementation("com.github.MuntashirAkon:sun-security-android:1.1")
-    implementation("org.conscrypt:conscrypt-android:2.5.3")
-    // Certificado autofirmado de la llave ADB (bcprov ya viene con libadb, misma versión).
-    implementation("org.bouncycastle:bcpkix-jdk15to18:1.81")
+    // Kadb: ADB y emparejamiento inalámbrico probados en TCL/Google TV.
+    implementation("com.flyfishxu:kadb:1.3.0")
+    implementation("org.conscrypt:conscrypt-android:2.8.0")
+    // Certificado autofirmado de la llave ADB (bcprov/bcpkix vienen con Kadb).
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.82")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.16")

@@ -16,6 +16,8 @@ def test_canonical_channel_normalization():
     assert app.canonical_channel("Azteca 7 (XHLAT) Nuevo Laredo MX") == "azteca7"
     assert app.canonical_channel("Las Estrellas Mex HD") == "lasestrellas"
     assert app.canonical_channel("Canal 2 de México (Canal Las Estrellas - XEW)") == "lasestrellas"
+    # El catálogo XTV la publica en singular: debe caer en la misma señal.
+    assert app.canonical_channel("CANAL DE LAS ESTRELLA") == "lasestrellas"
     assert app.canonical_channel("Azteca 1 HD") == "azteca1"
     assert app.canonical_channel("Canal Azteca Uno") == "azteca1"
 
@@ -49,6 +51,13 @@ def test_canonical_channel_never_merges_different_brands():
     assert app.canonical_channel("Canal HBO 2 Latinoamérica") == "hbo2"
     assert app.canonical_channel("Canal History 2 (México)") == "history2"
     assert app.canonical_channel("Canal Golden Premier 2") == "goldenpremier2"
+    # «Golden Plus MX» no debe terminar en «goldenmx» (clave inexistente).
+    assert app.canonical_channel("GOLDEN PLUS MX HD") == "golden"
+    assert app.canonical_channel("GOLDEN PLUS MX FHD") == "golden"
+    assert app.canonical_channel("Golden Multiplex MX") == "goldenmultiplex"
+    # El arreglo de «estrella» (singular) no debe tragarse otras marcas.
+    assert app.canonical_channel("TL ESTRELLA") == "tlestrella"
+    assert app.canonical_channel("ESTRELLA TV US HD") == "estrella"
     assert app.canonical_channel("ESPN 6 HD") == "espn6"
     assert app.canonical_channel("ESPN 7 HD") == "espn7"
     assert app.canonical_channel("HBO ZONE USA HD") == "hbozone"
@@ -84,11 +93,30 @@ def test_channel_country_from_name_and_code():
     assert app.channel_country("CANAL 13 CHILE HD") == "cl"
     assert app.channel_country("Canal ESPN 2 (Chile)") == "cl"
     assert app.channel_country("TUDN MX HD") == "mx"
+    assert app.channel_country("CANAL DE LAS ESTRELLA") == "mx"
     assert app.channel_country("TUDN USA HD") == "us"
     assert app.channel_country("FOX SPORTS 1 USA HD") == "us"
     assert app.channel_country("HBO HD") == ""
     assert app.channel_country("Canal 24 Horas (TVE)") == "es"
     assert app.channel_country("cyx-ElNueve") == "ar"
+
+
+def test_fox_feeds_keep_country_and_guide_apart():
+    """Lauman (MX) y Disney (US/LatAm) no comparten guía ni país."""
+    assert app.channel_country("Fox Sports Central HD") == "mx"
+    assert app.channel_country("Fox Sports 2 Central HD") == "mx"
+    assert app.channel_country("Fox Sports 3 Central HD") == "mx"
+    assert app.channel_country("Fox Sports Premium MX HD") == "mx"
+    assert app.channel_country("Fox Sports 1 MX") == "mx"
+    assert app.channel_country("Fox Deportes HD") == "us"
+    assert app.channel_country("FOX SOCCER PLUS HD") == "us"
+    assert app.channel_country("FOX SPORTS 1 USA HD") == "us"
+    assert app.channel_country("FOX SPORTS AR HD") == "ar"
+    assert app.channel_country("FOX SPORTS CHILE HD") == "cl"
+    assert app.channel_country("FOX ESP HD") == "es"
+    assert app.epg_norms_for("Fox Sports Central HD")[0] == "mx:foxsports"
+    assert app.epg_norms_for("Fox Sports 2 Central HD")[0] == "mx:foxsports2"
+    assert app.epg_norms_for("Fox Deportes HD") == ["us:foxdeportes"]
 
 
 def test_epg_norms_for_never_crosses_countries():
@@ -103,6 +131,11 @@ def test_epg_norms_for_never_crosses_countries():
     assert app.epg_norms_for("Canal 5 HD") == ["mx:canal5"]
     assert app.epg_norms_for("TUDN MX HD")[0] == "mx:tudn"
     assert app.epg_norms_for("HBO HD")[0] == "mx:hbo"
+    # Un canal con MX explícito no cae a la guía de otro país.
+    assert app.epg_norms_for("NICK MX HD") == ["mx:nick"]
+    assert app.epg_norms_for("CANAL 6 MX HD") == ["mx:multimedios"]
+    # Sony Central es una señal distinta del Canal Sony; no se le cruza su guía.
+    assert app.epg_norms_for("Sony Central HD")[0] == "mx:sonycentral"
     # El código es una pista: «cyx-ElNueve» es el Canal 9 argentino.
     assert app.epg_norms_for("CANAL 9 HD", "cyx-ElNueve") == ["ar:canal9"]
     assert app.epg_norms_for("") == []
@@ -113,6 +146,9 @@ def test_epg_worker_canonical_matches_api():
         "Canal 5 HD",
         "Azteca 7 HD",
         "Las Estrellas Mex HD",
+        "CANAL DE LAS ESTRELLA",
+        "GOLDEN PLUS MX HD",
+        "Golden Multiplex MX",
         "TUDN MX HD",
         "Fox Sports 1 MX",
         "HBO HD",
@@ -190,6 +226,16 @@ def test_epg_unique_removes_duplicate_signals():
         _row("B", now + timedelta(hours=1), now + timedelta(hours=2)),
     ]
     assert [r["title"] for r in app._epg_unique(rows)] == ["A", "B"]
+
+
+def test_epg_unique_drops_overlapping_shifted_copies():
+    now = datetime(2026, 10, 24, 18, 0, tzinfo=timezone.utc)
+    rows = [
+        _row("Sony 1", now, now + timedelta(hours=2)),
+        _row("Sony 2 (copia +1h)", now + timedelta(hours=1), now + timedelta(hours=3)),
+        _row("Siguiente", now + timedelta(hours=2), now + timedelta(hours=3)),
+    ]
+    assert [r["title"] for r in app._epg_unique(rows)] == ["Sony 1", "Siguiente"]
 
 
 def test_epg_window_finds_now_and_next():

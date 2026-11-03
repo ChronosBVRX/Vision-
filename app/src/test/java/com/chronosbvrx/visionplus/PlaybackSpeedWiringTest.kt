@@ -65,6 +65,27 @@ class PlaybackSpeedWiringTest {
     }
 
     @Test
+    fun seriesDoNotInheritTheSeasonDuration() {
+        // Un capítulo de 42 min mostraba 1 h 40 (la duración de la temporada). La ficha
+        // de la serie/temporada ya no se usa como duración del capítulo.
+        val api = source("data/xuper/X4KApi.kt")
+        val prepare = between(api, "suspend fun prepareVod(", "suspend fun playVod(")
+        assertTrue(
+            "en series la duración del portal no se usa",
+            prepare.contains("var durMs = if (sid.isBlank()) extractDurationMs(item) else 0L"),
+        )
+        assertFalse("no se hereda la ficha de la serie", prepare.contains("itemInfo(context, sid)"))
+        val mobile = source("ui/title/TitleScreen.kt")
+        assertTrue("la ficha móvil deja la serie en 0", mobile.contains("if (seriesLike) itemDurationMs = 0L"))
+        assertTrue("la ficha móvil no pinta duración de serie", mobile.contains("duration.takeIf { !seriesLike && it.isNotBlank() }"))
+        val tv = source("ui/tv/TvTitleScreen.kt")
+        assertTrue("la ficha TV deja la serie en 0", tv.contains("if (seriesLike) itemDurationMs = 0L"))
+        assertTrue("la ficha TV no pinta duración de serie", tv.contains("durationLabel = if (seriesLike) \"\" else duration"))
+        val player = source("ui/player/X4KPlayerAty.kt")
+        assertTrue("el reproductor no toma la duración del historial en series", player.contains("!seriesContext"))
+    }
+
+    @Test
     fun theLicenseGetsASlowNetworkRetry() {        val text = File("src/main/java/com/chronosbvrx/visionplus/data/xuper/X4KApi.kt").readText()
         val prepare = text.substringAfter("suspend fun prepareVod(").substringBefore("suspend fun playVod(")
         // La TCL (2.5.138) fallaba con «sin-medios» y el portal a 47 s: el tope de 25 s cortaba

@@ -6,55 +6,47 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * El Inicio de la tele tiene que dejar ver al menos 3 filas del catálogo. Las medidas salen de la
- * altura real de la pantalla (una TV 1080p a 320 dpi reporta 540 dp), así que estas pruebas fijan
- * el contrato sin componer.
+ * El Inicio de la tele usa pósters grandes de portada (148 × 220 dp) y deja más aire
+ * entre filas. La pantalla desplaza; ya no se encoge el póster para meter 3 filas.
  */
 class TvLayoutTest {
 
     @Test
-    fun threeRowsFitOnA1080pTv() {
+    fun thePosterIsLargeAndPremiumOnEveryTv() {
+        listOf(480, 540, 600, 720, 800, 1080).forEach { height ->
+            val metrics = tvRowMetrics(height)
+            assertEquals("ancho del póster en $height dp", 148.dp, metrics.cardWidth)
+            assertEquals("alto del póster en $height dp", 220.dp, metrics.cardHeight)
+            assertEquals("aire superior en $height dp", 24.dp, metrics.topPadding)
+        }
+    }
+
+    @Test
+    fun oneFullRowFitsWithBreathingRoomOnA1080pTv() {
         val metrics = tvRowMetrics(540)
         assertTrue("540 dp debe usar la densidad compacta", metrics.compact)
         assertTrue(
-            "3 filas de ${metrics.rowHeight} no caben en 540 dp",
-            metrics.rowHeight.value * TV_VISIBLE_CATALOG_ROWS <= 540f,
+            "una fila de ${metrics.rowHeight} no cabe en 540 dp",
+            metrics.rowHeight.value <= 540f,
         )
-        // El póster se achica, pero no a un tamaño de juguete.
-        assertTrue("póster demasiado chico: ${metrics.cardWidth}", metrics.cardWidth >= 60.dp)
-        assertTrue("póster demasiado grande: ${metrics.cardWidth}", metrics.cardWidth <= 140.dp)
+        assertEquals(330.dp, metrics.rowHeight)
     }
 
     @Test
-    fun everyTvHeightKeepsThreeCompleteRows() {
-        listOf(480, 540, 600, 720, 800, 1080).forEach { height ->
-            val metrics = tvRowMetrics(height)
-            assertTrue(
-                "en $height dp solo caben ${height / metrics.rowHeight.value} filas",
-                metrics.rowHeight.value * TV_VISIBLE_CATALOG_ROWS <= height,
-            )
-        }
-    }
-
-    @Test
-    fun tallScreensKeepTheFullPosterAndShortOnesShrinkIt() {
-        assertEquals(140.dp, tvRowMetrics(1080).cardWidth)
-        assertTrue(tvRowMetrics(720).cardWidth > tvRowMetrics(540).cardWidth)
-        // La proporción del póster nunca cambia (2:3).
+    fun tallScreensKeepTheSameLargePoster() {
+        assertEquals(148.dp, tvRowMetrics(1080).cardWidth)
+        assertEquals(148.dp, tvRowMetrics(720).cardWidth)
+        // La proporción del póster se mantiene estable (148 × 220, 2:3 aproximado).
         listOf(480, 540, 720, 1080).forEach { height ->
             val metrics = tvRowMetrics(height)
-            assertEquals(metrics.cardWidth.value * 1.5f, metrics.cardHeight.value, 0.01f)
+            assertTrue(metrics.cardHeight.value / metrics.cardWidth.value in 1.45f..1.52f)
         }
     }
 
     @Test
-    fun theCompactRowIsShorterThanTheOldFixedRow() {
-        // Antes: 18 de margen + 26 de etiqueta + 210 de póster + 6 + 20 de título + 10 = 290 dp.
+    fun theRowHasMoreAirThanTheOldCompactLayout() {
         val compact = tvRowMetrics(540)
-        assertTrue("la fila compacta debe bajar de 290 dp", compact.rowHeight.value < 290f)
-        // Y en una pantalla alta conserva el tamaño de siempre.
-        val tall = tvRowMetrics(1080)
-        assertEquals(140.dp, tall.cardWidth)
-        assertTrue(tall.rowHeight.value > compact.rowHeight.value)
+        assertTrue("la fila debe respirar: ${compact.topPadding}", compact.topPadding >= 24.dp)
+        assertTrue("el título debe leerse: ${compact.titleHeight}", compact.titleHeight >= 40.dp)
     }
 }

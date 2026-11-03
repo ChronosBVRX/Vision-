@@ -156,3 +156,20 @@ def test_section_rows_use_freshness_and_one_primary_genre():
     assert 1 <= index_build.FRESH_TOP <= 20
     assert not hasattr(index_build, "DESTACADOS_FIRST_SQL")
 
+
+
+def test_anime_movies_go_to_movies_and_series_never_accepts_movies():
+    filters = index_build.section_filters(["anime-serie"], ["novela"], ["anime-pelicula"])
+    anime_where, anime_args = filters["anime"]
+    movies_where, movies_args = filters["movies"]
+    series_where, series_args = filters["series"]
+    # Anime solo lleva la lista de series, no las películas de anime.
+    assert anime_args == [["anime-serie"]]
+    assert "t.id = any($1::text[]) and" in anime_where
+    # Películas acepta la lista extra de películas de anime.
+    assert "t.id = any($1::text[])" in movies_where
+    assert movies_args[0] == ["anime-pelicula"]
+    # Series exige kind='series' (no basta teleplay/program_type de una película).
+    assert "t.kind = 'series'" in series_where
+    assert "coalesce(t.program_type, '') not in ('movie', 'anime')" in series_where
+    assert series_args[0] == ["anime-serie", "anime-pelicula"]

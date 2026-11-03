@@ -4,6 +4,7 @@ import androidx.compose.runtime.mutableStateListOf
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.ResumeCard
+import com.chronosbvrx.visionplus.data.ResumeEntry
 
 /** Every place the app can show. */
 sealed interface Route {
@@ -13,6 +14,10 @@ sealed interface Route {
     data object Downloads : Route
     data object Live : Route
     data object Sports : Route
+    /** Vision+ Play: crear/unirse a una sala de trivia. */
+    data object Games : Route
+    /** Una sala concreta (código de 6 caracteres). */
+    data class GameRoom(val code: String) : Route
     data object Settings : Route
     data object About : Route
     data object Search : Route
@@ -141,6 +146,37 @@ internal fun closePlayback(route: Route, nav: Navigator, exitToLauncher: () -> U
         return true
     }
     return nav.close(route)
+}
+
+/**
+ * El capítulo exacto de un recuerdo de serie, con el minuto donde quedó. La ficha de la
+ * serie lo usa para «Continuar donde te quedaste»: no depende de que la temporada ya
+ * haya cargado sus capítulos (el historial ya trae el contexto completo).
+ */
+internal fun resumeEpisodePlay(
+    entry: ResumeEntry,
+    film: Film,
+    seasonNames: List<String> = emptyList(),
+    episodeNames: List<String> = emptyList(),
+    episodeNumbers: List<Int> = emptyList(),
+): EpisodePlay {
+    val names = entry.seasonNames.ifEmpty { seasonNames }
+    val seasonLabel = names.getOrNull(entry.seasonIndex)?.takeIf { it.isNotBlank() }
+    val seasonPrefix = if (names.size > 1 && seasonLabel != null) " · $seasonLabel" else ""
+    return EpisodePlay(
+        code = entry.xtvCode.ifBlank { entry.key },
+        titleSuffix = "$seasonPrefix · C${entry.episodeIndex + 1}",
+        seriesId = entry.seriesId.ifBlank { film.id },
+        episodeIds = entry.episodeIds,
+        episodeNames = episodeNames,
+        episodeNumbers = episodeNumbers,
+        episodeIndex = entry.episodeIndex,
+        seasonIds = entry.seasonIds,
+        seasonNames = names,
+        seasonIndex = entry.seasonIndex,
+        resumeMs = entry.positionMs,
+        durationMs = entry.durationMs,
+    )
 }
 
 /**

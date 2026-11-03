@@ -87,7 +87,15 @@ COUNTRY_TOKENS = {
 # Marcas nacionales (se revisan DESPUÉS de los tokens explícitos: «Azteca Guate»
 # ya salió Guatemala y no debe caer en México).
 COUNTRY_BRANDS = (
-    ("las estrellas", "mx"), ("canal de las estrellas", "mx"), ("televisa", "mx"),
+    # Fox: la señal mexicana es de Lauman; las de EE. UU./LatAm son de Disney.
+    # Los tokens explícitos (MX/USA/ARG/CHILE…) siguen mandando antes que esto.
+    ("fox sports central", "mx"), ("fox sports 2 central", "mx"),
+    ("fox sports 3 central", "mx"), ("fox sports premium", "mx"),
+    ("fox deportes", "us"), ("fox deporte", "us"),
+    ("fox soccer", "us"), ("fox one", "us"),
+    ("fox 40", "us"), ("fox 5", "us"),
+    ("las estrellas", "mx"), ("canal de las estrellas", "mx"),
+    ("canal de las estrella", "mx"), ("televisa", "mx"),
     ("azteca", "mx"), ("tudn", "mx"), ("canal 5", "mx"), ("adn40", "mx"),
     ("adn noticia", "mx"), ("multimedios", "mx"), ("milenio", "mx"),
     ("excelsior", "mx"), ("foro tv", "mx"), ("heraldo", "mx"), ("unicable", "mx"),
@@ -169,7 +177,12 @@ def canonical_channel(text: str) -> str:
         return key + suffix
 
     # --- cadenas nacionales / marcas ---
-    if "estrellas" in tok or "lasestrellas" in tok or "xew" in tok or "canal de las estrellas" in t:
+    if (
+        "estrellas" in tok or "lasestrellas" in tok or "xew" in tok
+        or "canal de las estrellas" in t
+        # El catálogo publica «CANAL DE LAS ESTRELLA» (singular): misma señal XEW.
+        or "canal de las estrella" in t
+    ):
         return out("lasestrellas")
     if "azteca" in tok:
         if any(x in tok for x in ("1", "uno", "un")):
@@ -198,6 +211,8 @@ def canonical_channel(text: str) -> str:
     if "warner" in tok:
         return out("warner")
     if "sony" in tok:
+        if "central" in tok:
+            return out("sonycentral")
         return out("sony")
     if "hbo" in tok:
         if "family" in tok:
@@ -285,6 +300,13 @@ def canonical_channel(text: str) -> str:
         if "novelas" in tok:
             return out("tntnovelas")
         return out("tnt")
+    if "golden" in tok and "plus" in tok:
+        # «Golden Plus» y «Golden» comparten parrilla en el feed MX (el propio
+        # feed los guarda bajo la misma clave); sin esto «GOLDEN PLUS MX HD»
+        # caía en «goldenmx», que no existe y dejaba el canal sin guía.
+        return out("golden")
+    if "golden" in tok and "multiplex" in tok:
+        return out("goldenmultiplex")
     if "golden" in tok and "premier" in tok:
         if "2" in tok:
             return out("goldenpremier2")
@@ -471,8 +493,14 @@ def epg_norms_for(name: str, code: str = "") -> list[str]:
     if not canon:
         return []
     country = channel_country(name or "") or channel_country(code or "")
-    if country and country != "mx":
+    # País explícito = solo ese país. Antes «NICK MX» caía en la guía de
+    # Colombia (`co:nick`) porque México se trataba como «sin país». Mejor sin
+    # guía que programación de otro feed.
+    if country:
+        # Canal 6 mexicano es Multimedios; la guía vive como mx:multimedios.
+        if country == "mx" and canon == "canal6":
+            return ["mx:multimedios"]
         return [f"{country}:{canon}"]
     if canon in NATIONAL_ONLY:
-        return [f"mx:{canon}"]
+        return ["mx:" + canon]
     return [f"{c}:{canon}" for c in COUNTRY_FALLBACK]

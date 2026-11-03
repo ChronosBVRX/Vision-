@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
+import com.chronosbvrx.visionplus.data.sports.SportsSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -35,6 +36,9 @@ object GeeSportsSource {
         val type: String,
         val drm: String,
         val alive: Boolean?,
+        /** Un `embed` que se resuelve al tocarlo (WebView), como en la app original. */
+        val tokenApi: String = "",
+        val resolvable: Boolean = false,
     )
 
     /** Un canal dentro de un grupo (TNT Sports, FOX Sports…). */
@@ -52,6 +56,22 @@ object GeeSportsSource {
         val alive: Int,
         val total: Int,
         val channels: List<GeeChannel>,
+    )
+
+    /**
+     * Segunda opción propia (XTV) para un evento: el espejo recomendado y sus
+     * alternativas. El servidor aplica la regla Fox (FOX ONE/FOX básico) y
+     * nunca mete OTT ni deja Fox Sports Lauman como si fuera el Fox nuevo.
+     */
+    data class XtvOption(
+        val name: String,
+        val code: String,
+        val country: String = "",
+        val brand: String = "",
+        val verified: Boolean = false,
+        val recommended: Boolean = false,
+        val note: String = "",
+        val source: String = "xtv",
     )
 
     /** Un evento deportivo (fútbol, básquet, box, F1…) con sus enlaces. */
@@ -82,6 +102,17 @@ object GeeSportsSource {
         val live: Boolean = false,
         val detail: String = "",
         val status: String = "",
+        /** 1 = principal, 2 = secundaria, 3 = nicho. El servidor lo calcula. */
+        val tier: Int = 0,
+        /** Atajo de `tier == 1` para no repetir la comparación en la UI. */
+        val featured: Boolean = false,
+        /** La app original oculta los eventos con `visible=false`. */
+        val visible: Boolean = true,
+        /**
+         * Canales XTV de la casa para este evento, ya resueltos por el servidor.
+         * Campo ADITIVO: no cambia los enlaces ni la agenda de GeeSports.
+         */
+        val xtv: List<XtvOption> = emptyList(),
     )
 
     private const val GROUPS_TTL_MS = 30L * 60 * 1000
@@ -139,7 +170,9 @@ object GeeSportsSource {
             // La fuente declara canales que todavía no sirve (sin dirección): viajan igual para
             // que la lista salga COMPLETA (como la app original) y la app los resuelva solos con
             // el canal confirmado de la casa al tocarlos (respaldo automático).
-            if (link.isBlank() && name.isBlank()) continue
+            val tokenApi = item.optString("token_api")
+            val resolvable = item.optBoolean("resolvable", false)
+            if (link.isBlank() && name.isBlank() && tokenApi.isBlank()) continue
             val headersJson = item.optJSONObject("headers")
             val headers = LinkedHashMap<String, String>()
             if (headersJson != null) {
@@ -156,10 +189,36 @@ object GeeSportsSource {
                     type = item.optString("type", "hls"),
                     drm = item.optString("drm"),
                     alive = if (item.isNull("alive")) null else item.optBoolean("alive"),
+                    tokenApi = tokenApi,
+                    resolvable = resolvable || tokenApi.isNotBlank(),
                 ),
             )
         }
         return out
+    }
+
+    private fun jsonXtv(array: JSONArray?): List<XtvOption> {
+        if (array == null) return emptyList()
+        val out = ArrayList<XtvOption>(array.length())
+        for (i in 0 until array.length()) {
+            val item = array.optJSONObject(i) ?: continue
+            val name = item.optString("name").trim()
+            val code = item.optString("code").trim()
+            if (name.isBlank() || code.isBlank()) continue
+            out.add(
+                XtvOption(
+                    name = name,
+                    code = code,
+                    country = item.optString("country"),
+                    brand = item.optString("brand"),
+                    verified = item.optBoolean("verified", false),
+                    recommended = item.optBoolean("recommended", false),
+                    note = item.optString("note"),
+                    source = item.optString("source", "xtv"),
+                ),
+            )
+        }
+        return out.distinctBy { it.code }
     }
 
     internal fun parseGroups(json: String): List<GeeGroup> {
@@ -245,6 +304,10 @@ object GeeSportsSource {
                     live = score?.optBoolean("live") ?: false,
                     detail = score?.optString("detail") ?: "",
                     status = score?.optString("status") ?: "",
+                    tier = e.optInt("tier", 0).coerceIn(0, 3),
+                    featured = e.optBoolean("featured", false),
+                    visible = e.optBoolean("visible", true),
+                    xtv = jsonXtv(e.optJSONArray("xtv")),
                 ),
             )
         }
@@ -265,9 +328,18 @@ object GeeSportsSource {
                 continue
             }
             val merged = previous.links + event.links.filter { link ->
-                previous.links.none { it.link == link.link }
+                // Las ranuras pendientes comparten `link=""`: se comparan también por
+                // nombre para no perder las fuentes declaradas al fusionar duplicados.
+                previous.links.none { it.name == link.name && it.link == link.link }
             }
-            if (merged.size != previous.links.size) seen[event.id] = previous.copy(links = merged)
+            if (merged.size != previous.links.size || previous.visible != event.visible) {
+                seen[event.id] = previous.copy(
+                    links = merged,
+                    // Una copia visible de la fuente gana sobre una oculta.
+                    visible = previous.visible || event.visible,
+                    xtv = (previous.xtv + event.xtv).distinctBy { it.code },
+                )
+            }
         }
         return seen.values.toList()
     }
@@ -342,7 +414,10 @@ object GeeSportsSource {
             val hit = memoryEventsList
             if (!force && hit != null && now - memoryEventsAt < EVENTS_TTL_MS) return@withContext hit
             val fresh = runCatching {
-                val body = get("${RemoteIndexSource.BASE_URL}/v1/gee38/events")
+                val body = get(
+                    "${RemoteIndexSource.BASE_URL}/v1/gee38/events" +
+                        "?day=${SportsSource.todayIso()}&days=2",
+                )
                 body
             }.onFailure { Log.w(TAG, "eventos: ${it.message}") }.getOrNull()
             val parsed = fresh?.let { runCatching { parseEvents(it) }.getOrDefault(emptyList()) }

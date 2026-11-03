@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="SectionScreen" extends="Group">
+    <interface>
+        <field id="action" type="string" alwaysNotify="true" />
+        <field id="payload" type="assocarray" alwaysNotify="true" />
+        <field id="load" type="integer" alwaysNotify="true" />
+        <field id="sectionName" type="string" />
+        <field id="sectionTitle" type="string" />
+    </interface>
+    <script type="text/brightscript" uri="pkg:/source/core.brs" />
+    <script type="text/brightscript" uri="pkg:/source/store.brs" />
+    <script type="text/brightscript" uri="pkg:/components/SectionScreen.brs" />
+    <children>
+        <Rectangle width="1920" height="1080" color="0x070B13FF" />
+        <Rectangle width="8" height="46" translation="[96,150]" color="0x2D7DF6FF" />
+        <Label id="screenTitle" text="Películas" translation="[120,144]" width="800" height="54" font="font:LargeBoldSystemFont" color="0xF4F7FCFF" />
+        <Label id="screenSub" text="" translation="[122,204]" width="1200" height="30" font="font:SmallSystemFont" color="0x9BA8BDFF" />
+        <Label text="Atrás volver   ·   OK abrir ficha   ·   ← → moverse   ·   ↑ ↓ filas" translation="[122,236]" width="1400" height="26" font="font:SmallSystemFont" color="0x6F7D96FF" />
+        <RowList id="rows" translation="[96,276]" width="1728" height="780" itemSize="[1728,560]" rowSpacings="[16]" itemComponentName="PosterCard" />
+        <Label id="loading" text="Cargando sección..." translation="[120,300]" width="900" height="50" font="font:MediumBoldSystemFont" color="0x9BA8BDFF" visible="true" />
+        <Label id="errorLabel" text="" translation="[120,300]" width="1500" height="100" font="font:MediumSystemFont" color="0xFF4B4BFF" wrap="true" visible="false" />
+    </children>
+</component>

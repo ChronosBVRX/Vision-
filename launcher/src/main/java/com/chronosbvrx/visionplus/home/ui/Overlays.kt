@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.home.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -20,12 +21,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Accessibility
+import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SportsSoccer
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SettingsRemote
 import androidx.compose.material.icons.rounded.Tune
@@ -60,11 +66,7 @@ fun CommandCenterDialog(
     onDismiss: () -> Unit,
     onPersonalize: () -> Unit,
     onOpenVisionSettings: () -> Unit,
-    onSystemSettings: () -> Unit,
-    onHomeSettings: () -> Unit,
-    onUpdate: () -> Unit,
     onLauncherSettings: () -> Unit,
-    onWatchTv: (() -> Unit)? = null,
     visionInstalled: Boolean = true,
     visionInstallState: HomeUpdate.State = HomeUpdate.State.Idle,
     onInstallVision: () -> Unit = {},
@@ -80,8 +82,9 @@ fun CommandCenterDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        BackHandler(onBack = onDismiss)
         val focus = rememberDialogFocus()
-        Box(Modifier.fillMaxSize().dialogRootFocus(focus)) {
+        Box(Modifier.fillMaxSize().dialogRootFocus(focus).dismissOnBack(onDismiss).consumeLongPressRelease()) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -162,6 +165,7 @@ fun CommandCenterDialog(
                             is HomeUpdate.State.Downloading -> "Descargando… ${visionInstallState.percent} %"
                             is HomeUpdate.State.Ready -> "Descarga lista: confirma en la pantalla del sistema"
                             is HomeUpdate.State.Failed -> "No se pudo: ${visionInstallState.message}"
+                            HomeUpdate.State.UpToDate -> "Ya tienes la última versión"
                             HomeUpdate.State.Idle -> "El launcher se baja la app del release oficial"
                         },
                         onClick = onInstallVision,
@@ -181,7 +185,7 @@ fun CommandCenterDialog(
                 PanelAction(
                     icon = Icons.Rounded.Tune,
                     title = "Ajustes de Vision+ Home",
-                    detail = "Cómo abre, entradas de TV, sistema y actualizaciones",
+                    detail = "Inicio del sistema, personalización y actualizaciones",
                     onClick = onLauncherSettings,
                     modifier = Modifier.dialogFocus(focus),
                 )
@@ -191,37 +195,12 @@ fun CommandCenterDialog(
                     detail = "Canales, apps, filas y apariencia",
                     onClick = onPersonalize,
                 )
-                if (onWatchTv != null) {
-                    PanelAction(
-                        icon = Icons.Rounded.Tv,
-                        title = "Ver TV abierta",
-                        detail = "Enciende el sintonizador del televisor",
-                        onClick = onWatchTv,
-                    )
-                }
                 PanelAction(
                     icon = Icons.Rounded.SettingsRemote,
                     title = "Ajustes de Vision+",
                     detail = "Perfiles, continuidad, calidad y descargas",
                     onClick = onOpenVisionSettings,
                 )
-                PanelAction(
-                    icon = Icons.Rounded.Settings,
-                    title = "Ajustes de la tele",
-                    detail = "Wi-Fi, pantalla, apps y sistema",
-                    onClick = onSystemSettings,
-                )
-                PanelAction(
-                    icon = Icons.Rounded.Settings,
-                    title = if (homeDefault) "Vision+ Home ya es tu Inicio" else "Cambiar el Inicio (ajustes)",
-                    detail = when {
-                        homeDefault -> "Abre los ajustes para cambiar al Inicio del sistema"
-                        currentHome != null -> "Ahora abre: $currentHome · elige Vision+ Home"
-                        else -> "Elige Vision+ Home o el Inicio del sistema"
-                    },
-                    onClick = onHomeSettings,
-                )
-                UpdateAction(onUpdate = onUpdate)
                 Spacer(Modifier.height(14.dp))
                 Text(
                     "Vision+ Home ${HomeUpdate.versionName}",
@@ -237,24 +216,6 @@ fun CommandCenterDialog(
             }
         }
     }
-}
-
-@Composable
-private fun UpdateAction(onUpdate: () -> Unit) {
-    val state = HomeUpdate.state
-    val detail = when (state) {
-        HomeUpdate.State.Checking -> "Buscando la última versión…"
-        is HomeUpdate.State.Downloading -> "Descargando… ${state.percent} %"
-        HomeUpdate.State.Ready -> "Descarga lista: confirma en la pantalla del sistema"
-        is HomeUpdate.State.Failed -> "No se pudo: ${state.message}"
-        HomeUpdate.State.Idle -> "Descarga el APK del mismo release"
-    }
-    PanelAction(
-        icon = Icons.Rounded.Download,
-        title = "Actualizar Vision+ Home",
-        detail = detail,
-        onClick = onUpdate,
-    )
 }
 
 @Composable
@@ -319,6 +280,7 @@ fun SearchDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        BackHandler(onBack = onDismiss)
         val focus = rememberDialogFocus()
         val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val text = result.data
@@ -331,7 +293,9 @@ fun SearchDialog(
             Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.62f))
-                .dialogRootFocus(focus),
+                .dialogRootFocus(focus)
+                .dismissOnBack(onDismiss)
+                .consumeLongPressRelease(),
             contentAlignment = Alignment.Center,
         ) {
             Column(
@@ -398,6 +362,7 @@ fun HomeGuideDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        BackHandler(onBack = onDismiss)
         val focus = rememberDialogFocus()
         Box(Modifier.fillMaxSize().dialogRootFocus(focus), contentAlignment = Alignment.Center) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.72f)))
@@ -433,6 +398,65 @@ fun HomeGuideDialog(
                         modifier = Modifier.dialogFocus(focus),
                     )
                     HomeButton(label = "Cerrar", onClick = onDismiss, icon = null, primary = false)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Después de elegir Vision+ Home como Inicio se ofrece el guardián: en Google TV el rol
+ * puede quedar concedido y aun así el launcher de fábrica abrirse solo.
+ */
+@Composable
+fun PersistentModeDialog(
+    onEnable: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        BackHandler(onBack = onDismiss)
+        val focus = rememberDialogFocus()
+        Box(Modifier.fillMaxSize().dialogRootFocus(focus), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.78f)))
+            Column(
+                Modifier
+                    .width(600.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(HomeColors.Surface)
+                    .padding(horizontal = 30.dp, vertical = 28.dp),
+            ) {
+                Text(
+                    "Que Vision+ Home quede definitivo",
+                    color = HomeColors.Text,
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Google TV puede volver a su Inicio aunque Vision+ Home sea el predeterminado. " +
+                        "Activa el modo persistente en Accesibilidad: si el sistema abre su launcher, " +
+                        "Vision+ Home vuelve al frente. No lee el contenido de tu pantalla.",
+                    color = HomeColors.TextDim,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(18.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HomeButton(
+                        label = "Activar modo persistente",
+                        onClick = onEnable,
+                        icon = Icons.Rounded.Accessibility,
+                        primary = true,
+                        modifier = Modifier.dialogFocus(focus),
+                    )
+                    HomeButton(
+                        label = "Ahora no",
+                        onClick = onDismiss,
+                        icon = null,
+                        primary = false,
+                        modifier = Modifier.dialogFallbackFocus(focus),
+                    )
                 }
             }
         }

@@ -3,12 +3,14 @@ package com.chronosbvrx.visionplus.data.adb
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
-import io.github.muntashirakon.adb.AbsAdbConnectionManager
+import android.os.Handler
+import android.os.Looper
 import java.io.File
-import java.security.PrivateKey
-import java.security.cert.Certificate
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import com.flyfishxu.kadb.Kadb
+import com.flyfishxu.kadb.cert.KadbCert
+import kotlinx.coroutines.runBlocking
 
 /** Un extremo ADB descubierto por mDNS (la tele y su puerto). */
 internal data class AdbEndpoint(val host: String, val port: Int)
@@ -20,131 +22,128 @@ internal data class AdbEndpoint(val host: String, val port: Int)
  * vez; después basta con descubrir el puerto y conectar. El `api` se fija bajo a propósito:
  * el demonio de la tele puede ser viejo y solo se usan servicios `shell:` clásicos.
  */
-internal object TvAdb : AbsAdbConnectionManager() {
+internal object TvAdb {
 
-    private var key: PrivateKey? = null
-    private var cert: Certificate? = null
+    @Volatile
+    private var client: Kadb? = null
+
+    @Volatile
+    private var ready = false
 
     fun init(context: Context) {
-        if (key != null) return
-        val (privateKey, certificate) = AdbKeys.load(context)
-        key = privateKey
-        cert = certificate
-        setApi(28)
-        setTimeout(12, TimeUnit.SECONDS)
-        setThrowOnUnauthorised(true)
+        if (ready) return
+        synchronized(this) {
+            if (ready) return
+            val (privateKey, certificate) = AdbKeys.load(context)
+            // Kadb espera la llave y el certificado en PEM. Se reutiliza LA MISMA llave que ya
+            // autorizó la tele con LibADB, así no vuelve a pedir permiso al cambiar de cliente.
+            KadbCert.set(
+                pem(certificate.encoded, "CERTIFICATE"),
+                pem(privateKey.encoded, "PRIVATE KEY"),
+            )
+            ready = true
+        }
     }
 
-    override fun getPrivateKey(): PrivateKey = key ?: error("llave ADB sin cargar")
-    override fun getCertificate(): Certificate = cert ?: error("certificado ADB sin cargar")
-
-    override fun getDeviceName(): String = AdbKeys.deviceName()
+    private fun pem(der: ByteArray, label: String): ByteArray =
+        ("-----BEGIN $label-----\n" +
+            android.util.Base64.encodeToString(der, android.util.Base64.NO_WRAP) +
+            "\n-----END $label-----\n").toByteArray(Charsets.US_ASCII)
 
     /**
-     * Ejecuta un comando en la tele y devuelve su salida. El stream se cierra siempre: una
-     * sesión colgada dejaría el canal ADB ocupado para el siguiente intento.
-     *
-     * OJO: LibADB lanza `IOException("Stream closed.")` cuando el demonio cierra el stream sin
-     * datos pendientes (en vez de devolver -1). Sin atraparlo se perdía TODA la respuesta de los
-     * comandos rápidos — por eso el flujo creía que Vision+ Home no estaba instalado y no hacía
-     * nada en la tele.
+     * Conecta y comprueba el shell con un `echo`. Kadb habla shell clásico en teles viejas y
+     * shell v2 en las nuevas, y mantiene los streams sin el fallo de LibADB que cerraba la
+     * conexión después de dos comandos en TCL Android 9.
      */
+    fun connect(host: String, port: Int, timeoutMs: Long = 180_000): Boolean {
+        disconnectQuietly()
+        val socketTimeout = timeoutMs.toInt().coerceAtLeast(180_000)
+        val connection = Kadb.create(host, port, 12_000, socketTimeout)
+        val ok = runCatching {
+            open(connection, "echo visionplus-ok").contains("visionplus-ok", ignoreCase = true)
+        }.getOrDefault(false)
+        if (!ok) {
+            runCatching { connection.close() }
+            return false
+        }
+        client = connection
+        return true
+    }
+
+    /** Kadb ya espera el aviso del sistema; se conserva el nombre para el flujo existente. */
+    fun connectAllowingAuthorization(host: String, port: Int, timeoutMs: Long = 180_000): Boolean =
+        connect(host, port, timeoutMs)
+
+    fun isConnected(): Boolean = client?.connectionCheck() == true
+
     fun shell(command: String): String {
-        val stream = openStream("shell:$command")
+        val connection = client ?: throw java.io.IOException("No conectado a ADB.")
+        return open(connection, command)
+    }
+
+    private fun open(connection: Kadb, command: String): String {
+        val stream = connection.open("shell:$command")
         return try {
-            val output = StringBuilder()
-            val input = stream.openInputStream()
-            val buffer = ByteArray(8 * 1024)
-            try {
-                while (true) {
-                    val read = input.read(buffer)
-                    if (read < 0) break
-                    output.append(String(buffer, 0, read, Charsets.UTF_8))
-                }
-            } catch (t: Throwable) {
-                if (!isClosedMessage(t)) throw t
-            } finally {
-                runCatching { input.close() }
-            }
-            output.toString()
+            stream.source.readUtf8()
         } finally {
             runCatching { stream.close() }
         }
     }
 
-    /** El cierre normal del stream según LibADB (no es un error del comando). */
-    fun isClosedMessage(t: Throwable): Boolean =
-        t is java.io.IOException && t.message.orEmpty().contains("closed", ignoreCase = true)
-
-    fun disconnectQuietly() {
-        runCatching { disconnect() }
+    fun pair(host: String, port: Int, code: String): Boolean = runBlocking {
+        runCatching {
+            Kadb.pair(host, port, code, AdbKeys.deviceName())
+            true
+        }.getOrDefault(false)
     }
 
-    /**
-     * Instala un APK en la tele por ADB (`pm install -r -S`). Se usa para dejar Vision+ Home en el
-     * televisor cuando el flujo lo necesita y no estaba: así el usuario no tiene que ir a la tele.
-     *
-     * `-r` es obligatorio: sin él, una tele que ya trae una versión anterior responde
-     * `INSTALL_FAILED_ALREADY_EXISTS` y el launcher nunca se actualizaría.
-     */
     fun installApk(bytes: ByteArray): Boolean =
         installApkOutput(bytes)?.contains("Success", ignoreCase = true) == true
 
-    /** Igual que [installApk], pero devuelve la respuesta de `pm` para poder mostrarla. */
-    fun installApkOutput(bytes: ByteArray): String? =
-        installStream(bytes.size.toLong()) { output -> output.write(bytes) }
+    fun installApkOutput(bytes: ByteArray): String? {
+        val temp = runCatching { File.createTempFile("vision-install", ".apk") }.getOrNull() ?: return null
+        return try {
+            temp.writeBytes(bytes)
+            installApkFileOutput(temp)
+        } finally {
+            runCatching { temp.delete() }
+        }
+    }
 
-    /**
-     * Instala un APK grande (Vision+, ~82 MB) sin cargarlo entero en memoria: el archivo se
-     * transmite por ADB en bloques.
-     */
     fun installApkFile(file: File): Boolean =
         installApkFileOutput(file)?.contains("Success", ignoreCase = true) == true
 
-    /** Igual que [installApkFile], pero devuelve la respuesta de `pm`. */
+    /**
+     * `pm install -r -S` por `exec:` cierra la conexión en algunas teles viejas. Aquí se sube
+     * el APK por sync y se instala con un comando normal del shell; es el camino de TidyTV.
+     */
     fun installApkFileOutput(file: File): String? {
         if (!file.isFile || file.length() <= 0) return null
-        return installStream(file.length()) { output ->
-            file.inputStream().use { input -> input.copyTo(output, 64 * 1024) }
+        val connection = client ?: return null
+        val remote = "/data/local/tmp/vision-install-${System.currentTimeMillis()}.apk"
+        return try {
+            connection.push(file, remote, "644".toInt(8), System.currentTimeMillis())
+            open(connection, "pm install -r $remote")
+        } catch (t: Throwable) {
+            t.message ?: t.javaClass.simpleName
+        } finally {
+            runCatching { open(connection, "rm -f $remote") }
         }
     }
 
-    private fun installStream(size: Long, write: (java.io.OutputStream) -> Unit): String? {
-        val stream = openStream("exec:pm install -r -S $size")
-        return try {
-            val output = stream.openOutputStream()
-            // No se cierra antes de leer: `pm install -S` termina al recibir el tamaño exacto y
-            // responde por el mismo stream; cerrar aquí podría cortar la respuesta.
-            write(output)
-            output.flush()
-            val text = StringBuilder()
-            val input = stream.openInputStream()
-            val buffer = ByteArray(8 * 1024)
-            try {
-                while (true) {
-                    val read = input.read(buffer)
-                    if (read < 0) break
-                    text.append(String(buffer, 0, read, Charsets.UTF_8))
-                }
-            } catch (t: Throwable) {
-                if (!isClosedMessage(t)) throw t
-            } finally {
-                runCatching { input.close() }
-            }
-            runCatching { output.close() }
-            text.toString()
-        } catch (t: Throwable) {
-            null
-        } finally {
-            runCatching { stream.close() }
-        }
+    fun disconnectQuietly() {
+        val current = client
+        client = null
+        runCatching { current?.close() }
     }
+
+    fun disconnect() = disconnectQuietly()
 }
 
 /**
  * Descubre los servicios que publica la depuración inalámbrica de la tele.
  *
- * `libadb` trae un descubridor propio, pero solo acepta servicios del MISMO equipo (compara
+ * Kadb trae un descubridor propio, pero solo acepta servicios del MISMO equipo (compara
  * la IP con las interfaces locales): aquí la tele es otro equipo, así que se resuelve con
  * `NsdManager` y se le pasa host/puerto a [TvAdb].
  */
@@ -152,6 +151,32 @@ internal object AdbDiscovery {
 
     const val SERVICE_PAIRING = "adb-tls-pairing"
     const val SERVICE_CONNECT = "adb-tls-connect"
+
+    /**
+     * Android solo permite un `resolveService` a la vez. Si otro servicio se está resolviendo,
+     * reintenta una vez a los 250 ms en vez de perder la tele.
+     */
+    private fun resolveWithRetry(
+        nsd: NsdManager,
+        info: NsdServiceInfo,
+        onResolved: (NsdServiceInfo) -> Unit,
+    ) {
+        val listener = object : NsdManager.ResolveListener {
+            private var retried = false
+            override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                if (errorCode == NsdManager.FAILURE_ALREADY_ACTIVE && !retried) {
+                    retried = true
+                    Handler(Looper.getMainLooper()).postDelayed(
+                        { runCatching { nsd.resolveService(serviceInfo, this) } },
+                        250,
+                    )
+                }
+            }
+
+            override fun onServiceResolved(serviceInfo: NsdServiceInfo) = onResolved(serviceInfo)
+        }
+        runCatching { nsd.resolveService(info, listener) }
+    }
 
     fun find(context: Context, serviceType: String, timeoutMs: Long): AdbEndpoint? {
         val nsd = context.getSystemService(Context.NSD_SERVICE) as? NsdManager ?: return null
@@ -190,6 +215,78 @@ internal object AdbDiscovery {
         }
     }
 
+/** Un servicio mDNS ya resuelto, con su nombre amigable si lo publica (Google Cast). */
+internal data class AdbService(
+    val host: String,
+    val port: Int,
+    val name: String = "",
+    val model: String = "",
+)
+
+/**
+ * Todos los extremos visibles de un servicio, con el nombre que publica (para las tarjetas de
+ * «Mi tele»). Igual que [findAll], pero conserva `fn`/`md` de `_googlecast._tcp`.
+ */
+internal fun findAllServices(
+    context: Context,
+    serviceType: String,
+    timeoutMs: Long,
+    max: Int = 8,
+): List<AdbService> {
+    val nsd = context.getSystemService(Context.NSD_SERVICE) as? NsdManager ?: return emptyList()
+    val latch = CountDownLatch(1)
+    val found = mutableListOf<AdbService>()
+    val listener = object : NsdManager.DiscoveryListener {
+        private var retriedStart = false
+        override fun onDiscoveryStarted(serviceType: String) = Unit
+        override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+            if (!retriedStart) {
+                retriedStart = true
+                Handler(Looper.getMainLooper()).postDelayed(
+                    { runCatching { nsd.discoverServices("_$serviceType._tcp", NsdManager.PROTOCOL_DNS_SD, this) } },
+                    300,
+                )
+            } else {
+                latch.countDown()
+            }
+        }
+        override fun onDiscoveryStopped(serviceType: String) = Unit
+        override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) = Unit
+        override fun onServiceFound(info: NsdServiceInfo) {
+            resolveWithRetry(nsd, info) { resolved ->
+                val host = resolved.host?.hostAddress ?: return@resolveWithRetry
+                val name = resolved.attributes["fn"]?.toString(Charsets.UTF_8)?.trim().orEmpty()
+                    .ifBlank { resolved.serviceName.orEmpty().trim() }
+                val model = resolved.attributes["md"]?.toString(Charsets.UTF_8)?.trim().orEmpty()
+                val service = AdbService(host, resolved.port, name, model)
+                synchronized(found) {
+                    val index = found.indexOfFirst { it.host == service.host }
+                    if (index >= 0) {
+                        val previous = found[index]
+                        found[index] = previous.copy(
+                            name = previous.name.ifBlank { service.name },
+                            model = previous.model.ifBlank { service.model },
+                        )
+                    } else {
+                        found += service
+                    }
+                    if (found.size >= max) latch.countDown()
+                }
+            }
+        }
+        override fun onServiceLost(info: NsdServiceInfo) = Unit
+    }
+    return try {
+        nsd.discoverServices("_$serviceType._tcp", NsdManager.PROTOCOL_DNS_SD, listener)
+        latch.await(timeoutMs, TimeUnit.MILLISECONDS)
+        synchronized(found) { found.toList() }
+    } catch (t: Throwable) {
+        emptyList()
+    } finally {
+        runCatching { nsd.stopServiceDiscovery(listener) }
+    }
+}
+
     /**
      * Todos los extremos visibles de un servicio (hasta [max]). Se usa para identificar de qué
      * tele es cada puerto cuando el teléfono conoce más de una: hay que conectar y preguntarle
@@ -207,20 +304,15 @@ internal object AdbDiscovery {
             override fun onDiscoveryStopped(serviceType: String) = Unit
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) = Unit
             override fun onServiceFound(info: NsdServiceInfo) {
-                runCatching {
-                    nsd.resolveService(info, object : NsdManager.ResolveListener {
-                        override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) = Unit
-                        override fun onServiceResolved(resolved: NsdServiceInfo) {
-                            val host = resolved.host?.hostAddress ?: return
-                            val endpoint = AdbEndpoint(host, resolved.port)
-                            synchronized(found) {
-                                if (found.none { it.host == endpoint.host && it.port == endpoint.port }) {
-                                    found += endpoint
-                                }
-                                if (found.size >= max) latch.countDown()
-                            }
+                resolveWithRetry(nsd, info) { resolved ->
+                    val host = resolved.host?.hostAddress ?: return@resolveWithRetry
+                    val endpoint = AdbEndpoint(host, resolved.port)
+                    synchronized(found) {
+                        if (found.none { it.host == endpoint.host && it.port == endpoint.port }) {
+                            found += endpoint
                         }
-                    })
+                        if (found.size >= max) latch.countDown()
+                    }
                 }
             }
             override fun onServiceLost(info: NsdServiceInfo) = Unit

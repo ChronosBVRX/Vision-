@@ -148,7 +148,7 @@ class HomeConfigTest {
         )
         val config = HomeConfig(rowOrder = listOf("channels", "top10", "apps"))
         assertEquals(
-            listOf("channels", "top10", "apps", "premieres", "continue", "live", "inputs"),
+            listOf("channels", "top10", "apps", "premieres", "continue", "inputs", "live"),
             homeRowOrder(config, feedRows),
         )
         val entries = homeRowEntries(config, feedRows)
@@ -219,12 +219,12 @@ class HomeConfigTest {
     }
 
     @Test
-    fun aConfigFromVersionOneReceivesTheInputsRowInPlace() {
-        // Lo que guardó la versión anterior (sin entradas y sin pestaña inicial).
-        val old = """{"version":1,"rowOrder":["continue","channels","live","apps","top10"],"hiddenRows":[]}"""
+    fun aConfigFromVersionOneMovesAppsUpAndPutsInputsUnderContinue() {
+        // Lo que guardó la versión anterior (con la fila de entradas y sin pestaña inicial).
+        val old = """{"version":1,"rowOrder":["continue","channels","live","apps","inputs","top10"],"hiddenRows":[]}"""
         val migrated = HomeConfig.fromJson(old)
         assertEquals(
-            listOf("continue", "channels", "live", "inputs", "apps", "top10"),
+            listOf("continue", "inputs", "channels", "apps", "live", "top10"),
             migrated.rowOrder,
         )
         // La preferencia nueva arranca en su default y no pisa lo que ya había.
@@ -278,7 +278,7 @@ class HomeConfigTest {
     @Test
     fun thePresetsPutTheRightRowsFirstAndCanBeUndone() {
         val tv = HomeConfig().withPreset(LauncherPreset.TV_FIRST)
-        assertEquals(listOf("continue", "channels", "live", "inputs", "apps"), tv.rowOrder.take(5))
+        assertEquals(listOf("continue", "inputs", "channels", "apps", "live"), tv.rowOrder.take(5))
         assertEquals("home", tv.tabOrder.first())
         assertTrue("live" !in tv.hiddenRows)
 

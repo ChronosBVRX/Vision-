@@ -12,12 +12,18 @@
     android:name="com.chronosbvrx.visionplus.permission.ENGINE_PREWARM"
     android:protectionLevel="signature" />
 
+<uses-permission android:name="android.permission.CAMERA" />
+<!-- La cámara es solo del escáner QR del teléfono; la tele no la necesita. -->
+<uses-feature android:name="android.hardware.camera" android:required="false" />
 <uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.VIBRATE" />
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 <!-- Control remoto por LAN: la tele escucha la difusión del teléfono y sostiene el multicast. -->
 <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Dictado del buscador de TV en vivo: se pide solo al usar el micrófono. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -29,6 +35,10 @@
         <package android:name="com.xuper.plugin" />
         <!-- Vision+ Home (el launcher): instalado/versión y abrirlo desde Ajustes. -->
         <package android:name="com.chronosbvrx.visionplus.home" />
+        <!-- Servicio de reconocimiento de voz para el dictado del buscador. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <!-- Android TV: no touchscreen required, leanback optional so phones can install it too. -->
@@ -58,6 +68,8 @@
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:exported="true"
             android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:theme="@style/Theme.Vision.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -66,6 +78,9 @@
             </intent-filter>
             <!-- Tarjetas del launcher (canal Watch Next) y Vision+ Home: reanudan la
                  película/capítulo, abren una ficha y los hubs del sistema. -->
+            <!-- OJO: los atributos de <data> se combinan por FILTRO, no por etiqueta. Un
+                 pathPrefix en este mismo filtro restringiría watch/live/title/open a esa
+                 ruta y el launcher dejaría de abrir canales y películas. Play va aparte. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -78,6 +93,14 @@
                 <!-- Vision+ Home: ajustes, buscador, secciones e Inicio. -->
                 <data android:scheme="visionplus" android:host="open" />
             </intent-filter>
+            <!-- Vision+ Play: invitación a una sala (solo teléfono). Filtro PROPIO para que
+                 su pathPrefix no se mezcle con los demás destinos. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="visionplus" android:host="play" android:pathPrefix="/join" />
+            </intent-filter>
         </activity>
 
         <!-- Reproductor residente («Camino B»): tarea propia fuera de recientes, una sola
@@ -88,6 +111,8 @@
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:exported="true"
             android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:taskAffinity="com.chronosbvrx.visionplus.player"
             android:excludeFromRecents="true"
             android:process=":x4k" />
@@ -137,6 +162,12 @@
             android:name=".data.offline.X4KDownloadService"
             android:exported="false"
             android:process=":x4k"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- «Qué está reproduciendo» en la red local: mDNS + HTTP de solo lectura. -->
+        <service
+            android:name=".data.netshare.NowPlayingService"
+            android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <provider

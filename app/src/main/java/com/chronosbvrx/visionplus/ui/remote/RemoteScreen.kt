@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.remote
 
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -62,12 +63,22 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.ui.layout.ContentScale
+import android.os.SystemClock
 import android.widget.Toast
 import coil.compose.AsyncImage
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.XuperCatalog
+import com.chronosbvrx.visionplus.data.remote.NowPlaying
 import com.chronosbvrx.visionplus.data.remote.RemoteClient
 import com.chronosbvrx.visionplus.data.remote.RemoteKeys
+import com.chronosbvrx.visionplus.data.remote.RemoteProto
 import com.chronosbvrx.visionplus.data.remote.RemoteStatus
 import com.chronosbvrx.visionplus.data.remote.RemoteTv
 import com.chronosbvrx.visionplus.data.remote.resumePositionFor
@@ -75,10 +86,12 @@ import com.chronosbvrx.visionplus.data.remote.tvRowLabel
 import com.chronosbvrx.visionplus.data.searchFilms
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
+import com.chronosbvrx.visionplus.ui.formatDuration
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
+import com.chronosbvrx.visionplus.ui.theme.VisionLiveRed
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionSuccess
@@ -133,7 +146,10 @@ fun RemoteScreen(catalog: XuperCatalog, onBack: () -> Unit) {
 
         when (state.status) {
             RemoteStatus.CONNECTED -> {
-                if (state.now.isNotBlank()) {
+                if (state.nowPlaying.active) {
+                    NowPlayingCard(state.nowPlaying, state.nowReceivedAt)
+                    Spacer(Modifier.height(14.dp))
+                } else if (state.now.isNotBlank()) {
                     Text(
                         "En la tele: ${state.now}",
                         style = MaterialTheme.typography.titleSmall,
@@ -178,6 +194,220 @@ fun RemoteScreen(catalog: XuperCatalog, onBack: () -> Unit) {
             RemoteStatus.IDLE, RemoteStatus.ERROR -> DiscoveryPanel(state.error)
         }
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+/**
+ * La tarjeta «Ahora en la tele»: arte, título, minuto, barra arrastrable y transporte.
+ * En vivo no hay barra (no se puede buscar hacia atrás); se muestran canal y play/pausa.
+ */
+@Composable
+private fun NowPlayingCard(np: NowPlaying, receivedAt: Long) {
+    var drag by remember(np.ref) { mutableStateOf<Long?>(null) }
+    var pendingSeek by remember(np.ref) { mutableStateOf<Long?>(null) }
+    var tick by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(np.updatedAt, np.playing) {
+        while (np.playing) {
+            tick = SystemClock.elapsedRealtime()
+            delay(500)
+        }
+    }
+    LaunchedEffect(pendingSeek) {
+        if (pendingSeek != null) {
+            delay(3_000)
+            pendingSeek = null
+        }
+    }
+    LaunchedEffect(np.updatedAt, np.positionMs) {
+        val target = pendingSeek
+        if (target != null && kotlin.math.abs(np.positionMs - target) < 3_000L) pendingSeek = null
+    }
+
+    val duration = np.durationMs.coerceAtLeast(0L)
+    val elapsed = if (np.playing && receivedAt > 0L) {
+        (tick - receivedAt).coerceAtLeast(0L)
+    } else {
+        0L
+    }
+    val base = if (np.playing) np.positionMs + elapsed else np.positionMs
+    val shown = (drag ?: pendingSeek ?: base).coerceIn(0L, if (duration > 0L) duration else Long.MAX_VALUE)
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(VisionSurface)
+            .padding(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (np.poster.isNotBlank()) {
+                AsyncImage(
+                    model = np.poster,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .width(58.dp)
+                        .height(84.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(VisionSurfaceHigh),
+                )
+                Spacer(Modifier.width(12.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (np.live) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(VisionLiveRed)
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        ) {
+                            Text(
+                                "EN VIVO",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                        np.title.ifBlank { "En la tele" },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = VisionTextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                if (np.subtitle.isNotBlank()) {
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        np.subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = VisionTextSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+
+        if (np.live) {
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                TransportButton(Icons.Default.KeyboardArrowDown, "Canal anterior") {
+                    RemoteClient.sendKey(RemoteKeys.CHANNEL_DOWN)
+                }
+                TransportButton(
+                    if (np.playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    if (np.playing) "Pausar" else "Reproducir",
+                    emphasized = true,
+                ) { RemoteClient.sendCommand(RemoteProto.CMD_PLAY_PAUSE) }
+                TransportButton(Icons.Default.KeyboardArrowUp, "Canal siguiente") {
+                    RemoteClient.sendKey(RemoteKeys.CHANNEL_UP)
+                }
+            }
+        } else {
+            Spacer(Modifier.height(10.dp))
+            Slider(
+                value = if (duration > 0L) shown.toFloat() else 0f,
+                onValueChange = { if (duration > 0L) drag = it.toLong() },
+                onValueChangeFinished = {
+                    val target = drag
+                    if (target != null) {
+                        pendingSeek = target
+                        RemoteClient.sendSeek(target)
+                    }
+                    drag = null
+                },
+                valueRange = 0f..(if (duration > 0L) duration.toFloat() else 1f),
+                enabled = np.canSeek && duration > 0L,
+                colors = SliderDefaults.colors(
+                    thumbColor = Color.White,
+                    activeTrackColor = VisionBlue,
+                    inactiveTrackColor = Color.White.copy(alpha = 0.18f),
+                ),
+            )
+            Row(Modifier.fillMaxWidth()) {
+                Text(
+                    if (duration > 0L) formatDuration(shown) else "--:--",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VisionTextSecondary,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    if (duration > 0L) formatDuration((duration - shown).coerceAtLeast(0L)) else "--:--",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VisionTextSecondary,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                TransportButton(Icons.Default.SkipPrevious, "Capítulo anterior", enabled = np.hasPrev) {
+                    RemoteClient.sendCommand(RemoteProto.CMD_PREVIOUS)
+                }
+                TransportButton(Icons.Default.Replay10, "Atrasar 10 segundos") {
+                    RemoteClient.sendSeek((shown - 10_000L).coerceAtLeast(0L))
+                }
+                TransportButton(
+                    if (np.playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    if (np.playing) "Pausar" else "Reproducir",
+                    emphasized = true,
+                ) { RemoteClient.sendCommand(RemoteProto.CMD_PLAY_PAUSE) }
+                TransportButton(Icons.Default.Forward10, "Adelantar 10 segundos") {
+                    RemoteClient.sendSeek(
+                        (shown + 10_000L).coerceAtMost(if (duration > 0L) duration else shown + 10_000L),
+                    )
+                }
+                TransportButton(Icons.Default.SkipNext, "Capítulo siguiente", enabled = np.hasNext) {
+                    RemoteClient.sendCommand(RemoteProto.CMD_NEXT)
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            TextButton(
+                onClick = { RemoteClient.sendCommand(RemoteProto.CMD_AUDIO) },
+                colors = ButtonDefaults.textButtonColors(contentColor = VisionBlueBright),
+            ) {
+                Text("Audio")
+            }
+            if (!np.live) {
+                TextButton(
+                    onClick = { RemoteClient.sendCommand(RemoteProto.CMD_SUBTITLES) },
+                    colors = ButtonDefaults.textButtonColors(contentColor = VisionBlueBright),
+                ) {
+                    Text("Subtítulos")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TransportButton(
+    icon: ImageVector,
+    description: String,
+    enabled: Boolean = true,
+    emphasized: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .size(if (emphasized) 52.dp else 46.dp)
+            .clip(CircleShape)
+            .background(if (emphasized) VisionBlue else VisionSurfaceHigh)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = if (enabled) Color.White else Color.White.copy(alpha = 0.3f),
+            modifier = Modifier.size(if (emphasized) 30.dp else 24.dp),
+        )
     }
 }
 
@@ -557,6 +787,7 @@ private fun PinDialog(wrong: Boolean, onSubmit: (String) -> Unit, onDismiss: () 
     var pin by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.dismissOnBack { onDismiss() },
         containerColor = VisionSurface,
         titleContentColor = VisionTextPrimary,
         textContentColor = VisionTextSecondary,

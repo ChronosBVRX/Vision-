@@ -6,31 +6,43 @@ import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkAdd
+import androidx.compose.material.icons.rounded.Brush
+import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.ChildCare
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Gavel
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircleOutline
 import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.QuestionMark
+import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.material.icons.rounded.Theaters
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Usb
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -56,6 +68,19 @@ object VisionIcons {
     val Series = Icons.Rounded.Theaters
     val Anime = Icons.Rounded.Animation
     val Kids = Icons.Rounded.ChildCare
+
+    /** Vision+ Play. */
+    val Games = Icons.Rounded.Casino
+    val Qr = Icons.Rounded.QrCodeScanner
+    val Charadas = Icons.Rounded.TheaterComedy
+    val Wager = Icons.Rounded.Lightbulb
+    val Impostor = Icons.Rounded.VisibilityOff
+    val Drawing = Icons.Rounded.Brush
+    val Auction = Icons.Rounded.Gavel
+    val Fibbage = Icons.Rounded.QuestionMark
+    val Players = Icons.Rounded.Groups
+    val Trophy = Icons.Rounded.EmojiEvents
+    val Timer = Icons.Rounded.Timer
 
     /** Acciones de ficha. */
     val Rating = Icons.Rounded.Star

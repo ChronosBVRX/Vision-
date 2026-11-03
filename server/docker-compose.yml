@@ -118,6 +118,11 @@ services:
       # Nombre real y sinopsis por capítulo (TMDB): una petición por temporada,
       # guardada en `episode_meta`. Presupuesto y TTL del refresco.
       EPISODES_META_SYNC: "${EPISODES_META_SYNC:-1}"
+      # Vision+ Play: banco de preguntas generado del catálogo (Fase 0/1).
+      TRIVIA_MAX_PER_CYCLE: "${TRIVIA_MAX_PER_CYCLE:-400}"
+      TRIVIA_BANK_CAP: "${TRIVIA_BANK_CAP:-8000}"
+      TRIVIA_MIN_HOURS: "${TRIVIA_MIN_HOURS:-6}"
+      TRIVIA_SOURCE_ROWS: "${TRIVIA_SOURCE_ROWS:-600}"
       EPISODES_META_MAX_PER_CYCLE: "${EPISODES_META_MAX_PER_CYCLE:-20}"
       EPISODES_META_TTL_HOURS: "${EPISODES_META_TTL_HOURS:-336}"
       EPISODES_META_RETRY_HOURS: "${EPISODES_META_RETRY_HOURS:-24}"

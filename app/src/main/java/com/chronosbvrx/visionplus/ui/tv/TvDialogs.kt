@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.tv
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +30,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.BorderStroke
@@ -41,6 +44,7 @@ import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.ui.comingSoon
 import com.chronosbvrx.visionplus.ui.plugins.PluginUpdatesCopy
 import com.chronosbvrx.visionplus.ui.plugins.versionLine
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
@@ -83,12 +87,14 @@ internal fun TvDialog(title: String, onDismiss: () -> Unit, content: @Composable
         onDispose { FocusRescue.dialogsOpen-- }
     }
     Dialog(onDismissRequest = onDismiss) {
+        BackHandler(onBack = onDismiss)
         Column(
             Modifier
                 .widthIn(min = 420.dp, max = 640.dp)
                 .background(VisionSurface, RoundedCornerShape(16.dp))
                 .padding(28.dp)
-                .modalFocusTrap(),
+                .modalFocusTrap()
+                .dismissOnBack(onDismiss),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(title, style = MaterialTheme.typography.headlineSmall, color = Color.White)
@@ -133,10 +139,15 @@ internal fun TvAppUpdatesDialog(onDismiss: () -> Unit) {
             Text(PluginUpdatesCopy.NEW_VERSION, style = MaterialTheme.typography.titleSmall, color = VisionBlue)
             Text(versionLine(AppUpdate.currentVersion(context), release.version), style = MaterialTheme.typography.bodyLarge, color = Color.White)
             if (!release.notes.isNullOrBlank()) {
+                // La lista de novedades nunca debe empujar los botones fuera de la tele.
+                // Se recorta a seis líneas y el resto vive en el release de GitHub.
                 Text(
-                    release.notes.trim().take(480),
+                    release.notes.trim().take(360),
                     style = MaterialTheme.typography.bodySmall,
                     color = VisionTextSecondary,
+                    maxLines = 6,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 120.dp),
                 )
             }
             if (updater.running) {

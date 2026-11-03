@@ -1,6 +1,8 @@
 package com.chronosbvrx.visionplus.ui.player
 
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.data.sports.MatchStats
+import com.chronosbvrx.visionplus.data.sports.TeamMatchStats
 import com.chronosbvrx.visionplus.ui.sports.geeScoreLine
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -39,20 +41,40 @@ class LiveSportsPlayerUiTest {
     }
 
     @Test
-    fun theLivePlayerShowsTheCableBannerAndTheLabelledPills() {
+    fun theLivePlayerUsesTheMatchCenterHudForSportsEvents() {
         val player = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
-        // El aviso de cable, con las mismas palabras que la TV en vivo.
-        assertTrue("el aviso de cable existe", player.contains("LiveCableBanner("))
-        assertTrue("la píldora EN VIVO", player.contains("\"EN VIVO\""))
-        assertTrue("la línea AHORA", player.contains("\"AHORA:\""))
-        assertTrue("la línea del marcador", player.contains("\"MARCADOR:\""))
-        assertTrue("dónde se transmite", player.contains("\"SE TRANSMITE EN:\""))
-        // Las píldoras, con las etiquetas de la TV en vivo.
-        assertTrue("píldoras etiquetadas", player.contains("PlayerPill("))
-        assertTrue("Canales", player.contains("label = \"Canales\""))
-        assertTrue("Información", player.contains("label = \"Información\""))
-        assertTrue("Audio y subtítulos", player.contains("label = \"Audio y subtítulos\""))
-        assertTrue("Pausa", player.contains("if (playing) \"Pausa\" else \"Reproducir\""))
+        val hud = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/MatchCenterHud.kt")
+        // La TV en vivo normal conserva el aviso de cable; el evento deportivo usa el HUD.
+        assertTrue("el aviso de cable sigue para la TV", player.contains("LiveCableBanner("))
+        assertTrue("el HUD se decide por el contexto del partido", player.contains("showMatchHud"))
+        assertTrue("el HUD se pinta abajo", player.contains("MatchCenterHud("))
+        assertTrue("el aviso se omite con HUD", player.contains("if (showMatchHud)"))
+        // D-Pad: izquierda/derecha cambia de página; OK oculta; cada tecla reinicia el auto-hide.
+        assertTrue("página anterior", player.contains("matchHudPageAfter(matchHudPage, -1)"))
+        assertTrue("página siguiente", player.contains("matchHudPageAfter(matchHudPage, 1)"))
+        assertTrue("OK oculta el menú", player.contains("Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> controls.hide()"))
+        // El bloque único: liga + EN VIVO, pestañas, marcador, cuerpo fijo y pie.
+        assertTrue("liga y EN VIVO", hud.contains("\"EN VIVO\""))
+        assertTrue("pestaña Resumen", hud.contains("\"1. Resumen\""))
+        assertTrue("pestaña Estadísticas", hud.contains("\"2. Estadísticas\""))
+        assertTrue("pestaña Tarjetas y Goles", hud.contains("\"3. Tarjetas y Goles\""))
+        assertTrue("pestaña Alineaciones", hud.contains("\"4. Alineaciones\""))
+        assertTrue("cifras clave", hud.contains("HUD_SUMMARY_STATS"))
+        assertTrue("disciplina y ataque", hud.contains("HUD_DISCIPLINE_STATS"))
+        assertTrue("cronología con iconos", hud.contains("hudEventLine("))
+        assertTrue("formación publicada", hud.contains("formation"))
+        assertTrue("selector de señal", hud.contains("\"↑ ↓ SEÑAL"))
+        assertTrue("guía de pestañas", hud.contains("Estadísticas y Alineaciones"))
+        assertTrue("guía de señal", hud.contains("Cambiar señal del partido"))
+        assertTrue("guía para ocultar", hud.contains("OK / Atrás"))
+        assertTrue("carga las cifras reales", hud.contains("SportsStatsSource.load("))
+        // La fila de 4 píldoras ya no se pinta en el evento deportivo (sí en TV en vivo).
+        assertTrue("píldoras solo fuera del HUD", player.contains("if (!showMatchHud) {"))
+        assertTrue("Canales sigue en la TV en vivo", player.contains("label = \"Canales\""))
+        // La ficha de Información sigue disponible para el canal en vivo.
+        assertTrue("información del canal", player.contains("GeeMatchInfoDialog("))
+        // En vivo no hay pausa: el botón de pausa es solo del VOD.
+        assertFalse("sin píldora de pausa en vivo", player.contains("if (playing) \"Pausa\" else \"Reproducir\""))
         // El contexto del partido viaja al reproductor y se lee antes que las señales.
         assertTrue("el modal arma el contexto", player.contains("takeInfoFor(channel)"))
         assertTrue("y el reproductor lo recibe", player.contains("eventInfo = eventInfo"))
@@ -71,9 +93,11 @@ class LiveSportsPlayerUiTest {
         for ((name, text) in listOf("móvil" to mobile, "TV" to tv)) {
             assertTrue("$name: arma el contexto", text.contains("eventInfo: GeeZapSignals.EventInfo? = null"))
             assertTrue("$name: lo entrega al reproductor", text.contains("GeeZapSignals.arm(picked, zapOrder, eventInfo)"))
-            assertTrue("$name: solo fuentes de GeeSports", text.contains("Transmisiones de GeeSports:"))
+            assertTrue("$name: la lista no atribuye la transmisión", text.contains("Transmisiones disponibles:"))
+            assertFalse("$name: sin mención de la fuente en la UI", text.contains("Transmisiones de GeeSports:"))
             // La lista la arma la pieza pura con LOS enlaces del evento (sin guía/catálogo).
             assertTrue("$name: usa solo los enlaces del evento", text.contains("geePickRows(title, links, checks, playingUrl)"))
+            assertTrue("$name: zapping solo entre las disponibles del evento", text.contains("it.playable && it.alive != false && it.channel.url.isNotBlank()"))
             assertFalse("$name: sin la línea de la guía", text.contains("Se transmite en: "))
             // Sin la sección del catálogo ni respaldo automático.
             assertFalse("$name: sin Canales posibles", text.contains("Canales posibles"))
@@ -81,9 +105,10 @@ class LiveSportsPlayerUiTest {
             assertFalse("$name: sin filas de respaldo", text.contains("respaldo automático"))
         }
         val picks = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/sports/GeePicks.kt")
-        assertTrue("las ranuras sin URL no se ofrecen", picks.contains("if (raw.isBlank()) continue"))
+        assertTrue("las ranuras declaradas sin URL se conservan", picks.contains("if (raw.isBlank() && link.name.isBlank() && link.tokenApi.isBlank()) continue"))
+        assertTrue("y se marcan como no sintonizables", picks.contains("val playable: Boolean"))
         assertFalse("sin canales de la guía", picks.contains("GeeGuide.channelsFor"))
-        assertTrue("lo que responde va primero", picks.contains("aliveRank(it.alive)"))
+        assertTrue("lo que responde va primero", picks.contains("aliveRank(it)"))
         val screenMobile = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/sports/SportsScreen.kt")
         val screenTv = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/tv/TvSportsScreen.kt")
         for ((name, text) in listOf("móvil" to screenMobile, "TV" to screenTv)) {
@@ -138,6 +163,37 @@ class LiveSportsPlayerUiTest {
         assertTrue("señal en pantalla", dialogs.contains("MenuRow(\"Señal en pantalla\""))
         assertTrue("se transmite en", dialogs.contains("MenuRow(\"Se transmite en\""))
         assertTrue("las señales del evento", dialogs.contains("Señales del evento"))
+    }
+
+
+    @Test
+    fun theStatLabelsKeepTheImportantNumbersFirstAndAddTheSourceExtras() {
+        val stats = MatchStats(
+            home = TeamMatchStats(
+                name = "Local",
+                values = mapOf(
+                    "Posesión" to "55",
+                    "Tiros" to "9",
+                    "Tarjetas rojas" to "1",
+                    "Precisión de pase" to "88%",
+                ),
+                lineup = emptyList(),
+            ),
+            away = TeamMatchStats(
+                name = "Visita",
+                values = mapOf(
+                    "Posesión" to "45",
+                    "Tiros" to "7",
+                    "Córners" to "3",
+                ),
+                lineup = emptyList(),
+            ),
+            fetchedAt = 0L,
+        )
+        val labels = matchStatLabels(stats)
+        assertEquals(listOf("Posesión", "Tiros", "Córners"), labels.take(3))
+        assertTrue(labels.contains("Córners"))
+        assertTrue(labels.contains("Tarjetas rojas"))
     }
 
     private fun event(scoreHome: Int? = null, scoreAway: Int? = null, detail: String = "") =

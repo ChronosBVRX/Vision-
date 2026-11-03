@@ -11,6 +11,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.chronosbvrx.visionplus.data.markers.canShowSkipPill
 import com.chronosbvrx.visionplus.data.normalizeDisplayName
+import com.chronosbvrx.visionplus.data.subs.languageName
+import com.chronosbvrx.visionplus.data.xuper.TRACK_CODECS
+import com.chronosbvrx.visionplus.data.xuper.dedupeTrackLabels
+import com.chronosbvrx.visionplus.data.xuper.trackDisplayLang
 import kotlinx.coroutines.delay
 
 /** Inactivity after which the overlay hides itself while the video plays. */
@@ -409,6 +413,17 @@ internal fun episodeRowLabel(rawName: String, epNumber: Int, seriesTitle: String
 }
 
 /**
+ * Rótulo del selector de capítulos: el número real y el nombre propio cuando la BD lo
+ * trae («C3 · El titán bestia»). Si el capítulo no tiene nombre, cae al genérico sin
+ * inventar uno; el número siempre va delante para que la lista se lea de un vistazo.
+ */
+internal fun episodeSelectorLabel(epNumber: Int, rawName: String, seriesTitle: String = ""): String {
+    val number = epNumber.coerceAtLeast(1)
+    val clean = cleanEpisodeName(rawName, number - 1, seriesTitle)
+    return if (clean.isBlank()) "Capítulo $number" else "C$number · $clean"
+}
+
+/**
  * Enlaza el foco del D-pad con la píldora «Omitir intro / resumen». Regresión real (2.5.83):
  * la píldora se volvía enfocable pero NINGÚN control apuntaba a ella, así que el mando jamás
  * podía llegar. Entrada: «arriba» desde la barra (la píldora vive sobre ella) mientras esté
@@ -573,6 +588,86 @@ internal fun <T> distinctQualityChoices(
     return out
 }
 
+/** Nombres de idioma que el portal usa además de los códigos ISO. */
+private val LANGUAGE_NAMES = setOf(
+    "espanol", "español", "latino", "espanol latino", "español latino", "spanish",
+    "ingles", "inglés", "english", "portugues", "portugués", "portuguese",
+    "frances", "francés", "french", "aleman", "alemán", "german",
+    "italiano", "italian", "japones", "japonés", "japanese",
+    "coreano", "korean", "chino", "chinese", "ruso", "russian",
+    "arabe", "árabe", "arabic", "hindi", "tailandes", "tailandés", "thai",
+    "vietnamita", "vietnamese", "indonesio", "indonesian", "ucraniano", "ukrainian",
+    "rumano", "romanian", "hungaro", "húngaro", "hungarian", "checo", "czech",
+)
+
+/**
+ * ¿El valor que declara el portal es un idioma real? Descarta códecs («aac», «ac3»),
+ * pistas vacías o etiquetas técnicas que antes se colaban como si fueran idiomas.
+ */
+internal fun isLanguageValue(raw: String): Boolean {
+    val clean = raw.trim().lowercase()
+    if (clean.isEmpty() || clean in TRACK_CODECS) return false
+    if (languageName(clean).isNotBlank()) return true
+    if (clean.length in 2..4 && clean.all { it.isLetter() }) return true
+    return clean in LANGUAGE_NAMES ||
+        LANGUAGE_NAMES.any { clean.startsWith("$it ") || clean.endsWith(" $it") }
+}
+
+/** Código ISO que entiende el motor para un valor del portal («Español» → «spa»). */
+internal fun languageCodeFor(raw: String): String {
+    val clean = raw.trim().lowercase()
+    if (clean.isEmpty() || clean in TRACK_CODECS) return ""
+    val base = clean.substringBefore('-').substringBefore('_').trim()
+    if (languageName(base).isNotBlank()) return base
+    return when {
+        clean.startsWith("espanol") || clean.startsWith("español") || clean.startsWith("spanish") ||
+            clean.startsWith("latino") -> "spa"
+        clean.startsWith("ingles") || clean.startsWith("inglés") || clean.startsWith("english") -> "eng"
+        clean.startsWith("portugues") || clean.startsWith("portugués") || clean.startsWith("portuguese") -> "por"
+        clean.startsWith("frances") || clean.startsWith("francés") || clean.startsWith("french") -> "fra"
+        clean.startsWith("aleman") || clean.startsWith("alemán") || clean.startsWith("german") -> "deu"
+        clean.startsWith("italiano") || clean.startsWith("italian") -> "ita"
+        clean.startsWith("japones") || clean.startsWith("japonés") || clean.startsWith("japanese") -> "jpn"
+        clean.startsWith("coreano") || clean.startsWith("korean") -> "kor"
+        clean.startsWith("chino") || clean.startsWith("chinese") -> "zho"
+        clean.startsWith("ruso") || clean.startsWith("russian") -> "rus"
+        else -> if (base.length in 2..4 && base.all { it.isLetter() }) base else ""
+    }
+}
+
+/** Una pista de audio ya resuelta: id real del motor, idioma y etiqueta para la interfaz. */
+internal data class AudioChoice(val trackId: Int, val language: String, val label: String)
+
+/**
+ * Etiquetas del selector de audio a partir de las pistas REALES del motor y lo declarado
+ * por el portal. El idioma del motor manda; cuando viene el códec, se usa el declarado en
+ * la MISMA posición (solo si el conteo coincide) y, si tampoco hay idioma, «Pista N».
+ * Así el menú nunca inventa un idioma y elegir «Inglés» selecciona la pista correcta.
+ */
+internal fun audioChoicesFor(
+    engineTracks: List<Triple<String, String, Int>>,
+    declaredLanguages: List<String>,
+): List<AudioChoice> {
+    if (engineTracks.isEmpty()) return emptyList()
+    val declared = declaredLanguages.map { it.trim() }.filter { it.isNotEmpty() }
+    val pairByIndex = engineTracks.size == declared.size
+    val resolved = engineTracks.mapIndexed { index, (_, lang, _) ->
+        trackDisplayLang(lang, declared.getOrNull(index)?.takeIf { pairByIndex })
+    }
+    val rawLabels = resolved.mapIndexed { index, code ->
+        when {
+            code.isNotBlank() -> languageName(code).ifBlank {
+                code.trim().replaceFirstChar { it.uppercase() }
+            }
+            else -> "Pista ${engineTracks[index].third}"
+        }
+    }
+    val labels = dedupeTrackLabels(rawLabels, engineTracks.map { it.third })
+    return engineTracks.mapIndexed { index, track ->
+        AudioChoice(track.third, resolved[index], labels[index])
+    }
+}
+
 /**
  * ¿Hay algo honesto que elegir en audio? Solo con más de una pista real: lo que declara el
  * portal (`audioInfo`, a veces «Español,Inglés») o lo que expone el motor. Con un único
@@ -580,8 +675,8 @@ internal fun <T> distinctQualityChoices(
  */
 internal fun shouldShowAudioPicker(declaredLanguages: List<String>, engineAudioTracks: Int): Boolean {
     val declared = declaredLanguages
+        .filter { isLanguageValue(it) }
         .map { it.trim().lowercase() }
-        .filter { it.isNotBlank() }
         .distinct()
         .size
     return maxOf(declared, engineAudioTracks.coerceAtLeast(0)) > 1

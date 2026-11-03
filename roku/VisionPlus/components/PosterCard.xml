@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="PosterCard" extends="Group">
+    <interface>
+        <field id="itemContent" type="node" />
+        <field id="itemHasFocus" type="bool" />
+    </interface>
+    <script type="text/brightscript" uri="pkg:/source/core.brs" />
+    <script type="text/brightscript" uri="pkg:/components/PosterCard.brs" />
+    <children>
+        <MaskGroup id="mask" width="296" height="440" maskUri="pkg:/images/mask_poster.png" maskSize="[296,440]">
+            <Rectangle width="296" height="440" color="0x1B2538FF" />
+            <Poster id="poster" width="296" height="440" loadDisplayMode="scaleToFill" />
+            <Poster id="cardGradient" uri="pkg:/images/gradient_card.png" width="296" height="440" />
+            <Poster id="badgeBg" uri="pkg:/images/badge_dark.png" width="140" height="30" translation="[10,10]" loadDisplayMode="scaleToFill" visible="false" />
+            <Label id="badge" width="140" height="30" translation="[10,10]" horizAlign="center" vertAlign="center" font="font:SmallBoldSystemFont" color="0xFFFFFFFF" visible="false" />
+            <Group id="scoreGroup" translation="[184,10]" visible="false">
+                <Poster uri="pkg:/images/score_pill.png" width="100" height="28" loadDisplayMode="scaleToFill" />
+                <Poster uri="pkg:/images/icon_star.png" width="16" height="16" translation="[8,6]" />
+                <Label id="score" width="66" height="28" translation="[28,0]" vertAlign="center" font="font:SmallBoldSystemFont" color="0xFFFFFFFF" />
+            </Group>
+            <Label id="rankShadow" text="" translation="[14,310]" width="220" height="130" font="font:LargeBoldSystemFont" color="0x00000099" />
+            <Label id="rankLabel" text="" translation="[10,306]" width="220" height="130" font="font:LargeBoldSystemFont" color="0x6BA6FFFF" />
+        </MaskGroup>
+        <Label id="title" width="292" height="60" translation="[2,450]" font="font:SmallSystemFont" color="0xF4F7FCFF" wrap="true" ellipsisText="..." />
+        <Poster id="focusBorder" uri="pkg:/images/focus_card.png" width="304" height="448" translation="[-4,-4]" visible="false" />
+    </children>
+</component>

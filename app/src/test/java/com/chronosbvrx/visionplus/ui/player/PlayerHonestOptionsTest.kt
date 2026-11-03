@@ -36,6 +36,45 @@ class PlayerHonestOptionsTest {
     }
 
     @Test
+    fun codecNamesAreNotCountedAsLanguages() {
+        // «aac, ac3» no son dos idiomas: no se abre un menú que elegiría a ciegas.
+        assertFalse(shouldShowAudioPicker(listOf("aac", "ac3"), 1))
+        assertEquals(2, audioChoicesFor(
+            listOf(Triple("audio", "aac", 4), Triple("audio", "aac", 7)),
+            listOf("spa", "eng"),
+        ).size)
+    }
+
+    @Test
+    fun audioChoicesKeepTheRealTrackIdAndTheRealLanguage() {
+        // El motor manda cuando sí trae idioma…
+        val fromEngine = audioChoicesFor(
+            listOf(Triple("audio", "eng", 2), Triple("audio", "spa", 4)),
+            listOf("spa", "eng"),
+        )
+        assertEquals(listOf("Inglés", "Español"), fromEngine.map { it.label })
+        assertEquals(listOf(2, 4), fromEngine.map { it.trackId })
+        assertEquals(listOf("eng", "spa"), fromEngine.map { it.language })
+
+        // …y cuando solo trae el códec se usa el declarado en la MISMA posición.
+        val fromDeclared = audioChoicesFor(
+            listOf(Triple("audio", "aac", 4), Triple("audio", "aac", 7)),
+            listOf("spa", "eng"),
+        )
+        assertEquals(listOf("Español", "Inglés"), fromDeclared.map { it.label })
+        assertEquals(listOf(4, 7), fromDeclared.map { it.trackId })
+    }
+
+    @Test
+    fun repeatedLanguagesStillShowTheirTrack() {
+        val choices = audioChoicesFor(
+            listOf(Triple("audio", "aac", 3), Triple("audio", "aac", 5)),
+            listOf("spa", "spa"),
+        )
+        assertEquals(listOf("Español", "Español · Pista 5"), choices.map { it.label })
+    }
+
+    @Test
     fun subtitlesOnlyAppearWhenTheProgramBringsAtLeastOne() {
         assertFalse(shouldShowSubtitlePicker(loaded = false, subtitleEntries = 3))
         assertFalse(shouldShowSubtitlePicker(loaded = true, subtitleEntries = 0))

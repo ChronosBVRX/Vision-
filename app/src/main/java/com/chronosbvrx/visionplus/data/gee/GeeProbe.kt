@@ -22,9 +22,9 @@ import okio.Buffer
  */
 internal object GeeProbe {
 
-    private const val TIMEOUT_MS = 3_500L
-    private const val THREADS = 4
-    private const val SAMPLE_BYTES = 512L
+    private const val TIMEOUT_MS = 5_000L
+    private const val THREADS = 8
+    private const val SAMPLE_BYTES = 1_024L
 
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(TIMEOUT_MS, TimeUnit.MILLISECONDS)
@@ -41,12 +41,24 @@ internal object GeeProbe {
     /** ¿Este enlace responde ahora? Nunca lanza: lo que truene sale caído. */
     fun pingOne(rawLink: String): Boolean {
         val parsed = GeeSportsFallback.parseStreamUrl(rawLink) ?: return false
+        // Algunos CDN exigen Range para el manifiesto y otros lo rechazan; se
+        // prueba primero como lo pide el reproductor y, si falla, con Range.
+        return attempt(parsed, withRange = false) || attempt(parsed, withRange = true)
+    }
+
+    private fun attempt(
+        parsed: com.chronosbvrx.visionplus.data.sports.GeeSportsFallback.ParsedStream,
+        withRange: Boolean,
+    ): Boolean {
         val request = runCatching {
             val builder = Request.Builder()
                 .url(parsed.url)
                 .get()
                 .header("User-Agent", parsed.userAgent ?: "Mozilla/5.0")
                 .header("Accept", "*/*")
+                .header("Accept-Encoding", "identity")
+                .header("Connection", "close")
+            if (withRange) builder.header("Range", "bytes=0-1023")
             parsed.referrer?.let { builder.header("Referer", it) }
             parsed.origin?.let { builder.header("Origin", it) }
             builder.build()

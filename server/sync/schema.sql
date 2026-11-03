@@ -499,3 +499,61 @@ create table if not exists sync_items (
 
 create index if not exists sync_items_pull
     on sync_items (sync_id, server_seq);
+
+-- Vision+ Play: banco de preguntas, rotación por grupo y resultados.
+-- Las salas NO se guardan en vivo (viven en memoria en la API): solo el
+-- resultado final se persiste al cerrar. La respuesta correcta vive separada
+-- del payload para que el snapshot de `question` jamás pueda filtrarla.
+create table if not exists trivia_questions (
+    id text primary key,
+    kind text not null,
+    payload jsonb not null,                 -- prompt, options, art
+    answer_key text not null,               -- separada del payload
+    difficulty smallint not null default 1,
+    pack text not null default 'general',
+    source_ref text not null default '',
+    lang text not null default 'es',
+    hash text not null unique,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists idx_trivia_questions_pack
+    on trivia_questions (pack, created_at desc);
+create index if not exists idx_trivia_questions_source
+    on trivia_questions (source_ref);
+
+create table if not exists trivia_served (
+    question_id text not null references trivia_questions(id) on delete cascade,
+    group_id text not null default '',      -- SHA-256 del código de continuidad
+    served_at timestamptz not null default now(),
+    primary key (question_id, group_id)
+);
+
+create index if not exists idx_trivia_served_group
+    on trivia_served (group_id, served_at desc);
+
+create table if not exists trivia_reports (
+    id bigserial primary key,
+    question_id text not null references trivia_questions(id) on delete cascade,
+    reason text not null default '',
+    created_at timestamptz not null default now()
+);
+
+create index if not exists idx_trivia_reports_question
+    on trivia_reports (question_id);
+
+create table if not exists game_results (
+    id bigserial primary key,
+    game text not null default 'trivia',
+    mode text not null default 'remote',
+    pack text not null default 'general',
+    players jsonb not null default '[]'::jsonb,
+    rounds integer not null default 0,
+    started_at timestamptz,
+    ended_at timestamptz,
+    created_at timestamptz not null default now()
+);
+alter table game_results add column if not exists game text not null default 'trivia';
+
+create index if not exists idx_game_results_ended
+    on game_results (ended_at desc);

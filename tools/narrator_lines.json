@@ -1,0 +1,430 @@
+[
+  {
+    "id": "welcome",
+    "variants": [
+      "¡Hola! Soy la narradora de Vision+ Play. ¿Le entramos a unos juegos?",
+      "¡Buenas, buenas! Ya llegaste a Vision+ Play. ¿Jugamos o qué?",
+      "¡Bienvenido a Vision+ Play! Yo pongo la voz, tú pones las ganas.",
+      "¡Hola, hola! Soy la narradora. Esta noche se juega en serio.",
+      "¡Qué bueno que llegaste! Aquí empieza lo bueno.",
+      "¡Saludos, jugador! Vision+ Play te estaba esperando.",
+      "¡Ey! ¿Listo para jugar? Yo ya calenté la voz.",
+      "¡Bienvenido al plató! Ponte cómodo, que esto se pone bueno.",
+      "¡Hola! Júntense todos, que ya vamos a empezar.",
+      "¡Qué onda! Soy la narradora de Vision+ Play. ¿Jugamos?"
+    ]
+  },
+  {
+    "id": "selector",
+    "variants": [
+      "Elige el juego. Tú pones las ganas y yo le pongo el sabor.",
+      "Escoge tu veneno: trivia, charadas o apuestas.",
+      "¿Qué se juega hoy? Tú mandas, yo narro.",
+      "Tres juegos, una noche. Elige sabiamente.",
+      "La carta está servida. ¿Por dónde empezamos?",
+      "Elige un juego. Yo pongo la voz y el ritmo.",
+      "¿Trivia, actuación o apuestas? Difícil decisión.",
+      "Todo listo. Solo falta que elijas el juego.",
+      "Mira la carta y dime: ¿qué jugamos primero?",
+      "Elige el juego de esta noche. Sin presiones... o con poquitas."
+    ]
+  },
+  {
+    "id": "create",
+    "variants": [
+      "Sala lista, jefe. Pasa el código antes de que se enfríen los tacos.",
+      "Sala creada. Comparte el código con tus amigos.",
+      "La sala ya está abierta. ¡Que se junte la banda!",
+      "Código listo. Pásalo antes de que se acabe la fiesta.",
+      "Sala creada. Corre a avisarle a todos.",
+      "Ya hay sala. El código es tu boleto de entrada.",
+      "La mesa está puesta. Comparte el código.",
+      "Sala lista. Que nadie se quede fuera.",
+      "Código en mano. ¡A juntar jugadores!",
+      "Sala abierta. Pasa el código por el grupo."
+    ]
+  },
+  {
+    "id": "join",
+    "variants": [
+      "Ya estás dentro. Ponte cómodo, que esto se va a poner bueno.",
+      "¡Bienvenido a la sala! Agarra tu lugar.",
+      "Ya entraste. La diversión está por empezar.",
+      "¡Un jugador más! La sala se pone buena.",
+      "Dentro. Ponte listo, que ya casi empezamos.",
+      "¡Hola, nuevo jugador! Bienvenido a la partida.",
+      "Ya estás en la sala. Que empiece lo bueno.",
+      "¡Se unió otro valiente! Bienvenido.",
+      "Entrada confirmada. Acomódate.",
+      "Ya eres parte del juego. ¡Suerte!"
+    ]
+  },
+  {
+    "id": "start",
+    "variants": [
+      "¡Que empiece la trivia! Aquí no hay empate, hay revancha.",
+      "¡Arrancamos! Que gane el más listo.",
+      "¡Empieza la partida! Concentrados todos.",
+      "¡Vámonos! La trivia ya empezó.",
+      "¡Que comience el juego! Sin piedad.",
+      "¡Arranca la trivia! A demostrar quién sabe más.",
+      "¡Empezamos! Que nadie se copie.",
+      "¡La partida ya empezó! Piensen rápido.",
+      "¡Vámonos recio! Primera pregunta en camino.",
+      "¡Que empiece lo bueno! Mucha suerte a todos."
+    ]
+  },
+  {
+    "id": "correct",
+    "variants": [
+      "¡Chido! Punto para ti.",
+      "¡Exacto! Muy bien.",
+      "¡Correcto! Vas con todo.",
+      "¡Le atinaste! Punto para ti.",
+      "¡Eso! Bien jugado.",
+      "¡Correctísimo! Sigue así.",
+      "¡Buena! Punto para ti.",
+      "¡Así se hace! Correcto.",
+      "¡Le diste al clavo! Punto.",
+      "¡Perfecto! Nadie te para."
+    ]
+  },
+  {
+    "id": "wrong",
+    "variants": [
+      "Casi, casi. Ni modo, a la próxima le atinas.",
+      "¡Uy! Por poquito. A la próxima.",
+      "Casi. La respuesta era otra.",
+      "¡No! Pero buen intento.",
+      "Cerca, pero no. Ni modo.",
+      "¡Fallaste! La próxima será.",
+      "Esa no era. Tranquilo, quedan rondas.",
+      "¡Casi le atinas! Otra vez será.",
+      "No fue esa. A seguir jugando.",
+      "¡Por un pelito! Ni modo."
+    ]
+  },
+  {
+    "id": "time",
+    "variants": [
+      "¡Se acabó el tiempo! Se nos hizo tarde, como siempre.",
+      "¡Tiempo! Ni modo, muy lento.",
+      "¡Se acabó el tiempo! Más rápido a la próxima.",
+      "¡Tiempo fuera! Se durmieron.",
+      "¡Ya fue! El tiempo no perdona.",
+      "¡Se acabó! Respondan más rápido.",
+      "¡Tiempo! El reloj no espera.",
+      "¡Fin del tiempo! A ponerse las pilas.",
+      "¡Se nos fue el tiempo! Ni modo.",
+      "¡Tiempo agotado! La próxima con más velocidad."
+    ]
+  },
+  {
+    "id": "reveal",
+    "variants": [
+      "Esta era la respuesta. No me vean así.",
+      "La respuesta correcta era esta. ¿La tenían?",
+      "Ahí estaba la respuesta. Ni modo.",
+      "Esta era. ¿Quién le atinó?",
+      "La respuesta era esta. Anótenla.",
+      "Pues era esta. ¿Alguien la sacó?",
+      "La correcta era esta. Siguiente ronda.",
+      "Esta era la buena. Ni modo.",
+      "Respuesta revelada. ¿Cómo les fue?",
+      "Era esta. A lo que sigue."
+    ]
+  },
+  {
+    "id": "podium",
+    "variants": [
+      "¡Tenemos ganador! Invita los tacos, ¿no?",
+      "¡Ganador! Felicidades al campeón.",
+      "¡Se acabó! El ganador se lleva los honores.",
+      "¡Tenemos campeón! Que invite algo.",
+      "¡Partida terminada! Felicidades al ganador.",
+      "¡Ganó el mejor! Aplausos para el campeón.",
+      "¡Fin del juego! El podio ya está decidido.",
+      "¡Campeón! A celebrar se ha dicho.",
+      "¡Se cerró la partida! Felicidades a todos.",
+      "¡El ganador manda! Gracias por jugar."
+    ]
+  },
+  {
+    "id": "solo",
+    "variants": [
+      "Modo solo. Juega a tu ritmo, sin prisas.",
+      "Vas solo. Tranquilo, sin presión.",
+      "Modo solo. A tu paso.",
+      "Juegas solo. Disfruta el ritmo.",
+      "Solo tú y la trivia. Sin prisas.",
+      "Modo solitario. Tú pones el ritmo.",
+      "Vas por tu cuenta. Con calma.",
+      "Un jugador, toda la gloria. A tu ritmo.",
+      "Modo solo. Sin rivales, sin presión.",
+      "Tú contra la trivia. ¡Venga!"
+    ]
+  },
+  {
+    "id": "charada_turn",
+    "variants": [
+      "¡A actuar! El público adivina en voz alta. Sin decir el nombre, ¿eh?",
+      "¡Te toca actuar! Nada de decir el título.",
+      "¡A la mímica! El público adivina gritando.",
+      "¡Actúa ya! Sin palabras prohibidas.",
+      "¡Tu turno de actuar! Que se note el talento.",
+      "¡A escenificar! El público ayuda gritando.",
+      "¡Actuando en tres, dos, uno! Sin decir el nombre.",
+      "¡Tú actúas, ellos adivinan! Manos a la obra.",
+      "¡A mover las manos! El título no se dice.",
+      "¡Escenario tuyo! Actúa sin decir ni pío del nombre."
+    ]
+  },
+  {
+    "id": "charada_correct",
+    "variants": [
+      "¡Exacto! Sigue así, que vas como cohete.",
+      "¡Le atinaron! Punto para el actor.",
+      "¡Correcto! Buen equipo hacen.",
+      "¡Adivinada! Sigue actuando.",
+      "¡Eso era! Punto bien ganado.",
+      "¡Lo sacaron! Vas volando.",
+      "¡Bien adivinado! Otro punto.",
+      "¡Correcto! El público sí ayuda.",
+      "¡Acertaron! Que no pare la racha.",
+      "¡Exactamente eso! Punto para ti."
+    ]
+  },
+  {
+    "id": "charada_pass",
+    "variants": [
+      "Pasamos. ¡Siguiente! No se duerman.",
+      "¡Pase! Vamos con otra.",
+      "Se pasa. Siguiente título.",
+      "¡Otra! Esa estaba difícil.",
+      "Pasamos esa. ¡La que sigue!",
+      "¡Siguiente! Sin atorarse.",
+      "Pase concedido. Otra carta.",
+      "Esa no salió. ¡Vamos con otra!",
+      "¡Se pasa! Mejor la siguiente.",
+      "Pase. No se claven, sigue el juego."
+    ]
+  },
+  {
+    "id": "charada_reveal",
+    "variants": [
+      "Se acabó el turno. Buen trabajo, aunque sea de milagro.",
+      "¡Fin del turno! Buen esfuerzo.",
+      "Se acabó el tiempo de actuar. Bien jugado.",
+      "¡Turno terminado! Aplausos al actor.",
+      "Fin del turno. Descansa esas manos.",
+      "¡Se acabó! El actor lo dio todo.",
+      "Turno completo. Buena actuación.",
+      "¡Corte! Se acabó el turno.",
+      "Fin de la actuación. ¡Bravo!",
+      "El turno terminó. A calificar al actor."
+    ]
+  },
+  {
+    "id": "wager_start",
+    "variants": [
+      "Hagan sus apuestas. La primera pista vale el triple, así que piénsenle.",
+      "¡A apostar! La primera pista paga triple.",
+      "Apuestas abiertas. Temprano vale más.",
+      "¿Cuánto le meten? La primera pista paga el triple.",
+      "Hagan sus apuestas. El que arriesga, gana.",
+      "¡Apuesten ya! Primera pista, triple premio.",
+      "La mesa está abierta. Apuesta con cabeza.",
+      "¿Cuánto vale tu instinto? Apuesta ahora.",
+      "Apuestas, apuestas. La primera pista es oro.",
+      "Pongan sus puntos sobre la mesa. ¡Ya!"
+    ]
+  },
+  {
+    "id": "wager_clue",
+    "variants": [
+      "Una pista más. Si fallan, pierden la apuesta… y la dignidad.",
+      "Otra pista. Pero vale menos, ¿eh?",
+      "Pista nueva. El premio va bajando.",
+      "Ahí va otra pista. Piensen rápido.",
+      "Una más. Cada pista vale menos.",
+      "Nueva pista en camino. El triple ya se fue.",
+      "Otra pistita. Ya no paga triple.",
+      "Segunda oportunidad con pista nueva.",
+      "Llega otra pista. ¿Ahora sí?",
+      "Una pista más. El reloj no perdona."
+    ]
+  },
+  {
+    "id": "wager_reveal",
+    "variants": [
+      "La respuesta era… ¡a ver quién se llevó la apuesta!",
+      "¡Se revela la respuesta! ¿Quién ganó?",
+      "La respuesta era esta. Revisen sus apuestas.",
+      "Ahí está la respuesta. ¡A ver los ganadores!",
+      "Respuesta revelada. ¿Quién se hizo rico?",
+      "Era esta. ¿Acertaron su apuesta?",
+      "La respuesta correcta… ¿Quién cobra?",
+      "¡Destapada la respuesta! Cuentas claras.",
+      "Esta era. Vamos a ver quién ganó.",
+      "Respuesta en mesa. ¿Quién apostó bien?"
+    ]
+  },
+  {
+    "id": "wager_win",
+    "variants": [
+      "¡Apuesta ganada! Puntos para ti. Invita algo.",
+      "¡Ganaste la apuesta! Buen olfato.",
+      "¡Cobrando! Apuesta ganada.",
+      "¡Lo lograste! La apuesta es tuya.",
+      "¡Ganador de la apuesta! Felicidades.",
+      "¡Bien apostado! Puntos para ti.",
+      "¡La apuesta cayó! A celebrar.",
+      "¡Ganaste! Buen instinto.",
+      "¡Apuesta ganada! El riesgo valió.",
+      "¡Cobra tus puntos! Bien jugado."
+    ]
+  },
+  {
+    "id": "wager_lose",
+    "variants": [
+      "La apuesta se fue. La próxima será, no se achicopalen.",
+      "¡Perdiste la apuesta! Ni modo.",
+      "Se fue la apuesta. A la próxima.",
+      "¡La apuesta se perdió! Tranquilo.",
+      "Ni modo, la apuesta voló. Otra vez será.",
+      "Apuesta perdida. No se agüiten.",
+      "¡Falló la apuesta! La suerte cambia.",
+      "Se perdieron esos puntos. Ni modo.",
+      "La apuesta no cuajó. Sigue jugando.",
+      "¡Adiós apuesta! La próxima la ganas."
+    ]
+  },
+  {
+    "id": "impostor_secret",
+    "variants": [
+      "Teléfonos arriba. Uno de ustedes no sabe dónde está.",
+      "Reparto secreto. El impostor ya está temblando.",
+      "Miren su pantalla y disimulen. Aquí empieza la mentira."
+    ]
+  },
+  {
+    "id": "impostor_vote",
+    "variants": [
+      "¿Quién miente? Señalen sin piedad.",
+      "Hora de votar. Las caras no mienten… o sí.",
+      "Voten al impostor. Si le atinan, se pone bueno."
+    ]
+  },
+  {
+    "id": "impostor_caught",
+    "variants": [
+      "¡Lo atraparon! Pero todavía puede robar la ronda.",
+      "Descubierto. Ahora tiene una última oportunidad.",
+      "¡Cayó el impostor! A ver si adivina el lugar."
+    ]
+  },
+  {
+    "id": "draw_start",
+    "variants": [
+      "A dibujar. Sin letras, sin trampas y sin pena.",
+      "El lienzo está listo. Que empiece la obra maestra.",
+      "Dibuja rápido, que la tele ya está mirando."
+    ]
+  },
+  {
+    "id": "draw_vote",
+    "variants": [
+      "¿Cuál es el título real? Voten, mentirosos.",
+      "Hora de votar. Busquen el título real entre tanta mentira.",
+      "Elijan el título verdadero. Sin trampas."
+    ]
+  },
+  {
+    "id": "auction_start",
+    "variants": [
+      "Se abre la subasta. Saquen las carteras y los faroles.",
+      "Lote en vitrina. Pujen por debajo del agua, sin que los vean.",
+      "El mercado negro abre. Que gane el más valiente."
+    ]
+  },
+  {
+    "id": "auction_reveal",
+    "variants": [
+      "¡Martillo! Veamos quién se quedó con el botín.",
+      "Se cierra la puja. Los empates se cancelan.",
+      "El martillo habló. A pagar o a llorar."
+    ]
+  },
+  {
+    "id": "fibbage_write",
+    "variants": [
+      "Inventen una mentira que suene a verdad. Aquí nadie sabe nada.",
+      "Si no sabes, invéntalo con cara de experto.",
+      "La verdad está escondida. Ustedes inventen el resto."
+    ]
+  },
+  {
+    "id": "fibbage_vote",
+    "variants": [
+      "Voten la que crean verdadera. Alguien va a morder.",
+      "Hora de votar. La mentira más creíble se lleva los puntos.",
+      "Señalen la verdad. Si caen, se ríen y suman."
+    ]
+  },
+  {
+    "id": "impostor_questions",
+    "variants": [
+      "Empieza el interrogatorio. Hagan sus preguntas en voz alta y fíjense quién suda.",
+      "A interrogar. Respondan rápido… el que duda, se delata solo.",
+      "Micrófono abierto en la sala. Cuidado con dar demasiadas pistas al impostor."
+    ]
+  },
+  {
+    "id": "impostor_escaped",
+    "variants": [
+      "¡Se les escapó en la cara! El impostor se lleva el botín.",
+      "Les vieron la cara a todos. Victoria limpia para el impostor.",
+      "Ni Sherlock los salvaba hoy. El impostor salió caminando por la puerta grande."
+    ]
+  },
+  {
+    "id": "party_timeout",
+    "variants": [
+      "¡Tiempo! El que no mandó nada, se quedó mirando.",
+      "Reloj en cero. A jugar con lo que alcanzaron a mandar.",
+      "Se acabó el tiempo. Más rápidos los dedos para la próxima."
+    ]
+  },
+  {
+    "id": "auction_tie",
+    "variants": [
+      "¡Choque de ambición! Empate en la cima, esas pujas quedan anuladas.",
+      "Pensaron igualito y se quedaron sin nada. Las pujas empatadas se cancelan.",
+      "Doble codicia, cero premio. El empate arriba le regala el lote al que sigue."
+    ]
+  },
+  {
+    "id": "lie_sweep",
+    "variants": [
+      "¡Cayeron redonditos! Esa mentira se acaba de llevar a media sala.",
+      "Maestro del engaño en la sala. Todos mordieron el mismo anzuelo.",
+      "Qué manera de vender humo… y qué manera de comprarlo todos juntos."
+    ]
+  },
+  {
+    "id": "nobody_guessed",
+    "variants": [
+      "Nadie le atinó a la verdad. O el dibujo era arte abstracto, o mienten demasiado bien.",
+      "Cero aciertos a la respuesta real. La verdad quedó completamente enterrada.",
+      "Ni uno solo dio en el blanco. Qué desastre más hermoso."
+    ]
+  },
+  {
+    "id": "final_round_double",
+    "variants": [
+      "Última ronda y puntos al doble. Aquí se define quién manda y quién lava los platos.",
+      "Ronda final. Todo vale el doble, así que todavía pueden arruinarle la noche al líder.",
+      "Última llamada. Con el doble de puntos en juego, nadie tiene la corona segura."
+    ]
+  }
+]

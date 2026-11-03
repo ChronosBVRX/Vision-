@@ -4,11 +4,13 @@ import android.content.Context
 import android.content.Intent
 import android.util.Base64
 import android.util.Log
+import com.chronosbvrx.visionplus.DeviceKind
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.mirror.EpisodeMirror
 import com.chronosbvrx.visionplus.data.normalizeDisplayName
+import com.chronosbvrx.visionplus.data.remote.RemoteBridge
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -730,12 +732,12 @@ object X4KApi {
                 if (code.isBlank()) continue
                 val name = displayChannelName(code, c.optString("name"))
                 val group = com.chronosbvrx.visionplus.data.LiveTaxonomy.genreFor(name)
-                val number = c.optString("channelNumber").takeIf { it.isNotBlank() }
                 out += com.chronosbvrx.visionplus.data.LiveChannel(
                     name = name,
                     url = "xtvlive:$code",
                     logo = c.optString("posterUrl").takeIf { it.isNotBlank() },
                     group = group,
+                    number = c.optString("channelNumber").trim().toIntOrNull(),
                 )
             }
             if (out.isNotEmpty()) {
@@ -755,14 +757,28 @@ object X4KApi {
         val upperCode = code.uppercase()
         val lowerName = trimmed.lowercase()
         return when {
+            // El portal etiqueta TNT (entretenimiento) como «TNT SPORTS HD»; el
+            // TNT Sports deportivo real es HD+/FHD (Chile). No lo cruces.
+            upperCode == "CYX_TNTSPORTS3" || lowerName == "tnt sports hd" -> "TNT HD"
+            upperCode == "CYX_BITME☆" || lowerName == "animal planet hd+" -> "BitMe HD"
+            upperCode == "CYX_622EEA9699C5DBB97E7DEC" -> "TNT Sports Chile HD+"
+            upperCode == "CYX_7A1A0524509A17E70D29A64" -> "TNT Sports Chile FHD"
+            upperCode == "CYX-CDFHD" -> "TNT Sports Premium Chile HD"
+            upperCode == "CYX-CDFFHD" -> "TNT Sports Premium Chile HD+"
+            upperCode == "CYX_TNTSPORTS☆" -> "TNT Sports Premium Chile FHD"
+            upperCode == "CYX_053453F405BE0EE2B020FAE5" || upperCode == "TNTSPORTSESTADIO" ->
+                "TNT Sports Chile Estadio"
+            upperCode == "CYX-FOXHD" -> "Star Channel HD"
+            upperCode == "CYX-FOXHD+" -> "Star Channel HD+"
+            upperCode == "CYX-FOXHD_CENTRAL" -> "Star Channel Central HD"
             upperCode == "ST☆R+HD_CYX" || lowerName == "elite sports hub hd" ->
-                "ESPN / Star+ HD"
+                "Disney+ (Elite Sports Hub)"
             upperCode == "ST☆R+ 2 HD_CYX" || lowerName == "elite sports hub 2 hd" ->
-                "ESPN 2 / Star+ 2 HD"
+                "Disney+ (Elite Sports Hub 2)"
             upperCode == "ST☆R+ 3 HD_CYX" || lowerName == "elite sports hub 3 hd" ->
-                "ESPN 3 / Star+ 3 HD"
+                "Disney+ (Elite Sports Hub 3)"
             upperCode == "ST☆R+ 4 HD_CYX" || lowerName == "elite sports hub 4 hd" ->
-                "ESPN 4 / Star+ 4 HD"
+                "Disney+ (Elite Sports Hub 4)"
             else -> trimmed
         }
     }
@@ -794,6 +810,7 @@ object X4KApi {
                     url = "xtvlive:$code",
                     logo = c.optString("posterUrl").takeIf { it.isNotBlank() },
                     group = group,
+                    number = c.optString("channelNumber").trim().toIntOrNull(),
                 )
             }
             if (out.isNotEmpty()) {
@@ -887,18 +904,11 @@ object X4KApi {
      * como ESPN. El mapeo vale para el endpoint individual y para el masivo.
      */
     private fun epgNameFor(channelCode: String, channelName: String): String = when {
-        channelCode.equals("ST☆R+HD_cyx", ignoreCase = true) ||
-            channelName.contains("Elite Sports Hub HD", ignoreCase = true) ||
-            channelName.equals("ESPN / Star+ HD", ignoreCase = true) -> "ESPN"
-        channelCode.equals("ST☆R+ 2 HD_cyx", ignoreCase = true) ||
-            channelName.contains("Elite Sports Hub 2", ignoreCase = true) ||
-            channelName.contains("ESPN 2 / Star+ 2", ignoreCase = true) -> "ESPN 2"
-        channelCode.equals("ST☆R+ 3 HD_cyx", ignoreCase = true) ||
-            channelName.contains("Elite Sports Hub 3", ignoreCase = true) ||
-            channelName.contains("ESPN 3 / Star+ 3", ignoreCase = true) -> "ESPN 3"
-        channelCode.equals("ST☆R+ 4 HD_cyx", ignoreCase = true) ||
-            channelName.contains("Elite Sports Hub 4", ignoreCase = true) ||
-            channelName.contains("ESPN 4 / Star+ 4", ignoreCase = true) -> "ESPN 4"
+        // Elite Sports Hub es la pantalla de Disney+, NO un ESPN en vivo.
+        // No se le cruza la guía de ESPN.
+        channelCode.startsWith("ST☆R+", ignoreCase = true) ||
+            channelName.contains("Elite Sports Hub", ignoreCase = true) ||
+            channelName.startsWith("Disney+ (Elite", ignoreCase = true) -> channelName
         else -> channelName
     }
 
@@ -1410,20 +1420,20 @@ object X4KApi {
                 slb.await()
                 item = meta?.await()
             }
-            var durMs = extractDurationMs(item)
-            // Los capítulos de serie no suelen traer duración propia: heredar de la ficha de la serie.
-            if (durMs <= 0L && sid.isNotBlank()) {
-                val seriesItem = itemInfo(context, sid)
-                durMs = extractDurationMs(seriesItem)
-            }
-            if (durMs <= 0L) {
+            // En series, la ficha editorial del capítulo puede devolver la duración de la
+            // serie/temporada (p. ej. 1 h 40 para un capítulo de 42 min). No se usa: el
+            // motor reporta la duración real del archivo y esa manda. Para películas sí se
+            // aprovecha la ficha del portal.
+            var durMs = if (sid.isBlank()) extractDurationMs(item) else 0L
+            if (durMs <= 0L && sid.isBlank()) {
                 val hist = PlaybackHistory.get(context, cid)
                 if (hist != null && hist.durationMs > 60_000L) {
                     durMs = hist.durationMs
                 }
             }
             // Si el portal no la reporta, aplicar la duración declarada en catálogo (Film.durationMin).
-            if (durMs <= 0L && fallbackDurationMs > 0L) {
+            // Solo en películas: la de una serie es la del contenedor, no la del capítulo.
+            if (durMs <= 0L && fallbackDurationMs > 0L && sid.isBlank()) {
                 durMs = fallbackDurationMs
             }
             var medias: JSONArray? = null
@@ -1777,6 +1787,7 @@ object X4KApi {
         title: String,
         channelCodes: List<String> = emptyList(),
         groupTitle: String? = null,
+        logo: String = "",
     ): Boolean = withContext(Dispatchers.IO) {
         guarded {
             // Asegurar SLB CDN entries y play_params para el motor Titan (valida sesión si expiró)
@@ -1809,6 +1820,7 @@ object X4KApi {
                 mediasJson = m,
                 channelCodes = channelCodes,
                 groupTitle = groupTitle.orEmpty(),
+                logoUrl = logo,
             )
             true
         } ?: false
@@ -1863,6 +1875,7 @@ object X4KApi {
         posterUrl: String = "",
         channelCodes: List<String> = emptyList(),
         groupTitle: String = "",
+        logoUrl: String = "",
         markersRef: String = "",
         markersEp: Int = 0,
         markersLengthSec: Int = 0,
@@ -1905,6 +1918,7 @@ object X4KApi {
             }
             if (resumeMs > 0) putExtra("resumeMs", resumeMs)
             if (posterUrl.isNotBlank()) putExtra("posterUrl", posterUrl)
+            if (logoUrl.isNotBlank()) putExtra("logoUrl", logoUrl)
             if (markersRef.isNotBlank()) putExtra("markersRef", markersRef)
             if (markersEp > 0) putExtra("markersEp", markersEp)
             if (markersLengthSec > 0) putExtra("markersLengthSec", markersLengthSec)
@@ -1914,6 +1928,11 @@ object X4KApi {
             }
             if (groupTitle.isNotBlank()) {
                 putExtra("channelGroup", groupTitle)
+            }
+            // El control remoto del teléfono recibe el estado del reproductor por este buzón.
+            // En un teléfono no hay servidor de control: el extra no se usa.
+            if (DeviceKind.isTelevision(context) && RemoteBridge.isMainProcess(context)) {
+                putExtra(RemoteBridge.EXTRA_HOST_MESSENGER, RemoteBridge.hostMessenger)
             }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }

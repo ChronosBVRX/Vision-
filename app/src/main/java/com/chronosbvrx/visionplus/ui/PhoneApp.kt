@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -67,6 +68,7 @@ import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.ui.about.AboutScreen
 import com.chronosbvrx.visionplus.ui.brand.VisionWordmark
+import com.chronosbvrx.visionplus.ui.games.GamesComingSoonScreen
 import com.chronosbvrx.visionplus.ui.home.HomeScreen
 import com.chronosbvrx.visionplus.ui.phone.CategoriesScreen
 import com.chronosbvrx.visionplus.ui.phone.LibraryScreen
@@ -80,11 +82,14 @@ import com.chronosbvrx.visionplus.ui.plugins.AppUpdatesDialog
 import com.chronosbvrx.visionplus.ui.plugins.appUpdateBadgeCount
 import com.chronosbvrx.visionplus.ui.plugins.CountBadgedIcon
 import com.chronosbvrx.visionplus.ui.plugins.PluginUpdatesBellIcon
-import com.chronosbvrx.visionplus.ui.remote.RemoteMiniPlayer
+import com.chronosbvrx.visionplus.data.remote.RemoteClient
+import com.chronosbvrx.visionplus.data.remote.RemoteStatus
+import com.chronosbvrx.visionplus.ui.remote.RemoteNowBar
 import com.chronosbvrx.visionplus.ui.sports.SportsScreen
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.title.TitleScreen
+import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import kotlinx.coroutines.launch
 
 import androidx.compose.material.icons.filled.Download
@@ -100,6 +105,7 @@ internal val TABS = listOf(
     Tab(Route.Section("series", "Series"), "Series", Icons.Default.Theaters),
     Tab(Route.Live, "En vivo", Icons.Default.LiveTv),
     Tab(Route.Sports, "Deportes en vivo", Icons.Default.SportsSoccer),
+    Tab(Route.Games, "Juegos", VisionIcons.Games),
     Tab(Route.Library, "Mi lista", Icons.Default.Bookmark),
     Tab(Route.Downloads, "Descargas", Icons.Default.Download),
     Tab(Route.Remote, "Control remoto", Icons.Default.Cast),
@@ -119,9 +125,17 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val route = nav.current
     LaunchedEffect(route) { com.chronosbvrx.visionplus.data.diag.Diagnostics.screen(route.toString()) }
+    // Si ya hay una tele vinculada, el móvil entra solo al control: así la barra «Ahora en la
+    // tele» puede aparecer sin que la persona tenga que abrir primero la pestaña del control.
+    LaunchedEffect(Unit) {
+        if (RemoteClient.state.value.status == RemoteStatus.IDLE) {
+            RemoteClient.rememberedTvs(context).firstOrNull()?.let { RemoteClient.connect(context, it) }
+        }
+    }
     val rows = catalog.rows
     val isTab = TABS.any { it.route == route }
     val isWide = isLandscapeTablet()
+    val inGame = route == Route.Games || route is Route.GameRoom
     val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
     var showPluginUpdates by rememberSaveable { mutableStateOf(false) }
     val updatesBadge = appUpdateBadgeCount()
@@ -140,7 +154,7 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
             if (latest.isNotBlank() && (AppUpdate.forced(context) || skipped != latest)) showPluginUpdates = true
         }
     }
-    if (showPluginUpdates && isOnline) {
+    if (showPluginUpdates && isOnline && !inGame) {
         AppUpdatesDialog(
             release = AppUpdate.latest,
             onDismiss = {
@@ -245,6 +259,22 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
             return
         }
         else -> Unit
+    }
+
+    // Vision+ Play es un modo inmersivo: sin barra superior, sin menú lateral y sin
+    // el aviso del control remoto. Solo se ve la interfaz del juego.
+    if (inGame) {
+        Box(Modifier.fillMaxSize()) {
+            when (route) {
+                // Vision+ Play sigue en preparación: no se abre el tablero ni una sala.
+                Route.Games, is Route.GameRoom -> GamesComingSoonScreen(
+                    isTv = false,
+                    onBack = { nav.pop() },
+                )
+                else -> Unit
+            }
+        }
+        return
     }
 
     ModalNavigationDrawer(
@@ -352,8 +382,13 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = VisionBlack),
                     )
                 },
-                // The linked TV's remote, floating over the section screens while it plays something.
-                bottomBar = { RemoteMiniPlayer(rows) },
+                // Lo que la tele reproduce, a la vista en todo el móvil (tocar abre el control).
+                bottomBar = {
+                    RemoteNowBar(
+                        visible = route != Route.Remote,
+                        onOpen = { nav.goTab(Route.Remote) },
+                    )
+                },
             ) { padding ->
                 // Transición suave entre secciones (solo móvil: en TV el foco manda al instante).
                 androidx.compose.animation.Crossfade(
@@ -383,6 +418,10 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
                             onOpenFilm = { nav.push(Route.Title(it)) },
                         )
                         Route.Sports -> SportsScreen(padding, onPlay = { nav.push(Route.LivePlayer(it)) })
+                        Route.Games, is Route.GameRoom -> GamesComingSoonScreen(
+                            isTv = false,
+                            onBack = { nav.pop() },
+                        )
                         Route.Library -> LibraryScreen(
                             catalog,
                             padding,

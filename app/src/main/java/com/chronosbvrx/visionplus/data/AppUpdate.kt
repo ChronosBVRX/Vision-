@@ -89,8 +89,16 @@ object AppUpdate {
         if (channel != CHANNEL_BETA) return stable
         if (stable == null) return beta
         if (beta == null) return stable
-        val stableNumber = parseReleaseNumber(stable.version)
-        val betaNumber = parseReleaseNumber(beta.version)
+        val betaNumber = if (stable.versionCode > 0 && beta.versionCode > 0) {
+            beta.versionCode
+        } else {
+            parseReleaseNumber(beta.version).toLong()
+        }
+        val stableNumber = if (stable.versionCode > 0 && beta.versionCode > 0) {
+            stable.versionCode
+        } else {
+            parseReleaseNumber(stable.version).toLong()
+        }
         return if (betaNumber >= stableNumber) beta else stable
     }
 
@@ -127,13 +135,21 @@ object AppUpdate {
         val release = latest ?: return false
         val current = parseReleaseNumber(currentVersion(context))
         val remote = parseReleaseNumber(release.version)
+        val currentCode = currentVersionCode(context)
+        // El versionCode del manifiesto distingue builds del mismo nombre (p. ej. reemplazos
+        // de una beta); si no viene, se compara el nombre de versión de siempre.
+        val remoteNewer = if (release.versionCode > 0 && currentCode > 0) {
+            release.versionCode > currentCode
+        } else {
+            remote > current
+        }
         // Heurística: si el APK del release es debug (no firmado de release), no lo ofrezcas.
         val apkUrl = release.apkUrl ?: ""
         val apkInstallable = !(apkUrl.contains("-debug", ignoreCase = true) || apkUrl.contains("-unsigned", ignoreCase = true))
         return updateOffer(
             forced = forced(context),
             paused = paused(context),
-            remoteNewer = remote > current,
+            remoteNewer = remoteNewer,
             apkInstallable = apkInstallable,
         )
     }
@@ -241,6 +257,7 @@ object AppUpdate {
             val version = json.optString("version").ifBlank { releaseVersion(json.optString("tag_name"), "") }
             if (version.isBlank()) null else Release(
                 version = version,
+                versionCode = json.optLong("versionCode", 0L),
                 url = RELEASES_PAGE,
                 apkUrl = apkUrl,
                 notes = json.optString("notes").takeIf { it.isNotBlank() },
@@ -372,4 +389,6 @@ data class Release(
     val url: String,
     val apkUrl: String? = null,
     val notes: String? = null,
+    /** El versionCode del APK publicado, cuando el `version.json` lo trae. */
+    val versionCode: Long = 0L,
 )

@@ -1,0 +1,72 @@
+================================================================
+        VISION+ PARA WINDOWS (VERSION PORTABLE)
+================================================================
+
+SI RECIBISTE "VisionPlusPC-Portable.exe"
+  Ese único archivo ya incluye todo (interfaz, motor, servidor,
+  Chromium y FFmpeg). Haz doble clic y listo. Los datos se guardan
+  en la carpeta "VisionPlusPC-data" junto al ejecutable.
+  Al abrirlo verás una pantalla de carga con barra de progreso
+  mientras se prepara el motor y la interfaz.
+
+SI RECIBISTE LA CARPETA "VisionPlusPC"
+  Usa las instrucciones de abajo.
+
+COMO USAR
+  1. Haz doble clic en "VisionPlusPC.exe".
+  2. La aplicación abrirá su propia ventana (sin barra de direcciones).
+  3. No hace falta instalar Node.js, FFmpeg ni nada más: van incluidos
+     en la carpeta runtime\.
+
+REPRODUCCION EN SEGUNDO PLANO Y BANDEJA
+  - Al cerrar con la "X" o al minimizar, la ventana se oculta a la
+    bandeja del sistema (junto al reloj) y el contenido sigue
+    reproduciéndose.
+  - Para volver: doble clic (o clic) en el icono de Vision+ de la
+    bandeja.
+  - Para cerrar de verdad: clic derecho en el icono de la bandeja y
+    elige "Cerrar aplicación".
+
+ATAJOS DE TECLADO
+  - Flechas: navegar por la interfaz (igual que el mando de la TV).
+  - Enter: seleccionar / reproducir.
+  - Escape o Retroceso: volver / cerrar el reproductor.
+  - F: pantalla completa.
+  - P: ventana flotante (Picture-in-Picture) durante la reproducción.
+  - Espacio: pausa / reproducir (dentro del reproductor).
+  - Izquierda / Derecha: retroceder o avanzar 10 segundos.
+  - Clic en la barra de progreso: saltar al minuto elegido.
+
+QUE INCLUYE
+  - La misma interfaz de Smart TV de Vision+: Inicio, TV en vivo,
+    Deportes, Buscar, Catálogo, Ajustes, ficha, temporadas/capítulos
+    y reproductor.
+  - El mismo catálogo del VPS y la misma resolución del portal XTV
+    que usa el port de webOS.
+  - Proxy local y FFmpeg para que Chrome/Edge reproduzcan el catálogo
+    aunque el título venga en MPEG-TS o HEVC (se convierte a H.264).
+  - TV en vivo convertida a un flujo MP4 compatible con el navegador.
+
+COMPATIBILIDAD
+  - Windows 10 u 11 con Microsoft Edge (incluido) o Google Chrome.
+  - En Windows 7/8.1 hace falta una versión de Node.js y un navegador
+    compatibles con ese sistema; no es la combinación probada.
+  - Puedes copiar toda la carpeta a una memoria USB o a otra PC. La
+    sesión, la caché y el perfil del navegador viven en data\.
+
+SI ALGO FALLA
+  - Windows puede mostrar SmartScreen ("Más información" ->
+    "Ejecutar de todas formas") porque el lanzador no está firmado
+    con un certificado comercial.
+  - Revisa data\launcher.log y data\server.log.
+  - Si el puerto 8910 está ocupado, Vision+ prueba el 8911, 8912...
+    y escribe el puerto real en data\port.json.
+  - Si no aparece la ventana, abre INICIAR-VISIONPLUS.bat: es el
+    mismo arranque sin el lanzador de bandeja.
+
+NOTA LEGAL
+  Vision+ es un proyecto personal de ChronosBVRX. El catálogo, las
+  licencias y el motor pertenecen a sus proveedores. No se
+  redistribuyen credenciales. Node.js (MIT) y FFmpeg (LGPL/GPL según
+  build) se incluyen como componentes de terceros; revisa
+  runtime\NODE-LICENSE.txt y runtime\FFMPEG-LICENSE.txt.

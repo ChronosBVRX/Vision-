@@ -7,11 +7,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * La lista del selector de un partido: SOLO los enlaces que GeeSports publica para
- * ese evento. Si la fuente no manda ninguno, la lista queda vacía y la UI muestra
- * «Sin enlaces disponibles».
+ * La lista del selector de un partido: TODAS las fuentes que la fuente publica
+ * para ese evento (con dirección o como ranura «Sin señal»). Si no declara
+ * ninguna, la lista queda vacía y la UI muestra «Sin enlaces disponibles».
  *
- * Es el guardián de «la única fuente de verdad es GeeSports»: nada de guía/parrilla
+ * Es el guardián de «la única fuente de verdad es el evento»: nada de guía/parrilla
  * ni de canales del catálogo colándose como si fueran señales del partido.
  */
 class GeePicksTest {
@@ -41,12 +41,14 @@ class GeePicksTest {
     }
 
     @Test
-    fun aSignalWithoutAddressIsNeverOffered() {
+    fun aDeclaredSignalWithoutAddressStillAppearsAsNotPlayable() {
         val rows = geePickRows(
             title = "León vs América",
             links = listOf(link("TUDN US", url = ""), link("CANAL MX FHD")),
         )
-        assertEquals(listOf("CANAL MX FHD"), rows.map { it.title })
+        assertEquals(listOf("CANAL MX FHD", "TUDN US"), rows.map { it.title })
+        assertEquals(listOf(true, false), rows.map { it.playable })
+        assertEquals("Sin señal", rows.last().typeLabel)
     }
 
     @Test
@@ -93,9 +95,21 @@ class GeePicksTest {
     }
 
     @Test
-    fun noLinksLeavesTheListEmptyForTheLegend() {
+    fun noDeclaredSourcesLeavesTheListEmptyForTheLegend() {
         assertTrue(geePickRows(title = "Partido").isEmpty())
-        assertTrue(geePickRows(title = "Partido", links = listOf(link("Sin URL", url = ""))).isEmpty())
+        assertTrue(geePickRows(title = "Partido", links = listOf(link("", url = ""))).isEmpty())
+    }
+
+    @Test
+    fun twoDifferentSourcesThatShareAUrlAreBothKept() {
+        val rows = geePickRows(
+            title = "Partido",
+            links = listOf(
+                link("HD QUALITY", "https://cdn.test/compartido.m3u8"),
+                link("HD QUALITY 2", "https://cdn.test/compartido.m3u8"),
+            ),
+        )
+        assertEquals(listOf("HD QUALITY", "HD QUALITY 2"), rows.map { it.title })
     }
 
     @Test
@@ -112,5 +126,50 @@ class GeePicksTest {
         val clearKey = row.copy(channel = row.channel.copy(drmKey = "kid:key"))
         assertEquals("DASH · ClearKey", clearKey.typeLabel)
         assertEquals("HLS", row.copy(type = "hls").typeLabel)
+    }
+
+    @Test
+    fun anEmbedWithoutUrlIsPlayableWhenTouched() {
+        val token = """{"api":"https://embed.example/live","type":"embed"}"""
+        val rows = geePickRows(
+            title = "Chivas vs Atlante",
+            links = listOf(
+                GeeSportsSource.GeeLink(
+                    name = "TELEMUNDO HD",
+                    link = "",
+                    headers = emptyMap(),
+                    type = "hls",
+                    drm = "",
+                    alive = null,
+                    tokenApi = token,
+                    resolvable = true,
+                ),
+            ),
+        )
+        assertEquals(1, rows.size)
+        assertTrue("se puede tocar para resolver", rows[0].playable)
+        assertEquals("Se resuelve al tocar", rows[0].typeLabel)
+        assertTrue(rows[0].tokenApi.isNotBlank())
+    }
+
+    @Test
+    fun xtvOptionGoesFirstAndKeepsTheServerRecommendationOrder() {
+        val rows = xtvPickRows(
+            listOf(
+                GeeSportsSource.XtvOption(
+                    name = "FOX One", code = "xtvlive:cyx_FOX", country = "México",
+                    verified = true, recommended = true, note = "FOX+ premium",
+                ),
+                GeeSportsSource.XtvOption(
+                    name = "AYM Sports", code = "cyx_AYM", country = "México",
+                    verified = true, recommended = false, note = "FOX básico",
+                ),
+            ),
+        )
+        assertEquals(listOf("FOX One", "AYM Sports"), rows.map { it.title })
+        assertEquals("En tu TV", rows.first().typeLabel)
+        assertEquals("xtvlive:cyx_FOX", rows.first().channel.url)
+        assertEquals("xtvlive:cyx_AYM", rows[1].channel.url)
+        assertTrue(rows.all { it.playable })
     }
 }

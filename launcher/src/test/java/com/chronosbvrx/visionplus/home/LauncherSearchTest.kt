@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.home
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,14 +34,14 @@ class LauncherSearchTest {
     }
 
     @Test
-    fun theEventsTabOpensTheExactEventInVisionPlus() {
+    fun theSportsShortcutOpensTheExactEventInVisionPlus() {
         val screen = require(
             "src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt",
             "launcher/src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt",
         )
-        assertTrue(screen.contains("HomeTab.EVENTS -> EventsSurface("))
-        assertTrue(screen.contains("VisionLinks.sports()"))
-        assertTrue(screen.contains("event.openLink"))
+        assertTrue(screen.contains("VisionDestination.SPORTS -> VisionLinks.sports()"))
+        assertTrue(screen.contains("onVisionDestination = { openVisionDestination(it) }"))
+        assertFalse("fuera la pestaña vieja", screen.contains("HomeTab.EVENTS -> EventsSurface("))
 
         val surfaces = require(
             "src/main/java/com/chronosbvrx/visionplus/home/ui/Surfaces.kt",

@@ -54,6 +54,14 @@ EPG_STALE_HOURS = int(os.environ.get("DIAG_EPG_STALE_HOURS", "8"))
 EPG_MIN_FUTURE = int(os.environ.get("DIAG_EPG_MIN_FUTURE", "500"))
 EPG_ALERT_KEY = "health_epg_alert_at"
 
+# Salud de Deportes: `link_names` (events.txt) es la lista que ve el usuario. Si el
+# worker deja de refrescarla o queda desalineada con las filas servidas, Vision+
+# vuelve a enseñar menos fuentes que la app original. Se avisa pronto (2 h de
+# enfriamiento) porque un partido en vivo dura poco.
+GEE38_STALE_MINUTES = int(os.environ.get("DIAG_GEE38_STALE_MINUTES", "15"))
+GEE38_COOLDOWN_HOURS = float(os.environ.get("DIAG_GEE38_COOLDOWN_HOURS", "2"))
+GEE38_ALERT_KEY = "health_gee38_alert_at"
+
 # --- Canario de builds nuevos: si una versión recién publicada rompe el reproductor, se frena
 # sola la oferta de actualizaciones (`ota_paused`) para que no se la lleven más equipos. El
 # forzado (`min_version_code`) sigue vigente porque `forced` gana sobre `paused` en la app.
@@ -865,6 +873,100 @@ def epg_alert_text(
     )
 
 
+def gee38_alert_text(
+    mismatched: int,
+    last: dt.datetime | None,
+    now: dt.datetime,
+) -> str:
+    """Aviso humano cuando la lista de fuentes de Deportes queda vieja/desalineada."""
+    if mismatched > 0:
+        return (
+            "🟠 Deportes: la lista de fuentes quedó desalineada\n\n"
+            f"{mismatched} eventos declaran más nombres (`link_names`) que filas servidas.\n"
+            "Eso hace que Vision+ enseñe menos fuentes que la app original.\n\n"
+            "👉 Revisar el worker: `docker compose logs --tail 120 sync | grep -i gee38` "
+            "y `curl -H \"X-Api-Key: …\" https://visionplusv2.duckdns.org/v1/gee38/health`.\n\n"
+            "Aviso automático de Vision+ · Deportes"
+        )
+    if last is None:
+        when = "sin sello de metadatos"
+    else:
+        minutes = int((now - last).total_seconds() // 60)
+        when = f"último refresco: {_mx_stamp(last)} (hace {minutes} min)"
+    return (
+        "🟠 Deportes: `events.txt` dejó de refrescarse\n\n"
+        f"{when}.\n"
+        "La app original saca la lista de canales de ese archivo; sin refresco, "
+        "Vision+ puede enseñar una lista vieja de fuentes.\n\n"
+        "👉 Revisar en el VPS: `docker compose ps sync`, "
+        "`docker compose logs --tail 120 sync | grep -i gee38` y "
+        "`curl -H \"X-Api-Key: …\" https://visionplusv2.duckdns.org/v1/gee38/health`.\n\n"
+        "Aviso automático de Vision+ · Deportes"
+    )
+
+
+def _gee38_stamp(value) -> dt.datetime | None:
+    """Lee el sello `{\"at\": \"...\"}` de `gee38_meta`."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (ValueError, TypeError):
+            return None
+    if not isinstance(value, dict):
+        return None
+    raw = str(value.get("at") or "").strip()
+    if not raw:
+        return None
+    try:
+        stamp = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=dt.timezone.utc)
+
+
+async def gee38_health(pool) -> int:
+    """Avisa si los metadatos de Deportes se congelaron o quedaron desalineados."""
+    now = dt.datetime.now(dt.timezone.utc)
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "select max(updated_at) as last_event from gee38_catalog where kind = 'event'"
+            )
+            stamps = await conn.fetch(
+                "select k, v from gee38_meta where k in ('meta_at', 'hot_at', 'full_at')"
+            )
+            previous = await conn.fetchrow(
+                "select updated_at from sync_meta where key = $1", GEE38_ALERT_KEY
+            )
+        meta_moment = None
+        moments: list[dt.datetime] = []
+        for item in stamps:
+            moment = _gee38_stamp(item["v"])
+            if moment is None:
+                continue
+            moments.append(moment)
+            if item["k"] == "meta_at":
+                meta_moment = moment
+        # La lista de canales depende EXCLUSIVAMENTE de `meta_at`: el pase de
+        # enlaces puede estar fresco mientras `events.txt` sigue congelado.
+        last = meta_moment or (max(moments) if moments else (
+            row["last_event"] if row and row["last_event"] else None
+        ))
+        if not is_stale(last, now, dt.timedelta(minutes=GEE38_STALE_MINUTES)):
+            return 0
+        before = previous["updated_at"] if previous else None
+        if before is not None and now - before < dt.timedelta(hours=GEE38_COOLDOWN_HOURS):
+            return 0
+        await asyncio.to_thread(send_alert, gee38_alert_text(0, last, now))
+        async with pool.acquire() as conn:
+            await _stamp_health_alert(conn, GEE38_ALERT_KEY, now)
+        log.warning("salud de Deportes: metadatos sin refrescar (último=%s)", last)
+        return 1
+    except Exception:  # noqa: BLE001 - la salud de Deportes no tumba el worker
+        log.exception("la salud de Deportes no se pudo revisar")
+        return 0
+
+
 async def _stamp_health_alert(conn, key: str, now: dt.datetime) -> None:
     await conn.execute(
         """
@@ -1310,6 +1412,10 @@ async def loop(pool) -> None:
             await catalog_health(pool)
         except Exception:  # noqa: BLE001 - la salud del catálogo no tumba el worker
             log.exception("salud del catálogo falló")
+        try:
+            await gee38_health(pool)
+        except Exception:  # noqa: BLE001 - la salud de Deportes no tumba el worker
+            log.exception("salud de Deportes falló")
         try:
             await build_canary(pool)
         except Exception:  # noqa: BLE001 - el canario no tumba el worker

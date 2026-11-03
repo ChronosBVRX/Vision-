@@ -22,8 +22,10 @@ class LauncherUtilityTest {
         assertTrue("candado del KeyUp", components.contains("TvPressGuard"))
         assertTrue("la repetición del mando también cuenta", components.contains("repeatCount"))
 
+        val dialogBack = require("src/main/java/com/chronosbvrx/visionplus/home/ui/DialogBack.kt")
+        assertTrue("la raíz del diálogo se come el KeyUp del OK largo", dialogBack.contains("TvPressGuard.takeKeyUp()"))
         val dialog = require("src/main/java/com/chronosbvrx/visionplus/home/ui/Personalize.kt")
-        assertTrue("el diálogo se come el KeyUp del OK largo", dialog.contains("TvPressGuard.takeKeyUp()"))
+        assertTrue("el menú de la tarjeta usa ese candado", dialog.contains(".consumeLongPressRelease()"))
     }
 
     @Test

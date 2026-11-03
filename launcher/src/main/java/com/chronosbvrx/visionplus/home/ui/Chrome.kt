@@ -2,11 +2,15 @@
 
 package com.chronosbvrx.visionplus.home.ui
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,12 +22,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,7 +44,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -50,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chronosbvrx.visionplus.home.data.HomeConfig
 import com.chronosbvrx.visionplus.home.data.StartTab
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -99,6 +104,41 @@ internal fun visibleTabs(config: HomeConfig, inputsAvailable: Boolean): List<Hom
     return listOf(HomeTab.HOME) + visible
 }
 
+/**
+ * La barra del launcher agrupa **TV en vivo** y **Deportes** en un solo destino «En vivo» con
+ * menú desplegable. Si la persona ocultó una de las dos, la otra se pinta sola; nunca se
+ * inventa una puerta vacía.
+ */
+internal sealed interface HomeTopEntry {
+    data class Tab(val tab: HomeTab) : HomeTopEntry
+    data object LiveHub : HomeTopEntry
+}
+
+internal fun visibleTopEntries(tabs: List<HomeTab>): List<HomeTopEntry> {
+    val live = HomeTab.LIVE in tabs
+    val events = HomeTab.EVENTS in tabs
+    val out = ArrayList<HomeTopEntry>(tabs.size)
+    var hubAdded = false
+    for (tab in tabs) {
+        if (tab == HomeTab.LIVE || tab == HomeTab.EVENTS) {
+            if (live && events) {
+                if (!hubAdded) {
+                    out += HomeTopEntry.LiveHub
+                    hubAdded = true
+                }
+            } else {
+                out += HomeTopEntry.Tab(tab)
+            }
+        } else {
+            out += HomeTopEntry.Tab(tab)
+        }
+    }
+    return out
+}
+
+internal fun liveHubActive(tab: HomeTab): Boolean =
+    tab == HomeTab.LIVE || tab == HomeTab.EVENTS
+
 /** La hora de la casa: centro de México, aunque la tele esté en otra zona. */
 @Composable
 fun rememberClockText(clock24h: Boolean = true): String {
@@ -123,132 +163,126 @@ internal fun msToNextMinute(nowMs: Long = System.currentTimeMillis()): Long {
 }
 
 /**
- * La barra del sistema. Es lo primero que se ve al encender la tele: marca a la izquierda,
- * pestañas al centro-izquierda, hora/perfil/acciones a la derecha. Nunca se desplaza.
+ * La barra superior del ESCRITORIO. No es la barra de la app: no lleva pestañas de catálogo.
+ * A la izquierda vive la identidad del sistema y el saludo; a la derecha, los indicadores
+ * que solo tienen sentido en un launcher (red, centro de control, ajustes y un reloj grande).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TopChrome(
     tab: HomeTab,
     profile: String,
+    network: String,
     onTab: (HomeTab) -> Unit,
     onSearch: () -> Unit,
     onCommandCenter: () -> Unit,
+    onVisionSettings: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     activeTabRequester: FocusRequester? = null,
     downTarget: FocusRequester? = null,
     clock24h: Boolean = true,
     showClock: Boolean = true,
-    /**
-     * Las pestañas que ESTE equipo puede mostrar. Una TV box no tiene sintonizador ni
-     * entradas HDMI, así que «Entradas» no se pinta: un launcher no enseña puertas vacías.
-     */
-    availableTabs: List<HomeTab> = HomeTab.entries,
+    hasNotifications: Boolean = false,
 ) {
     val clock = rememberClockText(clock24h)
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(if (compact) 52.dp else 62.dp)
+            .height(if (compact) 60.dp else 76.dp)
+            .background(
+                Brush.verticalGradient(
+                    0f to HomeColors.Black.copy(alpha = 0.72f),
+                    1f to Color.Transparent,
+                ),
+            )
             .padding(horizontal = if (compact) 36.dp else 52.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Marca
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Vision",
-                color = HomeColors.Text,
-                fontSize = if (compact) 17.sp else 20.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = (-0.4).sp,
-            )
-            Text(
-                "+",
-                color = HomeColors.BlueBright,
-                fontSize = if (compact) 17.sp else 20.sp,
-                fontWeight = FontWeight.Black,
-            )
-            Spacer(Modifier.width(10.dp))
-            Box(Modifier.width(1.dp).height(15.dp).background(Color.White.copy(alpha = 0.16f)))
-            Spacer(Modifier.width(10.dp))
-            Text(
-                "HOME",
-                color = HomeColors.TextFaint,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.2.sp,
-            )
-        }
-        Spacer(Modifier.width(if (compact) 18.dp else 30.dp))
-        LazyRow(
-            modifier = Modifier.weight(1f).focusGroup().focusRestorer(),
-            horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            items(availableTabs.toList()) { item ->
-                TabPill(
-                    label = item.label,
-                    selected = item == tab,
-                    onClick = { onTab(item) },
-                    compact = compact,
-                    downTarget = downTarget,
-                    modifier = if (item == tab && activeTabRequester != null) {
-                        Modifier.focusRequester(activeTabRequester)
-                    } else {
-                        Modifier
-                    },
+        SystemHomePill(
+            tab = tab,
+            onClick = { onTab(HomeTab.HOME) },
+            compact = compact,
+            downTarget = downTarget,
+            modifier = if (activeTabRequester != null) {
+                Modifier.focusRequester(activeTabRequester)
+            } else {
+                Modifier
+            },
+        )
+        Spacer(Modifier.width(if (compact) 12.dp else 16.dp))
+        SystemGreeting(profile = profile, tab = tab, compact = compact)
+        Spacer(Modifier.weight(1f))
+        ChromeIcon(Icons.Rounded.Search, "Buscar", onSearch, downTarget)
+        Spacer(Modifier.width(4.dp))
+        NetworkChip(network = network, compact = compact)
+        Spacer(Modifier.width(4.dp))
+        ChromeIcon(
+            Icons.Rounded.Notifications,
+            "Centro de control y notificaciones",
+            onCommandCenter,
+            downTarget,
+            badge = hasNotifications,
+        )
+        Spacer(Modifier.width(4.dp))
+        ChromeIcon(Icons.Rounded.Settings, "Ajustes de Vision+", onVisionSettings, downTarget)
+        if (showClock) {
+            Spacer(Modifier.width(if (compact) 12.dp else 18.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    clock,
+                    color = HomeColors.Text,
+                    fontSize = if (compact) 27.sp else 32.sp,
+                    lineHeight = if (compact) 28.sp else 33.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.8).sp,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontFeatureSettings = "tnum",
+                        fontWeight = FontWeight.Bold,
+                    ),
+                )
+                Text(
+                    "CDMX",
+                    color = HomeColors.TextFaint,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.6.sp,
                 )
             }
         }
-        // Hora
-        if (showClock) {
-            Text(
-                clock,
-                color = HomeColors.TextDim,
-                style = MaterialTheme.typography.titleMedium,
-                letterSpacing = 0.8.sp,
-            )
-            Spacer(Modifier.width(if (compact) 14.dp else 20.dp))
-        }
-        // Perfil
-        ProfileChip(name = profile, compact = compact, downTarget = downTarget)
-        Spacer(Modifier.width(8.dp))
-        ChromeIcon(Icons.Rounded.Search, "Buscar", onSearch, downTarget)
-        Spacer(Modifier.width(4.dp))
-        ChromeIcon(Icons.Rounded.Settings, "Ajustes", onCommandCenter, downTarget)
     }
 }
 
+/** El botón de Inicio del sistema. Su marca es lo único que permanece siempre a la vista. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TabPill(
-    label: String,
-    selected: Boolean,
+private fun SystemHomePill(
+    tab: HomeTab,
     onClick: () -> Unit,
     compact: Boolean,
-    downTarget: FocusRequester? = null,
+    downTarget: FocusRequester?,
     modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val background = when {
-        focused && selected -> HomeColors.Blue.copy(alpha = 0.30f)
-        focused -> Color.White.copy(alpha = 0.14f)
-        selected -> HomeColors.Blue.copy(alpha = 0.20f)
-        else -> Color.Transparent
+    val reduced = LocalReducedEffects.current
+    val dotAlpha = if (reduced) {
+        1f
+    } else {
+        val transition = rememberInfiniteTransition(label = "systemPulse")
+        val alpha by transition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1_200), RepeatMode.Reverse),
+            label = "systemPulseAlpha",
+        )
+        alpha
     }
-    Column(
+    Row(
         modifier = modifier
             .clip(HomeShapes.pill)
-            .background(background)
-            .then(if (focused) Modifier.border(1.dp, Color.White.copy(alpha = 0.7f), HomeShapes.pill) else Modifier)
-            .then(
-                if (downTarget != null) {
-                    Modifier.softFocusDown(downTarget)
-                } else {
-                    Modifier
-                },
-            )
+            .background(if (focused) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.05f))
+            .border(1.dp, Color.White.copy(alpha = if (focused) 0.52f else 0.10f), HomeShapes.pill)
+            .then(if (downTarget != null) Modifier.softFocusDown(downTarget) else Modifier)
             .onFocusChanged { focused = it.isFocused }
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -256,53 +290,120 @@ private fun TabPill(
                 onClick = onClick,
             )
             .padding(horizontal = if (compact) 11.dp else 14.dp, vertical = 7.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
+        Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(HomeColors.Cyan.copy(alpha = dotAlpha)))
         Text(
-            label,
-            color = if (selected || focused) HomeColors.Text else HomeColors.TextDim,
-            style = MaterialTheme.typography.titleMedium,
-            fontSize = if (compact) 12.sp else 13.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            "VISION+ OS",
+            color = if (focused || tab == HomeTab.HOME) HomeColors.Cyan else HomeColors.TextDim,
+            fontSize = if (compact) 11.sp else 12.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.4.sp,
             maxLines = 1,
         )
     }
 }
 
 @Composable
-private fun ProfileChip(name: String, compact: Boolean, downTarget: FocusRequester? = null) {
-    val label = name.trim().ifBlank { "Principal" }
-    Row(
-        modifier = Modifier
-            .clip(HomeShapes.pill)
-            .background(Color.White.copy(alpha = 0.07f))
-            .then(if (downTarget != null) Modifier.softFocusDown(downTarget) else Modifier)
-            .padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
+private fun SystemGreeting(profile: String, tab: HomeTab, compact: Boolean) {
+    val name = profile.trim().ifBlank { "Principal" }
+    val nowMs = rememberNowMs(intervalMs = 60_000L)
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier
-                .size(if (compact) 22.dp else 26.dp)
+                .size(if (compact) 27.dp else 31.dp)
                 .clip(RoundedCornerShape(50))
-                .background(Brush.linearGradient(listOf(HomeColors.Blue, Color(0xFF6E4BF6)))),
+                .background(Brush.linearGradient(listOf(HomeColors.Blue, HomeColors.Cyan)))
+                .border(1.5.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(50)),
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                label.take(1).uppercase(),
+                name.take(1).uppercase(),
                 color = Color.White,
                 fontSize = if (compact) 10.sp else 11.sp,
                 fontWeight = FontWeight.Bold,
             )
         }
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.widthIn(max = if (compact) 205.dp else 280.dp)) {
+            Text(
+                "${greetingFor(nowMs = nowMs)}, $name",
+                color = HomeColors.TextDim,
+                fontSize = if (compact) 13.sp else 15.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                if (tab == HomeTab.HOME) dateLine(nowMs = nowMs) else "Sistema · ${tab.label}",
+                color = HomeColors.TextFaint,
+                fontSize = if (compact) 9.sp else 10.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 0.4.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NetworkChip(
+    network: String,
+    compact: Boolean,
+) {
+    val known = network.isNotBlank()
+    val online = known && !network.equals("Sin red", ignoreCase = true)
+    Row(
+        modifier = Modifier.padding(horizontal = if (compact) 8.dp else 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            Icons.Rounded.Wifi,
+            contentDescription = "Red: ${network.ifBlank { "comprobando" }}",
+            tint = when {
+                !known -> HomeColors.TextFaint
+                online -> HomeColors.Success
+                else -> HomeColors.Live
+            },
+            modifier = Modifier.size(15.dp),
+        )
         Text(
-            label,
+            network.ifBlank { "Red" },
             color = HomeColors.TextDim,
-            style = MaterialTheme.typography.bodySmall,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+/** Saludo del escritorio, no del catálogo: la persona y la hora del centro de México. */
+internal fun greetingFor(
+    nowMs: Long = System.currentTimeMillis(),
+    timeZone: TimeZone = TimeZone.getTimeZone("America/Mexico_City"),
+): String {
+    val hour = SimpleDateFormat("H", Locale.US)
+        .apply { this.timeZone = timeZone }
+        .format(Date(nowMs))
+        .toIntOrNull() ?: 12
+    return when (hour) {
+        in 0..11 -> "Buenos días"
+        in 12..18 -> "Buenas tardes"
+        else -> "Buenas noches"
+    }
+}
+
+internal fun dateLine(
+    nowMs: Long = System.currentTimeMillis(),
+    timeZone: TimeZone = TimeZone.getTimeZone("America/Mexico_City"),
+): String {
+    val raw = SimpleDateFormat("EEEE d 'de' MMMM", Locale.forLanguageTag("es-MX"))
+        .apply { this.timeZone = timeZone }
+        .format(Date(nowMs))
+    return raw.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.forLanguageTag("es-MX")) else it.toString() }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -312,6 +413,7 @@ private fun ChromeIcon(
     label: String,
     onClick: () -> Unit,
     downTarget: FocusRequester? = null,
+    badge: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
     Box(
@@ -335,5 +437,15 @@ private fun ChromeIcon(
             tint = if (focused) HomeColors.Text else HomeColors.TextDim,
             modifier = Modifier.size(19.dp),
         )
+        if (badge) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 7.dp, end = 7.dp)
+                    .size(6.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(HomeColors.Cyan),
+            )
+        }
     }
 }

@@ -67,6 +67,7 @@ import com.chronosbvrx.visionplus.ui.components.CategoryPill
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.components.GhostRow
 import com.chronosbvrx.visionplus.ui.components.PosterCard
+import com.chronosbvrx.visionplus.ui.components.rememberPosterLongClick
 import com.chronosbvrx.visionplus.ui.isLandscapeTablet
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
@@ -183,6 +184,15 @@ fun SectionScreen(
             }
             else -> {
                 val rowsFinal = displayRows.orEmpty()
+                    .filterNot { it.title.contains("Recomendado para ti", ignoreCase = true) }
+                    .sortedBy {
+                        when {
+                            it.id.endsWith("-estrenos") -> 0
+                            it.id.contains("nueva", ignoreCase = true) ||
+                                it.title.contains("nueva", ignoreCase = true) -> 1
+                            else -> 2
+                        }
+                    }
                 // Selector horizontal de categorías (Chips / Pills)
                 val categoryChips = remember(rowsFinal) {
                     val genres = rowsFinal.map { it.title.trim() }.filter { it.isNotBlank() }.distinct()
@@ -339,6 +349,7 @@ private fun CuratedSectionModule(
                     badge = if (film.year >= 2025) "NUEVO" else null,
                     rank = rank,
                     modifier = Modifier.width(132.dp),
+                    onLongClick = rememberPosterLongClick(film),
                     onClick = { onOpenFilm(film) },
                 )
             }
@@ -557,6 +568,7 @@ private fun CategoryGridFeed(
                     meta = film.metaLine().ifBlank { null },
                     score = film.score,
                     badge = if (film.year >= 2025) "NUEVO" else null,
+                    onLongClick = rememberPosterLongClick(film),
                     onClick = { onOpenFilm(film) },
                 )
             }

@@ -34,6 +34,19 @@ class PlaybackHistoryTest {
         assertTrue(isFinished(585_000, 600_000))
         assertFalse(isFinished(120_000, 600_000))
         assertFalse(isFinished(120_000, 0))
+        // Los títulos finales pueden durar más de 30 s: con 2 min de margen, salir en los
+        // títulos ya cuenta como terminado y no deja la película en «Seguir viendo».
+        assertTrue(isFinished(500_000, 600_000))
+        assertFalse(shouldKeep(500_000, 600_000))
+    }
+
+    @Test
+    fun leavingDuringCreditsIsFinishedEvenWithALongCreditSequence() {
+        assertTrue(isFinishedAtExit(480_000, 600_000, creditsStartMs = 480_000))
+        assertTrue(isFinishedAtExit(475_000, 600_000, creditsStartMs = 480_000))
+        assertFalse(isFinishedAtExit(300_000, 600_000, creditsStartMs = 480_000))
+        assertTrue(isFinishedAtExit(500_000, 600_000))
+        assertFalse(isFinishedAtExit(300_000, 600_000))
     }
 
     @Test
@@ -131,5 +144,94 @@ class PlaybackHistoryTest {
         assertTrue(shouldCountWatchedOnSkip(2_280_000, 2_400_000))   // 95%: créditos al frente
         assertFalse(shouldCountWatchedOnSkip(2_000_000, 2_400_000))  // 83%: le falta mucho
         assertFalse(shouldCountWatchedOnSkip(100_000, 0))            // sin duración no hay juicio
+    }
+
+    // ---- «Seguir viendo» de series: ficha, capítulo y minuto exacto ----
+
+    private fun series() = Film(
+        id = "serie-grupo", title = "Ley y orden: UVE", year = 2024, durationMin = 45,
+        synopsis = "s", posterUrl = "p", videoUrl = "xtv:serie-1", sourceUrl = "xtv",
+        seasons = listOf(SeasonRef(1, "serie-1", "xtv:serie-1"), SeasonRef(2, "serie-2", "xtv:serie-2")),
+    )
+
+    @Test
+    fun resumeEntryForSeriesFindsTheLastChapterBySeasonIdOrTitle() {
+        val bySeason = entry("c1", updatedAt = 10L).copy(
+            title = "Ley y orden: UVE · T2 · C3", seriesId = "serie-2",
+            episodeIds = listOf("a", "b"), seasonIds = listOf("serie-1", "serie-2"),
+            seasonNames = listOf("T1", "T2"), seasonIndex = 1, episodeIndex = 2,
+        )
+        val byTitle = entry("c2", updatedAt = 5L).copy(
+            title = "Ley y orden: UVE · T1 · C1", seriesId = "temporada-vieja",
+            episodeIds = listOf("a", "b"), episodeIndex = 0,
+        )
+        assertEquals("c1", resumeEntryForSeries(listOf(bySeason, byTitle), series())?.key)
+        // Una película suelta con el mismo nombre no se confunde con un capítulo.
+        val movie = entry("m", updatedAt = 9L).copy(title = "Ley y orden: UVE")
+        assertEquals("c1", resumeEntryForSeries(listOf(movie, bySeason), series())?.key)
+    }
+
+    @Test
+    fun continueOpensSeriesOnlyForRealEpisodes() {
+        val film = series()
+        val episode = ResumeCard(
+            entry = entry("c1").copy(
+                title = "Ley y orden: UVE · T2 · C3", seriesId = "serie-2",
+                episodeIds = listOf("a", "b"), episodeIndex = 2,
+                seasonIds = listOf("serie-1", "serie-2"), seasonNames = listOf("T1", "T2"),
+                seasonIndex = 1,
+            ),
+            film = film, progress = 0.4f,
+        )
+        val movie = ResumeCard(entry = entry("m").copy(title = "Una película"), film = film, progress = 0.4f)
+        assertTrue(continueOpensSeries(episode))
+        assertFalse(continueOpensSeries(movie))
+        assertTrue("sin ficha del catálogo la serie igual abre su menú", continueOpensSeries(episode.copy(film = null)))
+        assertEquals("T2 · C3", episodeLabelOf(episode.entry))
+        assertEquals("", episodeLabelOf(movie.entry))
+        val fallback = resumeSeriesFilm(episode.entry)
+        assertEquals("Ley y orden: UVE", fallback.title)
+        assertEquals("serie-2", fallback.id)
+        assertEquals("xtv:serie-2", fallback.videoUrl)
+    }
+
+    @Test
+    fun matchCardsFindsTheSeriesByItsActiveSeasonAndMarksTheNextChapter() {
+        val film = series()
+        val finishedFirst = entry("a", positionMs = 2_700_000, durationMs = 2_700_000).copy(
+            title = "Ley y orden: UVE · T2 · C1", seriesId = "serie-2",
+            episodeIds = listOf("a", "b"), episodeIndex = 0,
+            seasonIds = listOf("serie-1", "serie-2"), seasonNames = listOf("T1", "T2"),
+            seasonIndex = 1,
+        )
+        val card = matchCards(listOf(finishedFirst), listOf(film)).single()
+        assertEquals("la ficha se encuentra por la temporada activa", film, card.film)
+        assertTrue("el capítulo terminó", card.completed)
+        assertTrue("pero queda el siguiente", card.hasNext)
+        assertEquals("T2 · C1", episodeLabelOf(card.entry))
+    }
+
+    @Test
+    fun resumeEpisodePlayCarriesTheExactMinuteAndContext() {
+        val entry = entry("c1", positionMs = 1_260_000, durationMs = 2_700_000).copy(
+            xtvCode = "c1", title = "Ley y orden: UVE · T2 · C3", seriesId = "serie-2",
+            episodeIds = listOf("a", "b"), episodeIndex = 2,
+            seasonIds = listOf("serie-1", "serie-2"), seasonNames = listOf("T1", "T2"),
+            seasonIndex = 1,
+        )
+        val play = com.chronosbvrx.visionplus.ui.resumeEpisodePlay(
+            entry = entry,
+            film = series(),
+            seasonNames = listOf("T1", "T2"),
+            episodeNames = listOf("A", "B"),
+            episodeNumbers = listOf(10, 11),
+        )
+        assertEquals("c1", play.code)
+        assertEquals(" · T2 · C3", play.titleSuffix)
+        assertEquals("serie-2", play.seriesId)
+        assertEquals(2, play.episodeIndex)
+        assertEquals(1_260_000, play.resumeMs)
+        assertEquals(2_700_000, play.durationMs)
+        assertEquals(listOf("A", "B"), play.episodeNames)
     }
 }

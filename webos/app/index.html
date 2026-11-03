@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1920, height=1080">
+  <title>Vision+</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/visiontv.css">
+</head>
+<body>
+  <svg class="svg-defs" aria-hidden="true">
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15.5 5 8 12l7.5 7 1.4-1.4L10.8 12l6.1-5.6z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.7 10.7l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4m0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="m19.4 13 .1-1-.1-1 2.1-1.6-2-3.4-2.5 1a8 8 0 0 0-1.7-1L15 3h-4l-.3 2.9a8 8 0 0 0-1.7 1l-2.5-1-2 3.4L6.6 11l-.1 1 .1 1-2.1 1.6 2 3.4 2.5-1a8 8 0 0 0 1.7 1L11 21h4l.3-2.9a8 8 0 0 0 1.7-1l2.5 1 2-3.4zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7"/></symbol>
+    <symbol id="i-tv" viewBox="0 0 24 24"><path d="M3 5h18v12H3zm2 2v8h14V7zM8 19h8v2H8z"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m12 3 9 8h-3v10h-5v-6h-2v6H6V11H3z"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><path d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16"/></symbol>
+    <symbol id="i-subs" viewBox="0 0 24 24"><path d="M3 5h18v14H3zm2 2v10h14V7zm2 3h4v2H7zm6 0h4v2h-4zM7 13h2v2H7zm4 0h6v2h-6z"/></symbol>
+    <symbol id="i-replay" viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m9 16.2-3.5-3.5L4 14.2 9 19 20 8l-1.4-1.4z"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7-1.4-1.4 5.6-5.6-5.6-5.6z"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h2v2H4zm4 0h12v2H8zM4 11h2v2H4zm4 0h12v2H8zM4 16h2v2H4zm4 0h12v2H8z"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M7 3h10v3h3v3a4 4 0 0 1-4 4h-1a5 5 0 0 1-3 3v2h4v3H8v-3h4v-2a5 5 0 0 1-3-3H8a4 4 0 0 1-4-4V6h3zm2 3H6v3a2 2 0 0 0 2 2h1zm6 0v5h1a2 2 0 0 0 2-2V6z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V9h4v11zm6 0V4h4v16zm6 0v-7h4v7z"/></symbol>
+    <symbol id="i-ball" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 3 2.6 1.9-1 3.1h-3.2l-1-3.1zM6.2 7.6l2.6-.2 1 3.1-2.5 1.7-2.2-1.6zm11.6 0 .9 3-2.2 1.6-2.5-1.7 1-3.1zM5 14.3l2.2-1.6 2.6 1.9-.9 3.1-2.7.2zm11.3 3.6-2.7-.2-.9-3.1 2.6-1.9 2.2 1.6z"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zm12.5-2.5a7 7 0 0 1 0 11l-1.4-1.4a5 5 0 0 0 0-8.2z"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M12 22a2.2 2.2 0 0 0 2.2-2.2h-4.4A2.2 2.2 0 0 0 12 22m7-5.5v-5.2c0-3.1-1.7-5.7-4.5-6.4V4a2.5 2.5 0 0 0-5 0v.9C6.7 5.6 5 8.2 5 11.3v5.2L3 18.5v1h18v-1z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9m0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 17.27 6.18 3.73-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m6.93 6h-2.95a15.7 15.7 0 0 0-1.38-3.56A8 8 0 0 1 18.93 8M12 4c.83 1.2 1.48 2.53 1.86 4h-3.72c.38-1.47 1.03-2.8 1.86-4M4.26 14a8.1 8.1 0 0 1 0-4h3.38a16.6 16.6 0 0 0 0 4zm.81 2h2.95c.34 1.25.81 2.45 1.38 3.56A8 8 0 0 1 5.07 16m2.95-8H5.07a8 8 0 0 1 4.33-3.56A15.7 15.7 0 0 0 8.02 8M12 20c-.83-1.2-1.48-2.53-1.86-4h3.72c-.38 1.47-1.03 2.8-1.86 4m2.22-6H9.78a14.7 14.7 0 0 1 0-4h4.44a14.7 14.7 0 0 1 0 4m.38 5.56c.57-1.11 1.04-2.31 1.38-3.56h2.95a8 8 0 0 1-4.33 3.56M16.36 14a16.6 16.6 0 0 0 0-4h3.38a8.1 8.1 0 0 1 0 4z"/></symbol>
+    <symbol id="i-live" viewBox="0 0 24 24"><path d="M4 6h16v12H4zm2 2v8h12V8zm3 2h2v4H9zm4 0h2v4h-2z"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M7 2v2H4v18h16V4h-3V2h-2v2H9V2zm11 8v10H6V10zM8 12h3v3H8z"/></symbol>
+    <symbol id="i-basket" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M5.1 9h3.2c.2-1.6.6-3 1.2-4.1A8 8 0 0 0 5.1 9m5.4 0c.2-1.5.6-2.7 1.1-3.6.2-.3.3-.4.4-.4s.2.1.4.4c.5.9.9 2.1 1.1 3.6zm6.4 0h3.2a8 8 0 0 0-4.4-4.1c.6 1.1 1 2.5 1.2 4.1M4 11h3.9a16 16 0 0 0 0 2H4a8 8 0 0 1 0-2m5.9 0h4.2a14 14 0 0 1 0 2H9.9a14 14 0 0 1 0-2M16.1 11H20a8 8 0 0 1 0 2h-3.9a16 16 0 0 0 0-2m-.8 4h-1.8c-.2 1.5-.6 2.7-1.1 3.6-.2.3-.3.4-.4.4s-.2-.1-.4-.4c-.5-.9-.9-2.1-1.1-3.6H5.1a8 8 0 0 0 4.4 4.1c-.6-1.1-1-2.5-1.2-4.1zm.5 0c.2 1.6.6 3 1.2 4.1A8 8 0 0 0 18.9 15z"/></symbol>
+    <symbol id="i-hockey" viewBox="0 0 24 24"><path d="M3 4h2v12.5c0 2 1.6 3.5 3.5 3.5H21v2H8.5C5.5 22 3 19.5 3 16.5zm5 0h2v10h-2zm4 0h2v10h-2zm4 0h2v10h-2z"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16v2H4zm3 6h10v2H7zm3 6h4v2h-4z"/></symbol>
+    <symbol id="i-user-circle" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 4a3 3 0 1 1 0 6 3 3 0 0 1 0-6m0 13a8 8 0 0 1-5.3-2c.3-1.7 3-2.7 5.3-2.7s5 1 5.3 2.7A8 8 0 0 1 12 19"/></symbol>
+
+  </svg>
+
+  <div id="app">
+    <header class="vt-topbar vt-hidden" id="app-topbar">
+      <div class="vt-brand" id="vt-brand">
+        <span class="vt-brand-vision">Vision</span><span class="vt-brand-plus">+</span>
+        <span class="vt-brand-tv">TV</span>
+      </div>
+      <nav class="vt-nav" id="app-nav">
+        <button class="vt-tab is-active" data-focusable data-nav="home">Inicio</button>
+        <div class="vt-hub">
+          <button class="vt-tab" data-focusable data-nav="live-hub">En vivo</button>
+          <div class="vt-menu" id="menu-live" hidden>
+            <button class="vt-menu-item" data-focusable data-nav="live">
+              <svg class="icon"><use href="#i-tv"/></svg>
+              <span><b>TV en vivo</b><small>Canales y guía</small></span>
+            </button>
+            <button class="vt-menu-item" data-focusable data-nav="sports">
+              <svg class="icon"><use href="#i-trophy"/></svg>
+              <span><b>Deportes en vivo</b><small>Agenda y partidos</small></span>
+            </button>
+          </div>
+        </div>
+        <button class="vt-tab" data-focusable data-nav="games">Juegos</button>
+        <button class="vt-tab" data-focusable data-nav="movies">Películas</button>
+        <div class="vt-hub">
+          <button class="vt-tab" data-focusable data-nav="series-hub">Series</button>
+          <div class="vt-menu" id="menu-series" hidden>
+            <button class="vt-menu-item" data-focusable data-nav="series"><svg class="icon"><use href="#i-tv"/></svg><span><b>Series</b><small>Series y novelas</small></span></button>
+            <button class="vt-menu-item" data-focusable data-nav="anime"><svg class="icon"><use href="#i-star"/></svg><span><b>Anime</b><small>Animación japonesa</small></span></button>
+            <button class="vt-menu-item" data-focusable data-nav="novelas"><svg class="icon"><use href="#i-list"/></svg><span><b>Novelas</b><small>Telenovelas</small></span></button>
+          </div>
+        </div>
+        <div class="vt-hub">
+          <button class="vt-tab" data-focusable data-nav="library-hub">Mi lista</button>
+          <div class="vt-menu" id="menu-library" hidden>
+            <button class="vt-menu-item" data-focusable data-nav="library"><svg class="icon"><use href="#i-list"/></svg><span><b>Mi lista</b><small>Favoritos y ver más tarde</small></span></button>
+            <button class="vt-menu-item" data-focusable data-nav="history"><svg class="icon"><use href="#i-replay"/></svg><span><b>Historial</b><small>Seguir viendo</small></span></button>
+          </div>
+        </div>
+      </nav>
+      <div class="vt-right">
+        <div class="vt-clock" id="clock">--:--</div>
+        <button class="vt-icon" id="top-notifications" data-focusable title="Avisos">
+          <svg class="icon"><use href="#i-bell"/></svg>
+          <span class="vt-bell-dot"></span>
+        </button>
+        <button class="vt-icon" id="top-reload" data-focusable title="Actualizar">
+          <svg class="icon"><use href="#i-refresh"/></svg>
+        </button>
+        <button class="vt-profile" id="top-profile" data-focusable>
+          <span class="vt-avatar">P</span><span>Principal</span>
+        </button>
+        <button class="vt-search" data-focusable data-nav="search">
+          <svg class="icon"><use href="#i-search"/></svg><span>Buscar</span>
+        </button>
+        <button class="vt-icon" data-focusable data-nav="settings" title="Ajustes">
+          <svg class="icon"><use href="#i-settings"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section id="screen-splash" class="screen is-active">
+      <div class="splash-inner">
+        <img id="splash-logo" src="images/vision_logo_horizontal.png" alt="Vision+">
+        <div class="splash-line"></div>
+        <div class="splash-version">webOS</div>
+      </div>
+    </section>
+
+    <section id="screen-home" class="screen">
+      <main class="home-main" id="home-main">
+        <div class="hero" id="home-hero">
+          <div class="hero-loading">
+            <div class="spinner"></div>
+            <span>Cargando catálogo</span>
+          </div>
+        </div>
+        <div class="rows" id="home-rows"></div>
+      </main>
+      <div class="status-line" id="home-status"></div>
+    </section>
+
+    <section id="screen-grid" class="screen">
+      <header class="subheader">
+        <button class="round-btn" data-focusable data-back="grid">
+          <svg class="icon"><use href="#i-back"/></svg>
+        </button>
+        <div class="subheader-title" id="grid-title">Catálogo</div>
+        <div class="subheader-spacer"></div>
+      </header>
+      <div class="grid-wrap">
+        <div class="poster-grid" id="grid-items"></div>
+        <button class="more-btn" id="grid-more" data-focusable>Ver más</button>
+      </div>
+    </section>
+
+    <section id="screen-live" class="screen">
+      <div class="vt-live-hero" id="live-hero"></div>
+      <div class="vt-live-filters">
+        <button class="vt-filter-pill country" id="live-country" data-focusable>
+          <svg class="icon"><use href="#i-globe"/></svg><span id="live-country-label">País: México</span>
+          <svg class="icon chevron"><use href="#i-chevron"/></svg>
+        </button>
+        <div class="vt-menu vt-country-menu" id="live-country-menu" hidden></div>
+        <button class="vt-filter-pill" id="live-search" data-focusable>
+          <svg class="icon"><use href="#i-search"/></svg><span>Buscar</span>
+        </button>
+        <div class="vt-pill-row" id="live-categories"></div>
+        <button class="vt-round" id="live-fav" data-focusable title="Favoritos"><svg class="icon"><use href="#i-star"/></svg></button>
+        <button class="vt-round" id="live-refresh" data-focusable title="Actualizar"><svg class="icon"><use href="#i-refresh"/></svg></button>
+      </div>
+      <div class="vt-live-rail" id="live-items"></div>
+      <div class="vt-live-status"><span id="live-count">Cargando canales</span><button class="vt-more" id="live-more" data-focusable hidden>Ver más canales</button></div>
+    </section>
+
+    <section id="screen-search" class="screen">
+      <header class="subheader">
+        <button class="round-btn" data-focusable data-back="search">
+          <svg class="icon"><use href="#i-back"/></svg>
+        </button>
+        <div class="search-box" id="search-box">
+          <svg class="icon"><use href="#i-search"/></svg>
+          <span id="search-query">Escribe el nombre de una película, serie o canal</span>
+        </div>
+        <div class="subheader-spacer"></div>
+      </header>
+      <div class="search-body">
+        <div class="keyboard" id="search-keyboard"></div>
+        <div class="search-results" id="search-results">
+          <div class="results-head" id="search-head">Búsqueda popular</div>
+          <div class="poster-grid compact" id="search-items"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-detail" class="screen">
+      <div class="detail-backdrop" id="detail-backdrop"></div>
+      <div class="detail-shade"></div>
+      <header class="detail-top">
+        <button class="round-btn" data-focusable data-back="detail">
+          <svg class="icon"><use href="#i-back"/></svg>
+        </button>
+        <img class="detail-top-logo" src="images/vision_logo_horizontal.png" alt="Vision+">
+      </header>
+      <div class="detail-content">
+        <div class="detail-poster-wrap">
+          <img class="detail-poster" id="detail-poster" src="" alt="">
+          <div class="detail-score" id="detail-score"></div>
+        </div>
+        <div class="detail-info">
+          <div class="detail-kicker" id="detail-kicker"></div>
+          <h1 class="detail-title" id="detail-title"></h1>
+          <div class="detail-meta" id="detail-meta"></div>
+          <p class="detail-synopsis" id="detail-synopsis"></p>
+          <div class="detail-actions">
+            <button class="primary-btn" id="detail-play" data-focusable>
+              <svg class="icon"><use href="#i-play"/></svg><span id="detail-play-label">Reproducir</span>
+            </button>
+            <button class="secondary-btn" id="detail-list" data-focusable>
+              <svg class="icon"><use href="#i-list"/></svg><span id="detail-list-label">Mi lista</span>
+            </button>
+            <button class="secondary-btn" id="detail-info-btn" data-focusable>
+              <svg class="icon"><use href="#i-info"/></svg><span>Más información</span>
+            </button>
+          </div>
+          <div class="seasons" id="detail-seasons"></div>
+          <div class="episodes" id="detail-episodes"></div>
+        </div>
+      </div>
+      <div class="detail-foot" id="detail-foot"></div>
+    </section>
+
+    <section id="screen-sports" class="screen">
+      <div class="vt-sports-hero" id="sports-hero"></div>
+      <div class="vt-sports-filters">
+        <div class="vt-sport-row" id="sports-tabs"></div>
+        <div class="vt-sport-subrow">
+          <div class="vt-day-row" id="sports-days"></div>
+          <div class="vt-league-row" id="sports-leagues"></div>
+        </div>
+      </div>
+      <div class="vt-sports-head"><span id="sports-status">Cargando deportes…</span><span id="sports-count"></span></div>
+      <div class="vt-sports-grid" id="sports-content"></div>
+      <div class="dialog sports-dialog" id="sports-dialog" hidden>
+        <div class="dialog-card vt-sports-dialog">
+          <div class="dialog-title" id="sports-dialog-title"></div>
+          <div class="dialog-list" id="sports-dialog-list"></div>
+          <button class="secondary-btn" id="sports-dialog-close" data-focusable>Cerrar</button>
+        </div>
+      </div>
+
+
+    </section>
+
+    <section id="screen-games" class="screen">
+      <div class="vt-games-empty">
+        <div class="vt-games-icon"><svg class="icon"><use href="#i-star"/></svg></div>
+        <div class="vt-games-title">Vision+ Play</div>
+        <div class="vt-games-text">Los juegos interactivos están disponibles en la app de Smart TV y en el teléfono. En PC se está preparando la mesa completa.</div>
+        <button class="primary-btn" data-focusable data-back="games">Volver</button>
+      </div>
+    </section>
+
+    <section id="screen-settings" class="screen">
+      <div class="vt-settings">
+        <aside class="vt-settings-rail">
+          <div class="vt-rail-title">AJUSTES</div>
+          <button class="vt-rail-item is-active" data-focusable data-settings-tab="reproduccion">Reproducción</button>
+          <button class="vt-rail-item" data-focusable data-settings-tab="pantalla">Pantalla y rendimiento</button>
+          <button class="vt-rail-item" data-focusable data-settings-tab="sistema">Sistema y red</button>
+          <button class="vt-rail-item" data-focusable data-settings-tab="cuenta">Cuenta y perfiles</button>
+          <button class="vt-rail-item" data-focusable data-settings-tab="actualizaciones">Actualizaciones</button>
+        </aside>
+        <div class="vt-settings-content">
+          <section class="vt-settings-section is-active" data-settings-section="reproduccion">
+            <h2>Video y Calidad</h2>
+            <button class="vt-setting-row" id="set-quality" data-focusable>
+              <span><b>Calidad preferida:</b> <span id="set-quality-value">Auto</span></span>
+              <span class="vt-arrows">‹ ›</span>
+            </button>
+            <p class="vt-setting-help">Resolución inicial para series y películas con múltiples calidades.</p>
+            <button class="vt-setting-row" id="set-render" data-focusable>
+              <span><b>Ajuste de pantalla:</b> <span id="set-render-value">Original (ajustar)</span></span>
+              <span class="vt-arrows">‹ ›</span>
+            </button>
+            <p class="vt-setting-help">Define cómo se escala el reproductor en pantalla por defecto.</p>
+            <h2>Series y Continuidad</h2>
+            <button class="vt-setting-row" id="set-intro" data-focusable>
+              <span><b>Omitir intro:</b> <span id="set-intro-value">Automático</span></span>
+              <span class="vt-arrows">‹ ›</span>
+            </button>
+            <p class="vt-setting-help">Botón durante la entrada, automático sin botón o desactivado. Los tiempos vienen de la comunidad.</p>
+            <button class="vt-setting-row" id="set-subs" data-focusable>
+              <span><b>Subtítulos:</b> <span id="set-subs-value">Español</span></span>
+              <span class="vt-arrows">‹ ›</span>
+            </button>
+            <p class="vt-setting-help">Idioma preferido cuando el título trae varias pistas.</p>
+          </section>
+          <section class="vt-settings-section" data-settings-section="pantalla">
+            <h2>Pantalla y Rendimiento</h2>
+            <div class="vt-setting-row static"><span><b>Pantalla:</b> 1920 × 1080 (ventana)</span><span>Automático</span></div>
+            <p class="vt-setting-help">La interfaz se escala al tamaño de la ventana y conserva el diseño de Smart TV.</p>
+            <div class="vt-setting-row static"><span><b>Motor de video:</b> FFmpeg Relay</span><span>H.264 / AAC</span></div>
+            <p class="vt-setting-help">El catálogo HEVC/TS/HLS se convierte al vuelo para Chrome/Edge/Electron.</p>
+            <div class="vt-setting-row static"><span><b>Animaciones:</b> Completas</span><span>Auto</span></div>
+          </section>
+          <section class="vt-settings-section" data-settings-section="sistema">
+            <h2>Sistema y red</h2>
+            <div class="vt-setting-row static">
+              <span><b>API de catálogo</b></span><span class="small" id="set-api">—</span>
+            </div>
+            <div class="vt-setting-row static">
+              <span><b>Servicio local</b></span><span class="small" id="set-service">—</span>
+            </div>
+            <button class="vt-setting-row" id="set-reset" data-focusable>
+              <span><b>Renovar sesión del portal</b></span><span>Ejecutar</span>
+            </button>
+            <button class="vt-setting-row" id="set-cache" data-focusable>
+              <span><b>Limpiar caché del catálogo</b></span><span>Ejecutar</span>
+            </button>
+            <p class="vt-setting-help">La sesión y la caché viven en la carpeta de datos junto al ejecutable.</p>
+          </section>
+          <section class="vt-settings-section" data-settings-section="cuenta">
+            <h2>Cuenta y perfiles</h2>
+            <div class="vt-setting-row static"><span><b>Perfil activo:</b> Principal</span><span class="vt-avatar">P</span></div>
+            <p class="vt-setting-help">Vision+ PC usa el perfil local Principal. Los perfiles y la continuidad entre equipos se sincronizan desde la app de TV/teléfono.</p>
+          </section>
+          <section class="vt-settings-section" data-settings-section="actualizaciones">
+            <h2>Actualizaciones</h2>
+            <div class="vt-setting-row static"><span><b>Versión de Vision+ PC</b></span><span id="about-version">0.4.0</span></div>
+            <div class="vt-setting-row static"><span><b>Canal</b></span><span>Estable</span></div>
+            <button class="vt-setting-row" id="set-check-update" data-focusable>
+              <span><b>Buscar actualizaciones</b></span><span id="set-update-state">Automático</span>
+            </button>
+            <p class="vt-setting-help" id="set-update-help">Vision+ PC busca actualizaciones al iniciar. Si hay una nueva, puedes descargarla e instalarla sin usar USB.</p>
+            <div class="about-line muted">Puerto basado en la arquitectura del port de XuperTV: catálogo VPS, resolución directa del portal XTV, proxy local y FFmpeg.</div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-player" class="screen player-screen">
+      <video id="player-video" playsinline webkit-playsinline preload="auto"></video>
+      <div class="subtitle-overlay" id="subtitle-overlay"></div>
+      <div class="player-top" id="player-top">
+        <button class="round-btn" id="player-back" data-focusable data-player-btn>
+          <svg class="icon"><use href="#i-back"/></svg>
+        </button>
+        <div class="player-titles">
+          <div class="player-title" id="player-title"></div>
+          <div class="player-subtitle" id="player-subtitle"></div>
+        </div>
+        <div class="player-badge" id="player-badge"></div>
+      </div>
+      <div class="player-osd" id="player-osd">
+        <div class="osd-progress-wrap">
+          <div class="osd-times"><span id="osd-current">00:00</span><span id="osd-total">--:--</span></div>
+          <div class="osd-progress" id="osd-progress">
+            <div class="osd-buffered" id="osd-buffered"></div>
+            <div class="osd-played" id="osd-played"></div>
+            <div class="osd-thumb" id="osd-thumb"></div>
+            <div class="osd-seek-hint" id="osd-seek-hint" hidden></div>
+          </div>
+        </div>
+        <div class="osd-buttons">
+          <button class="osd-btn" id="osd-back" data-focusable data-player-btn>
+            <svg class="icon"><use href="#i-back"/></svg><span>Salir</span>
+          </button>
+          <button class="osd-btn" id="osd-rew" data-focusable data-player-btn>
+            <svg class="icon"><use href="#i-replay"/></svg><span>-10 s</span>
+          </button>
+          <button class="osd-btn primary" id="osd-toggle" data-focusable data-player-btn>
+            <svg class="icon" id="osd-toggle-icon"><use href="#i-play"/></svg><span id="osd-toggle-label">Reproducir</span>
+          </button>
+          <button class="osd-btn" id="osd-ffw" data-focusable data-player-btn>
+            <svg class="icon"><use href="#i-chevron"/></svg><span>+10 s</span>
+          </button>
+          <button class="osd-btn" id="osd-audio" data-focusable data-player-btn hidden>
+            <svg class="icon"><use href="#i-volume"/></svg><span id="osd-audio-label">Español</span>
+          </button>
+          <button class="osd-btn" id="osd-subs" data-focusable data-player-btn>
+            <svg class="icon"><use href="#i-subs"/></svg><span id="osd-subs-label">Subtítulos</span>
+          </button>
+          <button class="osd-btn" id="osd-image" data-focusable data-player-btn>
+            <svg class="icon"><use href="#i-filter"/></svg><span id="osd-image-label">Imagen: Original</span>
+          </button>
+          <button class="osd-btn" id="osd-quality" data-focusable data-player-btn hidden>
+            <svg class="icon"><use href="#i-settings"/></svg><span id="osd-quality-label">Calidad</span>
+          </button>
+          <button class="osd-btn" id="osd-stats" data-focusable data-player-btn hidden>
+            <svg class="icon"><use href="#i-chart"/></svg><span>Estadísticas</span>
+          </button>
+        </div>
+      </div>
+      <div class="match-hud" id="match-hud" hidden>
+        <div class="mh-top">
+          <span class="mh-live">EN VIVO</span>
+          <span class="mh-league" id="mh-league"></span>
+          <span class="mh-page-label" id="mh-page-label"></span>
+        </div>
+        <div class="mh-scoreboard">
+          <div class="mh-team">
+            <img id="mh-home-logo" alt="">
+            <b id="mh-home-name">Local</b>
+          </div>
+          <div class="mh-score"><b id="mh-scoreline">VS</b><span>MATCH CENTER</span></div>
+          <div class="mh-team away">
+            <img id="mh-away-logo" alt="">
+            <b id="mh-away-name">Visitante</b>
+          </div>
+        </div>
+        <div class="mh-tabs" id="mh-tabs"></div>
+        <div class="mh-body" id="mh-body"></div>
+        <div class="mh-footer">
+          <span id="mh-signal"></span>
+          <button class="mh-open" id="mh-open" data-focusable>Estadísticas completas</button>
+        </div>
+      </div>
+      <div class="player-loading" id="player-loading">
+        <div class="spinner"></div>
+        <div id="player-loading-text">Preparando la reproducción</div>
+      </div>
+      <div class="player-message" id="player-message"></div>
+    </section>
+
+      <div class="dialog match-center-dialog" id="match-center-dialog" hidden>
+        <div class="dialog-card vt-match-center">
+          <div class="mcd-head">
+            <span class="mcd-live">EN VIVO</span>
+            <span id="mcd-league"></span>
+            <span class="mcd-head-score" id="mcd-scoreline"></span>
+          </div>
+          <div class="mcd-title" id="mcd-title"></div>
+          <div class="mcd-scoreboard">
+            <div class="mcd-team">
+              <img id="mcd-home-logo" alt="">
+              <b id="mcd-home-name">Local</b>
+            </div>
+            <div class="mcd-vs">VS</div>
+            <div class="mcd-team away">
+              <img id="mcd-away-logo" alt="">
+              <b id="mcd-away-name">Visitante</b>
+            </div>
+          </div>
+          <div class="mcd-tabs" id="mcd-tabs"></div>
+          <div class="mcd-body" id="mcd-body"></div>
+          <div class="mcd-footer">
+            <span id="mcd-source">Datos: ESPN · GeeSports</span>
+            <button class="mcd-close" id="match-center-close" data-focusable>Cerrar</button>
+          </div>
+        </div>
+      </div>
+
+    <div class="toast" id="toast"></div>
+    <div class="pc-update-banner" id="pc-update-banner" hidden>
+      <div class="pc-update-copy">
+        <b id="pc-update-title">Actualización disponible</b>
+        <span id="pc-update-text"></span>
+      </div>
+      <div class="pc-update-actions">
+        <button id="pc-update-later" class="pc-update-later">Luego</button>
+        <button id="pc-update-action" class="pc-update-action" data-focusable>Actualizar</button>
+      </div>
+    </div>
+    <div class="pc-fullscreen-hint" id="pc-fullscreen-hint" hidden>
+      Para salir de pantalla completa presiona <kbd>Ctrl</kbd> + <kbd>F</kbd>
+    </div>
+  </div>
+
+  <script src="js/webOSTV.js"></script>
+  <script src="config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

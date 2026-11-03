@@ -202,7 +202,7 @@ data class HomeConfig(
      */
     fun withPreset(preset: LauncherPreset): HomeConfig = when (preset) {
         LauncherPreset.TV_FIRST -> copy(
-            rowOrder = rowsFirst("continue", "channels", "live", "inputs", "apps", "top10"),
+            rowOrder = rowsFirst("continue", "inputs", "channels", "apps", "live", "top10"),
             hiddenRows = emptySet(),
             tabOrder = tabsFirst("home", "live", "inputs", "events", "apps"),
             hiddenTabs = emptySet(),
@@ -287,8 +287,13 @@ data class HomeConfig(
     }.toString()
 
     companion object {
-        /** Versión 3: entradas de la tele, pestaña inicial y barra de pestañas configurable. */
-        const val VERSION = 3
+        /**
+         * Versión 6: las entradas vuelven al Inicio como fila compacta, justo debajo de
+         * «Seguir viendo»; la pestaña con icono de TV sigue en la barra superior.
+         * Versión 5: las entradas salieron del Inicio (se revierte aquí).
+         * Versión 4: las apps suben al primer vistazo, entre «Mis canales» y «TV en vivo».
+         */
+        const val VERSION = 6
 
         /** Inicio nunca se oculta ni se mueve: es la puerta de vuelta del launcher. */
         const val HOME_TAB_ID = "home"
@@ -296,13 +301,16 @@ data class HomeConfig(
         /** El orden de la barra que traía el launcher. */
         val DEFAULT_TAB_ORDER = listOf("home", "live", "inputs", "events", "movies", "series", "apps")
 
-        /** Filas sintéticas + filas del feed, en el orden que tenía el Inicio. */
+        /**
+         * Filas sintéticas + filas del feed. Las apps van antes que la TV en vivo: son lo
+         * primero que una persona quiere abrir y quedan debajo de sus canales favoritos.
+         */
         val DEFAULT_ROW_ORDER = listOf(
             "continue",
-            "channels",
-            "live",
             "inputs",
+            "channels",
             "apps",
+            "live",
             "top10",
             "premieres",
             "home-kind-movie",
@@ -313,10 +321,10 @@ data class HomeConfig(
 
         val SYNTHETIC_ROWS = linkedMapOf(
             "continue" to "Seguir viendo",
-            "channels" to "Mis canales",
-            "live" to "TV en vivo",
             "inputs" to "Entradas de la tele",
+            "channels" to "Mis canales",
             "apps" to "Apps",
+            "live" to "TV en vivo",
         )
 
         fun default(legacyAppFavorites: Collection<String> = emptyList()): HomeConfig =
@@ -362,11 +370,37 @@ data class HomeConfig(
          * queda como el de una tele, sin reordenar lo que la persona ya había movido.
          */
         internal fun migrateRowOrder(order: List<String>, version: Int): List<String> {
-            val base = order.ifEmpty { DEFAULT_ROW_ORDER }
-            if (version >= VERSION || "inputs" in base) return base
-            val next = base.toMutableList()
-            val afterLive = next.indexOf("live")
-            next.add(if (afterLive >= 0) afterLive + 1 else next.size, "inputs")
+            var base = order.ifEmpty { DEFAULT_ROW_ORDER }
+            // v4: las apps suben al primer vistazo, justo después de «Mis canales».
+            if (version < 4) base = appsAfterChannels(base)
+            // v5: las entradas de TV dejan de ocupar una fila del Inicio; viven en la
+            // barra superior con su propio icono.
+            if (version < 5) base = base.filterNot { it == "inputs" }
+            // v6: vuelven al Inicio como fila compacta, justo debajo de «Seguir viendo».
+            if (version < 6) {
+                val without = base.filterNot { it == "inputs" }
+                val afterContinue = without.indexOf("continue")
+                val insertAt = if (afterContinue >= 0) afterContinue + 1 else 0
+                base = without.toMutableList().apply {
+                    add(insertAt.coerceIn(0, size), "inputs")
+                }
+            }
+            return base
+        }
+
+        /** Mueve «apps» detrás de «channels» (o antes de «live» si no hay canales). */
+        private fun appsAfterChannels(order: List<String>): List<String> {
+            if ("apps" !in order) return order
+            val next = order.toMutableList()
+            next.remove("apps")
+            val channels = next.indexOf("channels")
+            val live = next.indexOf("live")
+            val insertAt = when {
+                channels >= 0 -> channels + 1
+                live >= 0 -> live
+                else -> next.size
+            }
+            next.add(insertAt.coerceIn(0, next.size), "apps")
             return next
         }
 

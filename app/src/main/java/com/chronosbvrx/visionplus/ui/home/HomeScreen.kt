@@ -65,6 +65,10 @@ import com.chronosbvrx.visionplus.data.BecauseRow
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.FollowAiring
+import com.chronosbvrx.visionplus.data.continueOpensSeries
+import com.chronosbvrx.visionplus.data.isEpisodeEntry
+import com.chronosbvrx.visionplus.data.episodeLabelOf
+import com.chronosbvrx.visionplus.data.resumeSeriesFilm
 import com.chronosbvrx.visionplus.data.HomeCurated
 import com.chronosbvrx.visionplus.data.HomePersonal
 import com.chronosbvrx.visionplus.data.PlaybackHistory
@@ -81,6 +85,7 @@ import com.chronosbvrx.visionplus.ui.components.GhostRow
 import com.chronosbvrx.visionplus.ui.Route
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.components.PosterCard
+import com.chronosbvrx.visionplus.ui.components.rememberPosterLongClick
 import com.chronosbvrx.visionplus.ui.components.TopTenBadge
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.icons.homeRowIcon
@@ -314,6 +319,13 @@ fun HomeScreen(
                 HeroSkeleton(sizes)
             }
         }
+        // «Seguir viendo» vive ARRIBA, antes de cualquier categoría: es lo que la persona
+        // estaba viendo y lo primero que debe encontrar al abrir el Inicio.
+        if (continueCards.isNotEmpty()) {
+            item(key = "continue") {
+                ContinueRow(cards = continueCards, onOpenFilm = onOpenFilm, onResume = onResume)
+            }
+        }
         item(key = "selection") { Selections(onGoSection) }
         if (top10Films.isNotEmpty()) {
             item(key = "home_top10") {
@@ -342,9 +354,6 @@ fun HomeScreen(
                 onOpen = onOpenFilm,
                 onSeeAll = { onGoSection(Route.Categories) },
             )
-        }
-        if (continueCards.isNotEmpty()) {
-            item(key = "continue") { ContinueRow(cards = continueCards, onResume = onResume) }
         }
         val personal = becauseRow
         if (personal != null) {
@@ -484,7 +493,10 @@ private fun Hero(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to Color.Transparent,
+                        // Velo también en el borde superior: el arte no queda limpio
+                        // arriba mientras el resto del banner sí lleva el gris.
+                        0f to Color.Black.copy(alpha = 0.35f),
+                        0.22f to Color.Transparent,
                         0.45f to ambient.copy(alpha = if (ambientReady) 0.55f else 0.35f),
                         0.75f to Color.Black.copy(alpha = 0.82f),
                         1f to VisionBlack,
@@ -636,6 +648,7 @@ private fun FilmRow(
                     badge = if (film.year >= 2025) "NUEVO" else null,
                     rank = rank,
                     modifier = Modifier.width(posterWidth),
+                    onLongClick = rememberPosterLongClick(film),
                     onClick = { onOpen(film) },
                 )
             }
@@ -708,9 +721,16 @@ private fun SourceNote(catalog: XuperCatalog) {
 internal const val SOURCE_NOTE_FALLBACK =
     "Películas, series y anime de tu cuenta aparecen aquí."
 
-/** «Seguir viendo»: lo quedado a medias, con su avance, para reanudar tocando. */
+/**
+ * «Seguir viendo»: lo quedado a medias, con su avance. Las películas reanudan directo; las
+ * series abren su ficha para elegir capítulo o usar «Continuar donde te quedaste».
+ */
 @Composable
-private fun ContinueRow(cards: List<ResumeCard>, onResume: (ResumeCard) -> Unit) {
+private fun ContinueRow(
+    cards: List<ResumeCard>,
+    onOpenFilm: (Film) -> Unit,
+    onResume: (ResumeCard) -> Unit,
+) {
     Column(Modifier.padding(top = 22.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -737,24 +757,40 @@ private fun ContinueRow(cards: List<ResumeCard>, onResume: (ResumeCard) -> Unit)
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(cards, key = { it.entry.key }) { card ->
+                val opensSeries = continueOpensSeries(card) && card.completed
+                val nextUp = card.completed && card.hasNext && opensSeries
+                val episode = if (nextUp) "Siguiente capítulo"
+                else episodeLabelOf(card.entry).takeIf { it.isNotBlank() }
+                val barProgress = if (nextUp) 0f else card.progress
                 Column(Modifier.width(132.dp)) {
                     PosterCard(
                         title = card.film?.title ?: card.entry.title,
                         imageUrl = card.film?.posterUrl ?: card.entry.posterUrl.takeIf { it.isNotBlank() },
-                        meta = null,
-                        onClick = { onResume(card) },
+                        meta = episode,
+                        onLongClick = rememberPosterLongClick(card.film ?: resumeSeriesFilm(card.entry)),
+                        onClick = {
+                            if (opensSeries) {
+                                onOpenFilm(card.film ?: resumeSeriesFilm(card.entry))
+                            } else {
+                                onResume(card)
+                            }
+                        },
                     )
                     Box(
                         Modifier.padding(top = 6.dp).fillMaxWidth().height(3.dp)
                             .background(Color.White.copy(alpha = 0.25f)),
                     ) {
                         Box(
-                            Modifier.height(3.dp).fillMaxWidth(card.progress)
+                            Modifier.height(3.dp).fillMaxWidth(barProgress)
                                 .background(VisionBlue),
                         )
                     }
                     Text(
-                        "Continuar en " + formatResume(card.entry.positionMs),
+                        when {
+                            nextUp -> "Serie · Siguiente capítulo"
+                            isEpisodeEntry(card.entry) -> "Serie · Continuar en " + formatResume(card.entry.positionMs)
+                            else -> "Continuar en " + formatResume(card.entry.positionMs)
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = VisionTextSecondary,
                         maxLines = 1,
@@ -803,6 +839,7 @@ private fun FollowRow(cards: List<FollowAiring>, posterWidth: Dp, onOpen: (Film)
                     meta = card.label,
                     badge = if (card.today) "HOY" else null,
                     modifier = Modifier.width(posterWidth),
+                    onLongClick = rememberPosterLongClick(card.film),
                     onClick = { onOpen(card.film) },
                 )
             }

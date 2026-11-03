@@ -124,6 +124,21 @@ class EpisodeMirrorTest {
     }
 
     @Test
+    fun infosFromMapsEveryChapterWithMetadata() {
+        val array = JSONArray()
+            .put(JSONObject().put("contentId", "a").put("title", "El comienzo").put("still", "https://img/1.jpg"))
+            .put(JSONObject().put("contentId", "b"))
+            .put(JSONObject().put("contentId", "c").put("title", "La duda"))
+        val map = EpisodeMirror.infosFrom(array)
+        assertEquals(setOf("a", "c"), map.keys)
+        assertEquals("El comienzo", map["a"]?.title)
+        assertEquals("https://img/1.jpg", map["a"]?.still)
+        assertEquals("La duda", map["c"]?.title)
+        assertTrue(EpisodeMirror.infosFrom(null).isEmpty())
+        assertTrue(EpisodeMirror.infosFrom(JSONArray()).isEmpty())
+    }
+
+    @Test
     fun hasMetaTellsACopyWithoutTmdbDataFromOneThatHasIt() {
         // Copia ANTES del enriquecimiento: ninguna fila trae metadatos → se refresca.
         val plain = JSONArray()
@@ -171,6 +186,21 @@ class EpisodeMirrorTest {
         assertTrue("la sinopsis usa el overview del servidor", player.contains("synopsis.text = info.overview"))
         assertTrue("el nombre real reemplaza la marca técnica", player.contains("epTitle.text = \"\$label · \${info.title}\""))
         assertTrue("sin póster usa la miniatura del capítulo", player.contains("loadArt(info.still)"))
+        assertTrue("el selector del reproductor pide la temporada completa", player.contains("EpisodeMirror.infos(seasonRef)"))
+        assertTrue("el selector usa la miniatura del capítulo", player.contains("val still = info?.still"))
+    }
+
+    @Test
+    fun theTitleSelectorsUseEpisodeNamesAndStills() {
+        for (path in listOf(
+            "src/main/java/com/chronosbvrx/visionplus/ui/title/TitleScreen.kt",
+            "src/main/java/com/chronosbvrx/visionplus/ui/tv/TvTitleScreen.kt",
+        )) {
+            val source = requireSource(path)
+            assertTrue("$path pide los metadatos de la temporada", source.contains("EpisodeMirror.infos("))
+            assertTrue("$path muestra el número y el nombre", source.contains("episodeSelectorLabel("))
+            assertTrue("$path usa la miniatura del capítulo cuando existe", source.contains("info?.still"))
+        }
     }
 
     // ----- cableado en X4KApi -----

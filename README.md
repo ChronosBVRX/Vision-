@@ -42,6 +42,8 @@ app/src/main/java/com/chronosbvrx/visionplus/
 ├── ui/player/     # Reproductores nativos (VOD y Live) con OSD inmutable
 └── ui/sports/     # Módulo interactivo de fútbol y deportes en directo
 server/            # Backend VPS en FastAPI + PostgreSQL (índice, búsqueda, EPG y deportes)
+webos/             # Port para Smart TV LG webOS (misma UI y motor vía Node)
+pc/                # Port portable para Windows (misma UI/motor + lanzador y FFmpeg)
 ```
 
 ## Legal y Licencia

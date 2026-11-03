@@ -14,6 +14,9 @@ import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeHealth
 import com.chronosbvrx.visionplus.data.gee.GeeProbe
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.data.gee.SportsRelevance
+import com.chronosbvrx.visionplus.data.sports.SportsFavorites
+import com.chronosbvrx.visionplus.data.sports.SportsSearch
 import com.chronosbvrx.visionplus.data.sports.SportsSource
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import kotlinx.coroutines.CoroutineScope
@@ -43,9 +46,22 @@ class GeeSportsState(
         private set
     var selectedDay by mutableStateOf(DeportesReturn.validDay() ?: SportsSource.todayIso())
         private set
+    /** false = modo «Principal» (Tier 1); true = todas las ligas y deportes. */
+    var showAll by mutableStateOf(DeportesReturn.showAll)
+        private set
     var loading by mutableStateOf(false)
         private set
     var refreshedAt by mutableLongStateOf(0L)
+        private set
+
+    /** Equipos favoritos del perfil (claves normalizadas) y filtro «Favoritos». */
+    var favoriteTeams by mutableStateOf(SportsFavorites.teams(context))
+        private set
+    var favoritesOnly by mutableStateOf(false)
+        private set
+
+    /** Búsqueda local por equipo/liga/cadena (vacía = todos). */
+    var searchQuery by mutableStateOf("")
         private set
 
     /**
@@ -73,13 +89,25 @@ class GeeSportsState(
             DeportesReturn.category = selectedCategory
             DeportesReturn.categoryChosen = true
         }
-        refresh()
+        // La copia en disco puede no tener el deporte elegido (o haber quedado en
+        // una liga secundaria): se corrige antes del primer frame.
+        ensureCategory()
+        // Al abrir Deportes se pide la copia fresca: el CMS puede cambiar la lista
+        // de canales del evento (link_names) entre ciclos y no queremos enseñar
+        // una lista vieja durante el TTL de 8 min. Sin red se conserva la caché.
+        refresh(force = true)
     }
+
+    /** Los eventos que entran al modo elegido (Principal o todo el catálogo). */
+    private fun scoped(event: GeeSportsSource.GeeEvent): Boolean =
+        event.visible && (showAll || SportsRelevance.isMain(event))
 
     /** Deportes disponibles: fútbol primero y el resto por cantidad de eventos. */
     val categories: List<String>
         get() {
-            val counts = events.map { it.category }
+            val counts = events.asSequence()
+                .filter(::scoped)
+                .map { it.category }
                 .filter { it.isNotBlank() }
                 .groupingBy { it }
                 .eachCount()
@@ -94,12 +122,50 @@ class GeeSportsState(
     val selectedEvents: List<GeeSportsSource.GeeEvent>
         get() = events.filter { event ->
             event.dateIso == selectedDay &&
-                (selectedCategory == null || event.category.equals(selectedCategory, ignoreCase = true))
+                scoped(event) &&
+                (selectedCategory == null || event.category.equals(selectedCategory, ignoreCase = true)) &&
+                (!favoritesOnly || SportsFavorites.matches(event, favoriteTeams)) &&
+                SportsSearch.matches(event, searchQuery)
         }
+
+    /** Si el deporte elegido no tiene eventos ese día, cae al primero disponible del día. */
+    private fun ensureCategory() {
+        val selected = selectedCategory ?: return
+        val dayCategories = events.asSequence()
+            .filter { it.dateIso == selectedDay && scoped(it) }
+            .map { it.category }
+            .filter { it.isNotBlank() }
+            .toList()
+        if (dayCategories.isEmpty()) return
+        if (dayCategories.any { it.equals(selected, ignoreCase = true) }) return
+        val first = dayCategories.first()
+        selectedCategory = first
+        DeportesReturn.category = first
+    }
+
+    fun toggleFavorite(event: GeeSportsSource.GeeEvent) {
+        favoriteTeams = SportsFavorites.toggle(context, event)
+    }
+
+    fun isFavorite(event: GeeSportsSource.GeeEvent): Boolean =
+        SportsFavorites.matches(event, favoriteTeams)
+
+    fun toggleFavoritesOnly() {
+        favoritesOnly = !favoritesOnly
+    }
+
+    fun updateSearchQuery(query: String) {
+        searchQuery = query
+    }
+
+    fun clearSearch() {
+        searchQuery = ""
+    }
 
     fun pickDay(date: String) {
         selectedDay = date
         DeportesReturn.day = date
+        ensureCategory()
     }
 
     /**
@@ -111,6 +177,13 @@ class GeeSportsState(
     fun showEvent(event: GeeSportsSource.GeeEvent) {
         if (event.category.isNotBlank()) selectedCategory = event.category
         if (event.dateIso.isNotBlank()) selectedDay = event.dateIso
+        // Un partido pedido desde fuera debe verse aunque el filtro anterior lo esconda.
+        favoritesOnly = false
+        searchQuery = ""
+        if (!SportsRelevance.isMain(event) && !showAll) {
+            showAll = true
+            DeportesReturn.showAll = true
+        }
         DeportesReturn.category = selectedCategory
         DeportesReturn.categoryChosen = true
         DeportesReturn.day = selectedDay
@@ -122,6 +195,13 @@ class GeeSportsState(
         DeportesReturn.categoryChosen = true
     }
 
+    /** «Principal» ↔ «Todas las ligas»: el catálogo completo sigue a un toque. */
+    fun toggleShowAll() {
+        showAll = !showAll
+        DeportesReturn.showAll = showAll
+        ensureCategory()
+    }
+
     /** Avanza el reloj de la agenda (lo llama el tic de la pantalla). */
     fun tick(nowMs: Long = GeeAgenda.currentNow()) {
         if (nowMs > clockMs) clockMs = nowMs
@@ -130,6 +210,29 @@ class GeeSportsState(
     /** El estado efectivo de una señal: lo comprobado AHORA manda sobre el dato del servidor. */
     fun aliveOf(link: GeeSportsSource.GeeLink): Boolean? =
         GeeHealth.effective(link.alive, checks[link.link.trim()])
+
+    /**
+     * Comprueba AHORA todas las señales de UN evento (el que se acaba de abrir en el
+     * selector). El vigilante global tiene tope por pasada; esto garantiza que el
+     * partido que la persona está mirando no herede un «Caído» viejo del servidor
+     * cuando la señal sí responde (caso reportado con GeeSports).
+     */
+    suspend fun refreshChecksFor(event: GeeSportsSource.GeeEvent) {
+        val urls = event.links.asSequence()
+            .map { it.link.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .toList()
+        if (urls.isEmpty()) return
+        val fresh = GeeProbe.pingAll(urls)
+        if (fresh.isNotEmpty()) {
+            checks = checks + fresh
+            android.util.Log.i(
+                "GeeWatch",
+                "comprobación del partido: ${fresh.size} señales, vivas ${fresh.values.count { it.alive }}",
+            )
+        }
+    }
 
     /**
      * El vigilante de vida: la pantalla lo llama y corre mientras esté abierta. Comprueba sin
@@ -171,7 +274,10 @@ class GeeSportsState(
                 emptyList()
             }
             if (freshGroups.isNotEmpty()) groups = freshGroups
-            if (freshEvents.isNotEmpty()) events = freshEvents
+            if (freshEvents.isNotEmpty()) {
+                events = freshEvents
+                ensureCategory()
+            }
             if (freshXtv.isNotEmpty()) xtvChannels = freshXtv
             refreshedAt = System.currentTimeMillis()
             loading = false
@@ -187,7 +293,10 @@ class GeeSportsState(
             val fresh = withContext(Dispatchers.IO) {
                 runCatching { GeeSportsSource.refreshEvents(context, force) }.getOrDefault(emptyList())
             }
-            if (fresh.isNotEmpty()) events = fresh
+            if (fresh.isNotEmpty()) {
+                events = fresh
+                ensureCategory()
+            }
             refreshedAt = System.currentTimeMillis()
         }
     }
@@ -219,6 +328,8 @@ internal object DeportesReturn {
     var day: String? = null
     var league: String? = null
     var channels: Boolean = false
+    /** Se conserva al volver del reproductor: «Principal» o «Todas las ligas». */
+    var showAll: Boolean = false
 
     /** El partido que se estaba viendo y el enlace sintonizado (uno solo: el último). */
     private var watchingEventId: String? = null
@@ -244,7 +355,17 @@ internal object DeportesReturn {
     /** Un día guardado que ya pasó no sirve: la agenda de hoy es la que importa. */
     fun validDay(today: String = SportsSource.todayIso()): String? {
         val stored = day ?: return null
-        return if (stored < today) today else stored
+        val tomorrow = SportsSource.shift(today, 1)
+        return when {
+            stored < today -> today
+            stored > tomorrow -> tomorrow
+            else -> stored
+        }
+    }
+
+    /** La señal cambió dentro del reproductor: al volver, el modal marca la que se está viendo. */
+    fun updateWatchingUrl(url: String) {
+        if (watchingUrl != null && url.isNotBlank()) watchingUrl = url
     }
 
     /** Se cierra el modal (o se elige otro partido): la marca de «Viendo» deja de aplicar. */
@@ -265,6 +386,7 @@ internal object DeportesReturn {
         day = null
         league = null
         channels = false
+        showAll = false
         forgetWatching()
     }
 }

@@ -43,14 +43,17 @@ internal fun homeMetrics(screenHeightDp: Int, density: LauncherDensity = Launche
         h < 760 -> 116.dp
         else -> 140.dp
     }
+    val channelHeight = if (compact) 104.dp else 128.dp
+    // Canales y entradas conservan 16:9, la misma proporción que un episodio.
+    val channelWidth = (channelHeight.value * 16f / 9f).dp
     val base = HomeMetrics(
         heroHeight = if (compact) (h * 0.46f).dp.coerceIn(196.dp, 300.dp) else 340.dp,
         posterWidth = posterWidth,
         posterHeight = posterWidth * 1.5f,
         continueWidth = if (compact) 196.dp else 248.dp,
         continueHeight = if (compact) 110.dp else 140.dp,
-        channelWidth = if (compact) 156.dp else 196.dp,
-        channelHeight = if (compact) 104.dp else 128.dp,
+        channelWidth = channelWidth,
+        channelHeight = channelHeight,
         appTile = if (compact) 76.dp else 96.dp,
         gap = if (compact) 12.dp else 16.dp,
         horizontalPadding = if (compact) 36.dp else 52.dp,
@@ -59,14 +62,15 @@ internal fun homeMetrics(screenHeightDp: Int, density: LauncherDensity = Launche
     )
     if (density == LauncherDensity.COMFORT) return base
     val scale = if (density == LauncherDensity.CINEMA) 1.18f else 0.86f
+    val scaledChannelHeight = (base.channelHeight.value * scale).coerceAtLeast(92f).dp
     return base.copy(
         heroHeight = (base.heroHeight.value * if (density == LauncherDensity.CINEMA) 1.06f else 0.94f).dp,
         posterWidth = (base.posterWidth.value * scale).dp,
         posterHeight = (base.posterHeight.value * scale).dp,
         continueWidth = (base.continueWidth.value * scale).dp,
         continueHeight = (base.continueHeight.value * scale).dp,
-        channelWidth = (base.channelWidth.value * scale).dp,
-        channelHeight = (base.channelHeight.value * scale).coerceAtLeast(92f).dp,
+        channelWidth = (scaledChannelHeight.value * 16f / 9f).dp,
+        channelHeight = scaledChannelHeight,
         appTile = (base.appTile.value * scale).coerceAtLeast(64f).dp,
         gap = (base.gap.value * scale).dp,
     )

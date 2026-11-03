@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,9 +39,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.runtime.Composable
@@ -57,10 +59,13 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.tv.material3.Border
 import com.chronosbvrx.visionplus.ui.Route
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
@@ -98,6 +103,9 @@ import com.chronosbvrx.visionplus.data.ResumeCard
 import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.allFilms
+import com.chronosbvrx.visionplus.data.continueOpensSeries
+import com.chronosbvrx.visionplus.data.isEpisodeEntry
+import com.chronosbvrx.visionplus.data.resumeSeriesFilm
 import com.chronosbvrx.visionplus.data.banners.BannerSource
 import com.chronosbvrx.visionplus.data.banners.bannerArtCacheKey
 import com.chronosbvrx.visionplus.data.banners.HomeBanner
@@ -109,8 +117,7 @@ import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.ui.LocalReducedEffects
 import com.chronosbvrx.visionplus.ui.backdropFadeSpec
 import com.chronosbvrx.visionplus.ui.components.GhostRow
-import com.chronosbvrx.visionplus.ui.plugins.PluginUpdatesBellIcon
-import com.chronosbvrx.visionplus.ui.plugins.appUpdateBadgeCount
+import com.chronosbvrx.visionplus.ui.components.rememberPosterLongClick
 import com.chronosbvrx.visionplus.ui.rememberHeroDrift
 import com.chronosbvrx.visionplus.ui.rememberScreenPx
 import com.chronosbvrx.visionplus.ui.sports.DeportesReturn
@@ -189,9 +196,9 @@ private val MinimalScrollBringIntoView = object : BringIntoViewSpec {
  * 1. Billboard inmersivo en la parte superior con botones interactivos de mando:
  * 1. Hero billboard inmersivo con drift, badge «TENDENCIA DE HOY», título, metadatos,
  *    sinopsis y acciones directas con foco D-pad: [Reproducir], [Detalles], [Favorito].
- * 2. Fila 1: "Top 10 en Vision+ Hoy" (Tendencias) con pósteres 2:3 y sello TOP 10.
- * 3. Fila 2: "Novedades y Estrenos" con badges de estado NUEVO y calificación.
- * 4. Fila 3: "Seguir viendo" con avance real y captura.
+ * 2. Fila 1: "Seguir viendo" con avance real y captura (arriba de toda categoría).
+ * 3. Fila 2: "Top 10 en Vision+ Hoy" (Tendencias) con pósteres 2:3 y sello TOP 10.
+ * 4. Fila 3: "Novedades y Estrenos" con badges de estado NUEVO y calificación.
  * 5. Filas de catálogo y recomendaciones posteriores.
  * 6. Optimizada para dispositivos limitados (take 15 por carrusel, Coil 320x480).
  */
@@ -286,6 +293,9 @@ fun TvHomeScreen(
     val rowEntry = remember { FocusRequester() }
     val rowsListState = rememberLazyListState()
     var heroActionTick by remember { mutableIntStateOf(0) }
+    // Una sola fila dueña del scroll vertical: mover el foco horizontalmente dentro
+    // de la misma fila NO vuelve a pedir el «pico» (era el péndulo de la 2.5.232).
+    var focusedRow by remember { mutableIntStateOf(-1) }
     val homeScope = rememberCoroutineScope()
 
     // El LazyColumn solo compone lo que se ve: cuando el foco está en la ÚLTIMA fila visible, la
@@ -293,13 +303,13 @@ fun TvHomeScreen(
     // y el mando se queda atorado ahí. Al enfocar una tarjeta se deja asomado un «pico» de la
     // fila siguiente: con ella compuesta, Abajo entra y el foco nunca se pierde.
     val nextRowPeekPx = with(androidx.compose.ui.platform.LocalDensity.current) { 132.dp.toPx() }
-    fun revealNextRowPeek(rowIndex: Int) {
+    suspend fun revealNextRowPeek(rowIndex: Int) {
         if (rowIndex < 0) return
         val info = rowsListState.layoutInfo
         val item = info.visibleItemsInfo.firstOrNull { it.index == rowIndex } ?: return
         val below = (item.offset + item.size + nextRowPeekPx) - info.viewportEndOffset
         if (below > 2f) {
-            homeScope.launch { runCatching { rowsListState.animateScrollBy(below) } }
+            runCatching { rowsListState.animateScrollBy(below) }
             return
         }
         // Simétrico: si la fila es la primera visible (el héroe/hubs ya no están compuestos),
@@ -307,8 +317,17 @@ fun TvHomeScreen(
         val firstVisible = info.visibleItemsInfo.firstOrNull()?.index ?: 0
         val above = info.viewportStartOffset - (item.offset - nextRowPeekPx)
         if (above > 2f && firstVisible > 0) {
-            homeScope.launch { runCatching { rowsListState.animateScrollBy(-above) } }
+            runCatching { rowsListState.animateScrollBy(-above) }
         }
+    }
+
+    // Único dueño del peek: se dispara al CAMBIAR DE FILA, no en cada tarjeta. La
+    // corrutina anterior se cancela si el usuario baja rápido, así no se encadenan
+    // animaciones relativas con posiciones ya viejas.
+    LaunchedEffect(focusedRow) {
+        if (focusedRow < 0) return@LaunchedEffect
+        delay(24)
+        revealNextRowPeek(focusedRow)
     }
 
     // Al enfocar una acción del hero (volver arriba con el mando), la lista se ancla al
@@ -568,22 +587,22 @@ fun TvHomeScreen(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(VisionBlack)) {
+    Box(Modifier.fillMaxSize().clipToBounds().background(VisionBlack)) {
         // Fondo cinemático inmersivo con drift y degradado suave.
-        // En un partido, el fondo es un lienzo deportivo con las crestas y un gradiente.
+        // El arte vive dentro de un contenedor recortado: el zoom y el drift nunca
+        // pueden invadir la barra superior ni las filas de abajo.
         Crossfade(targetState = featured, animationSpec = backdropFadeSpec(reduced), label = "bg") { f ->
             if (f?.event != null) {
                 TvSportsHeroBackdrop(event = f.event)
             } else {
-                Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().clipToBounds()) {
                     AsyncImage(
                         model = heroImageRequest(context, f?.imageUrl, screenPx.width, screenPx.height),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
+                        colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
                         modifier = Modifier
-                            .fillMaxWidth(0.68f)
-                            .fillMaxHeight(0.75f)
-                            .align(Alignment.TopEnd)
+                            .fillMaxSize()
                             .graphicsLayer {
                                 if (!reduced) {
                                     val margin = size.width * (HERO_SCALE - 1f) / 2f
@@ -596,14 +615,28 @@ fun TvHomeScreen(
                 }
             }
         }
+        // Cortina horizontal: opaca donde vive el texto y todavía oscura sobre el
+        // arte de la derecha para que no se vea el color crudo de la foto.
         Box(
             Modifier.fillMaxSize().background(
-                Brush.horizontalGradient(listOf(VisionBlack, VisionBlack, VisionBlack.copy(alpha = 0.45f), Color.Transparent)),
+                Brush.horizontalGradient(
+                    0f to VisionBlack,
+                    0.48f to VisionBlack,
+                    0.72f to VisionBlack.copy(alpha = 0.42f),
+                    1f to VisionBlack.copy(alpha = 0.10f),
+                ),
             ),
         )
         Box(
             Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color.Transparent, VisionBlack.copy(alpha = 0.6f), VisionBlack)),
+                Brush.verticalGradient(
+                    // El velo cubre el borde superior del banner y vuelve a cerrar
+                    // el fondo hacia las filas.
+                    0f to VisionBlack.copy(alpha = 0.58f),
+                    0.16f to VisionBlack.copy(alpha = 0.18f),
+                    0.5f to Color.Transparent,
+                    1f to VisionBlack,
+                ),
             ),
         )
         // Tinte ambiental: el fondo toma los tonos del póster destacado (muestra 8×8).
@@ -678,10 +711,9 @@ fun TvHomeScreen(
                                 )
                             }
 
-                    // 2. ACCESOS RÁPIDOS A COLECCIONES Y ESPECIALES (Brand Hubs: Fútbol, Anime, Novelas, Categorías)
-                    HomeRowSlot.Hubs -> item(key = slot.key) {
-                        TvQuickHubsRow(onGoRoute = onGoRoute)
-                    }
+                    // La sección «Colecciones y Especiales» se retiró del Inicio:
+                    // Anime y Novelas viven ahora en el menú de Series; Descargas, en Mi lista.
+                    HomeRowSlot.Hubs -> Unit
 
                     // Estados de carga o reintento si el catálogo aún no responde
                     HomeRowSlot.Status -> item(key = slot.key) {
@@ -715,7 +747,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
+                            onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -730,7 +762,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
+                            onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -744,7 +776,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
+                            onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -756,7 +788,8 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
+                            onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
+                            onOpenFilm = onOpenFilm,
                             onResume = onResume,
                         )
                     }
@@ -770,7 +803,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
+                            onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -784,7 +817,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
+                            onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -799,7 +832,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
+                            onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -813,7 +846,7 @@ fun TvHomeScreen(
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
                             entryRequester = rowEntry,
-                            onFocusFilm = { focusFilm = it; revealNextRowPeek(slotIndex) },
+                            onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
                     }
@@ -828,67 +861,6 @@ fun TvHomeScreen(
         }
 
         // La navegación vive en la barra superior (TvTopBar): el riel ya no se pinta.
-
-        // Campana de actualizaciones del sistema
-        var showPluginUpdates by rememberSaveable { mutableStateOf(false) }
-        val updatesBadge = appUpdateBadgeCount()
-        val tvContext = androidx.compose.ui.platform.LocalContext.current
-        androidx.compose.runtime.LaunchedEffect(updatesBadge) {
-            if (updatesBadge > 0) {
-                val latest = com.chronosbvrx.visionplus.data.AppUpdate.latest?.version.orEmpty()
-                val skipped = tvContext.getSharedPreferences("updates", 0).getString("skipped", "")
-                // Con versión mínima forzada el "skip" se ignora: la oferta vuelve cada apertura.
-                if (latest.isNotBlank() &&
-                    (com.chronosbvrx.visionplus.data.AppUpdate.forced(tvContext) || skipped != latest)
-                ) showPluginUpdates = true
-            }
-        }
-        if (showPluginUpdates) {
-            TvAppUpdatesDialog(onDismiss = {
-                showPluginUpdates = false
-                // Con actualización forzada NO se recuerda el "skip".
-                if (!com.chronosbvrx.visionplus.data.AppUpdate.forced(tvContext)) {
-                    com.chronosbvrx.visionplus.data.AppUpdate.latest?.version?.let { v ->
-                        tvContext.getSharedPreferences("updates", 0).edit().putString("skipped", v).apply()
-                    }
-                }
-            })
-        }
-        Surface(
-            onClick = { showPluginUpdates = true },
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = 24.dp, end = 32.dp + 48.dp + 12.dp).size(48.dp),
-            shape = ClickableSurfaceDefaults.shape(CircleShape),
-            colors = ClickableSurfaceDefaults.colors(
-                containerColor = VisionBlack.copy(alpha = 0.55f),
-                contentColor = Color.White,
-                focusedContainerColor = VisionBlue,
-                focusedContentColor = Color.White,
-                pressedContainerColor = VisionBlue,
-                pressedContentColor = Color.White,
-            ),
-        ) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { PluginUpdatesBellIcon(updatesBadge) }
-        }
-
-        // Botón de recarga de catálogo
-        val reloadScope = rememberCoroutineScope()
-        Surface(
-            onClick = { reloadScope.launch { catalog.load() } },
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = 24.dp, end = 32.dp).size(48.dp),
-            shape = ClickableSurfaceDefaults.shape(CircleShape),
-            colors = ClickableSurfaceDefaults.colors(
-                containerColor = VisionBlack.copy(alpha = 0.55f),
-                contentColor = Color.White,
-                focusedContainerColor = VisionBlue,
-                focusedContentColor = Color.White,
-                pressedContainerColor = VisionBlue,
-                pressedContentColor = Color.White,
-            ),
-        ) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Refresh, contentDescription = "Recargar", modifier = Modifier.size(26.dp))
-            }
-        }
     }
 }
 
@@ -903,6 +875,7 @@ private data class TvQuickHub(
 )
 
 private val TV_QUICK_HUBS = listOf(
+    TvQuickHub("Juegos", "VISION+ PLAY", Icons.Default.Casino, Route.Games),
     TvQuickHub("Deportes en vivo", "EN DIRECTO", Icons.Default.SportsSoccer, Route.Sports),
     TvQuickHub("Descargas (USB)", "OFFLINE", Icons.Default.Usb, Route.Downloads),
     TvQuickHub("Anime", "COLECCIÓN", Icons.Default.Animation, Route.Section("anime", "Anime")),
@@ -1088,9 +1061,9 @@ internal sealed interface HomeRowSlot {
 
 /**
  * Las filas del Inicio en su orden real de pintado. Réplica EXACTA de lo que compone el
- * `LazyColumn` —ahora es la misma lista que lo alimenta—: billboard, hubs, estado
- * (fantasmas/reintento), Top 10, Estrenos, Populares de la semana, Seguir viendo, filas
- * propias, resto y el espaciador final.
+ * `LazyColumn` —ahora es la misma lista que lo alimenta—: billboard, Seguir viendo, hubs,
+ * estado (fantasmas/reintento), Top 10, Estrenos, Populares de la semana, filas propias,
+ * resto y el espaciador final.
  */
 internal fun homeRowSlots(
     heroFilmId: String?,
@@ -1108,7 +1081,9 @@ internal fun homeRowSlots(
     themeRows: List<CatalogRow> = emptyList(),
 ): List<HomeRowSlot> = buildList {
     add(HomeRowSlot.Billboard(heroFilmId))
-    add(HomeRowSlot.Hubs)
+    // «Seguir viendo» va ARRIBA, antes de cualquier categoría (y de los accesos rápidos):
+    // es lo que la persona estaba viendo y lo primero que debe encontrar al abrir el Inicio.
+    if (continueCards.isNotEmpty()) add(HomeRowSlot.Continue(continueCards))
     if (showPlaceholders || showNoRows) add(HomeRowSlot.Status)
     if (top10.isNotEmpty()) add(HomeRowSlot.Top10(top10))
     if (premieres.isNotEmpty()) add(HomeRowSlot.Premieres(premieres))
@@ -1116,7 +1091,6 @@ internal fun homeRowSlots(
     // Novedades y antes de la hilera semanal: se ven sin enterrarlas al fondo.
     themeRows.forEach { add(HomeRowSlot.Kind(it)) }
     if (trending.isNotEmpty()) add(HomeRowSlot.Trending(trending))
-    if (continueCards.isNotEmpty()) add(HomeRowSlot.Continue(continueCards))
     if (becauseFilms.isNotEmpty() && becauseTitle.isNotBlank()) {
         add(HomeRowSlot.Because(becauseTitle, becauseFilms))
     }
@@ -1195,14 +1169,17 @@ private fun HeroBillboard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 48.dp, vertical = 20.dp),
+            .padding(horizontal = 48.dp, vertical = 20.dp)
+            // El hero cambia de película a partido y de una a dos líneas: reservar un
+            // mínimo evita que el LazyColumn se reancle y mueva la fila enfocada.
+            .heightIn(min = 300.dp),
     ) {
-        // Badge superior distintivo: cine azul, deportes rojo en vivo.
-        val badgeBackground = if (event?.live == true) {
-            Brush.horizontalGradient(listOf(Color(0xFFC0292E), Color(0xFF7A1013)))
-        } else {
-            Brush.horizontalGradient(listOf(VisionBlue, VisionBlueDark))
-        }
+        // Badge superior sutil: vidrio oscuro con borde fino cian (o rojo si el
+        // partido está en vivo), texto pequeño en mayúsculas y tracking amplio.
+        val liveBadge = event?.live == true
+        val badgeBackground = if (liveBadge) Color(0x26EF4444) else Color(0x2638BDF8)
+        val badgeBorder = if (liveBadge) Color(0x4DEF4444) else Color(0x4D38BDF8)
+        val badgeInk = if (liveBadge) Color(0xFFFCA5A5) else Color(0xFF67E8F9)
         val badgeText = if (event != null) {
             featured.eyebrow.ifBlank { "DEPORTES · EN VIVO" }
         } else {
@@ -1214,30 +1191,31 @@ private fun HeroBillboard(
         }
         Box(
             modifier = Modifier
-                .background(badgeBackground, shape = RoundedCornerShape(4.dp))
-                .padding(horizontal = 9.dp, vertical = 4.dp),
+                .background(badgeBackground, shape = RoundedCornerShape(50))
+                .border(1.dp, badgeBorder, RoundedCornerShape(50))
+                .padding(horizontal = 11.dp, vertical = 5.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Icon(
                     if (event != null) Icons.Default.SportsSoccer else VisionIcons.WeeklyTrending,
                     contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(13.dp),
+                    tint = badgeInk,
+                    modifier = Modifier.size(12.dp),
                 )
                 Text(
-                    text = badgeText,
+                    text = badgeText.uppercase(),
                     style = TextStyle(
-                        color = Color.White,
+                        color = badgeInk,
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.4.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.8.sp,
                     ),
                 )
-                if (event?.live == true) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(Color.White))
+                if (liveBadge) {
+                    Box(Modifier.size(5.dp).clip(CircleShape).background(Color(0xFFFCA5A5)))
                 }
             }
         }
@@ -1291,6 +1269,7 @@ private fun HeroBillboard(
                     label = if (event.live) "Ver en vivo" else "Ver partido",
                     icon = Icons.Default.SportsSoccer,
                     primary = true,
+                    height = 44.dp,
                     modifier = if (landing != null) Modifier.landingFocus(landing) else Modifier,
                     onClick = { onOpenSports(event) },
                     onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
@@ -1298,6 +1277,8 @@ private fun HeroBillboard(
                 TvCompactAction(
                     label = "Agenda",
                     icon = Icons.Default.Info,
+                    height = 44.dp,
+                    soft = true,
                     onClick = onOpenSportsHub,
                     onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
                 )
@@ -1306,6 +1287,7 @@ private fun HeroBillboard(
                     label = "Reproducir",
                     icon = VisionIcons.Play,
                     primary = true,
+                    height = 44.dp,
                     modifier = when {
                         isHeroTarget && returnRequester != null -> Modifier.focusRequester(returnRequester)
                         landing != null -> Modifier.landingFocus(landing)
@@ -1317,12 +1299,16 @@ private fun HeroBillboard(
                 TvCompactAction(
                     label = "Detalles",
                     icon = Icons.Default.Info,
+                    height = 44.dp,
+                    soft = true,
                     onClick = { currentFilm?.let(onOpenFilm) },
                     onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
                 )
                 TvCompactAction(
                     label = if (inFavorites) "En Favoritos" else "Favorito",
                     icon = if (inFavorites) VisionIcons.Favorite else VisionIcons.FavoriteBorder,
+                    height = 44.dp,
+                    soft = true,
                     onClick = onToggleFavorite,
                     onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
                 )
@@ -1492,7 +1478,8 @@ internal fun HomePosterRow(
     LaunchedEffect(returnIndex, safeFilms) { rowState.revealReturnIndex(returnIndex) }
 
     Column(modifier = Modifier.padding(top = metrics.topPadding)) {
-        TvRowLabel(title, metrics.labelHeight, icon = icon, topTen = isTop10)
+        val rowIcon = icon ?: if (isTop10) VisionIcons.WeeklyTrending else null
+        TvRowLabel(title, metrics.labelHeight, icon = rowIcon)
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
                 state = rowState,
@@ -1502,26 +1489,22 @@ internal fun HomePosterRow(
             ) {
                 itemsIndexed(safeFilms, key = { idx, film -> "${title}-${film.id}-${idx}" }) { idx, film ->
                     val rank = if (isTop10 && idx in 0..9) idx + 1 else null
-                    val badge = when {
-                        isTop10 -> "TOP 10"
-                        isNew || film.year >= 2025 -> "NUEVO"
-                        else -> null
-                    }
                     val isReturn = returnRequester != null && film.id == returnFilmId
                     Column(Modifier.width(metrics.cardWidth)) {
                         TvPosterCard(
                             title = film.title,
                             imageUrl = film.posterUrl,
                             score = film.score,
-                            badge = badge,
                             rank = rank,
                             cardWidth = metrics.cardWidth,
+                            cardHeight = metrics.cardHeight,
                             modifier = when {
                                 isReturn -> Modifier.focusRequester(returnRequester)
                                 idx == 0 && entryRequester != null -> Modifier.focusRequester(entryRequester)
                                 else -> Modifier
                             },
                             onFocus = { onFocusFilm(film) },
+                            onLongClick = rememberPosterLongClick(film),
                             onClick = { onOpenFilm(film) },
                         )
                         // El título vive en una caja de alto fijo: aunque la tele tenga la letra
@@ -1532,7 +1515,7 @@ internal fun HomePosterRow(
                                 style = if (metrics.compact) MaterialTheme.typography.bodySmall
                                 else MaterialTheme.typography.bodyMedium,
                                 color = Color.White,
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
@@ -1585,12 +1568,14 @@ private fun HomeAiringRow(
                             score = card.film.score,
                             badge = if (card.today) "HOY" else null,
                             cardWidth = metrics.cardWidth,
+                            cardHeight = metrics.cardHeight,
                             modifier = when {
                                 isReturn -> Modifier.focusRequester(returnRequester)
                                 idx == 0 && entryRequester != null -> Modifier.focusRequester(entryRequester)
                                 else -> Modifier
                             },
                             onFocus = { onFocusFilm(card.film) },
+                            onLongClick = rememberPosterLongClick(card.film),
                             onClick = { onOpenFilm(card.film) },
                         )
                         Box(Modifier.padding(top = metrics.titleGap).height(metrics.titleHeight)) {
@@ -1599,7 +1584,7 @@ private fun HomeAiringRow(
                                 style = if (metrics.compact) MaterialTheme.typography.bodySmall
                                 else MaterialTheme.typography.bodyMedium,
                                 color = Color.White,
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
@@ -1629,6 +1614,7 @@ private fun ContinueRow(
     returnFilmId: String? = null,
     entryRequester: FocusRequester? = null,
     onFocusFilm: (Film) -> Unit,
+    onOpenFilm: (Film) -> Unit,
     onResume: (ResumeCard) -> Unit,
 ) {
     if (cards.isEmpty()) return
@@ -1656,7 +1642,10 @@ private fun ContinueRow(
             ) {
                 itemsIndexed(cards, key = { _, card -> card.entry.key }) { idx, card ->
                     val film = card.film
-                    val title = film?.title ?: card.entry.title
+                    val title = continueTitle(card)
+                    val opensSeries = continueOpensSeries(card) && card.completed
+                    val nextUp = card.completed && card.hasNext && opensSeries
+                    val barProgress = if (nextUp) 0f else card.progress
                     val isReturn = returnRequester != null && (film?.id == returnFilmId || card.entry.key == returnFilmId || card.entry.xtvCode == returnFilmId)
                     Column(Modifier.width(196.dp)) {
                         TvLandscapeCard(
@@ -1669,7 +1658,13 @@ private fun ContinueRow(
                                 else -> Modifier
                             },
                             onFocus = { film?.let(onFocusFilm) },
-                            onClick = { onResume(card) },
+                            onClick = {
+                                if (opensSeries) {
+                                    onOpenFilm(film ?: resumeSeriesFilm(card.entry))
+                                } else {
+                                    onResume(card)
+                                }
+                            },
                         )
                         Box(
                             Modifier
@@ -1681,20 +1676,31 @@ private fun ContinueRow(
                             Box(
                                 Modifier
                                     .fillMaxHeight()
-                                    .fillMaxWidth(card.progress.coerceIn(0.04f, 1f))
+                                    .fillMaxWidth(if (barProgress <= 0f) 0.04f else barProgress.coerceIn(0.04f, 1f))
                                     .background(
                                         Brush.horizontalGradient(listOf(VisionBlue, VisionBlueBright)),
                                         CircleShape,
                                     ),
                             )
                         }
+                        // Nombre real de la obra (antes la tarjeta solo decía
+                        // «Siguiente capítulo» y se perdía el título).
                         Text(
-                            text = "Continuar en " + formatResume(card.entry.positionMs),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.85f),
+                            text = title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 4.dp),
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                        Text(
+                            text = continueMetaLine(card, opensSeries, nextUp),
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.55f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 2.dp),
                         )
                     }
                 }
@@ -1702,6 +1708,49 @@ private fun ContinueRow(
         }
         Spacer(Modifier.height(metrics.bottomGap))
     }
+}
+
+/** Nombre de la obra para la primera línea de «Seguir viendo». */
+internal fun continueTitle(card: ResumeCard): String {
+    val fromFilm = card.film?.title?.trim().orEmpty()
+    if (fromFilm.isNotBlank()) return fromFilm
+    val raw = card.entry.title
+    return com.chronosbvrx.visionplus.data.normalizeDisplayName(raw)
+        .substringBefore(" · T")
+        .substringBefore(" · C")
+        .trim()
+        .ifBlank { raw }
+}
+
+/** «T1» desde «T1», «Temporada 1» o «Season 1». */
+private fun continueSeasonLabel(entry: com.chronosbvrx.visionplus.data.ResumeEntry): String {
+    val raw = entry.seasonNames.getOrNull(entry.seasonIndex).orEmpty()
+    val digits = Regex("\\d+").find(raw)?.value
+    return "T${digits ?: (entry.seasonIndex + 1)}"
+}
+
+/** «T1:E4» del capítulo actual. */
+private fun continueEpisodeLabel(entry: com.chronosbvrx.visionplus.data.ResumeEntry): String =
+    "${continueSeasonLabel(entry)}:E${entry.episodeIndex + 1}"
+
+/** El siguiente capítulo, cambiando de temporada cuando el actual era el último. */
+private fun continueNextEpisodeLabel(entry: com.chronosbvrx.visionplus.data.ResumeEntry): String {
+    val nextIndex = entry.episodeIndex + 1
+    val nextSeason = entry.episodeIds.isNotEmpty() &&
+        nextIndex >= entry.episodeIds.size &&
+        entry.seasonIndex + 1 < entry.seasonIds.size
+    return if (nextSeason) {
+        "T${entry.seasonIndex + 2}:E1"
+    } else {
+        "${continueSeasonLabel(entry)}:E${nextIndex + 1}"
+    }
+}
+
+internal fun continueMetaLine(card: ResumeCard, opensSeries: Boolean, nextUp: Boolean): String = when {
+    nextUp -> "Siguiente capítulo: ${continueNextEpisodeLabel(card.entry)}"
+    isEpisodeEntry(card.entry) -> "${continueEpisodeLabel(card.entry)} • Continuar en ${formatResume(card.entry.positionMs)}"
+    card.completed -> "Visto"
+    else -> "Continuar en ${formatResume(card.entry.positionMs)}"
 }
 
 /**

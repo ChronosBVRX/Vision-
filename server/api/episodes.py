@@ -26,9 +26,11 @@ EPISODES_REQUEST_COOLDOWN_MINUTES = float(os.environ.get("EPISODES_REQUEST_COOLD
 EPISODES_FAILED_RETRY_HOURS = float(os.environ.get("EPISODES_FAILED_RETRY_HOURS", "24") or "24")
 EPISODES_MAX_ATTEMPTS = int(os.environ.get("EPISODES_MAX_ATTEMPTS", "6") or "6")
 
-# Solo cids de XTV (números/alnum pelados o con el prefijo del índice). Una ref de
-# otra fuente (`magis:…`, `ia:…`) jamás se espeja: el portal solo entiende las suyas.
-_REF_RX = re.compile(r"^(?:xtv:)?[1-9][0-9A-Za-z_\-]{0,63}$")
+# Solo cids de XTV (alnum pelados o con el prefijo del índice). Los cids reales
+# pueden empezar con letra (`DC8195…`): exigir un dígito inicial rechazaba series
+# enteras y el espejo nunca traía sus nombres/miniaturas. Una ref de otra fuente
+# (`magis:…`, `ia:…`) sigue fuera: el portal solo entiende las suyas.
+_REF_RX = re.compile(r"^(?:xtv:)?[0-9A-Za-z][0-9A-Za-z_\-]{0,63}$")
 
 
 def valid_ref(raw) -> str | None:

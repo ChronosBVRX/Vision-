@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.sports
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,7 +50,9 @@ import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeHealth
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.sports.SportsLinker
+import com.chronosbvrx.visionplus.data.sports.SportsReminder
 import com.chronosbvrx.visionplus.ui.components.EmptyState
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSuccess
@@ -62,9 +65,17 @@ internal fun geeCategoryLabel(category: String): String = when (category.lowerca
     "football" -> "Fútbol"
     "basketball" -> "Básquet"
     "american football" -> "Americano"
-    "motorsports" -> "F1"
+    "motorsport", "motorsports" -> "Motor"
     "baseball" -> "Béisbol"
+    "hockey" -> "Hockey"
     "tennis" -> "Tenis"
+    "fighting", "pelea", "peleas" -> "Peleas"
+    "boxing", "boxeo" -> "Boxeo"
+    "mma" -> "MMA"
+    "rugby" -> "Rugby"
+    "volleyball" -> "Voleibol"
+    "handball" -> "Balonmano"
+    "cricket" -> "Cricket"
     "aussie rules" -> "Aussie rules"
     else -> category
 }
@@ -72,16 +83,13 @@ internal fun geeCategoryLabel(category: String): String = when (category.lowerca
 /** "19:00:00" → "19:00". */
 internal fun geeTimeLabel(time: String): String = time.take(5)
 
-/** El enlace tal cual, sin las cabeceras embebidas: se enseña para que no haya falsa expectativa. */
-internal fun linkDisplay(link: String): String = link.substringBefore('|').trim()
-
 /**
  * La recomendación del intercalado (móvil y TV): la fuente declara canales que pueden estar dando
  * OTRO partido, así que se dice claro y se explica cómo cambiar hasta encontrar el bueno.
  */
 internal const val ZAP_HINT =
-    "Puede que alguna esté dando otro partido: cambia entre ellas " +
-        "(Arriba/Abajo durante la reproducción) hasta encontrar la que lo dé."
+    "Arriba/Abajo cambia solo entre las señales disponibles de este partido. " +
+        "Si alguna no lo está dando, elige otra de la lista."
 
 /**
  * El badge de estado de un enlace según el sondeo del servidor. Habla de la
@@ -89,7 +97,15 @@ internal const val ZAP_HINT =
  * «Disponible» y no «EN VIVO» (esa palabra queda solo para partidos jugándose).
  */
 @Composable
-internal fun GeeAliveBadge(alive: Boolean?) {
+internal fun GeeAliveBadge(alive: Boolean?, playable: Boolean = true, resolvable: Boolean = false) {
+    if (!playable) {
+        Text("Sin señal", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+        return
+    }
+    if (resolvable) {
+        Text("Al tocar", style = MaterialTheme.typography.bodySmall, color = VisionBlueBright)
+        return
+    }
     val (label, color) = when (alive) {
         true -> "Disponible" to VisionSuccess
         null -> "Sin verificar" to VisionTextSecondary
@@ -112,12 +128,17 @@ internal fun GeeAliveBadge(alive: Boolean?) {
 /** La opción que se estaba viendo: al volver del reproductor el modal la trae marcada. */
 @Composable
 internal fun GeePlayingBadge() {
-    Surface(color = VisionBlueBright, shape = RoundedCornerShape(50)) {
+    Surface(
+        color = VisionBlueBright,
+        shape = RoundedCornerShape(50),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.55f)),
+    ) {
         Text(
-            "Viendo",
+            "Seleccionada",
             style = MaterialTheme.typography.labelSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
             color = Color(0xFF06121F),
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
         )
     }
 }
@@ -278,15 +299,38 @@ internal fun GeeLinkPickDialog(
     checks: Map<String, GeeHealth.Check> = emptyMap(),
     eventInfo: GeeZapSignals.EventInfo? = null,
     playingUrl: String? = null,
+    favorite: Boolean = false,
+    onToggleFavorite: (() -> Unit)? = null,
+    canRemind: Boolean = false,
+    reminderActive: Boolean = false,
+    onRemind: ((Int) -> Unit)? = null,
+    onClearReminder: (() -> Unit)? = null,
+    xtv: List<GeeSportsSource.XtvOption> = emptyList(),
 ) {
-    // SOLO las señales que GeeSports publica para este partido. Nada de guía/catálogo.
-    val rows = remember(title, links, checks, playingUrl) {
+    // Primero la segunda opción propia (XTV, ya confirmada por el servidor); debajo,
+    // las señales que publica GeeSports. No se toca la agenda ni sus enlaces.
+    val geeRows = remember(title, links, checks, playingUrl) {
         geePickRows(title, links, checks, playingUrl)
     }
+    // GeeSports manda: es la fuente que está entregando los partidos. La
+    // segunda opción de la casa solo aparece como RESPALDO cuando GeeSports no
+    // publicó ninguna señal sintonizable; además, la casa abre el motor nativo
+    // (sin el HUD de estadísticas).
+    val xtvRows = remember(xtv, playingUrl, geeRows) {
+        if (geeRows.any { it.playable }) emptyList() else xtvPickRows(xtv, playingUrl)
+    }
+    val rows = remember(geeRows, xtvRows) { geeRows + xtvRows }
+    var resolving by remember { mutableStateOf<GeePickRow?>(null) }
     // Zapping dentro del bloque de opciones: la lista ORDENADA del evento queda armada
-    // para el reproductor en línea, que la recoge al montar.
-    val zapOrder = remember(rows) { rows.map { it.channel }.distinctBy { it.url } }
-    val liveRows = remember(rows) { rows.filter { it.alive == true } }
+    // para el reproductor en línea, que la recoge al montar. Solo entran las señales que
+    // la lista muestra como disponibles (las caídas y las ranuras sin dirección no se
+    // sintonizan); el ciclo nunca sale de las transmisiones de ESTE partido.
+    val zapOrder = remember(rows) {
+        rows.filter { it.type != "xtv" && it.playable && it.alive != false && it.channel.url.isNotBlank() }
+            .map { it.channel }
+            .distinctBy { it.url }
+    }
+    val liveRows = remember(rows) { rows.filter { it.alive == true && it.type != "xtv" } }
     val listState = rememberLazyListState()
     val playingIndex = rows.indexOfFirst { it.playing }
     // La opción que se estaba viendo queda a la vista al volver del reproductor.
@@ -295,14 +339,18 @@ internal fun GeeLinkPickDialog(
     }
 
     fun playZap(picked: LiveChannel) {
-        GeeZapSignals.arm(picked, zapOrder, eventInfo)
+        // Un canal XTV no entra al zapping de GeeSports: lo abre el reproductor XTV.
+        if (!picked.url.startsWith("xtvlive:", ignoreCase = true)) {
+            GeeZapSignals.arm(picked, zapOrder, eventInfo)
+        }
         onPlay(picked)
     }
     Dialog(onDismissRequest = onDismiss) {
+        BackHandler(onBack = onDismiss)
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = VisionSurface,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).dismissOnBack(onDismiss),
         ) {
             Column(Modifier.padding(20.dp)) {
                 Text(
@@ -322,6 +370,28 @@ internal fun GeeLinkPickDialog(
                         style = MaterialTheme.typography.bodyMedium,
                         color = VisionTextSecondary,
                     )
+                    if (canRemind && onRemind != null) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            "Avisarme antes:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = VisionTextSecondary,
+                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            SportsReminder.OPTIONS.forEach { minutes ->
+                                TextButton(onClick = { onRemind(minutes) }) {
+                                    Text("$minutes min")
+                                }
+                            }
+                            if (reminderActive && onClearReminder != null) {
+                                TextButton(onClick = onClearReminder) { Text("Quitar") }
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(6.dp))
                 } else if (rows.isEmpty()) {
                     Text(
@@ -338,24 +408,57 @@ internal fun GeeLinkPickDialog(
                     ) {
                         item(key = "links_label") {
                             Text(
-                                "Transmisiones de GeeSports:",
+                                "Transmisiones disponibles:",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = VisionTextSecondary,
                                 modifier = Modifier.padding(bottom = 2.dp),
                             )
+                            if (xtvRows.isNotEmpty()) {
+                                Text(
+                                    "GeeSports no publicó una señal utilizable; opciones de la casa como respaldo.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = VisionBlueBright.copy(alpha = 0.8f),
+                                    modifier = Modifier.padding(bottom = 4.dp),
+                                )
+                            }
                         }
-                        itemsIndexed(rows, key = { index, row -> "link_${index}_${row.link}" }) { _, row ->
+                        itemsIndexed(rows, key = { index, row -> "link_${index}_${row.link}_${row.title}" }) { _, row ->
+                            val selected = row.playing
                             Surface(
-                                onClick = { playZap(row.channel) },
+                                onClick = {
+                                    if (row.playable) {
+                                        if (row.type == "xtv") {
+                                            playZap(row.channel)
+                                        } else if (row.link.isBlank() && row.tokenApi.isNotBlank()) {
+                                            resolving = row
+                                        } else {
+                                            playZap(row.channel)
+                                        }
+                                    }
+                                },
                                 shape = RoundedCornerShape(12.dp),
-                                color = VisionSurfaceHigh,
+                                color = when {
+                                    selected -> Color(0xFF173A66)
+                                    row.playable -> VisionSurfaceHigh
+                                    else -> VisionSurfaceHigh.copy(alpha = 0.55f)
+                                },
+                                border = if (selected) {
+                                    androidx.compose.foundation.BorderStroke(2.dp, VisionBlueBright)
+                                } else {
+                                    null
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Row(
                                     Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = VisionBlue, modifier = Modifier.size(22.dp))
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        tint = if (selected) VisionBlueBright else VisionBlue,
+                                        modifier = Modifier.size(22.dp),
+                                    )
                                     Spacer(Modifier.width(10.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text(
@@ -368,24 +471,40 @@ internal fun GeeLinkPickDialog(
                                         Text(
                                             row.typeLabel,
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = VisionTextSecondary,
+                                            color = if (row.type == "xtv") VisionBlueBright else VisionTextSecondary,
                                         )
-                                        // El enlace a la vista: la fuente declara canales que
-                                        // pueden estar dando OTRO partido — sin falsa expectativa.
-                                        Text(
-                                            linkDisplay(row.link),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = VisionTextSecondary.copy(alpha = 0.75f),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
+                                        if (row.note.isNotBlank()) {
+                                            Text(
+                                                row.note,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = VisionTextSecondary,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        // La dirección de la fuente no se enseña: solo el
+                                        // nombre del canal y su formato. Las ranuras sin señal
+                                        // explican que la fuente aún no publica su dirección.
+                                        if (!row.playable) {
+                                            Text(
+                                                "La fuente aún no publica su señal",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = VisionTextSecondary.copy(alpha = 0.75f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
                                     }
                                     if (row.playing) {
                                         Spacer(Modifier.width(8.dp))
                                         GeePlayingBadge()
                                     }
                                     Spacer(Modifier.width(8.dp))
-                                    GeeAliveBadge(row.alive)
+                                    GeeAliveBadge(
+                                        row.alive,
+                                        playable = row.playable,
+                                        resolvable = row.link.isBlank() && row.tokenApi.isNotBlank(),
+                                    )
                                 }
                             }
                         }
@@ -402,8 +521,31 @@ internal fun GeeLinkPickDialog(
                     }
                 }
                 Spacer(Modifier.height(6.dp))
-                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text("Cerrar") }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (onToggleFavorite != null) {
+                        TextButton(onClick = onToggleFavorite) {
+                            Text(if (favorite) "Quitar favorito" else "Favorito")
+                        }
+                    }
+                    TextButton(onClick = onDismiss) { Text("Cerrar") }
+                }
             }
         }
+    }
+
+    resolving?.let { row ->
+        GeeEmbedResolveDialog(
+            tokenApi = row.tokenApi,
+            title = row.title,
+            onResolved = { stream ->
+                resolving = null
+                playZap(row.resolvedWith(stream))
+            },
+            onDismiss = { resolving = null },
+        )
     }
 }

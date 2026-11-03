@@ -96,6 +96,11 @@ class HomeFeedCodecTest {
                     seasonNames = listOf("T1"),
                     resumeMs = 1_260_000,
                 ),
+                openLink = VisionLinks.title(
+                    ref = "xtv:grupo-serie",
+                    title = "Ley y orden: UVE",
+                    poster = "https://img/serie.jpg",
+                ),
             ),
         ),
         live = listOf(

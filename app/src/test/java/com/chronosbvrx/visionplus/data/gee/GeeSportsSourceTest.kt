@@ -73,6 +73,26 @@ class GeeSportsSourceTest {
     """.trimIndent()
 
     @Test
+    fun parseEventsReadsTheXtvSecondOption() {
+        val json = """
+            {"events":[{"id":"event:fox","category":"Football","event":"Liga MX, Apertura",
+             "team_a":"Necaxa","team_b":"Puebla","date_iso":"2026-10-17","time":"21:00:00",
+             "links":[],"xtv":[
+               {"name":"FOX One","code":"xtvlive:cyx_FOX","country":"México","brand":"Fox One",
+                "verified":true,"recommended":true,"note":"FOX+ premium","source":"xtv"},
+               {"name":"AYM Sports","code":"xtvlive:cyx_AYM","country":"México","brand":"AYM",
+                "verified":true,"recommended":false,"note":"FOX básico","source":"xtv"}
+             ]}]}
+        """.trimIndent()
+        val event = GeeSportsSource.parseEvents(json).single()
+        assertEquals(2, event.xtv.size)
+        assertEquals("FOX One", event.xtv[0].name)
+        assertEquals("xtvlive:cyx_FOX", event.xtv[0].code)
+        assertTrue(event.xtv[0].recommended)
+        assertEquals("FOX básico", event.xtv[1].note)
+    }
+
+    @Test
     fun parseEventsReadsTeamsDatesAndLiveScores() {
         val events = GeeSportsSource.parseEvents(eventsJson)
         assertEquals(2, events.size)
@@ -100,6 +120,27 @@ class GeeSportsSourceTest {
         assertNull(basket.scoreHome)
         assertEquals("", basket.leagueLabel)
         assertFalse(basket.live)
+    }
+
+    @Test
+    fun parseEventsKeepsDeclaredSourcesWithoutAddress() {
+        val json = """
+            {"events":[
+              {"id":"event:sin-url","category":"Football","event":"Liga MX, Apertura",
+               "team_a":"León","team_b":"América","date_iso":"2026-10-17",
+               "date":"17/10/2026","time":"19:00:00","alive":1,"total":2,
+               "link_names":["TUDN US","CANAL MX FHD"],
+               "links":[
+                 {"name":"TUDN US","link":"","url":"","headers":{},"type":"hls","drm":"","alive":null},
+                 {"name":"CANAL MX FHD","link":"https://cdn/mx.mpd","url":"https://cdn/mx.mpd",
+                  "headers":{},"type":"dash","drm":"","alive":true}
+               ]}
+            ]}
+        """.trimIndent()
+        val event = GeeSportsSource.parseEvents(json).single()
+        assertEquals(listOf("TUDN US", "CANAL MX FHD"), event.links.map { it.name })
+        assertEquals("", event.links[0].link)
+        assertEquals("https://cdn/mx.mpd", event.links[1].link)
     }
 
     @Test
@@ -142,6 +183,20 @@ class GeeSportsSourceTest {
         assertEquals(1, events.size)
         assertEquals(2, events[0].links.size)
         assertEquals(listOf("https://cdn/a.m3u8", "https://cdn/b.m3u8"), events[0].links.map { it.link })
+    }
+
+    @Test
+    fun duplicateEventsDoNotDropDeclaredNamesWithoutUrl() {
+        val json = """
+            {"events":[
+              {"id":"event:dup","category":"Football","event":"Liga MX","date":"17/10/2026","time":"21:00:00",
+               "links":[{"name":"TUDN US","link":""},{"name":"CANAL MX FHD","link":"https://cdn/mx.m3u8"}]},
+              {"id":"event:dup","category":"Football","event":"Liga MX","date":"17/10/2026","time":"21:00:00",
+               "links":[{"name":"UNIVISION HD","link":""},{"name":"CANAL MX FHD","link":"https://cdn/mx.m3u8"}]}
+            ]}
+        """.trimIndent()
+        val event = GeeSportsSource.parseEvents(json).single()
+        assertEquals(listOf("TUDN US", "CANAL MX FHD", "UNIVISION HD"), event.links.map { it.name })
     }
 
     @Test
@@ -196,4 +251,26 @@ class GeeSportsSourceTest {
         assertEquals("https://cdn/az.m3u8", channel.url)
         assertEquals("Azteca 7", channel.name)
     }
+
+    @Test
+    fun parseEventsReadsTheServerRelevanceFields() {
+        val json = """
+            {"events":[
+              {"id":"event:main","category":"Football","event":"Liga MX","team_a":"A","team_b":"B",
+               "date_iso":"2026-10-17","time":"19:00:00","alive":1,"total":1,"links":[],
+               "tier":1,"featured":true,"visible":true},
+              {"id":"event:hidden","category":"Football","event":"NWSL","team_a":"C","team_b":"D",
+               "date_iso":"2026-10-17","time":"20:00:00","alive":1,"total":1,"links":[],
+               "tier":2,"featured":false,"visible":false}
+            ]}
+        """.trimIndent()
+        val events = GeeSportsSource.parseEvents(json)
+        assertEquals(1, events[0].tier)
+        assertTrue(events[0].featured)
+        assertTrue(events[0].visible)
+        assertEquals(2, events[1].tier)
+        assertFalse(events[1].featured)
+        assertFalse(events[1].visible)
+    }
+
 }

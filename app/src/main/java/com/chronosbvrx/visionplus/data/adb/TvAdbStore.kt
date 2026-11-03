@@ -17,6 +17,17 @@ internal data class TvRecord(
     val applied: Boolean = false,
     val originalHome: String = "",
     val disabled: List<String> = emptyList(),
+    /** Apps que apagó la limpieza por lista (no son Inicios; se restauran con «Restaurar»). */
+    val cleaned: List<String> = emptyList(),
+    /** Lista de limpieza aplicada (p. ej. `tcl-g05-google-tv`), vacía si no se limpió. */
+    val cleanupList: String = "",
+    /** Copia del estado del televisor tomada antes de limpiar (archivo en filesDir/tv_backups). */
+    val backupFile: String = "",
+    val cleanupAt: Long = 0L,
+    /** Private DNS que tenía la tele antes de que Vision+ lo cambiara. */
+    val dnsMode: String = "",
+    val dnsSpecifier: String = "",
+    val dnsRecorded: Boolean = false,
     /** Qué versión de Vision+ tiene esa tele (se lee del propio televisor). */
     val appVersion: String = "",
     /** Qué versión del launcher tiene esa tele (se lee del propio televisor). */
@@ -83,6 +94,15 @@ internal object TvAdbStore {
                     disabled = obj.optJSONArray("disabled")?.let { items ->
                         (0 until items.length()).mapNotNull { items.optString(it).takeIf(String::isNotBlank) }
                     }.orEmpty(),
+                    cleaned = obj.optJSONArray("cleaned")?.let { items ->
+                        (0 until items.length()).mapNotNull { items.optString(it).takeIf(String::isNotBlank) }
+                    }.orEmpty(),
+                    cleanupList = obj.optString("cleanupList").trim(),
+                    backupFile = obj.optString("backupFile").trim(),
+                    cleanupAt = obj.optLong("cleanupAt", 0L),
+                    dnsMode = obj.optString("dnsMode").trim(),
+                    dnsSpecifier = obj.optString("dnsSpecifier").trim(),
+                    dnsRecorded = obj.optBoolean("dnsRecorded", false),
                     appVersion = obj.optString("appVersion").trim(),
                     launcherVersion = obj.optString("launcherVersion").trim(),
                     updatedAt = obj.optLong("updatedAt", 0L),
@@ -103,6 +123,13 @@ internal object TvAdbStore {
                     .put("applied", tv.applied)
                     .put("originalHome", tv.originalHome)
                     .put("disabled", JSONArray(tv.disabled))
+                    .put("cleaned", JSONArray(tv.cleaned))
+                    .put("cleanupList", tv.cleanupList)
+                    .put("backupFile", tv.backupFile)
+                    .put("cleanupAt", tv.cleanupAt)
+                    .put("dnsMode", tv.dnsMode)
+                    .put("dnsSpecifier", tv.dnsSpecifier)
+                    .put("dnsRecorded", tv.dnsRecorded)
                     .put("appVersion", tv.appVersion)
                     .put("launcherVersion", tv.launcherVersion)
                     .put("updatedAt", tv.updatedAt),

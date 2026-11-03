@@ -1,5 +1,6 @@
 package com.chronosbvrx.visionplus.ui.remote
 
+import androidx.activity.compose.BackHandler
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -76,6 +77,7 @@ import com.chronosbvrx.visionplus.data.allFilms
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.ui.formatDuration
 import com.chronosbvrx.visionplus.ui.settings.VisionCompanion
+import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
@@ -236,7 +238,8 @@ private fun MiniPlayerScreen(
     val np = NowPlayingOnTv
     val duration = durationOf(film)
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(color = VisionBlack, modifier = Modifier.fillMaxSize()) {
+        BackHandler(onBack = onClose)
+        Surface(color = VisionBlack, modifier = Modifier.fillMaxSize().dismissOnBack(onClose)) {
             Box(Modifier.fillMaxSize()) {
                 // Blur needs Android 12; before that the gradient alone darkens the art.
                 val screenPx = com.chronosbvrx.visionplus.ui.rememberScreenPx()
@@ -398,7 +401,7 @@ private fun TrackPicker(title: String, tracks: List<String>, current: String?, o
 @Composable
 private fun TvPickerSheet(choices: List<Pair<String, String>>, controlled: String?, onPick: (String) -> Unit, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = VisionSurfaceHigh) {
-        Column(Modifier.padding(bottom = 24.dp)) {
+        Column(Modifier.padding(bottom = 24.dp).dismissOnBack(onDismiss)) {
             Text("¿Qué TV quieres controlar?", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp))
             choices.forEach { (id, name) ->
                 Row(

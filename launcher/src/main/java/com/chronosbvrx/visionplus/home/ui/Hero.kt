@@ -8,7 +8,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -27,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LiveTv
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SportsSoccer
 import androidx.compose.material.icons.rounded.Star
@@ -56,6 +59,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -96,15 +100,30 @@ fun HeroStage(
     onOpen: (HeroSlide) -> Unit,
     onSportsHub: () -> Unit = {},
     modifier: Modifier = Modifier,
+    /** Un launcher puede cambiar el segundo botón por la puerta a la app principal. */
+    secondaryLabel: String? = null,
+    onSecondary: (() -> Unit)? = null,
+    /** El Bento es una tarjeta estrecha: usa el layout compacto aunque tenga altura. */
+    forceCompact: Boolean = false,
+    eyebrowOverride: String? = null,
     onControlFocus: (Boolean) -> Unit = {},
+    /** La diapositiva visible manda también el fondo a pantalla completa del Inicio. */
+    onActiveSlide: (HeroSlide) -> Unit = {},
+    /**
+     * El Inicio pinta el arte una sola vez, a pantalla completa, detrás de todo. El hero
+     * sigue dibujando sus degradados y contenido, pero no vuelve a pintar la foto: si lo
+     * hiciera, la misma imagen aparecería recortada dos veces y se vería el corte/duplicado.
+     */
+    showArt: Boolean = true,
 ) {
     if (items.isEmpty()) return
     var index by remember(items) { mutableIntStateOf(0) }
     val safeIndex = index.coerceIn(0, items.lastIndex)
     val current = items[safeIndex]
+    LaunchedEffect(current.id) { onActiveSlide(current) }
     val pausedState = rememberUpdatedState(paused)
     var progress by remember { mutableFloatStateOf(0f) }
-    val compact = metrics.heroHeight < 240.dp
+    val compact = forceCompact || metrics.heroHeight < 240.dp
     val context = LocalContext.current
 
     // La siguiente diapositiva se deja lista mientras se ve la actual: el crossfade
@@ -137,43 +156,55 @@ fun HeroStage(
 
     Box(modifier.fillMaxWidth().height(metrics.heroHeight).clipToBounds()) {
         // --- Arte de fondo -------------------------------------------------------
-        Crossfade(
-            targetState = current.id,
-            animationSpec = tween(650),
-            label = "heroArt",
-        ) { id ->
-            val slide = items.firstOrNull { it.id == id } ?: current
-            HeroBackdrop(slide = slide, reduced = reduced)
+        // En el escritorio Bento el arte se pinta DENTRO de la tarjeta del destacado.
+        // La variante sin arte queda para un shell que componga el fondo por su cuenta.
+        if (showArt) {
+            Crossfade(
+                targetState = current.id,
+                animationSpec = tween(650),
+                label = "heroArt",
+            ) { id ->
+                val slide = items.firstOrNull { it.id == id } ?: current
+                HeroBackdrop(slide = slide, reduced = reduced)
+            }
         }
 
         // --- Luz y degradados de cine -------------------------------------------
+        // Un destello cian muy tenue en vez del azul saturado: el color fuerte se reserva
+        // para EN VIVO, la barra de progreso y el foco.
         Box(
             Modifier.fillMaxSize().background(
                 Brush.radialGradient(
                     colors = listOf(
-                        HomeColors.Blue.copy(alpha = 0.16f),
+                        HomeColors.Cyan.copy(alpha = 0.07f),
                         Color.Transparent,
                     ),
                 ),
             ),
         )
+        // De izquierda a derecha: 80 % de opacidad a la izquierda para que el texto y los
+        // botones siempre tengan contraste; el arte respira hacia el centro y la derecha.
         Box(
             Modifier.fillMaxSize().background(
                 Brush.horizontalGradient(
-                    0f to HomeColors.Black.copy(alpha = 0.97f),
-                    0.42f to HomeColors.Black.copy(alpha = 0.78f),
-                    0.74f to Color.Transparent,
+                    0f to HomeColors.Deep.copy(alpha = 0.97f),
+                    0.38f to HomeColors.Deep.copy(alpha = 0.80f),
+                    0.72f to HomeColors.Deep.copy(alpha = 0.22f),
                     1f to Color.Transparent,
                 ),
             ),
         )
+        // De abajo hacia arriba: #0B0F19 sólido en la base para que las filas descansen
+        // sobre un fondo oscuro legible.
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
                     0f to HomeColors.Black.copy(alpha = 0.58f),
-                    0.30f to Color.Transparent,
-                    0.66f to Color.Transparent,
-                    1f to HomeColors.Black,
+                    0.28f to Color.Transparent,
+                    0.64f to Color.Transparent,
+                    // Con el arte a pantalla completa, el fondo ya cierra en #0B0F19:
+                    // el hero no debe pintar una banda sólida que marque el corte.
+                    1f to if (showArt) HomeColors.Deep else Color.Transparent,
                 ),
             ),
         )
@@ -200,10 +231,10 @@ fun HeroStage(
             ) { id ->
                 val slide = items.firstOrNull { it.id == id } ?: current
                 Column {
-                    HeroEyebrow(slide = slide, reduced = reduced)
+                    HeroEyebrow(slide = slide, reduced = reduced, eyebrowOverride = eyebrowOverride)
                     Spacer(Modifier.height(if (compact) 6.dp else 10.dp))
                     Text(
-                        slide.title,
+                        heroDisplayTitle(slide),
                         color = Color.White,
                         fontSize = (if (slide.sports && compact) metrics.titleSize - 4 else metrics.titleSize).sp,
                         lineHeight = (if (slide.sports && compact) metrics.titleSize else metrics.titleSize + 4).sp,
@@ -235,7 +266,7 @@ fun HeroStage(
             Spacer(Modifier.height(if (compact) 10.dp else 16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 val primaryLabel = when {
-                    current.sports -> if (current.live) "Ver en vivo" else "Ver partido"
+                    current.sports -> if (current.live) "Ver en directo" else "Ver partido"
                     current.playLink.isNotBlank() -> "Reproducir"
                     else -> "Ver detalles"
                 }
@@ -253,14 +284,27 @@ fun HeroStage(
                     onFocusChanged = onControlFocus,
                 )
                 HomeButton(
-                    label = if (current.sports) "Agenda completa" else "Más información",
+                    label = secondaryLabel
+                        ?: if (current.sports) "Agenda completa" else "Más información",
                     onClick = {
-                        if (current.sports) onSportsHub() else onOpen(current)
+                        when {
+                            onSecondary != null -> onSecondary.invoke()
+                            current.sports -> onSportsHub()
+                            else -> onOpen(current)
+                        }
                     },
-                    icon = if (current.sports) Icons.Rounded.LiveTv else Icons.Rounded.Info,
-                    modifier = Modifier
-                        .focusProperties { right = FocusRequester.Cancel }
-                        .then(if (upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier),
+                    icon = when {
+                        secondaryLabel != null -> Icons.AutoMirrored.Rounded.OpenInNew
+                        current.sports -> Icons.Rounded.LiveTv
+                        else -> Icons.Rounded.Info
+                    },
+                    // A la derecha vive la columna de sistema del Bento (Vision+ TV y
+                    // entradas): no se bloquea el salto geométrico del mando.
+                    modifier = if (upTarget != null) {
+                        Modifier.focusProperties { up = upTarget }
+                    } else {
+                        Modifier
+                    },
                     onFocusChanged = onControlFocus,
                 )
             }
@@ -415,12 +459,46 @@ private fun SportsBackdrop(slide: HeroSlide) {
                 alpha = 0.34f,
                 modifier = Modifier.fillMaxSize(),
             )
+        } else {
+            // La agenda no manda portada: se usa una foto de referencia del deporte (o de
+            // la liga) empaquetada en el APK. Los escudos de los equipos van encima.
+            val localArt = sportBackdropFor(slide)
+            if (localArt != 0) {
+                Image(
+                    painter = painterResource(localArt),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alpha = 0.56f,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun BoxScope.SportsAmbientCrests(slide: HeroSlide, metrics: HomeMetrics) {
+    // Sin escudos reales no se inventan monogramas gigantes: el arte del evento manda.
+    if (slide.homeLogo.isBlank() && slide.awayLogo.isBlank()) {
+        if (slide.leagueLogo.isNotBlank()) {
+            Box(
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = metrics.horizontalPadding, start = 40.dp)
+                    .size(220.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = slide.leagueLogo,
+                    contentDescription = slide.league,
+                    contentScale = ContentScale.Fit,
+                    alpha = 0.10f,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        return
+    }
     Row(
         modifier = Modifier
             .align(Alignment.CenterEnd)
@@ -455,7 +533,54 @@ private fun AmbientCrest(logo: String, name: String, alpha: Float) {
 // ---------------------------------------------------------------------------------
 
 @Composable
-private fun HeroEyebrow(slide: HeroSlide, reduced: Boolean) {
+private fun HeroEyebrow(slide: HeroSlide, reduced: Boolean, eyebrowOverride: String? = null) {
+    if (slide.sports) {
+        // Una sola etiqueta compacta: punto rojo pulsante + EN VIVO. Nada de repetir
+        // «DEPORTES · EN VIVO» y además una píldora roja con el mismo texto.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier
+                    .clip(HomeShapes.pill)
+                    .background(Color.White.copy(alpha = 0.10f))
+                    .border(1.dp, Color.White.copy(alpha = 0.15f), HomeShapes.pill)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (slide.live) {
+                    LiveDot(reduced)
+                } else {
+                    Box(Modifier.size(5.dp).clip(CircleShape).background(HomeColors.Cyan))
+                }
+                Text(
+                    if (slide.live) "EN VIVO" else "PRÓXIMO",
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.9.sp,
+                    maxLines = 1,
+                )
+            }
+            val subject = slide.title.takeIf { title ->
+                title.isNotBlank() && !title.contains(" vs ", ignoreCase = true)
+            } ?: slide.league
+            val season = seasonLabel(slide.startMs)
+            val context = listOf(subject, season).filter { it.isNotBlank() }.joinToString(" • ")
+            if (context.isNotBlank()) {
+                Spacer(Modifier.width(11.dp))
+                Text(
+                    context,
+                    color = HomeColors.TextDim,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.2.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        return
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier
@@ -463,16 +588,14 @@ private fun HeroEyebrow(slide: HeroSlide, reduced: Boolean) {
                 .height(2.dp)
                 .background(
                     Brush.horizontalGradient(
-                        listOf(HomeColors.BlueBright, Color.Transparent),
+                        listOf(HomeColors.Cyan, Color.Transparent),
                     ),
                 ),
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            slide.eyebrow.ifBlank {
-                if (slide.sports) "DEPORTES" else "DESTACADO HOY"
-            },
-            color = HomeColors.BlueBright,
+            eyebrowOverride ?: slide.eyebrow.ifBlank { "DESTACADO HOY" },
+            color = HomeColors.Cyan,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.8.sp,
@@ -491,6 +614,7 @@ private fun HeroBadge(text: String, live: Boolean, reduced: Boolean) {
         modifier = Modifier
             .clip(HomeShapes.pill)
             .background(if (live) HomeColors.Live.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.10f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), HomeShapes.pill)
             .padding(horizontal = 9.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -549,11 +673,28 @@ private fun MovieMetaLine(slide: HeroSlide) {
     }
 }
 
+/** Un evento individual (MotoGP, GP, pelea…) no es un «Local vs Visitante»: se pinta solo. */
+private fun heroDisplayTitle(slide: HeroSlide): String {
+    val parts = slide.title.split(" vs ", " VS ", " Vs ")
+    return if (parts.size == 2 && parts[0].trim().equals(parts[1].trim(), ignoreCase = true)) {
+        parts[0].trim()
+    } else {
+        slide.title
+    }
+}
+
 @Composable
 private fun SportsScoreboard(slide: HeroSlide, compact: Boolean) {
+    val home = slide.homeName.trim()
+    val away = slide.awayName.trim()
+    val single = home.isBlank() || away.isBlank() || home.equals(away, ignoreCase = true)
+    if (single) {
+        SingleEventScoreboard(slide = slide, compact = compact)
+        return
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 22.dp),
     ) {
         TeamBlock(
             name = slide.homeName.ifBlank { "Local" },
@@ -562,28 +703,46 @@ private fun SportsScoreboard(slide: HeroSlide, compact: Boolean) {
             alignEnd = true,
         )
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            val hasScore = slide.homeScore != null || slide.awayScore != null
             val score = when {
                 slide.homeScore != null && slide.awayScore != null ->
-                    "${slide.homeScore}  ${slide.awayScore}"
-                slide.homeScore != null -> "${slide.homeScore}  -"
-                slide.awayScore != null -> "-  ${slide.awayScore}"
+                    "${slide.homeScore} - ${slide.awayScore}"
+                slide.homeScore != null -> "${slide.homeScore} -"
+                slide.awayScore != null -> "- ${slide.awayScore}"
                 else -> "VS"
             }
             Text(
                 score,
-                color = Color.White,
-                fontSize = if (compact) 28.sp else 38.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.sp,
+                color = if (hasScore) Color.White else Color.White.copy(alpha = 0.58f),
+                fontSize = if (hasScore) {
+                    if (compact) 30.sp else 40.sp
+                } else {
+                    if (compact) 22.sp else 28.sp
+                },
+                fontWeight = if (hasScore) FontWeight.Black else FontWeight.Light,
+                letterSpacing = if (hasScore) 0.5.sp else 3.sp,
                 maxLines = 1,
             )
-            Text(
-                slide.detail.ifBlank { slide.subtitle }.ifBlank { "EN VIVO" },
-                color = if (slide.live) Color(0xFFFF8A8D) else HomeColors.TextDim,
-                fontSize = if (compact) 10.sp else 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-            )
+            // La hora o el minuto, con números tabulares debajo del VS: nunca baila.
+            val timeLine = when {
+                slide.live -> slide.detail.ifBlank { slide.subtitle }.ifBlank { "EN VIVO" }
+                slide.timeText.isNotBlank() -> listOf(slide.dateText, slide.timeText)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · ")
+                else -> slide.detail.ifBlank { slide.subtitle }
+            }
+            if (timeLine.isNotBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    timeLine,
+                    color = if (slide.live) Color(0xFFFF9A9D) else HomeColors.TextDim,
+                    fontSize = if (compact) 10.sp else 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.8.sp,
+                    maxLines = 1,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                )
+            }
         }
         TeamBlock(
             name = slide.awayName.ifBlank { "Visitante" },
@@ -592,13 +751,64 @@ private fun SportsScoreboard(slide: HeroSlide, compact: Boolean) {
             alignEnd = false,
         )
         if (slide.leagueLogo.isNotBlank() && !compact) {
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(4.dp))
             AsyncImage(
                 model = slide.leagueLogo,
                 contentDescription = slide.league,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.size(22.dp),
+                alpha = 0.82f,
+                modifier = Modifier.size(24.dp),
             )
+        }
+    }
+}
+
+@Composable
+private fun SingleEventScoreboard(slide: HeroSlide, compact: Boolean) {
+    val timeLine = when {
+        slide.timeText.isNotBlank() -> listOf(slide.dateText, slide.timeText)
+            .filter { it.isNotBlank() }
+            .joinToString(" · ")
+        slide.detail.isNotBlank() && !slide.detail.equals("EN VIVO", ignoreCase = true) -> slide.detail
+        else -> ""
+    }
+    val hasLeague = slide.league.isNotBlank()
+    if (slide.leagueLogo.isBlank() && !hasLeague && timeLine.isBlank()) return
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 14.dp),
+    ) {
+        if (slide.leagueLogo.isNotBlank()) {
+            AsyncImage(
+                model = slide.leagueLogo,
+                contentDescription = slide.league,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(if (compact) 40.dp else 56.dp),
+            )
+        }
+        Column {
+            if (hasLeague) {
+                Text(
+                    slide.league,
+                    color = HomeColors.TextDim,
+                    fontSize = if (compact) 10.sp else 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.sp,
+                    maxLines = 1,
+                )
+            }
+            if (timeLine.isNotBlank()) {
+                if (hasLeague) Spacer(Modifier.height(2.dp))
+                Text(
+                    timeLine,
+                    color = HomeColors.Text,
+                    fontSize = if (compact) 10.sp else 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.8.sp,
+                    maxLines = 1,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                )
+            }
         }
     }
 }
@@ -612,7 +822,7 @@ private fun TeamBlock(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
     ) {
         if (alignEnd) {
             Text(
@@ -623,14 +833,12 @@ private fun TeamBlock(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.End,
-                modifier = Modifier.widthIn(max = if (compact) 84.dp else 120.dp),
+                modifier = Modifier.widthIn(max = if (compact) 92.dp else 130.dp),
             )
         }
+        // Sin cuadro gris: el logo se dibuja transparente y a su tamaño natural.
         Box(
-            Modifier
-                .size(if (compact) 30.dp else 42.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color.White.copy(alpha = 0.08f)),
+            Modifier.size(if (compact) 38.dp else 52.dp),
             contentAlignment = Alignment.Center,
         ) {
             if (logo.isNotBlank()) {
@@ -638,10 +846,10 @@ private fun TeamBlock(
                     model = logo,
                     contentDescription = name,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().padding(4.dp),
+                    modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                Monogram(name, Modifier.fillMaxSize(), size = if (compact) 18 else 24)
+                Monogram(name, Modifier.fillMaxSize(), size = if (compact) 20 else 28)
             }
         }
         if (!alignEnd) {
@@ -652,20 +860,36 @@ private fun TeamBlock(
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = if (compact) 84.dp else 120.dp),
+                modifier = Modifier.widthIn(max = if (compact) 92.dp else 130.dp),
             )
         }
     }
+}
+
+/** «Temporada 2026» a partir de la fecha del evento (vacío si no hay fecha). */
+private fun seasonLabel(startMs: Long): String {
+    if (startMs <= 0) return ""
+    val year = java.text.SimpleDateFormat("yyyy", java.util.Locale.US)
+        .apply { timeZone = java.util.TimeZone.getTimeZone("America/Mexico_City") }
+        .format(java.util.Date(startMs))
+    return "Temporada $year"
 }
 
 /**
  * Una petición de arte con clave estable: el `?v=` diario del CDN cambia la URL, pero
  * no la imagen. Coil reutiliza la copia en disco/memoria y no vuelve a descargarla.
  */
-private fun bannerImageRequest(context: android.content.Context, url: String): ImageRequest =
+internal fun bannerImageRequest(
+    context: android.content.Context,
+    url: String,
+    width: Int = 1280,
+    height: Int = 720,
+): ImageRequest =
     ImageRequest.Builder(context)
         .data(url)
-        .size(1280, 720)
-        .memoryCacheKey(bannerArtCacheKey(url))
+        .size(width, height)
+        // La memoria distingue el tamaño (héroe 1280 vs fondo 1920); el disco no, para no
+        // volver a bajar la misma foto por cada resolución.
+        .memoryCacheKey("${bannerArtCacheKey(url)}@${width}x$height")
         .diskCacheKey(bannerArtCacheKey(url))
         .build()
