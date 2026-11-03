@@ -10,9 +10,11 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import java.io.File
 import java.io.FileNotFoundException
+import java.io.IOException
 import java.io.RandomAccessFile
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
+import org.json.JSONObject
 
 /**
  * Fuente de datos segura para ExoPlayer (Media3):
@@ -52,23 +54,42 @@ class EncryptedVaultDataSource(
         val raf = RandomAccessFile(targetFile, "r")
         randomAccessFile = raf
 
-        // 1. Leer y validar cabecera de 33 bytes
-        val (baseIv, plainLength) = OfflineCryptoVault.readHeader(raf)
-
-        // 2. Posicionar en el offset solicitado por ExoPlayer
         val requestedPosition = dataSpec.position
+        val portable = PortableVaultCrypto.readHeader(raf)
+        val plainLength: Long
+        val contentKey: SecretKey
+        val payloadOffset: Long
+        val baseIv: ByteArray
+
+        if (portable != null) {
+            // Contenedor portátil VPPACK02: la llave de contenido va envuelta para el
+            // dispositivo de origen y, si esta es otra TV, se resuelve con la llave de
+            // biblioteca ya importada desde la USB.
+            plainLength = portable.plainLength
+            baseIv = portable.baseIv
+            payloadOffset = portable.payloadOffset
+            contentKey = resolvePortableContentKey(targetFile, portable)
+                ?: throw IOException("Contenido portátil bloqueado: introduce el PIN de la USB")
+        } else {
+            val (v1BaseIv, v1PlainLength) = OfflineCryptoVault.readHeader(raf)
+            plainLength = v1PlainLength
+            baseIv = v1BaseIv
+            payloadOffset = OfflineCryptoVault.HEADER_SIZE.toLong()
+            contentKey = masterKey
+        }
+
         if (requestedPosition > plainLength) {
             throw java.io.EOFException("Posición solicitada ($requestedPosition) excede el tamaño del video ($plainLength)")
         }
 
-        val fileOffsetToSeek = OfflineCryptoVault.HEADER_SIZE + requestedPosition
-        raf.seek(fileOffsetToSeek)
-
-        // 3. Inicializar el descifrador en el punto exacto de la reproducción
-        val (seekCipher, _) = OfflineCryptoVault.createSeekableDecryptCipher(masterKey, baseIv, requestedPosition)
+        raf.seek(payloadOffset + requestedPosition)
+        val (seekCipher, _) = OfflineCryptoVault.createSeekableDecryptCipher(
+            key = contentKey,
+            baseIv = baseIv,
+            byteOffset = requestedPosition,
+        )
         cipher = seekCipher
 
-        // 4. Determinar cuántos bytes deben leerse en esta solicitud
         bytesRemaining = if (dataSpec.length != C.LENGTH_UNSET.toLong()) {
             dataSpec.length
         } else {
@@ -78,6 +99,27 @@ class EncryptedVaultDataSource(
         isOpen = true
         transferStarted(dataSpec)
         return bytesRemaining
+    }
+
+    /**
+     * Resuelve la llave de contenido de un `.pvpack`:
+     * 1) si esta TV es la que descargó, la cabecera trae la llave envuelta con su chip;
+     * 2) si es otra TV, se usa la llave de biblioteca importada y el `.pvkey` vecino.
+     */
+    private fun resolvePortableContentKey(
+        pack: File,
+        header: PortableVaultCrypto.PortableHeader,
+    ): SecretKey? {
+        runCatching { PortableVaultCrypto.unwrapDeviceContentKey(header) }.getOrNull()?.let { return it }
+        val keyFile = PortableLibrary.pvKeyFile(pack)
+        val obj = runCatching {
+            if (!keyFile.exists()) return@runCatching null
+            JSONObject(keyFile.readText(Charsets.UTF_8))
+        }.getOrNull() ?: return null
+        val libraryId = obj.optString("libraryId")
+        if (libraryId.isBlank()) return null
+        val libraryKey = PortableLibrary.getLibraryKey(context, libraryId) ?: return null
+        return PortableVaultCrypto.unwrapFromLibrary(obj.optString("wrappedKey"), libraryKey)
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {

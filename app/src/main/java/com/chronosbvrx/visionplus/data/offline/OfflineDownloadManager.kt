@@ -78,7 +78,13 @@ object OfflineDownloadManager {
 
         val targetVolume = resolveTargetVolume(context) ?: return false
 
-        val item = buildDownloadItem(film, episode, targetVolume, quality)
+        val item = buildDownloadItem(
+            film = film,
+            episode = episode,
+            target = targetVolume,
+            quality = quality,
+            portable = PortableLibrary.isEnabled(context),
+        )
 
         if (OfflineRegistry.isDownloaded(item.id, context)) return true
         if (OfflineRegistry.isDownloading(item.id, context)) return true
@@ -124,7 +130,13 @@ object OfflineDownloadManager {
                 seasonIndex = seasonIndex,
                 durationMs = durationMs,
             )
-            val item = buildDownloadItem(film, ep, targetVolume, quality)
+            val item = buildDownloadItem(
+                film = film,
+                episode = ep,
+                target = targetVolume,
+                quality = quality,
+                portable = PortableLibrary.isEnabled(context),
+            )
             when (OfflineRegistry.get(item.id, context)?.state) {
                 DownloadState.COMPLETED, DownloadState.DOWNLOADING, DownloadState.QUEUED -> Unit
                 DownloadState.PAUSED, DownloadState.ERROR -> {
@@ -170,13 +182,19 @@ object OfflineDownloadManager {
         episode: EpisodePlay?,
         target: StorageVolumeInfo,
         quality: String,
+        portable: Boolean = false,
     ): OfflineDownload {
         val isEpisode = episode != null && episode.code.isNotBlank()
         val epCode = episode?.code.orEmpty()
         val downloadId = if (isEpisode) "${film.id}:ep:$epCode" else film.id
 
         val safeFileName = downloadId.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-        val vaultFile = File(target.vaultDir, "$safeFileName.vpack")
+        val vaultDir = if (portable) {
+            File(target.vaultDir, PortableLibrary.PORTABLE_DIR).apply { mkdirs() }
+        } else {
+            target.vaultDir
+        }
+        val vaultFile = File(vaultDir, "$safeFileName.${if (portable) "pvpack" else "vpack"}")
 
         val duration = if (isEpisode && (episode?.durationMs ?: 0L) > 0L) {
             episode!!.durationMs
@@ -221,6 +239,7 @@ object OfflineDownloadManager {
             seasonIndex = episode?.seasonIndex ?: 0,
             episodeIndex = episode?.episodeIndex ?: 0,
             episodeName = episode?.titleSuffix?.ifBlank { episodeSubtitle } ?: episodeSubtitle,
+            portable = portable,
         )
     }
 
@@ -304,6 +323,7 @@ object OfflineDownloadManager {
                 destinationFile = destinationFile,
                 fallbackTotalBytes = fallbackTotal,
                 preferredQuality = item.quality,
+                portable = item.portable,
                 onProgress = { written, total ->
                     OfflineRegistry.updateProgress(item.id, written, total)
                 },
@@ -315,6 +335,9 @@ object OfflineDownloadManager {
             }
             OfflineRegistry.updateProgress(item.id, downloaded, downloaded)
             OfflineRegistry.updateState(item.id, DownloadState.COMPLETED)
+            if (item.portable) {
+                runCatching { PortableLibrary.finalizeDownload(context, item) }
+            }
             Log.i(TAG, "Descarga directa completada: ${item.title} ($downloaded bytes)")
         } catch (e: Exception) {
             if (e is CancellationException) throw e
@@ -390,6 +413,10 @@ object OfflineDownloadManager {
             if (!wasActive) return@launch
             Log.i(TAG, "fin del trabajador $id; siguiente de la cola")
             watchdogJob?.cancel()
+            val finished = OfflineRegistry.get(id, app)
+            if (finished?.state == DownloadState.COMPLETED && finished.portable) {
+                scope.launch { runCatching { PortableLibrary.finalizeDownload(app, finished) } }
+            }
             pumpRemote(app)
         }
     }
@@ -423,6 +450,7 @@ object OfflineDownloadManager {
                 vaultPath = item.vaultFilePath,
                 durationMs = item.durationMs,
                 totalBytes = item.totalBytes,
+                portable = item.portable,
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -466,6 +494,7 @@ object OfflineDownloadManager {
                     val len = vault.length()
                     OfflineRegistry.updateProgress(id, len, len)
                     OfflineRegistry.updateState(id, DownloadState.COMPLETED)
+                    runCatching { PortableLibrary.finalizeDownload(context, item) }
                     synchronized(engineLock) {
                         if (activeRemoteId == id) activeRemoteId = null
                     }

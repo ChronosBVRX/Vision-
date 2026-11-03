@@ -42,6 +42,10 @@ data class OfflineDownload(
     val episodeIndex: Int = 0,
     val episodeName: String = "",
     val errorMessage: String? = null,
+    /** Descarga en el contenedor portátil `.pvpack` (con PIN de USB). */
+    val portable: Boolean = false,
+    /** Biblioteca portátil a la que pertenece esta descarga. */
+    val portableLibraryId: String = "",
 ) {
     val progressFraction: Float
         get() = if (totalBytes > 0L) (bytesDownloaded.toFloat() / totalBytes).coerceIn(0f, 1f) else 0f
@@ -95,6 +99,8 @@ data class OfflineDownload(
             put("episodeIndex", episodeIndex)
             put("episodeName", episodeName)
             put("errorMessage", errorMessage.orEmpty())
+            put("portable", portable)
+            put("portableLibraryId", portableLibraryId)
         }
     }
 
@@ -122,6 +128,8 @@ data class OfflineDownload(
                 episodeIndex = json.optInt("episodeIndex", 0),
                 episodeName = json.optString("episodeName"),
                 errorMessage = json.optString("errorMessage").takeIf { it.isNotBlank() },
+                portable = json.optBoolean("portable", false),
+                portableLibraryId = json.optString("portableLibraryId"),
             )
         }
     }

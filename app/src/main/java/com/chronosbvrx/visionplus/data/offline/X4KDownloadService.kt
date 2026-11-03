@@ -61,6 +61,7 @@ class X4KDownloadService : Service() {
         const val EXTRA_DURATION_MS = "duration_ms"
         const val EXTRA_TOTAL_BYTES = "total_bytes"
         const val EXTRA_ISSUED_AT = "issued_at"
+        const val EXTRA_PORTABLE = "portable"
 
         const val MIN_VALID_VIDEO_BYTES = MIN_VALID_VAULT_BYTES
         private const val RESOLVE_TIMEOUT_MS = 25_000L
@@ -78,6 +79,7 @@ class X4KDownloadService : Service() {
             vaultPath: String,
             durationMs: Long,
             totalBytes: Long,
+            portable: Boolean = false,
         ): Intent = Intent(context, X4KDownloadService::class.java).apply {
             action = ACTION_DOWNLOAD
             putExtra(EXTRA_ID, id)
@@ -88,6 +90,7 @@ class X4KDownloadService : Service() {
             putExtra(EXTRA_VAULT_PATH, vaultPath)
             putExtra(EXTRA_DURATION_MS, durationMs)
             putExtra(EXTRA_TOTAL_BYTES, totalBytes)
+            putExtra(EXTRA_PORTABLE, portable)
             // Marca de emisión: si una pausa llega DESPUÉS de este momento, gana la
             // pausa aunque los intents se procesen en otro orden (carrera cerrada).
             putExtra(EXTRA_ISSUED_AT, System.currentTimeMillis())
@@ -186,6 +189,7 @@ class X4KDownloadService : Service() {
         val quality = intent.getStringExtra(EXTRA_QUALITY).orEmpty().ifBlank { "1080p" }
         val vaultPath = intent.getStringExtra(EXTRA_VAULT_PATH).orEmpty()
         val durationMs = intent.getLongExtra(EXTRA_DURATION_MS, 0L)
+        val portable = intent.getBooleanExtra(EXTRA_PORTABLE, false)
         val fallbackTotal = intent.getLongExtra(EXTRA_TOTAL_BYTES, 0L).takeIf { it > 0L }
             ?: estimateTotalBytes(durationMs, quality)
         val dest = File(vaultPath)
@@ -216,6 +220,7 @@ class X4KDownloadService : Service() {
                     dest = dest,
                     fallbackTotal = fallbackTotal,
                     declaredDurationMs = durationMs,
+                    portable = portable,
                     pauseWins = pauseWins,
                 )
             }
@@ -263,6 +268,7 @@ class X4KDownloadService : Service() {
         dest: File,
         fallbackTotal: Long,
         declaredDurationMs: Long,
+        portable: Boolean,
         pauseWins: () -> Boolean,
     ) {
         // El motor no acepta un segundo programa con vista nueva en el mismo
@@ -305,7 +311,7 @@ class X4KDownloadService : Service() {
             if (n.isBlank()) continue
             // Si el portal ya da http directo, sin motor de por medio.
             if (n.startsWith("http://") || n.startsWith("https://")) {
-                downloadCandidates(app, id, title, quality, dest, fallbackTotal, listOf(n))
+                downloadCandidates(app, id, title, quality, dest, fallbackTotal, listOf(n), portable)
                 return
             }
             mediaSpecs.add(
@@ -346,7 +352,7 @@ class X4KDownloadService : Service() {
             if (candidateUrls.isEmpty()) {
                 throw IllegalStateException("El servidor no entregó dirección de descarga (inténtalo de nuevo)")
             }
-            downloadCandidates(app, id, title, quality, dest, fallbackTotal, candidateUrls)
+            downloadCandidates(app, id, title, quality, dest, fallbackTotal, candidateUrls, portable)
         } finally {
             runCatching { X4KTitan.stopHeadless(code) }
         }
@@ -441,6 +447,7 @@ class X4KDownloadService : Service() {
         dest: File,
         fallbackTotal: Long,
         candidateUrls: List<String>,
+        portable: Boolean,
     ) {
         var lastErr: Exception? = null
         var downloadedBytes = 0L
@@ -451,6 +458,7 @@ class X4KDownloadService : Service() {
                     destinationFile = dest,
                     fallbackTotalBytes = fallbackTotal,
                     preferredQuality = quality,
+                    portable = portable,
                     onProgress = { written, total ->
                         OfflineProgressBus.sendProgress(app, id, written, total)
                         runCatching {

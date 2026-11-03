@@ -64,6 +64,16 @@ class OfflineDownloadDispatchTest {
     }
 
     @Test
+    fun `descarga portatil usa pvpack en carpeta portable`() {
+        val item = OfflineDownloadManager.buildDownloadItem(
+            movieFilm(), null, fakeVolume(), "1080p", portable = true,
+        )
+        assertTrue(item.portable)
+        assertTrue(item.vaultFilePath.endsWith(".pvpack"))
+        assertTrue(item.vaultFilePath.contains("/portable/"))
+    }
+
+    @Test
     fun `serie usa el codigo del capitulo elegido`() {
         val seriesFilm = movieFilm().copy(id = "xtv:serie9", videoUrl = "xtv:serie9")
         val ep = EpisodePlay(

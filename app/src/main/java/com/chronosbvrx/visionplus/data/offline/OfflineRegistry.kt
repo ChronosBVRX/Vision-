@@ -150,8 +150,9 @@ object OfflineRegistry {
         synchronized(lock) {
             val removed = memoryMap.remove(id)
             if (removed != null) {
-                // Borrar archivo .vpack del almacenamiento
+                // Borrar contenedor y sidecars portátiles del almacenamiento
                 if (removed.vaultFilePath.isNotBlank()) {
+                    runCatching { PortableLibrary.deleteSidecars(removed) }
                     runCatching { File(removed.vaultFilePath).delete() }
                     runCatching { File("${removed.vaultFilePath}.downloading").delete() }
                 }

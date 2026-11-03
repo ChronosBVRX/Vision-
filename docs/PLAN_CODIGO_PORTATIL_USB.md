@@ -1,6 +1,6 @@
 # Plan aprobado — Descargas portátiles por USB con PIN de 4 dígitos
 
-Estado: **aprobado por el usuario, pendiente de implementación**.
+Estado: **aprobado e implementado en beta1 (2.6.0-beta1), pendiente de pruebas con USB física en dos TVs**.
 Fecha: 2026-11-03.
 Alcance: app Android de Vision+ (teléfono y Smart TV). No toca webOS, Roku ni PC.
 

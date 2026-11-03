@@ -16,21 +16,28 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,11 +58,18 @@ import com.chronosbvrx.visionplus.data.offline.OfflineDownload
 import com.chronosbvrx.visionplus.data.offline.OfflineDownloadManager
 import com.chronosbvrx.visionplus.data.offline.OfflineRegistry
 import com.chronosbvrx.visionplus.data.offline.OfflineStoragePolicy
+import com.chronosbvrx.visionplus.data.offline.PortableLibrary.PortableItem
+import com.chronosbvrx.visionplus.data.offline.PortableLibrary
 import com.chronosbvrx.visionplus.ui.theme.VisionBlack
 import com.chronosbvrx.visionplus.ui.components.rememberPosterLongClick
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Pantalla de descargas offline e Interfaz Especial Sin Conexión para Smart TV:
@@ -72,17 +86,34 @@ fun TvDownloadsScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     remember(context) {
         OfflineRegistry.init(context)
         true
     }
     val landing = rememberLandingFocus("tv_downloads_landing")
     val downloads by OfflineRegistry.downloadsFlow.collectAsState()
+    var portableItems by remember { mutableStateOf<List<PortableItem>>(emptyList()) }
+    var pinTarget by remember { mutableStateOf<PortableItem?>(null) }
+    var pinToShow by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    // La USB puede conectarse/desconectarse con la pantalla abierta. Sondeo corto y
+    // solo mientras esta pantalla vive: no hay servicio ni gasto en segundo plano.
+    LaunchedEffect(context) {
+        while (isActive) {
+            runCatching { PortableLibrary.finalizePending(context) }
+            val items = runCatching { PortableLibrary.scanVolumes(context) }.getOrDefault(emptyList())
+            portableItems = items
+            runCatching { PortableLibrary.importUnlocked(context, items) }
+            delay(2_500L)
+        }
+    }
 
     val availableVolumes = remember(downloads) { OfflineStoragePolicy.getAvailableVolumes(context) }
     val externalVolume = availableVolumes.firstOrNull { it.isRemovable }
     val completedDownloads = downloads.filter { it.state == DownloadState.COMPLETED }
     val activeDownloads = downloads.filter { it.state != DownloadState.COMPLETED }
+    val lockedPortable = portableItems.filter { !it.unlocked }
 
     BackHandler(enabled = !isOfflineMode) {
         onBack()
@@ -314,8 +345,56 @@ fun TvDownloadsScreen(
             }
         }
 
+        // Biblioteca portátil bloqueada: títulos que llegaron en una USB de otra TV.
+        if (lockedPortable.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 14.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = Color(0xFFFFB74D),
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Biblioteca portátil · PIN requerido",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "${lockedPortable.size} títulos de otra TV",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VisionTextSecondary,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().focusGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(lockedPortable, key = { it.registryId }) { item ->
+                        TvPosterCard(
+                            title = item.title,
+                            imageUrl = item.posterPath.takeIf { it.isNotBlank() },
+                            score = 0.0,
+                            badge = "PIN",
+                            cardWidth = 112.dp,
+                            modifier = Modifier,
+                            onClick = { pinTarget = item },
+                        )
+                    }
+                }
+            }
+        }
+
         // Si no hay descargas completadas ni en curso
-        if (completedDownloads.isEmpty() && activeDownloads.isEmpty()) {
+        if (completedDownloads.isEmpty() && activeDownloads.isEmpty() && lockedPortable.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
@@ -371,7 +450,7 @@ fun TvDownloadsScreen(
                         title = item.title,
                         imageUrl = item.posterUrl,
                         score = 10.0,
-                        badge = "OFFLINE",
+                        badge = if (item.portable) "PORTÁTIL" else "OFFLINE",
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (index == 0) Modifier.landingFocus(landing) else Modifier),
@@ -397,23 +476,69 @@ fun TvDownloadsScreen(
                             color = VisionBlue,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        // Botón de eliminar con mando
-                        Button(
-                            onClick = { OfflineDownloadManager.deleteDownload(context, item.id) },
-                            colors = ButtonDefaults.colors(
-                                containerColor = Color.Transparent,
-                                focusedContainerColor = Color(0xFFE53935),
-                                contentColor = VisionTextSecondary,
-                                focusedContentColor = Color.White,
-                            ),
-                            shape = ButtonDefaults.shape(RoundedCornerShape(4.dp)),
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = "Eliminar de USB", modifier = Modifier.size(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (item.portable && !item.id.startsWith("pv:") &&
+                                PortableLibrary.isPortableReady(item)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            val pin = withContext(Dispatchers.IO) {
+                                                PortableLibrary.pinForDownload(context, item)
+                                            }
+                                            pinToShow = item.title to (pin ?: "No disponible")
+                                        }
+                                    },
+                                    colors = ButtonDefaults.colors(
+                                        containerColor = Color.Transparent,
+                                        focusedContainerColor = VisionBlue,
+                                        contentColor = VisionTextSecondary,
+                                        focusedContentColor = Color.White,
+                                    ),
+                                    shape = ButtonDefaults.shape(RoundedCornerShape(4.dp)),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                ) {
+                                    Icon(Icons.Default.Lock, contentDescription = "Ver PIN de esta USB", modifier = Modifier.size(14.dp))
+                                }
+                            }
+                            // Botón de eliminar con mando
+                            Button(
+                                onClick = { OfflineDownloadManager.deleteDownload(context, item.id) },
+                                colors = ButtonDefaults.colors(
+                                    containerColor = Color.Transparent,
+                                    focusedContainerColor = Color(0xFFE53935),
+                                    contentColor = VisionTextSecondary,
+                                    focusedContentColor = Color.White,
+                                ),
+                                shape = ButtonDefaults.shape(RoundedCornerShape(4.dp)),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = "Eliminar de USB", modifier = Modifier.size(14.dp))
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    pinTarget?.let { target ->
+        TvPortablePinDialog(
+            item = target,
+            onDismiss = { pinTarget = null },
+            onUnlocked = {
+                pinTarget = null
+                portableItems = runCatching { PortableLibrary.scanVolumes(context) }.getOrDefault(emptyList())
+                runCatching { PortableLibrary.importUnlocked(context, portableItems) }
+            },
+        )
+    }
+
+    pinToShow?.let { (title, pin) ->
+        TvPortablePinShowDialog(
+            title = title,
+            pin = pin,
+            onDismiss = { pinToShow = null },
+        )
     }
 }

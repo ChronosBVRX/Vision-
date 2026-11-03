@@ -37,6 +37,7 @@ object OfflineHttpDownloader {
         destinationFile: File,
         fallbackTotalBytes: Long,
         preferredQuality: String = "1080p",
+        portable: Boolean = false,
         onProgress: ((written: Long, total: Long) -> Unit)? = null,
         isCancelled: (() -> Boolean)? = null,
     ): Long {
@@ -70,6 +71,7 @@ object OfflineHttpDownloader {
                     destinationFile = destinationFile,
                     fallbackTotalBytes = fallbackTotalBytes,
                     preferredQuality = preferredQuality,
+                    portable = portable,
                     onProgress = onProgress,
                     isCancelled = isCancelled,
                 )
@@ -78,10 +80,11 @@ object OfflineHttpDownloader {
             val contentLength = body.contentLength()
             val initialTotal = if (contentLength > 0L) contentLength else fallbackTotalBytes
 
-            return OfflineCryptoVault.encryptStreamToFile(
+            return encryptToVault(
                 input = buffered,
                 totalLength = initialTotal,
                 destinationFile = destinationFile,
+                portable = portable,
                 onProgress = { written, total ->
                     val dynamicTotal = if (contentLength > 0L) {
                         contentLength
@@ -110,6 +113,7 @@ object OfflineHttpDownloader {
         destinationFile: File,
         fallbackTotalBytes: Long,
         preferredQuality: String,
+        portable: Boolean,
         onProgress: ((written: Long, total: Long) -> Unit)?,
         isCancelled: (() -> Boolean)?,
     ): Long {
@@ -216,10 +220,11 @@ object OfflineHttpDownloader {
         }
 
         hlsInputStream.use { stream ->
-            return OfflineCryptoVault.encryptStreamToFile(
+            return encryptToVault(
                 input = stream,
                 totalLength = fallbackTotalBytes,
                 destinationFile = destinationFile,
+                portable = portable,
                 onProgress = { written, _ ->
                     val segDone = currentSegmentIndex.coerceAtLeast(1)
                     val estimatedTotal = if (segDone >= totalSegments) {
@@ -230,6 +235,33 @@ object OfflineHttpDownloader {
                     }
                     onProgress?.invoke(written, estimatedTotal)
                 },
+                isCancelled = isCancelled,
+            )
+        }
+    }
+
+    private fun encryptToVault(
+        input: InputStream,
+        totalLength: Long,
+        destinationFile: File,
+        portable: Boolean,
+        onProgress: ((written: Long, total: Long) -> Unit)?,
+        isCancelled: (() -> Boolean)?,
+    ): Long {
+        return if (portable) {
+            PortableVaultCrypto.encryptStreamToFile(
+                input = input,
+                totalLength = totalLength,
+                destinationFile = destinationFile,
+                onProgress = onProgress,
+                isCancelled = isCancelled,
+            )
+        } else {
+            OfflineCryptoVault.encryptStreamToFile(
+                input = input,
+                totalLength = totalLength,
+                destinationFile = destinationFile,
+                onProgress = onProgress,
                 isCancelled = isCancelled,
             )
         }
