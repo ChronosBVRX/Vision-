@@ -12,8 +12,14 @@ catálogos propios: reproduce lo que ya está publicado en internet.
 
 ## Licencia y marcas
 
-El código de la aplicación se distribuye bajo [Apache-2.0](LICENSE). Se conservan [NOTICE](NOTICE) y
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) para atribución de componentes y bibliotecas de software libre.
+> **Nota (2026-11-04):** el repositorio de código pasó a privado. Las versiones publicadas antes de
+> esta fecha conservan la licencia con la que se distribuyeron (Apache-2.0); el código nuevo se
+> mantiene como propietario. La distribución pública de APK y OTA vive en
+> [Vision-Releases](https://github.com/ChronosBVRX/Vision-Releases).
+
+El código nuevo es propietario: consulta [LICENSE-PROPRIETARY.md](LICENSE-PROPRIETARY.md). El texto de
+[Apache-2.0](LICENSE) se conserva como referencia de las versiones publicadas antes del **2026-11-04**.
+Se conservan [NOTICE](NOTICE) y [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) para atribución de componentes y bibliotecas de software libre.
 
 El nombre "Vision+", la autoría de ChronosBVRX, el logo oficial, isotipos, imagotipos y las piezas
 gráficas de la aplicación no están licenciados bajo Apache-2.0: todos los derechos reservados por ChronosBVRX.

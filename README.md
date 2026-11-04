@@ -46,9 +46,19 @@ webos/             # Port para Smart TV LG webOS (misma UI y motor vía Node)
 pc/                # Port portable para Windows (misma UI/motor + lanzador y FFmpeg)
 ```
 
+## Distribución
+
+Las compilaciones firmadas, el launcher y la OTA se publican en el repositorio público
+[Vision-Releases](https://github.com/ChronosBVRX/Vision-Releases). El código fuente y el backend
+son privados.
+
+> **Nota (2026-11-04):** el repositorio de código pasó a privado. Las versiones publicadas antes de
+> esta fecha conservan la licencia con la que se distribuyeron; el código nuevo se mantiene como
+> propietario. Consulta `LEGAL.md` y `LICENSE`.
+
 ## Legal y Licencia
 
-- El código abierto de la aplicación se distribuye bajo [Apache-2.0](LICENSE).
+- El código nuevo es propietario: consulta [LICENSE-PROPRIETARY.md](LICENSE-PROPRIETARY.md). El texto de [Apache-2.0](LICENSE) se conserva como referencia de las versiones publicadas antes del **2026-11-04**.
 - Se conservan [NOTICE](NOTICE) y [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) para atribución de bibliotecas y componentes de software libre.
 - El nombre "Vision+", la marca, isotipo, imagotipos y elementos visuales son propiedad exclusiva de **ChronosBVRX**. Todos los derechos reservados.
 

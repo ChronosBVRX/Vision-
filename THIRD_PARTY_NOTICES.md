@@ -1,7 +1,8 @@
 # Third-party notices
 
-This repository's own code is covered by `LICENSE` (Apache-2.0). The libraries below keep their own
-licenses. The "Vision+" name and logo are not licensed (see `NOTICE`).
+El código propio de Vision+ es propietario (ver `LICENSE-PROPRIETARY.md`). Las versiones publicadas
+antes del 2026-11-04 conservan Apache-2.0 (`LICENSE`). Las bibliotecas siguientes mantienen sus
+propias licencias. El nombre "Vision+" y el logo no están licenciados (ver `NOTICE`).
 
 ## Libraries in this app
 
