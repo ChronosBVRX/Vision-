@@ -57,10 +57,11 @@ Los equipos que ya tenían la app necesitan instalar este APK una vez. Después 
 
 1. **Telegram:** la `TELEGRAM_STRING_SESSION` del `.env` viejo está en el historial privado. Terminar
    esa sesión en Telegram → Dispositivos y revocar la app en my.telegram.org.
-2. **TMDB:** regenerar la API key y actualizar `/opt/streaming-backend/.env`; reiniciar `api` y `sync`.
-3. **API key del backend:** viaja en el APK; no es un secreto. Añadir rate limiting por IP/dispositivo
-   y tokens por instalación. Si se rota, el servidor debe aceptar la vieja y la nueva durante la
-   transición.
+2. **TMDB:** la API key del `.env` viejo **sigue siendo la misma que usa el VPS** (verificado por
+   hash). Regenerarla y actualizar `/opt/streaming-backend/.env`; reiniciar `api` y `sync`.
+3. **API key del backend:** la clave del APK es **la misma que usa el VPS** (verificado por hash).
+   Viaja en el APK; no es un secreto. Añadir rate limiting por IP/dispositivo y tokens por
+   instalación. Si se rota, el servidor debe aceptar la vieja y la nueva durante la transición.
 4. **Llave del portal XTV:** viaja en el APK. No se puede rotar desde aquí; asumir que es extraíble.
    La única mitigación real es mover esa lógica al servidor o aceptar el riesgo.
 5. **Keystore:** `~/.visionplus/visionplus-historic.keystore` + `keystore.properties` (contraseña).
