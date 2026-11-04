@@ -92,8 +92,12 @@ Los equipos que ya tenían la app necesitan instalar este APK una vez. Después 
    instalación. Si se rota, el servidor debe aceptar la vieja y la nueva durante la transición.
 4. **Llave del portal XTV:** viaja en el APK. No se puede rotar desde aquí; asumir que es extraíble.
    La única mitigación real es mover esa lógica al servidor o aceptar el riesgo.
-5. **Keystore:** `~/.visionplus/visionplus-historic.keystore` + `keystore.properties` (contraseña).
-   Mantener fuera de cualquier ZIP/Drive/repo. La llave no se comparte.
+5. **Keystore:** la contraseña ya **no vive en el proyecto**. Está en
+   `~/.visionplus/keystore.properties` (600) y el helper `~/.visionplus/load-build-env.sh` (700)
+   exporta `VISION_KEYSTORE_*`. Para compilar: `source ~/.visionplus/load-build-env.sh` y luego
+   `./gradlew :app:assembleNormalRelease`. Verificado con `:app:packageNormalRelease` y la firma
+   histórica. La llave sigue en `~/.visionplus/visionplus-historic.keystore`; respaldar offline y
+   no compartir.
 6. **Historial git:** el repo es privado, pero `.env` y `AGENTS.md` siguen en el historial. Si se van
    a añadir colaboradores, purgar con `git filter-repo` y rotar todo antes.
 

@@ -27,7 +27,8 @@ Requisitos: **JDK 17 o superior** y **Android SDK** (API 35/36).
 
 - **Firma de release**: se usa la **llave histórica de la app** (`visionplus-historic.keystore`, alias
   `androiddebugkey`) para que las actualizaciones sigan siendo directas sobre la base instalada; vive en
-  `.visionplus` (fuera del repo) y `keystore.properties` (gitignored) la apunta. También acepta
+  `~/.visionplus` (fuera del repo). Carga las variables antes de compilar:
+  `source ~/.visionplus/load-build-env.sh`. También acepta
   `VISION_KEYSTORE_FILE`, `VISION_KEYSTORE_PASSWORD`, `VISION_KEY_ALIAS` y `VISION_KEY_PASSWORD` como
   variables de entorno (CI). Sin llave, el release se firma con debug para poder validar R8 sin exponer
   secretos. **No cambiar la firma**: rompería el update de los usuarios actuales.
