@@ -29,24 +29,30 @@
   `migration_deadline_ms=1794290399000` y el mensaje de descontinuación.
 - El diálogo de la 2.5.247 no tiene botón «Cerrar» cuando la actualización es forzada.
 - El repo anterior queda **público temporalmente** hasta que el usuario confirme el cierre. Los
-  usuarios que no actualicen verán el aviso forzado en cada apertura; la 2.5.247 es la última que
-  se publica en el repo anterior.
+  usuarios que no actualicen verán el aviso forzado en cada apertura; la **2.6.1** es la última
+  estable publicada en el repo anterior.
 - Después del cierre: `Vision-` vuelve a privado; `Vision-Releases` sigue público y es el único
   canal de OTA.
 
 ## Versiones publicadas en `Vision-Releases`
 
-### Estable
+### Estable actual
 
-- **2.6.0** (versionCode **492**, `v2.6.0`, **Latest**) — actualización obligatoria que restaura las mejoras de beta3/4/6 perdidas en la puente 2.5.247.
-- `VisionPlus.apk` **95,685,572 B** SHA-256 `c14d861b9f4c2a45ee48253b20ed8c3076c66c7b526b8e67014c41ddf323886e`
-- `VisionPlusHome.apk` **1.3.17** (versionCode **40**) SHA-256 `73b32e1d113483fd167857836a4d01e646b074ddc4930daff1eaf87fca3e2159`
-- `version.json` 2,313 B SHA-256 `7239f0b4122aa1f16eebea39e4b7b18d070b6c7f7ee6be6ad5d1702b60b9a95c`
+- **2.6.1** (versionCode **494**, `v2.6.1`, **Latest**) — incluye el árbol de 2.6.0 (60 avatares,
+  teclado en pantalla, capítulos al 85 %, calendario y USB) más los arreglos de Inicio, reproductor
+  e instalador ADB de esta sesión.
+- `VisionPlus.apk` **95,685,572 B** SHA-256 `e720fa8721cb2cad097a049d3143c102e82db3d065acbb038518ad2e0ecd84b2`
+- `VisionPlusHome.apk` **1.3.18** (versionCode **41**) SHA-256 `1de5243610e433e5ab9e068ac3873a2c968a5037ba0165d8cbd2a2348cc7c48a`
+- `version.json` 2,048 B SHA-256 `52d96f959b56728fda71c04cc57e8298867f721f5616648aae45de56aee6cdbc`
+- LG webOS **0.3.0** `visionplus-webos_0.3.0_all.ipk` SHA-256 `90bfa16257c8363fa96a736043aa97fa1f39989850f4e743bc9a66204181f759`
+- PC **0.5.0** `VisionPlusPC-Portable.exe` SHA-256 `e32b1dc2e6f9e14926e8bd07bce0091bd217520f396bee63cb9b5bbfbe1c923e` (canal `pc-latest` en los dos repos).
 - Firma histórica `9593cb0d2b44b8c5a47c157c13342c3d4a55629843d562d2c049331ec77473f3`.
-- `min_version_code=492` y `migration_version_code=492` en `remote_config`.
+- `min_version_code=494` y `migration_version_code=494` en `remote_config`.
 
 ### Historial inmediato
 
+- **2.6.0** (vc492, `v2.6.0`) fue la primera estable íntegra en el canal nuevo; quedó superada por
+  2.6.1. Su APK SHA-256 `c14d861b9f4c2a45ee48253b20ed8c3076c66c7b526b8e67014c41ddf323886e`.
 - **2.5.247** (vc491) fue una puente de distribución con un árbol reducido: perdió los 60 avatares, el teclado en pantalla, el visto al 85 %, Idioma/Subtítulos siempre visibles y el hero del calendario. Se conserva como release histórico, ya no es `Latest`.
 - **2.5.246** (vc486) fue la puente de distribución inicial.
 - **2.6.0-beta6** (vc491) y **2.6.0-beta5** (vc490) siguen como pre-release `beta`.
