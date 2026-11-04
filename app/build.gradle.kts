@@ -41,8 +41,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = (project.findProperty("fiestsVersionCode")?.toString()?.toIntOrNull()) ?: 485
-        versionName = project.findProperty("fiestsVersionName")?.toString() ?: "2.5.245"
+        versionCode = (project.findProperty("fiestsVersionCode")?.toString()?.toIntOrNull()) ?: 486
+        versionName = project.findProperty("fiestsVersionName")?.toString() ?: "2.5.246"
         // Beta Fiesta 3.0: si se compila con -PfiestsBaseUrl=http://IP:8100,
         // solo el cliente de juegos apunta al servidor local de pruebas.
         buildConfigField(

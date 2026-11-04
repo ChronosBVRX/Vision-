@@ -7,7 +7,7 @@ import android.net.Uri
 import android.widget.Toast
 
 /** The project's public home. */
-const val PROJECT_URL = "https://github.com/ChronosBVRX/Vision-"
+const val PROJECT_URL = "https://github.com/ChronosBVRX/Vision-Releases"
 
 /** What a placeholder button says instead of doing the real work. */
 const val COMING_SOON = "Función disponible próximamente en Vision+"

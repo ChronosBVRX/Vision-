@@ -23,7 +23,7 @@ import org.json.JSONObject
  * Después se abre el selector de Inicio del sistema para que la persona lo elija.
  */
 object LauncherInstall {
-    private const val RELEASES_URL = "https://api.github.com/repos/ChronosBVRX/Vision-/releases/latest"
+    private const val RELEASES_URL = "https://api.github.com/repos/ChronosBVRX/Vision-Releases/releases/latest"
 
     sealed interface State {
         data object Idle : State

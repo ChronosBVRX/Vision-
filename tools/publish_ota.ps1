@@ -143,16 +143,16 @@ try {
             Write-Host "== Publicando BETA en el tag fijo 'beta' =="
             # `gh` escribe a stderr cuando el tag aún no existe y PowerShell 5 lo trata como
             # error terminante (misma lección que con Gradle): va por `cmd /c` y se ignora.
-            & cmd /c "gh release delete beta -R ChronosBVRX/Vision- --cleanup-tag -y 2>&1" | Out-Null
-            & gh release create "beta" VisionPlus.apk VisionPlusHome.apk $versionFile -R ChronosBVRX/Vision- `
+            & cmd /c "gh release delete beta -R ChronosBVRX/Vision-Releases --cleanup-tag -y 2>&1" | Out-Null
+            & gh release create "beta" VisionPlus.apk VisionPlusHome.apk $versionFile -R ChronosBVRX/Vision-Releases `
                 --title "Vision+ $Version (pruebas)" --notes-file (Join-Path $root $NotesFile) --prerelease
             if ($LASTEXITCODE -ne 0) { throw "gh release (beta) fallo" }
-            Write-Host "== BETA $Version publicada: https://github.com/ChronosBVRX/Vision-/releases/tag/beta =="
+            Write-Host "== BETA $Version publicada: https://github.com/ChronosBVRX/Vision-Releases/releases/tag/beta =="
         } else {
             Write-Host "== Publicando release v$Version =="
-            gh release create "v$Version" VisionPlus.apk VisionPlusHome.apk $versionFile -R ChronosBVRX/Vision- --title $Title --notes-file (Join-Path $root $NotesFile)
+            gh release create "v$Version" VisionPlus.apk VisionPlusHome.apk $versionFile -R ChronosBVRX/Vision-Releases --title $Title --notes-file (Join-Path $root $NotesFile)
             if ($LASTEXITCODE -ne 0) { throw "gh release fallo" }
-            Write-Host "== OTA v$Version PUBLICADA: https://github.com/ChronosBVRX/Vision-/releases/tag/v$Version =="
+            Write-Host "== OTA v$Version PUBLICADA: https://github.com/ChronosBVRX/Vision-Releases/releases/tag/v$Version =="
         }
     } else {
         Write-Host "== Build listo (SkipPublish): VisionPlus.apk y VisionPlusHome.apk actualizados sin publicar =="

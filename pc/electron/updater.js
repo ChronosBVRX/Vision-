@@ -18,10 +18,10 @@ const { app, ipcMain } = require("electron");
 
 const DEFAULT_MANIFEST =
   process.env.VISION_PC_UPDATE_MANIFEST ||
-  "https://github.com/ChronosBVRX/Vision-/releases/download/pc-latest/pc-version.json";
+  "https://github.com/ChronosBVRX/Vision-Releases/releases/download/pc-latest/pc-version.json";
 const DEFAULT_BASE =
   process.env.VISION_PC_UPDATE_BASE ||
-  "https://github.com/ChronosBVRX/Vision-/releases/download/pc-latest/";
+  "https://github.com/ChronosBVRX/Vision-Releases/releases/download/pc-latest/";
 const MAX_REDIRECTS = 5;
 
 let ctx = null;

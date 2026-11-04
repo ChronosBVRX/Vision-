@@ -18,7 +18,7 @@ class UpdateChannelTest {
 
     private fun release(version: String) = Release(
         version = version,
-        url = "https://github.com/ChronosBVRX/Vision-/releases/tag/v$version",
+        url = "https://github.com/ChronosBVRX/Vision-Releases/releases/tag/v$version",
         apkUrl = "https://example/VisionPlus.apk",
     )
 

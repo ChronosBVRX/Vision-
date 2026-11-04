@@ -20,6 +20,9 @@ keystore.properties
 # Local build notes
 BUILD-REPORT.md
 
+# Internal agent notes (operational details and credential references)
+AGENTS.md
+
 # Scratch de investigación (APKs descompilados, capturas, sondas): jamás al repo
 /Temp/
 /classes.jar

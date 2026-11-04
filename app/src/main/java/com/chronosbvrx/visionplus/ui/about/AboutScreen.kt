@@ -71,7 +71,7 @@ internal const val ABOUT_CREDITS =
 internal const val ABOUT_SHARE_MESSAGE =
     "Te comparto Vision+ — la app que hice. Cine, series, anime y TV en vivo, cuidada hasta el " +
         "último detalle. — ChronosBVRX\n" +
-        "https://github.com/ChronosBVRX/Vision-/releases/latest/download/VisionPlus.apk"
+        "https://github.com/ChronosBVRX/Vision-Releases/releases/latest/download/VisionPlus.apk"
 
 /** Comparte el APK estable con el mensaje firmado del autor. */
 internal fun shareApp(context: Context) {

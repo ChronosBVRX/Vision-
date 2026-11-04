@@ -249,7 +249,7 @@ internal object TvLauncherPackage {
     }
 
     internal fun releaseUrl(asset: String): String =
-        "https://github.com/ChronosBVRX/Vision-/releases/latest/download/$asset"
+        "https://github.com/ChronosBVRX/Vision-Releases/releases/latest/download/$asset"
 }
 
 /**
@@ -259,7 +259,7 @@ internal object TvLauncherPackage {
 internal object TvAppPackage {
 
     private const val VERSION_URL =
-        "https://github.com/ChronosBVRX/Vision-/releases/latest/download/version.json"
+        "https://github.com/ChronosBVRX/Vision-Releases/releases/latest/download/version.json"
     private const val PREFS = "vision_tv_app"
     private const val KEY_VERSION = "release_version"
     private const val KEY_AT = "release_at"

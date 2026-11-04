@@ -9,7 +9,7 @@ EXE="$PC/build/VisionPlusPC-Portable.exe"
 VERSION="$(node -p "require('$PC/electron/package.json').version")"
 NOTES_FILE="${1:-$PC/electron/OTA_NOTES.md}"
 OUT_MANIFEST="$PC/build/pc-version.json"
-REPO="${VISION_PC_RELEASE_REPO:-ChronosBVRX/Vision-}"
+REPO="${VISION_PC_RELEASE_REPO:-ChronosBVRX/Vision-Releases}"
 TAG="${VISION_PC_RELEASE_TAG:-pc-latest}"
 
 if [ ! -f "$EXE" ]; then

@@ -26,14 +26,14 @@ import org.json.JSONObject
  * tiene su propio estado para que el progreso de una no pise a la otra.
  */
 object HomeUpdate {
-    private const val RELEASES_URL = "https://api.github.com/repos/ChronosBVRX/Vision-/releases/latest"
+    private const val RELEASES_URL = "https://api.github.com/repos/ChronosBVRX/Vision-Releases/releases/latest"
 
     /**
      * El asset estable del release: la descarga directa evita la API de GitHub (límite por IP)
      * y es exactamente el APK que se publica para el launcher.
      */
     private const val LAUNCHER_APK_URL =
-        "https://github.com/ChronosBVRX/Vision-/releases/latest/download/VisionPlusHome.apk"
+        "https://github.com/ChronosBVRX/Vision-Releases/releases/latest/download/VisionPlusHome.apk"
 
     /** La comprobación baja el APK del launcher (1.5 MB): se cachea 6 h. */
     private const val LAUNCHER_CHECK_MS = 6L * 60 * 60 * 1000

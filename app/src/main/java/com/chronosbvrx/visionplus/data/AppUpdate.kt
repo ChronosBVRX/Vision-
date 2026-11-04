@@ -16,14 +16,14 @@ import java.net.URL
 
 /**
  * Vision+ distributes its own updates from its releases at its repository
- * (ChronosBVRX/Vision- on GitHub). This check only reads the newest release of that repository:
+ * (ChronosBVRX/Vision-Releases on GitHub). This check only reads the newest release of that repository:
  * no mirrors, no stores, no third-party channel.
  */
 object AppUpdate {
-    private const val RELEASES_URL = "https://api.github.com/repos/ChronosBVRX/Vision-/releases/latest"
+    private const val RELEASES_URL = "https://api.github.com/repos/ChronosBVRX/Vision-Releases/releases/latest"
     /** Canal de pruebas: release marcada como *pre-release* con tag fijo `beta`. */
-    private const val RELEASES_BETA_URL = "https://api.github.com/repos/ChronosBVRX/Vision-/releases/tags/beta"
-    private const val RELEASES_PAGE = "https://github.com/ChronosBVRX/Vision-/releases/latest"
+    private const val RELEASES_BETA_URL = "https://api.github.com/repos/ChronosBVRX/Vision-Releases/releases/tags/beta"
+    private const val RELEASES_PAGE = "https://github.com/ChronosBVRX/Vision-Releases/releases/latest"
 
     /**
      * `version.json` que el publicador mete en CADA release (estable y beta). Es una descarga
@@ -31,13 +31,13 @@ object AppUpdate {
      * venga primero. Si un release viejo no lo trae, se cae a la API.
      */
     private const val MANIFEST_STABLE =
-        "https://github.com/ChronosBVRX/Vision-/releases/latest/download/version.json"
+        "https://github.com/ChronosBVRX/Vision-Releases/releases/latest/download/version.json"
     private const val MANIFEST_BETA =
-        "https://github.com/ChronosBVRX/Vision-/releases/download/beta/version.json"
+        "https://github.com/ChronosBVRX/Vision-Releases/releases/download/beta/version.json"
     private const val APK_STABLE =
-        "https://github.com/ChronosBVRX/Vision-/releases/latest/download/VisionPlus.apk"
+        "https://github.com/ChronosBVRX/Vision-Releases/releases/latest/download/VisionPlus.apk"
     private const val APK_BETA =
-        "https://github.com/ChronosBVRX/Vision-/releases/download/beta/VisionPlus.apk"
+        "https://github.com/ChronosBVRX/Vision-Releases/releases/download/beta/VisionPlus.apk"
     private const val RECHECK_MINUTES = 10
 
     private const val PREFS = "vision_updates"
