@@ -6,6 +6,21 @@
 - **Distribución pública:** `ChronosBVRX/Vision-Releases` (solo APK, launcher, `version.json` y documentación visible).
 - **OTA:** la app y el launcher apuntan a `Vision-Releases`.
 
+## Actualización obligatoria 2.5.247 (en curso)
+
+- Publicada **2.5.247** (versionCode **491**) en los dos repos.
+- `VisionPlus.apk` SHA-256 `7b77ce4995bb7c49a42b2d9c03b90dbc66529ca4cd9c6b565486eb1a23311bc5`.
+- `version.json` SHA-256 `d6a17cabca043d3024631af549368b72184ea142d008c905643bff1ddef92070`.
+- Fecha límite del aviso: **2026-11-09 23:59:59 -06:00** (epoch ms `1794290399000`).
+- Config remota aplicada: `min_version_code=491`, `migration_version_code=491`,
+  `migration_deadline_ms=1794290399000` y el mensaje de descontinuación.
+- El diálogo de la 2.5.247 no tiene botón «Cerrar» cuando la actualización es forzada.
+- El repo anterior queda **público temporalmente** hasta que el usuario confirme el cierre. Los
+  usuarios que no actualicen verán el aviso forzado en cada apertura; la 2.5.247 es la última que
+  se publica en el repo anterior.
+- Después del cierre: `Vision-` vuelve a privado; `Vision-Releases` sigue público y es el único
+  canal de OTA.
+
 ## Versiones publicadas en `Vision-Releases`
 
 ### Estable
