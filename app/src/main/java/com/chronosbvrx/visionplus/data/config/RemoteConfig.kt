@@ -70,6 +70,32 @@ object RemoteConfig {
             else -> default
         }
 
+    /** Lectura de un flag largo (fechas/límites en milisegundos). */
+    fun longFlag(context: Context, name: String, default: Long): Long {
+        if (flags.length() == 0) load(context)
+        return longFlagFrom(flags, name, default)
+    }
+
+    internal fun longFlagFrom(flags: JSONObject, name: String, default: Long): Long =
+        when (val value = flags.opt(name)) {
+            is Number -> value.toLong()
+            is String -> value.trim().toLongOrNull() ?: default
+            else -> default
+        }
+
+    /** Lectura de un flag de texto (mensajes de aviso). */
+    fun stringFlag(context: Context, name: String, default: String): String {
+        if (flags.length() == 0) load(context)
+        return stringFlagFrom(flags, name, default)
+    }
+
+    internal fun stringFlagFrom(flags: JSONObject, name: String, default: String): String =
+        when (val value = flags.opt(name)) {
+            is String -> value.trim().ifBlank { default }
+            null -> default
+            else -> value.toString()
+        }
+
     internal fun stringListFrom(flags: JSONObject, name: String): List<String> {
         val raw = flags.opt(name) ?: return emptyList()
         return when (raw) {

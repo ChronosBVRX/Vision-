@@ -47,4 +47,23 @@ class RemoteConfigTest {
         assertEquals(0, RemoteConfig.intFlagFrom(flags, "d", 0))
         assertEquals(7, RemoteConfig.intFlagFrom(flags, "missing", 7))
     }
+
+    @Test
+    fun longFlagAcceptsNumbersAndStrings() {
+        val flags = JSONObject("""{"a":1794290399000,"b":"1794290399000","c":"no-numero","d":true}""")
+        assertEquals(1794290399000L, RemoteConfig.longFlagFrom(flags, "a", 0L))
+        assertEquals(1794290399000L, RemoteConfig.longFlagFrom(flags, "b", 0L))
+        assertEquals(0L, RemoteConfig.longFlagFrom(flags, "c", 0L))
+        assertEquals(0L, RemoteConfig.longFlagFrom(flags, "d", 0L))
+        assertEquals(5L, RemoteConfig.longFlagFrom(flags, "missing", 5L))
+    }
+
+    @Test
+    fun stringFlagAcceptsTextAndDefaults() {
+        val flags = JSONObject("""{"a":"  hola  ","b":"   ","c":12}""")
+        assertEquals("hola", RemoteConfig.stringFlagFrom(flags, "a", "defecto"))
+        assertEquals("defecto", RemoteConfig.stringFlagFrom(flags, "b", "defecto"))
+        assertEquals("12", RemoteConfig.stringFlagFrom(flags, "c", "defecto"))
+        assertEquals("defecto", RemoteConfig.stringFlagFrom(flags, "missing", "defecto"))
+    }
 }

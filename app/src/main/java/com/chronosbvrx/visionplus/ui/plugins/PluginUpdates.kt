@@ -23,6 +23,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,10 +42,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.data.Release
+import com.chronosbvrx.visionplus.data.config.MigrationNotice
 import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Every text of the app's updates bell and sheet, phone and TV. */
 internal object PluginUpdatesCopy {
@@ -53,6 +62,10 @@ internal object PluginUpdatesCopy {
     const val DOWNLOADING = "Descargando"
     const val INSTALLING = "Abriendo el instalador…"
     const val FORCED = "Actualización requerida"
+    const val MIGRATION_TITLE = "Actualización obligatoria"
+    const val MIGRATION_RETRY = "Reintentar"
+    const val MIGRATION_OFFLINE =
+        "No se pudo comprobar la actualización. Conéctate a internet y vuelve a abrir Vision+."
     const val BY = "Creada por ChronosBVRX"
 }
 
@@ -97,9 +110,19 @@ fun appUpdateBadgeCount(): Int {
 fun AppUpdatesDialog(release: Release?, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val updater = com.chronosbvrx.visionplus.ui.settings.rememberInAppUpdate()
-    // Con versión mínima forzada el toque afuera / Atrás no cierra: se sale con el botón
-    // (y la oferta vuelve en la próxima apertura; el "skip" no se recuerda).
+    // Con versión mínima forzada no hay "Cerrar": el aviso solo se va instalando la
+    // actualización. Atrás, toque afuera y el cierre del sistema siguen bloqueados.
     val forced = AppUpdate.forced(context)
+    val scope = rememberCoroutineScope()
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000L)
+            now = System.currentTimeMillis()
+        }
+    }
+    val migrationHeadline = if (forced) MigrationNotice.headline(context, now) else null
+    val migrationMessage = MigrationNotice.message(context)
     Dialog(onDismissRequest = { if (!updater.running && !forced) onDismiss() }) {
         BackHandler { if (!updater.running && !forced) onDismiss() }
         Surface(
@@ -108,7 +131,12 @@ fun AppUpdatesDialog(release: Release?, onDismiss: () -> Unit) {
             modifier = Modifier.widthIn(max = 560.dp).dismissOnBack { if (!updater.running && !forced) onDismiss() },
         ) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(PluginUpdatesCopy.TITLE, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (forced) PluginUpdatesCopy.MIGRATION_TITLE else PluginUpdatesCopy.TITLE,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
                         "${PluginUpdatesCopy.CURRENT}: v${AppUpdate.currentVersion(context)}",
@@ -120,12 +148,36 @@ fun AppUpdatesDialog(release: Release?, onDismiss: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = VisionTextSecondary.copy(alpha = 0.8f),
                     )
+                    if (forced && migrationHeadline != null) {
+                        Text(
+                            migrationHeadline,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color(0xFFFFB74D),
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            migrationMessage,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                        )
+                    } else if (forced) {
+                        Text(PluginUpdatesCopy.FORCED, style = MaterialTheme.typography.titleSmall, color = Color(0xFFF5C518))
+                    }
                     if (release == null || !AppUpdate.pending(context)) {
-                        Text(PluginUpdatesCopy.UP_TO_DATE, style = MaterialTheme.typography.bodyLarge, color = Color.White)
-                    } else {
-                        if (forced) {
-                            Text(PluginUpdatesCopy.FORCED, style = MaterialTheme.typography.titleSmall, color = Color(0xFFF5C518))
+                        Text(
+                            if (forced) PluginUpdatesCopy.MIGRATION_OFFLINE else PluginUpdatesCopy.UP_TO_DATE,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.White,
+                        )
+                        if (forced && !updater.running) {
+                            Button(
+                                onClick = { scope.launch { AppUpdate.check(context, force = true) } },
+                                colors = ButtonDefaults.buttonColors(containerColor = VisionBlue, contentColor = Color.White),
+                            ) {
+                                Text(PluginUpdatesCopy.MIGRATION_RETRY)
+                            }
                         }
+                    } else {
                         Text(PluginUpdatesCopy.NEW_VERSION, style = MaterialTheme.typography.titleSmall, color = VisionBlue)
                         Text(versionLine(AppUpdate.currentVersion(context), release.version), style = MaterialTheme.typography.bodyLarge, color = Color.White)
                         if (!release.notes.isNullOrBlank()) {
@@ -160,12 +212,14 @@ fun AppUpdatesDialog(release: Release?, onDismiss: () -> Unit) {
                     if (release != null && AppUpdate.pending(context) && !updater.running) {
                         TextButton(onClick = { updater.start(release) }) { Text(PluginUpdatesCopy.DOWNLOAD, color = VisionBlue) }
                     }
-                    Button(
-                        onClick = onDismiss,
-                        enabled = !updater.running,
-                        colors = ButtonDefaults.buttonColors(containerColor = VisionBlue, contentColor = Color.White),
-                    ) {
-                        Text(PluginUpdatesCopy.CLOSE)
+                    if (!forced) {
+                        Button(
+                            onClick = onDismiss,
+                            enabled = !updater.running,
+                            colors = ButtonDefaults.buttonColors(containerColor = VisionBlue, contentColor = Color.White),
+                        ) {
+                            Text(PluginUpdatesCopy.CLOSE)
+                        }
                     }
                 }
             }

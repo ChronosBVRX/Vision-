@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,6 +42,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.chronosbvrx.visionplus.data.AppUpdate
+import com.chronosbvrx.visionplus.data.config.MigrationNotice
 import com.chronosbvrx.visionplus.ui.comingSoon
 import com.chronosbvrx.visionplus.ui.plugins.PluginUpdatesCopy
 import com.chronosbvrx.visionplus.ui.plugins.versionLine
@@ -51,6 +53,7 @@ import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Where a TV dialog puts the D-pad focus when it opens. The dialog's window takes a few frames to be
@@ -114,9 +117,22 @@ internal fun TvAppUpdatesDialog(onDismiss: () -> Unit) {
     val updater = com.chronosbvrx.visionplus.ui.settings.rememberInAppUpdate()
     val release = AppUpdate.latest
     val pending = AppUpdate.pending(context)
-    // Forzada: Atrás/afuera no cierran; el botón Cerrar sí (y la oferta vuelve a la próxima).
+    // Forzada: sin botón Cerrar. El diálogo solo se va instalando la actualización.
     val forced = AppUpdate.forced(context)
-    TvDialog(PluginUpdatesCopy.TITLE, onDismiss = { if (!forced) onDismiss() }) {
+    val scope = rememberCoroutineScope()
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000L)
+            now = System.currentTimeMillis()
+        }
+    }
+    val migrationHeadline = if (forced) MigrationNotice.headline(context, now) else null
+    val migrationMessage = MigrationNotice.message(context)
+    TvDialog(
+        if (forced) PluginUpdatesCopy.MIGRATION_TITLE else PluginUpdatesCopy.TITLE,
+        onDismiss = { if (!forced) onDismiss() },
+    ) {
         Text(
             "${PluginUpdatesCopy.CURRENT}: v${AppUpdate.currentVersion(context)}",
             style = MaterialTheme.typography.bodyMedium,
@@ -127,15 +143,40 @@ internal fun TvAppUpdatesDialog(onDismiss: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = VisionTextSecondary.copy(alpha = 0.8f),
         )
+        if (forced && migrationHeadline != null) {
+            Text(
+                migrationHeadline,
+                style = MaterialTheme.typography.titleSmall,
+                color = Color(0xFFFFB74D),
+            )
+            Text(
+                migrationMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White,
+            )
+        } else if (forced) {
+            Text(PluginUpdatesCopy.FORCED, style = MaterialTheme.typography.titleSmall, color = Color(0xFFF5C518))
+        }
         if (release == null || !pending) {
-            Text(PluginUpdatesCopy.UP_TO_DATE, style = MaterialTheme.typography.bodyLarge, color = Color.White)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TvCompactAction(label = PluginUpdatesCopy.CLOSE, modifier = Modifier.dialogFocus(focus), onClick = onDismiss)
+            Text(
+                if (forced) PluginUpdatesCopy.MIGRATION_OFFLINE else PluginUpdatesCopy.UP_TO_DATE,
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White,
+            )
+            if (forced) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TvCompactAction(
+                        label = PluginUpdatesCopy.MIGRATION_RETRY,
+                        modifier = Modifier.dialogFocus(focus),
+                        onClick = { scope.launch { AppUpdate.check(context, force = true) } },
+                    )
+                }
+            } else {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TvCompactAction(label = PluginUpdatesCopy.CLOSE, modifier = Modifier.dialogFocus(focus), onClick = onDismiss)
+                }
             }
         } else {
-            if (forced) {
-                Text(PluginUpdatesCopy.FORCED, style = MaterialTheme.typography.titleSmall, color = Color(0xFFF5C518))
-            }
             Text(PluginUpdatesCopy.NEW_VERSION, style = MaterialTheme.typography.titleSmall, color = VisionBlue)
             Text(versionLine(AppUpdate.currentVersion(context), release.version), style = MaterialTheme.typography.bodyLarge, color = Color.White)
             if (!release.notes.isNullOrBlank()) {
@@ -167,7 +208,9 @@ internal fun TvAppUpdatesDialog(onDismiss: () -> Unit) {
                     modifier = Modifier.dialogFocus(focus),
                     onClick = { updater.start(release) },
                 )
-                TvCompactAction(label = PluginUpdatesCopy.CLOSE, onClick = onDismiss)
+                if (!forced) {
+                    TvCompactAction(label = PluginUpdatesCopy.CLOSE, onClick = onDismiss)
+                }
             }
         }
     }
