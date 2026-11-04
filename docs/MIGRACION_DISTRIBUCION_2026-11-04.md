@@ -25,19 +25,18 @@
 
 ### Estable
 
-- **2.5.246** (versionCode **486**)
-- `VisionPlus.apk` SHA-256 `3e866f3437eb1a0a719151444b5df9479af28d136f1dfa5160a858e4469e0d0a`
+- **2.6.0** (versionCode **492**, `v2.6.0`, **Latest**) — actualización obligatoria que restaura las mejoras de beta3/4/6 perdidas en la puente 2.5.247.
+- `VisionPlus.apk` **95,685,572 B** SHA-256 `c14d861b9f4c2a45ee48253b20ed8c3076c66c7b526b8e67014c41ddf323886e`
 - `VisionPlusHome.apk` **1.3.17** (versionCode **40**) SHA-256 `73b32e1d113483fd167857836a4d01e646b074ddc4930daff1eaf87fca3e2159`
-- `version.json` SHA-256 `b0bd269ea26f3fd447b05292c615f3077c06d9926806aba11076937bf078f210`
+- `version.json` 2,313 B SHA-256 `7239f0b4122aa1f16eebea39e4b7b18d070b6c7f7ee6be6ad5d1702b60b9a95c`
 - Firma histórica `9593cb0d2b44b8c5a47c157c13342c3d4a55629843d562d2c049331ec77473f3`.
+- `min_version_code=492` y `migration_version_code=492` en `remote_config`.
 
-### Beta
+### Historial inmediato
 
-- **2.6.0-beta5** (versionCode **490**)
-- `VisionPlus.apk` SHA-256 `87295782a8c2ad26db92d27d275940533b5248f2e0791ad34f4247301a0ee166`
-- Tag `beta`, pre-release.
-- Misma base que beta4 + cambio de URLs. Se instala encima de beta4 (vc489) sin borrar datos.
-- Launcher 1.3.17/vc40.
+- **2.5.247** (vc491) fue una puente de distribución con un árbol reducido: perdió los 60 avatares, el teclado en pantalla, el visto al 85 %, Idioma/Subtítulos siempre visibles y el hero del calendario. Se conserva como release histórico, ya no es `Latest`.
+- **2.5.246** (vc486) fue la puente de distribución inicial.
+- **2.6.0-beta6** (vc491) y **2.6.0-beta5** (vc490) siguen como pre-release `beta`.
 
 ## Por qué hay dos versiones puente
 
@@ -72,8 +71,9 @@ Los equipos que ya tenían la app necesitan instalar este APK una vez. Después 
 
 1. **Telegram:** la `TELEGRAM_STRING_SESSION` del `.env` viejo está en el historial privado. Terminar
    esa sesión en Telegram → Dispositivos y revocar la app en my.telegram.org.
-2. **TMDB:** la API key del `.env` viejo **sigue siendo la misma que usa el VPS** (verificado por
-   hash). Regenerarla y actualizar `/opt/streaming-backend/.env`; reiniciar `api` y `sync`.
+2. **TMDB:** **rotada el 2026-11-04**. La key nueva ya está en `/opt/streaming-backend/.env`
+   (hash `4452ce6283563bab504997eb068703b1df1026fb4d88e1d0b85e464a12cd74bb`) y `api`+`sync` se
+   recrearon. La key anterior responde **401**: ya no sirve. No se imprime la key en claro.
 3. **API key del backend:** la clave del APK es **la misma que usa el VPS** (verificado por hash).
    Viaja en el APK; no es un secreto. Añadir rate limiting por IP/dispositivo y tokens por
    instalación. Si se rota, el servidor debe aceptar la vieja y la nueva durante la transición.
