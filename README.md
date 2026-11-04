@@ -1,5 +1,11 @@
 # Vision+
 
+> **Aviso de migración (2026-11-04):** este repositorio es el canal anterior. La distribución
+> pública, los APK y la OTA viven ahora en
+> [**ChronosBVRX/Vision-Releases**](https://github.com/ChronosBVRX/Vision-Releases).
+> Las versiones anteriores a **2.5.247** quedarán descontinuadas el **9 de noviembre de 2026**.
+> Actualiza desde el canal nuevo.
+
 **Vision+** es una plataforma de streaming y entretenimiento multimedia para Android (Smart TV / Android TV / Fire TV y dispositivos móviles) desarrollada por **ChronosBVRX**. Su interfaz es intuitiva y moderna, construida con Jetpack Compose en la paleta oficial Vision+ (azul `#2D7DF6` sobre negro profundo).
 
 - **Catálogo Global en la Nube**: Miles de películas, series completas por temporadas, anime y novelas conectados al índice del servidor VPS, con puntuaciones IMDb/TMDB y estrenos curados.
