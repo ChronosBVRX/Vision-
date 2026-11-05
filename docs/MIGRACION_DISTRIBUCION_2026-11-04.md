@@ -1,5 +1,13 @@
 # Migración de distribución — 2026-11-04
 
+## Cierre del repositorio anterior
+
+- **2026-11-04:** `ChronosBVRX/Vision-` pasó a **privado** por indicación del usuario.
+- Verificado sin autenticación: repo y releases del canal anterior responden **404**.
+- `ChronosBVRX/Vision-Releases` sigue **público** y es el único canal de descarga/OTA.
+- Última estable del canal anterior: **2.6.1/vc494** (también publicada en el canal nuevo).
+- El repo nuevo conserva Android 2.6.1, launcher 1.3.18, PC 0.5.0 (`pc-latest`) y LG webOS 0.3.0.
+
 ## Estado
 
 - **Código:** `ChronosBVRX/Vision-` → **privado**.
