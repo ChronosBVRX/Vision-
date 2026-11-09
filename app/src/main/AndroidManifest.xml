@@ -103,6 +103,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Escáner QR premium de Vision+ Party (motor ZXing de la librería). -->
+        <activity
+            android:name=".ui.games.PremiumQrActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="false"
+            android:screenOrientation="fullSensor"
+            android:theme="@style/Theme.Vision"
+            android:windowSoftInputMode="stateAlwaysHidden" />
+
         <!-- Reproductor residente («Camino B»): tarea propia fuera de recientes, una sola
              instancia con su vista del motor reutilizada entre reproducciones; el proceso
              `:x4k` sobrevive a la salida para que el próximo play no arranque en frío. -->

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#020617">
+
+    <com.journeyapps.barcodescanner.DecoratedBarcodeView
+        android:id="@+id/zxing_barcode_scanner"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:zxing_preview_scaling_strategy="centerCrop"
+        app:zxing_use_texture_view="true" />
+
+    <com.chronosbvrx.visionplus.ui.games.PartyScanOverlayView
+        android:id="@+id/party_scan_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingTop="30dp"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Escanea el código de la sala"
+            android:textColor="#F8FAFC"
+            android:textSize="21sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Apunta al QR de la tele"
+            android:textColor="#94A3B8"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:gravity="center"
+        android:paddingBottom="40dp"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:text="Código de 4 caracteres · el sonido avisa al encontrarlo"
+        android:textColor="#B9C6D6"
+        android:textSize="12sp" />
+</FrameLayout>

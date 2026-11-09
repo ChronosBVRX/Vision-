@@ -74,9 +74,13 @@ object PartyNetStack {
         if (!requestUrl.startsWith(base)) return false
         val path = requestUrl.substring(base.length).removePrefix("/")
         val cleanPath = path.substringBefore('?')
+        // El controlador (mando) también se sirve por OkHttp: su bundle pesa
+        // cientos de KB y la red de Chromium del WebView se atora a mitad de
+        // cuerpo en equipos viejos (pantalla en negro al escanear el QR).
         if (cleanPath.isEmpty() || cleanPath == "host" || cleanPath.startsWith("assets/") ||
             cleanPath.startsWith("party-audio/") || cleanPath.startsWith("party-covers/") ||
-            cleanPath.startsWith("covers/") || cleanPath.startsWith("fonts/")
+            cleanPath.startsWith("covers/") || cleanPath.startsWith("fonts/") ||
+            cleanPath == "controller" || cleanPath.startsWith("controller/")
         ) {
             return true
         }
