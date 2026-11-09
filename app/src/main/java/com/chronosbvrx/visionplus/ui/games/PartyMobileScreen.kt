@@ -1,9 +1,5 @@
 package com.chronosbvrx.visionplus.ui.games
 
-import android.app.Activity
-import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -40,7 +36,6 @@ import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextPrimary
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
-import com.google.zxing.integration.android.IntentIntegrator
 
 /**
  * En el teléfono, Juegos no es un catálogo: la tele lleva la sala y el juego.
@@ -52,6 +47,7 @@ fun PartyMobileScreen(onBack: () -> Unit, onOpenController: (String) -> Unit) {
     BackHandler { onBack() }
     var code by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
+    var scanning by remember { mutableStateOf(false) }
     fun openController(roomCode: String) {
         val normalized = roomCode.trim().uppercase().take(4)
         if (normalized.length != 4) {
@@ -62,15 +58,17 @@ fun PartyMobileScreen(onBack: () -> Unit, onOpenController: (String) -> Unit) {
         onOpenController(normalized)
     }
 
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val scan = IntentIntegrator.parseActivityResult(result.resultCode, result.data)
-        val scanned = scan?.contents?.trim()?.uppercase()?.removePrefix("VISIONPLUS://PARTY/")?.removePrefix("VISIONPLUS://PARTY")
-        if (!scanned.isNullOrBlank()) {
-            code = scanned.take(4)
-            openController(code)
-        } else {
-            message = "No se encontró un código válido."
-        }
+    if (scanning) {
+        PartyQrScanScreen(
+            onCode = { scanned ->
+                scanning = false
+                code = scanned
+                openController(scanned)
+            },
+            onCancel = { scanning = false },
+            onNeedsPermissionFallback = { scanning = false },
+        )
+        return
     }
 
     Column(
@@ -88,7 +86,7 @@ fun PartyMobileScreen(onBack: () -> Unit, onOpenController: (String) -> Unit) {
             lineHeight = 22.sp,
         )
         Button(
-            onClick = { launcher.launch(IntentIntegrator(context as Activity).createScanIntent()) },
+            onClick = { scanning = true },
             modifier = Modifier.fillMaxWidth().height(56.dp),
         ) { Text("Escanear código QR", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
         OutlinedTextField(

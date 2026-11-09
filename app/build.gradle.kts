@@ -41,8 +41,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = 517
-        versionName = "2.6.24"
+        versionCode = 518
+        versionName = "2.6.25"
         ndk {
             // Solo ARM: el APK no empaqueta libs x86/x86_64 (los AAR traían credentials/
             // graphics.path de x86_64). En dispositivos x86_64 con traducción ARM (emulador
@@ -249,6 +249,10 @@ dependencies {
     // QR de Vision+ Play: el teléfono escanea la sala de la tele y la TV genera el código.
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation("com.google.zxing:core:3.5.3")
+
+    // Cámara embebida (preview + análisis) para el escáner QR premium del
+    // móvil: el QR se escanea en una banda horizontal dentro de la app, con
+    // sonido al detectar y transición a la sala.
 
     // The one source's engine, packed inside: the 3DES portalCore client and its HLS proxy.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
