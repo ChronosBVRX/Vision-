@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para Palabra maldita: expliquen el término sin soltar las palabras que queman.",
+      "Se enciende Palabra maldita. Una palabra de más y el guardián les cobra la afrenta.",
+      "Palabra maldita, el juego donde morderse la lengua vale puntos.",
+      "Palabra maldita: expliquen sin decir lo prohibido. Fácil, ¿no?",
+      "Se enciende el guardián. Cada palabra de más cuesta caro.",
+      "Arranca Palabra maldita: labia, trampa y cero libertad condicional.",
+      "Prepárense para hablar con rodeos como políticos en campaña.",
+      "Palabra maldita: el único juego donde morderse la lengua da puntos.",
+      "Se abre la ronda. El guardián ya está afilando el castigo.",
+      "Aquí se explica con señas, sinónimos y puro ingenio. Nada de decir lo obvio."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Palabra maldita en marcha. Expliquen con maña y no se dejen atrapar.",
+      "La ronda corre. Si las palabras prohibidas se asoman, el guardián cobra.",
+      "Aquí se explica con puras vueltas. El que se tarda, se quema.",
+      "Palabra maldita en marcha: cuiden cada sílaba, que el guardián está al acecho.",
+      "La ronda corre. El que se emocione, pierde.",
+      "Expliquen con maña. Si dicen la palabra prohibida, se les cae el teatro.",
+      "El guardián escucha. Ni se les ocurra decir lo que ya saben.",
+      "Palabra maldita: más labia, menos literalidad.",
+      "Si se trabaja la lengua, se gana. Si se trabaja de más, se quema.",
+      "La ronda sigue. Aquí el silencio también es una estrategia."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Se acabó Palabra maldita. Veamos quién explicó y quién solo soltó veneno.",
+      "Ronda cerrada en Palabra maldita. Las palabras malditas ya tienen culpables.",
+      "Resultados de Palabra maldita. La tabla premia la labia, no la trampa.",
+      "Se acabó Palabra maldita. Veamos quién explicó y quién se quemó la lengua.",
+      "Ronda cerrada. El guardián cobró y la tabla también.",
+      "Resultados de Palabra maldita: las palabras prohibidas ya tienen culpables.",
+      "Terminó la ronda. El que se creyó poeta, que revise el castigo.",
+      "Se apagó el guardián. La vergüenza sigue encendida.",
+      "Palabra maldita: la labia se acabó y la tabla habló.",
+      "Resultados: unos explicaron, otros solo hicieron ruidos."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Así va la tabla de Palabra maldita. Arriba los de lengua fina; abajo los que pican.",
+      "Marcador de Palabra maldita. Los de arriba explican; los de abajo se autodelatan.",
+      "Puntos de Palabra maldita. Todavía pueden remontar sin decir lo que no se debe.",
+      "Puntos de Palabra maldita: arriba los de lengua fina, abajo los que pican.",
+      "Marcador de la ronda. El guardián no perdona, pero la tabla tampoco.",
+      "Tabla parcial: los que cuidan las palabras ya están sumando.",
+      "Así van los puntos. Todavía se puede remontar sin decir lo prohibido.",
+      "Palabra maldita: la tabla está llena de labia y de trampas.",
+      "Puntos del guardián. El que se confió, ya sabe.",
+      "Marcador: los callados suman, los bocones pagan."
+    ]
+  }
+]

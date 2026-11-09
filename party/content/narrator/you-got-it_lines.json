@@ -1,0 +1,92 @@
+[
+  {
+    "id": "welcome",
+    "variants": [
+      "Bienvenidos al espectro. Aquí se viene a adivinar lo que piensa el Oráculo.",
+      "Dos equipos, un dial. Cero paciencia. ¿Le atinan o se humillan?",
+      "El Oráculo ya tiene su objetivo secreto. Ustedes tienen pistas y cara de no saber.",
+      "Bienvenidos al juego donde la intuición vale más que la lógica.",
+      "El dial está listo. La vergüenza también.",
+      "Aquí se gana por acercarse, no por saber.",
+      "El Oráculo ya habló. Ahora muevan el dial y no lloren.",
+      "Bienvenidos al espectro. Dos equipos, un dial y muchas excusas.",
+      "El Oráculo ya eligió. Ustedes solo tienen que adivinar.",
+      "Aquí se viene a mover el dial y a aceptar el ridículo."
+    ]
+  },
+  {
+    "id": "clue",
+    "variants": [
+      "Oráculo, suelta una pista. Corta, pícara y que no regale todo.",
+      "Una sola pista. Si se pasa de lista, se la cobramos.",
+      "El Oráculo está afinando. Escuchen bien, que no hay repetición.",
+      "Pista del Oráculo. Ni muy obvia ni muy cruel.",
+      "Escuchen la pista y apunten al centro.",
+      "El Oráculo dice poco, pero cobra mucho.",
+      "Ahí viene la pista. Úsenla bien.",
+      "Una pista del Oráculo. Ni muy clara ni muy injusta.",
+      "Escuchen bien. La pista no se repite.",
+      "El Oráculo ya soltó la pista. Ahora úsenla."
+    ]
+  },
+  {
+    "id": "guess",
+    "variants": [
+      "Muevan el dial. Más cerca del centro, más puntos; más lejos, más vergüenza.",
+      "El equipo tiene el dial. Que no se les vaya la mano.",
+      "Afinando… afinando… no sean cobardes.",
+      "Muevan el dial como si supieran lo que hacen.",
+      "La aguja está temblando. El equipo también.",
+      "Más cerca del objetivo. Menos excusas.",
+      "El dial no miente. Ustedes sí.",
+      "Muevan el dial. El centro no se va a mover solo.",
+      "Afinando. La paciencia del Oráculo es limitada.",
+      "Más cerca. El objetivo está en algún lado."
+    ]
+  },
+  {
+    "id": "steal",
+    "variants": [
+      "Robo abierto: el otro equipo puede robarles el punto.",
+      "El rival ya está oliendo la sangre. Voten izquierda o derecha.",
+      "Si fallaron, el otro equipo tiene permiso de burlarse y cobrar.",
+      "Robo abierto: el otro equipo puede quitarles el punto.",
+      "El robo está disponible. Que empiece la traición.",
+      "El rival puede robar. Sonrían.",
+      "Aquí se premia el fallo ajeno.",
+      "Robo en juego. El que dude, pierde.",
+      "Robo disponible. El otro equipo ya se relame.",
+      "Si fallan, el rival cobra. Así de simple."
+    ]
+  },
+  {
+    "id": "reveal",
+    "variants": [
+      "A ver qué tan cerca le atinaron. Sin llorar.",
+      "La línea dorada es la verdad; la blanca era su esperanza.",
+      "Momento de la verdad: ¿genios o payasos?",
+      "La aguja se detuvo. La verdad también.",
+      "Veamos quién se acercó y quién solo movió el dial.",
+      "La línea dorada no se mueve. Ustedes tampoco.",
+      "Se acabó el suspenso. La tabla dirá.",
+      "Veamos la distancia. La verdad no se anda con rodeos.",
+      "La aguja ya se detuvo. Ahora aguanten.",
+      "Resultado a la vista. ¿Genios o payasos?"
+    ]
+  },
+  {
+    "id": "game_over",
+    "variants": [
+      "¡Fin del juego! El equipo ganador invita los tacos.",
+      "Se acabó el espectro. Ya pueden culpar al dial.",
+      "¡Tenemos campeón! Que vaya por las quesadillas.",
+      "Fin del juego. El Oráculo se despide y el dial también.",
+      "¡Ganaron! Ahora sí, a festejar.",
+      "Se terminó. El que perdió, que diga que fue por el aire.",
+      "¡Campeón! Que se acuerde de los que lo apoyaron.",
+      "Fin del juego. El campeón invita y el perdedor lava los platos.",
+      "Se acabó. El Oráculo se va y el dial se queda.",
+      "¡Tenemos ganador! Que lo celebren con tacos."
+    ]
+  }
+]

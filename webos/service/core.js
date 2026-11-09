@@ -16,6 +16,9 @@ const sportsStats = require("./sports-stats");
 const embedResolver = require("./embed-resolver");
 
 const PC = process.env.VISION_PC === "1";
+// El relay se puede probar en un navegador sin activar la interfaz de PC.
+const RELAY = PC || process.env.VISION_RELAY === "1";
+const VERSION = require("./package.json").version;
 
 let proxyReady = null;
 
@@ -49,9 +52,9 @@ function streamProxyPath(stream, options) {
   const hevc = /hevc|h\.?265/i.test(`${stream.codec || ""} ${stream.mime || ""}`);
   // Chrome/Edge no reproducen HLS/TS/DASH de forma nativa y Windows no siempre
   // tiene el códec HEVC. En PC todo eso pasa por el relay FFmpeg -> MP4 H.264.
-  const pcNeedsRelay = PC && (isLive || isHls || isTs || isDash || hevc || Boolean(stream.drmKey));
+  const pcNeedsRelay = RELAY && (isLive || isHls || isTs || isDash || hevc || Boolean(stream.drmKey));
   if ((opts.forceRelay || pcNeedsRelay) && relay.available()) {
-    if (isLive && PC) {
+    if (isLive && RELAY) {
       const livePath = relay.registerLive(stream);
       return {
         proxyPath: livePath,
@@ -317,11 +320,11 @@ async function ping() {
     app: PC ? "Vision+ PC" : "Vision+ webOS",
     platform: PC ? "windows" : "webos",
     pc: PC,
-    version: "0.2.0",
+    version: VERSION,
     api: api.BASE_URL,
     proxyPort: port,
-    relayAvailable: relay.available(),
-    relayPort: relay.available() ? relay.port() : 0,
+    relayAvailable: relay.availableFast(),
+    relayPort: relay.availableFast() ? relay.port() : 0,
     sessionReady: Boolean(xtv.session.ready),
     userId: xtv.session.userId || "",
     portalHosts: xtv.constants.HOSTS,

@@ -1,0 +1,107 @@
+[
+  {
+    "id": "huddle",
+    "variants": [
+      "Revisen su rol en el celular. Nadie enseñe la pantalla, no sean novatos.",
+      "Reunión secreta. Si alguien les pregunta, ustedes son Merkisenses de toda la vida.",
+      "Miren su rol. Sonrían. No hay nada que ver aquí.",
+      "Revisen su rol. Sonrían como si supieran algo que no van a decir.",
+      "Consejo secreto: nadie enseñe la pantalla ni confíe en el de al lado.",
+      "Miren su rol y memoricen sus mentiras.",
+      "Reunión privada. Aquí se habla de unidad y se planea la traición.",
+      "Cada quien a su celular. El que pregunte de más, es sospechoso.",
+      "Revisen su papel. La política es teatro con presupuesto.",
+      "Nadie vio nada, nadie sabe nada, todos están en el consejo."
+    ]
+  },
+  {
+    "id": "nominate",
+    "variants": [
+      "La silla nomina comisionado. Piensen bien a quién le dan el poder.",
+      "Hora de nominar. Y de fingir que confían en alguien.",
+      "La silla elige. El resto juzga en silencio.",
+      "La silla nomina. Elija a alguien que pueda cargar con el país y con la culpa.",
+      "Nominen con cuidado. El poder se paga caro.",
+      "La silla ya tiene candidato. O eso dice.",
+      "Es momento de dar el poder a alguien y luego culparlo de todo.",
+      "La nominación está abierta. Que empiece el teatro.",
+      "La silla nomina y el resto sonríe. Todos saben lo que viene.",
+      "Nominen a alguien. Si sale mal, ya tienen culpable."
+    ]
+  },
+  {
+    "id": "vote",
+    "variants": [
+      "Voten SÍ o NO. Y luego no digan que no sabían.",
+      "Gobierno en la mesa. Voten con el hígado, como siempre.",
+      "SÍ o NO. La democracia es un deporte de contacto.",
+      "Voten por el candidato o por el chisme. Aquí da igual.",
+      "La urna está abierta. La dignidad, cerrada.",
+      "SÍ o NO. El país tiembla y ustedes también.",
+      "Voten rápido, que la política no espera.",
+      "Voten SÍ o NO. La conciencia es opcional.",
+      "La democracia ya está aquí. No la arruinen.",
+      "SÍ o NO. El que se abstenga, que explique."
+    ]
+  },
+  {
+    "id": "legislature",
+    "variants": [
+      "Sesión legislativa. Tres decretos, uno se descarta y dos van al comisionado.",
+      "La silla legisla. El comisionado aprueba. El país tiembla.",
+      "Decretos en la mesa. Elijan bien, que esto tiene consecuencias.",
+      "Hora de legislar. O de fingir que saben lo que hacen.",
+      "Tres decretos, dos manos y una sola culpa.",
+      "La sesión está abierta. Que los discursos sean cortos.",
+      "Aquí se aprueban leyes que nadie leyó.",
+      "La silla recibe los decretos. El país aguanta la respiración.",
+      "Tres decretos, dos destinos y una sola silla.",
+      "Legislen con calma. O con cara de calma."
+    ]
+  },
+  {
+    "id": "veto",
+    "variants": [
+      "Veto sobre la mesa. La silla decide si se acepta.",
+      "El comisionado quiere vetar. La silla tiene la última palabra.",
+      "Veto. Porque no hay nada más político que decir “no”.",
+      "La silla puede vetar. El pueblo puede protestar. Nadie escucha.",
+      "Veto en la mesa. La democracia se pone interesante.",
+      "El comisionado vetó. Ahora la silla hace su teatro.",
+      "Veto. La palabra más bonita del diccionario político.",
+      "Veto en la mesa. La silla decide y el pueblo mira.",
+      "El comisionado se aferra al poder. La silla también.",
+      "Veto. Porque decir “no” también es gobernar."
+    ]
+  },
+  {
+    "id": "power",
+    "variants": [
+      "Poder desbloqueado. Alguien va a descubrir la verdad.",
+      "La silla tiene un poder. Úsenlo con malicia.",
+      "Poder activo. Esto se pone bueno.",
+      "Se desbloqueó el poder. Que tiemblen los inocentes.",
+      "La silla puede hacer magia política. O algo parecido.",
+      "Poder especial. Úsenlo antes de que se arrepientan.",
+      "Se activó el poder. La verdad tiene dueño.",
+      "El poder ya está en manos de la silla. Que Dios ayude.",
+      "Poder desbloqueado. La política se pone divertida.",
+      "La silla tiene un as bajo la manga. Úsenlo."
+    ]
+  },
+  {
+    "id": "game_over",
+    "variants": [
+      "Fin del juego. Ahora sí, destapen todos los roles.",
+      "Se acabó el consejo. Los Merkisenses ya pueden salir del clóset.",
+      "¡Tenemos ganador! Y una lista de traidores para revisar.",
+      "Se acabó el consejo. Ahora cada quien carga con su parte.",
+      "Fin del mandato. La corrupción se va de vacaciones.",
+      "Se acabó. El país sobrevivió, aunque no sabemos cómo.",
+      "¡Tenemos campeón! Que no se le suba el poder.",
+      "Fin del juego. Cuenten sus alianzas y sus traiciones.",
+      "Se acabó el mandato. Que cada quien cargue con su parte.",
+      "Fin del juego. Que cada quien cuente sus alianzas y sus traiciones."
+    ]
+  }
+]

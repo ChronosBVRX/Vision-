@@ -303,6 +303,19 @@ internal object TvAppPackage {
     /** Refleja en la interfaz el APK local que se está instalando. */
     fun announce(apk: Apk) = store.announce(apk)
 
+    /**
+     * ¿Hay que bajar el APK del release o basta la copia del teléfono?
+     *
+     * La fuente de verdad es el release nuevo: si publica una versión más nueva que la
+     * copia local, se descarga. Si la copia local ya es la misma (o más nueva), se usa
+     * para no gastar 95 MB. Si no hay manifiesto, se prefiere la copia local.
+     */
+    internal fun shouldDownloadRelease(latest: String?, local: String?): Boolean {
+        if (latest.isNullOrBlank()) return false
+        if (local.isNullOrBlank()) return true
+        return TvLauncherPackage.isNewer(latest, local)
+    }
+
     /** La versión de Vision+ del último release («2.5.171»), cacheada una hora. */
     suspend fun latestVersion(context: Context): String? = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

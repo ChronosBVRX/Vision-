@@ -87,6 +87,7 @@ class LauncherSettingsActions(
     val onUpdateHome: () -> Unit = {},
     val onCheckHome: () -> Unit = {},
     val onUpdateVision: () -> Unit = {},
+    val onCheckVision: () -> Unit = {},
 )
 
 /**
@@ -107,6 +108,7 @@ fun LauncherSettingsDialog(
     persistentActive: Boolean,
     updateState: HomeUpdate.State,
     visionState: HomeUpdate.State,
+    visionChecking: Boolean,
     actions: LauncherSettingsActions,
 ) {
     Dialog(
@@ -182,6 +184,7 @@ fun LauncherSettingsDialog(
                                 latestVisionVersion = latestVisionVersion,
                                 updateState = updateState,
                                 visionState = visionState,
+                                visionChecking = visionChecking,
                                 actions = actions,
                             )
 
@@ -312,74 +315,87 @@ private fun UpdatesSection(
     latestVisionVersion: String,
     updateState: HomeUpdate.State,
     visionState: HomeUpdate.State,
+    visionChecking: Boolean,
     actions: LauncherSettingsActions,
 ) {
+    val launcherPending = HomeUpdate.launcherPending()
+    val launcherLatest = HomeUpdate.launcherLatest
+    val launcherChecking = HomeUpdate.launcherChecking
+    val visionOlder = visionVersion.isNotBlank() && latestVisionVersion.isNotBlank() &&
+        HomeUpdate.isOlder(visionVersion, latestVisionVersion)
+
     SettingsList {
-        item { SettingsHeader("Actualizaciones", "Todo se descarga del release oficial de Vision+, sin tienda.") }
         item {
-            val launcherPending = HomeUpdate.launcherPending()
-            val launcherLatest = HomeUpdate.launcherLatest
-            SettingsValueRow(
-                title = "Vision+ Home",
-                detail = when (updateState) {
-                    HomeUpdate.State.Idle -> when {
-                        launcherPending && launcherLatest != null ->
-                            "v$homeVersion → v${launcherLatest.versionName}"
-                        // Una caché vieja puede traer una «última publicada» MENOR que la
-                        // instalada; nunca se enseña como si fuera más nueva.
-                        launcherLatest != null &&
-                            HomeUpdate.isOlder(homeVersion, launcherLatest.versionName) ->
-                            "v$homeVersion · última publicada v${launcherLatest.versionName}"
-                        else -> "Launcher de la tele · v$homeVersion · estás al día"
-                    }
-                    HomeUpdate.State.Checking -> "Buscando la última versión…"
-                    is HomeUpdate.State.Downloading -> "Descargando… ${updateState.percent} %"
-                    HomeUpdate.State.Ready -> "Descarga lista: confirma en la pantalla del sistema"
-                    HomeUpdate.State.UpToDate -> "v$homeVersion · ya es la última versión"
-                    is HomeUpdate.State.Failed -> "No se pudo: ${updateState.message}"
-                },
-                value = if (launcherPending) "Actualizar" else "Al día",
-                icon = Icons.Rounded.Download,
-                onClick = { if (launcherPending) actions.onUpdateHome() else actions.onCheckHome() },
+            SettingsHeader(
+                "Actualizaciones",
+                "La comprobación automática no siempre es instantánea: aquí puedes buscar AHORA la última versión de Vision+ Home y de Vision+.",
             )
         }
+
         item {
-            // Una beta instalada (p. ej. 2.5.191) puede ser MÁS NUEVA que el release estable
-            // (2.5.186): jamás se ofrece «Actualizar» hacia atrás ni se pinta una flecha que
-            // parezca un downgrade.
-            val visionOlder = visionVersion.isNotBlank() && latestVisionVersion.isNotBlank() &&
-                HomeUpdate.isOlder(visionVersion, latestVisionVersion)
-            SettingsValueRow(
-                title = if (visionInstalled) "Vision+" else "Instalar Vision+",
-                detail = when {
-                    !visionInstalled -> "El launcher se baja la app del release oficial"
-                    visionVersion.isBlank() -> "Instalada, pero no responde al Inicio"
-                    visionOlder -> "v$visionVersion → v$latestVisionVersion"
-                    else -> "v$visionVersion · es la que abre el contenido"
+            SettingsCard(
+                title = "Vision+ Home · v$homeVersion",
+                body = when {
+                    launcherChecking -> "Buscando la última versión publicada en el release…"
+                    updateState is HomeUpdate.State.Checking -> "Preparando la actualización…"
+                    updateState is HomeUpdate.State.Downloading -> "Descargando… ${updateState.percent} %"
+                    updateState is HomeUpdate.State.Ready -> "Descarga lista: confirma en la pantalla del sistema"
+                    updateState is HomeUpdate.State.Failed -> "No se pudo: ${updateState.message}"
+                    launcherPending && launcherLatest != null ->
+                        "Hay una versión más nueva: v${launcherLatest.versionName}. Se instala encima sin perder tu personalización."
+                    launcherLatest != null && HomeUpdate.isOlder(homeVersion, launcherLatest.versionName) ->
+                        "v$homeVersion · última publicada v${launcherLatest.versionName}"
+                    launcherLatest != null ->
+                        "v$homeVersion · última publicada v${launcherLatest.versionName} · estás al día"
+                    else -> "Aún no se ha consultado el release; pulsa «Buscar actualización»."
                 },
-                value = when {
-                    !visionInstalled -> "Instalar"
-                    visionOlder -> "Actualizar"
-                    else -> "Al día"
-                },
-                icon = Icons.Rounded.SettingsRemote,
-                onClick = { if (!visionInstalled || visionOlder) actions.onUpdateVision() },
-            )
-        }
-        item {
-            val visionStateText = when (visionState) {
-                HomeUpdate.State.Checking -> "Buscando Vision+ en el release…"
-                is HomeUpdate.State.Downloading -> "Descargando Vision+… ${visionState.percent} %"
-                HomeUpdate.State.Ready -> "Descarga lista: confirma en la pantalla del sistema"
-                HomeUpdate.State.UpToDate -> "Vision+: ya tienes la última versión"
-                is HomeUpdate.State.Failed -> "Vision+: ${visionState.message}"
-                HomeUpdate.State.Idle -> ""
+            ) {
+                if (launcherPending && launcherLatest != null) {
+                    HomeButton(
+                        label = "Actualizar a v${launcherLatest.versionName}",
+                        onClick = actions.onUpdateHome,
+                        icon = Icons.Rounded.Download,
+                        primary = true,
+                    )
+                }
+                HomeButton(
+                    label = if (launcherChecking) "Buscando…" else "Buscar actualización",
+                    onClick = if (launcherChecking) ({}) else actions.onCheckHome,
+                    icon = Icons.Rounded.Refresh,
+                    primary = !launcherPending,
+                )
             }
-            if (visionStateText.isNotBlank()) {
-                Text(
-                    visionStateText,
-                    color = HomeColors.BlueBright,
-                    style = MaterialTheme.typography.bodySmall,
+        }
+
+        item {
+            SettingsCard(
+                title = if (visionInstalled) "Vision+ · v${visionVersion.ifBlank { "?" }}" else "Vision+ no instalada",
+                body = when {
+                    visionChecking -> "Buscando la última versión de Vision+ en el release…"
+                    visionState is HomeUpdate.State.Checking -> "Preparando la instalación de Vision+…"
+                    visionState is HomeUpdate.State.Downloading -> "Descargando Vision+… ${visionState.percent} %"
+                    visionState is HomeUpdate.State.Ready -> "Descarga lista: confirma en la pantalla del sistema"
+                    visionState is HomeUpdate.State.Failed -> "No se pudo: ${visionState.message}"
+                    !visionInstalled -> "El launcher puede descargarla e instalarla desde el release oficial."
+                    visionVersion.isBlank() -> "Está instalada, pero no responde al Inicio."
+                    visionOlder -> "Hay una versión más nueva publicada: v$latestVisionVersion (tienes v$visionVersion)."
+                    latestVisionVersion.isBlank() -> "Aún no se ha consultado el release; pulsa «Buscar actualización»."
+                    else -> "v$visionVersion · última publicada v$latestVisionVersion · estás al día"
+                },
+            ) {
+                if (!visionInstalled || visionOlder) {
+                    HomeButton(
+                        label = if (!visionInstalled) "Instalar Vision+" else "Actualizar Vision+",
+                        onClick = actions.onUpdateVision,
+                        icon = Icons.Rounded.SettingsRemote,
+                        primary = true,
+                    )
+                }
+                HomeButton(
+                    label = if (visionChecking) "Buscando…" else "Buscar actualización",
+                    onClick = if (visionChecking) ({}) else actions.onCheckVision,
+                    icon = Icons.Rounded.Refresh,
+                    primary = visionInstalled && !visionOlder,
                 )
             }
         }

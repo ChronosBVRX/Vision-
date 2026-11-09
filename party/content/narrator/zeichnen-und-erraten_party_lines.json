@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para Garabato mental: dibujos feos, mentes retorcidas y un celular de por medio.",
+      "Se destapa Garabato mental. Una persona dibuja y el resto adivina qué demonios quiso decir.",
+      "Garabato mental, la prueba definitiva de que todos dibujan como niños con prisa.",
+      "Garabato mental: dibujos que parecen amenazas y respuestas que parecen adivinanzas.",
+      "Saquen el artista interior, aunque solo sepa hacer palitos.",
+      "Arranca Garabato mental: una persona dibuja, todos sufren.",
+      "Aquí no se juzga el arte, se juzga la intención. Y a veces ni eso.",
+      "Garabato mental: el único concurso donde un calcetín puede ser una jirafa.",
+      "Prepárense para dibujar con prisa y adivinar con fe.",
+      "Se destapó el museo del garabato. Pasen a ver las obras maestras del pulso nervioso."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Garabato mental en marcha. Trazo, adivina y no culpes al pulso.",
+      "Ya está corriendo. Si el dibujo parece un calcetín, tú sigue adivinando.",
+      "La ronda está viva. Saquen el artista abstracto que llevan dentro.",
+      "Garabato mental en marcha: tracen, adivinen y no culpen al plumón.",
+      "La ronda corre. Si el dibujo no tiene sentido, invéntele uno.",
+      "Menos perfección y más comunicación. El arte puede esperar.",
+      "Dibujen como si les pagaran por segundo; adivinen como si les debieran dinero.",
+      "El lienzo está en blanco y la paciencia también.",
+      "Garabato mental: el dibujo ya va, la explicación viene después.",
+      "Aquí se gana con pulso, ingenio y cara de “obviamente era eso”."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Se acabó Garabato mental. Veamos qué obra maestra entendió el resto.",
+      "Ronda cerrada en Garabato mental. El arte fue dudoso; las risas, garantizadas.",
+      "Resultados de Garabato mental. La tele juzga y el dibujo no apela.",
+      "Se acabó el garabato. Veamos qué obra maestra logró comunicar algo.",
+      "Ronda cerrada. El dibujo fue dudoso, pero la intención era buena.",
+      "Resultados de Garabato mental: el arte abstracto ganó otra vez.",
+      "Terminó la ronda. El crítico de arte ya está llorando en un rincón.",
+      "Se secó el plumón. La tabla dicta sentencia.",
+      "Garabato mental: la obra se queda, la vergüenza también.",
+      "Resultados: unos dibujaron, otros adivinaron y todos sufrieron."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Así va la tabla de Garabato mental. Arriba los que se hacen entender; abajo los incomprendidos.",
+      "Marcador de Garabato mental. Los de arriba dibujan; los de abajo adivinan con fe.",
+      "Puntos de Garabato mental. Todavía hay tiempo de garabatear una remontada.",
+      "Puntos de Garabato mental: arriba los que se hacen entender, abajo los que dibujan con el corazón.",
+      "Marcador del garabato. El pulso tiembla, pero la tabla no.",
+      "Tabla parcial: los artistas suman, los adivinos rezan.",
+      "Así van los puntos. El que dibujó un círculo y dijo “es una vaca”, ya sabe.",
+      "Garabato mental: la tabla se está llenando de garabatos y de rencores.",
+      "Puntos de la ronda. La próxima obra puede cambiar todo.",
+      "Marcador: el que se cree genio, que revise los números."
+    ]
+  }
+]

@@ -105,8 +105,7 @@ cómo añadir una pantalla sin romper el mando.
     (PowerShell las destroza).
 11. **R8 no puede pisar el espacio del motor:** `-repackageclasses 'visionplus'` + tarea
     `verifyEngineNamespace`. No tocar eso ni las keep rules sin correr la verificación.
-12. **No reinicies `sync` a media pasada profunda** (deja el índice a medias) ni despliegues si hay
-    una partida de Vision+ Play en curso (cuando exista: mata las salas).
+12. **No reinicies `sync` a media pasada profunda** (deja el índice a medias).
 
 ---
 
@@ -144,6 +143,7 @@ cómo añadir una pantalla sin romper el mando.
 | Reproductor ExoPlayer | `ui/player/PlayerScreen.kt`, `ui/player/PlayerDialogs.kt` |
 | TV en vivo | `ui/phone/LiveScreen.kt`, `ui/tv/TvLiveScreen.kt`, `LiveTaxonomy.kt` |
 | Deportes | `ui/sports/*`, `ui/tv/TvSportsScreen.kt`, `data/gee/*` |
+| Juegos (Party) | `party/`, `ui/games/PartyGamesScreen.kt`, `ui/games/PartyHostScreen.kt`, `data/party/PartyConfig.kt` |
 | Descargas | `data/offline/*`, `ui/DownloadsScreen.kt`, `ui/tv/TvDownloadsScreen.kt` |
 | Perfiles | `data/profile/ProfileStore.kt`, `ui/profile/*`, `ui/settings/ProfilesCard.kt` |
 | Continuidad | `data/sync/*`, `ui/settings/SyncSettingsCard.kt`, `ui/tv/TvSyncDialog.kt` |
@@ -169,8 +169,8 @@ cómo añadir una pantalla sin romper el mando.
   memoria** (`mem_limit: 1g`): un `limitFilms` sin tope ya tumbó el contenedor por OOM.
 - Workers: XTV, TMDB (enriquecido y traducciones), agrupador de temporadas, EPG (7 países),
   ESPN/deportes, GeeSports (enlaces), espejo de capítulos, marcadores de intro, banners, diagnóstico.
-- Salud: `/healthz`, `/v1/diag/health`, `/v1/epg/health`, `/v1/game/health` (cuando exista),
-  más el vigilante externo de GitHub Actions y el watchdog local.
+- Salud: `/healthz`, `/v1/diag/health`, `/v1/epg/health`, más el vigilante externo de
+  GitHub Actions y el watchdog local.
 
 Endpoints que ya existen (no los reinventes): `/v1/index`, `/v1/categories`, `/v1/category/{id}`,
 `/v1/section/{name}`, `/v1/trending`, `/v1/schedule`, `/v1/search`, `/v1/banners`, `/v1/sports`,
@@ -233,17 +233,17 @@ Endpoints que ya existen (no los reinventes): `/v1/index`, `/v1/categories`, `/v
 
 ---
 
-## 11. El módulo nuevo: **Vision+ Play**
+## 11. Juegos: **Vision+ Party**
 
-Plan completo, contrato, esquema, puntuación, presupuesto de rendimiento y fases:
-**`docs/PLAN_JUEGOS.md`**. Resumen de una línea: trivia, charadas y actividades de grupo con
-árbitro en el VPS, salas por código de 6 caracteres, contenido generado del catálogo.
+La sección Juegos ya no usa salas de trivia dentro de la API. Es un subsistema
+aparte en **`party/`**, construido sobre Open Party Lab (Apache 2.0), con 13
+juegos en español: **Banterbolt**, **¿Le atinaste? Bien.**, **El Comisionado
+Merk** y los 10 juegos restantes de Open Party Lab. El host es una pantalla web que abre la TV; los teléfonos
+entran por QR al controlador. La plataforma se publica aparte (subdominio
+`party.visionplusv2.duckdns.org`) y la app solo abre un WebView.
 
-No cambia ninguna pieza existente: añade `server/api/games.py`, `server/sync/trivia_bank.py`,
-4 tablas y un paquete `data/games` + `ui/games` en la app. La TV entra en Fase 2 y nunca es
-obligatoria.
-
----
+Referencia: `party/README.md` y `party/PLAN_PORT.md`. La app nativa está en
+`ui/games/Party*.kt`; la URL se controla con la flag remota `party_host`.
 
 ## 12. Orden de lectura recomendado
 
@@ -254,18 +254,18 @@ obligatoria.
    consúltalo por búsqueda cuando toques un tema.
 3. `docs/ARQUITECTURA.md` — invariantes, deuda, cómo añadir pantalla.
 4. `docs/REGRESSIONS.md` — qué se rompió antes y por qué.
-5. `docs/PLAN_JUEGOS.md` — tu primer encargo.
+5. `party/README.md` — el módulo de juegos activo.
 6. `docs/PLAN_LAUNCHER.md`, `docs/PLAN_CONTROL_REMOTO.md`, `docs/PLAN_UI_PREMIUM.md` — historia
    de diseño de las piezas grandes.
 7. `ota_notes_2.5.177.md` (y las dos anteriores) — cómo se redacta una entrega.
 
 ---
 
-## 13. Tu primer encargo
+## 13. Estado de Juegos
 
-Implementar **Fase 0 y Fase 1** de `docs/PLAN_JUEGOS.md` (backend puro + banco de 200 preguntas
-+ MVP de trivia en móvil), con las suites en verde, **sin publicar OTA** y **sin commitear**.
-Al terminar, reporta con la evidencia que pide el plan y espera instrucciones para Fase 2 (TV).
-
-Si algo de este handoff no coincide con el repo, **el repo manda**: repórtalo y actualiza el
-documento en el mismo lote.
+**Vision+ Party** sustituyó por completo al sistema anterior de trivia/Fiesta.
+El código viejo, sus assets, audios y endpoints se retiraron. El trabajo
+pendiente es de operación, no de rescate: desplegar el host en
+`party.visionplusv2.duckdns.org`, probar el hub con D-pad en la TV y validar
+una partida con 3 teléfonos por QR. Los juegos de Open Party Lab sin contenido
+es-MX aparecen deshabilitados como **EN TRADUCCIÓN**.

@@ -149,9 +149,10 @@ class _FakeAcquire:
 
 
 class _FakePool:
-    def __init__(self, rows, week=None):
+    def __init__(self, rows, week=None, calendar=None):
         self.rows = rows
         self.week = week
+        self.calendar = calendar or []
 
     async def execute(self, *args, **kwargs):
         return None
@@ -162,6 +163,8 @@ class _FakePool:
     async def fetch(self, query, *args, **kwargs):
         if "launcher_banners" in query:
             return self.rows
+        if "content_calendar" in query:
+            return self.calendar
         return []
 
     def acquire(self):
@@ -299,3 +302,39 @@ def test_refresh_skips_tmdb_when_another_instance_holds_the_lock(monkeypatch):
     result = asyncio.run(banners.refresh_movies(_LockedOutPool([]), "key"))
     assert result == 0
     assert calls == []
+
+
+def test_a_campaign_change_refreshes_the_hero_in_the_moment(monkeypatch):
+    banners._ensured = False
+    old = banners.movie_banner(_movie(), "", 0)
+    old["campaign"] = ""
+    campaign = {
+        "id": "evento-planeta",
+        "title": "Planeta en juego",
+        "start_md": "01-01",
+        "end_md": "12-31",
+        "priority": 80,
+        "hero": True,
+        "show_row": True,
+        "min_titles": 6,
+        "badge": "PLANETA EN JUEGO",
+        "eyebrow": "COP31",
+        "always": False,
+    }
+    pool = _FakePool([_row(old)], calendar=[campaign])
+    calls = []
+
+    async def fake_refresh(pool, key):
+        calls.append(1)
+        fresh = banners.movie_banner(_movie(), "", 0)
+        fresh["campaign"] = "evento-planeta"
+        fresh["campaignItem"] = True
+        pool.rows[0] = _row(fresh)
+        return 1
+
+    monkeypatch.setattr(banners, "refresh_movies", fake_refresh)
+    result = asyncio.run(banners.serve(pool, _FakeBackground(), tmdb_key=""))
+    assert calls == [1]
+    assert result["campaign"]["id"] == "evento-planeta"
+    assert result["items"][0]["campaignItem"] is True
+    assert result["nextRefreshAt"] <= result["campaign"]["endsAtMs"]

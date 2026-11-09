@@ -50,6 +50,11 @@ NBA_DATA = {
 }
 
 
+def test_ascenso_mx_is_not_scheduled():
+    # Se retiró de la programación porque casi nunca publica enlaces útiles.
+    assert all(slug != "mex.2" for slug, _, _ in sports.LEAGUES)
+
+
 def test_the_other_sports_are_team_sports_with_prefixed_ids():
     by_slug = {(sport, slug): name for sport, slug, name, _ in sports.OTHER_LEAGUES}
     assert by_slug[("basketball", "nba")] == "NBA"

@@ -212,6 +212,52 @@ class PlaybackHistoryTest {
     }
 
     @Test
+    fun nextEpisodeCrossesTheSeasonBoundaryOnlyAfterFinishing() {
+        val lastOfSeason = entry("e10", positionMs = 2_700_000, durationMs = 2_700_000).copy(
+            xtvCode = "e10", title = "Serie · T1 · C10", seriesId = "s1",
+            episodeIds = listOf("e9", "e10"), episodeIndex = 1,
+            seasonIds = listOf("s1", "s2"), seasonNames = listOf("T1", "T2"), seasonIndex = 0,
+        )
+        val next = nextEpisodeOf(lastOfSeason)!!
+        assertTrue(next.crossesSeason)
+        assertEquals(1, next.seasonIndex)
+        assertEquals(0, next.episodeIndex)
+        assertEquals("s2", next.seasonId)
+        assertEquals(null, next.episodeCode)
+        assertEquals("la ficha aterriza en la temporada nueva", 1, resumeTargetSeasonIndex(lastOfSeason))
+
+        val unfinished = lastOfSeason.copy(positionMs = 120_000, completed = false)
+        assertEquals("si no terminó, se queda en su temporada", 0, resumeTargetSeasonIndex(unfinished))
+    }
+
+    @Test
+    fun theNextEpisodeOfTheSameSeasonCanPlayDirectly() {
+        val first = entry("e1").copy(
+            xtvCode = "e1", title = "Serie · T1 · C1", seriesId = "s1",
+            episodeIds = listOf("e1", "e2"), episodeIndex = 0,
+            seasonIds = listOf("s1"), seasonNames = listOf("T1"), seasonIndex = 0,
+        )
+        val next = nextEpisodeOf(first)!!
+        assertFalse(next.crossesSeason)
+        assertEquals("e2", next.episodeCode)
+        val playable = nextEpisodeEntry(first)!!
+        assertEquals("e2", playable.key)
+        assertEquals(1, playable.episodeIndex)
+        assertEquals(0L, playable.positionMs)
+        assertFalse(playable.completed)
+    }
+
+    @Test
+    fun manualCompletedEntryIsFinishedWithoutDurationMath() {
+        val card = matchCards(
+            listOf(entry("m", positionMs = 1L, durationMs = 0L).copy(completed = true)),
+            emptyList(),
+        ).single()
+        assertTrue(card.completed)
+        assertEquals(1f, card.progress, 0.001f)
+    }
+
+    @Test
     fun resumeEpisodePlayCarriesTheExactMinuteAndContext() {
         val entry = entry("c1", positionMs = 1_260_000, durationMs = 2_700_000).copy(
             xtvCode = "c1", title = "Ley y orden: UVE · T2 · C3", seriesId = "serie-2",

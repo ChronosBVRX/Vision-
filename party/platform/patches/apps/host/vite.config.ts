@@ -1,0 +1,72 @@
+import { defineConfig } from "vite";
+import { fileURLToPath, URL } from "node:url";
+
+export default defineConfig({
+  define: process.env.OPEN_PARTY_LAB_RELEASE_BUILD
+    ? { "import.meta.env.VITE_SERVER_URL": "undefined" }
+    : undefined,
+  resolve: {
+    dedupe: ["phaser", "@open-party-lab/game-core", "@open-party-lab/protocol"],
+    alias: {
+      "@open-party-lab/protocol": fileURLToPath(
+        new URL("../../packages/protocol/src/index.ts", import.meta.url)
+      ),
+      "@open-party-lab/game-core": fileURLToPath(
+        new URL("../../packages/game-core/src/index.ts", import.meta.url)
+      ),
+      "@open-party-lab/ui-kit": fileURLToPath(
+        new URL("../../packages/ui-kit/src/index.ts", import.meta.url)
+      )
+    }
+  },
+  build: {
+    target: "es2016",
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const normalizedId = id.replace(/\\/g, "/");
+
+          if (normalizedId.includes("/node_modules/phaser/")) {
+            return "phaser";
+          }
+
+          if (normalizedId.includes("/node_modules/socket.io-client/")) {
+            return "socket-io";
+          }
+
+          if (normalizedId.includes("/node_modules/qrcode/")) {
+            return "qrcode";
+          }
+
+          if (normalizedId.includes("/src/games/.generated/")) {
+            return "game-external";
+          }
+
+          const gameMatch = normalizedId.match(/\/src\/games\/([^/]+)\//);
+
+          if (gameMatch) {
+            return `game-${gameMatch[1]}`;
+          }
+
+          if (normalizedId.includes("/src/scenes/")) {
+            return "host-scenes";
+          }
+
+          if (normalizedId.includes("/node_modules/")) {
+            return "vendor";
+          }
+
+          return undefined;
+        }
+      }
+    }
+  },
+  server: {
+    host: "0.0.0.0",
+    port: 5173
+  },
+  preview: {
+    host: "0.0.0.0",
+    port: 4173
+  }
+});

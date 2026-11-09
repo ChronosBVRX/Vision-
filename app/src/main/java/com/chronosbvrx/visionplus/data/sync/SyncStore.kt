@@ -185,6 +185,7 @@ object SyncStore {
         favorites = UserLibrary.favorites(context).distinctBy { it.id },
         watchLater = UserLibrary.watchLater(context).distinctBy { it.id },
         watched = UserLibrary.watchedEpisodesFresh(context),
+        unwatched = UserLibrary.unwatchedEpisodes(context),
     )
 
     private fun buildItems(
@@ -198,7 +199,7 @@ object SyncStore {
         for ((stamp, at) in removed) {
             val kind = stamp.substringBefore('|')
             val key = stamp.substringAfter('|', "")
-            if (kind !in setOf(KIND_RESUME, KIND_FAV, KIND_LATER) || key.isBlank()) continue
+            if (kind !in setOf(KIND_RESUME, KIND_FAV, KIND_LATER, KIND_UNWATCHED) || key.isBlank()) continue
             out += item(kind, key, at, deleted = true, data = null)
         }
         snapshot.resume.forEach { entry ->
@@ -220,6 +221,12 @@ object SyncStore {
             val subject = stampKey(KIND_WATCHED, series)
             val data = JSONObject().put("eps", JSONArray(episodes))
             out += item(KIND_WATCHED, series, times[subject] ?: nowMs, deleted = false, data = data)
+        }
+        // «No visto» es atómico por capítulo: key = serie|episodio. Al marcar visto, el
+        // snapshot deja de contenerlo y detectRemovals manda el tombstone en la siguiente sync.
+        snapshot.unwatched.forEach { episode ->
+            val subject = stampKey(KIND_UNWATCHED, episode)
+            out += item(KIND_UNWATCHED, episode, times[subject] ?: nowMs, deleted = false, data = null)
         }
         return JSONArray(out.take(200))
     }
@@ -267,6 +274,7 @@ object SyncStore {
         UserLibrary.replaceFavorites(context, snapshot.favorites)
         UserLibrary.replaceWatchLater(context, snapshot.watchLater)
         UserLibrary.replaceWatched(context, snapshot.watched)
+        UserLibrary.replaceUnwatched(context, snapshot.unwatched)
     }
 
     // --- red ---------------------------------------------------------------------------------

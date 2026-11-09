@@ -1,0 +1,839 @@
+import Phaser from "phaser";
+import QRCode from "qrcode";
+import {
+  canManagePlayerRoster,
+  getRoomPhase,
+  languageLabels,
+  supportedLanguages,
+  type SupportedLanguage
+} from "@open-party-lab/protocol";
+import type { HostAppState, HostSocketClient } from "./hostSocketClient.js";
+import { getHostText } from "../i18n/hostText.js";
+import { themeNames, type ThemeName } from "@open-party-lab/ui-kit";
+import { hostTheme, partyTheme } from "../ui/theme/theme.js";
+import { readHostMusicVolume, setHostMusicVolume } from "./backgroundMusic.js";
+import { readHostSoundEffectsVolume, setHostSoundEffectsVolume } from "./audioVolume.js";
+import { OPEN_HOST_CONTROLS_EVENT, SHELL_ACTIVE_ATTRIBUTE } from "../shell/hostShell.js";
+import {
+  applyStyles,
+  createChromeCard,
+  createChromeIconButton,
+  createChromeSection,
+  createChromeTextButton,
+  hostChrome,
+  setChromeIconButtonState,
+  trapChromePointerEvents
+} from "../ui/chrome/hostChrome.js";
+
+const fpsPreferenceKey = "open-party-lab.host-fps";
+const openPreferenceKey = "open-party-lab.host-controls-open";
+const allowedFpsValues = [30, 60] as const;
+
+function hasLocalStorage(): boolean {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function readStoredNumber(key: string, fallback: number): number {
+  if (!hasLocalStorage()) {
+    return fallback;
+  }
+
+  const value = Number(window.localStorage.getItem(key));
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function writeStoredNumber(key: string, value: number): void {
+  if (!hasLocalStorage()) {
+    return;
+  }
+
+  window.localStorage.setItem(key, String(value));
+}
+
+function readStoredBoolean(key: string, fallback: boolean): boolean {
+  if (!hasLocalStorage()) {
+    return fallback;
+  }
+
+  const value = window.localStorage.getItem(key);
+  if (value === null) {
+    return fallback;
+  }
+
+  return value === "1";
+}
+
+function writeStoredBoolean(key: string, value: boolean): void {
+  if (!hasLocalStorage()) {
+    return;
+  }
+
+  window.localStorage.setItem(key, value ? "1" : "0");
+}
+
+function normalizeFps(value: number): 30 | 60 {
+  return value >= 60 ? 60 : 30;
+}
+
+export function readHostFpsPreference(): 30 | 60 {
+  return normalizeFps(readStoredNumber(fpsPreferenceKey, 30));
+}
+
+function resolveHostFpsLoopMode(fps: 30 | 60): {
+  fpsLimit: number;
+  targetFps: number;
+  hasFpsLimit: boolean;
+  limitRateMs: number;
+  targetDeltaMs: number;
+  smoothStep: boolean;
+} {
+  if (fps === 60) {
+    return {
+      fpsLimit: 0,
+      targetFps: 60,
+      hasFpsLimit: false,
+      limitRateMs: 0,
+      targetDeltaMs: 1000 / 60,
+      smoothStep: true
+    };
+  }
+
+  return {
+    fpsLimit: 30,
+    targetFps: 30,
+    hasFpsLimit: true,
+    limitRateMs: 1000 / 30,
+    targetDeltaMs: 1000 / 30,
+    smoothStep: false
+  };
+}
+
+export function createHostFpsConfig(fps: 30 | 60): {
+  target: number;
+  limit: number;
+  min: number;
+  smoothStep: boolean;
+  forceSetTimeOut: boolean;
+} {
+  const mode = resolveHostFpsLoopMode(fps);
+
+  return {
+    target: mode.targetFps,
+    limit: mode.fpsLimit,
+    min: 20,
+    smoothStep: mode.smoothStep,
+    forceSetTimeOut: false
+  };
+}
+
+export function applyHostFps(game: Phaser.Game, fps: 30 | 60): void {
+  const mode = resolveHostFpsLoopMode(fps);
+  const timeStep = game.loop as unknown as {
+    fpsLimit: number;
+    targetFps: number;
+    hasFpsLimit: boolean;
+    _limitRate: number;
+    _target: number;
+    smoothStep: boolean;
+    running?: boolean;
+    resetDelta?: () => void;
+    sleep?: () => void;
+    wake?: (seamless?: boolean) => void;
+  };
+
+  timeStep.fpsLimit = mode.fpsLimit;
+  timeStep.targetFps = mode.targetFps;
+  timeStep.hasFpsLimit = mode.hasFpsLimit;
+  timeStep._limitRate = mode.limitRateMs;
+  timeStep._target = mode.targetDeltaMs;
+  timeStep.smoothStep = mode.smoothStep;
+  timeStep.resetDelta?.();
+
+  if (timeStep.running) {
+    timeStep.sleep?.();
+    timeStep.wake?.(true);
+  }
+}
+
+export function mountHostControlsOverlay(
+  game: Phaser.Game,
+  client: HostSocketClient
+): () => void {
+  let destroyed = false;
+  const gameLockedOnEntry = new URLSearchParams(window.location.search).get("game")?.trim();
+  let isOpen = gameLockedOnEntry ? false : readStoredBoolean(openPreferenceKey, false);
+  if (gameLockedOnEntry) writeStoredBoolean(openPreferenceKey, false);
+  let currentFps = readHostFpsPreference();
+  let currentState: HostAppState = client.getState();
+
+  const overlay = document.createElement("aside");
+  trapChromePointerEvents(overlay);
+  applyStyles(overlay, {
+    position: "fixed",
+    right: hostChrome.offset.edge,
+    bottom: hostChrome.offset.dockBottom,
+    zIndex: hostChrome.zIndex.controls,
+    pointerEvents: "none",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-end",
+    gap: "12px"
+  });
+
+  const gearIcon = `
+    <svg viewBox="0 0 24 24" width="23" height="23" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9.7 4.2 12 2.9l2.3 1.3.7 2.1 2.2.5 1.3 2.3-1.5 1.7.1 2.4 1.4 1.8-1.3 2.3-2.2.5-.7 2.1L12 21.1l-2.3-1.3-.7-2.1-2.2-.5-1.3-2.3 1.4-1.8.1-2.4-1.5-1.7 1.3-2.3 2.2-.5.7-2.1Z" />
+      <circle cx="12" cy="12" r="3.35" />
+      <path d="M12 8.65v1.2M15.35 12h-1.2M12 15.35v-1.2M8.65 12h1.2" opacity="0.78" />
+    </svg>
+  `;
+  const toggleButton = createChromeIconButton("Host-Steuerung", gearIcon);
+  toggleButton.style.pointerEvents = "auto";
+  overlay.appendChild(toggleButton);
+
+  const card = createChromeCard("dark");
+  applyStyles(card, {
+    pointerEvents: "auto",
+    display: isOpen ? "grid" : "none",
+    width: "min(396px, calc(100vw - 24px))",
+    maxHeight: "calc(100vh - 32px)",
+    overflowY: "auto"
+  });
+  overlay.insertBefore(card, toggleButton);
+
+  const header = document.createElement("div");
+  header.style.display = "flex";
+  header.style.alignItems = "start";
+  header.style.justifyContent = "space-between";
+  header.style.gap = "12px";
+  card.appendChild(header);
+
+  const titleBlock = document.createElement("div");
+  titleBlock.style.display = "grid";
+  titleBlock.style.gap = "4px";
+  header.appendChild(titleBlock);
+
+  const title = document.createElement("strong");
+  title.textContent = "Host-Steuerung";
+  title.style.fontFamily = hostTheme.titleFont;
+  title.style.fontSize = "20px";
+  title.style.letterSpacing = "0.02em";
+  titleBlock.appendChild(title);
+
+  const subtitle = document.createElement("div");
+  subtitle.style.fontSize = "12px";
+  subtitle.style.color = "var(--muted)";
+  subtitle.textContent = "FPS, Spieler und Schnellzugriff";
+  titleBlock.appendChild(subtitle);
+
+  const closeButton = createChromeTextButton("Schliessen");
+  header.appendChild(closeButton);
+
+  const meta = document.createElement("div");
+  meta.style.display = "grid";
+  meta.style.gridTemplateColumns = "1fr auto";
+  meta.style.gap = "10px";
+  card.appendChild(meta);
+
+  const roomBadge = createChromeSection("dark");
+  roomBadge.style.padding = "10px 12px";
+  roomBadge.style.fontFamily = hostTheme.monoFont;
+  roomBadge.style.fontSize = "26px";
+  roomBadge.style.fontWeight = "800";
+  roomBadge.style.letterSpacing = "0.14em";
+  roomBadge.style.textAlign = "center";
+  roomBadge.style.display = "flex";
+  roomBadge.style.alignItems = "center";
+  roomBadge.style.justifyContent = "space-between";
+  roomBadge.style.gap = "12px";
+  roomBadge.style.gridColumn = "1 / -1";
+  meta.appendChild(roomBadge);
+
+  const roomCodeLabel = document.createElement("span");
+  roomCodeLabel.style.minWidth = "0";
+  roomCodeLabel.style.overflowWrap = "anywhere";
+  roomBadge.appendChild(roomCodeLabel);
+
+  const roomQr = document.createElement("img");
+  roomQr.width = 132;
+  roomQr.height = 132;
+  applyStyles(roomQr, {
+    display: "none",
+    flexShrink: "0",
+    background: "#ffffff"
+  });
+  roomBadge.appendChild(roomQr);
+  let qrSourceUrl: string | null = null;
+
+  const connectionBadge = createChromeSection("dark");
+  connectionBadge.style.display = "grid";
+  connectionBadge.style.alignContent = "center";
+  connectionBadge.style.justifyItems = "end";
+  connectionBadge.style.padding = "10px 12px";
+  connectionBadge.style.fontSize = "12px";
+  connectionBadge.style.color = "var(--muted)";
+  connectionBadge.style.textAlign = "right";
+  connectionBadge.style.whiteSpace = "pre-line";
+  connectionBadge.style.gridColumn = "1 / -1";
+  meta.appendChild(connectionBadge);
+
+  const menuButton = createChromeTextButton("", "neutral");
+  card.appendChild(menuButton);
+  menuButton.addEventListener("click", () => {
+    if (client.getState().room?.lockedGameId) return;
+    client.returnToGameSelection();
+    isOpen = false;
+    writeStoredBoolean(openPreferenceKey, false);
+    syncView();
+  });
+
+  const fpsSection = document.createElement("section");
+  fpsSection.style.display = "grid";
+  fpsSection.style.gap = "8px";
+  card.appendChild(fpsSection);
+
+  const fpsLabel = document.createElement("div");
+  fpsLabel.textContent = "FPS";
+  fpsLabel.style.fontSize = "12px";
+  fpsLabel.style.letterSpacing = "0.12em";
+  fpsLabel.style.textTransform = "uppercase";
+  fpsLabel.style.color = "var(--muted)";
+  fpsSection.appendChild(fpsLabel);
+
+  const fpsButtons = document.createElement("div");
+  fpsButtons.style.display = "grid";
+  fpsButtons.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
+  fpsButtons.style.gap = "8px";
+  fpsSection.appendChild(fpsButtons);
+
+  const fpsButtonMap = new Map<30 | 60, HTMLButtonElement>();
+
+  for (const fps of allowedFpsValues) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = `${fps}`;
+    button.style.padding = "14px 12px";
+    button.style.borderRadius = "16px";
+    button.style.border = hostChrome.border.subtle;
+    button.style.background = hostTheme.panelMuted;
+    button.style.color = hostTheme.text;
+    button.style.fontFamily = hostTheme.titleFont;
+    button.style.fontSize = "18px";
+    button.style.fontWeight = "800";
+    button.style.letterSpacing = "0.06em";
+    button.style.cursor = "pointer";
+    button.style.minHeight = "52px";
+    fpsButtons.appendChild(button);
+    fpsButtonMap.set(fps, button);
+
+    button.addEventListener("click", () => {
+      if (currentFps === fps) {
+        return;
+      }
+
+      currentFps = fps;
+      writeStoredNumber(fpsPreferenceKey, fps);
+      applyHostFps(game, fps);
+      syncView();
+    });
+  }
+
+  /*
+   * Music volume.
+   *
+   * A slider rather than a set of steps: this is the one setting people reach
+   * for mid-evening because the room got louder, and it wants a nudge, not a
+   * decision. The percentage next to the label is there so it can be set from
+   * across the room and read back at a glance.
+   */
+  const volumeSection = document.createElement("section");
+  volumeSection.style.display = "grid";
+  volumeSection.style.gap = "8px";
+  card.appendChild(volumeSection);
+
+  const volumeHeader = document.createElement("div");
+  volumeHeader.style.display = "flex";
+  volumeHeader.style.alignItems = "baseline";
+  volumeHeader.style.justifyContent = "space-between";
+  volumeHeader.style.gap = "12px";
+  volumeSection.appendChild(volumeHeader);
+
+  const volumeLabel = document.createElement("div");
+  volumeLabel.style.fontSize = "12px";
+  volumeLabel.style.letterSpacing = "0.12em";
+  volumeLabel.style.textTransform = "uppercase";
+  volumeLabel.style.color = "var(--muted)";
+  volumeHeader.appendChild(volumeLabel);
+
+  const volumeReadout = document.createElement("output");
+  volumeReadout.style.fontFamily = hostTheme.monoFont;
+  volumeReadout.style.fontSize = "16px";
+  volumeReadout.style.color = hostTheme.text;
+  volumeHeader.appendChild(volumeReadout);
+
+  const volumeSlider = document.createElement("input");
+  volumeSlider.type = "range";
+  volumeSlider.min = "0";
+  volumeSlider.max = "100";
+  volumeSlider.step = "5";
+  volumeSlider.value = String(Math.round(readHostMusicVolume() * 100));
+  volumeSlider.style.width = "100%";
+  volumeSlider.style.minHeight = "40px";
+  volumeSlider.style.accentColor = hostTheme.accent;
+  volumeSlider.style.cursor = "pointer";
+  volumeSection.appendChild(volumeSlider);
+
+  function renderVolume(): void {
+    const percent = Number(volumeSlider.value);
+    volumeReadout.textContent = percent === 0 ? "—" : `${percent}%`;
+  }
+
+  volumeSlider.addEventListener("input", () => {
+    setHostMusicVolume(Number(volumeSlider.value) / 100);
+    renderVolume();
+  });
+
+  renderVolume();
+
+  const soundEffectsVolumeSection = document.createElement("section");
+  soundEffectsVolumeSection.style.display = "grid";
+  soundEffectsVolumeSection.style.gap = "8px";
+  card.appendChild(soundEffectsVolumeSection);
+
+  const soundEffectsVolumeHeader = document.createElement("div");
+  soundEffectsVolumeHeader.style.display = "flex";
+  soundEffectsVolumeHeader.style.alignItems = "baseline";
+  soundEffectsVolumeHeader.style.justifyContent = "space-between";
+  soundEffectsVolumeHeader.style.gap = "12px";
+  soundEffectsVolumeSection.appendChild(soundEffectsVolumeHeader);
+
+  const soundEffectsVolumeLabel = document.createElement("div");
+  soundEffectsVolumeLabel.style.fontSize = "12px";
+  soundEffectsVolumeLabel.style.letterSpacing = "0.12em";
+  soundEffectsVolumeLabel.style.textTransform = "uppercase";
+  soundEffectsVolumeLabel.style.color = "var(--muted)";
+  soundEffectsVolumeHeader.appendChild(soundEffectsVolumeLabel);
+
+  const soundEffectsVolumeReadout = document.createElement("output");
+  soundEffectsVolumeReadout.style.fontFamily = hostTheme.monoFont;
+  soundEffectsVolumeReadout.style.fontSize = "16px";
+  soundEffectsVolumeReadout.style.color = hostTheme.text;
+  soundEffectsVolumeHeader.appendChild(soundEffectsVolumeReadout);
+
+  const soundEffectsVolumeSlider = document.createElement("input");
+  soundEffectsVolumeSlider.type = "range";
+  soundEffectsVolumeSlider.min = "0";
+  soundEffectsVolumeSlider.max = "100";
+  soundEffectsVolumeSlider.step = "5";
+  soundEffectsVolumeSlider.value = String(Math.round(readHostSoundEffectsVolume() * 100));
+  soundEffectsVolumeSlider.style.width = "100%";
+  soundEffectsVolumeSlider.style.minHeight = "40px";
+  soundEffectsVolumeSlider.style.accentColor = hostTheme.accent;
+  soundEffectsVolumeSlider.style.cursor = "pointer";
+  soundEffectsVolumeSection.appendChild(soundEffectsVolumeSlider);
+
+  const renderSoundEffectsVolume = (): void => {
+    const percent = Number(soundEffectsVolumeSlider.value);
+    soundEffectsVolumeReadout.textContent = percent === 0 ? "—" : `${percent}%`;
+  };
+
+  soundEffectsVolumeSlider.addEventListener("input", () => {
+    setHostSoundEffectsVolume(Number(soundEffectsVolumeSlider.value) / 100);
+    renderSoundEffectsVolume();
+  });
+
+  renderSoundEffectsVolume();
+
+  const themeSection = document.createElement("section");
+  themeSection.style.display = "grid";
+  themeSection.style.gap = "8px";
+  card.appendChild(themeSection);
+
+  const themeLabel = document.createElement("div");
+  themeLabel.style.fontSize = "12px";
+  themeLabel.style.letterSpacing = "0.12em";
+  themeLabel.style.textTransform = "uppercase";
+  themeLabel.style.color = "var(--muted)";
+  themeSection.appendChild(themeLabel);
+
+  const themeButtons = document.createElement("div");
+  themeButtons.style.display = "grid";
+  themeButtons.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
+  themeButtons.style.gap = "8px";
+  themeSection.appendChild(themeButtons);
+
+  const themeButtonMap = new Map<ThemeName, HTMLButtonElement>();
+
+  for (const theme of themeNames) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.style.padding = "13px 12px";
+    button.style.borderRadius = "14px";
+    button.style.border = hostChrome.border.subtle;
+    button.style.background = hostTheme.panelMuted;
+    button.style.color = hostTheme.text;
+    button.style.fontFamily = hostTheme.titleFont;
+    button.style.fontSize = "16px";
+    button.style.fontWeight = "800";
+    button.style.cursor = "pointer";
+    button.style.minHeight = "48px";
+    themeButtons.appendChild(button);
+    themeButtonMap.set(theme, button);
+
+    button.addEventListener("click", () => client.setTheme(theme));
+  }
+
+  const languageSection = document.createElement("section");
+  languageSection.style.display = "grid";
+  languageSection.style.gap = "8px";
+  card.appendChild(languageSection);
+
+  const languageLabel = document.createElement("div");
+  languageLabel.style.fontSize = "12px";
+  languageLabel.style.letterSpacing = "0.12em";
+  languageLabel.style.textTransform = "uppercase";
+  languageLabel.style.color = "var(--muted)";
+  languageSection.appendChild(languageLabel);
+
+  const languageButtons = document.createElement("div");
+  languageButtons.style.display = "grid";
+  languageButtons.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
+  languageButtons.style.gap = "8px";
+  languageSection.appendChild(languageButtons);
+
+  const languageButtonMap = new Map<SupportedLanguage, HTMLButtonElement>();
+
+  for (const language of ["es"] as const) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = languageLabels[language];
+    button.style.padding = "13px 12px";
+    button.style.borderRadius = "14px";
+    button.style.border = hostChrome.border.subtle;
+    button.style.background = hostTheme.panelMuted;
+    button.style.color = hostTheme.text;
+    button.style.fontFamily = hostTheme.titleFont;
+    button.style.fontSize = "16px";
+    button.style.fontWeight = "800";
+    button.style.cursor = "pointer";
+    button.style.minHeight = "48px";
+    languageButtons.appendChild(button);
+    languageButtonMap.set(language, button);
+
+    button.addEventListener("click", () => {
+      client.setLanguage(language);
+    });
+  }
+
+  // Remote host control lives here rather than as a permanent banner on the
+  // shared screen: it is status, not something the room needs to look at all
+  // evening. Only the incoming *request* still interrupts.
+  const controlSection = document.createElement("section");
+  controlSection.style.display = "none";
+  controlSection.style.gap = "8px";
+  card.appendChild(controlSection);
+
+  const controlLabel = document.createElement("div");
+  controlLabel.style.fontSize = "12px";
+  controlLabel.style.letterSpacing = "0.12em";
+  controlLabel.style.textTransform = "uppercase";
+  controlLabel.style.color = "var(--muted)";
+  controlSection.appendChild(controlLabel);
+
+  const controlStatus = document.createElement("div");
+  controlStatus.style.fontSize = "14px";
+  controlStatus.style.lineHeight = "1.4";
+  controlSection.appendChild(controlStatus);
+
+  const reclaimButton = createChromeTextButton("", "danger");
+  reclaimButton.addEventListener("click", () => client.reclaimHostControl());
+  controlSection.appendChild(reclaimButton);
+
+  const playersSection = document.createElement("section");
+  playersSection.style.display = "grid";
+  playersSection.style.gap = "8px";
+  card.appendChild(playersSection);
+
+  const playersHeader = document.createElement("div");
+  playersHeader.style.display = "flex";
+  playersHeader.style.alignItems = "center";
+  playersHeader.style.justifyContent = "space-between";
+  playersHeader.style.gap = "12px";
+  playersSection.appendChild(playersHeader);
+
+  const playersLabel = document.createElement("div");
+  playersLabel.textContent = "Spieler";
+  playersLabel.style.fontSize = "12px";
+  playersLabel.style.letterSpacing = "0.12em";
+  playersLabel.style.textTransform = "uppercase";
+  playersLabel.style.color = "var(--muted)";
+  playersHeader.appendChild(playersLabel);
+
+  const playersCount = document.createElement("div");
+  playersCount.style.fontSize = "12px";
+  playersCount.style.color = "var(--muted)";
+  playersHeader.appendChild(playersCount);
+
+  const playersList = document.createElement("div");
+  playersList.style.display = "grid";
+  playersList.style.gap = "8px";
+  playersSection.appendChild(playersList);
+
+  const moderationHint = document.createElement("div");
+  moderationHint.style.fontSize = "12px";
+  moderationHint.style.color = "var(--muted)";
+  moderationHint.style.lineHeight = "1.4";
+  playersSection.appendChild(moderationHint);
+
+  function syncOpenState(label: string): void {
+    card.style.display = isOpen ? "grid" : "none";
+    setChromeIconButtonState(toggleButton, { active: isOpen, label });
+    // The shell's dock already offers a settings button; a second floating gear
+    // beside it would be two controls for one panel.
+    const shellActive =
+      document.documentElement.getAttribute(SHELL_ACTIVE_ATTRIBUTE) === "on";
+    toggleButton.style.display = shellActive ? "none" : "grid";
+  }
+
+  function resolveLanguage(): SupportedLanguage {
+    return currentState.room?.language ?? currentState.preferredLanguage;
+  }
+
+  /** Shows who is driving the room, and offers to take it back. */
+  function renderHostControl(text: ReturnType<typeof getHostText>): void {
+    const holderName = currentState.room?.hostControl.holderName ?? null;
+
+    controlSection.style.display = holderName ? "grid" : "none";
+
+    if (!holderName) {
+      return;
+    }
+
+    controlLabel.textContent = text.hostControlDelegatedTitle;
+    controlStatus.textContent = text.hostControlDelegatedBody(holderName);
+    reclaimButton.textContent = text.hostControlReclaim;
+  }
+
+  function renderRoomMeta(): void {
+    const text = getHostText(resolveLanguage());
+    const room = currentState.room;
+    const selectedGameId = room?.selectedGameId ?? null;
+    const gameName =
+      selectedGameId
+        ? room?.availableGames.find((gameEntry) => gameEntry.id === selectedGameId)?.displayName ??
+          text.noGame
+        : text.noGame;
+    const connectedPlayers = (room?.players ?? []).filter((player) => player.connected).length;
+    const totalPlayers = room?.players.length ?? 0;
+    const lifecycle = getRoomPhase(room) ?? "lobby";
+
+    roomCodeLabel.textContent = `${text.roomCode}\n${room?.code ?? "----"}`;
+    roomQr.alt = text.scanQr;
+    const joinUrl = room?.joinUrl ?? null;
+    if (joinUrl !== qrSourceUrl) {
+      qrSourceUrl = joinUrl;
+      roomQr.style.display = "none";
+      roomQr.removeAttribute("src");
+      if (joinUrl) {
+        void QRCode.toDataURL(joinUrl, {
+          width: 264,
+          margin: 4,
+          errorCorrectionLevel: "M",
+          color: { dark: "#000000", light: "#ffffff" }
+        }).then((dataUrl) => {
+          // Never show a previous room's QR after a room change or teardown.
+          if (destroyed || qrSourceUrl !== joinUrl) return;
+          roomQr.src = dataUrl;
+          roomQr.style.display = "block";
+        }).catch(() => {
+          if (!destroyed && qrSourceUrl === joinUrl) qrSourceUrl = null;
+        });
+      }
+    }
+    roomBadge.style.whiteSpace = "pre-line";
+    roomBadge.style.fontSize = "20px";
+    const gameLocked = Boolean(room?.lockedGameId);
+    menuButton.textContent = `${text.backToMenu} (G)`;
+    menuButton.disabled = !room || gameLocked;
+    menuButton.style.display = gameLocked ? "none" : "";
+    roomBadge.style.opacity = room ? "1" : "0.65";
+    connectionBadge.textContent = room
+      ? `${gameName}\n${connectedPlayers}/${totalPlayers} ${text.players.toLowerCase()} | ${text.lifecycle(lifecycle)}`
+      : currentState.connected
+        ? `${text.connected}\n${text.waitingForRoom}`
+        : `${text.offline}\n${text.connectionMissing}`;
+  }
+
+  function renderPlayers(): void {
+    const text = getHostText(resolveLanguage());
+    const room = currentState.room;
+    const players = room?.players ?? [];
+    const connectedPlayers = players.filter((player) => player.connected).length;
+    const canModeratePlayers = canManagePlayerRoster(room);
+
+    playersCount.textContent = `${connectedPlayers}/${players.length}`;
+    playersList.replaceChildren();
+    moderationHint.textContent = canModeratePlayers
+      ? text.moderationAllowed
+      : text.moderationLocked;
+
+    if (players.length === 0) {
+      const empty = document.createElement("div");
+      empty.textContent = room ? text.noPlayersConnected : text.roomListPending;
+      empty.style.padding = "12px";
+      empty.style.borderRadius = hostChrome.radius.control;
+      empty.style.background = hostTheme.panelMuted;
+      empty.style.border = hostChrome.border.subtle;
+      empty.style.color = hostTheme.muted;
+      empty.style.fontSize = "13px";
+      empty.style.lineHeight = "1.4";
+      playersList.appendChild(empty);
+      return;
+    }
+
+    for (const player of players) {
+      const row = document.createElement("div");
+      row.style.display = "grid";
+      row.style.gridTemplateColumns = "minmax(0, 1fr) auto";
+      row.style.gap = "10px";
+      row.style.alignItems = "center";
+      row.style.padding = "10px 12px";
+      row.style.borderRadius = hostChrome.radius.control;
+      row.style.background = hostTheme.panelMuted;
+      row.style.border = hostChrome.border.subtle;
+
+      const details = document.createElement("div");
+      details.style.display = "grid";
+      details.style.gap = "4px";
+      row.appendChild(details);
+
+      const name = document.createElement("div");
+      name.textContent = player.name;
+      name.style.fontSize = "16px";
+      name.style.fontWeight = "700";
+      name.style.lineHeight = "1.2";
+      details.appendChild(name);
+
+      const status = document.createElement("div");
+      status.textContent = `${player.connected ? "online" : player.presence} | ${player.isReady ? text.ready : text.notReady}`;
+      status.style.fontSize = "12px";
+      status.style.color = hostTheme.muted;
+      details.appendChild(status);
+
+      const kickButton = document.createElement("button");
+      kickButton.type = "button";
+      kickButton.textContent = text.kick;
+      kickButton.title = text.kickPlayer(player.name);
+      kickButton.style.padding = "10px 12px";
+      kickButton.style.borderRadius = "12px";
+      kickButton.style.border = hostChrome.border.subtle;
+      kickButton.style.background = partyTheme.color.dangerSoft;
+      kickButton.style.color = hostTheme.danger;
+      kickButton.style.fontFamily = hostTheme.bodyFont;
+      kickButton.style.fontSize = "13px";
+      kickButton.style.fontWeight = "700";
+      kickButton.style.cursor = canModeratePlayers ? "pointer" : "not-allowed";
+      kickButton.style.minWidth = "96px";
+      kickButton.style.minHeight = "40px";
+      kickButton.disabled = !canModeratePlayers;
+      kickButton.style.opacity = canModeratePlayers ? "1" : "0.52";
+      row.appendChild(kickButton);
+
+      kickButton.addEventListener("click", () => {
+        if (!canModeratePlayers) {
+          return;
+        }
+
+        client.kickPlayer(player.id);
+      });
+
+      playersList.appendChild(row);
+    }
+  }
+
+  function syncView(): void {
+    const text = getHostText(resolveLanguage());
+    syncOpenState(text.hostControlsTitle);
+    title.textContent = text.hostControlsTitle;
+    subtitle.textContent = text.hostControlsSubtitle;
+    closeButton.textContent = text.close;
+    fpsLabel.textContent = text.fpsLabel;
+    languageLabel.textContent = text.languageLabel;
+    themeLabel.textContent = text.themeLabel;
+    volumeLabel.textContent = text.musicVolumeLabel;
+    volumeSlider.setAttribute("aria-label", text.musicVolumeLabel);
+    soundEffectsVolumeLabel.textContent = text.soundEffectsVolumeLabel;
+    soundEffectsVolumeSlider.setAttribute("aria-label", text.soundEffectsVolumeLabel);
+
+    for (const [theme, button] of themeButtonMap) {
+      const active = (currentState.room?.theme ?? "light") === theme;
+      button.textContent = theme === "dark" ? text.themeDark : text.themeLight;
+      button.style.background = active ? hostTheme.accent : hostTheme.panelMuted;
+      button.style.borderColor = active ? hostTheme.accentStrong : hostTheme.line;
+      button.style.color = active ? hostTheme.onAccent : hostTheme.text;
+    }
+    playersLabel.textContent = text.players;
+    renderHostControl(text);
+    renderRoomMeta();
+    renderPlayers();
+
+    for (const [fps, button] of fpsButtonMap) {
+      const active = fps === currentFps;
+      button.style.background = active ? hostTheme.accent : hostTheme.panelMuted;
+      button.style.borderColor = active ? hostTheme.accentStrong : hostTheme.line;
+      button.style.boxShadow = active ? hostChrome.focusRing : "none";
+      button.style.color = active ? hostTheme.onAccent : hostTheme.text;
+    }
+
+    const currentLanguage = resolveLanguage();
+    for (const [language, button] of languageButtonMap) {
+      const active = language === currentLanguage;
+      button.style.background = active ? hostTheme.accent : hostTheme.panelMuted;
+      button.style.borderColor = active ? hostTheme.accentStrong : hostTheme.line;
+      button.style.boxShadow = active ? hostChrome.focusRing : "none";
+      button.style.color = active ? hostTheme.onAccent : hostTheme.text;
+    }
+  }
+
+  toggleButton.addEventListener("click", () => {
+    isOpen = !isOpen;
+    writeStoredBoolean(openPreferenceKey, isOpen);
+    syncView();
+  });
+
+  /** The shell's dock opens this panel without importing it. */
+  const handleOpenRequest = (): void => {
+    isOpen = !isOpen;
+    writeStoredBoolean(openPreferenceKey, isOpen);
+    syncView();
+  };
+
+  window.addEventListener(OPEN_HOST_CONTROLS_EVENT, handleOpenRequest);
+
+  closeButton.addEventListener("click", () => {
+    isOpen = false;
+    writeStoredBoolean(openPreferenceKey, isOpen);
+    syncView();
+  });
+
+  document.body.appendChild(overlay);
+  applyHostFps(game, currentFps);
+
+  const unsubscribe = client.subscribe((state) => {
+    currentState = state;
+    if (destroyed) {
+      return;
+    }
+
+    syncView();
+  });
+
+  syncView();
+
+  return () => {
+    destroyed = true;
+    unsubscribe();
+    window.removeEventListener(OPEN_HOST_CONTROLS_EVENT, handleOpenRequest);
+    overlay.remove();
+  };
+}

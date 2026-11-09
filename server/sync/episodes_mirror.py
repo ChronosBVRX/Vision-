@@ -38,6 +38,12 @@ log = logging.getLogger("sync.episodes")
 ENABLED = os.environ.get("EPISODES_SYNC", "1") == "1"
 INTERVAL = float(os.environ.get("EPISODES_INTERVAL_SECONDS", "90") or "90")
 MAX_PER_CYCLE = int(os.environ.get("EPISODES_MAX_PER_CYCLE", "30") or "30")
+# Pre-calentamiento del espejo: además de lo que pide la app, el worker encola
+# las temporadas del catálogo (popular primero) para que el selector de capítulos
+# y «Siguiente capítulo» funcionen en la primera apertura, sin depender del uso.
+PREWARM_ENABLED = os.environ.get("EPISODES_PREWARM", "1") == "1"
+PREWARM_BATCH = int(os.environ.get("EPISODES_PREWARM_BATCH", "400") or "400")
+PREWARM_LOW_WATER = int(os.environ.get("EPISODES_PREWARM_LOW_WATER", "80") or "80")
 # Pausa entre refs de la pasada: el portal tarda 0.2–0.7 s por llamada; nos
 # quedamos lejos de cualquier límite razonable de tasa.
 REF_DELAY_SECONDS = float(os.environ.get("EPISODES_DELAY_SECONDS", "0.25") or "0.25")
@@ -232,6 +238,37 @@ def fetch_programs(client: Any, cid: str) -> tuple[str, list[dict]]:
 def claims(rows, budget: int) -> list:
     """Reparte el presupuesto de la pasada en orden de pedido (puro, para tests)."""
     return [r["ref"] for r in list(rows)[:max(0, budget)]]
+
+
+# Encola las temporadas que aún no tienen copia. La app las pediría una a una al
+# abrir la ficha; el worker las deja listas de antemano (popular primero). Solo
+# se insertan cuando la cola está baja: ni se acumulan miles de pendientes ni se
+# pierde el orden. `on conflict do nothing` respeta lo que ya pidió la app.
+_PREWARM_SQL = """
+insert into episode_mirror (ref, requested_at, updated_at, status, next_try_at)
+select t.id, now(), now(), 'pending', now()
+from titles t
+where t.kind in ('series', 'anime', 'kids')
+  and coalesce(t.program_type, '') in ('series', 'teleplay')
+  and not exists (select 1 from episode_mirror m where m.ref = t.id)
+order by coalesce(t.popularity, 0) desc, t.id
+limit $1
+on conflict (ref) do nothing
+returning ref
+"""
+
+
+async def prewarm(pool: asyncpg.Pool) -> int:
+    """Mete a la cola un lote de temporadas pendientes cuando queda espacio."""
+    if not PREWARM_ENABLED:
+        return 0
+    pending = await pool.fetchval(
+        "select count(*) from episode_mirror where status = 'pending'"
+    )
+    if int(pending or 0) >= PREWARM_LOW_WATER:
+        return 0
+    rows = await pool.fetch(_PREWARM_SQL, PREWARM_BATCH)
+    return len(rows)
 
 
 async def drain(pool: asyncpg.Pool) -> int:
@@ -554,18 +591,35 @@ async def _enrich_rows(pool: asyncpg.Pool, rows) -> int:
 
 
 async def loop(pool: asyncpg.Pool) -> None:
-    """Loop propio (cada `EPISODES_INTERVAL_SECONDS`, default 90 s), independiente
-    del ciclo mayor del worker (6 h): una serie nueva debe quedar espejada en
-    minutos, no en horas. Un ciclo fallido jamás tumba el loop."""
+    """Loop propio del espejo (cada `EPISODES_INTERVAL_SECONDS`, default 90 s).
+
+    Solo drena la cola y alimenta el precalentamiento; los metadatos de TMDB
+    corren en `meta_loop` para que una temporada lenta no frene los capítulos.
+    """
     while True:
         try:
             if ENABLED:
+                added = await prewarm(pool)
+                if added:
+                    log.info("episodios: %s temporadas agregadas al precalentamiento", added)
                 await drain(pool)
-            await enrich_pass(pool)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001
             log.exception("episodios: el drenaje falló")
+        await asyncio.sleep(INTERVAL)
+
+
+async def meta_loop(pool: asyncpg.Pool) -> None:
+    """Metadatos TMDB (nombre/sinopsis) en su propio carril, sin frenar el espejo."""
+    while True:
+        try:
+            if META_ENABLED:
+                await enrich_pass(pool)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("episodios: los metadatos TMDB fallaron")
         await asyncio.sleep(INTERVAL)
 
 

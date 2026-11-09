@@ -295,7 +295,9 @@ object Popularity {
     internal fun homePool(rows: List<CatalogRow>, indexRows: List<CatalogRow>): List<Film> {
         val curatedIndex = indexRows.filter {
             it.id == "tendencias" || it.id == "estrenos" || it.id == "recomendados" ||
-                it.id.startsWith("genero-") || it.id.startsWith("tema-")
+                it.id.startsWith("genero-") ||
+                    it.id.startsWith("tema-") ||
+                    it.id.startsWith("evento-")
         }
         val ownRows = rows.filterNot { it.id.startsWith("xtv-masnew") }
         val all = (ownRows + curatedIndex).flatMap { it.films }
@@ -364,7 +366,10 @@ object Popularity {
         // el Inicio ya tiene «Populares de la semana».
         val topRowKeys = (top10 + premieresFinal).map { repeatKey(it) }.toHashSet()
         val themeCandidates = indexRows
-            .filter { it.id.startsWith("tema-") && it.id != "tema-tendencias-mundo" }
+            .filter {
+                (it.id.startsWith("tema-") || it.id.startsWith("evento-")) &&
+                    it.id != "tema-tendencias-mundo"
+            }
             .map { row ->
                 val base = dedupe(row.films)
                 val fresh = base.filterNot { repeatKey(it) in topRowKeys }
@@ -389,13 +394,26 @@ object Popularity {
                 null
             }
         }
+        // Hero del calendario editorial: la primera fila `tema-*`/`evento-*`
+        // activa (el servidor las ordena por prioridad y pone primero la campaña
+        // que debe abrir el billboard). «Para reír» y «Tendencias del mundo» son
+        // filas permanentes/de categorías y no deben convertirse en el hero.
+        val calendarHero = indexRows
+            .asSequence()
+            .filter { row ->
+                (row.id.startsWith("tema-") || row.id.startsWith("evento-")) &&
+                    row.id != "tema-para-reir" &&
+                    row.id != "tema-tendencias-mundo"
+            }
+            .flatMap { it.films.asSequence() }
+            .firstOrNull { it.videoUrl.isNotBlank() && it.posterUrl.isNotBlank() }
         return HomeCurated(
             pool = pool,
             top10 = top10,
             premieres = premieresFinal,
             kindRows = kindRows,
             themeRows = themeRows,
-            hero = pickHero(top10, premieresFinal, pool.firstOrNull()),
+            hero = calendarHero ?: pickHero(top10, premieresFinal, pool.firstOrNull()),
         )
     }
 }

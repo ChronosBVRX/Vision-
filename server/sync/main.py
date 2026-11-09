@@ -17,6 +17,7 @@ import asyncpg
 import archive_ia
 import aniskip
 import diag
+import editorial_calendar
 import epg
 import episodes_mirror
 import gee38
@@ -27,7 +28,6 @@ import schedule
 import search_text
 import sports
 import tmdb
-import trivia_bank
 import xtv
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -35,6 +35,7 @@ log = logging.getLogger("sync")
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 INTERVAL_SECONDS = int(os.environ.get("SYNC_INTERVAL_SECONDS", "21600"))
+CALENDAR_CHECK_SECONDS = int(os.environ.get("CALENDAR_CHECK_SECONDS", "900"))
 SEED_DEMO = os.environ.get("SEED_DEMO", "0") == "1"
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
@@ -165,12 +166,58 @@ async def bump_version(pool: asyncpg.Pool) -> None:
         await conn.execute("update sync_state set version = version + 1, updated_at = now() where id = 1")
 
 
+async def calendar_watch(pool: asyncpg.Pool, index_lock: asyncio.Lock) -> None:
+    """Enciende/apaga filas al cambiar de campaña, sin esperar al ciclo de 6 h.
+
+    La firma solo cambia cuando entra o sale una temporada/evento. En ese momento
+    se reconstruyen las filas `tema-*` (con la foto TMDB cacheada) y se sube la
+    versión del índice para que las apps refresquen su copia.
+    """
+    while True:
+        try:
+            await editorial_calendar.sync(pool)
+            signature = editorial_calendar.signature()
+            async with pool.acquire() as conn:
+                stored = await conn.fetchval(
+                    "select value from sync_meta where key = 'calendar_signature'"
+                )
+            if signature != stored:
+                async with index_lock:
+                    changed = await index_build.refresh_themes(pool)
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        insert into sync_meta (key, value, updated_at)
+                        values ('calendar_signature', $1, now())
+                        on conflict (key) do update
+                            set value = excluded.value, updated_at = now()
+                        """,
+                        signature,
+                    )
+                if changed:
+                    await bump_version(pool)
+                log.info(
+                    "calendario: campaña activa [%s] (%s cambios de filas)",
+                    signature or "sin campaña",
+                    changed,
+                )
+        except Exception:  # noqa: BLE001 - el vigilante nunca tumba el worker
+            log.exception("el vigilante del calendario falló")
+        await asyncio.sleep(CALENDAR_CHECK_SECONDS)
+
+
 async def main() -> None:
     pool = await connect()
     try:
         await apply_schema(pool)
+        # Publica el calendario antes de cualquier consulta de la API: si el worker
+        # se reinicia a media temporada, la API no se queda sin campaña.
+        await editorial_calendar.sync(pool)
         if SEED_DEMO:
             await seed_demo(pool)
+        # El ciclo grande y el vigilante del calendario no deben reconstruir el
+        # índice a la vez (normalize también toca categorías).
+        index_lock = asyncio.Lock()
         # La agenda de fútbol, la guía EPG, el triage de diagnóstico y los deportes
         # GeeSports corren aparte con sus propios intervalos: no tocan el índice de
         # catálogo ni su versión.
@@ -179,8 +226,13 @@ async def main() -> None:
         diag_task = asyncio.create_task(diag.loop(pool))
         gee38_task = asyncio.create_task(gee38.loop(pool))
         # Espejo de capítulos: drena la cola de `/v1/episodes` cada 90 s con la
-        # sesión del worker (jamás acuña). Comentar si algún día molesta.
+        # sesión del worker (jamás acuña). Los metadatos TMDB van en su propio
+        # carril para que una temporada lenta no frene la lista de capítulos.
         episodes_task = asyncio.create_task(episodes_mirror.loop(pool))
+        episodes_meta_task = asyncio.create_task(episodes_mirror.meta_loop(pool))
+        # El calendario editorial se revisa cada 15 min: las temporadas entran y
+        # salen a su hora, no cuando toque el ciclo grande.
+        calendar_task = asyncio.create_task(calendar_watch(pool, index_lock))
         try:
             while True:
                 changed = await run_connectors(pool)
@@ -236,7 +288,8 @@ async def main() -> None:
                     # El índice se arma AL FINAL: así ve la popularidad y los géneros
                     # refrescados en este mismo ciclo (antes corría antes de TMDB y la
                     # fila mostraba los valores del ciclo anterior).
-                    changed += await index_build.build(pool)
+                    async with index_lock:
+                        changed += await index_build.build(pool)
                 except Exception:  # noqa: BLE001
                     log.exception("el índice de estrenos/géneros falló")
                 try:
@@ -245,12 +298,6 @@ async def main() -> None:
                     await search_text.rebuild(pool)
                 except Exception:  # noqa: BLE001
                     log.exception("el texto de búsqueda no se pudo mantener")
-                try:
-                    # Vision+ Play: banco de preguntas generado del catálogo. Respeta
-                    # TRIVIA_MIN_HOURS y TRIVIA_BANK_CAP; no toca la versión del índice.
-                    await trivia_bank.run(pool)
-                except Exception:  # noqa: BLE001
-                    log.exception("el banco de preguntas de Vision+ Play falló")
                 try:
                     # Mapeo TMDB→MAL para AniSkip: semanal o si está vacío (no toca versión).
                     await aniskip.sync(pool)
@@ -278,7 +325,9 @@ async def main() -> None:
             epg_task.cancel()
             diag_task.cancel()
             gee38_task.cancel()
+            calendar_task.cancel()
             episodes_task.cancel()
+            episodes_meta_task.cancel()
             try:
                 await sports_task
             except asyncio.CancelledError:
@@ -296,7 +345,15 @@ async def main() -> None:
             except asyncio.CancelledError:
                 pass
             try:
+                await calendar_task
+            except asyncio.CancelledError:
+                pass
+            try:
                 await episodes_task
+            except asyncio.CancelledError:
+                pass
+            try:
+                await episodes_meta_task
             except asyncio.CancelledError:
                 pass
     finally:

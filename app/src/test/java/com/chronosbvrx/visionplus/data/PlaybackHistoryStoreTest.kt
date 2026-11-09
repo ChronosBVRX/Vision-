@@ -115,6 +115,35 @@ class PlaybackHistoryStoreTest {
     }
 
     @Test
+    fun manualWatchedMovieStaysInHistoryButLeavesContinue() {
+        val now = System.currentTimeMillis()
+        PlaybackHistory.save(
+            context,
+            movie("m1", "Película", positionMs = 120_000L, durationMs = 600_000L, updatedAt = now),
+            immediate = true,
+        )
+        PlaybackHistory.markCompleted(context, "m1", true)
+
+        assertTrue("el historial conserva el visto manual", PlaybackHistory.historyCards(context, emptyList()).single().completed)
+        assertTrue("no vuelve a Seguir viendo", PlaybackHistory.continueCards(context, emptyList()).isEmpty())
+
+        PlaybackHistory.markCompleted(context, "m1", false)
+        assertTrue("marcar no visto lo retira del historial", PlaybackHistory.list(context).isEmpty())
+    }
+
+    @Test
+    fun manualWatchedEpisodeWithNextStillOffersNext() {
+        val now = System.currentTimeMillis()
+        PlaybackHistory.save(context, episode("e1", "Serie · T1 · C1", now, positionMs = 120_000L), immediate = true)
+        PlaybackHistory.markCompleted(context, "e1", true)
+
+        val card = PlaybackHistory.continueCards(context, emptyList()).single()
+        assertTrue(card.completed)
+        assertTrue("el siguiente capítulo sigue disponible", card.hasNext)
+        assertEquals("e1", card.entry.key)
+    }
+
+    @Test
     fun listReadsTheHistoryFileNotTheStaleMemoryCopy() {
         val now = System.currentTimeMillis()
         PlaybackHistory.save(context, episode("e1", "Serie · T1 · C1", now - 1_000L), immediate = true)

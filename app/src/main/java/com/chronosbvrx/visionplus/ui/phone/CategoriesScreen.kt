@@ -140,8 +140,12 @@ fun CategoriesScreen(
     }
     // Las colecciones temáticas (Día de Muertos, Halloween, Navidad…) van en su
     // propia sección arriba; después el resto de géneros y colecciones.
-    val shownThemes = remember(shown) { shown.filter { it.id.startsWith("tema-") } }
-    val shownOther = remember(shown) { shown.filterNot { it.id.startsWith("tema-") } }
+    val shownThemes = remember(shown) {
+        shown.filter { it.id.startsWith("tema-") || it.id.startsWith("evento-") }
+    }
+    val shownOther = remember(shown) {
+        shown.filterNot { it.id.startsWith("tema-") || it.id.startsWith("evento-") }
+    }
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         modifier = Modifier.fillMaxSize(),

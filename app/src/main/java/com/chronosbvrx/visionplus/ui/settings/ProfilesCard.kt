@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -13,18 +14,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -34,14 +40,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.chronosbvrx.visionplus.data.profile.Profile
+import com.chronosbvrx.visionplus.data.profile.ProfileAvatarCategory
+import com.chronosbvrx.visionplus.data.profile.ProfileAvatars
 import com.chronosbvrx.visionplus.data.profile.ProfileStore
 import com.chronosbvrx.visionplus.ui.profile.ProfileAvatar
+import com.chronosbvrx.visionplus.ui.profile.ProfileNameField
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
+import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 
 /**
@@ -93,7 +107,7 @@ internal fun ProfilesSettingsSection() {
                                 reload()
                             },
                     ) {
-                        ProfileAvatar(name = profile.name, size = 56.dp, ring = inUse)
+                        ProfileAvatar(name = profile.name, size = 56.dp, ring = inUse, avatar = profile.avatar)
                         Spacer(Modifier.height(6.dp))
                         Text(
                             profile.name,
@@ -111,7 +125,7 @@ internal fun ProfilesSettingsSection() {
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Edit,
-                                contentDescription = "Renombrar ${profile.name}",
+                                contentDescription = "Editar ${profile.name}",
                                 tint = VisionTextSecondary,
                                 modifier = Modifier.size(16.dp),
                             )
@@ -150,7 +164,7 @@ internal fun ProfilesSettingsSection() {
                 supporting = "Hasta ${ProfileStore.MAX_PROFILES} personas por equipo",
             )
         }
-        SettingsNavRow("Renombrar «${active.name}»", onClick = { renameTarget = active })
+        SettingsNavRow("Editar «${active.name}»", onClick = { renameTarget = active })
         if (active.id != ProfileStore.DEFAULT_ID) {
             SettingsDestructiveRow(
                 title = "Borrar «${active.name}»",
@@ -161,13 +175,14 @@ internal fun ProfilesSettingsSection() {
     }
 
     if (showCreate) {
-        NameDialog(
+        ProfileEditorDialog(
             title = "Nuevo perfil",
             initial = "Perfil ${profiles.size + 1}",
+            initialAvatar = "",
             confirm = "Crear",
             onDismiss = { showCreate = false },
-            onAccept = { name ->
-                val created = ProfileStore.create(context, name)
+            onAccept = { name, avatar ->
+                val created = ProfileStore.create(context, name, avatar)
                 showCreate = false
                 if (created == null) {
                     Toast.makeText(context, "No se pudo crear el perfil", Toast.LENGTH_SHORT).show()
@@ -180,13 +195,15 @@ internal fun ProfilesSettingsSection() {
     }
 
     renameTarget?.let { target ->
-        NameDialog(
-            title = "Renombrar perfil",
+        ProfileEditorDialog(
+            title = "Editar perfil",
             initial = target.name,
+            initialAvatar = target.avatar,
             confirm = "Guardar",
             onDismiss = { renameTarget = null },
-            onAccept = { name ->
+            onAccept = { name, avatar ->
                 ProfileStore.rename(context, target.id, name)
+                ProfileStore.setAvatar(context, target.id, avatar)
                 renameTarget = null
                 reload()
             },
@@ -224,35 +241,144 @@ internal fun ProfilesSettingsSection() {
     }
 }
 
-/** Diálogo de nombre: sirve para crear y para renombrar. */
+/**
+ * Diálogo de perfil: nombre (con el teclado predeterminado del sistema) e imagen de cine,
+ * series o anime. «Inicial» deja el avatar dibujado de siempre.
+ */
 @Composable
-private fun NameDialog(
+private fun ProfileEditorDialog(
     title: String,
     initial: String,
+    initialAvatar: String,
     confirm: String,
     onDismiss: () -> Unit,
-    onAccept: (String) -> Unit,
+    onAccept: (String, String) -> Unit,
 ) {
     var name by remember(initial) { mutableStateOf(initial) }
+    var avatar by remember(initialAvatar) { mutableStateOf(initialAvatar) }
+    var category by remember { mutableStateOf(ProfileAvatarCategory.CINE) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.dismissOnBack { onDismiss() },
         title = { Text(title) },
         text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { if (it.length <= 24) name = it },
-                singleLine = true,
-                label = { Text("Nombre") },
-            )
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 430.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    ProfileAvatar(name = name, size = 54.dp, avatar = avatar)
+                    Column(Modifier.weight(1f)) {
+                        Text("Nombre", style = MaterialTheme.typography.labelMedium, color = VisionTextSecondary)
+                        Spacer(Modifier.height(4.dp))
+                        ProfileNameField(
+                            value = name,
+                            onValueChange = { if (it.length <= 24) name = it },
+                            autoFocus = true,
+                            textSizeSp = 18f,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "Imagen · cine, series y anime",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    ProfileAvatarCategory.entries.forEach { option ->
+                        FilterChip(
+                            selected = category == option,
+                            onClick = { category = option },
+                            label = { Text(option.label) },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    AvatarChoice(
+                        label = "Inicial",
+                        selected = avatar.isBlank(),
+                        onClick = { avatar = "" },
+                    ) {
+                        ProfileAvatar(name = name, size = 66.dp, avatar = "")
+                    }
+                    ProfileAvatars.of(category).forEach { option ->
+                        AvatarChoice(
+                            label = option.label,
+                            selected = avatar == option.id,
+                            onClick = { avatar = option.id },
+                        ) {
+                            Image(
+                                painter = painterResource(option.drawable),
+                                contentDescription = option.label,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(66.dp).clip(RoundedCornerShape(10.dp)),
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Sin imagen se usa la inicial del nombre.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VisionTextSecondary,
+                )
+            }
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { onAccept(name) }) { Text(confirm) }
+                TextButton(onClick = { if (name.isNotBlank()) onAccept(name.trim(), avatar) }) {
+                    Text(confirm)
+                }
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
+}
+
+@Composable
+private fun AvatarChoice(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(78.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .then(
+                if (selected) Modifier.border(3.dp, Color.White, RoundedCornerShape(12.dp))
+                else Modifier.border(1.dp, VisionSurfaceHigh, RoundedCornerShape(12.dp)),
+            )
+            .padding(5.dp),
+    ) {
+        content()
+        Spacer(Modifier.height(4.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 /** Cambia de perfil y recrea la pantalla para que ninguna fila se quede con los datos viejos. */

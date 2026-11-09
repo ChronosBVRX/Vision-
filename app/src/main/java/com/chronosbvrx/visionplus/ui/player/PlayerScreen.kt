@@ -88,6 +88,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -160,6 +161,7 @@ import com.chronosbvrx.visionplus.data.offline.OfflineDownloadManager
 import com.chronosbvrx.visionplus.data.offline.OfflineRegistry
 import com.chronosbvrx.visionplus.ui.EpisodePlay
 import com.chronosbvrx.visionplus.ui.brand.VisionWordmark
+import com.chronosbvrx.visionplus.ui.donation.DonationLoadingHint
 import com.chronosbvrx.visionplus.ui.formatDuration
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
@@ -624,6 +626,9 @@ private fun PlayerCore(
     val controls = rememberControlsState()
     AutoHideEffect(controls, playing)
     val menu = rememberPlayerMenuState()
+    // En VOD el botón de audio/subtítulos está siempre: si el título no trae opciones, el
+    // menú lo explica. Así la barra es igual en todas las películas y series.
+    val showTracksButton = !isLive && !introPlaying
     var showTracks by remember { mutableStateOf(false) }
     var showAspect by remember { mutableStateOf(false) }
     var aspectMode by remember { mutableIntStateOf(com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultAspect) }
@@ -949,7 +954,7 @@ private fun PlayerCore(
         if (menu.quality != "Auto" && menu.videoHeights.none { videoQualityKey(it) == menu.quality }) {
             menu.quality = "Auto"
         }
-        if (!menu.hasAnyChoices && showTracks) showTracks = false
+        if (!showTracksButton && showTracks) showTracks = false
     }
 
     fun applyAudioChoice(choice: PlayerTrackChoice) {
@@ -1349,8 +1354,8 @@ private fun PlayerCore(
 
     // Si el botón de audio/subtítulos deja de existir (el video no tiene opciones), el foco
     // no puede quedar huérfano: vuelve a play/pausa para que el mando siga respondiendo.
-    LaunchedEffect(menu.hasAnyChoices) {
-        if (!menu.hasAnyChoices && tracksFocused) {
+    LaunchedEffect(showTracksButton) {
+        if (!showTracksButton && tracksFocused) {
             tracksFocused = false
             if (controls.visible) runCatching { if (isLive) liveLeadFocus.requestFocus() else playPauseFocus.requestFocus() }
         }
@@ -1676,6 +1681,15 @@ private fun PlayerCore(
             }
         }
 
+        if (buffering && error == null && !inPip && !introPlaying && positionMs <= 0) {
+            DonationLoadingHint(
+                isTv = isTv,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = SAFE_V),
+            )
+        }
+
         if (recovering && error == null && !inPip) {
             // Reconexión automática en curso: píldora discreta, no vuelve al spinner grande.
             Box(
@@ -1781,18 +1795,18 @@ private fun PlayerCore(
             // so the big title stays readable.
             val scrim = if (isTv) {
                 arrayOf(
-                    0.0f to Color(0xB3000000),
-                    0.22f to Color(0x8C000000),
-                    0.42f to Color(0x14000000),
-                    0.70f to Color(0x14000000),
-                    1.0f to Color(0xD9000000),
+                    0.0f to Color(0x99000000),
+                    0.20f to Color(0x73000000),
+                    0.42f to Color(0x0D000000),
+                    0.70f to Color(0x0D000000),
+                    1.0f to Color(0xB3000000),
                 )
             } else {
                 arrayOf(
-                    0.0f to Color(0xB3000000),
-                    0.30f to Color(0x14000000),
-                    0.70f to Color(0x14000000),
-                    1.0f to Color(0xD9000000),
+                    0.0f to Color(0x99000000),
+                    0.30f to Color(0x0D000000),
+                    0.70f to Color(0x0D000000),
+                    1.0f to Color(0xB3000000),
                 )
             }
             Box(
@@ -1858,21 +1872,30 @@ private fun PlayerCore(
                             .align(Alignment.TopStart)
                             .systemBarsPadding()
                             .padding(start = 16.dp, end = 16.dp)
-                            .fillMaxWidth(0.6f),
+                            .fillMaxWidth(0.72f),
                     ) {
                         Text(
                             currentTitle,
                             color = Color.White,
-                            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 42.sp, lineHeight = 54.sp),
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontSize = if (isTv) 36.sp else 30.sp,
+                                lineHeight = if (isTv) 44.sp else 36.sp,
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = 0.8f),
+                                    offset = Offset(0f, 2f),
+                                    blurRadius = 6f,
+                                ),
+                            ),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(3.dp))
                         Text(
                             currentSubtitle,
-                            color = Color.White.copy(alpha = 0.75f),
-                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White.copy(alpha = 0.72f),
+                            style = MaterialTheme.typography.titleMedium,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 } else {
@@ -1910,7 +1933,7 @@ private fun PlayerCore(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .systemBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
                     if (!introPlaying && !isLive) {
                         val totalDur = if (durationMs > 0) durationMs else vaultDeclaredMs
@@ -1979,7 +2002,7 @@ private fun PlayerCore(
                             )
                             Text(formatDuration(totalDur), color = Color.White, style = MaterialTheme.typography.labelMedium)
                         }
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(4.dp))
                     }
                     // La fila de controles del EN VIVO es la de la TV en vivo: píldoras etiquetadas
                     // (Canales / Información, con las funciones propias del reproductor en línea
@@ -2084,11 +2107,9 @@ private fun PlayerCore(
                             )
                         }
                         if (!introPlaying) {
-                            TransportButton(
-                                icon = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (playing) "Pausar" else "Reproducir",
+                            PlayPauseButton(
+                                playing = playing,
                                 onClick = { if (canExecuteControlAction()) togglePlayPause() },
-                                iconSize = 34.dp,
                                 modifier = if (!isTv) Modifier else Modifier
                                     .focusRequester(playPauseFocus)
                                     .onFocusChanged { playPauseFocused = it.isFocused }
@@ -2108,10 +2129,10 @@ private fun PlayerCore(
                                 modifier = if (!isTv) Modifier else Modifier
                                     .focusRequester(forwardFocus)
                                     .onFocusChanged { forwardFocused = it.isFocused }
-                                    .focusProperties { left = playPauseFocus; right = if (menu.hasAnyChoices) tracksFocus else forwardFocus; up = barFocus; down = forwardFocus },
+                                    .focusProperties { left = playPauseFocus; right = if (showTracksButton) tracksFocus else forwardFocus; up = barFocus; down = forwardFocus },
                             )
                         }
-                        if (!introPlaying && menu.hasAnyChoices) {
+                        if (showTracksButton) {
                             TransportButton(
                                 icon = Icons.Default.Subtitles,
                                 contentDescription = "Audio, subtítulos y calidad",
@@ -2138,7 +2159,7 @@ private fun PlayerCore(
                                     .focusRequester(aspectFocus)
                                     .onFocusChanged { aspectFocused = it.isFocused }
                                     .focusProperties {
-                                        left = if (menu.hasAnyChoices) tracksFocus else playPauseFocus
+                                        left = if (showTracksButton) tracksFocus else playPauseFocus
                                         right = aspectFocus
                                         up = playPauseFocus
                                         down = aspectFocus
@@ -2363,7 +2384,7 @@ private fun PlayerCore(
         )
     }
     LaunchedEffect(showTracks) {
-        if (!showTracks && isTv && controls.visible && menu.hasAnyChoices) {
+        if (!showTracks && isTv && controls.visible && showTracksButton) {
             delay(100)
             runCatching { tracksFocus.requestFocus() }
         }
@@ -2404,7 +2425,7 @@ internal data class ZapTarget(
     val drmType: String? = null,
 )
 
-/** A white-bordered pill over the video; inverts while it holds the D-pad focus. */
+/** Píldora integrada sobre el video, con degradado y sin borde. */
 @Composable
 private fun SkipPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     var focused by remember { mutableStateOf(false) }
@@ -2414,8 +2435,14 @@ private fun SkipPill(label: String, onClick: () -> Unit, modifier: Modifier = Mo
         style = MaterialTheme.typography.titleMedium,
         modifier = modifier
             .onFocusChanged { focused = it.isFocused }
-            .background(if (focused) Color.White else Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-            .border(1.5.dp, Color.White, RoundedCornerShape(8.dp))
+            .background(
+                if (focused) {
+                    Brush.horizontalGradient(listOf(Color.White, Color(0xFFE3F2FD)))
+                } else {
+                    Brush.horizontalGradient(listOf(Color(0xCC0B1220), Color(0xB31B2538)))
+                },
+                RoundedCornerShape(50),
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 12.dp),
     )
@@ -2487,6 +2514,41 @@ private fun TransportButton(
     }
 }
 
+/** Play/pausa principal: esfera de degradado azul, no un botón plano genérico. */
+@Composable
+private fun PlayPauseButton(
+    playing: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Box(
+        modifier = modifier
+            .size(64.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .clip(CircleShape)
+            .background(
+                Brush.linearGradient(
+                    if (focused) {
+                        listOf(Color(0xFF8CC4FF), Color(0xFF4C9BFF), Color(0xFF1E5BD6))
+                    } else {
+                        listOf(Color(0xFF6BA6FF), Color(0xFF2D7DF6), Color(0xFF1746A8))
+                    },
+                ),
+            )
+            .clickable(onClick = onClick)
+            .focusable(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+            contentDescription = if (playing) "Pausar" else "Reproducir",
+            tint = Color.White,
+            modifier = Modifier.size(34.dp),
+        )
+    }
+}
+
 /**
  * Una píldora etiquetada del reproductor en vivo, con la MISMA piel que las de la TV en vivo
  * (`pill()` del reproductor nativo): fondo oscuro redondeado, icono y palabra; al enfocar se pinta
@@ -2506,11 +2568,17 @@ private fun PlayerPill(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    Surface(
-        color = if (focused) VisionBlue else Color(0xCC1B2538),
-        shape = RoundedCornerShape(50),
+    Box(
         modifier = modifier
             .clip(RoundedCornerShape(50))
+            .background(
+                if (focused) {
+                    Brush.horizontalGradient(listOf(Color(0xFF4C9BFF), Color(0xFF1E5BD6)))
+                } else {
+                    Brush.horizontalGradient(listOf(Color(0xCC1B2538), Color(0xCC0B1220)))
+                },
+                RoundedCornerShape(50),
+            )
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -2534,11 +2602,11 @@ private fun PlayerPill(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
         ) {
-            Icon(icon, contentDescription = null, tint = if (focused) Color.White else iconTint, modifier = Modifier.size(17.dp))
-            Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            Icon(icon, contentDescription = null, tint = if (focused) Color.White else iconTint, modifier = Modifier.size(16.dp))
+            Text(label, color = Color.White, style = MaterialTheme.typography.labelMedium, maxLines = 1)
         }
     }
 }
@@ -3213,6 +3281,14 @@ private fun XtvHandoff(
                 Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White)
                 Text("Abriendo…", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f))
             }
+        }
+        if (!failed) {
+            DonationLoadingHint(
+                isTv = com.chronosbvrx.visionplus.DeviceKind.isTelevision(LocalContext.current),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 36.dp),
+            )
         }
     }
 }

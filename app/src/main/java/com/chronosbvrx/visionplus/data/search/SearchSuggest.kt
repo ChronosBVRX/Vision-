@@ -74,6 +74,11 @@ internal object RecentSearches {
     private const val KEY = "recent"
     internal const val MAX = 8
 
+    private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(
+        com.chronosbvrx.visionplus.data.profile.ProfileStore.prefsName(context, PREFS),
+        Context.MODE_PRIVATE,
+    )
+
     /** Pone [query] al frente sin duplicar (comparando sin acentos ni mayúsculas). */
     internal fun merge(existing: List<String>, query: String, max: Int = MAX): List<String> {
         val clean = query.replace('\n', ' ').trim()
@@ -91,7 +96,7 @@ internal object RecentSearches {
 
     fun list(context: Context): List<String> {
         val raw = runCatching {
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, "").orEmpty()
+            prefs(context).getString(KEY, "").orEmpty()
         }.getOrDefault("")
         return raw.split('\n').map { it.trim() }.filter { it.isNotEmpty() }.take(MAX)
     }
@@ -105,7 +110,7 @@ internal object RecentSearches {
 
     private fun save(context: Context, items: List<String>) {
         runCatching {
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit()
                 .putString(KEY, items.joinToString("\n"))
                 .apply()

@@ -328,13 +328,19 @@ fun TvLandscapeCard(
     cardHeight: Dp,
     modifier: Modifier = Modifier,
     onFocus: () -> Unit = {},
+    /** OK largo: menú de estado de «Seguir viendo»/Historial. */
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
     val reduced = LocalReducedEffects.current
     Card(
         onClick = onClick,
-        modifier = modifier.height(cardHeight).onFocusChanged { if (it.isFocused) onFocus() },
+        onLongClick = onLongClick,
+        modifier = modifier
+            .height(cardHeight)
+            .posterLongPressKeys(onClick = onClick, onLongClick = onLongClick)
+            .onFocusChanged { if (it.isFocused) onFocus() },
         scale = cardFocusScale(reduced),
         colors = CardDefaults.colors(containerColor = VisionSurfaceHigh),
         border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color.White))),

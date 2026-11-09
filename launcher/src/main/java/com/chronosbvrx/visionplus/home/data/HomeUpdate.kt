@@ -72,6 +72,10 @@ object HomeUpdate {
     var visionState: State by mutableStateOf(State.Idle)
         private set
 
+    /** Hay una comprobación manual de Vision+ en curso. */
+    var visionChecking by mutableStateOf(false)
+        private set
+
     val versionName: String get() = BuildConfig.VERSION_NAME
 
     /**
@@ -240,20 +244,32 @@ object HomeUpdate {
 
     /**
      * La versión de Vision+ del último release (el tag, p. ej. «2.5.130»). Se cachea 24 h:
-     * el launcher la usa para avisar si la app instalada se quedó atrás.
+     * el launcher la usa para avisar si la app instalada se quedó atrás. Con [force] se
+     * consulta el release AHORA (el botón «Buscar actualización» no espera la caché).
      */
-    suspend fun latestAppVersion(context: Context): String? = withContext(Dispatchers.IO) {
-        val prefs = LauncherPrefs(context)
-        val now = System.currentTimeMillis()
-        val cached = prefs.lastReleaseTag
-        if (cached.isNotBlank() && now - prefs.lastReleaseAt < 24L * 60 * 60 * 1000) {
-            return@withContext cached
+    suspend fun latestAppVersion(context: Context, force: Boolean = false): String? =
+        withContext(Dispatchers.IO) {
+            val prefs = LauncherPrefs(context)
+            val now = System.currentTimeMillis()
+            val cached = prefs.lastReleaseTag
+            if (!force && cached.isNotBlank() && now - prefs.lastReleaseAt < 24L * 60 * 60 * 1000) {
+                return@withContext cached
+            }
+            val fresh = runCatching { fetchTag() }.getOrNull()
+            if (fresh.isNullOrBlank()) return@withContext cached.takeIf { it.isNotBlank() }
+            prefs.lastReleaseTag = fresh
+            prefs.lastReleaseAt = now
+            fresh
         }
-        val fresh = runCatching { fetchTag() }.getOrNull()
-        if (fresh.isNullOrBlank()) return@withContext cached.takeIf { it.isNotBlank() }
-        prefs.lastReleaseTag = fresh
-        prefs.lastReleaseAt = now
-        fresh
+
+    /** Comprobación manual de Vision+ con estado observable para la pantalla de ajustes. */
+    suspend fun checkVision(context: Context): String? {
+        visionChecking = true
+        return try {
+            latestAppVersion(context, force = true)
+        } finally {
+            visionChecking = false
+        }
     }
 
     /** Compara versiones «2.5.9» < «2.5.130» sin caer en el orden alfabético. */

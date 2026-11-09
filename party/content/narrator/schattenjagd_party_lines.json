@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para Sombra fugitiva: una sombra se esconde y todos los demás la persiguen.",
+      "Arranca Sombra fugitiva. La ciudad es grande, el topo se mueve y los detectives sudan.",
+      "Sombra fugitiva, persecución de noche: husmeen, cierren el cerco y no la dejen escapar.",
+      "Sombra fugitiva: la ciudad es grande, la sombra es rápida y ustedes van tarde.",
+      "Arranca la persecución. Saquen el detective interior y la linterna.",
+      "Sombra fugitiva: pistas, estaciones y una sombra que no quiere ser encontrada.",
+      "Prepárense para correr tras un fantasma con cara de sospechoso.",
+      "La noche se abre. La sombra ya se movió; ustedes apenas despiertan.",
+      "Sombra fugitiva: el único juego donde perder el rastro es parte del plan.",
+      "Se cierra el cerco. Si la sombra se ríe, es que ya se les escapó."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Sombra fugitiva en marcha. Cada pista cuenta y cada estación puede ser una trampa.",
+      "La persecución sigue. La sombra se mueve; ustedes solo tienen corazonadas.",
+      "La ciudad está en silencio. La sombra no.",
+      "Sombra fugitiva en marcha: cada pista puede ser verdad o carnada.",
+      "La sombra se mueve. Ustedes tienen corazonadas y pies cansados.",
+      "Miren bien. La ciudad no habla, pero tampoco esconde perfecto.",
+      "La persecución sigue. El que se distraiga, se queda sin pista.",
+      "Sombra fugitiva: husmeen, pregunten y no confíen en el mapa.",
+      "La noche corre. La sombra también.",
+      "El cerco se estrecha. O eso creen ustedes."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Terminó Sombra fugitiva. Veamos si la acorralaron o les dio un paseo.",
+      "Ronda cerrada en Sombra fugitiva. La noche cobra factura y la tabla también.",
+      "Resultados de Sombra fugitiva. La sombra se ríe o los detectives presumen.",
+      "Se acabó la persecución. Veamos si atraparon a la sombra o solo su sombra.",
+      "Ronda cerrada. La sombra se fue o se dejó ver. La tabla dirá.",
+      "Resultados de Sombra fugitiva: detectives, fantasmas y coartadas.",
+      "Terminó la noche. El que perdió el rastro, que culpe a la niebla.",
+      "Se cerró el caso. La sombra ya está en la tabla.",
+      "Sombra fugitiva: la ciudad amaneció y la vergüenza también.",
+      "Resultados: unos acorralaron, otros dieron un paseo."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Así va la tabla de Sombra fugitiva. Arriba los que cerraron el cerco; abajo los que perdieron el rastro.",
+      "Marcador de Sombra fugitiva. Los de arriba persiguen; los de abajo siguen buscando.",
+      "Puntos de Sombra fugitiva. Todavía pueden remontar, si la sombra no se les adelanta.",
+      "Puntos de Sombra fugitiva: arriba los que cerraron el cerco, abajo los que se perdieron.",
+      "Marcador de la noche. La sombra sonríe desde el anonimato.",
+      "Tabla parcial: los detectives suman, los distraídos buscan.",
+      "Así van los puntos. Todavía hay tiempo de encontrar una pista.",
+      "Sombra fugitiva: la tabla está llena de sospechas y de pasos perdidos.",
+      "Puntos de la ronda. La sombra no se detiene.",
+      "Marcador: el que encontró la pista, que lo demuestre."
+    ]
+  }
+]

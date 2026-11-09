@@ -70,7 +70,10 @@ class LauncherDpadTest {
         assertTrue("la red es solo un indicador, no una opción del TV", chrome.contains("NetworkChip(network = network, compact = compact)"))
         assertFalse("fuera el acceso a Wi-Fi del televisor", chrome.contains("onWifi"))
         assertTrue("centro de control baja al contenido", chrome.contains("onCommandCenter,") && chrome.contains("downTarget,"))
-        assertTrue("ajustes de Vision+ bajan al contenido", chrome.contains("Icons.Rounded.Settings, \"Ajustes de Vision+\", onVisionSettings, downTarget"))
+        assertTrue(
+            "el engrane abre los ajustes del sistema, no los de Vision+",
+            chrome.contains("Icons.Rounded.Settings, \"Ajustes de la tele\", onSystemSettings, downTarget"),
+        )
         assertTrue("el sistema implementa el atajo", chrome.contains("Modifier.softFocusDown(downTarget)"))
     }
 

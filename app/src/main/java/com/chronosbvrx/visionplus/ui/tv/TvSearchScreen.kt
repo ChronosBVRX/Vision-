@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -31,8 +33,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Border
@@ -49,8 +55,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardBackspace
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.rounded.SpaceBar
 import androidx.compose.ui.platform.LocalContext
 import androidx.tv.material3.Icon
 import com.chronosbvrx.visionplus.data.CatalogRow
@@ -96,9 +104,72 @@ private fun apply(text: String, key: Key) = when (key) {
 }
 
 /**
- * The remote's alphabetic keyboard: dark keys, the focused one red. Key size follows the smaller of
- * what the width and the height allow, so the whole grid always fits. [firstKey] marks the first key
- * (where the screen puts focus).
+ * Una tecla del teclado del mando. En reposo es vidrio oscuro y, al enfocar, se enciende en
+ * cian con la letra oscura (lectura cómoda en la tele) y crece un poco. Espacio y Borrar usan
+ * iconos universales para reconocerlos sin leer.
+ */
+@Composable
+private fun TvKeyboardKey(
+    key: Key,
+    width: Dp,
+    height: Dp,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (focused) 1.1f else 1f,
+        animationSpec = tween(120),
+        label = "tv-key-scale",
+    )
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .width(width)
+            .height(height)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(11.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color(0xFF1E293B),
+            contentColor = Color(0xFFE2E8F0),
+            focusedContainerColor = Color(0xFF38BDF8),
+            focusedContentColor = Color(0xFF0F172A),
+            pressedContainerColor = Color(0xFF38BDF8),
+            pressedContentColor = Color(0xFF0F172A),
+        ),
+        border = ClickableSurfaceDefaults.border(
+            border = Border.None,
+            focusedBorder = Border.None,
+            pressedBorder = Border.None,
+        ),
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            when (key) {
+                Key.Space -> Icon(
+                    Icons.Rounded.SpaceBar,
+                    contentDescription = key.label(),
+                    modifier = Modifier.size(21.dp),
+                )
+                Key.Backspace -> Icon(
+                    Icons.AutoMirrored.Rounded.KeyboardBackspace,
+                    contentDescription = key.label(),
+                    modifier = Modifier.size(21.dp),
+                )
+                is Key.Char -> Text(
+                    key.c.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The remote's on-screen keyboard: dark keys and the focused one cyan with dark, bold text.
+ * Key size follows the smaller of what the width and the height allow, so the whole grid always
+ * fits. [firstKey] marks the first key (where the screen puts focus).
  */
 @Composable
 internal fun TvKeyboard(text: String, onTextChange: (String) -> Unit, firstKey: Modifier, modifier: Modifier = Modifier) {
@@ -113,24 +184,13 @@ internal fun TvKeyboard(text: String, onTextChange: (String) -> Unit, firstKey: 
                 Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
                     row.forEachIndexed { c, key ->
                         val span = key.span()
-                        Surface(
+                        TvKeyboardKey(
+                            key = key,
+                            width = keySize * span + gap * (span - 1),
+                            height = keySize,
+                            modifier = if (r == 0 && c == 0) firstKey else Modifier,
                             onClick = { onTextChange(apply(text, key)) },
-                            modifier = Modifier
-                                .width(keySize * span + gap * (span - 1))
-                                .height(keySize)
-                                .then(if (r == 0 && c == 0) firstKey else Modifier),
-                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
-                            colors = ClickableSurfaceDefaults.colors(
-                                containerColor = VisionSurfaceHigh,
-                                contentColor = Color.White,
-                                focusedContainerColor = VisionBlue,
-                                focusedContentColor = Color.White,
-                            ),
-                        ) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(key.label(), style = MaterialTheme.typography.bodyMedium)
-                            }
-                        }
+                        )
                     }
                 }
             }

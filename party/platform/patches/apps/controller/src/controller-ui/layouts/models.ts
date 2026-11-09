@@ -1,0 +1,995 @@
+﻿export interface LayoutStat {
+  label: string;
+  value: string;
+  highlighted?: boolean;
+}
+
+import type { CardTableHandDisplayState } from "@open-party-lab/protocol";
+
+export interface ReadyLayoutModel {
+  currentPlayerReady: boolean;
+  readyCount: number;
+  playerCount: number;
+  label: string;
+  description?: string;
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  onToggleReady: () => void;
+}
+
+export interface ControllerActionButtonModel {
+  id: string;
+  label: string;
+  accentColor?: string;
+  disabled?: boolean;
+  onPress: () => void;
+  onRelease?: () => void;
+}
+
+export interface SingleButtonLayoutModel {
+  kind: "single_button";
+  title: string;
+  subtitle?: string;
+  buttonLabel: string;
+  helperText?: string;
+  disabled: boolean;
+  ready?: ReadyLayoutModel;
+  stats?: LayoutStat[];
+  onPress: () => void;
+}
+
+export interface TapMashRow {
+  label: string;
+  value: string;
+  highlighted?: boolean;
+}
+
+export interface TapMashLayoutModel {
+  kind: "tap_mash";
+  title: string;
+  subtitle?: string;
+  buttonLabel: string;
+  helperText?: string;
+  disabled: boolean;
+  ready?: ReadyLayoutModel;
+  progress: {
+    current: number;
+    max: number;
+  };
+  rows: TapMashRow[];
+  onPress: () => void;
+}
+
+export interface ChoiceItemModel {
+  id: string;
+  label: string;
+  iconPath?: string;
+  description?: string;
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+export interface ChoiceLayoutModel {
+  kind: "choice";
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  accentColor?: string;
+  identityLabel?: string;
+  disabled: boolean;
+  ready?: ReadyLayoutModel;
+  choices: ChoiceItemModel[];
+  stats?: LayoutStat[];
+  feed?: string[];
+}
+
+/**
+ * Generisches Layout fuer Spiele, in denen nur einzelne Rollen eine Karte sehen
+ * duerfen (Buzzwort, Pantomime, Imposter ...). Die Karte wird nur gerendert, wenn
+ * der Server sie fuer diesen Spieler mitgeschickt hat.
+ */
+export type SecretCardRoleTone = "primary" | "watch" | "guess" | "bench";
+
+export interface SecretCardActionModel {
+  id: string;
+  label: string;
+  sublabel?: string;
+  tone: "positive" | "neutral" | "danger";
+  disabled?: boolean;
+  onPress: () => void;
+}
+
+export interface SecretCardTargetModel {
+  id: string;
+  name: string;
+  hint?: string;
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+export interface SecretCardScoreRow {
+  id: string;
+  label: string;
+  value: string;
+  accentColor?: string;
+  highlighted?: boolean;
+}
+
+export interface SecretCardFeedEntry {
+  id: string;
+  text: string;
+  tone?: "positive" | "neutral" | "danger";
+}
+
+export interface SecretCardLayoutModel {
+  kind: "secret_card";
+  title: string;
+  subtitle?: string;
+  disabled: boolean;
+  accentColor?: string;
+  roleLabel: string;
+  roleTone: SecretCardRoleTone;
+  statusLabel?: string;
+  helperText?: string;
+  /** Grosser Countdown vor Zugbeginn. */
+  countdownMs?: number | null;
+  timer?: {
+    remainingMs: number | null;
+    durationMs: number;
+  } | null;
+  card?: {
+    term: string;
+    forbidden: string[];
+    tag?: string;
+  } | null;
+  /** Platzhaltertext, wenn dieser Spieler die Karte nicht sehen darf. */
+  hiddenCardHint?: string;
+  actions?: SecretCardActionModel[];
+  targetsTitle?: string;
+  targets?: SecretCardTargetModel[];
+  scoreRows?: SecretCardScoreRow[];
+  feedTitle?: string;
+  feed?: SecretCardFeedEntry[];
+  stats?: LayoutStat[];
+  ready?: ReadyLayoutModel;
+}
+
+export interface LeftRightHoldLayoutModel {
+  kind: "left_right_hold";
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  disabled: boolean;
+  accentColor?: string;
+  statusLabel: string;
+  statusKey: string;
+  leftLabel: string;
+  rightLabel: string;
+  ready?: ReadyLayoutModel;
+  stats?: LayoutStat[];
+  onLeftChange: (active: boolean) => void;
+  onRightChange: (active: boolean) => void;
+}
+
+export interface DPadLayoutModel {
+  kind: "dpad";
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  hideHeader?: boolean;
+  horizontalOnly?: boolean;
+  inlineActionButtons?: boolean;
+  directionLabels?: Partial<Record<"up" | "down" | "left" | "right", string>>;
+  disabled: boolean;
+  accentColor?: string;
+  resetKey: string;
+  ready?: ReadyLayoutModel;
+  stats?: LayoutStat[];
+  actionButtons?: ControllerActionButtonModel[];
+  actionButtonColumns?: 1 | 2 | 3 | 4;
+  onMoveChange: (moveX: number, moveY: number) => void;
+}
+
+export interface VirtualJoystickLayoutModel {
+  kind: "virtual_joystick";
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  stickHint?: string;
+  minimal?: boolean;
+  cleanChrome?: boolean;
+  /**
+   * Where a minimal stick sits on the phone. "center" (default) keeps the
+   * previous vertically centred pad; "bottom" anchors it to the lower screen
+   * edge so the thumb rests where the hand already holds the phone.
+   */
+  // "lower-middle" places the pad centre at 62.5% of the viewport height.
+  stickPlacement?: "center" | "bottom" | "lower-middle";
+  disabled: boolean;
+  accentColor?: string;
+  resetKey: string;
+  centerLabel?: string;
+  ready?: ReadyLayoutModel;
+  stats?: LayoutStat[];
+  actionButtons?: ControllerActionButtonModel[];
+  actionButtonColumns?: 1 | 2 | 3 | 4;
+  onMoveChange: (moveX: number, moveY: number) => void;
+}
+
+export type RacingControlKey = "drift" | "boost" | "fire";
+
+export interface RacingControlsState {
+  steering: number;
+  throttle: boolean;
+  brake: boolean;
+  drift: boolean;
+  boost: boolean;
+  fire: boolean;
+}
+
+export interface RacingControlsLayoutModel {
+  kind: "racing_controls";
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  disabled: boolean;
+  accentColor?: string;
+  resetKey: string;
+  onControlsChange: (controls: RacingControlsState) => void;
+}
+
+export interface ChaosKommandoMercenaryOptionModel {
+  id: string;
+  label: string;
+  subtitle: string;
+  hpLabel: string;
+  iconPath?: string;
+  teamColor?: string;
+  selected: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+export interface ChaosKommandoWeaponOptionModel {
+  id: string;
+  label: string;
+  subtitle: string;
+  ammoLabel: string;
+  iconPath?: string;
+  accentColor?: string;
+  selected: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+export interface ChaosKommandoLayoutModel {
+  kind: "chaos_kommando_controls";
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  disabled: boolean;
+  accentColor?: string;
+  resetKey: string;
+  countdownEndsAtMs?: number;
+  ready?: ReadyLayoutModel;
+  stats?: LayoutStat[];
+  turnOwnerLabel: string;
+  windLabel: string;
+  fireLabel: string;
+  fireHint?: string;
+  fireMode: "charged" | "instant";
+  isLocalPlayersTurn: boolean;
+  mercenaries: ChaosKommandoMercenaryOptionModel[];
+  weapons: ChaosKommandoWeaponOptionModel[];
+  onMoveChange: (moveX: number, moveY: number) => void;
+  onAimChange: (aimX: number, aimY: number) => void;
+  onRopeToggle?: () => void;
+  onReelChange?: (direction: -1 | 0 | 1) => void;
+  ropeAttached?: boolean;
+  ropeReeling?: boolean;
+  ropeDisabled?: boolean;
+  onBackflip?: () => void;
+  onEndTurn?: () => void;
+  fuseSeconds?: number;
+  onSetFuse?: (seconds: number) => void;
+  fireDisabled?: boolean;
+  onJump: () => void;
+  onFireStart: () => void;
+  onFireEnd: () => void;
+}
+
+export interface TwinStickLayoutModel {
+  kind: "twin_stick";
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  disabled: boolean;
+  accentColor?: string;
+  resetKey: string;
+  stats?: LayoutStat[];
+  leftStickLabel?: string;
+  rightStickLabel?: string;
+  interactButton?: ControllerActionButtonModel;
+  onMoveChange: (moveX: number, moveY: number) => void;
+  onAimChange: (aimX: number, aimY: number) => void;
+}
+
+export type SpellCastingSpellId = string;
+export type SpellCastingGestureColor = "red" | "blue" | "green";
+export type SpellCastingGestureShape =
+  | "vertical_up"
+  | "vertical_down"
+  | "triangle"
+  | "circle"
+  | "square"
+  | "zigzag"
+  | "spiral"
+  | "triple_circle"
+  | "triangle_slash"
+  | "lightning"
+  | "chevron"
+  | "cross"
+  | "wave";
+
+export interface SpellCastingGesturePoint {
+  x: number;
+  y: number;
+  t?: number;
+}
+
+export interface SpellCastingSpellModel {
+  id: SpellCastingSpellId;
+  label: string;
+  description: string;
+  color: SpellCastingGestureColor;
+  shape: SpellCastingGestureShape;
+  iconPath: string;
+  manaCost: number;
+  cooldownMs: number;
+  cooldownRemainingMs: number;
+  castMs: number;
+  disabled: boolean;
+}
+
+export interface SpellCastingDuelistModel {
+  playerId: string;
+  name: string;
+  color: string;
+  hp: number;
+  maxHp: number;
+  mana: number;
+  maxMana: number;
+  shieldHp: number;
+  shieldRemainingMs: number;
+  activeCastLabel?: string;
+  lastGesture?: {
+    spellLabel: string;
+    confidence: number;
+    reason: string;
+  };
+}
+
+export interface SpellCastingLayoutModel {
+  kind: "spell_casting";
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  disabled: boolean;
+  ready?: ReadyLayoutModel;
+  resetKey: string;
+  nextSpellReadyMs: number;
+  nextSpellTotalMs: number;
+  selectedSpellId: SpellCastingSpellId | null;
+  self: SpellCastingDuelistModel | null;
+  opponent: SpellCastingDuelistModel | null;
+  spells: SpellCastingSpellModel[];
+  actionLog: string[];
+  onCastGesture: (spellId: SpellCastingSpellId, points: SpellCastingGesturePoint[]) => void;
+}
+
+export interface TowerDefenseTowerModel {
+  id: string;
+  slotId: string;
+  towerTypeId: string;
+  displayName: string;
+  iconPath?: string;
+  level: number;
+  damage: number;
+  range: number;
+  fireRateMs: number;
+  color: string;
+  cooldownRemainingMs: number;
+  investedGold: number;
+  upgradeCost: number | null;
+  sellValue: number;
+  slowPct?: number;
+  slowDurationMs?: number;
+}
+
+export interface TowerDefenseSlotModel {
+  id: string;
+  col: number;
+  row: number;
+  tower: TowerDefenseTowerModel | null;
+}
+
+export interface TowerDefenseMapCellModel {
+  col: number;
+  row: number;
+}
+
+export interface TowerDefenseMapModel {
+  id: string;
+  name: string;
+  cols: number;
+  rows: number;
+  pathCells: TowerDefenseMapCellModel[];
+  buildSlots: TowerDefenseSlotModel[];
+}
+
+export interface TowerDefensePlayerModel {
+  playerId: string;
+  name: string;
+  color: string;
+  gold: number;
+  incomeTickValue: number;
+  incomeTickEveryMs: number;
+  lives: number;
+  alive: boolean;
+  kills: number;
+  sends: number;
+  leaks: number;
+  leakSignalCount?: number;
+  outgoingToPlayerId: string | null;
+  outgoingToPlayerName: string | null;
+}
+
+export interface TowerDefenseCatalogTowerModel {
+  id: string;
+  displayName: string;
+  description: string;
+  color: string;
+  iconPath?: string;
+  cost: number;
+  sellRefundRatio: number;
+  maxLevel: number;
+  baseDamage: number;
+  baseRange: number;
+  baseFireRateMs: number;
+  levels: Array<{
+    level: number;
+    price: number;
+    damage: number;
+    range: number;
+    fireRateMs: number;
+  }>;
+}
+
+export interface TowerDefenseCatalogEnemyModel {
+  id: string;
+  displayName: string;
+  description: string;
+  color: string;
+  iconPath?: string;
+  sendCost: number;
+  incomeBonus: number;
+  maxHp: number;
+  speed: number;
+  bounty: number;
+  damage: number;
+}
+
+export interface TowerDefenseLayoutModel {
+  kind: "tower_defense";
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  disabled: boolean;
+  buildDisabled: boolean;
+  sendDisabled: boolean;
+  accentColor?: string;
+  resetKey: string;
+  currentPlayerId: string;
+  currentPlayer: TowerDefensePlayerModel | null;
+  nextTargetPlayer: TowerDefensePlayerModel | null;
+  map: TowerDefenseMapModel;
+  towerCatalog: TowerDefenseCatalogTowerModel[];
+  enemyCatalog: TowerDefenseCatalogEnemyModel[];
+  players: TowerDefensePlayerModel[];
+  onBuild: (slotId: string, towerTypeId: string) => void;
+  onUpgrade: (slotId: string) => void;
+  onSell: (slotId: string) => void;
+  onSend: (enemyTypeId: string) => void;
+}
+
+export interface ShopOfferModel {
+  id: string;
+  kind: "item" | "weapon" | "upgrade";
+  title: string;
+  description: string;
+  cost: number;
+  affordable: boolean;
+  purchased: boolean;
+  iconPath?: string;
+  targetLevel?: number;
+  summary?: string;
+  stats?: LayoutStat[];
+  tags?: string[];
+  detailLines?: Array<{
+    label: string;
+    value: string;
+  }>;
+}
+
+export interface ShopLayoutModel {
+  kind: "shop";
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  disabled: boolean;
+  accentColor?: string;
+  shopMode?: "regular" | "level_up";
+  levelUpChoicesRemaining?: number;
+  waveNumber: number;
+  materials: number;
+  ready?: ReadyLayoutModel;
+  reroll?: {
+    cost: number;
+    count: number;
+    affordable: boolean;
+    onReroll: () => void;
+  };
+  loadout?: {
+    weapons: Array<{
+      weaponInstanceId: string;
+      weaponId: string;
+      level: number;
+      maxLevel: number;
+      displayName: string;
+      description: string;
+      iconPath?: string;
+      sellValue?: number;
+      sellable?: boolean;
+      canCombine?: boolean;
+      stats?: LayoutStat[];
+    }>;
+    items: Array<{
+      itemId: string;
+      level: number;
+      displayName: string;
+      description?: string;
+      iconPath?: string;
+    }>;
+  };
+  runSummary?: {
+    wavesCleared: number;
+    totalKills: number;
+    totalMaterialsCollected: number;
+    totalSurvivedMs: number;
+  };
+  playerStats?: Array<{
+    label: string;
+    value: string;
+  }>;
+  offers: ShopOfferModel[];
+  onBuy: (offerId: string) => void;
+  onSellWeapon?: (weaponInstanceId: string) => void;
+  onCombineWeapon?: (weaponInstanceId: string) => void;
+}
+
+export interface ArenaSurvivorModernShopLayoutModel extends Omit<ShopLayoutModel, "kind"> {
+  survival?: { phase: string; cores: number; level: number };
+  kind: "arena_survivor_modern_shop";
+}
+
+export interface DrawingGuessStrokeModel {
+  id: string;
+  clientStrokeId?: string;
+  color: string;
+  points: Array<{ x: number; y: number }>;
+}
+
+export interface DrawingGuessFeedModel {
+  playerName: string;
+  guess: string;
+  correct: boolean;
+}
+
+export interface DrawingGuessLayoutModel {
+  turnActions?: Array<{ id: string; label: string; disabled?: boolean; onPress: () => void }>;
+  turnStatus?: string;
+  turnDeadline?: number;
+  getServerTime?: () => number;
+  kind: "drawing_guess";
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  disabled: boolean;
+  ready?: ReadyLayoutModel;
+  guessResetKey?: string;
+  isDrawer: boolean;
+  wordMask: string;
+  secretWord?: string;
+  currentColor?: string;
+  canvasAspectRatio: number;
+  availableColors?: string[];
+  strokes: DrawingGuessStrokeModel[];
+  guessFeed: DrawingGuessFeedModel[];
+  winnerName?: string;
+  onDrawStart: (x: number, y: number, clientStrokeId?: string) => void;
+  onDrawMove: (x: number, y: number) => void;
+  onDrawEnd: () => void;
+  onClearDrawing: () => void;
+  onSelectColor?: (color: string) => void;
+  onSetCanvasAspect: (aspectRatio: number) => void;
+  onSubmitGuess: (guess: string) => void;
+}
+
+export interface SchaetzoramaLayoutModel {
+  revealStep: number;
+  revealAnswersVisible: boolean;
+  ownRevealReady: boolean;
+  autoContinue: boolean;
+  onAutoReady: () => void;
+  onContinueReveal: () => void;
+  onSetAutoContinue: (enabled: boolean) => void;
+
+  kind: "schaetzorama";
+  currentPlayerId: string;
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  disabled: boolean;
+  ready?: ReadyLayoutModel;
+  stage: import("@open-party-lab/protocol").SchaetzoramaStage;
+  resetKey: string;
+  roundContent?: import("@open-party-lab/protocol").SchaetzoramaRoundContent<import("@open-party-lab/protocol").SchaetzoramaPublicQuestion>;
+  ownAnswers: import("@open-party-lab/protocol").SchaetzoramaAnswerSet;
+  ownJokerPreview: import("@open-party-lab/protocol").SchaetzoramaJokerPreview | null | undefined;
+  ownJoker: import("@open-party-lab/protocol").SchaetzoramaJokerSelection | null | undefined;
+  ownInventory: import("@open-party-lab/protocol").SchaetzoramaJokerInventory;
+  copyTargets: Array<{
+    playerId: string;
+    name: string;
+    answers?: import("@open-party-lab/protocol").SchaetzoramaAnswerSet;
+  }>;
+  progress: import("@open-party-lab/protocol").SchaetzoramaPlayerProgress[];
+  answerEndsAt: number | null;
+  jokerEndsAt: number | null;
+  solutions: import("@open-party-lab/protocol").SchaetzoramaAnswerSet;
+  results: import("@open-party-lab/protocol").SchaetzoramaPlayerRoundResult[];
+  standings: import("@open-party-lab/protocol").SchaetzoramaStanding[];
+  categoryLabels: Record<import("@open-party-lab/protocol").SchaetzoramaCategoryId, string>;
+  canSubmitAnswers: boolean;
+  canSubmitJoker: boolean;
+  onSubmitAnswers: (answers: import("@open-party-lab/protocol").SchaetzoramaAnswerSet) => void;
+  onPreviewJoker: (joker: import("@open-party-lab/protocol").SchaetzoramaJokerSelection) => void;
+  onChooseJoker: (joker: import("@open-party-lab/protocol").SchaetzoramaJokerSelection | null) => void;
+}
+
+export interface WordTilesLayoutModel {
+  kind: "word_tiles_board";
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  disabled: boolean;
+  canAct: boolean;
+  ready?: ReadyLayoutModel;
+  resetKey: string;
+  boardSize: number;
+  board: import("@open-party-lab/protocol").WordTilesBoardCellState[];
+  rack: import("@open-party-lab/protocol").WordTilesRackTileState[];
+  players: import("@open-party-lab/protocol").WordTilesPlayerPublicState[];
+  currentPlayerId: string;
+  activePlayerId: string | null;
+  activePlayerName: string | null;
+  bagCount: number;
+  moveNumber: number;
+  ownScore: number;
+  lastMove?: import("@open-party-lab/protocol").WordTilesMoveSummaryState;
+  pendingMove?: import("@open-party-lab/protocol").WordTilesPendingMoveState;
+  activeTurn?: import("@open-party-lab/protocol").WordTilesActiveTurnState;
+  lastError?: string;
+  tileValues: Record<string, number>;
+  canAcceptPendingMove: boolean;
+  canChallenge: boolean;
+  canResolvePendingMove: boolean;
+  canRecallPendingMove: boolean;
+  canFinishTurn: boolean;
+  onPlay: (placements: import("@open-party-lab/protocol").WordTilesPlacementState[]) => void;
+  onPass: () => void;
+  onExchange: (tileIds: string[]) => void;
+  onAcceptPendingMove: (pendingMoveId: string) => void;
+  onChallenge: (pendingMoveId: string) => void;
+  onConfirmPendingMove: (pendingMoveId: string) => void;
+  onRecallPendingMove: (pendingMoveId: string) => void;
+  onFinishTurn: () => void;
+}
+
+export interface MagicArenaLayoutModel {
+  kind: "magic_arena";
+  title: string;
+  subtitle?: string;
+  helperText?: string;
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  disabled: boolean;
+  ready?: ReadyLayoutModel;
+  resetKey: string;
+  currentPlayerId: string;
+  state: any;
+  onPlanSlot: (slotIndex: number, action: any | null) => void;
+  onReady: () => void;
+  onPlayTurn: (action: any) => void;
+}
+
+/**
+ * Handkarten im Querformat.
+ *
+ * Generisches Modell für Kartenspiele: der gemeinsame Tisch, die eigene Hand
+ * und die Aktionen, die der Server für das aktuelle Regelwerk liefert. Neue
+ * Kartenspiele füllen dieselbe Form und bekommen dieselbe Oberfläche.
+ */
+export interface CardHandLayoutModel extends CardTableHandDisplayState {
+  kind: "card_hand";
+  /** Rommé wählt Karten direkt im Blatt statt über einzelne Aktionsknöpfe. */
+  isRomme?: boolean;
+  /** Symboljagd löst Treffer direkt über die Bilder auf der Karte aus. */
+  isSymboljagd?: boolean;
+  symboljagdSoloTime?: string;
+  symboljagdPositions?: ReadonlyArray<readonly [number, number, number]>;
+  symboljagdFeedback?: { playerId: string; playerName: string; symbolId: string; occurredAt: number };
+  title: string;
+  subtitle: string;
+  helperText: string;
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  disabled: boolean;
+  canAct: boolean;
+  resetKey: string;
+  deckLabel: string;
+  backStyle: import("@open-party-lab/protocol").CardTableBackStyle;
+  cardStyle: import("@open-party-lab/protocol").CardTableCardStyle;
+  hand: import("@open-party-lab/protocol").CardTableHandCardState[];
+  stacks: import("@open-party-lab/protocol").CardTableStackState[];
+  seats: import("@open-party-lab/protocol").CardTableSeatState[];
+  actions: import("@open-party-lab/protocol").CardTableActionState[];
+  currentPlayerId: string;
+  activePlayerId: string | null;
+  activePlayerName: string | null;
+  direction: 1 | -1;
+  turnNumber: number;
+  conditionLabel?: string;
+  conditionSymbol?: string;
+  conditionColor?: import("@open-party-lab/protocol").CardTableColor;
+  pendingChoice?: import("@open-party-lab/protocol").CardTableChoiceState;
+  pendingChoiceCardIds: string[];
+  /** Hinweis, den nur dieser Spieler sieht, z. B. der eigene Handwert. */
+  privateNote?: string;
+  log: import("@open-party-lab/protocol").CardTableLogEntryState[];
+  lastError?: string;
+  gameOver: boolean;
+  winnerName?: string;
+  ready?: ReadyLayoutModel;
+  onPlayCard: (cardId: string, choiceId?: string) => void;
+  onDraw: () => void;
+  onAction: (actionId: string) => void;
+}
+
+export interface DungeonPartyHandCardModel {
+  id: string;
+  name: string;
+  description: string;
+  kind: "equipment" | "effect";
+  effect?: string;
+  artKey: string;
+}
+
+export interface DungeonPartyLayoutModel {
+  kind: "dungeon_party";
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  mode: "planning" | "voting" | "response" | "waiting" | "reveal" | "complete";
+  resetKey: string;
+  ownPlayerId: string;
+  title: string;
+  subtitle: string;
+  helperText: string;
+  accentColor?: string;
+  disabled: boolean;
+  statusLabel?: string;
+  stats: LayoutStat[];
+  choices: Array<ChoiceItemModel & { symbol?: string }>;
+  scene: "camp" | "dungeon";
+  roomRule?: { name: string; description: string; symbol: string };
+  preparedPower: number;
+  campResults?: Array<{ playerName: string; action: string; symbol: string; healthDelta: number; goldDelta: number; powerDelta: number; cards: DungeonPartyHandCardModel[] }>;
+  hand: DungeonPartyHandCardModel[];
+  pendingCard?: DungeonPartyHandCardModel & { targetName?: string };
+  handTitle: string;
+  handHint: string;
+  handPlayable: boolean;
+  targets: Array<{ id: string; name: string }>;
+  targetRequiredEffects: string[];
+  targetForbiddenSelfEffects: string[];
+  teamFeed: string[];
+  resolution?: {
+    success: boolean;
+    partyPower: number;
+    sharedPower: number;
+    difficultyModifier: number;
+    targetDifficulty: number;
+    cards: string[];
+    rewards: Array<{ playerName: string; source: "loot" | "boss" | "room"; card: DungeonPartyHandCardModel }>;
+    heroes: Array<{ name: string; action: string; roll: number; originalRoll?: number; contribution: number; healthDelta: number; fameDelta: number; goldDelta: number; outcome?: string }>;
+  };
+  readyPhase: boolean;
+  readySubmitted: boolean;
+  readyLabel: string;
+  continueLabel: string;
+  passLabel: string;
+  playLabel: string;
+  onPlayCard: (cardId: string, targetPlayerId?: string) => void;
+  onPass: () => void;
+  onContinue: () => void;
+}
+
+export interface SocialPartyLayoutModel {
+  privateTextList?: {
+    values: string[]; count: number; maxLength: number; submitted: boolean;
+    onSave: (values: string[], submit: boolean) => void;
+  };
+  kind: "social_party";
+  deadline?: number;
+  getServerTime?: () => number;
+  title?: string;
+  helperText?: string;
+  statusLabel?: string;
+  secret?: { label: string; term: string; initiallyVisible?: boolean };
+  feedback?: { label: string; term: string };
+  review?: {
+    title: string; editable: boolean; unassignedLabel: string;
+    entries: Array<{ id: string; label: string; selectedId: string; note?: string }>;
+    options: Array<{ id: string; label: string }>;
+    onAssign: (entryId: string, selectedId: string) => void;
+  };
+  maxTextLength?: number;
+  score?: number;
+  actions?: Array<{ id: string; label: string; disabled?: boolean; onPress: () => void }>;
+  autoReady?: { enabled: boolean; onChange: (enabled: boolean) => void; onReady: () => void };
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  stage: "avatar" | "submit" | "vote" | "finished" | "waiting";
+  taskKind: "pick" | "text" | "photo" | "draw";
+  resetKey: string;
+  maxStrokes?: 1 | 2;
+  basePhoto?: string;
+  requirePhoto?: boolean;
+  connected?: boolean;
+  hasSubmitted: boolean;
+  disabled?: boolean;
+  selectedId?: string;
+  choices: Array<{ id: string; label: string; avatar?: string; disabled?: boolean }>;
+  ready?: ReadyLayoutModel;
+  onSubmitPick: (id: string) => void;
+  onSubmitAvatar: (dataUrl: string) => void;
+  onSubmitText: (text: string) => void;
+  onSubmitMedia: (dataUrl: string, strokeCount?: number) => void;
+  onVote: (id: string) => void;
+}
+
+export interface DungeonGuildCardModel {
+  id: string;
+  title: string;
+  kind: "monster" | "curse" | "class" | "race" | "item" | "boost" | "level";
+  artPath: string;
+  effect?: string;
+  level?: number;
+  bonus?: number;
+  levelReward?: number;
+  escapeTarget?: number;
+  badStuff?: string;
+  goldValue?: number;
+  treasureCount?: number;
+  slot?: string;
+  twoHand?: boolean;
+  equipped?: boolean;
+  playable?: boolean;
+  hint?: string;
+}
+
+export interface DungeonGuildLayoutModel {
+  kind: "dungeon_guild";
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  disabled?: boolean;
+  resetKey: string;
+  title: string;
+  playerName: string;
+  activePlayerName?: string;
+  stage: string;
+  canAct: boolean;
+  ownLevel: number;
+  ownStrength: number;
+  saleValue: number;
+  combatPending: boolean;
+  combatPassed: boolean;
+  combatWaitingNames: string[];
+  helpRequested: boolean;
+  helperName?: string | null;
+  helperOffer: number;
+  playerTargets: Array<{ id: string; name: string }>;
+  dead: boolean;
+  classCard: DungeonGuildCardModel | null;
+  raceCard: DungeonGuildCardModel | null;
+  equipment: DungeonGuildCardModel[];
+  hand: DungeonGuildCardModel[];
+  actions: import("@open-party-lab/protocol").CardTableActionState[];
+  message?: string;
+  lastError?: string;
+  gameOver: boolean;
+  winnerName?: string;
+  ready?: ReadyLayoutModel;
+  onPlayCard: (cardId: string, options?: { combatSide?: "party" | "monster"; itemMode?: "equip" | "store"; targetId?: string }) => void;
+  onAction: (actionId: string) => void;
+  onSellCards: (cardIds: string[]) => void;
+}
+
+
+export interface WavelengthLayoutModel {
+  kind: "wavelength";
+  language?: import("@open-party-lab/protocol").SupportedLanguage;
+  title?: string;
+  phase: "clue" | "guess" | "steal" | "reveal" | "game_over";
+  disabled?: boolean;
+  activeTeam: "bass" | "treble";
+  teamScores: { bass: number; treble: number };
+  targetScore: number;
+  prompt: { left: string; right: string };
+  clue: string | null;
+  pointerAngle: number;
+  targetAngle: number | null;
+  isOracle: boolean;
+  isActiveTeam: boolean;
+  isOpponent: boolean;
+  seat: number;
+  seatPlayers: Array<{ seat: number; name: string; avatar?: string }>;
+  readyCount: number;
+  guesserCount: number;
+  stealVotes: { left: number; right: number };
+  ownSteal: "left" | "right" | null;
+  onClue: (text: string) => void;
+  onMove: (angle: number) => void;
+  onLock: () => void;
+  onSteal: (dir: "left" | "right") => void;
+  resetKey: string;
+}
+
+export type ControllerLayoutModel =
+  | SingleButtonLayoutModel
+  | ChoiceLayoutModel
+  | SecretCardLayoutModel
+  | TapMashLayoutModel
+  | LeftRightHoldLayoutModel
+  | DPadLayoutModel
+  | VirtualJoystickLayoutModel
+  | RacingControlsLayoutModel
+  | ChaosKommandoLayoutModel
+  | TwinStickLayoutModel
+  | SpellCastingLayoutModel
+  | TowerDefenseLayoutModel
+  | ShopLayoutModel
+  | ArenaSurvivorModernShopLayoutModel
+  | DrawingGuessLayoutModel
+  | SchaetzoramaLayoutModel
+  | WordTilesLayoutModel
+  | MagicArenaLayoutModel
+  | CardHandLayoutModel
+  | DungeonPartyLayoutModel
+  | DungeonGuildLayoutModel
+  | SocialPartyLayoutModel
+  | WavelengthLayoutModel;
+
+// TODO: Fuer spaetere Minispiele hier weitere Layout-Modelle wie Choice und Swipe ergaenzen.

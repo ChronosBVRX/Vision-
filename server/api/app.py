@@ -8,7 +8,9 @@ Todos los endpoints /v1/* requieren el header X-Api-Key.
 
 import asyncio
 import difflib
+import gzip
 import hmac
+import html
 import json
 import logging
 import os
@@ -21,13 +23,16 @@ from zoneinfo import ZoneInfo
 
 import asyncpg
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.middleware.gzip import GZipMiddleware
 
 import markers as skip_markers
 import portal as portal_search
+import rate_limit as api_rate_limit
 import slots as device_slots
 import episodes as episodes_mirror
 import banners as launcher_banners
+import calendar_feed as editorial_calendar
 import sports_map
 import sync as device_sync
 from epg_channels import canonical_channel, channel_country, epg_norms_for
@@ -54,16 +59,22 @@ pool: asyncpg.Pool | None = None
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     global pool
-    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4, command_timeout=15)
-    games_task = asyncio.create_task(_games_sweep_loop())
+    pool = await asyncpg.create_pool(
+        DATABASE_URL,
+        min_size=1,
+        max_size=max(1, _env_int("DB_POOL_MAX", 10)),
+        command_timeout=15,
+    )
+    markers_task = asyncio.create_task(_markers_prewarm_loop())
     try:
         yield
     finally:
-        games_task.cancel()
-        try:
-            await games_task
-        except asyncio.CancelledError:
-            pass
+        markers_task.cancel()
+        for task in (markers_task,):
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         await pool.close()
         pool = None
 
@@ -77,6 +88,55 @@ app = FastAPI(
     openapi_url=None,
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)).strip())
+    except Exception:  # noqa: BLE001
+        return default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in ("0", "false", "no", "off")
+
+
+RATE_LIMITER = api_rate_limit.RateLimiter(
+    limits={
+        "index": _env_int("RATE_LIMIT_INDEX_PER_MIN", api_rate_limit.DEFAULT_LIMITS["index"]),
+        "search": _env_int("RATE_LIMIT_SEARCH_PER_MIN", api_rate_limit.DEFAULT_LIMITS["search"]),
+        "gee38": _env_int("RATE_LIMIT_GEE38_PER_MIN", api_rate_limit.DEFAULT_LIMITS["gee38"]),
+        "epg": _env_int("RATE_LIMIT_EPG_PER_MIN", api_rate_limit.DEFAULT_LIMITS["epg"]),
+        "diag": _env_int("RATE_LIMIT_DIAG_PER_MIN", api_rate_limit.DEFAULT_LIMITS["diag"]),
+        "config": _env_int("RATE_LIMIT_CONFIG_PER_MIN", api_rate_limit.DEFAULT_LIMITS["config"]),
+        "default": _env_int("RATE_LIMIT_DEFAULT_PER_MIN", api_rate_limit.DEFAULT_LIMITS["default"]),
+    },
+    default=_env_int("RATE_LIMIT_DEFAULT_PER_MIN", api_rate_limit.DEFAULT_LIMITS["default"]),
+    enabled=_env_bool("RATE_LIMIT_ENABLED", True),
+)
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    path = request.url.path
+    if path in ("/", "/healthz", "/apoyar"):
+        return await call_next(request)
+    client = api_rate_limit.client_ip(
+        request.headers.get("x-forwarded-for"),
+        request.headers.get("x-real-ip"),
+        request.client.host if request.client else None,
+    )
+    allowed, retry_after = RATE_LIMITER.allow(client, api_rate_limit.group_for_path(path))
+    if not allowed:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "demasiadas solicitudes; intenta más tarde"},
+            headers={"Retry-After": str(retry_after)},
+        )
+    return await call_next(request)
 
 
 def require_key(x_api_key: str | None) -> None:
@@ -355,37 +415,130 @@ async def healthz():
     return {"status": "ok"}
 
 
+@app.get("/apoyar", response_class=HTMLResponse, include_in_schema=False)
+async def donation_page():
+    """Página pública de apoyo. Los enlaces viven en el .env del VPS, no en el APK.
+
+    El QR de la app apunta aquí: si cambian los Payment Links, se actualiza el
+    servidor y no hace falta publicar otra OTA.
+    """
+    cafe = os.environ.get("STRIPE_CAFE_URL", "").strip()
+    chelas = os.environ.get("STRIPE_CHELAS_URL", "").strip()
+
+    def card(url: str, amount: str, title: str, note: str) -> str:
+        if not url:
+            return (
+                '<div class="card disabled">'
+                f'<span class="amount">{html.escape(amount)}</span>'
+                f'<span class="title">{html.escape(title)}</span>'
+                '<span class="note">Pagos en configuración</span>'
+                "</div>"
+            )
+        return (
+            f'<a class="card" href="{html.escape(url, quote=True)}" rel="noopener">'
+            f'<span class="amount">{html.escape(amount)}</span>'
+            f'<span class="title">{html.escape(title)}</span>'
+            f'<span class="note">{html.escape(note)}</span>'
+            "</a>"
+        )
+
+    page = f"""<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070B13">
+  <title>Apoya Vision+</title>
+  <style>
+    :root {{ color-scheme: dark; }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; min-height: 100vh; display: grid; place-items: center;
+      background: radial-gradient(circle at 50% 0%, #14233f 0%, #070B13 58%);
+      color: #fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }}
+    main {{ width: min(720px, 92vw); padding: 40px 0 52px; text-align: center; }}
+    .mark {{ font-size: 38px; font-weight: 900; letter-spacing: 1px; }}
+    .mark span {{ color: #6BA6FF; }}
+    h1 {{ margin: 22px 0 10px; font-size: clamp(28px, 5vw, 44px); }}
+    p {{ margin: 0 auto 26px; max-width: 580px; color: #b8c2d6; line-height: 1.6; }}
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px; margin: 26px 0 18px; }}
+    .card {{ display: flex; flex-direction: column; gap: 8px; padding: 24px;
+      border-radius: 20px; border: 1px solid #2D7DF6; background: #0F1626;
+      color: #fff; text-decoration: none; transition: transform .15s ease, border-color .15s ease; }}
+    .card:hover {{ transform: translateY(-3px); border-color: #6BA6FF; }}
+    .card.disabled {{ border-color: #2a3448; opacity: .62; }}
+    .amount {{ font-size: 34px; font-weight: 900; color: #6BA6FF; }}
+    .title {{ font-size: 20px; font-weight: 700; }}
+    .note {{ font-size: 13px; color: #9aa6bb; }}
+    .fine {{ margin-top: 24px; font-size: 12px; color: #7d8799; }}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark">VISION<span>+</span></div>
+    <h1>Apoya Vision+</h1>
+    <p>Detrás de Vision+ hay una sola persona. No hay anuncios, no hay suscripciones
+       y la app sigue gratis para todos. Si te ha acompañado, si te ha hecho reír o
+       te ha ayudado a desconectar, puedes invitarme un café o unas chelas.
+       Cada apoyo se va a los servidores y a seguir puliendo la app. Gracias por estar aquí.</p>
+    <div class="grid">
+      {card(cafe, "$100 MXN", "Invitame un café", "Pago único · tarjeta")}
+      {card(chelas, "$150 MXN", "Invitame unas chelas", "Pago único · tarjeta")}
+    </div>
+    <p class="fine">El pago lo procesa Stripe. Vision+ no almacena datos de tu tarjeta.
+       Apoyo voluntario: no es una suscripción ni compra acceso al contenido.</p>
+  </main>
+</body>
+</html>"""
+    return HTMLResponse(content=page, headers={"Cache-Control": "no-store"})
+
+
 # El índice completo pesa (~6 MB con 100 títulos por categoría) y se pide en cada
 # arranque: recalcularlo desde cero en cada llamada costaba segundos y escribía
 # temporales en disco (16.8 MB medidos por recálculo). Se cachea por versión + límite
 # (el worker sube la versión cuando cambia algo) y se guarda la última copia buena
 # para servirla si la base falla: un 500 dejaba el Inicio a medias en los equipos.
-_INDEX_CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
+# La copia se guarda YA serializada y comprimida: con miles de equipos abriendo la
+# app a la vez, volver a convertir 6 MB de dict a JSON en cada petición costaba más
+# que la propia consulta. El gzip se hace una vez por versión, no una vez por usuario.
+_INDEX_CACHE: dict[tuple[int, int], tuple[float, dict, bytes, bytes]] = {}
 _INDEX_CACHE_TTL = 1800.0
-_INDEX_LAST_GOOD: dict[int, dict] = {}
+_INDEX_LAST_GOOD: dict[int, tuple[dict, bytes, bytes]] = {}
 _INDEX_LAST_GOOD_MAX = 4
+# Un lock por nombre y por event loop: en producción hay uno; en las pruebas cada
+# test puede estrenar loop y un Lock creado en otro loop fallaría al usarse.
+_FILL_LOCKS: dict[str, tuple[object, asyncio.Lock]] = {}
 
 
-@app.get("/v1/index")
-async def index(
-    since: int = Query(default=0, ge=0),
-    # El índice completo (sin tope) materializa 157 MB en memoria y tumbaba el contenedor
-    # por OOM: la app pide 100 por categoría. El tope es obligatorio para cualquier cliente.
-    limitFilms: int = Query(default=100, ge=1, le=500),
-    x_api_key: str | None = Header(default=None),
-):
-    """Índice completo. Con `since` al día responde {upToDate: true} sin reenviar nada.
-    `limitFilms` recorta los títulos por categoría EN SQL (para la app móvil); `total`
-    sigue siendo el real de la categoría."""
-    require_key(x_api_key)
+def _fill_lock(name: str) -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    entry = _FILL_LOCKS.get(name)
+    if entry is None or entry[0] is not loop:
+        entry = (loop, asyncio.Lock())
+        _FILL_LOCKS[name] = entry
+    return entry[1]
+
+
+def _json_body(value) -> tuple[bytes, bytes]:
+    """JSON compacto + su copia gzip, listos para reutilizar en cada respuesta."""
+    raw = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return raw, gzip.compress(raw, compresslevel=6)
+
+
+def _json_response(raw: bytes, gz: bytes, request: Request) -> Response:
+    """Sirve la copia ya armada; si el cliente acepta gzip, la comprimida."""
+    if "gzip" in (request.headers.get("accept-encoding") or "").lower():
+        return Response(
+            content=gz,
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
+    return Response(content=raw, media_type="application/json")
+
+
+async def _build_index(version: int, limitFilms: int, cache_key: tuple[int, int]) -> tuple[dict, bytes, bytes]:
+    """Calcula el índice completo una sola vez y lo deja serializado en caché."""
     try:
-        version = await index_version()
-        if since and since >= version:
-            return {"version": version, "upToDate": True, "categories": []}
-        cache_key = (version, limitFilms)
-        cached = _INDEX_CACHE.get(cache_key)
-        if cached and time.time() - cached[0] < _INDEX_CACHE_TTL:
-            return cached[1]
         # Se piden hasta 2× por categoría: al colapsar las temporadas de un grupo quedan
         # suficientes tarjetas únicas para el límite pedido.
         fetch_limit = limitFilms * 2 if limitFilms else 0
@@ -465,6 +618,7 @@ async def index(
             "updatedAt": updated.isoformat() if updated else None,
             "categories": list(cats.values()),
         }
+        raw, gz = _json_body(result)
     except Exception:
         # Un fallo de la base (p. ej. pgsql_tmp sin espacio) no debe dejar el Inicio sin
         # catálogo: se sirve la última copia buena (versión anterior) hasta que vuelva.
@@ -473,16 +627,59 @@ async def index(
             raise
         log.warning("index: la base falló; sirviendo la última copia buena (límite %s)", limitFilms, exc_info=True)
         return last
-    _INDEX_CACHE[cache_key] = (time.time(), result)
+    _INDEX_CACHE[cache_key] = (time.time(), result, raw, gz)
     _INDEX_LAST_GOOD.pop(limitFilms, None)
-    _INDEX_LAST_GOOD[limitFilms] = result
+    _INDEX_LAST_GOOD[limitFilms] = (result, raw, gz)
     if len(_INDEX_LAST_GOOD) > _INDEX_LAST_GOOD_MAX:
         _INDEX_LAST_GOOD.pop(next(iter(_INDEX_LAST_GOOD)))
     # Poda de versiones viejas: la caché es por versión y límite; no debe crecer sin fin.
     if len(_INDEX_CACHE) > 8:
         for key in list(_INDEX_CACHE)[:-8]:
             _INDEX_CACHE.pop(key, None)
-    return result
+    return result, raw, gz
+
+
+async def _index_payload(since: int, limitFilms: int) -> tuple[dict, bytes, bytes]:
+    """Construye (o reutiliza) el índice y devuelve también sus bytes listos."""
+    try:
+        version = await index_version()
+    except Exception:
+        last = _INDEX_LAST_GOOD.get(limitFilms)
+        if last is None:
+            raise
+        log.warning("index: la base falló; sirviendo la última copia buena (límite %s)", limitFilms, exc_info=True)
+        return last
+    if since and since >= version:
+        result = {"version": version, "upToDate": True, "categories": []}
+        raw, gz = _json_body(result)
+        return result, raw, gz
+    cache_key = (version, limitFilms)
+    cached = _INDEX_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < _INDEX_CACHE_TTL:
+        return cached[1], cached[2], cached[3]
+    # Un solo equipo construye; los demás esperan y reciben la misma copia.
+    async with _fill_lock("index"):
+        cached = _INDEX_CACHE.get(cache_key)
+        if cached and time.time() - cached[0] < _INDEX_CACHE_TTL:
+            return cached[1], cached[2], cached[3]
+        return await _build_index(version, limitFilms, cache_key)
+
+
+@app.get("/v1/index")
+async def index(
+    request: Request,
+    since: int = Query(default=0, ge=0),
+    # El índice completo (sin tope) materializa 157 MB en memoria y tumbaba el contenedor
+    # por OOM: la app pide 100 por categoría. El tope es obligatorio para cualquier cliente.
+    limitFilms: int = Query(default=100, ge=1, le=500),
+    x_api_key: str | None = Header(default=None),
+):
+    """Índice completo. Con `since` al día responde {upToDate: true} sin reenviar nada.
+    `limitFilms` recorta los títulos por categoría EN SQL (para la app móvil); `total`
+    sigue siendo el real de la categoría."""
+    require_key(x_api_key)
+    _result, raw, gz = await _index_payload(since, limitFilms)
+    return _json_response(raw, gz, request)
 
 
 @app.get("/v1/categories")
@@ -1409,6 +1606,18 @@ async def _enrich_matches_with_epg(matches: list[dict]) -> list[dict]:
     return matches
 
 
+@app.get("/v1/calendar")
+async def editorial_calendar_endpoint(x_api_key: str | None = Header(default=None)):
+    """Calendario editorial: campaña activa, filas y siguiente cambio.
+
+    Lo consumen la app y los ports (webOS/PC) para saber qué temporada debe
+    ocupar el Inicio. La tele y el launcher ya lo reciben indirectamente en
+    `/v1/banners`, así que no necesitan OTA.
+    """
+    require_key(x_api_key)
+    return await editorial_calendar.snapshot_from_pool(db())
+
+
 @app.get("/v1/banners")
 async def launcher_banners_endpoint(
     background: BackgroundTasks,
@@ -1440,6 +1649,7 @@ async def sports(
                kickoff, status, status_detail, venue, broadcasts, channels
         from sports_matches
         where league_id not like '%/%'
+          and league_id <> 'mex.2'
           and (kickoff at time zone $1::text)::date
                   >= coalesce($2::text::date, (now() at time zone $1::text)::date)
           and (kickoff at time zone $1::text)::date
@@ -1570,10 +1780,42 @@ def _gee_fix_event_times(event: dict) -> None:
     event["time"] = local.strftime("%H:%M:%S")
 
 
-@app.get("/v1/gee38/sports")
-async def gee38_sports(x_api_key: str | None = Header(default=None)):
+# Deportes se pide igual desde todos los equipos: la misma semana, los mismos
+# enlaces. Sin caché, cada apertura de Inicio/Deportes recalculaba ~3.6 s de
+# cruces y la API (un solo worker) solo aguantaba ~0.27 req/s. Con 45 s de TTL
+# el cálculo se hace una vez y el resto de equipos recibe la copia al instante.
+_GEE_CACHE_MAX = 32
+_GEE_SPORTS_CACHE: dict[tuple, tuple[float, dict]] = {}
+_GEE_EVENTS_CACHE: dict[tuple, tuple[float, dict]] = {}
+_GEE_SPORTS_CACHE_TTL = max(0, _env_int("GEE_SPORTS_CACHE_SECONDS", 120))
+_GEE_EVENTS_CACHE_TTL = max(0, _env_int("GEE_EVENTS_CACHE_SECONDS", 45))
+
+
+async def _cached_gee_payload(cache, key, ttl, builder):
+    """Devuelve la copia reciente o calcula una sola vez por ventana."""
+    if ttl <= 0:
+        return await builder()
+    now = time.time()
+    hit = cache.get(key)
+    if hit is not None and now - hit[0] < ttl:
+        return hit[1]
+    # Si 200 equipos piden a la vez con la caché vacía, uno calcula y los demás
+    # esperan: sin esto todos harían el mismo cruce de 3.6 s y volvería el colapso.
+    async with _fill_lock("gee"):
+        now = time.time()
+        hit = cache.get(key)
+        if hit is not None and now - hit[0] < ttl:
+            return hit[1]
+        value = await builder()
+        cache[key] = (now, value)
+        if len(cache) > _GEE_CACHE_MAX:
+            oldest = min(cache, key=lambda item: cache[item][0])
+            cache.pop(oldest, None)
+        return value
+
+
+async def _gee38_sports_payload() -> dict:
     """Grupos de canales deportivos 24/7 (TNT Sports, FOX, Sky, LaLiga TV…)."""
-    require_key(x_api_key)
     rows = await db().fetch(
         "select payload, updated_at from gee38_catalog where kind = 'group' order by sort, name"
     )
@@ -1595,18 +1837,24 @@ async def gee38_sports(x_api_key: str | None = Header(default=None)):
     }
 
 
-@app.get("/v1/gee38/events")
-async def gee38_events(
-    category: str | None = Query(default=None, max_length=40),
-    day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
-    days: int = Query(default=0, ge=0, le=30),
-    scope: str | None = Query(default=None, pattern=r"^(main|all)$"),
-    x_api_key: str | None = Header(default=None),
-):
+@app.get("/v1/gee38/sports")
+async def gee38_sports(x_api_key: str | None = Header(default=None)):
+    """Grupos de canales deportivos 24/7 (TNT Sports, FOX, Sky, LaLiga TV…)."""
+    require_key(x_api_key)
+    return await _cached_gee_payload(
+        _GEE_SPORTS_CACHE, ("sports",), _GEE_SPORTS_CACHE_TTL, _gee38_sports_payload
+    )
+
+
+async def _gee38_events_payload(
+    category: str | None,
+    day: str | None,
+    days: int,
+    scope: str | None,
+) -> dict:
     """Eventos deportivos (fútbol, básquet, F1…). `day`(+`days`) acota por fecha
     del evento; `category` filtra por deporte (p. ej. Football); `scope=main`
     deja solo Tier 1 (portada/«Principal») y `scope=all` conserva todo."""
-    require_key(x_api_key)
     where = ["kind = 'event'"]
     args: list = []
     if category:
@@ -1660,7 +1908,7 @@ async def gee38_events(
     # La agenda del fútbol se arma con TODOS los partidos del calendario (así no se
     # pierde ningún Liga MX aunque GeeSports no lo liste) y a cada partido se le
     # cruzan los enlaces que GeeSports recomienda para ese mismo juego. Solo se
-    # sirven los deportes principales y las ligas principales (+ MX y ascenso).
+    # sirven los deportes principales y las ligas principales (sin ascenso MX).
     # La ventana cubre la semana (Hoy, Mañana, … +7) para las pestañas por día.
     today = date.today()
     near = {(today + timedelta(days=delta)).isoformat() for delta in range(-1, 8)}
@@ -1697,7 +1945,20 @@ async def gee38_events(
                     known.add(key)
         is_football = category == "football"
         match = _gee_find_match(event, entries) if _gee_sport_for_category(category) else None
+        # El ascenso MX ya no se programa: se descarta incluso si el CMS lo manda
+        # suelto con alguna fuente (su liga casi nunca tiene enlaces útiles).
+        if _gee_league_excluded(
+            str(event.get("league_id") or ""),
+            str(event.get("league_label") or event.get("event") or ""),
+        ):
+            continue
         if match is not None:
+            _match_league = match.get("league") or {}
+            if _gee_league_excluded(
+                str(_match_league.get("id") or ""),
+                str(_match_league.get("name") or ""),
+            ):
+                continue
             if _gee_league_allowed_match(match):
                 _gee_apply_match(event, match)
                 if _gee_date_of(match.get("kickoff")) in near:
@@ -1734,7 +1995,11 @@ async def gee38_events(
         ):
             out.append(event)
     for match, _home, _away, _dt in entries:
-        if not _gee_league_allowed_match(match):
+        _league = match.get("league") or {}
+        if _gee_league_excluded(
+            str(_league.get("id") or ""),
+            str(_league.get("name") or ""),
+        ) or not _gee_league_allowed_match(match):
             continue
         if _gee_date_of(match.get("kickoff")) not in near:
             continue
@@ -1827,6 +2092,23 @@ async def gee38_events(
     for card in deduped:
         card["xtv"] = sports_map.options_for_gee_event(card)
     return {"events": deduped}
+
+
+@app.get("/v1/gee38/events")
+async def gee38_events(
+    category: str | None = Query(default=None, max_length=40),
+    day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    days: int = Query(default=0, ge=0, le=30),
+    scope: str | None = Query(default=None, pattern=r"^(main|all)$"),
+    x_api_key: str | None = Header(default=None),
+):
+    require_key(x_api_key)
+    return await _cached_gee_payload(
+        _GEE_EVENTS_CACHE,
+        (category or "", day or "", days, scope or ""),
+        _GEE_EVENTS_CACHE_TTL,
+        lambda: _gee38_events_payload(category, day, days, scope),
+    )
 
 
 @app.get("/v1/gee38/health")
@@ -2377,16 +2659,18 @@ GEE_BRAND_CANONICALS = {
 }
 
 
-# Solo las ligas principales de fútbol: la MX, el ascenso mexicano y las grandes.
+# Solo las ligas principales de fútbol: la MX y las grandes. El ascenso mexicano
+# se retiró de la programación: casi nunca publica enlaces y llenaba la agenda de
+# tarjetas sin fuente.
 GEE_LEAGUE_IDS = {
-    "mex.1", "mex.2", "eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "por.1",
+    "mex.1", "eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "por.1",
     "uefa.champions", "uefa.europa", "conmebol.libertadores", "conmebol.sudamericana",
     "arg.1", "bra.1", "usa.1", "fifa.world",
 }
 
 # Nombres (normalizados) que se aceptan cuando el evento no se cruzó con la agenda.
 GEE_LEAGUE_NAMES = {
-    "liga mx", "liga de expansion mx", "uefa champions league", "champions league",
+    "liga mx", "uefa champions league", "champions league",
     "premier league", "laliga", "serie a", "bundesliga", "ligue 1",
     "liga profesional de futbol", "liga profesional argentina", "brasileirao",
     "campeonato brasileiro serie a", "copa libertadores", "copa sudamericana",
@@ -2394,10 +2678,17 @@ GEE_LEAGUE_NAMES = {
     "primeira liga", "liga portugal", "fifa world cup", "copa mundial",
 }
 
+# Fuera de la agenda, aunque el CMS publique algún evento suelto con fuente.
+GEE_EXCLUDED_LEAGUE_IDS = {"mex.2"}
+GEE_EXCLUDED_LEAGUE_NAMES = {
+    "liga de expansion mx", "liga de ascenso mx", "ascenso mx",
+    "liga de expansion", "expansion mx",
+}
+
 # Tier 1 = portada/«Principal». Se compara el nombre normalizado completo, nunca
 # por subcadena: «LaLiga 2» no es LaLiga ni «Russian Premier League» es Premier.
 GEE_MAIN_LEAGUE_NAMES = {
-    "liga mx", "liga de expansion mx",
+    "liga mx",
     "uefa champions league", "uefa europa league",
     "laliga", "premier league", "serie a", "bundesliga", "ligue 1",
     "copa libertadores", "copa sudamericana",
@@ -2412,8 +2703,7 @@ GEE_MAIN_LEAGUE_NAMES = {
     "motogp", "nascar", "ufc", "mma", "mixed martial arts", "boxeo", "boxing",
 }
 
-# Señales de una categoría inferior. Se evalúan después de la lista principal,
-# porque «Liga de Expansión MX» es principal aunque contenga «expansion».
+# Señales de una categoría inferior (segunda división, femenil, juvenil...).
 GEE_SECONDARY_MARKERS = (
     " 2", " ii", " b", "women", "femen", "femenil", "u17", "u18", "u19",
     "u20", "u21", "u23", "youth", "juvenil", "reserve", "reservas",
@@ -2492,6 +2782,13 @@ def _gee_league_allowed_match(match: dict) -> bool:
 def _gee_league_allowed_event(event: dict) -> bool:
     label = event.get("league_label") or event.get("event") or ""
     return _gee_norm_league(label) in GEE_LEAGUE_NAMES
+
+
+def _gee_league_excluded(league_id: str, label: str) -> bool:
+    """Liga retirada por completo, aunque llegue con fuentes o desde la agenda."""
+    if (league_id or "").strip().lower() in GEE_EXCLUDED_LEAGUE_IDS:
+        return True
+    return _gee_norm_league(label) in GEE_EXCLUDED_LEAGUE_NAMES
 
 
 def _gee_is_secondary_league(label: str) -> bool:
@@ -3761,10 +4058,27 @@ async def slots_worker(request: Request, x_admin_key: str | None = Header(defaul
 MARKERS_POS_TTL = 14 * 24 * 3600   # dato encontrado: se revalida cada 14 días
 MARKERS_NEG_TTL = 2 * 24 * 3600    # «aquí no hay dato» real: se reintenta a los 2 días
 MARKERS_RETRY_TTL = 24 * 3600      # dato positivo pero con una fuente caída: refrescar en 1 día
-MARKERS_ERROR_TTL = 3600           # todas las fuentes fallaron: reintentar en 1 hora
+# Si TODAS las fuentes fallan se reintenta en 6 h (no en 1 h): TheIntroDB tiene un
+# tope diario de 5,000 peticiones y, al agotarse, devuelve 429 durante horas. Un
+# reintento cada hora volvía a elegir siempre las mismas fichas populares y dejaba
+# sin indexar la cola larga. Seis horas permiten avanzar y volver a probar cuando
+# la cuota se recupere.
+MARKERS_ERROR_TTL = 6 * 3600
 MARKERS_EPISODE_MAX = 5000         # One Piece y series largas pasan de 400
 MARKERS_MAX_BODY = 2048
 _markers_bucket: dict[str, list[float]] = {}
+
+# Pre-calentamiento del catálogo: además de la cascada por petición, un pase de
+# fondo deja indexado el PRIMER capítulo de cada temporada (y los siguientes de
+# las que sí tienen datos). Así «Omitir intro» aparece sin esperar a que alguien
+# reproduzca ese capítulo y el catálogo deja de depender del uso.
+MARKERS_PREWARM = os.environ.get("MARKERS_PREWARM", "1") == "1"
+MARKERS_PREWARM_BATCH = int(os.environ.get("MARKERS_PREWARM_BATCH", "30") or "30")
+MARKERS_PREWARM_INTERVAL = float(os.environ.get("MARKERS_PREWARM_INTERVAL_SECONDS", "15") or "15")
+MARKERS_PREWARM_IDLE = float(os.environ.get("MARKERS_PREWARM_IDLE_SECONDS", "300") or "300")
+MARKERS_PREWARM_DELAY = float(os.environ.get("MARKERS_PREWARM_DELAY_SECONDS", "0.35") or "0.35")
+MARKERS_PREWARM_EPISODES = int(os.environ.get("MARKERS_PREWARM_EPISODES", "3") or "3")
+MARKERS_PREWARM_START = float(os.environ.get("MARKERS_PREWARM_START_SECONDS", "20") or "20")
 
 # La misma serie puede existir como XTV (anime) y Magis (series). Primero la fila
 # EXACTA del ref que reprodujo la app; después la versión XTV/anime, para que AniSkip
@@ -3782,6 +4096,38 @@ _MARKERS_TITLE_SQL = """
              (t.id like 'xtv:%') desc,
              t.id
     limit 1
+"""
+
+
+# Fichas que todavía no tienen el episodio 1 indexado (o cuya copia ya venció).
+# Se prioriza la popularidad de la ficha; el grupo pone la temporada y la API
+# resuelve tmdb/imdb/mal igual que una petición normal. Una copia negativa se
+# reintenta a los 2 días; una positiva se conserva 14 (mismos TTL del endpoint).
+_MARKERS_PREWARM_SQL = """
+    select t.id as ref, t.kind, t.title,
+           coalesce((
+               select gm.season from group_members gm
+               where gm.title_id = t.id order by gm.season limit 1
+           ), 0) as group_season,
+           coalesce(t.popularity, 0) as popularity,
+           case when exists (
+               select 1 from skip_markers sm2
+               where sm2.ref = t.id and sm2.episode = 1
+           ) then 1 else 0 end as has_row
+    from titles t
+    where t.kind in ('series', 'anime', 'kids')
+      and coalesce(t.program_type, '') in ('series', 'teleplay')
+      and not exists (
+          select 1 from skip_markers sm
+          where sm.ref = t.id and sm.episode = 1
+            and sm.fetched_at > now() - case
+                when sm.segments <> '{}'::jsonb
+                    then make_interval(secs => $1)
+                else make_interval(secs => $2)
+            end
+      )
+    order by has_row asc, coalesce(t.popularity, 0) desc, t.id
+    limit $3
 """
 
 
@@ -3917,6 +4263,78 @@ async def _warm_next_markers(key: str, season: int, ep: int, length_sec: int = 0
                 await _resolve_markers(key, nxt, season, None, length_sec)
     except Exception:  # noqa: BLE001 — calentar nunca rompe la respuesta servida
         pass
+
+
+def prewarm_episode_plan(first_found, configured: int) -> list[int]:
+    """Episodios extra a indexar: solo si el primero SÍ trajo datos.
+
+    Si el capítulo 1 no está en ninguna base comunitaria, los siguientes casi
+    nunca aparecen solos (y sí cuestan peticiones): se deja la copia negativa y
+    el on-demand de la app los resolverá si algún día hacen falta.
+    """
+    if not first_found:
+        return []
+    try:
+        limit = int(configured)
+    except (TypeError, ValueError):
+        limit = 0
+    return list(range(2, max(1, limit) + 1))
+
+
+async def _markers_prewarm_once() -> int:
+    """Indexa el primer capítulo de cada temporada pendiente (y los siguientes)."""
+    rows = await db().fetch(
+        _MARKERS_PREWARM_SQL,
+        MARKERS_POS_TTL,
+        MARKERS_NEG_TTL,
+        MARKERS_PREWARM_BATCH,
+    )
+    done = 0
+    for row in rows:
+        key = str(row["ref"])
+        season = max(1, int(row["group_season"] or 0))
+        try:
+            first, season = await _resolve_markers(key, 1, season)
+        except Exception as exc:  # noqa: BLE001 — una ficha rota no frena el pase
+            log.warning("marcadores: no se pudo indexar %s: %s", key, exc)
+            first = {}
+        else:
+            done += 1
+            for ep in prewarm_episode_plan(bool(first), MARKERS_PREWARM_EPISODES):
+                try:
+                    found, season = await _resolve_markers(key, ep, season)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("marcadores: fallo en %s E%s: %s", key, ep, exc)
+                    break
+                done += 1
+                if not found:
+                    break
+        if MARKERS_PREWARM_DELAY > 0:
+            await asyncio.sleep(MARKERS_PREWARM_DELAY)
+    return done
+
+
+async def _markers_prewarm_loop() -> None:
+    """Pase de fondo: mantiene indexada la mayor parte del catálogo sola.
+
+    No compite con las peticiones de la app (una ficha a la vez, con pausa) y
+    nunca tumba el proceso: cualquier error se registra y el siguiente pase
+    continúa por donde iba (la consulta excluye lo ya indexado).
+    """
+    if not MARKERS_PREWARM:
+        return
+    await asyncio.sleep(MARKERS_PREWARM_START)
+    while True:
+        try:
+            done = await _markers_prewarm_once()
+            if done:
+                log.info("marcadores: %s capítulos indexados", done)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("marcadores: el pase de indexado falló")
+            done = 0
+        await asyncio.sleep(MARKERS_PREWARM_INTERVAL if done else MARKERS_PREWARM_IDLE)
 
 
 @app.post("/v1/markers")
@@ -4093,6 +4511,39 @@ async def stats(x_api_key: str | None = Header(default=None)):
         from skip_markers
         """
     )
+    markers_by_kind = await db().fetch(
+        """
+        select t.kind,
+               count(*) as total,
+               count(*) filter (where exists (
+                   select 1 from skip_markers sm
+                   where (sm.ref = t.id or sm.ref = t.play_ref)
+                     and sm.segments <> '{}'::jsonb
+               )) as with_data
+        from titles t
+        where t.kind in ('series', 'anime', 'kids')
+          and coalesce(t.program_type, '') in ('series', 'teleplay')
+        group by 1
+        """
+    )
+    episodes = await db().fetchrow(
+        """
+        select count(*) filter (where status = 'ok') as mirrored_refs,
+               coalesce(sum(episodes) filter (where status = 'ok'), 0) as episode_rows,
+               count(*) filter (where status = 'pending') as pending,
+               count(*) filter (where status = 'failed') as failed
+        from episode_mirror
+        """
+    )
+    meta = await db().fetchrow(
+        """
+        select count(*) filter (where status = 'ok') as seasons,
+               coalesce((
+                   select count(*) from episode_meta
+               ), 0) as episode_rows
+        from episode_meta_season
+        """
+    )
     search = await db().fetchrow(
         """
         select count(*) as titles,
@@ -4124,6 +4575,22 @@ async def stats(x_api_key: str | None = Header(default=None)):
             "rows": int(markers["rows_total"] or 0),
             "withData": int(markers["with_data"] or 0),
             "lastFetch": markers["last_fetch"].isoformat() if markers["last_fetch"] else None,
+            "byKind": {
+                row["kind"]: {
+                    "rows": int(row["total"] or 0),
+                    "withData": int(row["with_data"] or 0),
+                    "coverage": round(100.0 * int(row["with_data"] or 0) / int(row["total"] or 1)),
+                }
+                for row in markers_by_kind
+            },
+        },
+        "episodes": {
+            "mirroredRefs": int(episodes["mirrored_refs"] or 0),
+            "episodeRows": int(episodes["episode_rows"] or 0),
+            "pending": int(episodes["pending"] or 0),
+            "failed": int(episodes["failed"] or 0),
+            "metaSeasons": int(meta["seasons"] or 0),
+            "metaRows": int(meta["episode_rows"] or 0),
         },
         "search": {
             "titles": int(search["titles"] or 0),
@@ -4268,787 +4735,3 @@ async def sync_forget(
     sync_id = _sync_id_or_401(x_sync_code)
     await db().execute("delete from sync_items where sync_id = $1", sync_id)
     return {"ok": True}
-
-
-# ----- Vision+ Play: salas de trivia (árbitro en el VPS) -----
-# El estado de una sala vive en memoria (decenas de KB): si la API se reinicia,
-# la sala muere y la app lo dice. Solo el resultado final se guarda en Postgres.
-# La lógica pura está en `games.py`; el banco, en `sync/trivia_bank.py`.
-
-import games as vision_games  # noqa: E402  (import local para no ensuciar el bloque de arriba)
-import game_decks as vision_decks  # noqa: E402
-
-GAME_MAX_BODY = 64 * 1024
-GAME_MAX_ROOMS = 100
-GAME_JOIN_RATE = 10  # por IP y minuto
-GAME_ANSWER_RATE = 30  # por jugador y minuto
-
-_GAME_ROOMS: dict[str, vision_games.Room] = {}
-_GAME_JOIN_BUCKET: dict[str, list[float]] = {}
-_GAME_CREATE_BUCKET: dict[str, list[float]] = {}
-_GAME_ANSWER_BUCKET: dict[str, list[float]] = {}
-_GAME_REPORT_BUCKET: dict[str, list[float]] = {}
-
-
-def _game_int(value, default: int, low: int, high: int) -> int:
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
-        number = default
-    return max(low, min(high, number))
-
-
-def _game_text(value, limit: int) -> str:
-    return str(value or "").strip().replace("\x00", "")[:limit]
-
-
-def _game_json(value):
-    """jsonb de asyncpg puede llegar como str; nunca dejamos pasar basura."""
-    if isinstance(value, str):
-        try:
-            return json.loads(value)
-        except (TypeError, ValueError):
-            return None
-    return value
-
-
-async def _game_body(request: Request) -> dict:
-    raw = await request.body()
-    if len(raw) > GAME_MAX_BODY:
-        raise HTTPException(status_code=413, detail="cuerpo demasiado grande")
-    try:
-        body = json.loads(raw.decode("utf-8", "replace"))
-    except Exception:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail="JSON inválido")
-    if not isinstance(body, dict):
-        raise HTTPException(status_code=400, detail="JSON inválido")
-    return body
-
-
-def _game_code(raw) -> str:
-    code = vision_games.normalize_code(raw)
-    if not code:
-        raise HTTPException(status_code=400, detail="código de sala inválido")
-    return code
-
-
-def _game_group_id(raw) -> str:
-    """El `sync_id` del código de continuidad rota el banco por familia."""
-    clean = device_sync.normalize_code(raw)
-    return device_sync.code_id(clean) if clean else ""
-
-
-def _game_room(code: str) -> vision_games.Room:
-    room = _GAME_ROOMS.get(code)
-    if room is None or room.phase == "closed":
-        raise HTTPException(status_code=404, detail="la sala se cerró")
-    return room
-
-
-def _game_host(room: vision_games.Room, token: str | None) -> None:
-    if not room.host_ok(token):
-        raise HTTPException(status_code=403, detail="solo el anfitrión puede hacer eso")
-
-
-def _game_player(room: vision_games.Room, token: str | None) -> vision_games.Player:
-    player = room.player_by_token(token)
-    if player is None:
-        raise HTTPException(status_code=410, detail="token de jugador inválido")
-    return player
-
-
-def _game_snapshot(room: vision_games.Room, role: str, since: int, now: float,
-                   player_id: str | None = None, *, display_authorized: bool = False):
-    snap = room.snapshot(
-        role, since, now, player_id,
-        display_authorized=display_authorized,
-    )
-    if snap is None:
-        return Response(status_code=204)
-    return snap
-
-
-async def _game_questions(pack: str, rounds: int, group_id: str) -> list[dict]:
-    """Saca preguntas del banco, evitando las ya servidas a este grupo."""
-    wanted = max(1, min(rounds, vision_games.MAX_ROUNDS)) + 4
-    async with db().acquire() as conn:
-        rows = await conn.fetch(
-            """
-            select q.id, q.kind, q.payload, q.answer_key, q.difficulty, q.pack
-            from trivia_questions q
-            where ($1 = '' or $1 = 'general' or q.pack = $1)
-              and not exists (
-                  select 1 from trivia_served s
-                  where s.question_id = q.id and s.group_id = $2
-                    and s.served_at > now() - interval '90 days'
-              )
-            order by random()
-            limit $3
-            """,
-            pack, group_id, wanted,
-        )
-        if len(rows) < wanted:
-            fill = await conn.fetch(
-                """
-                select q.id, q.kind, q.payload, q.answer_key, q.difficulty, q.pack
-                from trivia_questions q
-                where ($1 = '' or $1 = 'general' or q.pack = $1)
-                order by coalesce(
-                    (select max(s.served_at) from trivia_served s
-                     where s.question_id = q.id and s.group_id = $2),
-                    to_timestamp(0)
-                ) asc, random()
-                limit $3
-                """,
-                pack, group_id, wanted - len(rows),
-            )
-            rows = list(rows) + list(fill)
-        selected: list[dict] = []
-        seen: set[str] = set()
-        for row in rows:
-            qid = str(row["id"])
-            if qid in seen:
-                continue
-            payload = _game_json(row["payload"])
-            if not isinstance(payload, dict):
-                continue
-            seen.add(qid)
-            selected.append({
-                "id": qid,
-                "kind": str(row["kind"] or ""),
-                "payload": payload,
-                "answer_key": str(row["answer_key"] or ""),
-                "difficulty": int(row["difficulty"] or 1),
-                "pack": str(row["pack"] or "general"),
-            })
-        if group_id and selected:
-            await conn.executemany(
-                """
-                insert into trivia_served (question_id, group_id, served_at)
-                values ($1, $2, now()) on conflict do nothing
-                """,
-                [(item["id"], group_id) for item in selected],
-            )
-    if not selected:
-        raise HTTPException(status_code=503, detail="no hay preguntas disponibles")
-    return selected
-
-
-async def _game_charada_deck(rounds: int, code: str) -> list[dict]:
-    """Mazo de Charadas: títulos con póster, populares y reconocibles."""
-    need = max(1, rounds) * (vision_games.CHARADA_MAX_PASSES + 1) + 6
-    async with db().acquire() as conn:
-        rows = await conn.fetch(
-            """
-            select t.id, t.title, t.year, t.poster_url, t.kind, t.genres
-            from titles t
-            where coalesce(t.poster_url, '') <> ''
-              and length(t.title) between 2 and 90
-              and t.title not ilike '%(trailer)%'
-              and (t.popularity > 0 or t.vote_count >= 50)
-            order by random()
-            limit $1
-            """,
-            need * 2,
-        )
-    deck = vision_games.build_charada_deck([dict(row) for row in rows], rounds, code)
-    if not deck:
-        raise HTTPException(status_code=503, detail="no hay cartas disponibles")
-    return deck
-
-
-async def _game_wager_rounds(rounds: int, code: str) -> list[dict]:
-    """Rondas de Apuesta a la pista: títulos con sinopsis, reparto y póster."""
-    want = max(1, rounds) * 3 + 24
-    async with db().acquire() as conn:
-        rows = await conn.fetch(
-            """
-            select t.id, t.title, t.year, t.kind, t.poster_url, t.synopsis,
-                   t.cast_list, t.director, t.genres, t.popularity, t.vote_count
-            from titles t
-            where coalesce(t.poster_url, '') <> ''
-              and length(t.synopsis) >= 60
-              and length(t.title) between 2 and 90
-              and t.title not ilike '%(trailer)%'
-              and (t.popularity > 0 or t.vote_count >= 50)
-            order by t.popularity desc nulls last, random()
-            limit $1
-            """,
-            want,
-        )
-    deck = vision_games.build_wager_rounds([dict(row) for row in rows], rounds, code)
-    if not deck:
-        raise HTTPException(status_code=503, detail="no hay pistas disponibles")
-    return deck
-
-
-def _game_party_deck(game: str, rounds: int, code: str) -> list[dict]:
-    """Mazos locales de los juegos de fiesta (sin DB, respuesta instantánea)."""
-    if game == "impostor":
-        return vision_decks.build_impostor_deck(rounds, code)
-    if game == "dibujo":
-        return vision_decks.build_drawing_deck(rounds, code)
-    if game == "subasta":
-        return vision_decks.build_auction_deck(rounds, code)
-    if game == "fibbage":
-        return vision_decks.build_fibbage_deck(rounds, code)
-    return []
-
-
-async def _persist_game_result(room: vision_games.Room) -> None:
-    if not room.started_at or not room.players:
-        return
-    try:
-        result = room.result()
-        ended = room.ended_at or time.time()
-        await db().execute(
-            """
-            insert into game_results (game, mode, pack, players, rounds, started_at, ended_at)
-            values ($1, $2, $3, $4::jsonb, $5,
-                    to_timestamp($6::double precision), to_timestamp($7::double precision))
-            """,
-            result.get("game", "trivia"), result["mode"], result["pack"],
-            json.dumps(result["players"], ensure_ascii=False),
-            result["rounds"], result["startedAt"] / 1000.0, ended,
-        )
-    except Exception:  # noqa: BLE001 - el resultado no puede tumbar la sala
-        log.exception("Play: no se pudo guardar el resultado de la sala")
-
-
-async def _games_sweep_loop() -> None:
-    """Cierra salas vencidas o inactivas cada minuto y guarda su resultado."""
-    while True:
-        await asyncio.sleep(60)
-        now = time.time()
-        for code, room in list(_GAME_ROOMS.items()):
-            try:
-                room.tick(now)
-                if room.phase == "closed":
-                    await _persist_game_result(room)
-                    _GAME_ROOMS.pop(code, None)
-            except Exception:  # noqa: BLE001
-                log.exception("Play: el barrendero falló con la sala %s", code)
-
-
-@app.post("/v1/game/rooms")
-async def game_create(
-    request: Request,
-    x_api_key: str | None = Header(default=None),
-    x_sync_code: str | None = Header(default=None),
-):
-    require_key(x_api_key)
-    body = await _game_body(request)
-    ip = request.client.host if request.client else "?"
-    if not _diag_rate_ok(_GAME_CREATE_BUCKET, ip, time.time(), limit=GAME_JOIN_RATE, window=60):
-        raise HTTPException(status_code=429, detail="demasiadas salas; espera un momento")
-    if len(_GAME_ROOMS) >= GAME_MAX_ROOMS:
-        raise HTTPException(status_code=409, detail="hay demasiadas salas abiertas")
-
-    mode = _game_text(body.get("mode"), 12).lower() or "remote"
-    if mode not in vision_games.MODES:
-        raise HTTPException(status_code=400, detail="modo inválido")
-    game = _game_text(body.get("game"), 16).lower() or "trivia"
-    if game not in vision_games.GAMES:
-        raise HTTPException(status_code=400, detail="juego inválido")
-    default_rounds = vision_games.game_default_rounds(game)
-    rounds = _game_int(body.get("rounds"), default_rounds, 1, vision_games.MAX_ROUNDS)
-    question_seconds = _game_int(
-        body.get("questionSeconds"), vision_games.QUESTION_SECONDS,
-        vision_games.MIN_QUESTION_SECONDS, vision_games.MAX_QUESTION_SECONDS,
-    )
-    charada_seconds = _game_int(
-        body.get("charadaSeconds"), vision_games.CHARADA_SECONDS, 15, 120,
-    )
-    wager_seconds = _game_int(body.get("wagerSeconds"), vision_games.WAGER_SECONDS, 5, 30)
-    clue_seconds = _game_int(body.get("clueSeconds"), vision_games.CLUE_SECONDS, 5, 60)
-    max_players = _game_int(body.get("maxPlayers"), vision_games.MAX_PLAYERS, 1, vision_games.HARD_MAX_PLAYERS)
-    rules_version = _game_int(body.get("rulesVersion"), 2, 1, 2)
-    fair = bool(body.get("fair"))
-    family_mode = bool(body.get("family", True))
-    solo_test = bool(body.get("soloTest", False))
-    pack = _game_text(body.get("pack"), 32) or ("general" if game == "trivia" else game)
-    host_name = vision_games.clean_name(body.get("hostName") or "Anfitrión") or "Anfitrión"
-    group_id = _game_group_id(x_sync_code)
-
-    code = ""
-    for _ in range(8):
-        candidate = vision_games.generate_code()
-        if candidate not in _GAME_ROOMS:
-            code = candidate
-            break
-    if not code:
-        raise HTTPException(status_code=503, detail="no se pudo crear la sala")
-
-    if game in vision_games.fiesta_engine.FIESTA_GAMES:
-        questions = []
-        deck = []
-    elif game == "charadas":
-        questions: list[dict] = []
-        deck = await _game_charada_deck(rounds, code)
-    elif game == "wager":
-        questions = []
-        deck = await _game_wager_rounds(rounds, code)
-    elif game in ("impostor", "dibujo", "subasta", "fibbage"):
-        questions = []
-        deck = _game_party_deck(game, rounds, code)
-    else:
-        questions = await _game_questions(pack, rounds, group_id)
-        deck = []
-
-    host_token = vision_games.new_token()
-    player_token = vision_games.new_token() if mode != "display" else ""
-    now = time.time()
-    try:
-        room = vision_games.create_room(
-            code, host_name, host_token, player_token, questions,
-            game=game, deck=deck, mode=mode, pack=pack, rounds=rounds,
-            question_seconds=question_seconds, charada_seconds=charada_seconds,
-            wager_seconds=wager_seconds, clue_seconds=clue_seconds,
-            fair=fair, max_players=max_players, rules_version=rules_version,
-            family_mode=family_mode, solo_test=solo_test, now=now,
-        )
-    except ValueError:
-        raise HTTPException(status_code=400, detail="no se pudo crear la sala")
-    _GAME_ROOMS[code] = room
-    role = "display" if mode == "display" else "player"
-    return {
-        "code": code,
-        "displayCode": vision_games.format_code(code),
-        "hostToken": host_token,
-        "playerToken": player_token,
-        "playerId": room.host_id,
-        "hostId": room.host_id,
-        "mode": mode,
-        "game": room.game,
-        "rounds": room.rounds,
-        "expiresAt": int((now + vision_games.ROOM_TTL_SECONDS) * 1000),
-        "snapshot": room.snapshot(
-            role, 0, now, room.host_id, display_authorized=True,
-        ),
-    }
-
-
-@app.post("/v1/game/rooms/{code}/join")
-async def game_join(
-    code: str,
-    request: Request,
-    x_api_key: str | None = Header(default=None),
-):
-    require_key(x_api_key)
-    room = _game_room(_game_code(code))
-    ip = request.client.host if request.client else "?"
-    if not _diag_rate_ok(_GAME_JOIN_BUCKET, ip, time.time(), limit=GAME_JOIN_RATE, window=60):
-        raise HTTPException(status_code=429, detail="demasiados intentos; espera un momento")
-    body = await _game_body(request)
-    name = vision_games.clean_name(body.get("name"))
-    if not name:
-        raise HTTPException(status_code=400, detail="apodo inválido")
-    spectator = bool(body.get("spectator"))
-    now = time.time()
-    room.tick(now)
-    if room.phase == "closed":
-        raise HTTPException(status_code=404, detail="la sala se cerró")
-    token = vision_games.new_token()
-    player = room.add_player(name, token, now, spectator=spectator)
-    if player is None:
-        raise HTTPException(status_code=409, detail="la sala está llena o la partida ya empezó")
-    return {
-        "playerToken": token,
-        "playerId": player.id,
-        "spectator": spectator,
-        "snapshot": room.snapshot("player", 0, now, player.id),
-    }
-
-
-@app.post("/v1/game/rooms/{code}/rejoin")
-async def game_rejoin(
-    code: str,
-    x_api_key: str | None = Header(default=None),
-    x_game_player: str | None = Header(default=None),
-):
-    require_key(x_api_key)
-    room = _game_room(_game_code(code))
-    player = _game_player(room, x_game_player)
-    now = time.time()
-    room.tick(now)
-    if room.phase == "closed":
-        raise HTTPException(status_code=404, detail="la sala se cerró")
-    room.rejoin(x_game_player or "", now)
-    return {
-        "playerToken": x_game_player,
-        "playerId": player.id,
-        "snapshot": room.snapshot("player", 0, now, player.id),
-    }
-
-
-@app.get("/v1/game/rooms/{code}/state")
-async def game_state(
-    code: str,
-    x_api_key: str | None = Header(default=None),
-    x_game_player: str | None = Header(default=None),
-    x_game_host: str | None = Header(default=None),
-    since: int = Query(default=0, ge=0),
-    role: str = Query(default="player"),
-):
-    require_key(x_api_key)
-    if role not in vision_games.ROLES:
-        raise HTTPException(status_code=400, detail="rol inválido")
-    room = _game_room(_game_code(code))
-    # Compatibilidad de transición: una TV vieja (2.5.200) puede seguir leyendo
-    # el estado público, pero sin el póster de Apuesta. La TV nueva manda su
-    # host token y recibe la pista visual completa.
-    display_authorized = bool(role == "display" and room.host_ok(x_game_host))
-    now = time.time()
-    player = None
-    if role == "player":
-        player = _game_player(room, x_game_player)
-        player.connected = True
-        player.last_seen = now
-    room.touch(now)
-    room.tick(now)
-    if room.phase == "closed":
-        _GAME_ROOMS.pop(room.code, None)
-        raise HTTPException(status_code=404, detail="la sala se cerró")
-    return _game_snapshot(
-        room, role, since, now, player.id if player else None,
-        display_authorized=display_authorized,
-    )
-
-
-@app.post("/v1/game/rooms/{code}/answer")
-async def game_answer(
-    code: str,
-    request: Request,
-    x_api_key: str | None = Header(default=None),
-    x_game_player: str | None = Header(default=None),
-):
-    require_key(x_api_key)
-    room = _game_room(_game_code(code))
-    player = _game_player(room, x_game_player)
-    now = time.time()
-    if not _diag_rate_ok(_GAME_ANSWER_BUCKET, f"{room.code}|{player.id}", now,
-                         limit=GAME_ANSWER_RATE, window=60):
-        raise HTTPException(status_code=429, detail="demasiadas respuestas")
-    body = await _game_body(request)
-    round_no = _game_int(body.get("round"), 0, 0, vision_games.MAX_ROUNDS)
-    option = _game_int(body.get("option"), -1, -1, 3)
-    if round_no <= 0 or option < 0:
-        raise HTTPException(status_code=400, detail="respuesta inválida")
-    room.tick(now)
-    if room.phase == "closed":
-        raise HTTPException(status_code=404, detail="la sala se cerró")
-    accepted, reason = room.answer(player.id, round_no, option, now)
-    return {"accepted": accepted, "reason": reason, "receivedAt": int(now * 1000)}
-
-
-@app.post("/v1/game/rooms/{code}/wager")
-async def game_wager(
-    code: str,
-    request: Request,
-    x_api_key: str | None = Header(default=None),
-    x_game_player: str | None = Header(default=None),
-):
-    require_key(x_api_key)
-    room = _game_room(_game_code(code))
-    player = _game_player(room, x_game_player)
-    body = await _game_body(request)
-    round_no = _game_int(body.get("round"), 0, 0, vision_games.MAX_ROUNDS)
-    points = body.get("points", vision_games.WAGER_MIN)
-    if round_no <= 0:
-        raise HTTPException(status_code=400, detail="ronda inválida")
-    now = time.time()
-    room.tick(now)
-    if room.phase == "closed":
-        raise HTTPException(status_code=404, detail="la sala se cerró")
-    accepted, reason = room.wager(player.id, round_no, points, now)
-    return {"accepted": accepted, "reason": reason, "wager": player.wager}
-
-
-@app.post("/v1/game/rooms/{code}/charada")
-async def game_charada(
-    code: str,
-    request: Request,
-    x_api_key: str | None = Header(default=None),
-    x_game_player: str | None = Header(default=None),
-):
-    require_key(x_api_key)
-    room = _game_room(_game_code(code))
-    player = _game_player(room, x_game_player)
-    body = await _game_body(request)
-    action = _game_text(body.get("action"), 16).lower()
-    if action not in ("correct", "pass", "correcto", "pasar"):
-        raise HTTPException(status_code=400, detail="acción inválida")
-    now = time.time()
-    room.tick(now)
-    if room.phase == "closed":
-        raise HTTPException(status_code=404, detail="la sala se cerró")
-    accepted, reason = room.charada_action(player.id, action, now)
-    return {"accepted": accepted, "reason": reason}
-
-
-@app.post("/v1/game/rooms/{code}/action")
-async def game_action(
-    code: str,
-    request: Request,
-    x_api_key: str | None = Header(default=None),
-    x_game_player: str | None = Header(default=None),
-):
-    """Acciones de los juegos de fiesta: dibujar, mentir, votar o pujar.
-
-    La tele nunca manda acciones: solo el teléfono de un jugador (o del
-    público) puede escribir, votar o pujar. El servidor valida fase y ronda.
-    """
-    require_key(x_api_key)
-    room = _game_room(_game_code(code))
-    player = _game_player(room, x_game_player)
-    body = await _game_body(request)
-    round_no = _game_int(body.get("round"), 0, 0, vision_games.MAX_ROUNDS)
-    kind = _game_text(body.get("kind"), 24).lower()
-    text = _game_text(body.get("text"), 180)
-    target = _game_text(body.get("target"), 40)
-    index = body.get("index", 0)
-    if round_no <= 0 or not kind:
-        raise HTTPException(status_code=400, detail="acción inválida")
-    now = time.time()
-    # Los trazos parciales son una emisión de baja frecuencia (cada ~2.5 s)
-    # y no deben consumir el presupuesto de votos/pujas del jugador.
-    if kind != "draw_partial" and not _diag_rate_ok(
-        _GAME_ANSWER_BUCKET, f"{room.code}|{player.id}", now,
-        limit=GAME_ANSWER_RATE, window=60,
-    ):
-        raise HTTPException(status_code=429, detail="demasiadas acciones")
-    room.tick(now)
-    if room.phase == "closed":
-        raise HTTPException(status_code=404, detail="la sala se cerró")
-    accepted, reason = room.act(
-        player.id, round_no, kind, now,
-        text=text, target=target, bid=body.get("bid", 0),
-        strokes=body.get("strokes"), index=index,
-        power=_game_text(body.get("power"), 16).lower(),
-        wire=_game_text(body.get("wire"), 12).lower(),
-        choices=body.get("choices"),
-        selected=body.get("selected"),
-        amount=body.get("amount", 0),
-        vote=bool(body.get("vote")),
-    )
-    if not accepted and reason == "cerca":
-        raise HTTPException(
-            status_code=400,
-            detail="¡Demasiado cerca del título real! Disimula un poco más.",
-        )
-    # Idempotencia de red: un doble toque, un reintento o una acción que llega
-    # justo después del cambio de fase no debe convertirse en un error visible.
-    # El cliente recibe 200 con `ignored=True` y sigue su polling normal.
-    is_fiesta = getattr(room, "fiesta", None) is not None
-    ignored = bool(
-        is_fiesta
-        and not accepted
-        and reason in {"duplicada", "fase", "ronda", "turno", "duelo"}
-    )
-    return {
-        "accepted": accepted,
-        "ignored": ignored,
-        "reason": reason,
-        "phase": room.phase,
-        "receivedAt": int(now * 1000),
-        "points": int(player.score),
-        "coins": int(player.coins),
-    }
-
-
-@app.post("/v1/game/rooms/{code}/ready")
-async def game_ready(
-    code: str,
-    request: Request,
-    x_api_key: str | None = Header(default=None),
-    x_game_player: str | None = Header(default=None),
-):
-    require_key(x_api_key)
-    room = _game_room(_game_code(code))
-    player = _game_player(room, x_game_player)
-    body = await _game_body(request)
-    round_no = _game_int(body.get("round"), 0, 0, vision_games.MAX_ROUNDS)
-    if round_no <= 0:
-        raise HTTPException(status_code=400, detail="ronda inválida")
-    now = time.time()
-    room.tick(now)
-    if room.phase == "closed":
-        raise HTTPException(status_code=404, detail="la sala se cerró")
-    ok = room.ready(player.id, round_no, now)
-    return {"ok": ok, "ready": bool(ok and player.ready_round >= round_no)}
-
-
-@app.post("/v1/game/rooms/{code}/host/{action}")
-async def game_host_action(
-    code: str,
-    action: str,
-    request: Request,
-    x_api_key: str | None = Header(default=None),
-    x_game_host: str | None = Header(default=None),
-):
-    require_key(x_api_key)
-    room = _game_room(_game_code(code))
-    _game_host(room, x_game_host)
-    now = time.time()
-    room.tick(now)
-    if action == "start":
-        if not room.start(now):
-            raise HTTPException(status_code=409, detail="la partida ya empezó o faltan jugadores")
-    elif action == "next":
-        if room.phase == "reveal" and not room.all_ready():
-            raise HTTPException(status_code=409, detail="faltan jugadores por continuar")
-        if not room.next_round(now):
-            raise HTTPException(status_code=409, detail="solo se avanza en el reveal")
-    elif action == "close":
-        room.close(now, "host")
-        await _persist_game_result(room)
-        _GAME_ROOMS.pop(room.code, None)
-        return {"ok": True, "closed": True}
-    elif action == "kick":
-        body = await _game_body(request)
-        player_id = _game_text(body.get("playerId"), 16)
-        if not player_id or not room.kick(player_id, now):
-            raise HTTPException(status_code=404, detail="jugador no encontrado")
-    else:
-        raise HTTPException(status_code=404, detail="acción desconocida")
-    return {"ok": True, "phase": room.phase, "rev": room.rev}
-
-
-@app.post("/v1/game/rooms/{code}/reaction")
-async def game_reaction(
-    code: str,
-    request: Request,
-    x_api_key: str | None = Header(default=None),
-    x_game_player: str | None = Header(default=None),
-):
-    require_key(x_api_key)
-    room = _game_room(_game_code(code))
-    player = _game_player(room, x_game_player)
-    body = await _game_body(request)
-    kind = _game_int(body.get("kind"), -1, -1, 5)
-    now = time.time()
-    room.tick(now)
-    if room.phase == "closed":
-        raise HTTPException(status_code=404, detail="la sala se cerró")
-    if not room.react(player.id, kind, now):
-        raise HTTPException(status_code=429, detail="espera un momento entre reacciones")
-    return {"ok": True}
-
-
-@app.post("/v1/game/rooms/{code}/report")
-async def game_report(
-    code: str,
-    request: Request,
-    x_api_key: str | None = Header(default=None),
-    x_game_player: str | None = Header(default=None),
-    x_game_host: str | None = Header(default=None),
-):
-    require_key(x_api_key)
-    room = _game_room(_game_code(code))
-    player = room.player_by_token(x_game_player)
-    if player is None and not room.host_ok(x_game_host):
-        raise HTTPException(status_code=410, detail="token inválido")
-    reporter_id = player.id if player is not None else "host"
-    if not _diag_rate_ok(
-        _GAME_REPORT_BUCKET, f"{room.code}|{reporter_id}", time.time(),
-        limit=5, window=60,
-    ):
-        raise HTTPException(status_code=429, detail="demasiados reportes")
-    body = await _game_body(request)
-    question_id = _game_text(body.get("questionId"), 64)
-    if not any(q["id"] == question_id for q in room.questions):
-        raise HTTPException(status_code=404, detail="pregunta no encontrada")
-    reason = _game_text(body.get("reason"), 120)
-    before = room.reports.get(question_id, 0)
-    count = room.report(question_id, reporter_id)
-    duplicate = count == before
-    persisted = False
-    if not duplicate:
-        try:
-            await db().execute(
-                "insert into trivia_reports (question_id, reason) values ($1, $2)",
-                question_id, reason,
-            )
-            persisted = True
-        except Exception:  # noqa: BLE001 - el reporte no puede tumbar la partida
-            log.exception("Play: no se pudo guardar el reporte")
-    # No borrar preguntas en caliente: un reporte no debe ser un botón de
-    # destrucción de contenido. El equipo editorial revisa la bandera.
-    return {
-        "ok": True,
-        "reports": count,
-        "persisted": persisted,
-        "duplicate": duplicate,
-        "flagged": count >= 3,
-    }
-
-
-@app.get("/v1/game/catalog")
-async def game_catalog(x_api_key: str | None = Header(default=None)):
-    require_key(x_api_key)
-    return {"games": vision_games.catalog()}
-
-
-@app.get("/v1/game/packs")
-async def game_packs(x_api_key: str | None = Header(default=None)):
-    require_key(x_api_key)
-    titles = {
-        "general": "General",
-        "cine": "Cine",
-        "series": "Series",
-        "anime": "Anime",
-        "infantil": "Infantil",
-        "novelas": "Novelas",
-    }
-    counts: dict[str, int] = {}
-    total = 0
-    try:
-        rows = await db().fetch(
-            "select coalesce(pack, 'general') as pack, count(*) as n "
-            "from trivia_questions group by coalesce(pack, 'general')"
-        )
-        counts = {str(row["pack"]): int(row["n"] or 0) for row in rows}
-        total = sum(counts.values())
-    except Exception:  # noqa: BLE001 - la salud de packs no debe romper la API
-        log.exception("Play: no se pudieron contar los packs")
-    packs = []
-    for pack_id, title in titles.items():
-        questions = total if pack_id == "general" else counts.get(pack_id, 0)
-        packs.append({
-            "id": pack_id,
-            "title": title,
-            "active": questions > 0,
-            "questions": questions,
-        })
-    return {"packs": packs}
-
-
-@app.get("/v1/game/health")
-async def game_health(x_api_key: str | None = Header(default=None)):
-    require_key(x_api_key)
-    rooms = len(_GAME_ROOMS)
-    try:
-        row = await db().fetchrow(
-            "select count(*) as n, max(created_at) as last from trivia_questions"
-        )
-        served = await db().fetchval("select count(*) from trivia_served")
-        questions = int(row["n"] or 0) if row else 0
-        version = int(row["last"].timestamp()) if row and row["last"] else 0
-        return {
-            "ok": True,
-            "rooms": rooms,
-            "questions": questions,
-            "served": int(served or 0),
-            "version": version,
-            "maxRooms": GAME_MAX_ROOMS,
-        }
-    except Exception:  # noqa: BLE001 - la salud no debe romper por la DB
-        return {
-            "ok": True,
-            "rooms": rooms,
-            "questions": 0,
-            "served": 0,
-            "version": 0,
-            "db": False,
-            "maxRooms": GAME_MAX_ROOMS,
-        }

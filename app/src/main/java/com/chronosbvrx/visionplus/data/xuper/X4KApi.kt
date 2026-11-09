@@ -1812,6 +1812,7 @@ object X4KApi {
             }
 
             val m = mediasJson?.takeIf { it.isNotBlank() } ?: return@guarded false
+            com.chronosbvrx.visionplus.data.LiveHistory.remember(context, channelCode, title, logo)
             launch(
                 context = context,
                 mode = "live",

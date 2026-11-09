@@ -93,8 +93,8 @@
                 <!-- Vision+ Home: ajustes, buscador, secciones e Inicio. -->
                 <data android:scheme="visionplus" android:host="open" />
             </intent-filter>
-            <!-- Vision+ Play: invitación a una sala (solo teléfono). Filtro PROPIO para que
-                 su pathPrefix no se mezcle con los demás destinos. -->
+            <!-- Mando de Vision+ Party: el puente del QR usa este esquema para
+                 abrir el controlador dentro de la app, no en el navegador. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

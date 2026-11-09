@@ -45,14 +45,43 @@ services:
     environment:
       DATABASE_URL: "postgresql://${POSTGRES_USER:-catalog_user}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-catalog_db}"
       API_KEY: "${API_KEY:?define API_KEY en server/.env}"
+      # TheIntroDB: con cuenta sube el tope de 5,000 a 100,000 consultas/día.
+      THEINTRODB_API_KEY: "${THEINTRODB_API_KEY:-}"
       CONFIG_ADMIN_KEY: "${CONFIG_ADMIN_KEY:-}"
       # Banners diarios del Inicio: arte panorámico de TMDB (se busca 1 vez/día).
       TMDB_API_KEY: "${TMDB_API_KEY:-}"
+      # Rate limiting por IP (ventana de 60 s). 0 = desactivado.
+      RATE_LIMIT_ENABLED: "${RATE_LIMIT_ENABLED:-1}"
+      RATE_LIMIT_DEFAULT_PER_MIN: "${RATE_LIMIT_DEFAULT_PER_MIN:-600}"
+      RATE_LIMIT_INDEX_PER_MIN: "${RATE_LIMIT_INDEX_PER_MIN:-60}"
+      RATE_LIMIT_SEARCH_PER_MIN: "${RATE_LIMIT_SEARCH_PER_MIN:-120}"
+      RATE_LIMIT_GEE38_PER_MIN: "${RATE_LIMIT_GEE38_PER_MIN:-120}"
+      RATE_LIMIT_EPG_PER_MIN: "${RATE_LIMIT_EPG_PER_MIN:-120}"
+      RATE_LIMIT_DIAG_PER_MIN: "${RATE_LIMIT_DIAG_PER_MIN:-60}"
+      RATE_LIMIT_CONFIG_PER_MIN: "${RATE_LIMIT_CONFIG_PER_MIN:-300}"
+      RATE_LIMIT_GAME_PER_MIN: "${RATE_LIMIT_GAME_PER_MIN:-1200}"
+      # Caché en memoria de respuestas idénticas (segundos; 0 = desactivado) y
+      # conexiones de la API a PostgreSQL. No crea servicios ni costo extra.
+      GEE_EVENTS_CACHE_SECONDS: "${GEE_EVENTS_CACHE_SECONDS:-45}"
+      GEE_SPORTS_CACHE_SECONDS: "${GEE_SPORTS_CACHE_SECONDS:-120}"
+      DB_POOL_MAX: "${DB_POOL_MAX:-10}"
+      # Página /apoyar: Payment Links públicos de Stripe (seguros de compartir).
+      # Vacíos = la página muestra «Pagos en configuración» sin romper nada.
+      STRIPE_CAFE_URL: "${STRIPE_CAFE_URL:-}"
+      STRIPE_CHELAS_URL: "${STRIPE_CHELAS_URL:-}"
       # Espejo de capítulos: TTL de la copia (vencida → se encarga el refresco y
       # la app cae al portal) y cooldown anti-martillo de la cola.
       EPISODES_TTL_HOURS: "${EPISODES_TTL_HOURS:-48}"
       EPISODES_REQUEST_COOLDOWN_MINUTES: "${EPISODES_REQUEST_COOLDOWN_MINUTES:-10}"
       EPISODES_FAILED_RETRY_HOURS: "${EPISODES_FAILED_RETRY_HOURS:-24}"
+      # Indexado de marcadores de salto: pase de fondo que deja listo el primer
+      # capítulo de cada temporada (y los siguientes cuando hay datos).
+      MARKERS_PREWARM: "${MARKERS_PREWARM:-1}"
+      MARKERS_PREWARM_BATCH: "${MARKERS_PREWARM_BATCH:-30}"
+      MARKERS_PREWARM_INTERVAL_SECONDS: "${MARKERS_PREWARM_INTERVAL_SECONDS:-15}"
+      MARKERS_PREWARM_IDLE_SECONDS: "${MARKERS_PREWARM_IDLE_SECONDS:-300}"
+      MARKERS_PREWARM_DELAY_SECONDS: "${MARKERS_PREWARM_DELAY_SECONDS:-0.35}"
+      MARKERS_PREWARM_EPISODES: "${MARKERS_PREWARM_EPISODES:-3}"
       TZ: "${TZ:-America/Mexico_City}"
     ports:
       - "127.0.0.1:8100:8000"
@@ -88,6 +117,7 @@ services:
     environment:
       DATABASE_URL: "postgresql://${POSTGRES_USER:-catalog_user}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-catalog_db}"
       SYNC_INTERVAL_SECONDS: "${SYNC_INTERVAL_SECONDS:-21600}"
+      CALENDAR_CHECK_SECONDS: "${CALENDAR_CHECK_SECONDS:-900}"
       SEED_DEMO: "${SEED_DEMO:-0}"
       XTV_SYNC: "${XTV_SYNC:-1}"
       MAGIS_SYNC: "${MAGIS_SYNC:-1}"
@@ -115,10 +145,15 @@ services:
       EPISODES_DELAY_SECONDS: "${EPISODES_DELAY_SECONDS:-0.25}"
       EPISODES_RETRY_HOURS: "${EPISODES_RETRY_HOURS:-6}"
       EPISODES_MAX_ATTEMPTS: "${EPISODES_MAX_ATTEMPTS:-6}"
+      # Pre-calentamiento del espejo: encola temporadas del catálogo cuando la
+      # cola está baja (popular primero). Acelera «Siguiente capítulo».
+      EPISODES_PREWARM: "${EPISODES_PREWARM:-1}"
+      EPISODES_PREWARM_BATCH: "${EPISODES_PREWARM_BATCH:-400}"
+      EPISODES_PREWARM_LOW_WATER: "${EPISODES_PREWARM_LOW_WATER:-80}"
       # Nombre real y sinopsis por capítulo (TMDB): una petición por temporada,
       # guardada en `episode_meta`. Presupuesto y TTL del refresco.
       EPISODES_META_SYNC: "${EPISODES_META_SYNC:-1}"
-      # Vision+ Play: banco de preguntas generado del catálogo (Fase 0/1).
+      # Vision+ Party: banco de preguntas generado del catálogo (Fase 0/1).
       TRIVIA_MAX_PER_CYCLE: "${TRIVIA_MAX_PER_CYCLE:-400}"
       TRIVIA_BANK_CAP: "${TRIVIA_BANK_CAP:-8000}"
       TRIVIA_MIN_HOURS: "${TRIVIA_MIN_HOURS:-6}"

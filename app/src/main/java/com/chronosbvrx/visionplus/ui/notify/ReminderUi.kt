@@ -76,7 +76,11 @@ fun MobileRemindBell(
                         Toast.makeText(context, "El partido ya empezó", Toast.LENGTH_SHORT).show()
                         return@gate
                     }
-                    if (ReminderKit.schedule(context, key, at, title, "Empieza en 30 minutos")) {
+                    if (ReminderKit.schedule(
+                            context, key, at, title, "Empieza en 30 minutos",
+                            com.chronosbvrx.visionplus.home.contract.VisionLinks.sports(matchId),
+                        )
+                    ) {
                         Toast.makeText(context, "Te avisaremos 30 min antes", Toast.LENGTH_SHORT).show()
                         tick++
                     }
@@ -121,7 +125,11 @@ fun TvRemindAction(
                         Toast.makeText(context, "El partido ya empezó", Toast.LENGTH_SHORT).show()
                         return@gate
                     }
-                    if (ReminderKit.schedule(context, key, at, title, "Empieza en 30 minutos")) {
+                    if (ReminderKit.schedule(
+                            context, key, at, title, "Empieza en 30 minutos",
+                            com.chronosbvrx.visionplus.home.contract.VisionLinks.sports(matchId),
+                        )
+                    ) {
                         Toast.makeText(context, "Te avisaremos 30 min antes", Toast.LENGTH_SHORT).show()
                         tick++
                     }

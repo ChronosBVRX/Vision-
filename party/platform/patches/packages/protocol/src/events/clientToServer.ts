@@ -1,0 +1,256 @@
+import type { SupportedLanguage } from "@open-party-lab/game-core";
+import type { ThemeName } from "@open-party-lab/ui-kit";
+import type { HostControlDenyReason } from "../dto/hostControl.js";
+import type { RoomSnapshot } from "../dto/room.js";
+import type { PlayerSetupValue, PlayerSnapshot } from "../dto/player.js";
+
+export interface OkResult<T> {
+  ok: true;
+  data: T;
+}
+
+export interface ErrorResult {
+  ok: false;
+  error: string;
+}
+
+export type AckResult<T> = OkResult<T> | ErrorResult;
+
+export interface CreateRoomRequest {
+  hostName?: string;
+  language?: SupportedLanguage;
+  roomCode?: string;
+  /** Locks a newly-created room to this game. */
+  gameId?: string | null;
+}
+
+export interface JoinRoomRequest {
+  roomCode: string;
+  playerName: string;
+  deviceId: string;
+  preferredColor?: string;
+}
+
+export interface ResumeSessionRequest {
+  reconnectToken: string;
+  deviceId: string;
+}
+
+export interface PlayerReadyRequest {
+  roomCode: string;
+  playerId: string;
+  isReady: boolean;
+}
+
+export interface PlayerSelectCharacterRequest {
+  roomCode: string;
+  playerId: string;
+  characterId: string;
+}
+
+export interface PlayerSetupRequest {
+  roomCode: string;
+  playerId: string;
+  selectionKey: string;
+  value: PlayerSetupValue;
+}
+
+export interface PlayerProfileRequest {
+  roomCode: string;
+  playerId: string;
+  name: string;
+  avatar: string | null;
+}
+
+export interface GameSelectRequest {
+  roomCode: string;
+  gameId: string | null;
+}
+
+export interface GameHostActionRequest<TAction = unknown> {
+  roomCode: string;
+  gameId: string;
+  action: TAction;
+}
+
+export interface GameInputRequest<TInput = unknown> {
+  roomCode: string;
+  playerId: string;
+  input: TInput;
+}
+
+export interface RoundStartRequest {
+  roomCode: string;
+}
+
+export interface RoundAbortRequest {
+  roomCode: string;
+}
+
+/**
+ * Hold or release the running round.
+ *
+ * Whoever drives the room may pause it — the shared screen, or the phone that
+ * took the controls over. Pausing is what makes a host menu usable mid-game:
+ * nobody has to lose a round because someone needed the settings.
+ */
+export interface RoundPauseRequest {
+  roomCode: string;
+  paused: boolean;
+}
+
+export interface CreateRoomSuccess {
+  room: RoomSnapshot;
+}
+
+export interface JoinRoomSuccess {
+  room: RoomSnapshot;
+  player: PlayerSnapshot;
+  reconnectToken: string;
+}
+
+export interface ResumeSessionSuccess {
+  room: RoomSnapshot;
+  player: PlayerSnapshot;
+  reconnectToken: string;
+}
+
+export interface LeaveRoomRequest {
+  roomCode: string;
+}
+
+export interface LeaveRoomSuccess {
+  room: RoomSnapshot;
+}
+
+export interface KickPlayerRequest {
+  roomCode: string;
+  playerId: string;
+}
+
+export interface KickPlayerSuccess {
+  room: RoomSnapshot;
+}
+
+export interface PlayerSetupSuccess {
+  room: RoomSnapshot;
+  player: PlayerSnapshot;
+}
+
+export interface RoundAbortSuccess {
+  room: RoomSnapshot;
+}
+
+export interface HostControlRequest {
+  roomCode: string;
+  playerId: string;
+}
+
+export interface HostControlResolveRequest {
+  roomCode: string;
+  /** The requesting player, echoed back so a stale approval cannot land. */
+  playerId: string;
+  grant: boolean;
+  reason?: HostControlDenyReason;
+}
+
+export interface HostControlReleaseRequest {
+  roomCode: string;
+}
+
+export interface HostControlSuccess {
+  room: RoomSnapshot;
+}
+
+export interface RoomLanguageRequest {
+  roomCode: string;
+  language: SupportedLanguage;
+}
+
+export interface RoomLanguageSuccess {
+  room: RoomSnapshot;
+}
+
+export interface RoomThemeRequest {
+  roomCode: string;
+  theme: ThemeName;
+}
+
+export interface RoomThemeSuccess {
+  room: RoomSnapshot;
+}
+
+export interface RoomLifetimeExtensionRequest {
+  roomCode: string;
+}
+
+export interface RoomLifetimeExtensionSuccess {
+  room: RoomSnapshot;
+}
+
+export interface ClientToServerEvents {
+  "server:time": (payload: Record<string, never>, ack: (serverTime: number) => void) => void;
+  "room:create": (
+    payload: CreateRoomRequest,
+    ack: (result: AckResult<CreateRoomSuccess>) => void
+  ) => void;
+  "room:join": (
+    payload: JoinRoomRequest,
+    ack: (result: AckResult<JoinRoomSuccess>) => void
+  ) => void;
+  "session:resume": (
+    payload: ResumeSessionRequest,
+    ack: (result: AckResult<ResumeSessionSuccess>) => void
+  ) => void;
+  "room:leave": (
+    payload: LeaveRoomRequest,
+    ack: (result: AckResult<LeaveRoomSuccess>) => void
+  ) => void;
+  "player:kick": (
+    payload: KickPlayerRequest,
+    ack: (result: AckResult<KickPlayerSuccess>) => void
+  ) => void;
+  "room:set-language": (
+    payload: RoomLanguageRequest,
+    ack: (result: AckResult<RoomLanguageSuccess>) => void
+  ) => void;
+  "room:set-theme": (
+    payload: RoomThemeRequest,
+    ack: (result: AckResult<RoomThemeSuccess>) => void
+  ) => void;
+  "room:extend-lifetime": (
+    payload: RoomLifetimeExtensionRequest,
+    ack: (result: AckResult<RoomLifetimeExtensionSuccess>) => void
+  ) => void;
+  "player:ready": (payload: PlayerReadyRequest) => void;
+  "player:set-profile": (
+    payload: PlayerProfileRequest,
+    ack: (result: AckResult<ResumeSessionSuccess>) => void
+  ) => void;
+  "player:select-character": (payload: PlayerSelectCharacterRequest) => void;
+  "player:set-setup": (
+    payload: PlayerSetupRequest,
+    ack: (result: AckResult<PlayerSetupSuccess>) => void
+  ) => void;
+  "host-control:request": (
+    payload: HostControlRequest,
+    ack: (result: AckResult<HostControlSuccess>) => void
+  ) => void;
+  "host-control:resolve": (
+    payload: HostControlResolveRequest,
+    ack: (result: AckResult<HostControlSuccess>) => void
+  ) => void;
+  "host-control:release": (
+    payload: HostControlReleaseRequest,
+    ack: (result: AckResult<HostControlSuccess>) => void
+  ) => void;
+  "game:select": (payload: GameSelectRequest) => void;
+  "game:host-action": (payload: GameHostActionRequest) => void;
+  "game:input": (payload: GameInputRequest) => void;
+  "round:start": (payload: RoundStartRequest) => void;
+  "round:abort": (
+    payload: RoundAbortRequest,
+    ack: (result: AckResult<RoundAbortSuccess>) => void
+  ) => void;
+  "round:pause": (payload: RoundPauseRequest) => void;
+}

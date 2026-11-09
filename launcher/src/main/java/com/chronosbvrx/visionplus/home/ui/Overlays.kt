@@ -62,10 +62,10 @@ import com.chronosbvrx.visionplus.home.data.HomeUpdate
 @Composable
 fun CommandCenterDialog(
     profileName: String,
+    profileAvatar: String,
     profiles: Int,
     onDismiss: () -> Unit,
     onPersonalize: () -> Unit,
-    onOpenVisionSettings: () -> Unit,
     onLauncherSettings: () -> Unit,
     visionInstalled: Boolean = true,
     visionInstallState: HomeUpdate.State = HomeUpdate.State.Idle,
@@ -118,20 +118,11 @@ fun CommandCenterDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Box(
-                        Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(Brush.linearGradient(listOf(HomeColors.Blue, Color(0xFF6E4BF6)))),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            profileName.trim().ifBlank { "Principal" }.take(1).uppercase(),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
-                        )
-                    }
+                    ProfileAvatarBadge(
+                        name = profileName.trim().ifBlank { "Principal" },
+                        avatar = profileAvatar,
+                        size = 42.dp,
+                    )
                     Column(Modifier.weight(1f)) {
                         Text(
                             profileName.trim().ifBlank { "Principal" },
@@ -139,12 +130,15 @@ fun CommandCenterDialog(
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
-                            if (profiles > 1) "$profiles perfiles en este equipo" else "Perfil principal",
+                            if (profiles > 1) {
+                                "$profiles perfiles · se cambia en Vision+"
+                            } else {
+                                "Perfil principal"
+                            },
                             color = HomeColors.TextFaint,
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    HomeButton(label = "Cambiar", onClick = onOpenVisionSettings, icon = null)
                 }
                 Spacer(Modifier.height(18.dp))
                 if (!homeDefault) {
@@ -194,12 +188,6 @@ fun CommandCenterDialog(
                     title = "Personalizar Inicio",
                     detail = "Canales, apps, filas y apariencia",
                     onClick = onPersonalize,
-                )
-                PanelAction(
-                    icon = Icons.Rounded.SettingsRemote,
-                    title = "Ajustes de Vision+",
-                    detail = "Perfiles, continuidad, calidad y descargas",
-                    onClick = onOpenVisionSettings,
                 )
                 Spacer(Modifier.height(14.dp))
                 Text(

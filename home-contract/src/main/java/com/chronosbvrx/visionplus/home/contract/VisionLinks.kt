@@ -104,7 +104,7 @@ object VisionLinks {
         if (eventId.isNotBlank()) query("event", eventId)
     }
 
-    /** El hub de Juegos de Vision+ Play. */
+    /** El hub de Juegos de Vision+ Party. */
     fun games(): String = "$SCHEME://$HOST_OPEN/games"
 
     /** Las descargas / contenido sin conexión de Vision+. */

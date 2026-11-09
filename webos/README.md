@@ -4,10 +4,12 @@ Port de Vision+ a LG webOS usando la misma arquitectura que el port de XuperTV:
 una app web (HTML/CSS/JS) + un servicio Luna en Node.js que habla con el API
 del VPS y con el portal XTV, y publica el video por un proxy HTTP local.
 
-> Estado: **port funcional v0.2.0**. Catálogo, búsqueda, ficha con
+> Estado: **port funcional v0.3.0**. Catálogo, búsqueda, ficha con
 > temporadas/capítulos, TV en vivo con EPG, deportes/agenda, VOD/live, audio y
 > subtítulos por idioma, calidades, omitir intro, «Seguir viendo» y «Mi lista».
-> Faltan descargas, perfiles, juegos y la prueba en una TV física.
+> Probado en el **webOS TV 26 Simulator** (UI, VOD y TV en vivo) contra el
+> dev-server HTTP; faltan descargas, perfiles, juegos, el servicio Luna real en
+> una TV física y la prueba del IPK por el flujo Key Server/SSH.
 
 ## Por qué funciona sin el motor nativo
 
@@ -53,15 +55,50 @@ el teléfono ni con la app Android.
 ## Probar en el navegador (sin TV)
 
 ```bash
-node webos/service/dev-server.js
-# abrir http://127.0.0.1:8910/
+./webos/tools/run-dev.sh
+# abrir http://127.0.0.1:8910/?relay=1
 ```
 
-El servidor de desarrollo expone los mismos métodos del servicio por HTTP y
-sirve la app. El video usa el proxy local; en un PC x86 el binario `ffmpeg` ARM
-no se puede ejecutar, así que `relayAvailable` será `false` y el modo suave no
-estará disponible. La reproducción directa tampoco se puede validar en Chrome
-si no soporta H.265; en la TV sí.
+`run-dev.sh` mantiene la interfaz de LG (no activa `?platform=pc`) y enciende el
+relay solo para el navegador. Chrome/Edge no reproducen MPEG-TS/HEVC, así que
+sin `?relay=1` el reproductor no puede validarse en el PC; en la TV real la
+reproducción es nativa y no usa el relay.
+
+El FFmpeg ARM incluido en el IPK no se ejecuta en x86. El motor intenta primero
+`VISION_FFMPEG`, luego el binario incluido y por último el `ffmpeg` del PATH.
+Si el `ffmpeg` del sistema no puede leer el CDN (algunos builds estáticos
+fallan), indica uno que sí funcione:
+
+```bash
+VISION_FFMPEG=/ruta/a/ffmpeg ./webos/tools/run-dev.sh
+```
+
+Smoke test del servidor, catálogo, resolución y relay:
+
+```bash
+VISION_FFMPEG=/ruta/a/ffmpeg ./webos/tools/smoke-test.sh
+```
+
+### Simulador oficial (webOS TV 26)
+
+El **webOS TV 26 Simulator** oficial se puede descargar desde LG (WebOS Studio
+/ Simulator Installation). El simulador no instala IPK: ejecuta el directorio
+de la app. Para probar sin agregar el servicio Luna a mano, `run-simulator.sh`
+lanza la app con `launchParams` que apuntan al `dev-server` HTTP y activan el
+relay. Así se valida la interfaz y el reproductor en el Chromium real de webOS.
+
+```bash
+# Terminal 1: dev-server
+VISION_FFMPEG=/ruta/a/ffmpeg ./webos/tools/run-dev.sh
+
+# Terminal 2: simulador (binario extraído del zip de LG)
+WEBOS_SIMULATOR_BIN=/ruta/al/webOS_TV_26_Simulator_1.5.0 \
+  ./webos/tools/run-simulator.sh
+```
+
+El servicio Luna real se sigue probando con `smoke-test.sh` y con la TV física.
+En el simulador, `devServiceUrl` apunta solo a `127.0.0.1`/`localhost`; el
+override está pensado para desarrollo y no acepta hosts remotos.
 
 ## Empaquetar
 
@@ -70,7 +107,10 @@ si no soporta H.265; en la TV sí.
 ./webos/tools/prepare-ffmpeg.sh "/ruta/com.webosflux.xuptertv.fidelity_1.5.8_all.ipk"
 
 ./webos/tools/pack.sh
-# webos/build/visionplus-webos_0.2.0_all.ipk
+# webos/build/visionplus-webos_0.3.0_all.ipk
+
+./webos/tools/verify-ipk.sh
+# comprueba appinfo, servicio, control, packageinfo y ffmpeg ejecutable
 ```
 
 El `.ipk` se arma como un paquete webOS (`ar` + `control.tar.gz` + `data.tar.gz`)
@@ -86,9 +126,13 @@ Instalación con webOS CLI en modo desarrollador:
 
 ```bash
 ares-setup-device            # una vez
-ares-install -d <device> webos/build/visionplus-webos_0.2.0_all.ipk
+ares-install -d <device> webos/build/visionplus-webos_0.3.0_all.ipk
 ares-launch  -d <device> com.chronosbvrx.visionplus.webos
 ```
+
+> El instalador de Vision+ para Android replica este flujo sin PC: Key Server
+> en `9991`, SSH `prisoner@9922`, subida a `/media/developer/temp` y
+> `luna://com.webos.appInstallService/dev/install`.
 
 Si el instalador rechaza el paquete sin firmar, empaquétalo con
 `ares-package` (webOS CLI) en lugar del script; la estructura de `webos/app` y
@@ -129,6 +173,11 @@ Si el instalador rechaza el paquete sin firmar, empaquétalo con
   para que las cabeceras del CDN se apliquen también a los segmentos.
 - Ajustes: modo de reproducción, calidad, subtítulos, omitir intro, renovar
   sesión y limpiar caché.
+- «Mi lista» e «Historial» vacíos muestran un estado claro y el foco vuelve a
+  «Volver»; los capítulos usan el nombre real de TMDB/VPS o «Capítulo N», sin
+  las marcas técnicas del portal.
+- Probado en el **webOS TV 26 Simulator**: Inicio, VOD y TV en vivo con relay,
+  sin errores de consola (el servicio Luna real sigue pendiente en TV física).
 
 ## Qué falta (roadmap)
 

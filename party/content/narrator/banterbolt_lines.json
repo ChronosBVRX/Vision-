@@ -1,0 +1,137 @@
+[
+  {
+    "id": "welcome",
+    "variants": [
+      "¡Bienvenidos a Banterbolt! Aquí se viene a escribir tonterías y a votar sin piedad.",
+      "¡Ya llegó la banda! Saquen el celular, que esto se va a poner bueno.",
+      "Banterbolt: el único lugar donde escribir mal te puede hacer ganar.",
+      "¡Llegó Banterbolt! Escriban tonterías, voten sin piedad y culpen al de al lado.",
+      "Bienvenidos al único juego donde quedar mal es parte del chiste.",
+      "Saquen el celular y la cara de inocentes: Banterbolt ya empezó.",
+      "Banterbolt: el programa donde todos escriben y nadie se hace responsable.",
+      "¡Órale! La fiesta ya empezó y el jurado ya está juzgando.",
+      "Bienvenidos. Aquí se viene a reír, a votar y a perder amigos con estilo.",
+      "Banterbolt: el único lugar donde tu peor idea puede ganar."
+    ]
+  },
+  {
+    "id": "write",
+    "variants": [
+      "Escriban su respuesta. Si es mala, mejor; si es buena, sospechosa.",
+      "Tienen su prompt. No piensen tanto, que se enfría el chiste.",
+      "Saquen la pluma digital. La gracia no se va a escribir sola.",
+      "Saquen la pluma digital y no piensen tanto.",
+      "Tienen el prompt. Ahora sorprendan a su propio cerebro.",
+      "Escriban rápido, que el chiste se enfría.",
+      "Aquí no hay respuestas correctas, solo respuestas divertidas.",
+      "Escriban como si nadie los viera y como si todos fueran a juzgar.",
+      "La hoja está en blanco. La vergüenza también.",
+      "Escriban su respuesta y no culpen al teclado."
+    ]
+  },
+  {
+    "id": "vote",
+    "variants": [
+      "Voten por la respuesta que más les hizo reír. No se vale votar por la propia.",
+      "A ver, ¿cuál de estas dos joyas se lleva su voto?",
+      "Voten con el corazón, pero sin ponerse de acuerdo.",
+      "Voten por la que más les hizo reír. No se vale votar por la propia.",
+      "Voten por la que los dejó pensando, aunque sea peligroso.",
+      "El jurado ya está listo. Voten sin culpa.",
+      "Aquí se premia el chiste, no la amistad.",
+      "Voten por la respuesta que les sacó una risa de verdad.",
+      "Voten rápido, que la duda también cuenta como traición.",
+      "Voten por la que los hizo reír, no por la que los hizo pensar."
+    ]
+  },
+  {
+    "id": "reveal",
+    "variants": [
+      "A ver, ¿quién escribió esta joya?",
+      "Momento de la verdad: destapen a los autores.",
+      "Y el genio detrás de esto es…",
+      "Se acabó el anonimato. Que salga el responsable.",
+      "Atención: la identidad del cómico ya se revela.",
+      "Aquí viene el nombre del que escribió esta obra maestra.",
+      "Destapen al autor, que la vergüenza es compartida.",
+      "El sobre ya se abre. ¿Quién fue el chistoso?",
+      "Salgan de la sombra, autores. La fama los espera.",
+      "Aquí viene el nombre del responsable de esta belleza."
+    ]
+  },
+  {
+    "id": "zap",
+    "variants": [
+      "¡Zas! Barrida total. Puntos extra y humillación pública.",
+      "¡Zas! Les gustó a todos. Qué miedo.",
+      "Barrida unánime. Alguien escribió algo demasiado bueno.",
+      "¡Zas! El chiste pegó y la mesa se rindió.",
+      "¡Zas! Votación perfecta. Nadie se atrevió a contradecir.",
+      "¡Zas! El público se rindió. No hay vuelta.",
+      "¡Zas! Esa respuesta se llevó todos los votos.",
+      "¡Zas! Ni el jurado pudo disimular.",
+      "¡Zas! Puntos extra y una envidia que no se disimula.",
+      "¡Zas! Se llevaron todos los puntos y la atención."
+    ]
+  },
+  {
+    "id": "jinx",
+    "variants": [
+      "¡Misma idea! Escribieron lo mismo. Cero puntos y un abrazo.",
+      "Se copiaron mentalmente. Qué vergüenza ajena.",
+      "¡Misma idea! Dos genios, una sola idea. No hay puntos.",
+      "¡Misma idea! Hasta el chiste se repitió.",
+      "¡Misma idea! Ese chiste ya lo habían soñado.",
+      "¡Misma idea! La misma respuesta. El universo se está burlando.",
+      "¡Misma idea! Ni el algoritmo lo hubiera predicho.",
+      "¡Misma idea! Se les ocurrió lo mismo. Qué miedo.",
+      "¡Misma idea! Cero puntos, pero un chiste compartido.",
+      "¡Misma idea! Hasta el universo se quedó callado."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Van los puntos. No se peleen, todavía.",
+      "Así va la tabla. Todavía hay tiempo de remontar.",
+      "Puntos parciales. El que se confíe pierde.",
+      "Marcador de Banterbolt. Los de arriba sonríen; los de abajo traman.",
+      "La tabla está que arde y todavía falta.",
+      "Puntos de la ronda. El que se ría primero, pierde.",
+      "Así van los números. La próxima ronda puede cambiarlo todo.",
+      "Tabla en vivo. El que se confíe, se cae.",
+      "Puntos parciales. La próxima ronda puede dar la vuelta.",
+      "Así va la tabla. La gloria todavía no tiene dueño."
+    ]
+  },
+  {
+    "id": "finale",
+    "variants": [
+      "Ronda relámpago: todos responden lo mismo. Aquí se define al campeón.",
+      "Última ronda. Todo o nada. Saquen su mejor tontería.",
+      "Se acabó el calentamiento: viene la ronda relámpago.",
+      "Última oportunidad. El que no arriesgue, que no llore.",
+      "Ronda final: el que gane se lleva la gloria; el que pierda, la captura.",
+      "Se viene la relámpago. Saquen el chiste guardado.",
+      "Todo o nada. La tabla está a punto de decidir.",
+      "Ronda relámpago. Una sola respuesta y se acaba.",
+      "Última ronda: el que se quede callado, pierde.",
+      "Se viene la final. Saquen el chiste que guardaron."
+    ]
+  },
+  {
+    "id": "podium",
+    "variants": [
+      "¡Tenemos ganador! Que vaya por los tacos.",
+      "¡Fin del juego! El campeón se lleva la gloria y la responsabilidad de invitar.",
+      "¡Se acabó! Ya pueden presumir en el grupo de grupo de mensajes.",
+      "¡Campeón! Que se parezca a alguien que ganó algo.",
+      "Fin de Banterbolt. El podio es suyo; la cuenta, también.",
+      "¡Tenemos campeón! Que pague las quesadillas.",
+      "Se terminó. El que perdió, que diga que fue por el calor.",
+      "¡Fin del juego! El campeón ya puede presumir.",
+      "Tenemos ganador. Que se acuerde de los que lo aguantaron.",
+      "Se terminó Banterbolt. La gloria es de uno; la vergüenza, de todos."
+    ]
+  }
+]

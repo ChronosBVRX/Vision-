@@ -166,7 +166,6 @@ def _mexico_home_team_channels(home_name: str) -> list[str]:
 # (slug ESPN, título, cadenas candidatas en la lista del aparato, en orden)
 LEAGUES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("mex.1", "Liga MX", ("TUDN", "Canal 5", "Azteca 7", "Fox Sports", "Claro Sports", "ViX Deportes", "ESPN")),
-    ("mex.2", "Liga de Expansión MX", ("TUDN", "Fox Sports", "Claro Sports", "ESPN", "Azteca 7")),
     ("esp.1", "LaLiga", ("Movistar Futbol", "DAZN", "Directv Sports", "Canal Gol", "ESPN", "Sky Sports")),
     ("eng.1", "Premier League", ("TNT Sports", "Fox Sports", "ESPN", "DAZN", "Movistar Futbol", "Telemundo", "Universo")),
     ("ita.1", "Serie A", ("ESPN", "ESPN 2", "DAZN", "Directv Sports")),

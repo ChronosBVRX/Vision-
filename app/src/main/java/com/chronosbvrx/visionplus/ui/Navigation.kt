@@ -14,10 +14,12 @@ sealed interface Route {
     data object Downloads : Route
     data object Live : Route
     data object Sports : Route
-    /** Vision+ Play: crear/unirse a una sala de trivia. */
+    /** Vision+ Party: crear/unirse a una sala de trivia. */
     data object Games : Route
-    /** Una sala concreta (código de 6 caracteres). */
-    data class GameRoom(val code: String) : Route
+    /** Host de Vision+ Party: la tele muestra el juego y el QR. */
+    data class PartyHost(val gameId: String? = null) : Route
+    /** Mando nativo (WebView a pantalla completa) para una sala concreta. */
+    data class PartyController(val roomCode: String) : Route
     data object Settings : Route
     data object About : Route
     data object Search : Route
@@ -104,7 +106,7 @@ class Navigator(start: List<Route>) {
      * teléfono dejaba una rutina de player colgada en el stack.
      */
     fun pushPlayer(route: Route) {
-        if (stack.size > 1 && (stack.last() is Route.Player || stack.last() is Route.LivePlayer)) {
+        if (stack.size > 1 && (stack.last() is Route.Player || stack.last() is Route.LivePlayer || stack.last() is Route.PartyController)) {
             stack.removeAt(stack.lastIndex)
         }
         push(route)

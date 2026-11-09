@@ -13,6 +13,32 @@
       return false;
     }
   })();
+  // Solo para probar la app de LG en Chrome: mantiene la interfaz webOS y
+  // fuerza el relay porque el navegador no reproduce TS/HEVC.
+  var RELAY_TEST = (function () {
+    try {
+      return /(?:\?|&)relay=1(?:&|$)/.test(String(location.search || ""));
+    } catch (error) {
+      return false;
+    }
+  })();
+
+  // Pruebas en el webOS TV Simulator: permite apuntar la app al dev-server
+  // HTTP en lugar del servicio Luna, y activar el relay si el simulador no
+  // reproduce HEVC. Se pasa en los launchParams de ares-launch.
+  (function applyLaunchOverrides() {
+    var launch = {};
+    try {
+      var raw = window.PalmSystem && window.PalmSystem.launchParams;
+      launch = raw ? JSON.parse(raw) : {};
+    } catch (error) {
+      launch = {};
+    }
+    if (launch && launch.devService && /^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?(?:\/|$)/i.test(String(launch.devService))) {
+      CFG.devServiceUrl = String(launch.devService);
+    }
+    if (launch && launch.relay) RELAY_TEST = true;
+  })();
 
   var state = {
     screen: "splash",
@@ -281,7 +307,10 @@
     return new Promise(function (resolve, reject) {
       var payload = params || {};
       var usedLuna = false;
-      if (window.webOS && window.webOS.service && window.webOS.service.request && window.PalmServiceBridge) {
+      // devServiceUrl es explícito: se usa el servidor HTTP aunque el
+      // simulador inyecte las APIs de Luna.
+      var forceHttp = Boolean(CFG.devServiceUrl);
+      if (!forceHttp && window.webOS && window.webOS.service && window.webOS.service.request && window.PalmServiceBridge) {
         usedLuna = true;
         try {
           window.webOS.service.request("luna://" + SERVICE_ID, {
@@ -302,7 +331,7 @@
       }
       if (usedLuna) return;
 
-      if (window.PalmServiceBridge) {
+      if (!forceHttp && window.PalmServiceBridge) {
         try {
           var bridge = new window.PalmServiceBridge();
           var settled = false;
@@ -1160,6 +1189,38 @@
       });
   }
 
+  /**
+   * El portal rotula sus capítulos con marcas técnicas («Serie Season1 - 1»,
+   * «Serie T1_11»). Se limpian para mostrar el nombre propio o «Capítulo N».
+   */
+  function cleanEpisodeTitle(raw, number, seriesTitle) {
+    var text = String(raw || "")
+      .replace(/_/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!text) return "";
+    text = text
+      .replace(/\b(?:season|temporada)\s*\d{1,2}\s*[-–—·:]?\s*\d{1,3}\b/ig, " ")
+      .replace(/\b[Tt]\d{1,2}\s*[-–—·_:]?\s*\d{1,3}\b/g, " ")
+      .replace(/\bS\d{1,2}\s*[-–—·_:]?\s*E\d{1,3}\b/ig, " ")
+      .replace(/\b(?:cap[ií]tulo|episodio|episode)\s*\d{1,3}\b/ig, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^[\s\-–—·:]+|[\s\-–—·:]+$/g, "")
+      .trim();
+    if (!text) return "";
+    if (/^\d{1,3}$/.test(text)) return "";
+    var series = String(seriesTitle || "").replace(/_/g, " ").replace(/\s+/g, " ").trim();
+    if (series && text.toLowerCase() === series.toLowerCase()) return "";
+    return text;
+  }
+
+  function episodeLabel(episode, seriesTitle) {
+    var number = (episode && episode.number) || 1;
+    var clean = cleanEpisodeTitle(episode && (episode.title || episode.name), number, seriesTitle);
+    return clean || "Capítulo " + number;
+  }
+
   function renderEpisodes() {
     var holder = $("#detail-episodes");
     holder.innerHTML = "";
@@ -1177,7 +1238,7 @@
         (episode.still ? '<img class="episode-thumb" loading="lazy" src="' + escapeHtml(still) + '" alt="">' : "") +
         '<div class="episode-number">' + escapeHtml(episode.number || "") + "</div>" +
         '<div class="episode-info">' +
-        '<div class="episode-title">' + escapeHtml(episode.title || episode.name || "Capítulo " + episode.number) + "</div>" +
+        '<div class="episode-title">' + escapeHtml(episodeLabel(episode, state.detail.film && state.detail.film.title)) + "</div>" +
         (episode.overview ? '<div class="episode-overview">' + escapeHtml(episode.overview) + "</div>" : "") +
         "</div>";
       row.addEventListener("click", function () {
@@ -1259,14 +1320,17 @@
     state.player.scrubRatio = null;
     state.player.lastSave = 0;
     if (state.screen !== "player") state.player.returnScreen = state.screen;
-    state.player.forceRelay = state.settings.render === "smooth";
+    state.player.forceRelay = RELAY_TEST || state.settings.render === "smooth";
     $("#osd-audio").hidden = true;
     $("#osd-quality").hidden = true;
     $("#osd-subs-label").textContent = "Sin subtítulos";
 
+    var episodeTitle = episode
+      ? cleanEpisodeTitle(episode.title || episode.name, episode.number, film && film.title)
+      : "";
     $("#player-title").textContent = (film && film.title) || "";
     $("#player-subtitle").textContent = episode
-      ? "T" + ((season && season.n) || 1) + " E" + (episode.number || "") + (episode.title ? " · " + episode.title : "")
+      ? "T" + ((season && season.n) || 1) + " E" + (episode.number || "") + (episodeTitle ? " · " + episodeTitle : "")
       : isLiveMode
         ? "Señal en vivo"
         : kindLabel(film);
@@ -1384,7 +1448,7 @@
     request("resolve", {
       ref: url,
       headers: state.player.headers || {},
-      forceRelay: false,
+      forceRelay: RELAY_TEST,
       isLive: true,
       mime: mime,
       drmKey: state.player.film && state.player.film.drmKey ? state.player.film.drmKey : "",
@@ -2256,6 +2320,7 @@
       pageSize: 120,
       total: opts.total || (opts.films || []).length,
       categoryId: opts.categoryId || "",
+      empty: opts.empty || "",
       loader: null,
     };
     $("#grid-title").textContent = state.grid.title;
@@ -2267,7 +2332,7 @@
     if (state.grid.categoryId) loadGridPage(1, false);
     else {
       setTimeout(function () {
-        Focus.first("#grid-items .grid-card");
+        Focus.first("#grid-items .grid-card") || Focus.first("#screen-grid .round-btn");
       }, 40);
     }
   }
@@ -2310,6 +2375,13 @@
     uniqueFilms(items).forEach(function (film) {
       holder.appendChild(createGridCard(film));
     });
+    if (!append && !holder.children.length && state.grid.empty) {
+      holder.innerHTML =
+        '<div class="grid-empty">' +
+        '<div class="grid-empty-title">' + escapeHtml(state.grid.empty) + "</div>" +
+        '<div class="grid-empty-help">Explora el catálogo o vuelve al Inicio.</div>' +
+        "</div>";
+    }
     if (append && holder.children.length > startIndex) {
       setTimeout(function () {
         Focus.set(holder.children[startIndex]);
@@ -2402,7 +2474,9 @@
     state.live.loading = true;
     Promise.all([
       request("liveCatalog", {}, 60000).catch(function () { return { channels: [] }; }),
-      request("live", { page: 1, pageSize: 1200 }, 60000).catch(function () { return { films: [] }; }),
+      // El API topa pageSize en 500; el catálogo de canales (liveCatalog)
+      // sigue trayendo las 1,035 señales y rellena las que falten.
+      request("live", { page: 1, pageSize: 500 }, 60000).catch(function () { return { films: [] }; }),
     ])
       .then(function (results) {
         var catalog = (results[0] && results[0].channels) || [];
@@ -3730,7 +3804,7 @@
   }
 
   function topbarVisibleFor(name) {
-    return name !== "splash" && name !== "player" && name !== "detail" && name !== "games";
+    return name !== "splash" && name !== "player" && name !== "detail";
   }
 
   function updateTopbar(name) {
@@ -3739,7 +3813,6 @@
     var active = "";
     if (name === "home") active = "home";
     else if (name === "live" || name === "sports") active = "live-hub";
-    else if (name === "games") active = "games";
     else if (name === "library" || name === "history") active = "library-hub";
     else if (name === "grid") {
       if (state.topTab === "series" || state.topTab === "anime" || state.topTab === "novelas") active = "series-hub";
@@ -3867,11 +3940,11 @@
     var films = Object.keys(state.list || {}).map(function (key) {
       return state.list[key];
     }).filter(Boolean);
-    if (!films.length) {
-      toast("Tu lista está vacía. Agrega títulos desde una ficha.");
-      return;
-    }
-    openGrid({ title: "Mi lista", films: films });
+    openGrid({
+      title: "Mi lista",
+      films: films,
+      empty: films.length ? "" : "Tu lista está vacía. Agrega títulos desde una ficha.",
+    });
   }
 
   function openHistory() {
@@ -3885,11 +3958,11 @@
       seen[entry.film.id] = true;
       films.push(entry.film);
     });
-    if (!films.length) {
-      toast("Todavía no hay historial.");
-      return;
-    }
-    openGrid({ title: "Historial", films: films });
+    openGrid({
+      title: "Historial",
+      films: films,
+      empty: films.length ? "" : "Todavía no hay historial. Lo que veas aparecerá aquí.",
+    });
   }
 
   function navigateTop(nav) {
@@ -3907,9 +3980,6 @@
       openLive();
     } else if (nav === "sports") {
       openSports();
-    } else if (nav === "games") {
-      showScreen("games");
-      setTimeout(function () { Focus.first("#screen-games .primary-btn"); }, 50);
     } else if (nav === "movies") {
       openSection("movies", "Películas");
     } else if (nav === "series") {
@@ -4219,6 +4289,32 @@
 
   /* ============================ arranque ============================ */
 
+  function setCopyText(selector, value) {
+    var node = $(selector);
+    if (node) node.textContent = value;
+  }
+
+  /**
+   * La misma app se comparte con el port de PC. En LG no deben verse textos
+   * de escritorio («ventana», «Chrome/Edge/Electron», «junto al ejecutable»).
+   */
+  function applyPlatformCopy() {
+    if (PC) return;
+    setCopyText("#set-screen-value", "1920 × 1080 (TV)");
+    setCopyText("#set-screen-help", "La interfaz usa la resolución de la TV y se controla con el mando.");
+    setCopyText("#set-engine-value", "Nativo webOS");
+    setCopyText("#set-engine-codec", "H.265 / H.264 / HLS");
+    setCopyText("#set-engine-help", "La TV reproduce el formato original del catálogo; no se transcodifica.");
+    setCopyText("#set-account-help", "Vision+ para LG usa el perfil local Principal. Los perfiles y la continuidad se sincronizan desde la app del teléfono.");
+    setCopyText("#set-update-title", "Versión de Vision+ para LG");
+    setCopyText("#set-update-help", "Las actualizaciones de Vision+ para LG se instalan desde la app del teléfono.");
+    setCopyText("#set-data-help", "La sesión y la caché viven en el almacenamiento de la app en la TV.");
+    setCopyText("#about-line", "Catálogo VPS, resolución directa del portal XTV y proxy local. Reproductor nativo webOS.");
+    setCopyText("#about-version", VERSION);
+    var checkUpdate = $("#set-check-update");
+    if (checkUpdate) checkUpdate.hidden = true;
+  }
+
   function boot() {
     state.settings = readJson("vp_webos_settings", { render: "direct", quality: "auto", subs: "es", skipIntro: "auto" });
     if (!state.settings.skipIntro) state.settings.skipIntro = "auto";
@@ -4234,6 +4330,7 @@
         if (aboutVersion) aboutVersion.textContent = VERSION;
       }
     }
+    applyPlatformCopy();
     state.progress = readJson("vp_webos_progress", {});
     state.list = readJson("vp_webos_list", {});
     state.live.favorites = readJson("vp_webos_live_fav", {});

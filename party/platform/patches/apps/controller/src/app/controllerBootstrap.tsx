@@ -1,0 +1,193 @@
+import { startTransition, useEffect, useState } from "react";
+import { hasHostControl } from "@open-party-lab/protocol";
+import { ControllerPage } from "../pages/ControllerPage.js";
+import { HostGameMenu } from "../controller-ui/common/HostGameMenu.js";
+import { JoinPage } from "../pages/JoinPage.js";
+import { LobbyPage } from "../pages/LobbyPage.js";
+import { NotFoundPage } from "../pages/NotFoundPage.js";
+import { ReconnectPage } from "../pages/ReconnectPage.js";
+import { SafeAreaLayout } from "../controller-ui/layout/SafeAreaLayout.js";
+import { useWakeHint } from "../hooks/useWakeHint.js";
+import { mountControllerDebugOverlay } from "./debugOverlay.js";
+import { clearStoredControllerIdentity, readPrefilledRoomCode } from "./deviceSession.js";
+import { mountControllerFullscreenOverlay } from "./fullscreenOverlay.js";
+import { ControllerSocketClient, type ControllerAppState } from "./controllerSocketClient.js";
+import { getProfileText } from "../i18n/profileText.js";
+
+function resolveDefaultServerUrl(): string {
+  if (import.meta.env.PROD || window.location.port === "3000") {
+    return window.location.origin;
+  }
+
+  const hostname = window.location.hostname;
+
+  if (!hostname || hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
+    return "http://localhost:3000";
+  }
+
+  const host = hostname.includes(":") ? `[${hostname}]` : hostname;
+  const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+  return `${protocol}//${host}:3000`;
+}
+
+// A native deep link for a new room carries `fresh=1`: drop the old room
+// identity before the client constructor can auto-resume the previous game.
+if (new URLSearchParams(window.location.search).get("fresh") === "1") {
+  clearStoredControllerIdentity();
+}
+
+const controllerClient = new ControllerSocketClient(import.meta.env.VITE_SERVER_URL ?? resolveDefaultServerUrl());
+
+// HostGameMenu owns the pause through an effect. Keep its callback stable so
+// room snapshots do not run the cleanup (resume) and immediately pause again.
+const setRoundPaused = (paused: boolean): void => controllerClient.setRoundPaused(paused);
+
+function resolvePage(state: ControllerAppState): "join" | "reconnect" | "lobby" | "controller" | "missing" {
+  if (!state.room || !state.player) {
+    return state.hasStoredSession ? "reconnect" : "join";
+  }
+
+  if (state.room.selectedGameId && state.room.currentRound) {
+    return "controller";
+  }
+
+  return "lobby";
+}
+
+export function ControllerApp() {
+  const [state, setState] = useState(controllerClient.getState());
+
+  useWakeHint(Boolean(state.room));
+
+  useEffect(() => {
+    const unsubscribe = controllerClient.subscribe((nextState) => {
+      startTransition(() => {
+        setState(nextState);
+      });
+    });
+    controllerClient.connect();
+    setState(controllerClient.getState());
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const gameId = state.room?.selectedGameId;
+    const root = document.documentElement;
+
+    if (gameId) {
+      root.style.setProperty("--controller-art", `url("/party-covers/${gameId}.webp")`);
+    } else {
+      root.style.setProperty("--controller-art", `url("/party-covers/default.webp")`);
+    }
+
+    root.dataset.controllerGame = gameId ?? "";
+  }, [state.room?.selectedGameId]);
+
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Element
+        ? event.target.closest("button, [role=\"button\"]")
+        : null;
+
+      if (!target || target.getAttribute("aria-disabled") === "true") {
+        return;
+      }
+
+      if (target instanceof HTMLButtonElement && target.disabled) {
+        return;
+      }
+
+      navigator.vibrate?.(7);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown, { passive: true });
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, []);
+
+  useEffect(() => {
+    return mountControllerDebugOverlay(controllerClient);
+  }, []);
+
+  useEffect(() => {
+    return mountControllerFullscreenOverlay();
+  }, []);
+
+  const page = resolvePage(state);
+  const connectionText = getProfileText(state.room?.language ?? state.preferredLanguage);
+
+  return (
+    <SafeAreaLayout>
+      {state.room && (!state.connected || !state.room.hostConnected) && <div className="connection-banner" role="status" aria-live="polite">{!state.connected ? connectionText.reconnecting : connectionText.hostOffline}</div>}
+      <fieldset className="connection-content" disabled={Boolean(state.room) && !state.connected}>
+      {page === "join" ? (
+        <JoinPage
+          defaultRoomCode={readPrefilledRoomCode()}
+          connected={state.connected}
+          error={state.error}
+          language={state.room?.language ?? state.preferredLanguage}
+          onJoin={(roomCode, playerName) => controllerClient.joinRoom(roomCode, playerName)}
+        />
+      ) : null}
+
+      {page === "reconnect" ? (
+        <ReconnectPage
+          connected={state.connected}
+          storedSession={state.storedSession}
+          error={state.error}
+          language={state.room?.language ?? state.preferredLanguage}
+          onReconnect={() => controllerClient.resumeSession()}
+          onReset={() => controllerClient.clearStoredSession({ rotateDeviceId: true, disconnect: true })}
+        />
+      ) : null}
+
+      {page === "lobby" ? (
+        <LobbyPage
+          room={state.room}
+          player={state.player}
+          error={state.error}
+          onLeaveRoom={() => controllerClient.leaveRoom()}
+          onSetReady={(isReady) => controllerClient.setReady(isReady)}
+          onSetProfile={(name, avatar) => controllerClient.setProfile(name, avatar)}
+          onSetPlayerSetup={(selectionKey, value) => controllerClient.setPlayerSetup(selectionKey, value)}
+          onRequestHostControl={() => controllerClient.requestHostControl()}
+          onReleaseHostControl={() => controllerClient.releaseHostControl()}
+          onResolveHostControl={(playerId, grant) =>
+            controllerClient.resolveHostControl(playerId, grant)
+          }
+          onSelectGame={(gameId) => controllerClient.selectGame(gameId)}
+          onHostAction={(gameId, action) => controllerClient.sendGameHostAction(gameId, action)}
+          onStartRound={() => controllerClient.startRound()}
+          onBackToMenu={() => controllerClient.returnToGameSelection()}
+          onKickPlayer={(playerId) => controllerClient.kickPlayer(playerId)}
+        />
+      ) : null}
+
+      {page === "controller" ? (
+        <>
+          <ControllerPage
+            state={state}
+            onLeaveRoom={() => controllerClient.leaveRoom()}
+            onInput={(input) => controllerClient.sendInput(input)}
+            onSetReady={(isReady) => controllerClient.setReady(isReady)}
+          />
+          {/* Only the phone driving the room gets this, and only while a round
+              is running — it is the host's menu, not a player's. */}
+          {state.room && hasHostControl(state.room.hostControl, state.player?.id) ? (
+            <HostGameMenu
+              room={state.room}
+              onSetPaused={setRoundPaused}
+              onSetTheme={(theme) => controllerClient.setTheme(theme)}
+              onSetLanguage={(language) => controllerClient.setRoomLanguage(language)}
+              onBackToMenu={() => controllerClient.returnToGameSelection()}
+              onReleaseControl={() => controllerClient.releaseHostControl()}
+            />
+          ) : null}
+        </>
+      ) : null}
+
+      {page === "missing" ? <NotFoundPage language={state.room?.language ?? state.preferredLanguage} /> : null}
+      </fieldset>
+    </SafeAreaLayout>
+  );
+}

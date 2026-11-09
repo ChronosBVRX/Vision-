@@ -29,6 +29,10 @@ class EngineWarmupWiringTest {
         val splash = source("ui/brand/VisionSplash.kt")
         assertTrue("el splash no acepta estado", splash.contains("status: String? = null"))
         assertTrue("el splash no pinta el estado", splash.contains("text = status ?: \"Iniciando Vision+...\""))
+        // El rediseño: la marca sube y se desvanece para revelar el Inicio ya cargado.
+        assertTrue("el splash no se desliza hacia arriba", splash.contains("translationY = -exit.value"))
+        assertTrue("la carga no usa la línea fina de la marca", splash.contains("PROGRESS_WIDTH"))
+        assertTrue("la carga no muestra el logo", splash.contains("VisionFullLogo("))
     }
 
     @Test

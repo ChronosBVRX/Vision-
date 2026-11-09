@@ -375,6 +375,26 @@ class PopularityTest {
     }
 
     @Test
+    fun homeCuratedUsesTheActiveCalendarEventAsHero() {
+        val topFilms = (1..5).map {
+            film("top$it", tmdb = 100 + it, popularity = 900.0 - it, votes = 1_000)
+        }
+        val eventFilms = (1..5).map {
+            film("event$it", tmdb = 400 + it, year = 2026, title = "Evento $it")
+        }
+        val curated = Popularity.homeCurated(
+            emptyList(),
+            listOf(
+                CatalogRow("tendencias", "Tendencias", topFilms),
+                CatalogRow("tema-evento-sagas", "Semana de sagas", eventFilms),
+            ),
+            yearNow = 2026,
+        )
+        assertEquals("event1", curated.hero?.id)
+        assertTrue(curated.themeRows.any { it.id == "tema-evento-sagas" })
+    }
+
+    @Test
     fun homeCuratedThematicRowsDoNotRepeatEachOther() {
         val firstFilms = (1..8).map {
             film("h$it", tmdb = 300 + it, year = 1990, popularity = 0.0, title = "Halloween $it")

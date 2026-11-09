@@ -27,6 +27,12 @@ data class ResumeEntry(
     val positionMs: Long = 0,
     val durationMs: Long = 0,
     val updatedAt: Long = 0,
+    /**
+     * El usuario lo marcó como visto a mano (o lo terminó sin que el motor reportara el
+     * último ms). Es un estado explícito: no depende de la duración conocida y sobrevive a
+     * una reapertura que no haya llegado al final.
+     */
+    val completed: Boolean = false,
 )
 
 /** Una entrada lista para pintar: su ficha del catálogo cuando sigue ahí (o null). */
@@ -144,11 +150,35 @@ object PlaybackHistory {
         matchCards(
             latestBySeries(
                 list(context).filter {
-                    shouldKeep(it.positionMs, it.durationMs) || hasNextEpisode(it)
+                    // Un terminado a mano no vuelve a «Seguir viendo»: si tiene siguiente,
+                    // la tarjeta es la del siguiente capítulo; si no, desaparece de la fila.
+                    (!it.completed && shouldKeep(it.positionMs, it.durationMs)) || hasNextEpisode(it)
                 },
             ),
             films,
         ).take(limit)
+
+    /**
+     * Marca o desmarca un recuerdo como visto. Es el estado explícito del usuario: manda
+     * sobre el avance guardado y funciona aunque la duración sea desconocida. Al desmarcar
+     * se retira del historial (no se inventa un minuto 00:00).
+     */
+    fun markCompleted(context: Context, key: String, completed: Boolean) {
+        val p = prefs(context)
+        val entries = listFresh(context)
+        val target = entries.firstOrNull { it.key == key } ?: return
+        if (!completed) {
+            write(p, entries.filterNot { it.key == key }, immediate = true)
+            return
+        }
+        val now = System.currentTimeMillis()
+        val done = target.copy(
+            completed = true,
+            positionMs = if (target.durationMs > 0L) target.durationMs else maxOf(target.positionMs, 1L),
+            updatedAt = now,
+        )
+        write(p, prune(listOf(done) + entries.filterNot { it.key == key }, now), immediate = true)
+    }
 
     /**
      * Historial completo (en curso y terminados), recientes primero y una entrada por serie.
@@ -188,6 +218,7 @@ object PlaybackHistory {
         .put("positionMs", e.positionMs)
         .put("durationMs", e.durationMs)
         .put("updatedAt", e.updatedAt)
+        .put("completed", e.completed)
 
     internal fun entryFromJson(o: JSONObject): ResumeEntry = ResumeEntry(
         key = o.optString("key"),
@@ -204,6 +235,7 @@ object PlaybackHistory {
         positionMs = o.optLong("positionMs"),
         durationMs = o.optLong("durationMs"),
         updatedAt = o.optLong("updatedAt"),
+        completed = o.optBoolean("completed", false),
     )
 
     private fun jsonStrings(arr: JSONArray?): List<String> {
@@ -274,11 +306,80 @@ internal fun isFinishedAtExit(
 internal fun isEpisodeEntry(e: ResumeEntry): Boolean =
     e.episodeIds.size > 1 || e.seasonIds.size > 1
 
+/**
+ * El siguiente capítulo de un recuerdo. [episodeCode] solo existe cuando el capítulo ya
+ * está en la lista de la temporada activa; al cruzar de temporada hay que pedirle la lista
+ * a la ficha (por eso el código queda vacío y [crossesSeason] manda).
+ */
+data class NextEpisode(
+    val seasonIndex: Int,
+    val episodeIndex: Int,
+    val seasonId: String,
+    val episodeCode: String? = null,
+    val crossesSeason: Boolean = false,
+)
+
+internal fun nextEpisodeOf(e: ResumeEntry): NextEpisode? {
+    if (!isEpisodeEntry(e)) return null
+    val nextEpisode = e.episodeIndex + 1
+    if (e.episodeIds.isNotEmpty() && nextEpisode < e.episodeIds.size) {
+        return NextEpisode(
+            seasonIndex = e.seasonIndex,
+            episodeIndex = nextEpisode,
+            seasonId = e.seriesId.ifBlank { e.seasonIds.getOrNull(e.seasonIndex).orEmpty() },
+            episodeCode = e.episodeIds[nextEpisode],
+        )
+    }
+    val nextSeason = e.seasonIndex + 1
+    if (e.seasonIds.isNotEmpty() && nextSeason < e.seasonIds.size) {
+        return NextEpisode(
+            seasonIndex = nextSeason,
+            episodeIndex = 0,
+            seasonId = e.seasonIds[nextSeason],
+            episodeCode = null,
+            crossesSeason = true,
+        )
+    }
+    return null
+}
+
+/**
+ * Temporada en la que debe aterrizar la ficha para continuar. Solo salta a la siguiente
+ * cuando el capítulo actual YA terminó; si se quedó a medias en el último capítulo, la
+ * ficha debe seguir en su temporada para ofrecer «Continuar donde te quedaste».
+ */
+internal fun resumeTargetSeasonIndex(e: ResumeEntry): Int {
+    val finished = e.completed || isFinished(e.positionMs, e.durationMs)
+    if (!finished) return e.seasonIndex
+    return nextEpisodeOf(e)?.takeIf { it.crossesSeason }?.seasonIndex ?: e.seasonIndex
+}
+
 /** Quedan capítulos en esta temporada o una temporada siguiente por abrir. */
-internal fun hasNextEpisode(e: ResumeEntry): Boolean {
-    if (!isEpisodeEntry(e)) return false
-    if (e.episodeIds.isNotEmpty() && e.episodeIndex + 1 < e.episodeIds.size) return true
-    return e.seasonIds.isNotEmpty() && e.seasonIndex + 1 < e.seasonIds.size
+internal fun hasNextEpisode(e: ResumeEntry): Boolean = nextEpisodeOf(e) != null
+
+/**
+ * El recuerdo convertido en el siguiente capítulo, listo para el reproductor. Solo existe
+ * cuando el capítulo está en la lista actual (misma temporada); al cruzar de temporada la
+ * ficha es la que pide la lista nueva.
+ */
+internal fun nextEpisodeEntry(e: ResumeEntry): ResumeEntry? {
+    val next = nextEpisodeOf(e)?.takeIf { !it.crossesSeason } ?: return null
+    val code = next.episodeCode?.takeIf { it.isNotBlank() } ?: return null
+    val base = normalizeDisplayName(e.title).substringBefore(" · T").substringBefore(" · C").trim()
+    val season = e.seasonNames.getOrNull(next.seasonIndex)?.takeIf { it.isNotBlank() }
+        ?: "T${next.seasonIndex + 1}"
+    return e.copy(
+        key = code,
+        xtvCode = code,
+        title = if (base.isBlank()) e.title else "$base · $season · C${next.episodeIndex + 1}",
+        seriesId = next.seasonId,
+        episodeIndex = next.episodeIndex,
+        seasonIndex = next.seasonIndex,
+        positionMs = 0L,
+        durationMs = 0L,
+        updatedAt = System.currentTimeMillis(),
+        completed = false,
+    )
 }
 
 /**
@@ -433,16 +534,17 @@ internal fun matchCards(entries: List<ResumeEntry>, films: List<Film>): List<Res
             null
         }
         val film = direct ?: seriesFilm ?: byTitle[resumeTitleKey(entry.title)]
-        val progress = if (entry.durationMs > 0) {
-            (entry.positionMs.toFloat() / entry.durationMs).coerceIn(0f, 1f)
-        } else {
-            0f
+        val completed = entry.completed || isFinished(entry.positionMs, entry.durationMs)
+        val progress = when {
+            completed -> 1f
+            entry.durationMs > 0 -> (entry.positionMs.toFloat() / entry.durationMs).coerceIn(0f, 1f)
+            else -> 0f
         }
         ResumeCard(
             entry = entry,
             film = film,
             progress = progress,
-            completed = isFinished(entry.positionMs, entry.durationMs),
+            completed = completed,
             hasNext = hasNextEpisode(entry),
         )
     }

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para Cifras salvajes: números al aire, estimaciones dudosas y cero miedo al ridículo.",
+      "Se suelta Cifras salvajes. Estimen, ordenen y apuesten antes de que la tele les baje la verdad.",
+      "Cifras salvajes, el concurso donde todos creen saber cuánto es y casi nadie acierta.",
+      "Cifras salvajes: el único lugar donde decir “más o menos” es una estrategia.",
+      "Saquen la calculadora mental, que la real está prohibida.",
+      "Arranca Cifras salvajes: números, apuestas y cero vergüenza.",
+      "Aquí no se trata de saber, se trata de convencer.",
+      "Cifras salvajes: la estadística se pone de acuerdo con el que grita más fuerte.",
+      "Prepárense para estimar con el hígado y defenderlo con cara seria.",
+      "Se suelta el número. Si no saben, inventen con seguridad."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Cifras salvajes en marcha. Numeren con confianza, aunque vayan con el hígado.",
+      "Ya empezó. Si dudan, apunten al número más raro y récenle a la estadística.",
+      "La ronda corre. Ordenen, estimen y no dejen que el pánico haga las cuentas.",
+      "Cifras salvajes en marcha: apuesten, ordenen y no se arrepientan.",
+      "La ronda corre. El que dude, que le eche ganas y un poco de azúcar.",
+      "Números arriba. La intuición es bienvenida; la mentira, también.",
+      "Si no saben, respondan rápido. La seguridad vende.",
+      "Cifras salvajes: el dato es opcional, la actitud es obligatoria.",
+      "Aquí se juega con la casa, con el hígado y con la cara de “yo sabía”.",
+      "La cuenta regresiva no perdona. Estimen como si les fuera la vida."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Se acabó Cifras salvajes. Veamos quién tiene olfato numérico y quién puro cuento.",
+      "Ronda cerrada en Cifras salvajes. La realidad acaba de dar su veredicto.",
+      "Resultados de Cifras salvajes. La tabla separa a los calculadores de los soñadores.",
+      "Se acabó Cifras salvajes. La realidad acaba de arruinar varias teorías.",
+      "Ronda cerrada. Veamos quién se acercó y quién inventó con estilo.",
+      "Resultados de Cifras salvajes: el número correcto ya tiene dueño.",
+      "Terminó la ronda. La estadística no se disculpa.",
+      "Cifras salvajes: la tabla separa a los sabios de los valientes.",
+      "Se cerró la cuenta. El que apostó al azar, que rece.",
+      "Resultados: unos le atinaron, otros hicieron el ridículo con dignidad."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Así va la tabla de Cifras salvajes. Arriba los precisos; abajo los que tiran al azar.",
+      "Marcador de Cifras salvajes. Los de arriba suman; los de abajo inventan.",
+      "Puntos de Cifras salvajes. Todavía pueden remontar, pero ya saben que la intuición cobra caro.",
+      "Puntos de Cifras salvajes: arriba los que le atinan, abajo los que inventan.",
+      "Marcador de la ronda. La intuición cobra intereses.",
+      "Tabla parcial: el que se creyó genio, que revise.",
+      "Así van los números. Todavía se puede remontar con una buena mentira.",
+      "Cifras salvajes: la tabla está que arde y no hay calculadora que la salve.",
+      "Puntos de la casa. El que no arriesgó, no suma.",
+      "Marcador: los números no mienten, pero los jugadores sí."
+    ]
+  }
+]

@@ -18,7 +18,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,11 +47,13 @@ import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.data.allFilms
 import com.chronosbvrx.visionplus.data.continueOpensSeries
 import com.chronosbvrx.visionplus.data.episodeLabelOf
+import com.chronosbvrx.visionplus.data.nextEpisodeEntry
 import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.resumeSeriesFilm
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.components.PosterCard
+import com.chronosbvrx.visionplus.ui.components.rememberPlaybackLongClick
 import com.chronosbvrx.visionplus.ui.components.rememberPosterLongClick
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
 import com.chronosbvrx.visionplus.ui.isLandscapeTablet
@@ -63,7 +67,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class LibraryTab { FAVORITES, WATCH_LATER, HISTORY, DOWNLOADS }
+enum class LibraryTab { FAVORITES, WATCH_LATER, SERIES, HISTORY, DOWNLOADS }
+
+/** Filtro simple del Historial: todo, películas o series. */
+private enum class HistoryFilter(val label: String) {
+    ALL("Todo"),
+    MOVIES("Películas"),
+    SERIES("Series"),
+}
 
 /**
  * «Mi lista» en el teléfono: Favoritos, Ver más tarde, **Historial** (lo visto con su
@@ -81,13 +92,20 @@ fun LibraryScreen(
     val downloads by OfflineRegistry.downloadsFlow.collectAsState()
     val context = LocalContext.current
     var historyCards by remember { mutableStateOf<List<ResumeCard>>(emptyList()) }
+    var seriesFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
+    var unfollowTarget by remember { mutableStateOf<Film?>(null) }
+    var historyFilter by rememberSaveable { mutableStateOf(HistoryFilter.ALL) }
     val historyScope = rememberCoroutineScope()
 
     fun reloadHistory() {
         historyScope.launch(Dispatchers.Default) {
             val films = allFilms(catalog.personalRows + catalog.rows + catalog.indexRows)
             val cards = PlaybackHistory.historyCards(context, films)
-            withContext(Dispatchers.Main) { historyCards = cards }
+            val followed = com.chronosbvrx.visionplus.data.follow.FollowStore.followedFilms(context, films)
+            withContext(Dispatchers.Main) {
+                historyCards = cards
+                seriesFilms = followed
+            }
         }
     }
 
@@ -106,6 +124,7 @@ fun LibraryScreen(
     val films = when (selectedTab) {
         LibraryTab.FAVORITES -> catalog.personalRows.firstOrNull { it.id == "favorites" }?.films.orEmpty()
         LibraryTab.WATCH_LATER -> catalog.personalRows.firstOrNull { it.id == "watch-later" }?.films.orEmpty()
+        LibraryTab.SERIES -> seriesFilms
         LibraryTab.DOWNLOADS -> downloads.filter { it.state == DownloadState.COMPLETED }.map { it.toFilm() }
         LibraryTab.HISTORY -> emptyList()
     }
@@ -141,6 +160,14 @@ fun LibraryScreen(
                 },
             )
             FilterChip(
+                selected = selectedTab == LibraryTab.SERIES,
+                onClick = { selectedTab = LibraryTab.SERIES },
+                label = { Text("Mis series") },
+                leadingIcon = {
+                    Icon(VisionIcons.Following, contentDescription = null, modifier = Modifier.size(16.dp))
+                },
+            )
+            FilterChip(
                 selected = selectedTab == LibraryTab.HISTORY,
                 onClick = { selectedTab = LibraryTab.HISTORY },
                 label = { Text("Historial") },
@@ -157,12 +184,51 @@ fun LibraryScreen(
                 },
             )
         }
+        if (selectedTab == LibraryTab.HISTORY) {
+            Text(
+                "Mantén pulsada una tarjeta para marcar como visto/no visto o quitarla.",
+                style = MaterialTheme.typography.bodySmall,
+                color = VisionTextSecondary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                HistoryFilter.values().forEach { filter ->
+                    FilterChip(
+                        selected = historyFilter == filter,
+                        onClick = { historyFilter = filter },
+                        label = { Text(filter.label) },
+                    )
+                }
+            }
+        }
 
         if (selectedTab == LibraryTab.HISTORY) {
             if (historyCards.isEmpty()) {
                 EmptyState(
                     title = "Todavía no has visto nada",
                     subtitle = "Lo que veas aparecerá aquí con su avance; al terminar queda marcado como «Visto».",
+                )
+                return@Column
+            }
+            val visibleHistory = remember(historyCards, historyFilter) {
+                historyCards.filter { card ->
+                    when (historyFilter) {
+                        HistoryFilter.ALL -> true
+                        HistoryFilter.MOVIES -> !continueOpensSeries(card)
+                        HistoryFilter.SERIES -> continueOpensSeries(card)
+                    }
+                }
+            }
+            if (visibleHistory.isEmpty()) {
+                EmptyState(
+                    title = "Sin resultados en este filtro",
+                    subtitle = "Cambia a «Todo» para ver el resto de tu historial.",
                 )
                 return@Column
             }
@@ -179,8 +245,17 @@ fun LibraryScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) { }
-                items(historyCards, key = { it.entry.key }) { card ->
-                    HistoryCard(card = card, onResume = onResume, onOpenFilm = onOpenFilm)
+                items(visibleHistory, key = { it.entry.key }) { card ->
+                    val downloaded = downloads.any {
+                        it.state == DownloadState.COMPLETED &&
+                            (it.contentId == card.entry.xtvCode || it.id.contains(card.entry.xtvCode))
+                    }
+                    HistoryCard(
+                        card = card,
+                        downloaded = downloaded,
+                        onResume = onResume,
+                        onOpenFilm = onOpenFilm,
+                    )
                 }
             }
             return@Column
@@ -191,12 +266,14 @@ fun LibraryScreen(
                 title = when (selectedTab) {
                     LibraryTab.FAVORITES -> "Todavía no tienes favoritos"
                     LibraryTab.WATCH_LATER -> "Nada para ver más tarde"
+                    LibraryTab.SERIES -> "Todavía no sigues ninguna serie"
                     LibraryTab.DOWNLOADS -> "No tienes descargas aún"
                     LibraryTab.HISTORY -> "Todavía no has visto nada"
                 },
                 subtitle = when (selectedTab) {
                     LibraryTab.FAVORITES -> "En la ficha de una película toca «Favorito» y aparece aquí."
                     LibraryTab.WATCH_LATER -> "En la ficha de una película toca «+ Ver más tarde» y aparece aquí."
+                    LibraryTab.SERIES -> "En la ficha de una serie toca «Seguir serie» y aparecerá aquí con sus novedades."
                     LibraryTab.DOWNLOADS -> "Toca «Descargar» en la ficha de una película para verla sin internet."
                     LibraryTab.HISTORY -> "Lo que veas aparecerá aquí con su avance."
                 },
@@ -212,27 +289,60 @@ fun LibraryScreen(
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) { }
             items(films, key = { it.id }) { film ->
+                val posterLong = rememberPosterLongClick(film)
                 PosterCard(
                     title = film.title,
                     imageUrl = film.posterUrl,
                     meta = film.metaLine(),
                     score = film.score,
                     badge = if (film.year >= 2025) "NUEVO" else null,
-                    onLongClick = rememberPosterLongClick(film),
+                    onLongClick = if (selectedTab == LibraryTab.SERIES) {
+                        { unfollowTarget = film }
+                    } else {
+                        posterLong
+                    },
+                    onOptions = if (selectedTab == LibraryTab.SERIES) {
+                        { unfollowTarget = film }
+                    } else {
+                        null
+                    },
                     onClick = { onOpenFilm(film) },
                 )
             }
         }
     }
+    val target = unfollowTarget
+    if (target != null) {
+        AlertDialog(
+            onDismissRequest = { unfollowTarget = null },
+            title = { Text("Dejar de seguir") },
+            text = { Text("¿Quitar «${target.title}» de Mis series? No borra tu historial ni tus favoritos.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    com.chronosbvrx.visionplus.data.follow.FollowStore.unfollow(context, target.id)
+                    seriesFilms = seriesFilms.filterNot { it.id == target.id }
+                    unfollowTarget = null
+                    android.widget.Toast.makeText(context, "Dejaste de seguir «${target.title}»", android.widget.Toast.LENGTH_SHORT).show()
+                }) { Text("Dejar de seguir") }
+            },
+            dismissButton = { TextButton(onClick = { unfollowTarget = null }) { Text("Cancelar") } },
+        )
+    }
 }
 
 /** Tarjeta del historial: póster, avance real y «Visto»/«Continuar en …». */
 @Composable
-private fun HistoryCard(card: ResumeCard, onResume: (ResumeCard) -> Unit, onOpenFilm: (Film) -> Unit) {
+private fun HistoryCard(
+    card: ResumeCard,
+    downloaded: Boolean = false,
+    onResume: (ResumeCard) -> Unit,
+    onOpenFilm: (Film) -> Unit,
+) {
     val film = card.film
     val displayTitle = film?.title ?: card.entry.title
-    val opensSeries = continueOpensSeries(card) && card.completed
-    val nextUp = card.completed && card.hasNext && opensSeries
+    val nextEntry = if (card.completed && card.hasNext) nextEpisodeEntry(card.entry) else null
+    val opensSeries = continueOpensSeries(card) && card.completed && nextEntry == null
+    val nextUp = card.completed && card.hasNext
     val episode = if (nextUp) "Siguiente capítulo"
     else episodeLabelOf(card.entry).takeIf { it.isNotBlank() }
         ?: if (card.entry.title != displayTitle) {
@@ -246,9 +356,11 @@ private fun HistoryCard(card: ResumeCard, onResume: (ResumeCard) -> Unit, onOpen
             imageUrl = film?.posterUrl ?: card.entry.posterUrl.takeIf { it.isNotBlank() },
             meta = episode.ifBlank { film?.metaLine() },
             badge = if (card.completed) "VISTO" else null,
-            onLongClick = rememberPosterLongClick(film ?: resumeSeriesFilm(card.entry)),
+            onLongClick = rememberPlaybackLongClick(card),
+            onOptions = rememberPlaybackLongClick(card),
             onClick = {
                 when {
+                    nextEntry != null -> onResume(card.copy(entry = nextEntry))
                     opensSeries -> onOpenFilm(film ?: resumeSeriesFilm(card.entry))
                     card.completed && film != null -> onOpenFilm(film)
                     card.completed -> onResume(card.copy(entry = card.entry.copy(positionMs = 0L)))
@@ -271,12 +383,15 @@ private fun HistoryCard(card: ResumeCard, onResume: (ResumeCard) -> Unit, onOpen
             )
         }
         Text(
-            when {
-                nextUp -> "Siguiente capítulo"
-                card.completed -> "Visto"
-                opensSeries -> "Serie · Continuar en " + formatResume(card.entry.positionMs)
-                else -> "Continuar en " + formatResume(card.entry.positionMs)
-            },
+            listOfNotNull(
+                when {
+                    nextUp -> "Siguiente capítulo"
+                    card.completed -> "Visto"
+                    opensSeries -> "Serie · Continuar en " + formatResume(card.entry.positionMs)
+                    else -> "Continuar en " + formatResume(card.entry.positionMs)
+                },
+                "Descargado".takeIf { downloaded },
+            ).joinToString(" · "),
             style = MaterialTheme.typography.bodySmall,
             color = VisionTextSecondary,
             maxLines = 1,

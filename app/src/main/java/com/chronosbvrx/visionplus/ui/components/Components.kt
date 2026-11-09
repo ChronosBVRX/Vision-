@@ -16,6 +16,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +71,8 @@ fun PosterCard(
     altTitle: String? = null,
     /** OK largo (mando) o pulsación larga (dedo): menú de favoritos / Ver más tarde. */
     onLongClick: (() -> Unit)? = null,
+    /** Acción visible de opciones (tarjetas de estado e «Mis series»). */
+    onOptions: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -216,6 +220,27 @@ fun PosterCard(
                                 listOf(Color.White, VisionBlueBright, VisionSurfaceHigh),
                             ),
                         ),
+                    )
+                }
+            }
+
+            // Afordancia visible: el menú de estado ya no depende solo del OK largo.
+            if (onOptions != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.65f))
+                        .clickable(onClick = onOptions),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = "Opciones",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }

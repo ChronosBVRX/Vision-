@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=1920, height=1080">
   <title>Vision+</title>
+  <link rel="icon" type="image/png" href="images/icon.png">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/visiontv.css">
 </head>
@@ -62,7 +63,6 @@
             </button>
           </div>
         </div>
-        <button class="vt-tab" data-focusable data-nav="games">Juegos</button>
         <button class="vt-tab" data-focusable data-nav="movies">Películas</button>
         <div class="vt-hub">
           <button class="vt-tab" data-focusable data-nav="series-hub">Series</button>
@@ -234,15 +234,6 @@
 
     </section>
 
-    <section id="screen-games" class="screen">
-      <div class="vt-games-empty">
-        <div class="vt-games-icon"><svg class="icon"><use href="#i-star"/></svg></div>
-        <div class="vt-games-title">Vision+ Play</div>
-        <div class="vt-games-text">Los juegos interactivos están disponibles en la app de Smart TV y en el teléfono. En PC se está preparando la mesa completa.</div>
-        <button class="primary-btn" data-focusable data-back="games">Volver</button>
-      </div>
-    </section>
-
     <section id="screen-settings" class="screen">
       <div class="vt-settings">
         <aside class="vt-settings-rail">
@@ -280,10 +271,10 @@
           </section>
           <section class="vt-settings-section" data-settings-section="pantalla">
             <h2>Pantalla y Rendimiento</h2>
-            <div class="vt-setting-row static"><span><b>Pantalla:</b> 1920 × 1080 (ventana)</span><span>Automático</span></div>
-            <p class="vt-setting-help">La interfaz se escala al tamaño de la ventana y conserva el diseño de Smart TV.</p>
-            <div class="vt-setting-row static"><span><b>Motor de video:</b> FFmpeg Relay</span><span>H.264 / AAC</span></div>
-            <p class="vt-setting-help">El catálogo HEVC/TS/HLS se convierte al vuelo para Chrome/Edge/Electron.</p>
+            <div class="vt-setting-row static"><span><b>Pantalla:</b> <span id="set-screen-value">1920 × 1080 (ventana)</span></span><span>Automático</span></div>
+            <p class="vt-setting-help" id="set-screen-help">La interfaz se escala al tamaño de la ventana y conserva el diseño de Smart TV.</p>
+            <div class="vt-setting-row static"><span><b>Motor de video:</b> <span id="set-engine-value">FFmpeg Relay</span></span><span id="set-engine-codec">H.264 / AAC</span></div>
+            <p class="vt-setting-help" id="set-engine-help">El catálogo HEVC/TS/HLS se convierte al vuelo para Chrome/Edge/Electron.</p>
             <div class="vt-setting-row static"><span><b>Animaciones:</b> Completas</span><span>Auto</span></div>
           </section>
           <section class="vt-settings-section" data-settings-section="sistema">
@@ -300,22 +291,22 @@
             <button class="vt-setting-row" id="set-cache" data-focusable>
               <span><b>Limpiar caché del catálogo</b></span><span>Ejecutar</span>
             </button>
-            <p class="vt-setting-help">La sesión y la caché viven en la carpeta de datos junto al ejecutable.</p>
+            <p class="vt-setting-help" id="set-data-help">La sesión y la caché viven en la carpeta de datos junto al ejecutable.</p>
           </section>
           <section class="vt-settings-section" data-settings-section="cuenta">
             <h2>Cuenta y perfiles</h2>
             <div class="vt-setting-row static"><span><b>Perfil activo:</b> Principal</span><span class="vt-avatar">P</span></div>
-            <p class="vt-setting-help">Vision+ PC usa el perfil local Principal. Los perfiles y la continuidad entre equipos se sincronizan desde la app de TV/teléfono.</p>
+            <p class="vt-setting-help" id="set-account-help">Vision+ PC usa el perfil local Principal. Los perfiles y la continuidad entre equipos se sincronizan desde la app de TV/teléfono.</p>
           </section>
           <section class="vt-settings-section" data-settings-section="actualizaciones">
             <h2>Actualizaciones</h2>
-            <div class="vt-setting-row static"><span><b>Versión de Vision+ PC</b></span><span id="about-version">0.4.0</span></div>
+            <div class="vt-setting-row static"><span><b id="set-update-title">Versión de Vision+ PC</b></span><span id="about-version">0.4.1</span></div>
             <div class="vt-setting-row static"><span><b>Canal</b></span><span>Estable</span></div>
             <button class="vt-setting-row" id="set-check-update" data-focusable>
               <span><b>Buscar actualizaciones</b></span><span id="set-update-state">Automático</span>
             </button>
             <p class="vt-setting-help" id="set-update-help">Vision+ PC busca actualizaciones al iniciar. Si hay una nueva, puedes descargarla e instalarla sin usar USB.</p>
-            <div class="about-line muted">Puerto basado en la arquitectura del port de XuperTV: catálogo VPS, resolución directa del portal XTV, proxy local y FFmpeg.</div>
+            <div class="about-line muted" id="about-line">Puerto basado en la arquitectura del port de XuperTV: catálogo VPS, resolución directa del portal XTV, proxy local y FFmpeg.</div>
           </section>
         </div>
       </div>

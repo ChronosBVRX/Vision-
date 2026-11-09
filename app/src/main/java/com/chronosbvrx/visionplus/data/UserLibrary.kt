@@ -43,20 +43,140 @@ object UserLibrary {
     // ---- Capítulos vistos (series, novelas, anime): local, clave "serieId|capítulo". ----
 
     private const val K_WATCHED_EPS = "watched_episodes"
+    /** Marcas explícitas del usuario (OK largo): mandan sobre el progreso y sobre las viejas. */
+    private const val K_MANUAL_EPS = "watched_episodes_manual"
+    /** «No visto» explícito: manda aunque el historial haya llegado al final. */
+    private const val K_UNWATCHED_EPS = "watched_episodes_unwatched"
+
+    /**
+     * A partir de este porcentaje un capítulo cuenta como visto aunque falten minutos para
+     * que terminen los créditos. 85 % cubre el caso normal (si el episodio dura 42 min, se
+     * marca a los ~35:42) y deja margen para una salida antes del final.
+     */
+    internal const val WATCHED_FRACTION = 0.85f
+
+    /** Progreso 0..1 de un recuerdo; null cuando la duración no se conoce. */
+    internal fun watchedProgressOf(entry: com.chronosbvrx.visionplus.data.ResumeEntry?): Float? {
+        val duration = entry?.durationMs ?: 0L
+        if (entry == null || duration <= 0L) return null
+        return (entry.positionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    }
+
+    private fun episodeKey(seriesId: String, episode: Int) = "$seriesId|$episode"
 
     fun watchedEpisodes(context: Context): Set<String> =
         prefs(context).getStringSet(K_WATCHED_EPS, emptySet()) ?: emptySet()
 
+    /** Capítulos que la persona marcó explícitamente como «no visto» (manda sobre todo). */
+    fun unwatchedEpisodes(context: Context): Set<String> =
+        prefs(context).getStringSet(K_UNWATCHED_EPS, emptySet()) ?: emptySet()
+
     fun isEpisodeWatched(context: Context, seriesId: String, episode: Int): Boolean =
-        "$seriesId|$episode" in watchedEpisodes(context)
+        isEpisodeWatched(context, seriesId, episode, progress = null)
+
+    /**
+     * ¿Cuenta como visto? Prioridad:
+     * 1. «No visto» explícito del usuario.
+     * 2. Marca manual del usuario.
+     * 3. Progreso real del historial (≥ [WATCHED_FRACTION]).
+     * 4. Marca automática/legacy (solo cuando no hay progreso conocido).
+     *
+     * El orden importa: un capítulo que se abrió y solo avanzó 3 minutos no puede quedar
+     * «Visto» por una marca vieja de la app, pero una marca manual del usuario sí manda.
+     */
+    fun isEpisodeWatched(context: Context, seriesId: String, episode: Int, progress: Float?): Boolean {
+        val key = episodeKey(seriesId, episode)
+        val p = prefs(context)
+        if (key in (p.getStringSet(K_UNWATCHED_EPS, emptySet()) ?: emptySet())) return false
+        if (key in (p.getStringSet(K_MANUAL_EPS, emptySet()) ?: emptySet())) return true
+        if (progress != null) return progress >= WATCHED_FRACTION
+        return key in (p.getStringSet(K_WATCHED_EPS, emptySet()) ?: emptySet())
+    }
+
+    /**
+     * Estado de una temporada completa leído UNA vez: auto, manual, «no visto» y el historial
+     * freso (que escribe `:x4k`). La ficha pinta la lista sin abrir preferencias por capítulo.
+     */
+    fun episodeWatchStates(
+        context: Context,
+        seriesId: String,
+        episodeCodes: List<String>,
+        history: List<com.chronosbvrx.visionplus.data.ResumeEntry>,
+    ): List<Boolean> {
+        val p = prefs(context)
+        val auto = p.getStringSet(K_WATCHED_EPS, emptySet()) ?: emptySet()
+        val manual = p.getStringSet(K_MANUAL_EPS, emptySet()) ?: emptySet()
+        val unwatched = p.getStringSet(K_UNWATCHED_EPS, emptySet()) ?: emptySet()
+        val progressByCode = history.associate { it.key to watchedProgressOf(it) }
+        return episodeCodes.mapIndexed { index, code ->
+            val key = episodeKey(seriesId, index + 1)
+            when {
+                key in unwatched -> false
+                key in manual -> true
+                else -> progressByCode[code]?.let { it >= WATCHED_FRACTION } ?: (key in auto)
+            }
+        }
+    }
 
     fun markEpisodeWatched(context: Context, seriesId: String, episode: Int, watched: Boolean = true) {
         val p = prefs(context)
-        val set = (p.getStringSet(K_WATCHED_EPS, emptySet()) ?: emptySet()).toMutableSet()
-        val key = "$seriesId|$episode"
-        if (watched) set.add(key) else set.remove(key)
-        p.edit().putStringSet(K_WATCHED_EPS, set).apply()
+        val key = episodeKey(seriesId, episode)
+        val auto = (p.getStringSet(K_WATCHED_EPS, emptySet()) ?: emptySet()).toMutableSet()
+        val manual = (p.getStringSet(K_MANUAL_EPS, emptySet()) ?: emptySet()).toMutableSet()
+        val unwatched = (p.getStringSet(K_UNWATCHED_EPS, emptySet()) ?: emptySet()).toMutableSet()
+        if (watched) {
+            auto.add(key)
+            manual.add(key)
+            unwatched.remove(key)
+        } else {
+            auto.remove(key)
+            manual.remove(key)
+            unwatched.add(key)
+        }
+        p.edit()
+            .putStringSet(K_WATCHED_EPS, auto)
+            .putStringSet(K_MANUAL_EPS, manual)
+            .putStringSet(K_UNWATCHED_EPS, unwatched)
+            .apply()
     }
+
+    /**
+     * Marca automática por progreso (la llama el reproductor cada poco). Es idempotente y
+     * no escribe si el capítulo ya estaba marcado. Devuelve true solo la primera vez.
+     */
+    fun markEpisodeProgressWatched(
+        context: Context,
+        seriesId: String,
+        episode: Int,
+        positionMs: Long,
+        durationMs: Long,
+    ): Boolean {
+        if (durationMs <= 0L || positionMs <= 0L) return false
+        if (positionMs.toFloat() / durationMs.toFloat() < WATCHED_FRACTION) return false
+        val p = prefs(context)
+        val key = episodeKey(seriesId, episode)
+        val auto = (p.getStringSet(K_WATCHED_EPS, emptySet()) ?: emptySet()).toMutableSet()
+        val unwatched = (p.getStringSet(K_UNWATCHED_EPS, emptySet()) ?: emptySet()).toMutableSet()
+        val wasMarked = key in auto && key !in unwatched
+        if (wasMarked) return false
+        auto.add(key)
+        unwatched.remove(key)
+        p.edit()
+            .putStringSet(K_WATCHED_EPS, auto)
+            .putStringSet(K_UNWATCHED_EPS, unwatched)
+            .apply()
+        return true
+    }
+
+    /** Solo para pruebas: deja el estado de capítulos como recién instalado. */
+    internal fun clearAllEpisodeWatchState(context: Context) {
+        prefs(context).edit()
+            .remove(K_WATCHED_EPS)
+            .remove(K_MANUAL_EPS)
+            .remove(K_UNWATCHED_EPS)
+            .apply()
+    }
+
 
     private fun toggle(p: SharedPreferences, key: String, film: Film) {
         val list = read(p, key)
@@ -105,6 +225,11 @@ object UserLibrary {
 
     internal fun replaceWatched(context: Context, episodes: Set<String>) {
         prefs(context).edit().putStringSet(K_WATCHED_EPS, episodes.toSet()).apply()
+    }
+
+    /** Reemplaza el set de «no visto» tras una sync. */
+    internal fun replaceUnwatched(context: Context, episodes: Set<String>) {
+        prefs(context).edit().putStringSet(K_UNWATCHED_EPS, episodes.toSet()).apply()
     }
 
     /**

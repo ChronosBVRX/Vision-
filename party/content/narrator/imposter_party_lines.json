@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para El Infiltrado: una palabra secreta, un topo y demasiadas caras de sospecha.",
+      "Se abre la investigación de El Infiltrado. Todos saben la palabra menos uno; encuéntrenlo.",
+      "El Infiltrado está suelto. Cuiden la palabra y no confíen ni en su propia sombra.",
+      "El Infiltrado: una palabra, un topo y demasiada confianza.",
+      "Arranca la investigación. Todos saben algo, nadie sabe todo.",
+      "El Infiltrado ya se sentó a la mesa. Sonrían y disimulen.",
+      "Prepárense para mentir con elegancia y acusar sin pruebas.",
+      "El Infiltrado: el juego donde tu mejor amigo es el principal sospechoso.",
+      "Se abre el expediente. La palabra es secreta; las caras, delatoras.",
+      "El Infiltrado está aquí. No confíen ni en el que trajo las botanas."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "El Infiltrado ya está trabajando. Pistas, miradas y una que otra mentira.",
+      "La ronda de El Infiltrado avanza. Alguien está improvisando y no precisamente bien.",
+      "El Infiltrado respira cerca. Si la palabra se les escapa, se delata.",
+      "El Infiltrado en marcha: pistas, miradas y una que otra traición.",
+      "La ronda corre. Si hablan de más, se delatan; si de menos, sospechan.",
+      "El topo está respirando cerca. Cuiden la palabra y la cara.",
+      "Aquí se juega a parecer inocente. El que se ría primero, pierde.",
+      "El Infiltrado avanza. La mentira tiene que ser creíble, no perfecta.",
+      "Pistas cortas, miradas largas y cero pruebas. Bienvenidos al juego.",
+      "El Infiltrado ya movió ficha. Ahora todos son sospechosos."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Terminó la ronda de El Infiltrado. Veamos si la mentira aguantó la presión.",
+      "Se cerró El Infiltrado. Momento de señalar culpables y aceptar el ridículo.",
+      "Resultados de El Infiltrado. La tabla dirá quién cazó al topo y quién se dejó engañar.",
+      "Se cerró El Infiltrado. Veamos si el topo se salvó o se hundió.",
+      "Ronda terminada. La mentira aguantó hasta que alguien dijo “yo sabía”.",
+      "Resultados de El Infiltrado: el topo ya tiene nombre y cara.",
+      "Terminó la investigación. Ahora sí, señalen sin miedo.",
+      "El Infiltrado cayó o se escapó. La tabla lo dirá.",
+      "Se acabó la ronda. El que confió de más, que levante la mano.",
+      "Resultados: unos cazaron, otros se dejaron engañar. Como en la vida."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Así va la tabla de El Infiltrado. Arriba los que huelen la mentira; abajo los confiados.",
+      "Marcador de El Infiltrado. Los de arriba investigan; los de abajo se delatan solos.",
+      "Puntos de El Infiltrado. Todavía hay tiempo de remontar, pero las sospechas ya están caras.",
+      "Puntos de El Infiltrado: arriba los que huelen la mentira, abajo los que la creen.",
+      "Marcador de la investigación. El topo sonríe en la tabla.",
+      "Tabla parcial: los confiados ya están pagando.",
+      "Así van los puntos. Todavía hay tiempo de traicionar a alguien.",
+      "El Infiltrado: la tabla no perdona, pero la amistad tampoco.",
+      "Puntos de la ronda. El que se creyó detective, que revise.",
+      "Marcador: los inocentes suman, los culpables se esconden."
+    ]
+  }
+]

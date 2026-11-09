@@ -81,7 +81,7 @@ internal enum class TvTopTab(val label: String, val description: String, val tar
     HOME("Inicio", "Inicio", Route.Home),
     LIVE("TV en vivo", "En vivo", Route.Live),
     SPORTS("Deportes", "Deportes en vivo", Route.Sports),
-    GAMES("Juegos", "Vision+ Play", Route.Games),
+    GAMES("Juegos", "Vision+ Party", Route.Games),
     MOVIES("Películas", "Películas", Route.Section("movies", "Películas")),
     SERIES("Series", "Series", Route.Section("series", "Series")),
     LIBRARY("Mi lista", "Mi lista", Route.Library),
@@ -90,7 +90,7 @@ internal enum class TvTopTab(val label: String, val description: String, val tar
 /** La barra superior se pinta en estas rutas (las del launcher) y no en fichas/reproductores. */
 internal fun tvTopBarVisible(route: Route): Boolean =
     route == Route.Home || route == Route.Live || route == Route.Sports ||
-        // Vision+ Play tiene su propio plató a pantalla completa: sin barra del shell.
+        // Vision+ Party tiene su propio plató a pantalla completa: sin barra del shell.
         route is Route.Section || route == Route.Library ||
         route == Route.Categories || route is Route.Category ||
         // Ajustes y Buscar son parte del mismo shell: si no, parecen otra app.
@@ -152,6 +152,9 @@ internal fun TvTopBar(
     onSearch: () -> Unit,
     onSettings: () -> Unit,
     onProfile: () -> Unit = {},
+    /** Perfil activo que pinta el chip; si no se pasa, la barra lo lee del almacén. */
+    profileName: String? = null,
+    profileAvatar: String = "",
     /** Campana y recarga dentro de la barra (antes flotaban sobre los pósters). */
     updatesBadge: Int = 0,
     onNotifications: (() -> Unit)? = null,
@@ -166,9 +169,11 @@ internal fun TvTopBar(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val profile = remember(context) {
-        runCatching { ProfileStore.active(context).name }.getOrDefault("Principal")
+    val storedProfile = remember(context) {
+        runCatching { ProfileStore.active(context) }.getOrNull()
     }
+    val profile = profileName ?: storedProfile?.name ?: "Principal"
+    val avatar = if (profileName != null) profileAvatar else storedProfile?.avatar.orEmpty()
     val clock = rememberTopClock()
     var liveMenuOpen by remember { mutableStateOf(false) }
     var seriesMenuOpen by remember { mutableStateOf(false) }
@@ -353,7 +358,7 @@ internal fun TvTopBar(
             TopBarIcon(Icons.Default.Refresh, "Recargar", onReload)
             Spacer(Modifier.width(8.dp))
         }
-        ProfileChip(profile, onProfile)
+        ProfileChip(profile, avatar, onProfile)
         Spacer(Modifier.width(6.dp))
         TvSearchPill(onSearch)
         Spacer(Modifier.width(4.dp))
@@ -574,7 +579,7 @@ private fun LiveHubOption(
 }
 
 @Composable
-private fun ProfileChip(name: String, onClick: () -> Unit) {
+private fun ProfileChip(name: String, avatar: String, onClick: () -> Unit) {
     val label = name.trim().ifBlank { "Principal" }
     // El chip abre «Perfiles» (como en Netflix): elegir quién eres desde cualquier pantalla.
     Surface(
@@ -597,7 +602,7 @@ private fun ProfileChip(name: String, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            ProfileAvatar(name = label, size = 22.dp)
+            ProfileAvatar(name = label, size = 22.dp, avatar = avatar)
             Text(
                 label,
                 color = Color.White,

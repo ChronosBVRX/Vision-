@@ -1,0 +1,825 @@
+import type {
+  ClientToServerEvents,
+  GameStateEnvelope,
+  PlayerSetupValue,
+  PlayerSnapshot,
+  RoomSnapshot,
+  ScoreboardSnapshot,
+  ServerToClientEvents,
+  SupportedLanguage
+} from "@open-party-lab/protocol";
+import { applyThemeVariables, normalizeThemeName, type ThemeName } from "@open-party-lab/ui-kit";
+import { io, type Socket } from "socket.io-client";
+import { ServerClock, startServerClockSync } from "@open-party-lab/game-core";
+import {
+  readStoredControllerLanguage,
+  writeStoredControllerLanguage
+} from "../i18n/controllerText.js";
+import {
+  clearStoredControllerIdentity,
+  getOrCreateDeviceId,
+  loadReconnectToken,
+  loadStoredSession,
+  rotateDeviceId,
+  saveStoredSession,
+  type StoredControllerSession
+} from "./deviceSession.js";
+
+export interface ControllerAppState {
+  getServerTime?: () => number;
+  connected: boolean;
+  room: RoomSnapshot | null;
+  player: PlayerSnapshot | null;
+  game: GameStateEnvelope | null;
+  scoreboard: ScoreboardSnapshot | null;
+  error: string | null;
+  preferredLanguage: SupportedLanguage;
+  hasStoredSession: boolean;
+  storedSession: StoredControllerSession | null;
+}
+
+type ControllerStateListener = (state: ControllerAppState) => void;
+
+const initialState: ControllerAppState = {
+  connected: false,
+  room: null,
+  player: null,
+  game: null,
+  scoreboard: null,
+  error: null,
+  preferredLanguage: readStoredControllerLanguage(),
+  hasStoredSession: false,
+  storedSession: null
+};
+
+/** Writes the room's theme onto the document root. */
+function applyControllerTheme(theme: unknown): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  applyThemeVariables(document.documentElement, normalizeThemeName(theme));
+}
+
+function shouldUseVolatileInput(input: unknown): boolean {
+  if (!input || typeof input !== "object") {
+    return false;
+  }
+
+  const { type: inputType, moveX, moveY } = input as {
+    type?: unknown;
+    moveX?: unknown;
+    moveY?: unknown;
+  };
+
+  // Releasing the stick must arrive: a dropped stop leaves the figure running
+  // until the player touches the stick again.
+  if (inputType === "move" && moveX === 0 && moveY === 0) {
+    return false;
+  }
+
+  return inputType === "move" || inputType === "turn" || inputType === "aim";
+}
+
+export class ControllerSocketClient {
+  private readonly serverClock = new ServerClock();
+  private stopClockSync?: () => void;
+  private readonly socket: Socket<ServerToClientEvents, ClientToServerEvents>;
+  private readonly listeners = new Set<ControllerStateListener>();
+  private state: ControllerAppState = {
+    ...initialState,
+    getServerTime: this.serverClock.now,
+    hasStoredSession: Boolean(loadStoredSession()),
+    storedSession: loadStoredSession()
+  };
+  private listenersBound = false;
+  private notifyScheduled = false;
+  private sessionTerminated = false;
+  private sessionTerminationPending = false;
+  private resumePending = false;
+  private resumeRetry?: ReturnType<typeof setTimeout>;
+
+  constructor(private readonly serverUrl: string) {
+    this.socket = io(serverUrl, {
+      autoConnect: false,
+      timeout: 5_000,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3_000,
+      // WebSocket straight away instead of starting on HTTP long-polling and
+      // upgrading later: polling adds a request round trip per message and
+      // drops volatile packets while a request is in flight. Polling stays as
+      // the fallback for networks that block WebSockets.
+      transports: ["websocket", "polling"],
+      tryAllTransports: true
+    });
+  }
+
+  connect(): void {
+    if (this.listenersBound) {
+      this.socket.connect();
+      return;
+    }
+
+    this.listenersBound = true;
+    this.socket.on("server:hello", ({ serverTime }) => this.serverClock.initialize(serverTime));
+    this.socket.on("connect", () => {
+      this.stopClockSync?.();
+      this.stopClockSync = startServerClockSync(this.serverClock, (reply) => {
+        this.socket.timeout(3000).emit("server:time", {}, (error, serverTime) => { if (!error) reply(serverTime); });
+      });
+      const storedSession = loadStoredSession();
+      this.updateState({
+        connected: !storedSession,
+        error: null,
+        hasStoredSession: Boolean(storedSession),
+        storedSession
+      });
+      if (storedSession && !this.sessionTerminated && !this.sessionTerminationPending) {
+        this.resumeSession();
+      }
+    });
+
+    this.socket.on("disconnect", (reason) => {
+      this.stopClockSync?.();
+      this.resumePending = false;
+      clearTimeout(this.resumeRetry);
+      this.updateState({ connected: false });
+      if (reason === "io server disconnect" && !this.sessionTerminated && !this.sessionTerminationPending) {
+        this.socket.connect();
+      }
+    });
+
+    this.socket.on("connect_error", (error) => {
+      this.updateState({
+        connected: false,
+        error:
+          this.state.preferredLanguage === "en"
+            ? `Connection to server failed: ${error.message}`
+            : `Verbindung zum Server fehlgeschlagen: ${error.message}`
+      });
+    });
+
+    this.socket.on("room:state", ({ room }) => {
+      if (this.sessionTerminated || this.sessionTerminationPending) {
+        return;
+      }
+
+      // Ignore an in-flight snapshot from the room we just left. Accepting it
+      // would restore the previous currentRound and trap the phone in the old
+      // game controller after joining a new code.
+      if (this.state.room && room.code !== this.state.room.code) {
+        return;
+      }
+
+      const playerId = this.state.player?.id ?? this.state.storedSession?.playerId;
+      const player = playerId
+        ? room.players.find((entry) => entry.id === playerId) ?? this.state.player
+        : this.state.player;
+
+      writeStoredControllerLanguage(room.language);
+      // The theme is a room setting the phone simply adopts.
+      applyControllerTheme(room.theme);
+      const currentGame =
+        room.currentRound &&
+        this.state.game?.gameId === room.currentRound.gameId &&
+        this.state.game.roundNumber === room.currentRound.roundNumber
+          ? this.state.game
+          : null;
+      this.updateState({
+        room,
+        preferredLanguage: room.language,
+        player: player ?? null,
+        game: currentGame
+      });
+    });
+
+    this.socket.on("game:state", ({ game }) => {
+      if (this.sessionTerminated || this.sessionTerminationPending) {
+        return;
+      }
+
+      this.updateState({ game });
+    });
+
+    this.socket.on("scoreboard:state", (scoreboard) => {
+      if (this.sessionTerminated || this.sessionTerminationPending) {
+        return;
+      }
+
+      this.updateState({ scoreboard });
+    });
+
+    this.socket.on("room:error", ({ message }) => {
+      if (this.sessionTerminated || this.sessionTerminationPending) {
+        return;
+      }
+
+      this.updateState({ error: message });
+    });
+
+    this.socket.on("room:closed", ({ message }) => {
+      this.clearStoredSession({
+        rotateDeviceId: true,
+        disconnect: false,
+        error: message
+      });
+    });
+
+    this.socket.on("session:resumed", ({ room, player, reconnectToken }) => {
+      if (this.sessionTerminated || this.sessionTerminationPending) return;
+      this.sessionTerminated = false;
+      this.sessionTerminationPending = false;
+      const storedSession = this.persistSession(room.code, player.id, player.name, reconnectToken);
+      writeStoredControllerLanguage(room.language);
+      applyControllerTheme(room.theme);
+      this.updateState({
+        connected: true,
+        room,
+        player,
+        preferredLanguage: room.language,
+        hasStoredSession: true,
+        storedSession,
+        game: room.currentRound?.gameId === this.state.game?.gameId &&
+          room.currentRound?.roundNumber === this.state.game?.roundNumber ? this.state.game : null
+      });
+    });
+
+    this.socket.on("session:terminated", ({ message }) => {
+      this.clearStoredSession({
+        rotateDeviceId: true,
+        disconnect: true,
+        error: message
+      });
+    });
+
+    const reconnectWhenVisible = () => {
+      if (document.visibilityState === "visible" && !this.socket.connected && !this.sessionTerminated) {
+        this.socket.connect();
+      }
+    };
+    window.addEventListener("online", reconnectWhenVisible);
+    document.addEventListener("visibilitychange", reconnectWhenVisible);
+    this.socket.connect();
+  }
+
+  subscribe(listener: ControllerStateListener): () => void {
+    this.listeners.add(listener);
+    listener(this.state);
+    return () => this.listeners.delete(listener);
+  }
+
+  getState(): ControllerAppState {
+    return this.state;
+  }
+
+  joinRoom(roomCode: string, playerName: string): void {
+    if (!this.socket.connected) {
+      this.socket.connect();
+    }
+
+    this.sessionTerminated = false;
+    this.sessionTerminationPending = false;
+
+    this.socket.emit(
+      "room:join",
+      {
+        roomCode: roomCode.toUpperCase(),
+        playerName,
+        deviceId: getOrCreateDeviceId()
+      },
+      (result) => {
+        if (!result.ok) {
+          this.updateState({ error: result.error });
+          return;
+        }
+
+        const storedSession = this.persistSession(
+          result.data.room.code,
+          result.data.player.id,
+          result.data.player.name,
+          result.data.reconnectToken
+        );
+        this.updateState({
+          connected: true,
+          room: result.data.room,
+          player: result.data.player,
+          preferredLanguage: result.data.room.language,
+          hasStoredSession: true,
+          storedSession,
+          game: null,
+          error: null
+        });
+        writeStoredControllerLanguage(result.data.room.language);
+      }
+    );
+  }
+
+  resumeSession(): void {
+    if (this.resumePending || this.sessionTerminationPending) return;
+    const reconnectToken = loadReconnectToken();
+
+    if (!reconnectToken) {
+      this.updateState({
+        error:
+          this.state.preferredLanguage === "en"
+            ? "No saved session found."
+            : "Keine gespeicherte Session gefunden.",
+        hasStoredSession: false
+      });
+      return;
+    }
+
+    if (!this.socket.connected) {
+      this.sessionTerminated = false;
+      this.socket.connect();
+      return;
+    }
+
+    this.sessionTerminated = false;
+    this.sessionTerminationPending = false;
+
+    this.resumePending = true;
+    clearTimeout(this.resumeRetry);
+    const socketId = this.socket.id;
+    this.socket.timeout(8_000).emit(
+      "session:resume",
+      {
+        reconnectToken,
+        deviceId: getOrCreateDeviceId()
+      },
+      (error, result) => {
+        if (this.socket.id !== socketId || this.sessionTerminated || this.sessionTerminationPending) return;
+        this.resumePending = false;
+        if (error) {
+          this.updateState({ connected: false });
+          this.resumeRetry = setTimeout(() => this.resumeSession(), 2_000);
+          return;
+        }
+        if (!result.ok) {
+          this.sessionTerminated = true;
+          this.sessionTerminationPending = false;
+          clearStoredControllerIdentity();
+          this.updateState({
+            connected: this.socket.connected,
+            error: result.error,
+            hasStoredSession: false,
+            storedSession: null,
+            player: null,
+            room: null,
+            game: null,
+            scoreboard: null
+          });
+          return;
+        }
+
+        const storedSession = this.persistSession(
+          result.data.room.code,
+          result.data.player.id,
+          result.data.player.name,
+          result.data.reconnectToken
+        );
+        this.updateState({
+          connected: true,
+          room: result.data.room,
+          player: result.data.player,
+          preferredLanguage: result.data.room.language,
+          hasStoredSession: true,
+          storedSession,
+          error: null
+        });
+        writeStoredControllerLanguage(result.data.room.language);
+      }
+    );
+  }
+
+  leaveRoom(): void {
+    if (!this.state.room || !this.state.player) {
+      return;
+    }
+
+    if (!this.socket.connected) {
+      this.socket.connect();
+    }
+
+    this.sessionTerminationPending = true;
+
+    this.socket.emit(
+      "room:leave",
+      {
+        roomCode: this.state.room.code
+      },
+      (result) => {
+        if (!result.ok) {
+          this.sessionTerminationPending = false;
+          this.updateState({ error: result.error });
+          return;
+        }
+
+        this.clearStoredSession({
+          rotateDeviceId: true,
+          disconnect: true,
+          error:
+            this.state.preferredLanguage === "en"
+              ? "You left the room."
+              : "Du hast den Raum verlassen."
+        });
+      }
+    );
+  }
+
+  clearStoredSession(options?: {
+    rotateDeviceId?: boolean;
+    disconnect?: boolean;
+    error?: string | null;
+  }): void {
+    this.sessionTerminated = true;
+    this.sessionTerminationPending = false;
+    this.resumePending = false;
+    clearTimeout(this.resumeRetry);
+
+    clearStoredControllerIdentity();
+
+    if (options?.rotateDeviceId) {
+      rotateDeviceId();
+    }
+
+    this.updateState({
+      hasStoredSession: false,
+      storedSession: null,
+      player: null,
+      room: null,
+      game: null,
+      scoreboard: null,
+      error: options?.error ?? null
+    });
+
+    if (options?.disconnect !== false) {
+      this.socket.disconnect();
+      // End the old room session, then keep the join screen usable. The
+      // terminated flag prevents this fresh connection restoring the room.
+      this.socket.connect();
+    }
+  }
+
+  setReady(isReady: boolean): void {
+    if (!this.state.room || !this.state.player) {
+      return;
+    }
+
+    this.socket.emit("player:ready", {
+      roomCode: this.state.room.code,
+      playerId: this.state.player.id,
+      isReady
+    });
+  }
+
+  async setProfile(name: string, avatar: string | null): Promise<string | null> {
+    const { room, player } = this.state;
+    const en = this.state.preferredLanguage === "en";
+    if (!room || !player || !this.state.connected) {
+      return en ? "Waiting for reconnection." : "Warte auf die Wiederverbindung.";
+    }
+    return new Promise((resolve) => {
+      this.socket.timeout(8_000).emit("player:set-profile", { roomCode: room.code, playerId: player.id, name, avatar }, (error, result) => {
+        if (error) {
+          resolve(en ? "No response. Please try again." : "Keine Antwort. Bitte erneut versuchen.");
+          return;
+        }
+        if (!result.ok) { resolve(result.error); return; }
+        const storedSession = this.persistSession(room.code, player.id, result.data.player.name, result.data.reconnectToken);
+        this.updateState({ room: result.data.room, player: result.data.player, storedSession, error: null });
+        resolve(null);
+      });
+    });
+  }
+
+  selectCharacter(characterId: string): void {
+    if (!this.state.room || !this.state.player) {
+      return;
+    }
+
+    this.socket.emit("player:select-character", {
+      roomCode: this.state.room.code,
+      playerId: this.state.player.id,
+      characterId
+    });
+  }
+
+  setPlayerSetup(selectionKey: string, value: PlayerSetupValue): void {
+    if (!this.state.room || !this.state.player) {
+      return;
+    }
+
+    this.socket.emit(
+      "player:set-setup",
+      {
+        roomCode: this.state.room.code,
+        playerId: this.state.player.id,
+        selectionKey,
+        value
+      },
+      (result) => {
+        if (!result.ok) {
+          this.updateState({ error: result.error });
+          return;
+        }
+
+        this.updateState({
+          room: result.data.room,
+          player: result.data.player,
+          error: null
+        });
+      }
+    );
+  }
+
+  // --- remote host control -------------------------------------------------
+
+  /**
+   * Takes the host controls.
+   *
+   * Free controls are handed over at once. If another player holds them, this
+   * opens a handover they have thirty seconds to refuse; either way the outcome
+   * arrives via `room:state` rather than from this call.
+   */
+  requestHostControl(): void {
+    if (!this.state.room || !this.state.player) {
+      return;
+    }
+
+    this.socket.emit(
+      "host-control:request",
+      { roomCode: this.state.room.code, playerId: this.state.player.id },
+      (result) => {
+        if (!result.ok) {
+          this.updateState({ error: result.error });
+          return;
+        }
+
+        this.updateState({ room: result.data.room, error: null });
+      }
+    );
+  }
+
+  /**
+   * Answers a handover aimed at this phone.
+   *
+   * Only the player who currently holds the controls is being asked, so this is
+   * how they keep or give them up before the thirty seconds run out.
+   */
+  resolveHostControl(playerId: string, grant: boolean): void {
+    if (!this.state.room) {
+      return;
+    }
+
+    this.socket.emit(
+      "host-control:resolve",
+      { roomCode: this.state.room.code, playerId, grant },
+      (result) => {
+        if (!result.ok) {
+          this.updateState({ error: result.error });
+          return;
+        }
+
+        this.updateState({ room: result.data.room, error: null });
+      }
+    );
+  }
+
+  /** Hands the controls back to the shared screen. */
+  releaseHostControl(): void {
+    if (!this.state.room) {
+      return;
+    }
+
+    this.socket.emit("host-control:release", { roomCode: this.state.room.code }, (result) => {
+      if (!result.ok) {
+        this.updateState({ error: result.error });
+        return;
+      }
+
+      this.updateState({ room: result.data.room, error: null });
+    });
+  }
+
+  /** Host action: pick a game. Requires host control; the server enforces it. */
+  selectGame(gameId: string | null): void {
+    if (!this.state.room) {
+      return;
+    }
+
+    this.socket.emit("game:select", { roomCode: this.state.room.code, gameId });
+  }
+
+  /**
+   * Host action: change the selected game's lobby settings.
+   *
+   * This is the same event the shared screen sends for a map or ruleset choice,
+   * so a phone holding host control configures a game exactly as the screen
+   * would. The server authorises it through the same check.
+   */
+  sendGameHostAction(gameId: string, action: unknown): void {
+    if (!this.state.room) {
+      return;
+    }
+
+    this.socket.emit("game:host-action", { roomCode: this.state.room.code, gameId, action });
+  }
+
+  /**
+   * Host action: switch the room's skin.
+   *
+   * Room-wide, exactly as from the shared screen — the server already
+   * authorised the holder for this, the phone simply had no way to ask.
+   */
+  setTheme(theme: ThemeName): void {
+    if (!this.state.room) {
+      return;
+    }
+
+    this.socket.emit("room:set-theme", { roomCode: this.state.room.code, theme }, (result) => {
+      if (!result.ok) {
+        this.updateState({ error: result.error });
+        return;
+      }
+
+      this.updateState({ room: result.data.room, error: null });
+    });
+  }
+
+  /** Host action: switch the room's language. */
+  setRoomLanguage(language: SupportedLanguage): void {
+    if (!this.state.room) {
+      return;
+    }
+
+    this.socket.emit(
+      "room:set-language",
+      { roomCode: this.state.room.code, language },
+      (result) => {
+        if (!result.ok) {
+          this.updateState({ error: result.error });
+          return;
+        }
+
+        this.updateState({ room: result.data.room, error: null });
+      }
+    );
+  }
+
+  /**
+   * Host action: hold or release the running round.
+   *
+   * The phone pauses before opening the host menu, so reading the settings or
+   * stepping back to the catalog does not cost everyone the round in progress.
+   */
+  setRoundPaused(paused: boolean): void {
+    if (!this.state.room) {
+      return;
+    }
+
+    this.socket.emit("round:pause", { roomCode: this.state.room.code, paused });
+  }
+
+  /** Host action: start the current round. */
+  startRound(): void {
+    if (!this.state.room) {
+      return;
+    }
+
+    this.socket.emit("round:start", { roomCode: this.state.room.code });
+  }
+
+  /** Host action: abort the running round and return to the catalog. */
+  returnToGameSelection(): void {
+    const room = this.state.room;
+
+    if (!room) {
+      return;
+    }
+
+    if (room.currentRound && room.currentRound.phase !== "finished") {
+      this.socket.emit("round:abort", { roomCode: room.code }, (result) => {
+        if (!result.ok) {
+          this.updateState({ error: result.error });
+          return;
+        }
+
+        this.socket.emit("game:select", { roomCode: room.code, gameId: null });
+      });
+      return;
+    }
+
+    this.socket.emit("game:select", { roomCode: room.code, gameId: null });
+  }
+
+  /** Host action: remove a player from the room. */
+  kickPlayer(playerId: string): void {
+    if (!this.state.room) {
+      return;
+    }
+
+    this.socket.emit("player:kick", { roomCode: this.state.room.code, playerId }, (result) => {
+      if (!result.ok) {
+        this.updateState({ error: result.error });
+        return;
+      }
+
+      this.updateState({ room: result.data.room, error: null });
+    });
+  }
+
+  sendInput(input: unknown): void {
+    if (!this.state.connected || !this.socket.connected || !this.state.room || !this.state.player) {
+      return;
+    }
+
+    const emitter = shouldUseVolatileInput(input) ? this.socket.volatile : this.socket;
+
+    emitter.emit("game:input", {
+      roomCode: this.state.room.code,
+      playerId: this.state.player.id,
+      input
+    });
+  }
+
+  async savePerfLog(payload: unknown): Promise<{ ok: boolean; file?: string; error?: string }> {
+    try {
+      const response = await fetch(new URL("/debug/perf-log", this.serverUrl), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json; charset=utf-8"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = (await response.json()) as { file?: string; error?: string };
+
+      if (!response.ok) {
+        return {
+          ok: false,
+          error: result.error ?? `HTTP ${response.status}`
+        };
+      }
+
+      return {
+        ok: true,
+        file: result.file
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unbekannter Fehler"
+      };
+    }
+  }
+
+  private updateState(patch: Partial<ControllerAppState>): void {
+    this.state = { ...this.state, ...patch };
+
+    this.scheduleNotifyListeners();
+  }
+
+  private scheduleNotifyListeners(): void {
+    if (this.notifyScheduled) {
+      return;
+    }
+
+    this.notifyScheduled = true;
+
+    const flush = () => {
+      this.notifyScheduled = false;
+
+      for (const listener of this.listeners) {
+        listener(this.state);
+      }
+    };
+
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(flush);
+      return;
+    }
+
+    setTimeout(flush, 0);
+  }
+
+  private persistSession(
+    roomCode: string,
+    playerId: string,
+    playerName: string,
+    reconnectToken: string
+  ): StoredControllerSession {
+    const session = {
+      reconnectToken,
+      roomCode,
+      playerId,
+      playerName,
+      savedAt: Date.now()
+    };
+
+    saveStoredSession(session);
+    return session;
+  }
+}

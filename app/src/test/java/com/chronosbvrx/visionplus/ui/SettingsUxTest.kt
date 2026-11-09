@@ -59,12 +59,14 @@ class SettingsUxTest {
         assertTrue(avatars.contains("private val PROFILE_COLORS"))
         assertTrue(avatars.contains("internal fun profileColorIndex"))
         assertTrue(avatars.contains("internal fun profileInitial"))
-        // Nada de imágenes: el avatar se dibuja.
-        assertFalse(avatars.contains("AsyncImage"))
-        assertFalse(avatars.contains("painterResource"))
+        // Las imágenes elegidas se pintan con su recurso; sin imagen, el avatar se dibuja.
+        assertTrue(avatars.contains("ProfileAvatars.find"))
+        assertTrue(avatars.contains("painterResource"))
+        assertTrue(avatars.contains("else {"))
         val dialog = source("ui/tv/TvProfilesDialog.kt")
         assertTrue("el diálogo no usa avatares", dialog.contains("ProfileAvatar("))
         assertTrue("no hay tarjeta de crear", dialog.contains("isAdd = true"))
+        assertTrue("no ofrece imágenes de cine/series/anime", dialog.contains("ProfileAvatars.of(category)"))
         // Determinista y dentro de la paleta.
         val a = profileColorIndex("Sala")
         assertEquals(a, profileColorIndex("  sala "))
@@ -86,14 +88,18 @@ class SettingsUxTest {
     @Test
     fun thePhoneProfilesAreAvatarsToo() {
         val card = source("ui/settings/ProfilesCard.kt")
-        assertTrue("sin avatares en móvil", card.contains("ProfileAvatar(name = profile.name, size = 56.dp, ring = inUse)"))
+        assertTrue(
+            "sin avatares en móvil",
+            card.contains("ProfileAvatar(name = profile.name, size = 56.dp, ring = inUse, avatar = profile.avatar)"),
+        )
         // La etiqueta va en su propio renglón dentro de Text(…): se busca el literal, no la forma.
         assertTrue("sin tarjeta de crear", card.contains("\"Crear\""))
         assertTrue("sin el círculo de «+»", card.contains("Text(\"+\""))
-        // Se sigue pudiendo crear, renombrar y borrar.
+        // Se sigue pudiendo crear, renombrar, borrar y elegir imagen.
         assertTrue(card.contains("showCreate = true"))
         assertTrue(card.contains("renameTarget = active"))
         assertTrue(card.contains("SettingsDestructiveRow("))
+        assertTrue(card.contains("ProfileAvatars.of(category)"))
     }
 
     @Test

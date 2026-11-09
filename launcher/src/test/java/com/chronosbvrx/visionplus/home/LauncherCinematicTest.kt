@@ -159,7 +159,7 @@ class LauncherCinematicTest {
     @Test
     fun theChromeLooksLikeASystemBarNotAnAppTabBar() {
         val chrome = ui("Chrome.kt")
-        assertTrue("identidad del sistema", chrome.contains("VISION+ OS"))
+        assertTrue("el imagotipo oficial de Vision+", chrome.contains("ic_vision_wordmark"))
         assertTrue("saludo de la persona", chrome.contains("greetingFor("))
         assertTrue("sin pestañas de catálogo", !chrome.contains("items(entries)"))
         assertFalse("ya no hay pestañas de texto", chrome.contains("TabPill("))

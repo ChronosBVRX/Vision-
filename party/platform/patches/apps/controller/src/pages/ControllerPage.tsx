@@ -1,0 +1,231 @@
+import { resolveControllerChrome } from "@open-party-lab/game-core";
+import { Profiler, useEffect, useMemo, useRef } from "react";
+import { ControllerPerfTracker } from "../app/perfTelemetry.js";
+import type { ControllerAppState } from "../app/controllerSocketClient.js";
+import { controllerGameRegistry } from "../controller-ui/games/registry.js";
+import { ReadyPanel } from "../controller-ui/common/ReadyPanel.js";
+import { ControllerFrame } from "../controller-ui/layout/ControllerFrame.js";
+import { ControllerLayoutRenderer } from "../controller-ui/layouts/ControllerLayoutRenderer.js";
+import type { ControllerLayoutModel, ReadyLayoutModel } from "../controller-ui/layouts/models.js";
+import { getControllerText } from "../i18n/controllerText.js";
+import { useOrientationHint } from "../hooks/useOrientationHint.js";
+
+interface ControllerPageProps {
+  state: ControllerAppState;
+  onLeaveRoom: () => void;
+  onInput: (input: unknown) => void;
+  onSetReady: (isReady: boolean) => void;
+}
+
+function resolveControllerPerfCounters(
+  state: ControllerAppState,
+  model: ControllerLayoutModel
+): Record<string, number> {
+  const baseCounters = {
+    players: state.room?.players.length ?? 0
+  };
+
+  switch (model.kind) {
+    case "tower_defense":
+      return {
+        ...baseCounters,
+        buildSlots: model.map.buildSlots.length,
+        pathCells: model.map.pathCells.length,
+        ownedTowers: model.map.buildSlots.filter((slot) => slot.tower).length,
+        towerTypes: model.towerCatalog.length,
+        enemyTypes: model.enemyCatalog.length
+      };
+    case "shop":
+      return {
+        ...baseCounters,
+        offers: model.offers.length,
+        loadoutWeapons: model.loadout?.weapons.length ?? 0,
+        loadoutItems: model.loadout?.items.length ?? 0
+      };
+    case "tap_mash":
+      return {
+        ...baseCounters,
+        rows: model.rows.length,
+        progressCurrent: model.progress.current,
+        progressMax: model.progress.max
+      };
+    default:
+      return baseCounters;
+  }
+}
+
+function resolveAutoReadyFallback(
+  state: ControllerAppState,
+  onSetReady: (isReady: boolean) => void,
+  model: ControllerLayoutModel,
+  text: ReturnType<typeof getControllerText>
+): ReadyLayoutModel | undefined {
+  const gameId = state.room?.selectedGameId;
+  const selectedGame = gameId
+    ? state.room?.availableGames.find((entry) => entry.id === gameId)
+    : undefined;
+
+  if (
+    !state.room ||
+    !state.player ||
+    !selectedGame ||
+    selectedGame.roundCompletionMode !== "wait_for_ready" ||
+    state.game?.phase !== "finished"
+  ) {
+    return undefined;
+  }
+
+  if ("ready" in model && model.ready) {
+    return undefined;
+  }
+
+  const currentPlayerReady = Boolean(
+    state.room.players.find((player) => player.id === state.player?.id)?.isReady ?? state.player.isReady
+  );
+  const readyCount = state.room.players.filter((player) => player.isReady).length;
+  const playerCount = state.room.players.length;
+
+  return {
+    currentPlayerReady,
+    readyCount,
+    playerCount,
+    label: text.nextRound,
+    description: text.nextRoundDescription(readyCount, playerCount),
+    language: state.room.language,
+    onToggleReady: () => onSetReady(!currentPlayerReady)
+  };
+}
+
+export function ControllerPage({ state, onLeaveRoom, onInput, onSetReady }: ControllerPageProps) {
+  const orientation = useOrientationHint();
+  const text = getControllerText(state.room?.language ?? state.preferredLanguage);
+  const gameId = state.room?.selectedGameId;
+  const game = state.game;
+  const gameRegistration = gameId ? controllerGameRegistry[gameId] : undefined;
+  const selectedGame =
+    state.room?.availableGames.find((entry) => entry.id === gameId);
+  const gameName =
+    selectedGame?.displayName ?? gameId ?? "Controller";
+  const perfTrackerRef = useRef<ControllerPerfTracker | null>(null);
+
+  if (!perfTrackerRef.current) {
+    perfTrackerRef.current = new ControllerPerfTracker("controller-page", "controller-page");
+  }
+
+  useEffect(() => {
+    return () => {
+      perfTrackerRef.current?.clear();
+      perfTrackerRef.current = null;
+    };
+  }, []);
+
+  const layoutResult = useMemo(() => {
+    if (!state.player || !state.room || !gameId || !gameRegistration) {
+      return null;
+    }
+
+    const buildStart = performance.now();
+    const model = gameRegistration.buildLayout({
+      state,
+      onInput,
+      onSetReady
+    });
+
+    return {
+      model,
+      buildMs: performance.now() - buildStart
+    };
+  }, [gameId, gameRegistration, onInput, onSetReady, state]);
+
+  if (!state.player || !state.room || !gameId || !gameRegistration || !layoutResult) {
+    return (
+      <ControllerFrame title={text.controllerTitle} subtitle={text.preparingGameView}>
+        <p style={{ margin: 0 }}>{text.unsupportedGame}</p>
+      </ControllerFrame>
+    );
+  }
+
+  const layoutModel = layoutResult.model;
+  const perfCounters = resolveControllerPerfCounters(state, layoutModel);
+  const fallbackReady = resolveAutoReadyFallback(state, onSetReady, layoutModel, text);
+  // Chrome preferences come from the game's manifest. Layout-driven variants
+  // (a joystick that asked for a clean frame) still win, because those depend
+  // on the layout model rather than the game.
+  const chrome = resolveControllerChrome(selectedGame?.controllerChrome);
+  const joystickChrome = layoutModel.kind === "virtual_joystick" && layoutModel.minimal;
+  const cleanJoystickChrome = layoutModel.kind === "virtual_joystick" && layoutModel.cleanChrome;
+  const bareChrome = chrome.bare || joystickChrome || cleanJoystickChrome;
+  const wideChrome = chrome.wide;
+  const minimalChrome = chrome.minimal || bareChrome || joystickChrome;
+  const hideSubtitle = chrome.hideSubtitle || cleanJoystickChrome;
+
+  return (
+    <ControllerFrame
+      title={minimalChrome ? "" : gameName}
+      subtitle={minimalChrome || hideSubtitle ? undefined : `${text.phase}: ${text.formatPhase(game?.phase ?? text.unknown)} | ${orientation}`}
+      wide={wideChrome}
+      bare={bareChrome}
+      footer={
+        minimalChrome ? undefined :
+        <div style={{ display: "grid", gap: 10 }}>
+          {!hideSubtitle ? (
+            <button type="button" onClick={onLeaveRoom} style={secondaryButtonStyle}>
+              {text.logout}
+            </button>
+          ) : null}
+          {!cleanJoystickChrome ? (
+            <div style={{ display: "grid", gap: 8 }}>
+              {!hideSubtitle ? (
+                <small style={{ color: "var(--text-muted)" }}>{text.room} {state.room.code}</small>
+              ) : null}
+              {!chrome.hideScore ? <small style={{ color: "var(--text-muted)" }}>
+                {text.score}: {state.scoreboard?.entries.find((entry) => entry.playerId === state.player?.id)?.total ?? state.player.score}
+              </small> : null}
+            </div>
+          ) : null}
+        </div>
+      }
+    >
+      <Profiler
+        id={`controller:${gameId}`}
+        onRender={(_id, phase, actualDuration, baseDuration) => {
+          perfTrackerRef.current?.sample({
+            sourceId: `${gameId}:${layoutModel.kind}`,
+            timingsMs: {
+              buildModel: layoutResult.buildMs,
+              reactCommit: actualDuration,
+              reactBase: baseDuration
+            },
+            counters: perfCounters,
+            tags: {
+              gameId,
+              layout: layoutModel.kind,
+              phase: game?.phase ?? null,
+              roomCode: state.room?.code ?? null,
+              mapId: layoutModel.kind === "tower_defense" ? layoutModel.map.id : null
+            },
+            flags: {
+              mount: phase === "mount",
+              disabled: layoutModel.disabled
+            }
+          });
+          }}
+        >
+        <div className="controller-stage" key={gameId}>
+          {fallbackReady ? <ReadyPanel ready={fallbackReady} /> : null}
+          <ControllerLayoutRenderer model={layoutModel} />
+        </div>
+      </Profiler>
+    </ControllerFrame>
+  );
+}
+
+const secondaryButtonStyle = {
+  justifySelf: "start",
+  border: "1px solid color-mix(in srgb, var(--danger) 34%, transparent)",
+  borderRadius: 999,
+  background: "color-mix(in srgb, var(--danger-soft) 30%, transparent)",
+  color: "var(--danger)",
+  padding: "10px 16px",
+  fontWeight: 700
+} as const;

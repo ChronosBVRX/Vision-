@@ -173,6 +173,10 @@ object LauncherWatchNext {
                 posterUrl = spec.posterUrl,
                 code = spec.code,
                 videoUrl = spec.videoUrl,
+                seriesId = spec.seriesId,
+                seasonIndex = spec.seasonIndex,
+                seasonIds = spec.seasonIds,
+                seasonNames = spec.seasonNames,
             ),
         )
         val intent = Intent(Intent.ACTION_VIEW, data)

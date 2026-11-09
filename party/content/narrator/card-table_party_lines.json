@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para Baraja brava: doce juegos de cartas, una mesa y la mano privada en el celular.",
+      "Se reparte la Baraja brava. Elijan su juego, cuiden su mano y no muestren las cartas.",
+      "Baraja brava, la mesa donde todos creen contar mejor que el resto.",
+      "Baraja brava: doce juegos, una mesa y una mano que nadie debe ver.",
+      "Se reparte la baraja. Elijan juego, cuiden la mano y no enseñen las cartas.",
+      "Baraja brava: la mesa donde nadie admite que va perdiendo.",
+      "Prepárense para farolear, robar y perder con estilo.",
+      "Se abre la mesa. La suerte reparte; la cara no.",
+      "Baraja brava: cartas privadas, humillación pública.",
+      "Saquen el jugador interior. El que muestre la mano, que se atenga."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Baraja brava en marcha. Jueguen, roben o pasen, pero no se duerman.",
+      "La mesa está caliente. Cada carta cuenta y cada farol se paga.",
+      "Baraja brava sigue. La mano es privada; la humillación es pública.",
+      "Baraja brava: el que parpadea, pierde la mano.",
+      "La mano es privada; la humillación es pública.",
+      "Baraja brava: cuenten bien y disimulen mejor.",
+      "El que se confíe, pierde. El que farolee, también.",
+      "La mesa sigue. Las cartas no perdonan.",
+      "Baraja brava: el que muestre la mano, que se despida.",
+      "Baraja brava: el que se duerma, se queda sin mano."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Se acabó Baraja brava. Veamos quién contó bien y quién se quedó con las cartas.",
+      "Ronda cerrada en Baraja brava. La mesa ya tiene dueño y la tabla también.",
+      "Resultados de Baraja brava. El que presumió, que revise su mano.",
+      "Ronda cerrada. La mesa ya tiene dueño y la tabla también.",
+      "Resultados de Baraja brava: el que faroleó, que lo explique.",
+      "Terminó la mano. El farol se apagó y la verdad salió.",
+      "Se cerró la mesa. La suerte ya tiene culpables.",
+      "Baraja brava: las cartas se guardan, la vergüenza no.",
+      "Resultados: unos ganaron, otros aprendieron a contar.",
+      "Resultados de la mesa. El que perdió, que cuente las cartas otra vez."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Así va la tabla de Baraja brava. Arriba los que juegan fino; abajo los que enseñan las cartas.",
+      "Marcador de Baraja brava. Los de arriba suman; los de abajo se descartan.",
+      "Puntos de Baraja brava. Todavía pueden remontar, si dejan de farolear.",
+      "Puntos de Baraja brava: arriba los que juegan fino, abajo los que enseñan las cartas.",
+      "Marcador de la mesa. El que faroleó, que revise.",
+      "Tabla parcial: los de mano firme suman; los distraídos pagan.",
+      "Así van los puntos. Todavía pueden remontar, si dejan de farolear.",
+      "Baraja brava: la tabla está llena de cartas y de rencores.",
+      "Puntos de la ronda. La próxima mano puede cambiarlo todo.",
+      "Marcador: el que contó bien, que lo demuestre."
+    ]
+  }
+]

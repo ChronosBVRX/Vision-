@@ -1,0 +1,892 @@
+import { resolveGameAudioTrack } from "@open-party-lab/game-core";
+import { markHostMusicAudioContext } from "./audioVolume.js";
+import type { HostAppState, HostSocketClient } from "./hostSocketClient.js";
+import { getSelectedGame } from "../games/selectedGame.js";
+
+const LOBBY_TRACK_ID = "lobby";
+const LOOKUP_DEFAULT_TRACK_ID = "default";
+const MUSIC_UNLOCK_EVENTS = ["pointerdown", "keydown", "touchstart"] as const;
+
+interface MusicTemplate {
+  bars?: number;
+  legato?: boolean;
+  leadPattern: Array<number | null>;
+  bassPattern: Array<number | null>;
+  padPattern: Array<number | null>;
+  barProgression: number[];
+  kickPattern: number[];
+  snarePattern: number[];
+  hatPattern: number[];
+  leadWave: OscillatorType;
+  bassWave: OscillatorType;
+  padWave: OscillatorType;
+  padChordIntervals: number[];
+  leadGain: number;
+  bassGain: number;
+  padGain: number;
+  drumGain: number;
+  lowpassHz: number;
+}
+
+interface MusicProfile extends MusicTemplate {
+  bpm: number;
+  rootMidi: number;
+  masterGain: number;
+  crossfadeSeconds?: number;
+}
+
+function createProfile(
+  template: MusicTemplate,
+  overrides: Partial<Pick<MusicProfile, "bpm" | "rootMidi" | "masterGain">>
+): MusicProfile {
+  return {
+    ...template,
+    bpm: overrides.bpm ?? 110,
+    rootMidi: overrides.rootMidi ?? 52,
+    masterGain: overrides.masterGain ?? 0.16
+  };
+}
+
+const musicTemplates: Record<string, MusicTemplate> = {
+  calmFocus: {
+    bars: 64, legato: true,
+    leadPattern: [0,null,null,null,null,null,7,null,null,null,null,null,4,null,null,null, 2,null,null,null,null,null,null,null,7,null,null,null,null,null,null,null, 4,null,null,null,null,null,9,null,null,null,null,null,7,null,null,null, 2,null,null,null,null,null,null,null,0,null,null,null,null,null,null,null],
+    bassPattern: [0,null,null,null,null,null,null,null,7,null,null,null,null,null,null,null],
+    padPattern: [0,null,null,null],
+    barProgression: [0,0,5,5,9,9,5,7, 0,0,5,5,9,7,5,0, 9,9,5,5,0,0,7,7, 5,5,0,9,5,7,0,0, 0,5,9,7,5,0,5,7, 9,5,0,0,5,9,7,7, 5,0,9,9,7,5,0,5, 9,7,5,0,5,7,0,0],
+    kickPattern: [], snarePattern: [], hatPattern: [],
+    leadWave: "sine", bassWave: "sine", padWave: "sine", padChordIntervals: [0,7,12,16],
+    leadGain: .038, bassGain: .06, padGain: .10, drumGain: 0, lowpassHz: 1400
+  },
+  calmReveal: {
+    bars: 64, legato: true,
+    leadPattern: [4,null,null,null,7,null,null,null,12,null,null,null,null,null,7,null, 9,null,null,null,null,null,7,null,4,null,null,null,null,null,null,null, 7,null,null,null,12,null,null,null,14,null,null,null,12,null,null,null, 7,null,null,null,null,null,4,null,0,null,null,null,null,null,null,null],
+    bassPattern: [0,null,null,null,null,null,null,null,7,null,null,null,null,null,null,null],
+    padPattern: [0,null,null,null],
+    barProgression: [0,0,5,5,9,9,7,7, 5,5,0,0,9,5,7,0, 0,9,5,7,0,9,5,7, 5,5,0,0,9,7,0,0, 5,9,0,7,5,5,9,7, 0,5,9,5,0,0,7,7, 9,9,5,0,7,5,9,7, 5,0,5,9,7,5,0,0],
+    kickPattern: [.2,0,0,0,0,0,0,0,.12,0,0,0,0,0,0,0], snarePattern: [], hatPattern: [],
+    leadWave: "triangle", bassWave: "sine", padWave: "sine", padChordIntervals: [0,7,12,16],
+    leadGain: .035, bassGain: .055, padGain: .085, drumGain: .06, lowpassHz: 1750
+  },
+  lobby: {
+    leadPattern: [0, null, 7, null, 3, null, 10, null, 7, null, 12, null, 10, null, 7, null],
+    bassPattern: [0, null, null, null, -5, null, null, null, -2, null, null, null, -5, null, null, null],
+    padPattern: [0, null, 3, null],
+    barProgression: [0, -5, -2, 3],
+    kickPattern: [1, 0, 0, 0, 0.7, 0, 0, 0, 1, 0, 0, 0, 0.7, 0, 0, 0],
+    snarePattern: [0, 0, 0, 0, 0, 0, 0.7, 0, 0, 0, 0, 0, 0, 0, 0.7, 0],
+    hatPattern: [0.24, 0, 0.18, 0, 0.22, 0, 0.18, 0, 0.24, 0, 0.18, 0, 0.22, 0, 0.18, 0],
+    leadWave: "triangle",
+    bassWave: "sine",
+    padWave: "triangle",
+    padChordIntervals: [0, 7, 12],
+    leadGain: 0.075,
+    bassGain: 0.1,
+    padGain: 0.08,
+    drumGain: 0.16,
+    lowpassHz: 2_200
+  },
+  battle: {
+    leadPattern: [0, null, 3, null, 7, null, 10, null, 12, null, 10, null, 7, 5, 3, null],
+    bassPattern: [0, null, 0, null, -5, null, -5, null, -2, null, -2, null, -5, null, -5, null],
+    padPattern: [0, null, -2, null],
+    barProgression: [0, -5, -2, -7],
+    kickPattern: [1, 0, 0.45, 0, 0.8, 0, 0.32, 0, 1, 0, 0.45, 0, 0.8, 0, 0.32, 0],
+    snarePattern: [0, 0, 0, 0.12, 0, 0, 0.7, 0, 0, 0, 0, 0.12, 0, 0, 0.78, 0],
+    hatPattern: [0.18, 0.14, 0.18, 0.14, 0.2, 0.14, 0.18, 0.14, 0.18, 0.14, 0.18, 0.14, 0.2, 0.14, 0.18, 0.14],
+    leadWave: "square",
+    bassWave: "sawtooth",
+    padWave: "triangle",
+    padChordIntervals: [0, 7, 10],
+    leadGain: 0.07,
+    bassGain: 0.12,
+    padGain: 0.065,
+    drumGain: 0.18,
+    lowpassHz: 2_400
+  },
+  frostfire: {
+    leadPattern: [0, null, 3, null, 7, null, 10, null, 7, null, 12, null, 10, null, 3, null],
+    bassPattern: [0, null, null, null, -5, null, null, null, -2, null, null, null, -5, null, null, null],
+    padPattern: [0, null, 3, null],
+    barProgression: [0, -5, -2, 3],
+    kickPattern: [0.72, 0, 0, 0, 0.42, 0, 0, 0, 0.72, 0, 0, 0, 0.42, 0, 0, 0],
+    snarePattern: [0, 0, 0, 0, 0, 0, 0.34, 0, 0, 0, 0, 0, 0, 0, 0.34, 0],
+    hatPattern: [0.08, 0, 0.06, 0, 0.1, 0, 0.06, 0, 0.08, 0, 0.06, 0, 0.1, 0, 0.06, 0],
+    leadWave: "triangle",
+    bassWave: "sine",
+    padWave: "sine",
+    padChordIntervals: [0, 3, 7, 12],
+    leadGain: 0.075,
+    bassGain: 0.12,
+    padGain: 0.075,
+    drumGain: 0.11,
+    lowpassHz: 1_900
+  },
+  chase: {
+    leadPattern: [0, 3, 7, 10, 12, 10, 7, 3, 0, 3, 7, 10, 12, 15, 10, 7],
+    bassPattern: [0, null, -5, null, 0, null, -2, null, 0, null, -5, null, 0, null, -2, null],
+    padPattern: [0, null, 7, null],
+    barProgression: [0, -2, -5, -2],
+    kickPattern: [1, 0, 0.5, 0, 0.85, 0.3, 0.42, 0, 1, 0, 0.5, 0, 0.85, 0.3, 0.42, 0],
+    snarePattern: [0, 0, 0, 0.1, 0, 0, 0.76, 0, 0, 0, 0, 0.1, 0, 0, 0.76, 0],
+    hatPattern: [0.22, 0.18, 0.22, 0.18, 0.22, 0.18, 0.22, 0.18, 0.22, 0.18, 0.22, 0.18, 0.22, 0.18, 0.22, 0.18],
+    leadWave: "square",
+    bassWave: "triangle",
+    padWave: "sine",
+    padChordIntervals: [0, 5, 12],
+    leadGain: 0.075,
+    bassGain: 0.115,
+    padGain: 0.05,
+    drumGain: 0.18,
+    lowpassHz: 2_800
+  },
+  arcade: {
+    leadPattern: [0, null, 7, 12, 7, null, 10, 7, 0, null, 5, 7, 10, 7, 5, null],
+    bassPattern: [0, null, null, 0, -5, null, null, -5, -2, null, null, -2, -5, null, null, -5],
+    padPattern: [0, 7, 5, 7],
+    barProgression: [0, -5, -2, 0],
+    kickPattern: [1, 0, 0.35, 0, 0.8, 0, 0.35, 0, 1, 0, 0.35, 0, 0.8, 0, 0.35, 0],
+    snarePattern: [0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, 0, 0.8, 0],
+    hatPattern: [0.24, 0.1, 0.2, 0.1, 0.24, 0.1, 0.2, 0.1, 0.24, 0.1, 0.2, 0.1, 0.24, 0.1, 0.2, 0.1],
+    leadWave: "triangle",
+    bassWave: "square",
+    padWave: "triangle",
+    padChordIntervals: [0, 7, 12],
+    leadGain: 0.08,
+    bassGain: 0.11,
+    padGain: 0.05,
+    drumGain: 0.18,
+    lowpassHz: 3_000
+  },
+  mystery: {
+    leadPattern: [0, null, null, 7, null, null, 3, null, -2, null, null, 5, null, null, 3, null],
+    bassPattern: [0, null, null, null, -7, null, null, null, -5, null, null, null, -7, null, null, null],
+    padPattern: [0, null, -5, null],
+    barProgression: [0, -7, -5, -2],
+    kickPattern: [0.75, 0, 0, 0, 0.45, 0, 0, 0, 0.75, 0, 0, 0, 0.45, 0, 0, 0],
+    snarePattern: [0, 0, 0, 0.08, 0, 0, 0.5, 0, 0, 0, 0, 0.08, 0, 0, 0.55, 0],
+    hatPattern: [0.1, 0, 0.08, 0, 0.1, 0, 0.08, 0, 0.1, 0, 0.08, 0, 0.1, 0, 0.08, 0],
+    leadWave: "sine",
+    bassWave: "triangle",
+    padWave: "triangle",
+    padChordIntervals: [0, 6, 12],
+    leadGain: 0.06,
+    bassGain: 0.095,
+    padGain: 0.085,
+    drumGain: 0.12,
+    lowpassHz: 1_800
+  },
+  gentle: {
+    leadPattern: [0, null, 5, null, 7, null, 9, null, 12, null, 9, null, 7, null, 5, null],
+    bassPattern: [0, null, null, null, -5, null, null, null, 0, null, null, null, -2, null, null, null],
+    padPattern: [0, null, 5, null],
+    barProgression: [0, -5, 0, -2],
+    kickPattern: [0.55, 0, 0, 0, 0.4, 0, 0, 0, 0.55, 0, 0, 0, 0.4, 0, 0, 0],
+    snarePattern: [0, 0, 0, 0.06, 0, 0, 0.35, 0, 0, 0, 0, 0.06, 0, 0, 0.35, 0],
+    hatPattern: [0.08, 0, 0.06, 0, 0.08, 0, 0.06, 0, 0.08, 0, 0.06, 0, 0.08, 0, 0.06, 0],
+    leadWave: "sine",
+    bassWave: "sine",
+    padWave: "triangle",
+    padChordIntervals: [0, 7, 12],
+    leadGain: 0.055,
+    bassGain: 0.08,
+    padGain: 0.085,
+    drumGain: 0.1,
+    lowpassHz: 2_000
+  },
+  sports: {
+    leadPattern: [0, 7, null, 10, 12, 10, null, 7, 0, 7, null, 10, 12, 15, 12, 10],
+    bassPattern: [0, null, 0, null, -5, null, -5, null, 0, null, 0, null, -2, null, -2, null],
+    padPattern: [0, 7, 5, 10],
+    barProgression: [0, -5, 0, -2],
+    kickPattern: [1, 0, 0.3, 0, 0.9, 0, 0.3, 0, 1, 0, 0.3, 0, 0.9, 0, 0.3, 0],
+    snarePattern: [0, 0, 0, 0, 0, 0, 0.82, 0, 0, 0, 0, 0, 0, 0, 0.82, 0],
+    hatPattern: [0.22, 0.14, 0.22, 0.14, 0.22, 0.14, 0.22, 0.14, 0.22, 0.14, 0.22, 0.14, 0.22, 0.14, 0.22, 0.14],
+    leadWave: "square",
+    bassWave: "sawtooth",
+    padWave: "triangle",
+    padChordIntervals: [0, 7, 12],
+    leadGain: 0.08,
+    bassGain: 0.12,
+    padGain: 0.055,
+    drumGain: 0.19,
+    lowpassHz: 3_100
+  },
+  kitchen: {
+    leadPattern: [0, null, 4, null, 7, null, 9, null, 12, null, 9, null, 7, null, 4, null],
+    bassPattern: [0, null, null, 0, -5, null, null, -5, 0, null, null, 0, -2, null, null, -2],
+    padPattern: [0, null, 7, null],
+    barProgression: [0, -5, 0, -2],
+    kickPattern: [0.9, 0, 0.28, 0, 0.72, 0, 0.28, 0, 0.9, 0, 0.28, 0, 0.72, 0, 0.28, 0],
+    snarePattern: [0, 0, 0, 0, 0, 0, 0.72, 0, 0, 0, 0, 0, 0, 0, 0.72, 0],
+    hatPattern: [0.18, 0.08, 0.2, 0.08, 0.18, 0.08, 0.2, 0.08, 0.18, 0.08, 0.2, 0.08, 0.18, 0.08, 0.2, 0.08],
+    leadWave: "triangle",
+    bassWave: "triangle",
+    padWave: "sine",
+    padChordIntervals: [0, 7, 12],
+    leadGain: 0.07,
+    bassGain: 0.1,
+    padGain: 0.055,
+    drumGain: 0.16,
+    lowpassHz: 2_700
+  },
+  western: {
+    leadPattern: [0, null, 7, null, 10, null, 7, null, 0, null, 5, null, 7, null, 3, null],
+    bassPattern: [0, null, 0, null, -5, null, -5, null, -2, null, -2, null, -5, null, -5, null],
+    padPattern: [0, null, -2, null],
+    barProgression: [0, -5, -2, -5],
+    kickPattern: [0.85, 0, 0.22, 0, 0.7, 0, 0.22, 0, 0.85, 0, 0.22, 0, 0.7, 0, 0.22, 0],
+    snarePattern: [0, 0, 0, 0, 0, 0, 0.65, 0, 0, 0, 0, 0, 0, 0, 0.65, 0],
+    hatPattern: [0.12, 0, 0.1, 0, 0.12, 0, 0.1, 0, 0.12, 0, 0.1, 0, 0.12, 0, 0.1, 0],
+    leadWave: "triangle",
+    bassWave: "sine",
+    padWave: "triangle",
+    padChordIntervals: [0, 7, 12],
+    leadGain: 0.07,
+    bassGain: 0.1,
+    padGain: 0.055,
+    drumGain: 0.14,
+    lowpassHz: 2_100
+  },
+  sugarCountry: {
+    bars: 16,
+    leadPattern: [0, null, 7, 12, null, 10, 7, null, 5, null, 7, 10, null, 7, 3, null],
+    bassPattern: [0, null, 0, null, -5, null, -5, null, -2, null, -2, null, -5, null, -5, null],
+    padPattern: [0, null, 7, null],
+    barProgression: [0, -5, -2, -5, 3, -2, -5, 0],
+    kickPattern: [0.82, 0, 0.18, 0, 0.68, 0, 0.16, 0, 0.82, 0, 0.18, 0, 0.68, 0, 0.16, 0],
+    snarePattern: [0, 0, 0, 0, 0, 0, 0.62, 0, 0, 0, 0, 0, 0, 0, 0.66, 0],
+    hatPattern: [0.1, 0, 0.08, 0, 0.12, 0, 0.08, 0, 0.1, 0, 0.08, 0, 0.12, 0, 0.08, 0],
+    leadWave: "triangle",
+    bassWave: "sine",
+    padWave: "triangle",
+    padChordIntervals: [0, 7, 12],
+    leadGain: 0.075,
+    bassGain: 0.095,
+    padGain: 0.045,
+    drumGain: 0.13,
+    lowpassHz: 2_450
+  },
+  strategy: {
+    leadPattern: [0, null, 3, null, 7, null, 12, null, 10, null, 7, null, 5, null, 3, null],
+    bassPattern: [0, null, null, null, -5, null, null, null, -2, null, null, null, -5, null, null, null],
+    padPattern: [0, null, -2, null],
+    barProgression: [0, -5, -2, -5],
+    kickPattern: [0.72, 0, 0.16, 0, 0.6, 0, 0.16, 0, 0.72, 0, 0.16, 0, 0.6, 0, 0.16, 0],
+    snarePattern: [0, 0, 0, 0.05, 0, 0, 0.48, 0, 0, 0, 0, 0.05, 0, 0, 0.48, 0],
+    hatPattern: [0.1, 0, 0.08, 0, 0.1, 0, 0.08, 0, 0.1, 0, 0.08, 0, 0.1, 0, 0.08, 0],
+    leadWave: "triangle",
+    bassWave: "triangle",
+    padWave: "sine",
+    padChordIntervals: [0, 7, 10],
+    leadGain: 0.06,
+    bassGain: 0.1,
+    padGain: 0.08,
+    drumGain: 0.13,
+    lowpassHz: 2_000
+  }
+};
+
+/**
+ * Platform-owned tracks.
+ *
+ * Everything else comes from the selected game's manifest: it names one of the
+ * `musicTemplates` above and tunes tempo, key and volume. The platform used to
+ * carry a table of thirteen game ids here, which meant no game could bring its
+ * own music without a platform change.
+ */
+const musicProfiles: Record<string, MusicProfile> = {
+  [LOBBY_TRACK_ID]: createProfile(musicTemplates.lobby, {
+    bpm: 84,
+    rootMidi: 52,
+    masterGain: 0.12
+  }),
+  [LOOKUP_DEFAULT_TRACK_ID]: createProfile(musicTemplates.lobby, {
+    bpm: 96,
+    rootMidi: 50,
+    masterGain: 0.12
+  })
+};
+
+/** Tracks built on demand from game manifests, keyed by resolved track id. */
+const manifestProfiles = new Map<string, MusicProfile>();
+
+function resolveTemplate(name: string): MusicTemplate {
+  return musicTemplates[name as keyof typeof musicTemplates] ?? musicTemplates.lobby;
+}
+
+/**
+ * Builds (and caches) the profile a game asked for.
+ *
+ * Returns null when the game declares no audio, in which case the engine falls
+ * back to the default track.
+ */
+function resolveManifestProfile(state: HostAppState): { id: string; profile: MusicProfile } | null {
+  const game = getSelectedGame(state);
+  const publicState = state.game?.state;
+  const stage = publicState && typeof publicState === "object" && "stage" in publicState && typeof publicState.stage === "string" ? publicState.stage : undefined;
+  const track = resolveGameAudioTrack(game?.audio, state.room?.selectedGameSettings, stage);
+
+  if (!game || !track) {
+    return null;
+  }
+
+  const id = `${game.id}:${track.profile}:${track.bpm ?? ""}:${track.rootMidi ?? ""}:${track.masterGain ?? ""}:${track.crossfadeSeconds ?? ""}`;
+  const cached = manifestProfiles.get(id);
+
+  if (cached) {
+    return { id, profile: cached };
+  }
+
+  const profile = createProfile(resolveTemplate(track.profile), {
+    bpm: track.bpm ?? 100,
+    rootMidi: track.rootMidi ?? 50,
+    masterGain: track.masterGain ?? 0.14
+  });
+  profile.crossfadeSeconds = track.crossfadeSeconds;
+  manifestProfiles.set(id, profile);
+  return { id, profile };
+}
+
+/** Looks a track up across platform tracks and manifest-built ones. */
+function getMusicProfile(trackId: string): MusicProfile {
+  return (
+    musicProfiles[trackId] ??
+    manifestProfiles.get(trackId) ??
+    musicProfiles[LOOKUP_DEFAULT_TRACK_ID]
+  );
+}
+
+function resolveDesiredTrackId(state: HostAppState): string {
+  if (!state.room?.selectedGameId) {
+    return LOBBY_TRACK_ID;
+  }
+
+  return resolveManifestProfile(state)?.id ?? LOOKUP_DEFAULT_TRACK_ID;
+}
+
+function midiToFrequency(midi: number): number {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function createNoiseBuffer(
+  context: OfflineAudioContext,
+  durationSeconds = 0.18
+): AudioBuffer {
+  const buffer = context.createBuffer(
+    1,
+    Math.max(1, Math.ceil(context.sampleRate * durationSeconds)),
+    context.sampleRate
+  );
+  const data = buffer.getChannelData(0);
+
+  for (let index = 0; index < data.length; index += 1) {
+    data[index] = Math.random() * 2 - 1;
+  }
+
+  return buffer;
+}
+
+function scheduleTone(
+  context: OfflineAudioContext,
+  destination: AudioNode,
+  options: {
+    time: number;
+    duration: number;
+    frequency: number;
+    wave: OscillatorType;
+    gain: number;
+    lowpassHz: number;
+    pan?: number;
+    attack?: number;
+    release?: number;
+  }
+): void {
+  const oscillator = context.createOscillator();
+  const filter = context.createBiquadFilter();
+  const panner = context.createStereoPanner();
+  const gainNode = context.createGain();
+  const attack = options.attack ?? 0.01;
+  const release = options.release ?? 0.08;
+  const sustainEnd = Math.max(options.time + attack, options.time + options.duration - release);
+
+  oscillator.type = options.wave;
+  oscillator.frequency.setValueAtTime(options.frequency, options.time);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(options.lowpassHz, options.time);
+  panner.pan.setValueAtTime(options.pan ?? 0, options.time);
+  gainNode.gain.setValueAtTime(0.0001, options.time);
+  gainNode.gain.linearRampToValueAtTime(options.gain, options.time + attack);
+  gainNode.gain.setValueAtTime(options.gain, sustainEnd);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, options.time + options.duration);
+
+  oscillator.connect(filter);
+  filter.connect(panner);
+  panner.connect(gainNode);
+  gainNode.connect(destination);
+
+  oscillator.start(options.time);
+  oscillator.stop(options.time + options.duration + 0.05);
+}
+
+function scheduleKick(
+  context: OfflineAudioContext,
+  destination: AudioNode,
+  time: number,
+  gain: number
+): void {
+  const oscillator = context.createOscillator();
+  const gainNode = context.createGain();
+
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(150, time);
+  oscillator.frequency.exponentialRampToValueAtTime(42, time + 0.12);
+  gainNode.gain.setValueAtTime(Math.max(0.001, gain), time);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, time + 0.18);
+
+  oscillator.connect(gainNode);
+  gainNode.connect(destination);
+  oscillator.start(time);
+  oscillator.stop(time + 0.2);
+}
+
+function scheduleNoiseHit(
+  context: OfflineAudioContext,
+  destination: AudioNode,
+  noiseBuffer: AudioBuffer,
+  options: {
+    time: number;
+    gain: number;
+    duration: number;
+    highpassHz: number;
+    pan?: number;
+  }
+): void {
+  const source = context.createBufferSource();
+  const filter = context.createBiquadFilter();
+  const panner = context.createStereoPanner();
+  const gainNode = context.createGain();
+
+  source.buffer = noiseBuffer;
+  filter.type = "highpass";
+  filter.frequency.setValueAtTime(options.highpassHz, options.time);
+  panner.pan.setValueAtTime(options.pan ?? 0, options.time);
+  gainNode.gain.setValueAtTime(Math.max(0.0001, options.gain), options.time);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, options.time + options.duration);
+
+  source.connect(filter);
+  filter.connect(panner);
+  panner.connect(gainNode);
+  gainNode.connect(destination);
+
+  source.start(options.time);
+  source.stop(options.time + options.duration + 0.02);
+}
+
+async function renderTrackLoop(profile: MusicProfile): Promise<AudioBuffer> {
+  const bars = profile.bars ?? 8;
+  const beatsPerBar = 4;
+  const stepsPerBeat = 4;
+  const stepsPerBar = beatsPerBar * stepsPerBeat;
+  const totalSteps = bars * beatsPerBar * stepsPerBeat;
+  const stepDuration = 60 / profile.bpm / stepsPerBeat;
+  const beatDuration = 60 / profile.bpm;
+  const durationSeconds = stepDuration * totalSteps;
+  const sampleRate = 44_100;
+  const tailSeconds = profile.legato ? 3 : 0;
+  const context = new OfflineAudioContext(
+    2,
+    Math.max(1, Math.ceil((durationSeconds + tailSeconds) * sampleRate)),
+    sampleRate
+  );
+  const masterGain = context.createGain();
+  const lowpass = context.createBiquadFilter();
+  const compressor = context.createDynamicsCompressor();
+  const noiseBuffer = createNoiseBuffer(context);
+
+  masterGain.gain.value = profile.masterGain;
+  lowpass.type = "lowpass";
+  lowpass.frequency.value = profile.lowpassHz;
+  compressor.threshold.value = -18;
+  compressor.knee.value = 14;
+  compressor.ratio.value = 3.2;
+  compressor.attack.value = 0.01;
+  compressor.release.value = 0.18;
+
+  masterGain.connect(lowpass);
+  lowpass.connect(compressor);
+  compressor.connect(context.destination);
+
+  for (let barIndex = 0; barIndex < bars; barIndex += 1) {
+    const barOffset = profile.barProgression[barIndex % profile.barProgression.length] ?? 0;
+    const isVariationSection = barIndex >= bars / 2;
+
+    for (let beatIndex = 0; beatIndex < profile.padPattern.length; beatIndex += 1) {
+      const noteOffset = profile.padPattern[beatIndex];
+
+      if (noteOffset === null || noteOffset === undefined) {
+        continue;
+      }
+
+      const startTime = (barIndex * beatsPerBar + beatIndex) * beatDuration;
+
+      for (const chordOffset of profile.padChordIntervals) {
+        scheduleTone(context, masterGain, {
+          time: startTime,
+          duration: beatDuration * (profile.legato ? 4.4 : isVariationSection ? 2.15 : 1.9),
+          frequency: midiToFrequency(profile.rootMidi + barOffset + noteOffset + chordOffset),
+          wave: profile.padWave,
+          gain: (profile.padGain / Math.max(1, profile.padChordIntervals.length)) * (isVariationSection ? 1.08 : 1),
+          lowpassHz: Math.max(700, profile.lowpassHz - 900),
+          pan: (chordOffset - 6) / 16,
+          attack: profile.legato ? .5 : 0.08,
+          release: profile.legato ? .8 : isVariationSection ? 0.34 : 0.28
+        });
+      }
+    }
+  }
+
+  for (let stepIndex = 0; stepIndex < totalSteps; stepIndex += 1) {
+    const time = stepIndex * stepDuration;
+    const stepInBar = stepIndex % stepsPerBar;
+    const barIndex = Math.floor(stepIndex / stepsPerBar);
+    const barOffset = profile.barProgression[barIndex % profile.barProgression.length] ?? 0;
+    const isVariationSection = barIndex >= bars / 2;
+    const isTurnaroundBar = barIndex === bars - 1;
+    const bassOffset = profile.bassPattern[stepInBar];
+    const leadOffset = profile.leadPattern[stepIndex % profile.leadPattern.length];
+    const kick = profile.kickPattern[stepInBar] ?? 0;
+    const snare = profile.snarePattern[stepInBar] ?? 0;
+    const hat = profile.hatPattern[stepInBar] ?? 0;
+
+    if (bassOffset !== null && bassOffset !== undefined) {
+      const bassAccent = stepInBar === 0 ? 1.12 : 1;
+      scheduleTone(context, masterGain, {
+        time,
+        duration: stepDuration * (profile.legato ? 7 : 2.6),
+        frequency: midiToFrequency(profile.rootMidi - 12 + barOffset + bassOffset),
+        wave: profile.bassWave,
+        gain: profile.bassGain * bassAccent,
+        lowpassHz: Math.max(420, profile.lowpassHz - 1_150),
+        pan: -0.08,
+        attack: 0.01,
+        release: 0.12
+      });
+    }
+
+    if (leadOffset !== null && leadOffset !== undefined) {
+      const leadLift = !profile.legato && isVariationSection && stepInBar % 8 === 0 ? 12 : 0;
+      const leadGainMultiplier = isVariationSection && stepInBar >= 8 ? 1.08 : 1;
+      scheduleTone(context, masterGain, {
+        time,
+        duration: stepDuration * (profile.legato ? 5 : isVariationSection && stepInBar >= 12 ? 2.3 : 1.8),
+        frequency: midiToFrequency(profile.rootMidi + 12 + barOffset + leadOffset + leadLift),
+        wave: profile.leadWave,
+        gain: profile.leadGain * leadGainMultiplier,
+        lowpassHz: Math.max(1_000, profile.lowpassHz + 900),
+        pan: (stepInBar + barIndex) % 2 === 0 ? -0.12 : 0.12,
+        attack: profile.legato ? .035 : 0.008,
+        release: profile.legato ? .45 : 0.1
+      });
+    }
+
+    if (kick > 0) {
+      scheduleKick(context, masterGain, time, profile.drumGain * kick * (isVariationSection ? 1.04 : 1));
+    }
+
+    if (snare > 0) {
+      scheduleNoiseHit(context, masterGain, noiseBuffer, {
+        time,
+        gain: profile.drumGain * snare * 0.7 * (isVariationSection ? 1.05 : 1),
+        duration: 0.13,
+        highpassHz: 1_600,
+        pan: 0.06
+      });
+    }
+
+    if (hat > 0) {
+      scheduleNoiseHit(context, masterGain, noiseBuffer, {
+        time,
+        gain: profile.drumGain * hat * 0.34,
+        duration: 0.05,
+        highpassHz: 4_800,
+        pan: -0.08
+      });
+    }
+
+    if (!profile.legato && isTurnaroundBar && stepInBar >= 12 && stepInBar % 2 === 1) {
+      scheduleNoiseHit(context, masterGain, noiseBuffer, {
+        time,
+        gain: profile.drumGain * 0.05,
+        duration: 0.04,
+        highpassHz: 5_400,
+        pan: 0.08
+      });
+    }
+  }
+
+  const rendered = await context.startRendering();
+  if (!tailSeconds) return rendered;
+  // Fold sustained tails into the start, so the long loop has no cut-off chord.
+  const frames = Math.ceil(durationSeconds * sampleRate);
+  const loop = context.createBuffer(2, frames, sampleRate);
+  for (let channel = 0; channel < 2; channel++) {
+    const data = rendered.getChannelData(channel);
+    const target = loop.getChannelData(channel);
+    target.set(data.subarray(0, frames));
+    for (let index = frames; index < data.length; index++) target[index - frames] += data[index];
+  }
+  return loop;
+}
+
+class HostBackgroundMusicController {
+  private readonly bufferCache = new Map<string, Promise<AudioBuffer>>();
+  private readonly unsubscribe: () => void;
+  private readonly visibilityHandler = () => {
+    if (document.hidden) {
+      void this.audioContext?.suspend();
+      return;
+    }
+
+    if (this.unlocked) {
+      void this.audioContext?.resume();
+      void this.syncTrack();
+    }
+  };
+
+  private audioContext: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
+  private currentSource: AudioBufferSourceNode | null = null;
+  private currentTrackGain: GainNode | null = null;
+  private currentTrackId: string | null = null;
+  private desiredTrackId: string;
+  private unlocked = false;
+  private disposed = false;
+  private unlockCleanup: (() => void) | null = null;
+
+  constructor(private readonly client: HostSocketClient) {
+    resolveManifestProfile(client.getState());
+    this.desiredTrackId = resolveDesiredTrackId(client.getState());
+    this.unsubscribe = client.subscribe((state) => {
+      resolveManifestProfile(state);
+      this.desiredTrackId = resolveDesiredTrackId(state);
+      void this.syncTrack();
+    });
+    this.unlockCleanup = this.installUnlockListeners();
+    document.addEventListener("visibilitychange", this.visibilityHandler);
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.unsubscribe();
+    this.unlockCleanup?.();
+    this.unlockCleanup = null;
+    document.removeEventListener("visibilitychange", this.visibilityHandler);
+
+    if (this.currentTrackGain && this.audioContext) {
+      this.currentTrackGain.gain.cancelScheduledValues(this.audioContext.currentTime);
+      this.currentTrackGain.gain.setTargetAtTime(0.0001, this.audioContext.currentTime, 0.05);
+    }
+
+    this.currentSource?.stop();
+    this.currentSource = null;
+    this.currentTrackGain = null;
+    this.masterGain?.disconnect();
+    this.masterGain = null;
+    void this.audioContext?.close();
+    this.audioContext = null;
+  }
+
+  private installUnlockListeners(): () => void {
+    const unlock = () => {
+      void this.unlockAudio();
+    };
+
+    for (const eventName of MUSIC_UNLOCK_EVENTS) {
+      window.addEventListener(eventName, unlock, { passive: true });
+    }
+
+    return () => {
+      for (const eventName of MUSIC_UNLOCK_EVENTS) {
+        window.removeEventListener(eventName, unlock);
+      }
+    };
+  }
+
+  private async unlockAudio(): Promise<void> {
+    if (this.disposed || this.unlocked) {
+      return;
+    }
+
+    const audioContext = this.ensureAudioContext();
+    await audioContext.resume();
+    this.unlocked = true;
+    this.unlockCleanup?.();
+    this.unlockCleanup = null;
+    await this.syncTrack();
+  }
+
+  private ensureAudioContext(): AudioContext {
+    if (this.audioContext && this.masterGain) {
+      return this.audioContext;
+    }
+
+    this.audioContext = new AudioContext();
+    markHostMusicAudioContext(this.audioContext);
+    this.masterGain = this.audioContext.createGain();
+    // The single node everything the music schedules passes through, which is
+    // what makes one volume control possible at all.
+    this.masterGain.gain.value = readHostMusicVolume();
+    this.masterGain.connect(this.audioContext.destination);
+
+    return this.audioContext;
+  }
+
+  /**
+   * Moves the output to a new level.
+   *
+   * Ramped rather than assigned: stepping a gain node produces an audible click,
+   * and a slider sends a stream of these while it is being dragged.
+   */
+  applyVolume(volume: number): void {
+    if (!this.masterGain || !this.audioContext) {
+      return;
+    }
+
+    const now = this.audioContext.currentTime;
+    this.masterGain.gain.cancelScheduledValues(now);
+    this.masterGain.gain.setTargetAtTime(volume, now, 0.02);
+  }
+
+  private async syncTrack(): Promise<void> {
+    if (!this.unlocked || this.disposed) {
+      return;
+    }
+
+    const audioContext = this.ensureAudioContext();
+
+    if (document.hidden) {
+      return;
+    }
+
+    if (this.currentTrackId === this.desiredTrackId && this.currentSource) {
+      return;
+    }
+
+    const nextTrackId = this.desiredTrackId;
+    const buffer = await this.getTrackBuffer(nextTrackId);
+
+    if (this.disposed || !this.unlocked || document.hidden || nextTrackId !== this.desiredTrackId || this.currentTrackId === nextTrackId && this.currentSource) {
+      return;
+    }
+
+    const trackGain = audioContext.createGain();
+    const source = audioContext.createBufferSource();
+    const startTime = audioContext.currentTime + 0.03;
+    const previousSource = this.currentSource;
+    const previousTrackGain = this.currentTrackGain;
+    const crossfade = Math.min(8, Math.max(.1, getMusicProfile(nextTrackId).crossfadeSeconds ?? .45));
+
+    source.buffer = buffer;
+    source.loop = true;
+    trackGain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+    trackGain.gain.linearRampToValueAtTime(1, startTime + crossfade);
+    source.connect(trackGain);
+    trackGain.connect(this.masterGain!);
+    source.onended = () => {
+      source.disconnect();
+      trackGain.disconnect();
+    };
+    source.start(startTime);
+
+    if (previousTrackGain) {
+      previousTrackGain.gain.cancelScheduledValues(audioContext.currentTime);
+      previousTrackGain.gain.setValueAtTime(
+        Math.max(0.0001, previousTrackGain.gain.value || 0.0001),
+        audioContext.currentTime
+      );
+      previousTrackGain.gain.linearRampToValueAtTime(0.0001, startTime + crossfade);
+    }
+
+    if (previousSource) {
+      previousSource.stop(startTime + crossfade + .05);
+    }
+
+    this.currentSource = source;
+    this.currentTrackGain = trackGain;
+    this.currentTrackId = nextTrackId;
+  }
+
+  private getTrackBuffer(trackId: string): Promise<AudioBuffer> {
+    const cached = this.bufferCache.get(trackId);
+
+    if (cached) {
+      return cached;
+    }
+
+    const profile = getMusicProfile(trackId);
+    const promise = renderTrackLoop(profile);
+    this.bufferCache.set(trackId, promise);
+    return promise;
+  }
+}
+
+/**
+ * Music volume, as the person in the room set it.
+ *
+ * A preference of the machine the music comes out of, not of the room: the
+ * phones make no sound, and the right level depends on the speakers and the
+ * neighbours rather than on which game is running. It therefore lives in local
+ * storage beside the FPS preference instead of in the room state.
+ *
+ * Zero is a real value — silence with the music still scheduled — so the reader
+ * has to tell "not set yet" from "set to none", which a plain falsy check does
+ * not.
+ */
+const volumePreferenceKey = "open-party-lab.host-music-volume";
+const DEFAULT_MUSIC_VOLUME = 0.6;
+
+let activeController: HostBackgroundMusicController | null = null;
+
+function clampVolume(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : DEFAULT_MUSIC_VOLUME;
+}
+
+export function readHostMusicVolume(): number {
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+    return DEFAULT_MUSIC_VOLUME;
+  }
+
+  const stored = window.localStorage.getItem(volumePreferenceKey);
+
+  return stored === null ? DEFAULT_MUSIC_VOLUME : clampVolume(Number(stored));
+}
+
+/** Applies a new level immediately and remembers it for the next session. */
+export function setHostMusicVolume(value: number): number {
+  const volume = clampVolume(value);
+
+  if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
+    window.localStorage.setItem(volumePreferenceKey, String(volume));
+  }
+
+  activeController?.applyVolume(volume);
+  return volume;
+}
+
+export function mountBackgroundMusic(client: HostSocketClient): () => void {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return () => undefined;
+  }
+
+  const controller = new HostBackgroundMusicController(client);
+  activeController = controller;
+
+  return () => {
+    if (activeController === controller) {
+      activeController = null;
+    }
+
+    controller.dispose();
+  };
+}

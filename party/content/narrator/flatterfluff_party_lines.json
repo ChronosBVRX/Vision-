@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para Dulce puntería: malvaviscos alados, miras de colores y dedos calientes.",
+      "Se abre Dulce puntería. Apunten, disparen y recarguen antes de quedarse sin dulces.",
+      "Dulce puntería, el único campo de tiro donde perder es una dulce humillación.",
+      "Dulce puntería: malvaviscos, miras y dedos que no perdonan.",
+      "Arranca el campo de tiro. Apunten, disparen y no se coman la munición.",
+      "Dulce puntería: el único lugar donde perder es dulce y público.",
+      "Prepárense para disparar con estilo y fallar con clase.",
+      "Se abre la ronda. La luna no es un objetivo, aunque lo parezca.",
+      "Dulce puntería: azúcar, adrenalina y cero paciencia.",
+      "Saquen el francotirador interior. El que parpadee, pierde."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Dulce puntería en marcha. No se queden sin balas ni sin orgullo.",
+      "La ronda vuela. Recarguen, apunten y no le disparen a la luna.",
+      "Hay malvaviscos por todos lados. El que parpadea, pierde puntos.",
+      "Dulce puntería en marcha: recarguen, apunten y no le disparen al compañero.",
+      "La ronda vuela. Si se quedan sin balas, sonrían.",
+      "Apunten al centro y no al orgullo.",
+      "El campo está lleno de dulces y de malas decisiones.",
+      "Dulce puntería: cada tiro cuenta, cada fallo se recuerda.",
+      "La mira tiembla, pero la actitud no.",
+      "Aquí se gana con pulso y se pierde con excusas."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Se acabó Dulce puntería. Veamos quién tiene dedo fino y quién pura azúcar.",
+      "Ronda cerrada en Dulce puntería. La puntería se demuestra, no se presume.",
+      "Resultados de Dulce puntería. El marcador no endulza ninguna derrota.",
+      "Se acabó Dulce puntería: el que falló, que pague los malvaviscos.",
+      "Ronda cerrada. El marcador no endulza las derrotas.",
+      "Resultados de Dulce puntería: unos acertaron, otros alimentaron a los malvaviscos.",
+      "Terminó el tiroteo. La luna sigue intacta, por si acaso.",
+      "Se apagó el campo. La puntería ya tiene dueño.",
+      "Dulce puntería: la tabla dice quién dispara y quién solo presume.",
+      "Resultados: el que falló, que lo explique con azúcar."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Así va la tabla de Dulce puntería. Arriba los francotiradores; abajo los que disparan al aire.",
+      "Marcador de Dulce puntería. Los de arriba aciertan; los de abajo recargan tarde.",
+      "Puntos de Dulce puntería. Todavía pueden remontar, si dejan de temblar.",
+      "Puntos de Dulce puntería: arriba los francotiradores, abajo los que disparan al aire.",
+      "Marcador del campo. La luna no compite, pero igual ganó.",
+      "Tabla parcial: los de dedo fino suman; los temblorosos recargan.",
+      "Así van los puntos. Todavía pueden remontar, si dejan de cerrar los ojos.",
+      "Dulce puntería: la tabla está dulce para unos y amarga para otros.",
+      "Puntos de la ronda. El que apuntó bien, que lo disfrute.",
+      "Marcador: el que falló, que pida otra ronda."
+    ]
+  }
+]

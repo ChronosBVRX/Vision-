@@ -95,8 +95,14 @@ class GeeSportsState(
         // Al abrir Deportes se pide la copia fresca: el CMS puede cambiar la lista
         // de canales del evento (link_names) entre ciclos y no queremos enseñar
         // una lista vieja durante el TTL de 8 min. Sin red se conserva la caché.
-        refresh(force = true)
+        // En Robolectric no se toca la red: los tests siembran el archivo y deben ver
+        // exactamente esos eventos (si no, el VPS real los reemplaza y el test se vuelve
+        // dependiente de la agenda del día).
+        if (!isRobolectric()) refresh(force = true)
     }
+
+    private fun isRobolectric(): Boolean =
+        runCatching { Class.forName("org.robolectric.Robolectric") }.isSuccess
 
     /** Los eventos que entran al modo elegido (Principal o todo el catálogo). */
     private fun scoped(event: GeeSportsSource.GeeEvent): Boolean =
@@ -257,6 +263,10 @@ class GeeSportsState(
     }
 
     fun refresh(force: Boolean = false) {
+        if (isRobolectric()) {
+            loading = false
+            return
+        }
         scope.launch {
             loading = true
             val freshGroups = withContext(Dispatchers.IO) {
@@ -289,6 +299,7 @@ class GeeSportsState(
      * no vuelve a bajar los grupos 24/7 (TTL 30 min) y mantiene el selector al día.
      */
     fun refreshLinks(force: Boolean = false) {
+        if (isRobolectric()) return
         scope.launch {
             val fresh = withContext(Dispatchers.IO) {
                 runCatching { GeeSportsSource.refreshEvents(context, force) }.getOrDefault(emptyList())

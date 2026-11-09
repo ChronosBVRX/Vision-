@@ -15,7 +15,7 @@ import json
 import re
 import time
 
-KINDS = ("resume", "fav", "later", "watched")
+KINDS = ("resume", "fav", "later", "watched", "unwatched")
 CODE_LENGTH = 8
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 MAX_ITEMS = 200

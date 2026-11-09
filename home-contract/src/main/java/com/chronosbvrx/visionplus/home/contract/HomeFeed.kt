@@ -24,6 +24,8 @@ data class FeedMeta(
     val profile: String = "",
     /** Identidad estable del perfil: la personalización no depende del nombre. */
     val profileId: String = "",
+    /** Avatar elegido en Vision+ (p. ej. `cine_noir`); vacío = inicial del nombre. */
+    val profileAvatar: String = "",
     val profiles: Int = 1,
     val online: Boolean = true,
     val appVersion: String = "",

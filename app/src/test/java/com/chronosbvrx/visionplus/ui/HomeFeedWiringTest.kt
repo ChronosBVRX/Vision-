@@ -112,7 +112,10 @@ class HomeFeedWiringTest {
         assertTrue("la tele pinta «Seguir viendo» antes del Top 10", slots in 0 until top10)
 
         val store = require("src/main/java/com/chronosbvrx/visionplus/data/homefeed/HomeFeedStore.kt")
-        assertTrue("el feed del launcher abre la ficha en series", store.contains("openLink = if (episode)"))
+        assertTrue(
+            "el feed del launcher abre la ficha en series (salvo que ya tenga el siguiente capítulo)",
+            store.contains("openLink = if (episode && next == null)"),
+        )
         val launcher = File("launcher/src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt")
             .takeIf { it.exists() }
             ?: File("../launcher/src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt")
@@ -172,11 +175,16 @@ class HomeFeedWiringTest {
             assertTrue("el filtro del launcher debe declarar $host", launcher.contains("android:host=\"$host\""))
         }
         assertFalse(
-            "el pathPrefix de Vision+ Play no puede viajar en el filtro del launcher",
+            "el pathPrefix de Vision+ Party no puede viajar en el filtro del launcher",
             launcher.contains("pathPrefix") || launcher.contains("pathPattern"),
         )
-        val play = filters.first { it.contains("android:host=\"play\"") }
-        assertTrue("Play conserva su ruta /join en un filtro propio", play.contains("android:pathPrefix=\"/join\""))
+        // El puente del QR de Vision+ Party usa `visionplus://play/join` en su PROPIO filtro.
+        val playFilter = filters.firstOrNull { it.contains("android:host=\"play\"") }
+        assertTrue("el puente del QR de Party necesita un filtro propio", playFilter != null)
+        assertFalse(
+            "el host play no puede vivir en el filtro del launcher",
+            launcher.contains("android:host=\"play\""),
+        )
     }
 
     @Test

@@ -1559,25 +1559,28 @@ internal object TvHomeSetup {
         val pkg = HomeContract.APP_PACKAGE
         val onTv = packageVersionOnTv(pkg)
         log(if (onTv.isBlank()) "Vision+ no está en la tele" else "la tele tiene Vision+ $onTv")
-        if (onTv.isNotBlank()) {
-            if (!update) return onTv
-            val latest = runCatching { TvAppPackage.latestVersion(context) }.getOrNull()
-            if (latest.isNullOrBlank()) {
-                log("no pude comprobar la última versión de Vision+; se queda la que tiene")
-                return onTv
-            }
-            if (!TvLauncherPackage.isNewer(latest, onTv)) {
-                log("Vision+ ya está al día ($onTv)")
-                return onTv
-            }
+        if (onTv.isNotBlank() && !update) return onTv
+
+        // La fuente de verdad es el release nuevo. Se consulta SIEMPRE antes de decidir
+        // entre la copia del teléfono y la descarga, para no instalar una copia vieja.
+        val latest = runCatching { TvAppPackage.latestVersion(context) }.getOrNull()
+        if (onTv.isNotBlank() && !latest.isNullOrBlank() && !TvLauncherPackage.isNewer(latest, onTv)) {
+            log("Vision+ ya está al día ($onTv)")
+            return onTv
+        }
+        if (onTv.isNotBlank() && latest.isNullOrBlank()) {
+            log("no pude comprobar la última versión de Vision+; pruebo la copia del teléfono")
+        } else if (!latest.isNullOrBlank()) {
             log("hay una Vision+ más nueva: $latest")
         }
 
-        // Si la tele no tiene Vision+ (o tiene una más vieja), la copia que ya está instalada en
-        // este teléfono es la misma que se va a usar: se envía por ADB y no se bajan 97 MB del
-        // release. Si la copia local falla (firma distinta), se sigue con el release.
+        // La copia que ya está instalada en este teléfono es la misma que se va a usar
+        // solo si no es más vieja que el release. Si el release es más nuevo, se baja.
         val local = runCatching { TvAppPackage.local(context) }.getOrNull()
-        if (local != null && (onTv.isBlank() || TvLauncherPackage.isNewer(local.versionName, onTv))) {
+        val downloadRelease = TvAppPackage.shouldDownloadRelease(latest, local?.versionName)
+        if (!downloadRelease && local != null &&
+            (onTv.isBlank() || TvLauncherPackage.isNewer(local.versionName, onTv))
+        ) {
             TvAppPackage.announce(local)
             prepareInstall()
             state.value = state.value.copy(
@@ -1603,6 +1606,11 @@ internal object TvHomeSetup {
             log(
                 "no se pudo instalar la copia del teléfono" +
                     (if (localReason.isBlank()) "" else ": $localReason") + "; pruebo el release",
+            )
+        } else if (local != null && downloadRelease) {
+            log(
+                "el release ($latest) es más nuevo que la copia del teléfono " +
+                    "(${local.versionName}); se descarga del canal nuevo",
             )
         }
 

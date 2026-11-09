@@ -50,7 +50,11 @@ class HomeUpdateTest {
 
         val settings = source("ui/LauncherSettings.kt")
         assertTrue("Ajustes muestra la versión publicada", settings.contains("launcherLatest"))
-        assertTrue("y no permite bajar si ya está al día", settings.contains("if (launcherPending) actions.onUpdateHome() else actions.onCheckHome()"))
+        assertTrue("ofrece actualizar cuando hay una nueva", settings.contains("Actualizar a v"))
+        assertTrue("y un botón manual de búsqueda", settings.contains("Buscar actualización"))
+        assertTrue("actualiza con la acción del launcher", settings.contains("actions.onUpdateHome"))
+        assertTrue("y comprueba a mano", settings.contains("actions.onCheckHome"))
+        assertTrue("también comprueba Vision+ a mano", settings.contains("actions.onCheckVision"))
         assertTrue("no enseña una «última publicada» más vieja que la instalada", settings.contains("HomeUpdate.isOlder(homeVersion"))
         assertTrue("la sección se comprueba al abrirla", screen.contains("settingsSection == LauncherSettingsSection.UPDATES"))
         assertTrue("con una comprobación forzada", screen.contains("HomeUpdate.checkLauncher(context, force = true)"))

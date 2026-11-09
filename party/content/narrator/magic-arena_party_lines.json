@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para Hexagonia: hexágonos, hechizos y una arena que no perdona errores.",
+      "Se enciende Hexagonia. Planeen en secreto, lancen magia y sobrevivan al cierre.",
+      "Hexagonia, táctica pura: cada casilla cuenta y cada carta puede quemar.",
+      "Hexagonia: hexágonos, hechizos y una arena que cobra caro.",
+      "Arranca la batalla. Planeen, lancen y no regalen ni un hexágono.",
+      "Hexagonia: táctica, magia y traición de sobremesa.",
+      "Prepárense para mover ficha como si les fuera la vida.",
+      "Se enciende la arena. Cada casilla puede ser una trampa.",
+      "Hexagonia: el que duda, pierde el hexágono y la dignidad.",
+      "Saquen al estratega interior. El que improvise, que rece."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Hexagonia en marcha. Muevan ficha, lancen hechizo y no regalen el terreno.",
+      "La arena se cierra. Si dudan, el rival ya les está robando el hexágono.",
+      "Magia, cartas y mala leche táctica. Así se juega Hexagonia.",
+      "Hexagonia en marcha: muevan ficha y no le regalen terreno al rival.",
+      "La arena se cierra. Si dudan, ya les robaron el hexágono.",
+      "Magia, cartas y mala leche. Así se juega.",
+      "Cada movimiento cuenta. El que se distraiga, pierde la casilla.",
+      "Hexagonia: planeen dos jugadas y recen por la tercera.",
+      "La arena no perdona. El rival tampoco.",
+      "Hexagonia: el tablero está vivo y ustedes van un paso tarde."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Terminó Hexagonia. Veamos quién dominó la arena y quién quedó sin hexágonos.",
+      "Ronda cerrada en Hexagonia. La magia hizo lo suyo; ahora la tabla cobra.",
+      "Resultados de Hexagonia. Los hechizos se olvidan, el marcador no.",
+      "Terminó Hexagonia: el tablero se cerró y la tabla habló.",
+      "Ronda cerrada. La magia hizo lo suyo; la tabla cobra.",
+      "Resultados de Hexagonia: la magia se apaga, la tabla no.",
+      "Terminó la batalla. El que improvisó, que revise el tablero.",
+      "Se apagó la arena. La estrategia ya tiene dueño.",
+      "Hexagonia: la última ficha cayó y la tabla habló.",
+      "Resultados: unos planearon, otros solo movieron por mover."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Así va la tabla de Hexagonia. Arriba los estrategas; abajo los que improvisaron.",
+      "Marcador de Hexagonia. Los de arriba calculan; los de abajo rezan.",
+      "Puntos de Hexagonia. Todavía hay tiempo de remontar, si encuentran el hexágono correcto.",
+      "Puntos de Hexagonia: arriba los estrategas, abajo los que improvisaron.",
+      "Marcador de la arena. El que calculó, suma; el que rezó, espera.",
+      "Tabla parcial: los hexágonos están caros.",
+      "Así van los puntos. Todavía hay tiempo de encontrar la jugada.",
+      "Hexagonia: la tabla se cierra y el que se confió, ya sabe.",
+      "Puntos de la ronda. La próxima magia puede cambiarlo todo.",
+      "Marcador: el que domina el hexágono, domina la tabla."
+    ]
+  }
+]

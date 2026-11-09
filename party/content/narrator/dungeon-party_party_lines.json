@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para Héroes del sótano: cooperen para sobrevivir, pero compitan por la fama.",
+      "Se abre la puerta de Héroes del sótano. Elijan clase, saqueen y no mueran en el intento.",
+      "Héroes del sótano, aventura de equipo con traiciones de sobremesa.",
+      "Héroes del sótano: cooperen para sobrevivir y compitan por la fama.",
+      "Se abre la puerta. Elijan clase, saqueen y no mueran en el intento.",
+      "Héroes del sótano: el botín es de todos, la culpa de uno.",
+      "Prepárense para pelear, curar y culpar al mago.",
+      "La mazmorra está abierta. El botín es de todos; la culpa también.",
+      "Héroes del sótano: el único lugar donde el tanque también llora.",
+      "Saquen el héroe interior. El que se esconda, que lo explique."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Héroes del sótano en marcha. El monstruo no perdona y el botín tampoco.",
+      "La mazmorra está viva. Peguen, curen y cuiden la espalda.",
+      "Cada habitación huele a peligro y a fama mal repartida.",
+      "La mazmorra no perdona al que se separa del grupo.",
+      "Héroes del sótano: el que se adelante, que cargue con el botín.",
+      "Aquí se coopera hasta que alguien ve el tesoro.",
+      "La mazmorra no espera. Ni el mago.",
+      "Héroes del sótano: peleen juntos, saqueen por separado.",
+      "La mazmorra cruje. El que se esconda, que lo explique.",
+      "Héroes del sótano: el botín se comparte, la culpa no."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Terminó Héroes del sótano. Veamos quién salió con botín y quién con trauma.",
+      "Ronda cerrada en Héroes del sótano. La mazmorra cobró y la tabla también.",
+      "Resultados de Héroes del sótano. La fama se reparte; la humillación también.",
+      "Ronda cerrada. La mazmorra cobró y la tabla también.",
+      "Resultados de Héroes del sótano: el dragón cobró y la tabla también.",
+      "Terminó la aventura. El dragón descansa, el grupo no.",
+      "Se cerró la mazmorra. El que se escondió, que lo cuente.",
+      "Héroes del sótano: el botín ya tiene dueño y la tabla también.",
+      "Resultados: unos saquearon, otros sobrevivieron de milagro.",
+      "Resultados de la mazmorra. El que sobrevivió, que lo celebre."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Así va la tabla de Héroes del sótano. Arriba los héroes; abajo los que despertaron al dragón.",
+      "Marcador de Héroes del sótano. Los de arriba saquean; los de abajo curan heridas.",
+      "Puntos de Héroes del sótano. Todavía pueden remontar, si el sótano los deja.",
+      "Puntos de Héroes del sótano: arriba los héroes, abajo los que despertaron al dragón.",
+      "Marcador de la mazmorra. Los de arriba saquean; los de abajo curan heridas.",
+      "Tabla parcial: el que se adelantó, que revise.",
+      "Así van los puntos. Todavía pueden remontar, si el sótano los deja.",
+      "Héroes del sótano: la tabla está llena de botín y de rencores.",
+      "Puntos de la ronda. La próxima habitación puede cambiarlo todo.",
+      "Marcador: el que sobrevivió, que lo disfrute."
+    ]
+  }
+]

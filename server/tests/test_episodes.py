@@ -419,3 +419,55 @@ def test_schema_has_episode_meta_tables():
     assert "create table if not exists episode_meta_season" in sql
     # una temporada se pide UNA vez: la llave es (tmdb_id, season)
     assert "primary key (tmdb_id, season)" in sql
+
+
+def test_worker_prewarms_the_whole_series_catalog_without_hammering_failures():
+    src = open(Path(__file__).parent.parent / "sync" / "episodes_mirror.py", encoding="utf-8").read()
+    assert "_PREWARM_SQL" in src
+    assert "t.kind in ('series', 'anime', 'kids')" in src
+    assert "coalesce(t.program_type, '') in ('series', 'teleplay')" in src
+    # No se re-encola lo que ya existe (ni las fallidas) y el orden es popular primero.
+    assert "not exists (select 1 from episode_mirror m where m.ref = t.id)" in src
+    assert "order by coalesce(t.popularity, 0) desc, t.id" in src
+    assert "on conflict (ref) do nothing" in src
+    # Lote acotado solo cuando la cola está baja: no se acumulan miles de pendientes.
+    assert "PREWARM_LOW_WATER" in src
+    assert "await prewarm(pool)" in src
+
+
+def test_prewarm_inserts_only_when_the_queue_is_low():
+    class FakePool:
+        def __init__(self, pending):
+            self.pending = pending
+            self.inserted = 0
+
+        async def fetchval(self, sql):
+            return self.pending
+
+        async def fetch(self, sql, limit):
+            self.inserted += 1
+            return [{"ref": "xtv:a"}, {"ref": "xtv:b"}]
+
+    import asyncio
+
+    low = FakePool(0)
+    assert asyncio.run(episodes_mirror.prewarm(low)) == 2
+    assert low.inserted == 1
+
+    high = FakePool(episodes_mirror.PREWARM_LOW_WATER)
+    assert asyncio.run(episodes_mirror.prewarm(high)) == 0
+    assert high.inserted == 0
+
+
+def test_episode_drain_and_tmdb_metadata_run_in_separate_lanes():
+    # Una temporada lenta de TMDB no puede frenar la lista de capítulos: el
+    # drenaje y los metadatos son dos tareas independientes del worker.
+    src = open(Path(__file__).parent.parent / "sync" / "episodes_mirror.py", encoding="utf-8").read()
+    main = open(Path(__file__).parent.parent / "sync" / "main.py", encoding="utf-8").read()
+    assert "async def meta_loop(pool" in src
+    assert "await enrich_pass(pool)" in src
+    assert "episodes_meta_task = asyncio.create_task(episodes_mirror.meta_loop(pool))" in main
+    assert "episodes_meta_task.cancel()" in main
+    # El loop principal ya no ejecuta enrich_pass dentro del drenaje.
+    drain_loop = src.split("async def loop(pool")[1].split("async def meta_loop")[0]
+    assert "await enrich_pass(pool)" not in drain_loop

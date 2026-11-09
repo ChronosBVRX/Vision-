@@ -67,6 +67,7 @@ import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.FollowAiring
 import com.chronosbvrx.visionplus.data.continueOpensSeries
 import com.chronosbvrx.visionplus.data.isEpisodeEntry
+import com.chronosbvrx.visionplus.data.nextEpisodeEntry
 import com.chronosbvrx.visionplus.data.episodeLabelOf
 import com.chronosbvrx.visionplus.data.resumeSeriesFilm
 import com.chronosbvrx.visionplus.data.HomeCurated
@@ -85,6 +86,7 @@ import com.chronosbvrx.visionplus.ui.components.GhostRow
 import com.chronosbvrx.visionplus.ui.Route
 import com.chronosbvrx.visionplus.ui.components.EmptyState
 import com.chronosbvrx.visionplus.ui.components.PosterCard
+import com.chronosbvrx.visionplus.ui.components.rememberPlaybackLongClick
 import com.chronosbvrx.visionplus.ui.components.rememberPosterLongClick
 import com.chronosbvrx.visionplus.ui.components.TopTenBadge
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
@@ -757,8 +759,11 @@ private fun ContinueRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(cards, key = { it.entry.key }) { card ->
-                val opensSeries = continueOpensSeries(card) && card.completed
-                val nextUp = card.completed && card.hasNext && opensSeries
+                // El siguiente capítulo de la MISMA temporada ya tiene código y se puede
+                // abrir directo; al cruzar de temporada la ficha aterriza en la nueva.
+                val nextEntry = if (card.completed && card.hasNext) nextEpisodeEntry(card.entry) else null
+                val opensSeries = continueOpensSeries(card) && card.completed && nextEntry == null
+                val nextUp = card.completed && card.hasNext
                 val episode = if (nextUp) "Siguiente capítulo"
                 else episodeLabelOf(card.entry).takeIf { it.isNotBlank() }
                 val barProgress = if (nextUp) 0f else card.progress
@@ -767,12 +772,13 @@ private fun ContinueRow(
                         title = card.film?.title ?: card.entry.title,
                         imageUrl = card.film?.posterUrl ?: card.entry.posterUrl.takeIf { it.isNotBlank() },
                         meta = episode,
-                        onLongClick = rememberPosterLongClick(card.film ?: resumeSeriesFilm(card.entry)),
+                        onLongClick = rememberPlaybackLongClick(card),
+                        onOptions = rememberPlaybackLongClick(card),
                         onClick = {
-                            if (opensSeries) {
-                                onOpenFilm(card.film ?: resumeSeriesFilm(card.entry))
-                            } else {
-                                onResume(card)
+                            when {
+                                nextEntry != null -> onResume(card.copy(entry = nextEntry))
+                                opensSeries -> onOpenFilm(card.film ?: resumeSeriesFilm(card.entry))
+                                else -> onResume(card)
                             }
                         },
                     )

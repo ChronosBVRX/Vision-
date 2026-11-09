@@ -1,0 +1,59 @@
+/*
+ * Controller theme tokens.
+ *
+ * Mirrors `packages/ui-kit/src/theme.ts` — the host screen and the phone
+ * controller must read the same palette. When a token changes there, change it
+ * here too (both names are listed so a search finds both sides).
+ *
+ * Legacy `--page-bg` / `--panel-bg` / `--text-main` names are kept because ~200
+ * call sites use them; the modern `--paper` / `--surface` / `--ink` aliases are
+ * provided for new code and for parity with the host.
+ */
+:root {
+  /* Shared vocabulary (matches ui-kit themeCssVariables). */
+  --paper: #f7f1e7;
+  --paper-deep: #efe6d8;
+  --surface: #fffbf4;
+  --surface-muted: #f3ece0;
+  --surface-raised: #fffdf9;
+  --ink: #24313a;
+  --ink-soft: #3d4b55;
+  --muted: #697178;
+  --line: #ded5c7;
+  --line-strong: #c9bda9;
+  --accent: #bd4727;
+  --accent-strong: #9f351c;
+  --accent-soft: #f6ddd0;
+  --sage: #6e8b74;
+  --sage-strong: #587260;
+  --sage-soft: #dfe9df;
+  --amber: #c8873a;
+  --amber-soft: #f7e7cd;
+  --danger: #a93b31;
+  --danger-soft: #f4dad6;
+  --on-accent: #ffffff;
+
+  --font-display: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --font-body: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --shadow-card: 0 8px 28px rgba(60, 43, 26, 0.07);
+  --shadow-panel: 0 14px 40px rgba(60, 43, 26, 0.14);
+  --shadow-modal: 0 24px 70px rgba(60, 43, 26, 0.24);
+
+  /* Legacy aliases used across the existing controller components. */
+  --page-bg: var(--paper);
+  --surface-bg: var(--surface);
+  --panel-bg: var(--surface);
+  --panel-border: var(--line);
+  --text-main: var(--ink);
+  --text-muted: var(--muted);
+  --success: var(--sage);
+  --button-shadow: var(--shadow-card);
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 15px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+}

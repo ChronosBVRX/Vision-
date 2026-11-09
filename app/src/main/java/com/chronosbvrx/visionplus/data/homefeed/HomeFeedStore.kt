@@ -13,6 +13,7 @@ import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.isEpisodeEntry
+import com.chronosbvrx.visionplus.data.nextEpisodeEntry
 import com.chronosbvrx.visionplus.data.offline.NetworkMonitor
 import com.chronosbvrx.visionplus.data.profile.ProfileStore
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
@@ -314,6 +315,7 @@ object HomeFeedStore {
         generatedAt = System.currentTimeMillis(),
         profile = runCatching { ProfileStore.active(context).name }.getOrDefault(""),
         profileId = runCatching { ProfileStore.active(context).id }.getOrDefault(""),
+        profileAvatar = runCatching { ProfileStore.active(context).avatar }.getOrDefault(""),
         profiles = runCatching { ProfileStore.profiles(context).size }.getOrDefault(1),
         online = NetworkMonitor.isOnline.value,
         appVersion = BuildConfig.VERSION_NAME,
@@ -395,9 +397,10 @@ object HomeFeedStore {
             val entry = card.entry
             if (entry.key.isBlank()) return@mapNotNull null
             val episode = isEpisodeEntry(entry)
+            val next = if (card.completed && card.hasNext && episode) nextEpisodeEntry(entry) else null
             val nextUp = card.completed && card.hasNext && episode
             ContinueItem(
-                key = entry.key,
+                key = if (next != null) next.key else entry.key,
                 // El mismo nombre que pinta el Inicio de la app (la ficha del catálogo
                 // manda); el título del historial solo rellena cuando no hay ficha.
                 title = if (episode) (card.film?.title ?: baseTitle(entry.title)) else entry.title,
@@ -411,11 +414,10 @@ object HomeFeedStore {
                         .ifBlank { episodeLabel(entry.title) }
                     else -> ""
                 },
-                playLink = watchLinkFor(entry, episode),
-                // En series, el launcher abre la ficha: ahí se elige capítulo o se usa
-                // «Continuar donde te quedaste». Si el catálogo ya no tiene la tarjeta,
-                // el enlace usa la temporada del historial para que la ficha cargue igual.
-                openLink = if (episode) {
+                playLink = if (next != null) watchLinkFor(next, episode) else watchLinkFor(entry, episode),
+                // Misma temporada: el enlace de reproducción ya lleva el capítulo exacto.
+                // Temporada nueva: la ficha aterriza en la temporada siguiente.
+                openLink = if (episode && next == null) {
                     val film = card.film
                     val ref = film?.id ?: entry.seriesId
                         .ifBlank { entry.seasonIds.getOrNull(entry.seasonIndex).orEmpty() }

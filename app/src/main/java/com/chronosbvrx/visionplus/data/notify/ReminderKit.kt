@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -36,8 +37,21 @@ object ReminderKit {
             PackageManager.PERMISSION_GRANTED
     }
 
-    /** Programa el aviso; devuelve false si la hora ya pasó. */
-    fun schedule(context: Context, key: String, atMs: Long, title: String, text: String): Boolean {
+    /**
+     * Programa el aviso; devuelve false si la hora ya pasó.
+     *
+     * [uri] es el deep link que se abre al tocar la notificación (`visionplus://title/…`,
+     * `visionplus://open/sports?event=…`). Sin él se conserva el comportamiento anterior:
+     * abrir la app en el Inicio.
+     */
+    fun schedule(
+        context: Context,
+        key: String,
+        atMs: Long,
+        title: String,
+        text: String,
+        uri: String = "",
+    ): Boolean {
         if (key.isBlank() || atMs <= System.currentTimeMillis()) return false
         val app = context.applicationContext
         val intent = Intent(app, ReminderReceiver::class.java).apply {
@@ -45,6 +59,7 @@ object ReminderKit {
             putExtra("key", key)
             putExtra("title", title.take(120))
             putExtra("text", text.take(200))
+            if (uri.isNotBlank()) putExtra("uri", uri)
         }
         val pending = PendingIntent.getBroadcast(
             app, key.hashCode(), intent,
@@ -110,11 +125,23 @@ class ReminderReceiver : BroadcastReceiver() {
         val title = intent.getStringExtra("title").orEmpty().ifBlank { return }
         val text = intent.getStringExtra("text").orEmpty()
         ReminderKit.ensureChannel(context)
-        val open = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        }
+        val deepLink = intent.getStringExtra("uri").orEmpty().trim()
+        val open = if (deepLink.isNotBlank()) {
+            Intent(Intent.ACTION_VIEW, Uri.parse(deepLink)).apply {
+                setPackage(context.packageName)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+        } else {
+            context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+        } ?: return
+        // Una clave por aviso: con requestCode 0 todas las notificaciones compartían el
+        // mismo PendingIntent y tocar cualquiera abría el último contenido programado.
+        val requestCode = (intent.getStringExtra("key") ?: title).hashCode()
         val pending = PendingIntent.getActivity(
-            context, 0, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            context, requestCode, open,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = NotificationCompat.Builder(context, ReminderKit.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)

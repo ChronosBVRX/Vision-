@@ -8,6 +8,7 @@ prueban con un pool falso que captura el SQL. La clave real vive solo en el
 `.env` del VPS (el repo es público).
 """
 
+import asyncio
 import base64
 import json
 from datetime import date, datetime, timedelta, timezone
@@ -709,6 +710,62 @@ async def test_gee38_health_flags_stale_metadata(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_gee_cache_reuses_the_same_answer_until_the_ttl_expires():
+    calls = 0
+
+    async def build():
+        nonlocal calls
+        calls += 1
+        return {"n": calls}
+
+    cache = {}
+    first = await api_app._cached_gee_payload(cache, ("same",), 60, build)
+    second = await api_app._cached_gee_payload(cache, ("same",), 60, build)
+    assert first is second and calls == 1
+    # TTL 0 = desactivado (siempre calcula).
+    third = await api_app._cached_gee_payload(cache, ("same",), 0, build)
+    assert third == {"n": 2} and calls == 2
+
+
+@pytest.mark.anyio
+async def test_gee_cache_fills_once_when_many_requests_arrive_at_once():
+    calls = 0
+
+    async def build():
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.01)
+        return {"n": calls}
+
+    cache = {}
+    answers = await asyncio.gather(
+        *[
+            api_app._cached_gee_payload(cache, ("same",), 60, build)
+            for _ in range(20)
+        ]
+    )
+    assert calls == 1
+    assert all(answer is answers[0] for answer in answers)
+
+
+@pytest.mark.anyio
+async def test_gee38_events_reuses_identical_answers(monkeypatch):
+    payload = json.dumps({
+        "id": "event:a", "category": "Football", "event": "Liga MX, Apertura",
+        "team_a": "Alfa", "team_b": "Beta",
+        "date_iso": "2026-10-16", "time": "19:00:00", "links": [],
+    })
+    fake = _FakePool(rows=[{"id": "event:a", "payload": payload}])
+    monkeypatch.setattr(api_app, "pool", fake)
+    args = dict(category="Football", day="2026-10-16", days=0, x_api_key="test-key")
+    first = await api_app.gee38_events(**args)
+    calls = len(fake.calls)
+    second = await api_app.gee38_events(**args)
+    assert second is first
+    assert len(fake.calls) == calls
+
+
+@pytest.mark.anyio
 async def test_gee38_events_filters_day_window(monkeypatch):
     payload = json.dumps({
         "id": "event:a", "category": "Football", "event": "Liga MX, Apertura",
@@ -1154,7 +1211,10 @@ def test_gee_broadcast_filter_links_caliente_with_fox_one():
 
 
 def test_gee_league_filters_by_id_and_name():
-    assert api_app._gee_league_allowed_match({"league": {"id": "mex.2"}})
+    # El ascenso MX se retiró: no entra por id, nombre ni evento suelto.
+    assert not api_app._gee_league_allowed_match({"league": {"id": "mex.2"}})
+    assert api_app._gee_league_excluded("mex.2", "Liga de Expansión MX")
+    assert not api_app._gee_league_allowed_event({"event": "Liga de Expansión MX"})
     assert api_app._gee_league_allowed_match({"league": {"id": "uefa.champions"}})
     assert not api_app._gee_league_allowed_match({"league": {"id": "ita.2"}})
     assert api_app._gee_norm_league("Liga MX, Apertura") == "liga mx"
@@ -1549,7 +1609,7 @@ def test_gee_tier_never_confuses_secondary_competitions_with_the_main_league():
     assert api_app._gee_tier_for("", "Russian Premier League", "Football") == 2
     assert api_app._gee_tier_for("", "Kenya Premier League", "Football") == 2
     assert api_app._gee_tier_for("", "Championship", "Football") == 2
-    assert api_app._gee_tier_for("", "Liga de Expansión MX", "Football") == 1
+    assert api_app._gee_tier_for("", "Liga de Expansión MX", "Football") == 2
     assert api_app._gee_tier_for("", "Six Nations", "Rugby") == 3
     assert api_app._gee_tier_for("", "Liga MX, Apertura", "Football") == 1
     assert api_app._gee_tier_for("", "Liga MX Femenil", "Football") == 2

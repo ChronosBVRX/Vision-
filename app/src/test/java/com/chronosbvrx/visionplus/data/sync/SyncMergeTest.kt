@@ -131,6 +131,31 @@ class SyncMergeTest {
     }
 
     @Test
+    fun unwatchedTravelsPerEpisodeAndItsTombstoneWinsByTimestamp() {
+        val local = SyncSnapshot(unwatched = setOf("s1|2"))
+        assertTrue(snapshotKeys(local).contains(stampKey(KIND_UNWATCHED, "s1|2")))
+
+        val added = mergeSync(
+            SyncSnapshot(),
+            listOf(RemoteSyncItem(KIND_UNWATCHED, "s1|2", 2000)),
+            emptyMap(),
+            emptyMap(),
+            nowMs = 5000,
+        )
+        assertEquals(setOf("s1|2"), added.snapshot.unwatched)
+
+        val removed = mergeSync(
+            local,
+            listOf(RemoteSyncItem(KIND_UNWATCHED, "s1|2", 3000, deleted = true)),
+            mapOf(stampKey(KIND_UNWATCHED, "s1|2") to 2000L),
+            emptyMap(),
+            nowMs = 5000,
+        )
+        assertTrue(removed.snapshot.unwatched.isEmpty())
+        assertEquals(3000L, removed.removed[stampKey(KIND_UNWATCHED, "s1|2")])
+    }
+
+    @Test
     fun detectRemovalsStampsTheFirstTimeAndDoesNotRefreshIt() {
         val times = mapOf(stampKey(KIND_FAV, "A") to 1000L)
         val (afterTimes, firstRemoved) = detectRemovals(times, emptySet(), emptyMap(), nowMs = 5000)

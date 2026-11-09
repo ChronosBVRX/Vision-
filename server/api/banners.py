@@ -9,6 +9,11 @@ feed (`sports`), que ya se refresca con el resto del Inicio. Así el marcador y 
 La primera petición del día construye la foto (5-6 llamadas a TMDB en paralelo); las
 siguientes la sirven de Postgres y, si ya venció, la refrescan en segundo plano sin
 hacer esperar a la tele.
+
+El calendario editorial (`calendar_feed.py`) manda sobre la foto: si hay una campaña
+activa, sus 3 primeros títulos van al frente del hero con su badge/eyebrow y el
+`nextRefreshAt` se recorta al fin de la temporada. Así Halloween, Día de Muertos,
+Navidad o el Mundial cambian solos sin publicar una OTA.
 """
 
 from __future__ import annotations
@@ -23,9 +28,11 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
+import calendar_feed
+
 log = logging.getLogger("visionplus.banners")
 
-TMDB_IMAGE = "https://image.tmdb.org/t/p/w1280"
+TMDB_IMAGE = "https://image.tmdb.org/t/p/original"
 BANNER_TTL_SECONDS = 20 * 3600
 MAX_MOVIES = 5
 
@@ -111,6 +118,16 @@ def _row_get(row: Any, key: str, default: Any = None) -> Any:
 def _clean_title(title: str) -> str:
     cleaned = _SEASON_RE.sub("", _text(title)).strip(" -–:(")
     return cleaned or _text(title)
+
+
+def _work_key(row: Any) -> tuple:
+    """Identidad de obra para no repetir una temporada/doblaje en el hero."""
+    tmdb_id = _int(_row_get(row, "tmdb_id"))
+    if tmdb_id:
+        return tmdb_id, _text(_row_get(row, "media"))
+    return _fold(_text(_row_get(row, "base_title")) or _text(_row_get(row, "title"))), _int(
+        _row_get(row, "year")
+    )
 
 
 def _kind_label(kind: str) -> str:
@@ -283,15 +300,80 @@ async def _candidate_rows(pool) -> list[Any]:
     return [dict(row) for row in rows]
 
 
+SEASONAL_HERO_ITEMS = 3
+
+
+async def _seasonal_rows(pool, theme_id: str, limit: int = 12) -> list[dict]:
+    """Títulos de la fila temática activa, listos para el hero.
+
+    Si la fila todavía no existe (el worker está a mitad de un cambio de
+    campaña), se devuelve vacío y el hero usa la foto normal. No se inventan
+    títulos ni se consulta TMDB aquí.
+    """
+    if not theme_id:
+        return []
+    try:
+        rows = await pool.fetch(
+            """
+            select t.id, t.title, t.kind, t.program_type, t.poster_url, t.play_ref,
+                   t.year, t.score, t.duration_min, t.synopsis, t.popularity,
+                   t.is_premiere, e.tmdb_id, e.overview, e.rating as tmdb_rating,
+                   null::text as media, 0 as rank, tg.base_title
+            from title_categories tc
+            join titles t on t.id = tc.title_id
+            left join enrichment e on e.title_id = t.id
+                 and coalesce(e.match_confidence, 0) >= 0.5
+            left join group_members gm on gm.title_id = t.id
+            left join title_groups tg on tg.id = gm.group_id
+            where tc.category_id = $1
+              and t.source != 'magis'
+              and coalesce(t.poster_url, '') <> ''
+              and coalesce(t.play_ref, '') <> ''
+            order by tc.position, t.title
+            limit $2
+            """,
+            theme_id,
+            limit,
+        )
+    except Exception:  # noqa: BLE001 - una fila ausente no rompe el Inicio
+        return []
+    return [dict(row) for row in rows]
+
+
+def _merge_picked(seasonal: list, regular: list, limit: int) -> list:
+    """Temporada primero, sin repetir obra; el resto se completa con la foto diaria."""
+    out: list = []
+    seen: set[tuple] = set()
+    for row in seasonal + regular:
+        key = _work_key(row)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(row)
+        if len(out) >= limit:
+            break
+    return out
+
+
 async def _refresh_movies_locked(
     pool, tmdb_key: str, limit: int, lock_conn
 ) -> int:
     """Cuerpo del refresco, ya con el candado tomado (misma conexión para escribir)."""
+    campaign = await calendar_feed.current(pool)
     rows = await _candidate_rows(pool)
-    picked = pick_movie_candidates(rows, limit=limit)
+    regular = pick_movie_candidates(rows, limit=limit)
+    seasonal: list = []
+    if campaign:
+        theme_id = _text(campaign.get("themeId"))
+        seasonal = pick_movie_candidates(
+            await _seasonal_rows(pool, theme_id, limit=SEASONAL_HERO_ITEMS * 4),
+            limit=SEASONAL_HERO_ITEMS,
+        )
+    picked = _merge_picked(seasonal, regular, limit)
     if not picked:
         log.warning("banners: no hay títulos elegibles")
         return 0
+    seasonal_keys = {_work_key(row) for row in seasonal}
     backdrops = await asyncio.gather(
         *(
             _tmdb_backdrop(
@@ -307,7 +389,15 @@ async def _refresh_movies_locked(
     for position, row in enumerate(picked):
         art = backdrops[position]
         backdrop = art if isinstance(art, str) else ""
-        payloads.append(movie_banner(row, backdrop, position))
+        payload = movie_banner(row, backdrop, position)
+        # La foto normal también lleva el id de campaña para que `serve` pueda
+        # detectar el cambio sin refrescar en bucle cuando la fila aún no existe.
+        payload["campaign"] = _text(campaign.get("id")) if campaign else ""
+        if campaign and _work_key(row) in seasonal_keys:
+            payload["badge"] = _text(campaign.get("badge")) or _text(campaign.get("title")).upper()
+            payload["eyebrow"] = _text(campaign.get("eyebrow")) or "ESPECIAL DE TEMPORADA"
+            payload["campaignItem"] = True
+        payloads.append(payload)
     async with lock_conn.transaction():
         await lock_conn.execute("delete from launcher_banners where kind = 'movie'")
         for position, payload in enumerate(payloads):
@@ -373,35 +463,75 @@ async def _load_movies(pool) -> tuple[list[dict], datetime | None]:
     return items, stamp
 
 
+def _campaign_of(items: list[dict]) -> str:
+    return _text(items[0].get("campaign")) if items else ""
+
+
+def _has_seasonal(items: list[dict]) -> bool:
+    return any(bool(item.get("campaignItem")) for item in items)
+
+
+def _recent_start(campaign: dict | None, now: datetime) -> bool:
+    """¿La campaña acaba de entrar? Solo entonces vale la pena reintentar el hero."""
+    raw = _text((campaign or {}).get("startsAt"))
+    if not raw:
+        return False
+    try:
+        start = datetime.fromisoformat(raw)
+    except ValueError:
+        return False
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    return now - start < timedelta(hours=2)
+
+
 async def serve(pool, background, tmdb_key: str) -> dict:
     """Respuesta de `/v1/banners`: cache diaria + refresco en segundo plano.
 
     La respuesta SIEMPRE trae `nextRefreshAt` en el futuro: cuando la foto está vieja
     (o no hay), el cliente espera al reintento en vez de preguntar en bucle. El refresco
     real corre una sola vez (candado de Postgres) y con enfriamiento si falla.
+
+    Si cambia la campaña del calendario, el refresco se hace en el momento (no en
+    segundo plano): el hero no puede quedarse con Halloween durante 20 h cuando ya
+    entró Navidad. La fila temática se consulta cada vez; si todavía no existe, se
+    reintenta a los 15 min sin gastar TMDB.
     """
     global _last_refresh_attempt, _refresh_running
     now = datetime.now(timezone.utc)
     movies: list[dict] = []
     stamp: datetime | None = None
     stale = True
+    campaign: dict | None = None
     try:
         await ensure_table(pool)
+        campaign = await calendar_feed.current(pool)
         movies, stamp = await _load_movies(pool)
         stale = stamp is None or (now - stamp).total_seconds() > BANNER_TTL_SECONDS
-        if not movies:
-            # Primera petición tras el despliegue: se construye en el momento (5 llamadas
-            # a TMDB en paralelo). Si TMDB tarda o falla, el launcher usa su feed y el
-            # siguiente intento espera el enfriamiento (no se martilla TMDB).
+        campaign_id = _text((campaign or {}).get("id"))
+        campaign_changed = campaign_id != _campaign_of(movies)
+        seasonal_missing = bool(campaign) and not _has_seasonal(movies)
+        # La campaña puede haber entrado antes de que el worker rehaga su fila.
+        # Cuando la fila ya existe, se refresca YA; si no, se espera al reintento.
+        if seasonal_missing and campaign:
+            seasonal_missing = not bool(
+                await _seasonal_rows(pool, _text(campaign.get("themeId")), limit=1)
+            )
+            if not seasonal_missing:
+                campaign_changed = True
+        stale = stale or campaign_changed
+        if (not movies or campaign_changed) and _refresh_due(_mono()):
+            # Primera petición o cambio de temporada: se construye en el momento
+            # (5 llamadas a TMDB en paralelo). Si TMDB tarda o falla, se mantiene
+            # la foto anterior y el siguiente intento espera el enfriamiento.
             mono = _mono()
-            if _refresh_due(mono):
-                _last_refresh_attempt = mono
-                try:
-                    await asyncio.wait_for(refresh_movies(pool, tmdb_key), timeout=14.0)
-                    movies, stamp = await _load_movies(pool)
-                    stale = stamp is None or (now - stamp).total_seconds() > BANNER_TTL_SECONDS
-                except Exception:  # noqa: BLE001
-                    log.exception("banners: no se pudo construir la foto inicial")
+            _last_refresh_attempt = mono
+            try:
+                await asyncio.wait_for(refresh_movies(pool, tmdb_key), timeout=14.0)
+                movies, stamp = await _load_movies(pool)
+                stale = stamp is None or (now - stamp).total_seconds() > BANNER_TTL_SECONDS
+            except Exception:  # noqa: BLE001
+                log.exception("banners: no se pudo construir la foto inicial")
         elif stale:
             # Ya hay algo que servir; la búsqueda del día corre después de responder.
             # Un solo refresco a la vez y, si falló, 15 min de enfriamiento.
@@ -416,8 +546,18 @@ async def serve(pool, background, tmdb_key: str) -> dict:
         next_at = now + timedelta(seconds=_BACKGROUND_RETRY_SECONDS)
     else:
         next_at = (stamp or now) + timedelta(seconds=BANNER_TTL_SECONDS)
+    # El fin de la temporada manda sobre la foto diaria: el cliente vuelve justo
+    # cuando toca cambiar de campaña.
+    ends_at = _int((campaign or {}).get("endsAtMs"))
+    if ends_at > 0:
+        next_at = min(next_at, datetime.fromtimestamp(ends_at / 1000, tz=timezone.utc))
+    # Si la campaña acaba de empezar y su fila aún no está lista, reintentar en
+    # 15 min (sin TMDB) para que el hero estacional no espere 20 h.
+    if campaign and not _has_seasonal(movies) and _recent_start(campaign, now):
+        next_at = min(next_at, now + timedelta(seconds=_BACKGROUND_RETRY_SECONDS))
     return {
         "generatedAt": int((stamp or now).timestamp() * 1000),
         "nextRefreshAt": int(next_at.timestamp() * 1000),
+        "campaign": campaign,
         "items": movies,
     }

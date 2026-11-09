@@ -1,0 +1,122 @@
+import type { ScoreEntry, SupportedLanguage } from "@open-party-lab/game-core";
+import type { PlayerSetupValue, PublicGamePhase } from "@open-party-lab/protocol";
+import type { ThemeName } from "@open-party-lab/ui-kit";
+import { MemoryStore } from "../persistence/memoryStore.js";
+
+export type PlayerPresenceState = "online" | "reconnecting" | "offline";
+
+export interface PlayerRecord {
+  id: string;
+  deviceId: string;
+  name: string;
+  avatar?: string | null;
+  color: string;
+  selectedCharacterId: string | null;
+  setupSelectionsByGameId: Record<string, Record<string, PlayerSetupValue>>;
+  score: number;
+  isReady: boolean;
+  connected: boolean;
+  presence: PlayerPresenceState;
+  socketId: string | null;
+  reconnectToken: string;
+  joinedAt: number;
+  lastSeenAt: number;
+  reconnectGraceEndsAt: number | null;
+}
+
+export interface RoundRecord {
+  gameId: string;
+  roundNumber: number;
+  phase: PublicGamePhase;
+  startedAt: number | null;
+  phaseStartedAt: number;
+  phaseEndsAt: number | null;
+  updatedAt: number;
+  message?: string;
+  state: unknown;
+  scoreEntries: ScoreEntry[];
+  scoreCommittedAt: number | null;
+}
+
+/**
+ * Remote host control state.
+ *
+ * Keyed by player id, not socket id, so a phone that reconnects keeps the
+ * permission it was granted.
+ */
+export interface HostControlRecord {
+  holderPlayerId: string | null;
+  pendingRequest: { playerId: string; requestedAt: number; expiresAt: number } | null;
+}
+
+/**
+ * A paused round.
+ *
+ * Pausing cannot simply stop the tick: every deadline a game has stored —
+ * `phaseEndsAt`, a round's `finishAt` — is an absolute timestamp, so a round
+ * resumed after a minute would find all of them long expired and race through
+ * its phases. Instead the room keeps its own clock: `pausedTotalMs` is
+ * subtracted from wall time before anything reaches a game, so from the game's
+ * side the pause never happened.
+ */
+export interface RoomClock {
+  /** Wall-clock moment the round was paused, or null while it runs. */
+  pausedAt: number | null;
+  /** Milliseconds this room has spent paused, across all pauses. */
+  pausedTotalMs: number;
+  /** Player who paused, so the screen can say who. Null when the screen did. */
+  pausedByPlayerId: string | null;
+}
+
+export interface RoomRecord {
+  code: string;
+  createdAt: number;
+  expiresAt: number | null;
+  lastActivityAt: number;
+  joinUrl: string;
+  language: SupportedLanguage;
+  theme: ThemeName;
+  hostName: string;
+  hostSocketId: string | null;
+  hostControl: HostControlRecord;
+  clock: RoomClock;
+  selectedGameId: string | null;
+  /** When set, the room belongs to this game and cannot switch. */
+  lockedGameId: string | null;
+  gameSettingsByGameId: Record<string, Record<string, unknown>>;
+  roundCounter: number;
+  players: Map<string, PlayerRecord>;
+  currentRound: RoundRecord | null;
+}
+
+export class RoomStore {
+  private readonly rooms = new MemoryStore<RoomRecord>();
+
+  create(room: RoomRecord): RoomRecord {
+    return this.rooms.set(room.code, room);
+  }
+
+  get(roomCode: string): RoomRecord | undefined {
+    return this.rooms.get(roomCode.toUpperCase());
+  }
+
+  has(roomCode: string): boolean {
+    return this.rooms.has(roomCode.toUpperCase());
+  }
+
+  delete(roomCode: string): boolean {
+    return this.rooms.delete(roomCode.toUpperCase());
+  }
+
+  values(): RoomRecord[] {
+    return this.rooms.values();
+  }
+
+  first(): RoomRecord | undefined {
+    return this.values()[0];
+  }
+
+  findByHostSocketId(socketId: string): RoomRecord | undefined {
+    return this.values().find((room) => room.hostSocketId === socketId);
+  }
+}

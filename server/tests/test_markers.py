@@ -429,3 +429,68 @@ def test_fetch_global_without_mal_never_calls_aniskip(monkeypatch):
     monkeypatch.setattr(markers, "_get_json", fake_get)
     markers.fetch_global(1396, "tt0903747", season=1, episode=1)
     assert calls and all("aniskip" not in url for url in calls)
+
+
+# ---------------------------------------------------------------- indexado masivo
+
+def test_prewarm_episode_plan_only_advances_when_the_first_episode_has_data():
+    import app as api_app
+
+    assert api_app.prewarm_episode_plan({}, 3) == []
+    assert api_app.prewarm_episode_plan(None, 3) == []
+    assert api_app.prewarm_episode_plan({"intro": {"s": 1, "e": 2}}, 3) == [2, 3]
+    assert api_app.prewarm_episode_plan({"credits": {"s": 1, "e": 2}}, 1) == []
+    assert api_app.prewarm_episode_plan({"intro": {"s": 1, "e": 2}}, 0) == []
+    assert api_app.prewarm_episode_plan({"intro": {"s": 1, "e": 2}}, "x") == []
+
+
+def test_prewarm_targets_every_series_season_and_respects_marker_freshness():
+    src = open(Path(__file__).parent.parent / "api" / "app.py", encoding="utf-8").read()
+    assert "_MARKERS_PREWARM_SQL" in src
+    # Solo series/anime/kids con estructura de temporadas; las películas no tienen intro.
+    assert "t.kind in ('series', 'anime', 'kids')" in src
+    assert "coalesce(t.program_type, '') in ('series', 'teleplay')" in src
+    # No se re-consulta lo que ya está fresco: positivo 14 días, negativo 2.
+    assert "sm.fetched_at > now() - case" in src
+    # Primero las temporadas que NUNCA se consultaron; después se revalidan las viejas.
+    assert "has_row asc" in src
+    assert "then make_interval(secs => $1)" in src
+    assert "else make_interval(secs => $2)" in src
+    # El pase corre de fondo y arranca/cancela con la API.
+    assert "_markers_prewarm_loop" in src
+    assert "markers_task = asyncio.create_task(_markers_prewarm_loop())" in src
+    assert "markers_task.cancel()" in src
+    # Una ficha rota no frena el barrido completo.
+    assert "no se pudo indexar" in src
+
+
+def test_a_temporary_source_outage_does_not_retry_every_hour():
+    # TheIntroDB limita a 5,000 peticiones diarias y responde 429 durante horas.
+    # Reintentar cada hora re-elegía las mismas fichas populares y bloqueaba la
+    # cola larga; el reintento debe dar espacio a avanzar.
+    import app as api_app
+
+    assert api_app.MARKERS_ERROR_TTL >= 6 * 3600
+
+
+def test_theintrodb_uses_the_account_api_key_when_configured(monkeypatch):
+    # Sin clave, el presupuesto anónimo es de 5,000/día; con cuenta sube a 100,000.
+    # La clave viaja SOLO a TheIntroDB (nunca a IntroDB.app ni a AniSkip).
+    calls = []
+    monkeypatch.setattr(markers, "TIDB_API_KEY", "theintrodb:user_test:secret")
+    monkeypatch.setattr(
+        markers, "_get_json_headers",
+        lambda url, timeout, headers=None: calls.append((url, headers or {})) or {
+            "intro": [{"start_ms": 90000, "end_ms": 150000, "submission_count": 1}],
+        },
+    )
+    monkeypatch.setattr(
+        markers, "_get_json",
+        lambda url, timeout: {"intro": {"start_ms": 91000, "end_ms": 151000, "submission_count": 3}},
+    )
+    out = markers.fetch_global_status(1399, "tt0944947", season=1, episode=1)
+    assert out[0]["intro"]["src"] == "introdb"
+    assert any(headers.get("Authorization") == "Bearer theintrodb:user_test:secret"
+               for _, headers in calls)
+    # La clave no se filtra a las otras fuentes.
+    assert all("introdb.app" not in url for url, _ in calls)

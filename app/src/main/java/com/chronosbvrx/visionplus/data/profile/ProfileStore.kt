@@ -19,6 +19,11 @@ data class Profile(
     val id: String,
     val name: String,
     val createdAt: Long = 0L,
+    /**
+     * Id del avatar elegido en [ProfileAvatars] (p. ej. `cine_spiderman`). Vacío = avatar
+     * dibujado con la inicial y el color del nombre, el de siempre.
+     */
+    val avatar: String = "",
 )
 
 object ProfileStore {
@@ -45,6 +50,8 @@ object ProfileStore {
         "playback_history",
         "sync_state",
         "vision_follow",
+        "vision_live_history",
+        "vision_search",
     )
 
     // ----- piezas puras (con guardián) -----
@@ -71,6 +78,16 @@ object ProfileStore {
         .joinToString(" ")
         .take(24)
 
+    /**
+     * Id del avatar: solo letras, números, guion y guion bajo (40 como tope). Un perfil
+     * viejo corrupto no puede inyectar rutas ni recursos arbitrarios; si el id no existe
+     * en el catálogo, la interfaz pinta la inicial.
+     */
+    internal fun sanitizeAvatar(raw: String): String = raw
+        .trim()
+        .take(40)
+        .filter { it.isLetterOrDigit() || it == '_' || it == '-' }
+
     /** Siguiente id libre: `p1`, `p2`… (el `principal` no cuenta). */
     internal fun nextId(existing: List<Profile>): String {
         val used = existing.map { it.id }.toSet()
@@ -94,6 +111,7 @@ object ProfileStore {
                     id = id,
                     name = name.ifBlank { if (id == DEFAULT_ID) DEFAULT_NAME else "Perfil" },
                     createdAt = obj.optLong("createdAt"),
+                    avatar = sanitizeAvatar(obj.optString("avatar")),
                 )
             }
         }
@@ -109,6 +127,7 @@ object ProfileStore {
                     put("id", p.id)
                     put("name", p.name)
                     put("createdAt", p.createdAt)
+                    put("avatar", p.avatar)
                 }
             )
         }
@@ -149,12 +168,12 @@ object ProfileStore {
     }
 
     /** Crea un perfil nuevo con nombre visible. Devuelve null si el nombre está vacío o ya no caben. */
-    fun create(context: Context, name: String): Profile? {
+    fun create(context: Context, name: String, avatar: String = ""): Profile? {
         val clean = sanitizeName(name)
         if (clean.isBlank()) return null
         val current = profiles(context)
         if (current.size >= MAX_PROFILES) return null
-        val profile = Profile(nextId(current), clean, System.currentTimeMillis())
+        val profile = Profile(nextId(current), clean, System.currentTimeMillis(), sanitizeAvatar(avatar))
         save(context, current + profile)
         return profile
     }
@@ -165,6 +184,15 @@ object ProfileStore {
         val current = profiles(context)
         if (current.none { it.id == id }) return false
         save(context, current.map { if (it.id == id) it.copy(name = clean) else it })
+        return true
+    }
+
+    /** Cambia solo la imagen del perfil sin tocar su nombre. Vacío = avatar de inicial. */
+    fun setAvatar(context: Context, id: String, avatar: String): Boolean {
+        val clean = sanitizeAvatar(avatar)
+        val current = profiles(context)
+        if (current.none { it.id == id }) return false
+        save(context, current.map { if (it.id == id) it.copy(avatar = clean) else it })
         return true
     }
 

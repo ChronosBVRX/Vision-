@@ -64,15 +64,70 @@ def test_other_seasonal_windows():
     assert "tema-vacaciones" in august and "tema-regreso-a-clases" in august
 
 
-def test_only_the_year_round_theme_stays_in_a_plain_month():
+def test_the_year_round_theme_stays_active_beside_a_calendar_event():
+    # 1 de marzo: arranca «Mujeres en pantalla»; «Para reír» sigue como fila
+    # permanente, pero nunca por delante de una campaña.
     ids = _ids(date(2026, 3, 1))
-    assert ids == ["tema-para-reir"]
+    assert ids == ["tema-evento-mujeres", "tema-para-reir"]
 
 
 def test_theme_ids_are_unique_and_namespaced():
     ids = [theme.id for theme in themes.THEMES]
     assert len(ids) == len(set(ids))
     assert all(theme_id.startswith("tema-") for theme_id in ids)
+
+
+def test_special_weeks_are_unique_and_namespaced():
+    ids = [theme.id for theme in themes.EVENTS]
+    assert len(ids) == len(set(ids))
+    assert all(theme_id.startswith("tema-evento-") for theme_id in ids)
+    all_ids = [theme.id for theme in themes.ALL_THEMES]
+    assert len(all_ids) == len(set(all_ids))
+
+
+def test_the_autumn_bridge_covers_the_gap_after_day_of_the_dead():
+    ids = _ids(date(2026, 11, 5))
+    assert ids[0] == "tema-evento-otono"
+
+
+def test_cop31_and_latin_grammy_light_up_after_day_of_the_dead():
+    ids = _ids(date(2026, 11, 12))
+    assert "tema-dia-de-muertos" not in ids
+    assert ids[:3] == ["tema-evento-planeta", "tema-evento-otono", "tema-evento-musica-latina"]
+
+
+def test_blockbuster_week_wins_over_christmas_until_it_ends():
+    ids = _ids(date(2026, 12, 18))
+    assert ids[0] == "tema-evento-sagas"
+    assert "tema-navidad" in ids
+    after = _ids(date(2026, 12, 21))
+    assert after[0] == "tema-navidad"
+
+
+def test_super_bowl_and_valentine_can_share_the_week():
+    ids = _ids(date(2027, 2, 14))
+    assert ids[0] == "tema-evento-superbowl"
+    assert "tema-san-valentin" in ids
+
+
+def test_womens_world_cup_is_the_top_campaign_of_summer_2027():
+    ids = _ids(date(2027, 7, 25))
+    assert ids[0] == "tema-evento-mundial-femenil"
+    assert "tema-evento-comiccon" in ids
+    assert "tema-evento-panamericanos" in ids
+
+
+def test_eclipse_and_pan_american_games_overlap_without_losing_the_hero():
+    ids = _ids(date(2027, 8, 2))
+    assert ids[0] == "tema-evento-eclipse"
+    assert "tema-evento-panamericanos" in ids
+    assert "tema-regreso-a-clases" in ids
+
+
+def test_exact_event_does_not_appear_outside_its_dates():
+    assert "tema-evento-mundial-femenil" not in _ids(date(2027, 6, 23))
+    assert "tema-evento-mundial-femenil" in _ids(date(2027, 6, 24))
+    assert "tema-evento-mundial-femenil" not in _ids(date(2027, 7, 26))
 
 
 def test_genre_aliases_match_both_portal_and_tmdb_spellings():
@@ -251,7 +306,7 @@ def test_discover_asks_for_movies_and_series_with_the_keywords():
 
 
 def test_build_caches_the_tmdb_photo_and_falls_back_to_it():
-    source = inspect.getsource(themes.build)
+    source = inspect.getsource(themes._build)
     assert "theme_tmdb" in source
     assert "active_themes(today)" in source
     refresh = inspect.getsource(themes._refresh_tmdb_members)

@@ -25,6 +25,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,14 +40,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chronosbvrx.visionplus.BuildConfig
+import com.chronosbvrx.visionplus.data.config.RemoteConfig
 import com.chronosbvrx.visionplus.ui.PROJECT_URL
 import com.chronosbvrx.visionplus.ui.brand.VisionWordmark
+import com.chronosbvrx.visionplus.ui.donation.DONATION_URL
+import com.chronosbvrx.visionplus.ui.donation.DonationPromptDialog
 import com.chronosbvrx.visionplus.ui.openLink
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
-import com.chronosbvrx.visionplus.ui.tv.TvActionOption
 import com.chronosbvrx.visionplus.ui.tv.TvCompactAction
 import com.chronosbvrx.visionplus.ui.tv.landingFocus
 import com.chronosbvrx.visionplus.ui.tv.rememberLandingFocus
@@ -176,9 +182,21 @@ fun AboutScreen(contentPadding: PaddingValues) {
 
             Text(ABOUT_CREDITS, style = MaterialTheme.typography.bodyMedium, color = VisionTextSecondary)
 
+            if (RemoteConfig.flag(context, "donation_prompt", false)) {
+                Text(
+                    "Vision+ es gratis. Si te sirve, puedes apoyar su mantenimiento con un café o unas chelas.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = VisionTextSecondary,
+                )
+                Button(
+                    onClick = { openLink(context, DONATION_URL) },
+                    colors = ButtonDefaults.buttonColors(containerColor = VisionBlue, contentColor = Color.White),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Apoyar Vision+") }
+            }
             Button(
                 onClick = { shareApp(context) },
-                colors = ButtonDefaults.buttonColors(containerColor = VisionBlue, contentColor = Color.White),
+                colors = ButtonDefaults.buttonColors(containerColor = VisionSurface, contentColor = Color.White),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Compartir Vision+") }
             Button(
@@ -201,6 +219,7 @@ fun AboutScreen(contentPadding: PaddingValues) {
 fun TvAboutScreen() {
     val context = LocalContext.current
     val landing = rememberLandingFocus()
+    var showDonation by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxSize().padding(horizontal = 96.dp, vertical = 40.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()),
@@ -218,13 +237,28 @@ fun TvAboutScreen() {
             AuthorSignature()
             androidx.tv.material3.Text(ABOUT_CREDITS, style = androidx.tv.material3.MaterialTheme.typography.bodyMedium, color = VisionTextSecondary)
             androidx.tv.material3.Text("Vision+ ${BuildConfig.VERSION_NAME}", style = androidx.tv.material3.MaterialTheme.typography.titleSmall, color = Color.White)
+            val donationEnabled = RemoteConfig.flag(context, "donation_prompt", false)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (donationEnabled) {
+                    TvCompactAction(
+                        label = "Apoyar Vision+",
+                        modifier = Modifier.landingFocus(landing),
+                    ) { showDonation = true }
+                }
                 TvCompactAction(
-                    label = "Compartir Vision+",
-                    modifier = Modifier.landingFocus(landing),
+                    label = "Compartir",
+                    modifier = if (donationEnabled) Modifier else Modifier.landingFocus(landing),
                 ) { shareApp(context) }
-                TvActionOption("Abrir el proyecto en GitHub") { openLink(context, PROJECT_URL) }
+                TvCompactAction(label = "GitHub") { openLink(context, PROJECT_URL) }
             }
         }
+    }
+    if (showDonation) {
+        DonationPromptDialog(
+            isTv = true,
+            allowNever = false,
+            onDismiss = { showDonation = false },
+            onNever = {},
+        )
     }
 }

@@ -123,7 +123,9 @@ fun rememberLandingFocus(key: Any? = Unit): LandingFocus {
         if (key == null) return@LaunchedEffect
         repeat(ATTEMPTS) {
             if (landing.focused) return@LaunchedEffect
-            landing.request()
+            // Un diálogo/selector encima (p. ej. perfiles al arrancar) es dueño del foco:
+            // la pantalla de atrás no puede quitárselo mientras siga abierto.
+            if (FocusRescue.dialogsOpen <= 0) landing.request()
             delay(RETRY_MS)
         }
     }
@@ -307,6 +309,13 @@ internal fun requestFocusSafely(requester: FocusRequester): Boolean =
 fun Modifier.softFocusDown(requester: FocusRequester): Modifier = onPreviewKeyEvent { event ->
     event.type == KeyEventType.KeyDown &&
         event.key == Key.DirectionDown &&
+        requestFocusSafely(requester)
+}
+
+/** Igual que [softFocusDown], pero para «Arriba»: nunca revienta con un destino desmontado. */
+fun Modifier.softFocusUp(requester: FocusRequester): Modifier = onPreviewKeyEvent { event ->
+    event.type == KeyEventType.KeyDown &&
+        event.key == Key.DirectionUp &&
         requestFocusSafely(requester)
 }
 

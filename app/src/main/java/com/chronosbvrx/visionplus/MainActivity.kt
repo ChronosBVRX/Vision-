@@ -16,6 +16,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -40,6 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -47,8 +50,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.data.CatalogSeed
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.config.RemoteConfig
 import com.chronosbvrx.visionplus.data.XuperCatalog
-import com.chronosbvrx.visionplus.data.games.GameDeepLink
 import com.chronosbvrx.visionplus.data.gate.GateClient
 import com.chronosbvrx.visionplus.data.homefeed.HomeFeedStore
 import com.chronosbvrx.visionplus.data.launcher.LauncherWatchNext
@@ -69,7 +72,10 @@ import com.chronosbvrx.visionplus.ui.brand.VisionSplash
 import com.chronosbvrx.visionplus.ui.components.LocalPosterActions
 import com.chronosbvrx.visionplus.ui.components.PosterActionsController
 import com.chronosbvrx.visionplus.ui.components.PosterActionsDialog
+import com.chronosbvrx.visionplus.ui.donation.DonationPrompt
+import com.chronosbvrx.visionplus.ui.donation.DonationPromptDialog
 import com.chronosbvrx.visionplus.ui.launcherRouteFor
+import com.chronosbvrx.visionplus.ui.resumeRoute
 import com.chronosbvrx.visionplus.ui.liveRouteFor
 import com.chronosbvrx.visionplus.ui.player.PipMode
 import com.chronosbvrx.visionplus.ui.player.PipSession
@@ -240,6 +246,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         bootStartedMs = android.os.SystemClock.uptimeMillis()
+        if (com.chronosbvrx.visionplus.BuildConfig.DEBUG) {
+            android.webkit.WebView.setWebContentsDebuggingEnabled(true)
+        }
         installSplashScreen()
         super.onCreate(savedInstanceState)
         // Identidad propia automática (cero códigos para el usuario): si el servidor
@@ -297,11 +306,29 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalReducedEffects provides DevicePerformance.shouldReduceEffects(this, com.chronosbvrx.visionplus.ui.settings.VisionSettings.effectsMode)) {
                     // Menú contextual de pósters (OK largo): una sola instancia para toda la app.
                     val posterActions = remember { PosterActionsController() }
+                    // Tele con varias personas: una vez por arranque en frío, preguntar quién ve.
+                    // En móvil no se interrumpe: el chip de perfil del menú basta.
+                    var showProfileGate by rememberSaveable {
+                        mutableStateOf(
+                            savedInstanceState == null && isTv &&
+                                com.chronosbvrx.visionplus.data.profile.ProfileStore
+                                    .profiles(this@MainActivity).size > 1,
+                        )
+                    }
+                    // Apoyo voluntario: una vez al día, nunca encima del splash, la activación,
+                    // el selector de perfiles ni un deep link que ya viene a reproducir.
+                    var showDonation by rememberSaveable { mutableStateOf(false) }
+                    // Editar el perfil desde el selector del arranque también refresca el chip
+                    // de la barra superior (el diálogo interno ya lo hacía con su propio tick).
+                    var profileRevision by remember { mutableStateOf(0) }
                     var needsActivation by rememberSaveable {
                         mutableStateOf(ACTIVATION_REQUIRED && !GateClient.isActivated(this@MainActivity))
                     }
                     var splashVisible by rememberSaveable { mutableStateOf(true) }
                     var bootReady by remember { mutableStateOf(false) }
+                    // Un respiro extra tras cargar los datos: el Inicio ya se compone detrás del
+                    // splash y las portadas/hero alcanzan a pintarse antes de que el logo suba.
+                    var splashExitReady by remember { mutableStateOf(false) }
                     var warming by remember { mutableStateOf(false) }
                     val navigator = remember { nav }
                     val catalog = remember { XuperCatalog(this@MainActivity) }
@@ -314,7 +341,7 @@ class MainActivity : ComponentActivity() {
                     // El reloj flotante ya no se monta sobre la barra superior: la hora vive
                     // DENTRO de la barra (como en Vision+ Home). Solo queda en las pantallas
                     // que no llevan barra (ficha, ajustes).
-                    val showClock = !needsActivation && showsFloatingClock(isTv, clockRoute) &&
+                    val showClock = !needsActivation && !showProfileGate && showsFloatingClock(isTv, clockRoute) &&
                         !com.chronosbvrx.visionplus.ui.tv.tvTopBarVisible(clockRoute)
 
                     // Salida con confirmación desde la pantalla principal: el primer Atrás
@@ -446,10 +473,45 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // El Inicio ya está compuesto detrás del splash: le damos un instante a las
+                    // imágenes para que el logo se deslice y las portadas estén ahí, no un esqueleto.
+                    LaunchedEffect(bootReady) {
+                        if (!bootReady) return@LaunchedEffect
+                        delay(if (deepLinked) 0L else 420L)
+                        splashExitReady = true
+                    }
+
+                    // Al cerrar el selector del arranque, el Inicio retoma el mando sin exigir una
+                    // pulsación extra: el rescate verificado enfoca su destino real.
+                    LaunchedEffect(showProfileGate) {
+                        if (!showProfileGate && bootReady) {
+                            delay(180)
+                            runCatching { FocusRescue.rescue() }
+                        }
+                    }
+
                     // Cuando regresa la conexión a internet, cargamos el catálogo automáticamente
                     LaunchedEffect(isOnline) {
                         if (isOnline && bootReady && catalog.rows.isEmpty()) {
                             catalog.load()
+                        }
+                    }
+
+                    // Apoyo voluntario: una sola vez al día y con la app ya usable. No aparece
+                    // sobre el splash, la activación, el selector de perfiles ni un deep link.
+                    LaunchedEffect(bootReady, splashVisible, needsActivation, showProfileGate, deepLinked) {
+                        if (!bootReady || splashVisible || needsActivation || showProfileGate || deepLinked) {
+                            return@LaunchedEffect
+                        }
+                        // Se enciende desde el servidor cuando los Payment Links ya están
+                        // publicados; así una OTA nunca enseña una página de pagos vacía.
+                        if (!RemoteConfig.flag(this@MainActivity, "donation_prompt", false)) {
+                            return@LaunchedEffect
+                        }
+                        delay(2_500L)
+                        if (DonationPrompt.shouldShow(this@MainActivity)) {
+                            DonationPrompt.markShown(this@MainActivity)
+                            showDonation = true
                         }
                     }
 
@@ -466,26 +528,62 @@ class MainActivity : ComponentActivity() {
                     }
                     CompositionLocalProvider(LocalPosterActions provides posterActions) {
                     Box(Modifier.fillMaxSize().background(VisionBlack)) {
+                        // El selector de perfiles del arranque vive en la misma composición que el
+                        // Inicio (no en otra ventana): el splash se desliza hacia arriba y deja
+                        // ver las portadas con los perfiles encima, sin salto de pantalla.
+                        val profileGateOpen = showProfileGate && bootReady && !needsActivation
                         if (needsActivation) {
                             ActivationScreen(
                                 isTv = isTv,
                                 onActivated = { needsActivation = false },
                             )
                         } else if (!splashVisible || bootReady) {
-                            if (isTv) {
-                                TvApp(catalog, navigator, onExitToLauncher = {
-                                    com.chronosbvrx.visionplus.ui.exitAppCleanly(this@MainActivity)
-                                }, onExitRequest = requestExit)
+                            // En Android 12+ el Inicio se ve ligeramente desenfocado detrás del
+                            // cristal; en equipos modestos solo queda el velo del 75 %.
+                            val blurRadius by animateDpAsState(
+                                targetValue = if (
+                                    isTv && profileGateOpen &&
+                                    android.os.Build.VERSION.SDK_INT >= 31 &&
+                                    !DevicePerformance.isLowEndDevice(this@MainActivity)
+                                ) {
+                                    16.dp
+                                } else {
+                                    0.dp
+                                },
+                                animationSpec = tween(280),
+                                label = "profiles-gate-blur",
+                            )
+                            val backgroundBlur = if (
+                                android.os.Build.VERSION.SDK_INT >= 31 && blurRadius > 0.dp
+                            ) {
+                                Modifier.blur(radius = blurRadius)
                             } else {
-                                PhoneApp(catalog, navigator) {
-                                    com.chronosbvrx.visionplus.ui.exitAppCleanly(this@MainActivity)
+                                Modifier
+                            }
+                            Box(Modifier.fillMaxSize().then(backgroundBlur)) {
+                                if (isTv) {
+                                    TvApp(catalog, navigator, onExitToLauncher = {
+                                        com.chronosbvrx.visionplus.ui.exitAppCleanly(this@MainActivity)
+                                    }, onExitRequest = requestExit, profileRevision = profileRevision)
+                                } else {
+                                    PhoneApp(catalog, navigator) {
+                                        com.chronosbvrx.visionplus.ui.exitAppCleanly(this@MainActivity)
+                                    }
                                 }
                             }
+                        }
+                        // Se dibuja ANTES del splash para que el splash lo revele al subir.
+                        if (profileGateOpen) {
+                            com.chronosbvrx.visionplus.ui.tv.TvProfilesOverlay(
+                                onDismiss = { showProfileGate = false },
+                                onProfileChanged = { profileRevision++ },
+                                title = "Perfiles",
+                            )
                         }
                         if (splashVisible) {
                             VisionSplash(
                                 isTv = isTv,
-                                canExit = bootReady,
+                                canExit = splashExitReady,
                                 status = if (warming) "Preparando el reproductor..." else null,
                                 onFinished = { splashVisible = false },
                             )
@@ -536,13 +634,28 @@ class MainActivity : ComponentActivity() {
                         // favoritos y «Ver más tarde» desde donde esté mirando.
                         PosterActionsDialog(
                             film = posterActions.film,
+                            card = posterActions.resumeCard,
                             onDismiss = { posterActions.dismiss() },
                             onOpenFilm = { film ->
                                 posterActions.dismiss()
                                 navigator.push(Route.Title(film))
                             },
+                            onResume = { card ->
+                                posterActions.dismiss()
+                                navigator.push(resumeRoute(card))
+                            },
                             onChanged = { catalog.refreshPersonal() },
                         )
+                        if (showDonation && !needsActivation && !splashVisible && bootReady && !showProfileGate) {
+                            DonationPromptDialog(
+                                isTv = isTv,
+                                onDismiss = { showDonation = false },
+                                onNever = {
+                                    DonationPrompt.never(this@MainActivity)
+                                    showDonation = false
+                                },
+                            )
+                        }
                     }
                     }
                 }
@@ -561,16 +674,18 @@ class MainActivity : ComponentActivity() {
     private fun launcherIntentRoute(intent: Intent?): Route? {
         if (intent == null || intent.action != Intent.ACTION_VIEW) return null
         val uri = intent.data ?: return null
+        // El QR/puente abre el mando dentro de la app antes que el navegador.
+        if ("play".equals(uri.host, ignoreCase = true)) {
+            val room = uri.getQueryParameter("room") ?: uri.pathSegments.getOrNull(1)
+            if (!room.isNullOrBlank()) {
+                return Route.PartyController(room.trim().uppercase().take(4))
+            }
+        }
         // Vision+ Home: destinos del sistema (ajustes, buscador, Inicio) y fichas.
         if ("open".equals(uri.host, ignoreCase = true)) return openRouteFor(uri)
         if ("title".equals(uri.host, ignoreCase = true)) return titleRouteFor(uri)
         // El control remoto y nuestro propio launcher abren canales con `visionplus://live/<código>`.
         if ("live".equals(uri.host, ignoreCase = true)) return liveRouteFor(this, uri)
-        // Vision+ Play: los enlaces de invitación son solo para el teléfono.
-        if ("play".equals(uri.host, ignoreCase = true)) {
-            if (isTv) return null
-            return GameDeepLink.joinCode(uri)?.let { Route.GameRoom(it) }
-        }
         return launcherRouteFor(this, uri)
     }
 
@@ -682,7 +797,8 @@ private fun remoteRouteLabel(route: Route): String = when (route) {
     Route.Assistant -> "Asistente"
     Route.Remote -> "Control remoto"
     Route.Games -> "Juegos"
-    is Route.GameRoom -> "Sala ${route.code}"
+    is Route.PartyHost -> "Juegos"
+    is Route.PartyController -> "Juegos"
     is Route.Title -> route.film.title
     is Route.Category -> route.title
     is Route.Section -> route.title

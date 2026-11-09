@@ -2,12 +2,14 @@
 
 package com.chronosbvrx.visionplus.home.ui
 
+import android.content.Context
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -48,10 +51,15 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.chronosbvrx.visionplus.home.R
 import com.chronosbvrx.visionplus.home.data.HomeConfig
 import com.chronosbvrx.visionplus.home.data.StartTab
 import kotlinx.coroutines.delay
@@ -172,11 +180,12 @@ internal fun msToNextMinute(nowMs: Long = System.currentTimeMillis()): Long {
 fun TopChrome(
     tab: HomeTab,
     profile: String,
+    profileAvatar: String,
     network: String,
     onTab: (HomeTab) -> Unit,
     onSearch: () -> Unit,
     onCommandCenter: () -> Unit,
-    onVisionSettings: () -> Unit,
+    onSystemSettings: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     activeTabRequester: FocusRequester? = null,
@@ -211,7 +220,7 @@ fun TopChrome(
             },
         )
         Spacer(Modifier.width(if (compact) 12.dp else 16.dp))
-        SystemGreeting(profile = profile, tab = tab, compact = compact)
+        SystemGreeting(profile = profile, avatar = profileAvatar, tab = tab, compact = compact)
         Spacer(Modifier.weight(1f))
         ChromeIcon(Icons.Rounded.Search, "Buscar", onSearch, downTarget)
         Spacer(Modifier.width(4.dp))
@@ -225,7 +234,7 @@ fun TopChrome(
             badge = hasNotifications,
         )
         Spacer(Modifier.width(4.dp))
-        ChromeIcon(Icons.Rounded.Settings, "Ajustes de Vision+", onVisionSettings, downTarget)
+        ChromeIcon(Icons.Rounded.Settings, "Ajustes de la tele", onSystemSettings, downTarget)
         if (showClock) {
             Spacer(Modifier.width(if (compact) 12.dp else 18.dp))
             Column(horizontalAlignment = Alignment.End) {
@@ -264,19 +273,6 @@ private fun SystemHomePill(
     modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val reduced = LocalReducedEffects.current
-    val dotAlpha = if (reduced) {
-        1f
-    } else {
-        val transition = rememberInfiniteTransition(label = "systemPulse")
-        val alpha by transition.animateFloat(
-            initialValue = 0.35f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(1_200), RepeatMode.Reverse),
-            label = "systemPulseAlpha",
-        )
-        alpha
-    }
     Row(
         modifier = modifier
             .clip(HomeShapes.pill)
@@ -291,40 +287,27 @@ private fun SystemHomePill(
             )
             .padding(horizontal = if (compact) 11.dp else 14.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(HomeColors.Cyan.copy(alpha = dotAlpha)))
-        Text(
-            "VISION+ OS",
-            color = if (focused || tab == HomeTab.HOME) HomeColors.Cyan else HomeColors.TextDim,
-            fontSize = if (compact) 11.sp else 12.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.4.sp,
-            maxLines = 1,
+        // La marca real de Vision+, no un texto genérico: el mismo imagotipo del APK.
+        Image(
+            painter = painterResource(R.drawable.ic_vision_wordmark),
+            contentDescription = "Vision+",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.height(if (compact) 17.dp else 21.dp),
         )
     }
 }
 
 @Composable
-private fun SystemGreeting(profile: String, tab: HomeTab, compact: Boolean) {
+private fun SystemGreeting(profile: String, avatar: String, tab: HomeTab, compact: Boolean) {
     val name = profile.trim().ifBlank { "Principal" }
     val nowMs = rememberNowMs(intervalMs = 60_000L)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(if (compact) 27.dp else 31.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Brush.linearGradient(listOf(HomeColors.Blue, HomeColors.Cyan)))
-                .border(1.5.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(50)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                name.take(1).uppercase(),
-                color = Color.White,
-                fontSize = if (compact) 10.sp else 11.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
+        ProfileAvatarBadge(
+            name = name,
+            avatar = avatar,
+            size = if (compact) 27.dp else 31.dp,
+        )
         Spacer(Modifier.width(8.dp))
         Column(Modifier.widthIn(max = if (compact) 205.dp else 280.dp)) {
             Text(
@@ -347,7 +330,60 @@ private fun SystemGreeting(profile: String, tab: HomeTab, compact: Boolean) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+/**
+ * El avatar del perfil tal como lo eligió la persona en Vision+. Si el feed trae un id que
+ * no existe en este launcher (versión vieja o avatar retirado), cae a la inicial — nunca a
+ * un hueco gris.
+ */
+@Composable
+internal fun ProfileAvatarBadge(
+    name: String,
+    avatar: String,
+    size: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val resId = remember(avatar) { profileAvatarResourceId(context, avatar) }
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(50))
+            .background(Brush.linearGradient(listOf(HomeColors.Blue, HomeColors.Cyan)))
+            .border(1.5.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(50)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (resId != 0) {
+            Image(
+                painter = painterResource(resId),
+                contentDescription = "Foto de perfil de $name",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                name.trim().take(1).uppercase().ifBlank { "?" },
+                color = Color.White,
+                fontSize = (size.value * 0.36f).sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+/** `profile_avatar_<id>` del propio APK del launcher; 0 si el id no es válido o no existe. */
+internal fun profileAvatarResourceId(context: Context, avatar: String): Int {
+    val clean = avatar.trim()
+    if (!isValidAvatarId(clean)) return 0
+    return context.resources.getIdentifier(
+        "profile_avatar_$clean",
+        "drawable",
+        context.packageName,
+    )
+}
+
+internal fun isValidAvatarId(value: String): Boolean =
+    value.isNotBlank() && value.length <= 40 && value.all { it.isLetterOrDigit() || it == '_' }
+
 @Composable
 private fun NetworkChip(
     network: String,

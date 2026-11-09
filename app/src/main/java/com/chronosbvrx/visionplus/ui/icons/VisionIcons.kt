@@ -69,7 +69,7 @@ object VisionIcons {
     val Anime = Icons.Rounded.Animation
     val Kids = Icons.Rounded.ChildCare
 
-    /** Vision+ Play. */
+    /** Vision+ Party. */
     val Games = Icons.Rounded.Casino
     val Qr = Icons.Rounded.QrCodeScanner
     val Charadas = Icons.Rounded.TheaterComedy
@@ -122,5 +122,9 @@ fun homeRowIcon(rowId: String): ImageVector? = when (rowId) {
     "home-kind-series" -> VisionIcons.Series
     "home-kind-anime" -> VisionIcons.Anime
     "home-kind-kids" -> VisionIcons.Kids
-    else -> if (rowId.startsWith("tema-")) VisionIcons.Collections else null
+    else -> if (rowId.startsWith("tema-") || rowId.startsWith("evento-")) {
+        VisionIcons.Collections
+    } else {
+        null
+    }
 }

@@ -62,8 +62,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.PlaybackHistory
+import com.chronosbvrx.visionplus.data.ResumeCard
 import com.chronosbvrx.visionplus.data.UserLibrary
+import com.chronosbvrx.visionplus.data.formatResume
+import com.chronosbvrx.visionplus.data.isEpisodeEntry
 import com.chronosbvrx.visionplus.data.metaLine
+import com.chronosbvrx.visionplus.data.nextEpisodeEntry
+import com.chronosbvrx.visionplus.data.resumeSeriesFilm
 import com.chronosbvrx.visionplus.ui.tv.FocusRescue
 import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
@@ -201,12 +207,24 @@ class PosterActionsController {
     var film by mutableStateOf<Film?>(null)
         private set
 
+    /** Cuando la tarjeta viene de «Seguir viendo»/Historial, además del póster se ofrecen
+     *  las acciones de estado (reanudar, desde el inicio, visto/no visto, quitar). */
+    var resumeCard by mutableStateOf<ResumeCard?>(null)
+        private set
+
     fun open(film: Film) {
         this.film = film
+        this.resumeCard = null
+    }
+
+    fun open(card: ResumeCard) {
+        this.film = card.film ?: resumeSeriesFilm(card.entry)
+        this.resumeCard = card
     }
 
     fun dismiss() {
         film = null
+        resumeCard = null
     }
 }
 
@@ -224,14 +242,30 @@ fun rememberPosterLongClick(film: Film?): (() -> Unit)? {
 }
 
 /**
+ * OK largo/pulsación larga sobre una tarjeta de «Seguir viendo» o Historial: abre el menú de
+ * estado de esa reproducción (no el menú genérico de favoritos). Si la app no montó el
+ * controlador (pruebas aisladas), cae al menú de póster.
+ */
+@Composable
+fun rememberPlaybackLongClick(card: ResumeCard?): (() -> Unit)? {
+    val controller = LocalPosterActions.current ?: return null
+    if (card == null) return null
+    return remember(controller, card.entry.key, card.entry.updatedAt) {
+        { controller.open(card) }
+    }
+}
+
+/**
  * El menú contextual de una tarjeta: ficha, favoritos y «Ver más tarde», sin salir de donde
  * está mirando. Se abre con OK largo (mando) o manteniendo pulsada la portada (dedo).
  */
 @Composable
 fun PosterActionsDialog(
     film: Film?,
+    card: ResumeCard? = null,
     onDismiss: () -> Unit,
     onOpenFilm: (Film) -> Unit,
+    onResume: (ResumeCard) -> Unit = {},
     onChanged: () -> Unit = {},
 ) {
     val target = film ?: return
@@ -241,6 +275,9 @@ fun PosterActionsDialog(
     var tick by remember(target.id) { mutableIntStateOf(0) }
     val favorite = remember(tick, target.id) { UserLibrary.isFavorite(context, target.id) }
     val later = remember(tick, target.id) { UserLibrary.isWatchLater(context, target.id) }
+    val entry = card?.entry
+    val completed = card?.completed == true
+    val nextEntry = if (card != null && completed && card.hasNext) nextEpisodeEntry(entry!!) else null
 
     DisposableEffect(Unit) {
         FocusRescue.dialogsOpen++
@@ -280,6 +317,38 @@ fun PosterActionsDialog(
             if (added) "«${target.title}» en Ver más tarde" else "«${target.title}» fuera de Ver más tarde",
             android.widget.Toast.LENGTH_SHORT,
         ).show()
+    }
+
+    fun resume(cardToPlay: ResumeCard) {
+        onResume(cardToPlay)
+        onDismiss()
+    }
+
+    fun markWatched(watched: Boolean) {
+        val current = card ?: return
+        val item = current.entry
+        if (isEpisodeEntry(item) && item.seriesId.isNotBlank()) {
+            UserLibrary.markEpisodeWatched(context, item.seriesId, item.episodeIndex + 1, watched)
+        }
+        PlaybackHistory.markCompleted(context, item.key, watched)
+        com.chronosbvrx.visionplus.data.sync.SyncStore.syncAsync(context, force = true)
+        onChanged()
+        android.widget.Toast.makeText(
+            context,
+            if (watched) "«${current.film?.title ?: item.title}» marcado como visto"
+            else "«${current.film?.title ?: item.title}» marcado como no visto",
+            android.widget.Toast.LENGTH_SHORT,
+        ).show()
+        onDismiss()
+    }
+
+    fun removeFromContinue() {
+        val current = card ?: return
+        PlaybackHistory.delete(context, current.entry.key)
+        com.chronosbvrx.visionplus.data.sync.SyncStore.syncAsync(context, force = true)
+        onChanged()
+        android.widget.Toast.makeText(context, "Quitado de Seguir viendo", android.widget.Toast.LENGTH_SHORT).show()
+        onDismiss()
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -328,13 +397,80 @@ fun PosterActionsDialog(
                     color = VisionTextSecondary,
                 )
                 Spacer(Modifier.height(4.dp))
+                if (card != null) {
+                    // Acciones de estado: la fila «Seguir viendo» y el Historial dejan de ser
+                    // de solo lectura. La primera acción siempre retoma lo que estabas viendo.
+                    if (nextEntry != null) {
+                        PosterActionRow(
+                            icon = Icons.Rounded.Check,
+                            title = "Siguiente capítulo",
+                            detail = "T${nextEntry.seasonIndex + 1} · C${nextEntry.episodeIndex + 1}",
+                            modifier = Modifier
+                                .focusRequester(focus)
+                                .onFocusChanged { focusAttached = it.isFocused },
+                            onClick = { resume(card.copy(entry = nextEntry)) },
+                        )
+                    } else if (completed && card.hasNext) {
+                        PosterActionRow(
+                            icon = Icons.Rounded.Check,
+                            title = "Siguiente capítulo",
+                            detail = "Abre la temporada nueva en su primer capítulo",
+                            modifier = Modifier
+                                .focusRequester(focus)
+                                .onFocusChanged { focusAttached = it.isFocused },
+                            onClick = {
+                                onDismiss()
+                                onOpenFilm(target)
+                            },
+                        )
+                    } else if (completed) {
+                        PosterActionRow(
+                            icon = Icons.Rounded.Check,
+                            title = "Volver a ver",
+                            detail = "Desde el inicio",
+                            modifier = Modifier
+                                .focusRequester(focus)
+                                .onFocusChanged { focusAttached = it.isFocused },
+                            onClick = { resume(card.copy(entry = entry!!.copy(positionMs = 0L, completed = false))) },
+                        )
+                    } else {
+                        PosterActionRow(
+                            icon = Icons.Rounded.Check,
+                            title = "Reanudar",
+                            detail = "Continúa en ${formatResume(entry!!.positionMs)}",
+                            modifier = Modifier
+                                .focusRequester(focus)
+                                .onFocusChanged { focusAttached = it.isFocused },
+                            onClick = { resume(card) },
+                        )
+                    }
+                    PosterActionRow(
+                        icon = Icons.Rounded.Check,
+                        title = "Desde el inicio",
+                        detail = "Empieza este título desde 00:00",
+                        onClick = {
+                            resume(card.copy(entry = entry!!.copy(positionMs = 0L, completed = false)))
+                        },
+                    )
+                    PosterActionRow(
+                        icon = Icons.Rounded.Check,
+                        title = if (completed) "Marcar como no visto" else "Marcar como visto",
+                        detail = if (completed) "Lo retira del historial" else "Lo quita de Seguir viendo",
+                        accent = completed,
+                        onClick = { markWatched(!completed) },
+                    )
+                    PosterActionRow(
+                        icon = Icons.Rounded.Close,
+                        title = "Quitar de Seguir viendo",
+                        detail = "No borra la ficha ni tus favoritos",
+                        onClick = { removeFromContinue() },
+                    )
+                }
                 PosterActionRow(
                     icon = Icons.Rounded.Info,
                     title = "Ver ficha",
                     detail = "Sinopsis, reparto y temporadas",
-                    modifier = Modifier
-                        .focusRequester(focus)
-                        .onFocusChanged { focusAttached = it.isFocused },
+                    modifier = if (card == null) Modifier.focusRequester(focus).onFocusChanged { focusAttached = it.isFocused } else Modifier,
                     onClick = { onOpenFilm(target) },
                 )
                 PosterActionRow(

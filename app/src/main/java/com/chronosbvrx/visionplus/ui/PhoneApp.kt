@@ -68,7 +68,10 @@ import com.chronosbvrx.visionplus.data.AppUpdate
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.ui.about.AboutScreen
 import com.chronosbvrx.visionplus.ui.brand.VisionWordmark
-import com.chronosbvrx.visionplus.ui.games.GamesComingSoonScreen
+import com.chronosbvrx.visionplus.ui.games.PartyGamesScreen
+import com.chronosbvrx.visionplus.ui.games.PartyControllerScreen
+import com.chronosbvrx.visionplus.ui.games.PartyMobileScreen
+import com.chronosbvrx.visionplus.ui.games.PartyHostScreen
 import com.chronosbvrx.visionplus.ui.home.HomeScreen
 import com.chronosbvrx.visionplus.ui.phone.CategoriesScreen
 import com.chronosbvrx.visionplus.ui.phone.LibraryScreen
@@ -135,7 +138,7 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
     val rows = catalog.rows
     val isTab = TABS.any { it.route == route }
     val isWide = isLandscapeTablet()
-    val inGame = route == Route.Games || route is Route.GameRoom
+    val inGame = route == Route.Games || route is Route.PartyHost || route is Route.PartyController
     val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
     var showPluginUpdates by rememberSaveable { mutableStateOf(false) }
     val updatesBadge = appUpdateBadgeCount()
@@ -261,14 +264,21 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
         else -> Unit
     }
 
-    // Vision+ Play es un modo inmersivo: sin barra superior, sin menú lateral y sin
+    // Vision+ Party es un modo inmersivo: sin barra superior, sin menú lateral y sin
     // el aviso del control remoto. Solo se ve la interfaz del juego.
     if (inGame) {
         Box(Modifier.fillMaxSize()) {
             when (route) {
-                // Vision+ Play sigue en preparación: no se abre el tablero ni una sala.
-                Route.Games, is Route.GameRoom -> GamesComingSoonScreen(
-                    isTv = false,
+                Route.Games -> PartyMobileScreen(
+                    onBack = { nav.pop() },
+                    onOpenController = { code -> nav.push(Route.PartyController(code)) },
+                )
+                is Route.PartyHost -> PartyHostScreen(
+                    gameId = (route as Route.PartyHost).gameId,
+                    onBack = { nav.pop() },
+                )
+                is Route.PartyController -> PartyControllerScreen(
+                    roomCode = (route as Route.PartyController).roomCode,
                     onBack = { nav.pop() },
                 )
                 else -> Unit
@@ -418,8 +428,16 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
                             onOpenFilm = { nav.push(Route.Title(it)) },
                         )
                         Route.Sports -> SportsScreen(padding, onPlay = { nav.push(Route.LivePlayer(it)) })
-                        Route.Games, is Route.GameRoom -> GamesComingSoonScreen(
-                            isTv = false,
+                        Route.Games -> PartyMobileScreen(
+                            onBack = { nav.pop() },
+                            onOpenController = { code -> nav.push(Route.PartyController(code)) },
+                        )
+                        is Route.PartyHost -> PartyHostScreen(
+                            gameId = (route as Route.PartyHost).gameId,
+                            onBack = { nav.pop() },
+                        )
+                        is Route.PartyController -> PartyControllerScreen(
+                            roomCode = (route as Route.PartyController).roomCode,
                             onBack = { nav.pop() },
                         )
                         Route.Library -> LibraryScreen(

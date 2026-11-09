@@ -705,6 +705,30 @@ button:focus-visible {
   gap: 1vw 0.75vw;
 }
 
+.grid-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2vh;
+  min-height: 42vh;
+  padding: 4vh 2vw;
+  text-align: center;
+  color: var(--muted);
+}
+
+.grid-empty-title {
+  color: var(--text);
+  font-size: 1.35vw;
+  font-weight: 600;
+}
+
+.grid-empty-help {
+  font-size: 0.95vw;
+  opacity: 0.75;
+}
+
 .grid-card {
   position: relative;
   border-radius: var(--radius);

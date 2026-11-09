@@ -59,6 +59,7 @@ class HomeFeedCodecTest {
             version = HomeContract.VERSION,
             generatedAt = 1_760_000_000_000L,
             profile = "Sala",
+            profileAvatar = "series_detective",
             profiles = 3,
             online = true,
             appVersion = "2.5.126",
@@ -166,6 +167,7 @@ class HomeFeedCodecTest {
         assertEquals(RowKind.POSTERS, feed.rows.single().kind)
         assertEquals(0.0, feed.rows.single().items.single().rating, 0.0)
         assertEquals(1, feed.meta.profiles)
+        assertEquals("", feed.meta.profileAvatar)
     }
 
     @Test

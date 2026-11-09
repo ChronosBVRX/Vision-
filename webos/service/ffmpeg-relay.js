@@ -6,12 +6,16 @@ var http = require("http"),
   urlmod = require("url"),
   spawn = require("child_process").spawn,
   spawnSync = require("child_process").spawnSync,
-  PC = process.env.VISION_PC === "1",
+  // VISION_RELAY permite probar el relay en un navegador de PC sin activar
+  // el modo PC de la interfaz. En la TV no se define: se usa el ffmpeg ARM
+  // incluido y la reproducción nativa.
+  PC = process.env.VISION_PC === "1" || process.env.VISION_RELAY === "1",
   FFMPEG = process.env.VISION_FFMPEG || __dirname + "/ffmpeg",
   HOST = "127.0.0.1",
   PORT = Number(process.env.VISION_RELAY_PORT || 0) || 0,
   actualPort = 0,
   availableCache = null,
+  binaryResolved = false,
   sessions = {},
   current = null;
 function log() {
@@ -22,6 +26,56 @@ function log() {
   } catch (e) {}
   console.log.apply(console, ["[relay]"].concat(e));
 }
+
+/**
+ * Comprueba que un binario de FFmpeg se pueda ejecutar de verdad.
+ * El paquete de webOS trae un FFmpeg ARM; en un PC x86 `-version` falla con
+ * ENOEXEC y hay que caer al FFmpeg del sistema para poder probar el relay.
+ */
+function canRunBinary(bin) {
+  if (!bin) return false;
+  try {
+    if (path.isAbsolute(bin)) {
+      var mode = process.platform === "win32"
+        ? (fs.constants && fs.constants.F_OK) || 0
+        : (fs.constants && fs.constants.X_OK) || 1;
+      fs.accessSync(bin, mode);
+    }
+  } catch (error) {
+    return false;
+  }
+  try {
+    var probe = spawnSync(bin, ["-version"], { stdio: "ignore", timeout: 2500 });
+    return !probe.error && probe.status === 0;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Elige el primer FFmpeg utilizable: el configurado, el incluido en el IPK
+ * (ARM, para la TV) o el del PATH (para el servidor de desarrollo en PC).
+ */
+function resolveBinary() {
+  if (binaryResolved) return Boolean(availableCache);
+  binaryResolved = true;
+  var candidates = [];
+  if (process.env.VISION_FFMPEG) candidates.push(process.env.VISION_FFMPEG);
+  candidates.push(path.join(__dirname, "ffmpeg"));
+  candidates.push(process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
+  for (var i = 0; i < candidates.length; i += 1) {
+    if (canRunBinary(candidates[i])) {
+      FFMPEG = candidates[i];
+      availableCache = true;
+      log("ffmpeg:", FFMPEG);
+      return true;
+    }
+  }
+  availableCache = false;
+  log("ffmpeg no ejecutable; el relay queda desactivado");
+  return false;
+}
+
 try {
   if (process.platform !== "win32" && path.isAbsolute(FFMPEG)) {
     var mode = fs.statSync(FFMPEG).mode;
@@ -362,33 +416,11 @@ server.on("error", function (e) {
     registerLive: registerLive,
     stop: stopCurrent,
     probeDuration: probeDuration,
+    availableFast: function () {
+      return resolveBinary();
+    },
     available: function () {
-      if (availableCache !== null) return availableCache;
-      try {
-        if (path.isAbsolute(FFMPEG)) {
-          var accessMode =
-            process.platform === "win32"
-              ? (fs.constants && fs.constants.F_OK) || 0
-              : (fs.constants && fs.constants.X_OK) || fs.X_OK || 1;
-          fs.accessSync(FFMPEG, accessMode);
-        }
-      } catch (e) {
-        availableCache = !1;
-        return availableCache;
-      }
-      try {
-        // El binario incluido es ARM (webOS). En un PC x86 no debe intentarse:
-        // se comprueba una vez y se cachea para no lanzar ffmpeg en cada play.
-        var probe = spawnSync(FFMPEG, ["-version"], {
-          stdio: "ignore",
-          timeout: 2500,
-        });
-        availableCache = !probe.error && probe.status === 0;
-        if (!availableCache) log("ffmpeg incluido no ejecutable en este equipo");
-      } catch (e) {
-        availableCache = !1;
-      }
-      return availableCache;
+      return resolveBinary();
     },
     path: function () {
       return FFMPEG;

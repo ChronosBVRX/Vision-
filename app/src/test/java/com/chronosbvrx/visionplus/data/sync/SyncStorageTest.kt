@@ -50,6 +50,9 @@ class SyncStorageTest {
 
         UserLibrary.replaceWatched(context, setOf("s1|1", "s1|2"))
         assertEquals(setOf("s1|1", "s1|2"), UserLibrary.watchedEpisodes(context))
+
+        UserLibrary.replaceUnwatched(context, setOf("s1|3"))
+        assertEquals(setOf("s1|3"), UserLibrary.unwatchedEpisodes(context))
     }
 
     @Test

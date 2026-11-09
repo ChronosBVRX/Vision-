@@ -39,7 +39,9 @@ import kotlinx.coroutines.launch
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.ui.about.TvAboutScreen
-import com.chronosbvrx.visionplus.ui.games.GamesComingSoonScreen
+import com.chronosbvrx.visionplus.ui.games.PartyGamesScreen
+import com.chronosbvrx.visionplus.ui.games.PartyControllerScreen
+import com.chronosbvrx.visionplus.ui.games.PartyHostScreen
 import com.chronosbvrx.visionplus.ui.player.LivePlayerScreen
 import com.chronosbvrx.visionplus.ui.player.PlayerScreen
 import com.chronosbvrx.visionplus.ui.tv.FocusRescue
@@ -89,6 +91,8 @@ fun TvApp(
     onExitToLauncher: () -> Unit = {},
     /** Arma/confirma el cierre con aviso del Inicio (lo provee MainActivity). */
     onExitRequest: () -> Unit = {},
+    /** Cambia cuando otra superficie (el selector de perfiles del arranque) edita el perfil. */
+    profileRevision: Int = 0,
 ) {
     val route = nav.current
     LaunchedEffect(route) { com.chronosbvrx.visionplus.data.diag.Diagnostics.screen(route.toString()) }
@@ -172,6 +176,7 @@ fun TvApp(
                 onExitToLauncher = onExitToLauncher,
                 topBarLanding = topBarLanding,
                 onTopBarFocusChanged = { topBarFocused = it },
+                profileRevision = profileRevision,
             )
         }
     }
@@ -192,6 +197,7 @@ private fun TvRoute(
     onExitToLauncher: () -> Unit = {},
     topBarLanding: LandingFocus? = null,
     onTopBarFocusChanged: (Boolean) -> Unit = {},
+    profileRevision: Int = 0,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -298,9 +304,21 @@ private fun TvRoute(
     }
 
     val showTopBar = com.chronosbvrx.visionplus.ui.tv.tvTopBarVisible(route)
-    var showProfiles by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showProfiles by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(false)
+    }
+    // El chip de la barra debe reflejar nombre e imagen en cuanto se edita el perfil (sin
+    // recrear la pantalla: renombrar o cambiar la foto no cambia de persona).
+    var profileTick by remember { mutableStateOf(0) }
+    val activeProfile = remember(profileTick, profileRevision) {
+        runCatching { com.chronosbvrx.visionplus.data.profile.ProfileStore.active(context) }.getOrNull()
+            ?: com.chronosbvrx.visionplus.data.profile.Profile("principal", "Principal")
+    }
     if (showProfiles) {
-        com.chronosbvrx.visionplus.ui.tv.TvProfilesDialog(onDismiss = { showProfiles = false })
+        com.chronosbvrx.visionplus.ui.tv.TvProfilesDialog(
+            onDismiss = { showProfiles = false },
+            onProfileChanged = { profileTick++ },
+        )
     }
     Column(Modifier.fillMaxSize()) {
         if (showTopBar) {
@@ -311,7 +329,11 @@ private fun TvRoute(
                 onSearch = { guardedGo(Route.Search, viaTab = false) },
                 onSettings = { guardedGo(Route.Settings, viaTab = false) },
                 // El chip del perfil abre «Perfiles» desde cualquier pantalla.
-                onProfile = { showProfiles = true },
+                onProfile = {
+                    showProfiles = true
+                },
+                profileName = activeProfile.name,
+                profileAvatar = activeProfile.avatar,
                 updatesBadge = updatesBadge,
                 onNotifications = { showPluginUpdates = true },
                 onReload = { scope.launch { catalog.load() } },
@@ -427,9 +449,17 @@ private fun TvRoute(
             returnChannelCode = liveReturn,
         )
         Route.Sports -> TvSportsScreen(onPlay = { nav.push(Route.LivePlayer(it)) })
-        // Vision+ Play sigue en preparación: la pestaña no abre el tablero de juegos.
-        Route.Games, is Route.GameRoom -> GamesComingSoonScreen(
+        Route.Games -> PartyGamesScreen(
             isTv = true,
+            onOpenGame = { nav.push(Route.PartyHost(it)) },
+            onBack = { nav.pop() },
+        )
+        is Route.PartyHost -> PartyHostScreen(
+            gameId = (route as Route.PartyHost).gameId,
+            onBack = { nav.pop() },
+        )
+        is Route.PartyController -> PartyControllerScreen(
+            roomCode = (route as Route.PartyController).roomCode,
             onBack = { nav.pop() },
         )
         Route.Settings -> TvSettingsScreen()

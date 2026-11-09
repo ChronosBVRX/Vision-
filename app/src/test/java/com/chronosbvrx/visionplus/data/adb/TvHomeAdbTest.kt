@@ -222,6 +222,7 @@ class TvHomeAdbTest {
     fun installsTheLatestVisionPlusAndLauncherFromTheOfficialRelease() {
         val pkg = source("data/adb/TvLauncherPackage.kt")
         assertTrue("no baja del release oficial", pkg.contains("releases/latest/download"))
+        assertTrue("no apunta al canal nuevo", pkg.contains("Vision-Releases"))
         assertTrue("no pide el APK del launcher", pkg.contains("HomeContract.LAUNCHER_ASSET"))
         assertTrue("no pide el APK de la app", pkg.contains("HomeContract.APP_ASSET"))
         assertTrue("no lee el version.json del release", pkg.contains("version.json"))
@@ -232,6 +233,18 @@ class TvHomeAdbTest {
         val setup = source("data/adb/TvHomeSetup.kt")
         assertTrue("no instala Vision+ antes del Inicio", setup.contains("ensureVisionPlus(context, updateApp)"))
         assertTrue("no deja la tele sin app si no pudo instalar Vision+", setup.contains("No toco su Inicio"))
+        val latestAt = setup.indexOf("TvAppPackage.latestVersion(context)")
+        val localAt = setup.indexOf("TvAppPackage.local(context)")
+        assertTrue("el release debe consultarse antes de elegir la copia local", latestAt in 0 until localAt)
+    }
+
+    @Test
+    fun theReleaseWinsWhenItIsNewerThanThePhonesCopy() {
+        assertTrue(TvAppPackage.shouldDownloadRelease("2.5.249", "2.5.247"))
+        assertTrue(TvAppPackage.shouldDownloadRelease("2.6.0", "2.5.247"))
+        assertTrue(TvAppPackage.shouldDownloadRelease("2.5.247", null))
+        assertFalse("misma versión: no se bajan 95 MB", TvAppPackage.shouldDownloadRelease("2.5.247", "2.5.247"))
+        assertFalse("sin manifiesto se usa la copia local", TvAppPackage.shouldDownloadRelease(null, "2.5.247"))
     }
 
     @Test

@@ -19,12 +19,17 @@ Fuentes:
 
 import concurrent.futures
 import json
+import os
 import re
 import urllib.parse
 import urllib.request
 
 TIDB_URL = "https://api.theintrodb.org/v2/media?tmdb_id={tmdb}&season={season}&episode={episode}"
 IDB_URL = "https://api.introdb.app/segments?imdb_id={imdb}&season={season}&episode={episode}"
+# Cuenta de TheIntroDB (opcional): con una API key el tope sube de 5,000 a
+# 100,000 peticiones diarias. La clave vive SOLO en el .env del VPS; nunca en el
+# repo. Sin clave se sigue usando el presupuesto anónimo.
+TIDB_API_KEY = os.environ.get("THEINTRODB_API_KEY", "").strip()
 # AniSkip: tiempos de opening/ending/recap por anime, con el MyAnimeList id y el número de
 # capítulo dentro de ESA entrada de MAL (cada temporada es su propia entrada).
 # OJO: la v2 exige `episodeLength` (segundos, aproximado basta): sin él responde 400.
@@ -392,10 +397,17 @@ def segments_of(value) -> dict:
 
 # ---------------------------------------------------------------- red
 
-def _get_json(url: str, timeout: float):
-    request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+def _get_json_headers(url: str, timeout: float, headers: dict | None = None):
+    merged = {"User-Agent": _USER_AGENT}
+    if headers:
+        merged.update(headers)
+    request = urllib.request.Request(url, headers=merged)
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8", "replace"))
+
+
+def _get_json(url: str, timeout: float):
+    return _get_json_headers(url, timeout)
 
 
 def _aniskip_json(mal: int, episode: int, length: int, timeout: float):
@@ -457,7 +469,11 @@ def fetch_global_status(
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
         if tmdb_id:
             url = TIDB_URL.format(tmdb=int(tmdb_id), season=season, episode=episode)
-            futures["tidb"] = pool.submit(_get_json, url, timeout)
+            if TIDB_API_KEY:
+                auth = {"Authorization": f"Bearer {TIDB_API_KEY}"}
+                futures["tidb"] = pool.submit(_get_json_headers, url, timeout, auth)
+            else:
+                futures["tidb"] = pool.submit(_get_json, url, timeout)
         if imdb_id:
             imdb = urllib.parse.quote(str(imdb_id).strip(), safe="")
             url = IDB_URL.format(imdb=imdb, season=season, episode=episode)

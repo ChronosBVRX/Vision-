@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.data.launcher
 
 import com.chronosbvrx.visionplus.data.ResumeEntry
+import com.chronosbvrx.visionplus.data.nextEpisodeEntry
 import com.chronosbvrx.visionplus.data.seriesKeyOf
 import com.chronosbvrx.visionplus.data.shouldKeep
 
@@ -25,6 +26,9 @@ internal data class WatchNextSpec(
     val seasonNumber: Int,
     val episodeNumber: Int,
     val seriesId: String,
+    val seasonIndex: Int = 0,
+    val seasonIds: List<String> = emptyList(),
+    val seasonNames: List<String> = emptyList(),
     val positionMs: Long,
     val durationMs: Long,
     val updatedAt: Long,
@@ -65,13 +69,19 @@ internal fun watchNextSpecs(entries: List<ResumeEntry>, limit: Int = WATCH_NEXT_
     val seen = HashSet<String>(limit * 2)
     for (entry in entries.sortedByDescending { it.updatedAt }) {
         if (out.size >= limit) break
-        if (entry.key.isBlank() || entry.positionMs <= 0L) continue
-        // El historial ahora conserva los terminados para «Historial»; el launcher solo
-        // debe espejar lo que de verdad se puede continuar.
-        if (!shouldKeep(entry.positionMs, entry.durationMs)) continue
+        if (entry.key.isBlank()) continue
+        val candidate = when {
+            // Si terminó y queda el siguiente capítulo de la MISMA temporada, el canal del
+            // sistema publica ese siguiente con su contexto (no desaparece la serie).
+            entry.completed || !shouldKeep(entry.positionMs, entry.durationMs) -> {
+                nextEpisodeEntry(entry) ?: continue
+            }
+            entry.positionMs <= 0L -> continue
+            else -> entry
+        }
         val dedupeKey = seriesKeyOf(entry) ?: "k:${entry.key}"
         if (!seen.add(dedupeKey)) continue
-        out += entry.toSpec()
+        out += candidate.toSpec()
     }
     return out
 }
@@ -119,6 +129,9 @@ private fun ResumeEntry.toSpec(): WatchNextSpec {
         seasonNumber = if (isEpisode && seasonIds.isNotEmpty()) seasonIndex + 1 else 0,
         episodeNumber = if (isEpisode && episodeIds.isNotEmpty()) episodeIndex + 1 else 0,
         seriesId = if (isEpisode) seriesId else "",
+        seasonIndex = if (isEpisode) seasonIndex else 0,
+        seasonIds = if (isEpisode) seasonIds else emptyList(),
+        seasonNames = if (isEpisode) seasonNames else emptyList(),
         positionMs = positionMs,
         durationMs = durationMs,
         updatedAt = updatedAt,

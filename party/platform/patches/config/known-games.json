@@ -1,0 +1,15 @@
+[
+  { "id": "banterbolt", "package": "@open-party-lab/game-banterbolt", "repo": "", "defaultLocalPath": "local-games/banterbolt", "alternateLocalPaths": [] },
+  { "id": "you-got-it", "package": "@open-party-lab/game-you-got-it", "repo": "", "defaultLocalPath": "local-games/you-got-it", "alternateLocalPaths": [] },
+  { "id": "merkissioner", "package": "@open-party-lab/game-merkissioner", "repo": "", "defaultLocalPath": "local-games/merkissioner", "alternateLocalPaths": [] },
+  { "id": "pantomime", "package": "@open-party-lab/game-pantomime", "repo": "", "defaultLocalPath": "local-games/pantomime", "alternateLocalPaths": [] },
+  { "id": "zeichnen-und-erraten", "package": "@open-party-lab/game-zeichnen-und-erraten", "repo": "", "defaultLocalPath": "local-games/zeichnen-und-erraten", "alternateLocalPaths": [] },
+  { "id": "schaetzorama", "package": "@open-party-lab/game-schaetzorama", "repo": "", "defaultLocalPath": "local-games/schaetzorama", "alternateLocalPaths": [] },
+  { "id": "imposter", "package": "@open-party-lab/game-imposter", "repo": "", "defaultLocalPath": "local-games/imposter", "alternateLocalPaths": [] },
+  { "id": "buzzwort", "package": "@open-party-lab/game-buzzwort", "repo": "", "defaultLocalPath": "local-games/buzzwort", "alternateLocalPaths": [] },
+  { "id": "schattenjagd", "package": "@open-party-lab/game-schattenjagd", "repo": "", "defaultLocalPath": "local-games/schattenjagd", "alternateLocalPaths": [] },
+  { "id": "flatterfluff", "package": "@open-party-lab/game-flatterfluff", "repo": "", "defaultLocalPath": "local-games/flatterfluff", "alternateLocalPaths": [] },
+  { "id": "magic-arena", "package": "@open-party-lab/game-magic-arena", "repo": "", "defaultLocalPath": "local-games/magic-arena", "alternateLocalPaths": [] },
+  { "id": "card-table", "package": "@open-party-lab/game-card-table", "repo": "", "defaultLocalPath": "local-games/card-table", "alternateLocalPaths": [] },
+  { "id": "dungeon-party", "package": "@open-party-lab/game-dungeon-party", "repo": "", "defaultLocalPath": "local-games/dungeon-party", "alternateLocalPaths": [] }
+]

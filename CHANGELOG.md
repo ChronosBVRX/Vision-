@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.6.19 — Reingreso a salas y TV sin caché vieja
+
+- Corregido el reingreso con un código nuevo: recarga real del controlador y descarte de la sesión anterior.
+- Corregido el ciclo cerrar juego → elegir otro → iniciar.
+- El host de TV ya no reutiliza documentos viejos en caché; Dulce puntería tiene pantalla de carga.
+- Motor X4K conservado y verificado; sin pérdida de datos.
+
+## 2.6.18 — VOD reparado + QR abre el mando en la app
+- **Crítico:** se restauró el motor X4K (DEX y librerías nativas) que faltaba en 2.6.16/2.6.17; VOD vuelve a reproducir.
+- El QR apunta a un puente que lanza `visionplus://play/join`; prioridad para la app nativa.
+- Nuevo mando WebView a pantalla completa dentro de la app, sin chrome de navegador.
+- Fallback “Jugar en el navegador” si Vision+ no está instalado.
+- Versión 2.6.18 / versionCode 511; firma histórica.
+
+## 2.6.17 — Juegos TV más estable y limpio
+- WebView del host con foco al contenido, sin scrollbars/overscroll y URL versionada por OTA.
+- Reintento real cuando el proceso de render muere; recrea el WebView en vez de dejar la pantalla bloqueada.
+- Zoom de texto fijo y ajustes de seguridad del WebView.
+- Versión 2.6.17 / versionCode 510; firma histórica.
+
+## 2.6.16 — Bienvenida sin audio cortado
+- Se regeneraron las 10 tomas F1 de bienvenida con recorte conservador para no perder la consonante inicial.
+- Se añadió un colchón de 0.6 s y se extendió la transición a 5.6 s para absorber la latencia de audio de la TV.
+- Versión 2.6.16 / versionCode 509; firma histórica.
+
+## 2.6.15 — Bienvenida de Juegos con voz mexicana
+- Se reemplazaron las 8 tomas locales de bienvenida por **10 tomas F1 (es-MX)** de Vision+ Party; se eliminó la pronunciación extranjera.
+- `PartyWelcomeNarrator` rota entre las 10 tomas y conserva la transición local sin depender de la red.
+- `noCompress += m4a` para que `MediaPlayer.openRawResourceFd` siga funcionando.
+- Versión 2.6.15 / versionCode 508; firma histórica.
+
 ## 2.5.35 — Continuidad Secuencial de Series y Selector Pro de Temporadas y Capítulos
 - Ordenamiento estricto de capítulos (`X4KApi.parseEpisodePrograms` y `parsePlayEpisodePrograms`) por `seriesNumber` / `episodeNumber` con desduplicación y respaldo por regex.
 - Detección nativa de fin de episodio (`bd.a.z2` en `X4KTitan.makePlayerListener` → `onEpisodeEnded`) y duración real por capítulo sin heredar escalas mayores del episodio previo.

@@ -37,10 +37,8 @@ per-model cleanup lists are the exception: they travel inside the APK under
 
 | Herramienta / modelo | Uso | Licencia |
 |---|---|---|
-| Qwen3-TTS-12Hz-1.7B-VoiceDesign (`tools/generate_fiesta_voice_qwen.py`) | Síntesis de voz local para los presentadores de Fiesta | Apache-2.0 |
+| Qwen3-TTS-12Hz-1.7B-VoiceDesign (`party/tools/generate_party_voice_design.py`) | Voz local irreverente de Vision+ Party | Apache-2.0 |
 | Qwen3-TTS-12Hz-1.7B-Base | Clonación de las referencias de voz | Apache-2.0 |
-| ComfyUI + Juggernaut XL v9 (SDXL) | Generación local de arte IA para Fiesta | ComfyUI GPL-3.0; modelo con su licencia Open RAIL++-M |
-| Piper / voces `es_MX-*` | **Retirados**; ya no se usan en Fiesta | — |
 | ffmpeg | Codificación AAC/WebP y procesamiento de audio | LGPL/GPL según build |
 | Node.js (runtime portable de Vision+ PC) | Servidor local del port de Windows | MIT |
 | FFmpeg (runtime portable de Vision+ PC) | Transcodificación TS/HEVC/HLS a MP4 H.264 | LGPL/GPL según build |

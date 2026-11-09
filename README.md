@@ -11,6 +11,7 @@
 - **Catálogo Global en la Nube**: Miles de películas, series completas por temporadas, anime y novelas conectados al índice del servidor VPS, con puntuaciones IMDb/TMDB y estrenos curados.
 - **TV en Vivo Premium**: Más de 1,000 canales de televisión organizados automáticamente por categoría y país, con guía EPG interactiva en tiempo real.
 - **Deportes en Directo**: Agenda deportiva en vivo, cruce automático con la guía EPG, filtro de ligas con escudos y logotipos oficiales, y selector de señales por país y operadora.
+- **Juegos de Fiesta (Vision+ Party)**: Hub nativo para TV con D-pad y sala web para teléfonos. Incluye 13 juegos, entre ellos Banterbolt, ¿Le atinaste? Bien. y El Comisionado Merk, con narradora en español mexicano.
 - **Buscador Inteligente Universal**: Búsqueda insensible a acentos (`unaccent`), multicriterio por título, director o elenco, con soporte nativo de dictado por voz en Smart TV y móviles.
 - **Motor de Reproducción Nativo**: Reproducción fluida con aceleración por hardware, duraciones exactas en transmisiones HLS, salto de intro/outro y selección de pistas de audio y subtítulos.
 - **Navegación Blindada para Smart TV**: Experiencia nativa con control remoto D-pad, rescate automático de foco ante modales o tecla Atrás, y optimización de memoria para dispositivos modestos (Chromecast, TV Boxes).

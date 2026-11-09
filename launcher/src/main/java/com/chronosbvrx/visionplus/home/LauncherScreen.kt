@@ -223,6 +223,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     LaunchedEffect(settingsSection) {
         if (settingsSection == LauncherSettingsSection.UPDATES) {
             HomeUpdate.checkLauncher(context, force = true)
+            latestApp = HomeUpdate.checkVision(context)
         }
     }
 
@@ -551,6 +552,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                 TopChrome(
                     tab = tab,
                     profile = feed?.meta?.profile.orEmpty(),
+                    profileAvatar = feed?.meta?.profileAvatar.orEmpty(),
                     network = network,
                     onTab = {
                         backToTop.disarm()
@@ -562,7 +564,13 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                     },
                     onSearch = { searchOpen = true },
                     onCommandCenter = { commandCenter = true },
-                    onVisionSettings = { openLink(VisionLinks.settings()) },
+                    // El engrane es la puerta del televisor: abre los Ajustes de Android.
+                    // Los ajustes propios de Vision+ siguen en el Centro de control.
+                    onSystemSettings = {
+                        if (!appsRepo.openSystemSettings()) {
+                            LauncherActions.toast(context, "No se pudieron abrir los ajustes de la tele")
+                        }
+                    },
                     compact = compact,
                     activeTabRequester = tabLanding,
                     downTarget = if (bannerVisible) bannerFocus else contentLanding,
@@ -688,6 +696,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
     if (commandCenter) {
         CommandCenterDialog(
             profileName = feed?.meta?.profile.orEmpty(),
+            profileAvatar = feed?.meta?.profileAvatar.orEmpty(),
             profiles = feed?.meta?.profiles ?: 1,
             onDismiss = { commandCenter = false },
             onLauncherSettings = {
@@ -697,10 +706,6 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             onPersonalize = {
                 commandCenter = false
                 personalizePage = PersonalizePage.HUB
-            },
-            onOpenVisionSettings = {
-                commandCenter = false
-                openLink(VisionLinks.settings())
             },
             onRequestHome = {
                 requestHome()
@@ -742,6 +747,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
             persistentActive = persistentGuardian,
             updateState = HomeUpdate.state,
             visionState = HomeUpdate.visionState,
+            visionChecking = HomeUpdate.visionChecking,
             actions = LauncherSettingsActions(
                 onDismiss = { settingsSection = null },
                 onSection = { settingsSection = it },
@@ -767,6 +773,7 @@ fun LauncherScreen(profile: DeviceProfile, homeSignal: Int) {
                         HomeUpdate.openInstallPermission(context)
                     }
                 },
+                onCheckVision = { scope.launch { latestApp = HomeUpdate.checkVision(context) } },
             ),
         )
     }

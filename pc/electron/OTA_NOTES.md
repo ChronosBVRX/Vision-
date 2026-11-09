@@ -1,5 +1,9 @@
-# Vision+ PC — actualización OTA
+# Vision+ PC 0.5.0 — Actualización OTA
 
-Actualización del ejecutable portable de Vision+ PC. Incluye las mejoras de la interfaz Smart TV, el reproductor, el Match Center de Deportes y las correcciones más recientes.
+Actualización del ejecutable portable de Vision+ PC.
 
-La aplicación se reinicia sola después de instalar la actualización. Los datos, la sesión local, favoritos e historial se conservan.
+- Incluye la interfaz Smart TV y el motor webOS 0.3.0.
+- Actualizadores apuntando al canal nuevo **Vision-Releases**.
+- Mejoras de Inicio, reproductor y correcciones recientes.
+- La aplicación se reinicia sola después de instalar la actualización.
+- Los datos, la sesión local, favoritos e historial se conservan.

@@ -882,8 +882,8 @@ private fun seasonLabel(startMs: Long): String {
 internal fun bannerImageRequest(
     context: android.content.Context,
     url: String,
-    width: Int = 1280,
-    height: Int = 720,
+    width: Int = 1920,
+    height: Int = 1080,
 ): ImageRequest =
     ImageRequest.Builder(context)
         .data(url)

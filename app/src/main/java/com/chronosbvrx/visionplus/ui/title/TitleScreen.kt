@@ -60,6 +60,7 @@ import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.UserLibrary
+import com.chronosbvrx.visionplus.data.resumeTargetSeasonIndex
 import com.chronosbvrx.visionplus.data.formatResume
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.data.mirror.EpisodeMirror
@@ -92,7 +93,9 @@ import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -248,7 +251,11 @@ fun TitleScreen(
     LaunchedEffect(resumeEntry, film.id) {
         val entry = resumeEntry ?: return@LaunchedEffect
         if (autoSeasonApplied) return@LaunchedEffect
-        val targetId = entry.seasonIds.getOrNull(entry.seasonIndex)?.takeIf { it.isNotBlank() }
+        // Si terminó el último capítulo de la temporada, la ficha aterriza en la
+        // siguiente: el botón principal no puede volver a ofrecer «C1» de la temporada
+        // que ya se terminó.
+        val targetSeason = resumeTargetSeasonIndex(entry)
+        val targetId = entry.seasonIds.getOrNull(targetSeason)?.takeIf { it.isNotBlank() }
             ?: entry.seriesId
         val target = film.seasons.firstOrNull { it.titleId == targetId }
         if (target != null && selectedSeason?.titleId == film.seasons.firstOrNull()?.titleId) {
@@ -266,13 +273,11 @@ fun TitleScreen(
         )
     }
 
-    val watchedCount = remember(watchedTick, activeId, episodes) {
-        episodes.indices.count { UserLibrary.isEpisodeWatched(context, activeId, it + 1) }
+    val watchedStates = remember(watchedTick, activeId, episodes) {
+        UserLibrary.episodeWatchStates(context, activeId, episodes, PlaybackHistory.list(context))
     }
-    val nextEpisodeIndex = remember(watchedTick, activeId, episodes) {
-        if (episodes.isEmpty()) 0
-        else episodes.indices.firstOrNull { !UserLibrary.isEpisodeWatched(context, activeId, it + 1) } ?: 0
-    }
+    val watchedCount = watchedStates.count { it }
+    val nextEpisodeIndex = if (episodes.isEmpty()) 0 else watchedStates.indexOfFirst { !it }.takeIf { it >= 0 } ?: 0
     val activeSeasonLabel = seasonNameList.getOrElse(seasonIdx) { "T${seasonIdx + 1}" }
     val seasonTitlePrefix = if (film.seasons.size > 1) " · $activeSeasonLabel" else ""
     // Solo es serie con 2+ capítulos o 2+ temporadas: 1 capítulo suelto del portal es película.
@@ -443,8 +448,6 @@ fun TitleScreen(
                                 val targetEp = episodes.getOrNull(targetIdx)
                                 when {
                                     isSeriesTitle && targetEp != null -> {
-                                        UserLibrary.markEpisodeWatched(context, activeId, targetIdx + 1)
-                                        watchedTick++
                                         onPlay(
                                             EpisodePlay(
                                                 code = targetEp,
@@ -568,7 +571,7 @@ fun TitleScreen(
                                 }
                                 TextButton(onClick = {
                                     following.value =
-                                        com.chronosbvrx.visionplus.data.follow.FollowStore.toggle(context, film.id, film.title)
+                                        com.chronosbvrx.visionplus.data.follow.FollowStore.toggle(context, film)
                                 }) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Icon(
@@ -669,13 +672,11 @@ fun TitleScreen(
                                 nextEpisodeIndex = nextEpisodeIndex,
                                 watchedTick = watchedTick,
                                 onToggleWatched = { index ->
-                                    val was = UserLibrary.isEpisodeWatched(context, activeId, index + 1)
+                                    val was = watchedStates.getOrElse(index) { false }
                                     UserLibrary.markEpisodeWatched(context, activeId, index + 1, !was)
                                     watchedTick++
                                 },
                                 onSelectEpisode = { index, ep ->
-                                    UserLibrary.markEpisodeWatched(context, activeId, index + 1)
-                                    watchedTick++
                                     onPlay(
                                         EpisodePlay(
                                             code = ep.contentId,
@@ -780,6 +781,7 @@ private fun RelatedSection(films: List<Film>, onOpenFilm: (Film) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MobileSeriesSelectorSection(
     seasons: List<com.chronosbvrx.visionplus.data.SeasonRef>,
@@ -803,6 +805,15 @@ private fun MobileSeriesSelectorSection(
     onPlayDownloaded: (String) -> Unit,
 ) {
     val context = LocalContext.current
+    val history = remember(watchedTick, activeId, episodePrograms) {
+        PlaybackHistory.list(context)
+    }
+    val watchedStates = remember(history, activeId, episodePrograms) {
+        UserLibrary.episodeWatchStates(context, activeId, episodePrograms.map { it.contentId }, history)
+    }
+    val progressByCode = remember(history) {
+        history.associate { it.key to UserLibrary.watchedProgressOf(it) }
+    }
     Column(
         modifier = Modifier
             .padding(top = 10.dp)
@@ -851,6 +862,13 @@ private fun MobileSeriesSelectorSection(
                 )
             }
         }
+
+        Text(
+            "Mantén presionado un capítulo para marcarlo visto o no visto.",
+            style = MaterialTheme.typography.labelSmall,
+            color = VisionTextSecondary,
+            modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 2.dp),
+        )
 
         // Descargar la temporada completa: la cola del motor va bajando un capítulo por uno.
         if (downloadsOn && episodePrograms.isNotEmpty()) {
@@ -961,9 +979,8 @@ private fun MobileSeriesSelectorSection(
             }
             Column(Modifier.padding(horizontal = 8.dp)) {
                 episodePrograms.forEachIndexed { index, ep ->
-                    val watched = remember(watchedTick, activeId, index) {
-                        UserLibrary.isEpisodeWatched(context, activeId, index + 1)
-                    }
+                    val watched = watchedStates.getOrElse(index) { false }
+                    val progress = progressByCode[ep.contentId]
                     val isNext = index == nextEpisodeIndex
                     val info = episodeInfo[ep.contentId]
                     val epNumber = ep.number.takeIf { it > 0 } ?: (index + 1)
@@ -976,7 +993,10 @@ private fun MobileSeriesSelectorSection(
                             .padding(vertical = 1.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(if (isNext) VisionBlue.copy(alpha = 0.14f) else Color.Transparent)
-                            .clickable { onSelectEpisode(index, ep) }
+                            .combinedClickable(
+                                onClick = { onSelectEpisode(index, ep) },
+                                onLongClick = { onToggleWatched(index) },
+                            )
                             .padding(horizontal = 6.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -1052,6 +1072,33 @@ private fun MobileSeriesSelectorSection(
                                         "Visto",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = VisionSuccess,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                            } else if (progress != null && progress > 0.01f) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                    modifier = Modifier.padding(top = 4.dp),
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .width(54.dp)
+                                            .height(2.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(Color.White.copy(alpha = 0.15f)),
+                                    ) {
+                                        Box(
+                                            Modifier
+                                                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                                                .height(2.dp)
+                                                .background(VisionBlueBright),
+                                        )
+                                    }
+                                    Text(
+                                        "${(progress * 100).toInt()} %",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = VisionBlueBright,
                                         fontWeight = FontWeight.SemiBold,
                                     )
                                 }

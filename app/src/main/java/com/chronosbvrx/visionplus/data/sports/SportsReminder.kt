@@ -37,6 +37,7 @@ object SportsReminder {
             atMs = at,
             title = title(event),
             text = "Empieza en $minutesBefore minutos",
+            uri = com.chronosbvrx.visionplus.home.contract.VisionLinks.sports(event.id),
         )
     }
 

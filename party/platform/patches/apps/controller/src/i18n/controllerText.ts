@@ -1,0 +1,520 @@
+import {
+  defaultLanguage,
+  normalizeLanguage,
+  type PublicGamePhase,
+  type SupportedLanguage
+} from "@open-party-lab/protocol";
+
+const languagePreferenceKey = "open-party-lab.controller-language";
+
+export function readStoredControllerLanguage(): SupportedLanguage {
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+    return defaultLanguage;
+  }
+
+  return normalizeLanguage(window.localStorage.getItem(languagePreferenceKey));
+}
+
+export function writeStoredControllerLanguage(language: SupportedLanguage): void {
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(languagePreferenceKey, language);
+}
+
+export interface ControllerText {
+  inputs: {
+    move: string;
+    aim: string;
+    look: string;
+    joystickHint: string;
+    statusReport: string;
+    cardBack: string;
+    driveStick: string;
+    raceActions: string;
+    left: string;
+    right: string;
+    forward: string;
+    reverse: string;
+    ready: string;
+    boost: string;
+    fire: string;
+    drift: string;
+  };
+  hostControlTitle: string;
+  hostControlTake: string;
+  hostControlPending: string;
+  hostControlPendingCountdown: (seconds: number) => string;
+  hostControlHeldByOther: (name: string) => string;
+  hostControlHandoverTitle: string;
+  hostControlHandoverBody: (name: string) => string;
+  hostControlHandoverKeep: string;
+  hostControlHandoverGive: string;
+  hostControlHandoverCountdown: (seconds: number) => string;
+  hostMenuOpen: string;
+  hostMenuTitle: string;
+  hostMenuPausedNote: string;
+  hostMenuResume: string;
+  hostMenuToMainMenu: string;
+  hostControlActive: string;
+  hostControlRelease: string;
+  themeLabel: string;
+  themeLight: string;
+  themeDark: string;
+  languageLabel: string;
+  hostControlChooseGame: string;
+  hostControlStartRound: string;
+  hostControlBackToMenu: string;
+  hostControlRoster: string;
+  hostControlKick: (name: string) => string;
+  hostControlRoundRunning: string;
+  joinTitle: string;
+  joinSubtitle: string;
+  roomCode: string;
+  name: string;
+  joinRoom: string;
+  connectingController: string;
+  serverConnected: string;
+  serverNotConnected: string;
+  reconnectTitle: string;
+  reconnectSubtitle: string;
+  continueSession: string;
+  discardLocalSession: string;
+  room: string;
+  notFoundTitle: string;
+  notFoundSubtitle: string;
+  notFoundBody: string;
+  controllerTitle: string;
+  preparingGameView: string;
+  unsupportedGame: string;
+  phase: string;
+  unknown: string;
+  logout: string;
+  fullscreen: string;
+  exitFullscreen: string;
+  fullscreenHint: string;
+  exitFullscreenHint: string;
+  fullscreenHelp: string;
+  fullscreenInstallTitle: string;
+  fullscreenInstallBody: string;
+  fullscreenUnavailable: string;
+  fullscreenFailed: string;
+  fullscreenHelpClose: string;
+  score: string;
+  lobbySelected: (gameName: string) => string;
+  lobbyWaitingHost: string;
+  leaveRoom: string;
+  ready: string;
+  notReady: string;
+  chooseCharacterFirst: string;
+  chooseSetupFirst: string;
+  setup: string;
+  setupChooseTitle: string;
+  selectionCount: (selected: number, min: number, max: number) => string;
+  characterChooseTitle: string;
+  characterChooseDescription: string;
+  yourCharacter: string;
+  select: string;
+  chosenBy: (names: string) => string;
+  stillFree: string;
+  players: string;
+  minRequired: (minPlayers: number) => string;
+  needsMorePlayers: string;
+  readyCount: string;
+  character: string;
+  noCharacter: string;
+  connectedReady: string;
+  connectedWaiting: string;
+  nextRound: string;
+  nextRoundDescription: (readyCount: number, playerCount: number) => string;
+  readyForNextRound: string;
+  readyForNextRoundQuestion: string;
+  waitForPlayers: (readyCount: number, playerCount: number) => string;
+  formatPhase: (phase: PublicGamePhase | string | undefined) => string;
+}
+
+const baseControllerText = {
+  de: {
+    inputs: {
+      move: "BEWEGEN", aim: "ZIELEN", look: "UMSEHEN",
+      joystickHint: "Innen fein steuern, am Rand mit voller Geschwindigkeit laufen.",
+      statusReport: "Lagebericht", cardBack: "Kartenrücken",
+      driveStick: "Fahrsteuerung", raceActions: "Fahraktionen",
+      left: "LINKS", right: "RECHTS", forward: "VORWÄRTS", reverse: "RÜCKWÄRTS",
+      ready: "BEREIT", boost: "TURBO", fire: "FEUERN", drift: "DRIFT"
+    },
+    hostControlTitle: "Host-Steuerung",
+    hostControlTake: "Steuerung uebernehmen",
+    hostControlPending: "Anfrage laeuft.",
+    hostControlPendingCountdown: (seconds: number) =>
+      `Uebernahme in ${seconds} s, falls niemand widerspricht.`,
+    hostControlHeldByOther: (name: string) => `${name} steuert gerade den Host.`,
+    hostControlHandoverTitle: "Steuerung abgeben?",
+    hostControlHandoverBody: (name: string) => `${name} moechte die Steuerung uebernehmen.`,
+    hostControlHandoverKeep: "Behalten",
+    hostControlHandoverGive: "Abgeben",
+    hostControlHandoverCountdown: (seconds: number) =>
+      `Ohne Antwort wechselt sie in ${seconds} s.`,
+    hostMenuOpen: "Host-Menue",
+    hostMenuTitle: "Host-Menue",
+    hostMenuPausedNote: "Die Runde ist angehalten, solange dieses Menue offen ist.",
+    hostMenuResume: "Weiterspielen",
+    hostMenuToMainMenu: "Zum Hauptmenue",
+    hostControlActive: "Du steuerst den Host.",
+    hostControlRelease: "Steuerung zurueckgeben",
+    themeLabel: "Farbschema",
+    themeLight: "Hell",
+    themeDark: "Dunkel",
+    languageLabel: "Sprache",
+    hostControlChooseGame: "Spiel waehlen",
+    hostControlStartRound: "Runde starten",
+    hostControlBackToMenu: "Zurueck zum Menue",
+    hostControlRoster: "Spieler im Raum",
+    hostControlKick: (name: string) => `${name} entfernen`,
+    hostControlRoundRunning: "Waehrend einer laufenden Runde gesperrt.",
+    joinTitle: "Beitreten",
+    joinSubtitle: "Verbinde dein Handy mit dem Raum auf dem grossen Bildschirm.",
+    roomCode: "Raumcode",
+    name: "Name",
+    joinRoom: "Dem Raum beitreten",
+    connectingController: "Verbinde Controller mit Server ...",
+    serverConnected: "Server verbunden.",
+    serverNotConnected: "Noch keine Serververbindung.",
+    reconnectTitle: "Session fortsetzen",
+    reconnectSubtitle: "Es liegt noch eine gespeicherte Controller-Session auf diesem Geraet vor.",
+    continueSession: "Session fortsetzen",
+    discardLocalSession: "Lokale Session verwerfen",
+    room: "Raum",
+    notFoundTitle: "Seite nicht gefunden",
+    notFoundSubtitle: "Die Controller-Ansicht konnte nicht aufgebaut werden.",
+    notFoundBody: "Bitte lade die Seite neu oder tritt dem Raum erneut bei.",
+    controllerTitle: "Controller",
+    preparingGameView: "Die Spielansicht wird vorbereitet.",
+    unsupportedGame: "Der Host hat noch kein unterstuetztes Spiel gestartet.",
+    phase: "Phase",
+    unknown: "unbekannt",
+    logout: "Ausloggen",
+    fullscreen: "Vollbild",
+    exitFullscreen: "Vollbild beenden",
+    fullscreenHint: "Klick oder F startet den Vollbildmodus",
+    exitFullscreenHint: "Esc oder F beendet den Vollbildmodus",
+    fullscreenHelp: "Hilfe zum Vollbildmodus",
+    fullscreenInstallTitle: "Ohne Browserleiste spielen",
+    fullscreenInstallBody: "Dieser Browser kann den Controller nicht per Taste ins Vollbild schalten. Öffne diese Seite in Safari und wähle im Menü „Teilen“ → „Zum Home-Bildschirm“. Falls angezeigt, aktiviere „Als Web-App öffnen“.\n\nStarte den Controller danach über das neue Symbol. Falls nötig, tritt dem Raum dort erneut bei.",
+    fullscreenUnavailable: "Dieser Browser unterstützt keinen Vollbildmodus für den Controller. Du kannst hier weiterspielen oder einen anderen Browser verwenden.",
+    fullscreenFailed: "Der Browser hat den Wechsel in den Vollbildmodus abgelehnt. Schließe diesen Hinweis und versuche es erneut. Du kannst auch ohne Vollbild weiterspielen.",
+    fullscreenHelpClose: "Verstanden",
+    score: "Score",
+    lobbySelected: (gameName: string) => `Ausgewaehlt: ${gameName}`,
+    lobbyWaitingHost: "Der Host waehlt gleich ein Spiel.",
+    leaveRoom: "Raum verlassen",
+    ready: "Bereit",
+    notReady: "Nicht bereit",
+    chooseCharacterFirst: "Erst Charakter waehlen",
+    chooseSetupFirst: "Erst Setup waehlen",
+    setup: "Setup",
+    setupChooseTitle: "Setup waehlen",
+    selectionCount: (selected: number, min: number, max: number) =>
+      `${selected}/${max} gewaehlt, mindestens ${min}`,
+    characterChooseTitle: "Charakter waehlen",
+    characterChooseDescription: "Bitte zuerst einen Charakter fuer den Run auswaehlen. Danach kannst du dich bereit setzen.",
+    yourCharacter: "Dein Charakter",
+    select: "Auswaehlen",
+    chosenBy: (names: string) => `Gewaehlt von ${names}`,
+    stillFree: "Noch frei",
+    players: "Spieler",
+    minRequired: (minPlayers: number) => `mindestens ${minPlayers} noetig`,
+    needsMorePlayers: "Fuer dieses Spiel braucht ihr noch mehr Spieler.",
+    readyCount: "Bereit",
+    character: "Charakter",
+    noCharacter: "Kein Charakter",
+    connectedReady: "bereit",
+    connectedWaiting: "wartet",
+    nextRound: "Naechste Runde",
+    nextRoundDescription: (readyCount: number, playerCount: number) =>
+      `Naechste Runde startet bei ${readyCount}/${playerCount} bereit.`,
+    readyForNextRound: "Bereit fuer die naechste Runde",
+    readyForNextRoundQuestion: "Bereit fuer die naechste Runde?",
+    waitForPlayers: (readyCount: number, playerCount: number) =>
+      `Warte auf alle Spieler. ${readyCount}/${playerCount} bereit.`,
+    formatPhase: (phase: PublicGamePhase | string | undefined) => {
+      switch (phase) {
+        case "round_intro":
+          return "Intro";
+        case "countdown":
+          return "Countdown";
+        case "playing":
+          return "Spielen";
+        case "locked":
+          return "Gesperrt";
+        case "result":
+          return "Ergebnis";
+        case "scoreboard":
+          return "Scoreboard";
+        case "finished":
+          return "Fertig";
+        default:
+          return "Warten";
+      }
+    }
+  },
+  en: {
+    inputs: {
+      move: "MOVE", aim: "AIM", look: "LOOK",
+      joystickHint: "Move gently near the center, or push to the edge for full speed.",
+      statusReport: "Status report", cardBack: "Card back",
+      driveStick: "Drive stick", raceActions: "Race actions",
+      left: "LEFT", right: "RIGHT", forward: "FORWARD", reverse: "REVERSE",
+      ready: "READY", boost: "BOOST", fire: "FIRE", drift: "DRIFT"
+    },
+    hostControlTitle: "Host controls",
+    hostControlTake: "Take host control",
+    hostControlPending: "Request sent.",
+    hostControlPendingCountdown: (seconds: number) =>
+      `Taking over in ${seconds}s unless someone objects.`,
+    hostControlHeldByOther: (name: string) => `${name} is driving the host.`,
+    hostControlHandoverTitle: "Hand the controls over?",
+    hostControlHandoverBody: (name: string) => `${name} wants to take over.`,
+    hostControlHandoverKeep: "Keep",
+    hostControlHandoverGive: "Hand over",
+    hostControlHandoverCountdown: (seconds: number) =>
+      `Without an answer they get them in ${seconds}s.`,
+    hostMenuOpen: "Host menu",
+    hostMenuTitle: "Host menu",
+    hostMenuPausedNote: "The round is held while this menu is open.",
+    hostMenuResume: "Resume",
+    hostMenuToMainMenu: "Back to main menu",
+    hostControlActive: "You are driving the host.",
+    hostControlRelease: "Hand control back",
+    themeLabel: "Theme",
+    themeLight: "Light",
+    themeDark: "Dark",
+    languageLabel: "Language",
+    hostControlChooseGame: "Choose a game",
+    hostControlStartRound: "Start round",
+    hostControlBackToMenu: "Back to menu",
+    hostControlRoster: "Players in the room",
+    hostControlKick: (name: string) => `Remove ${name}`,
+    hostControlRoundRunning: "Locked while a round is running.",
+    joinTitle: "Join",
+    joinSubtitle: "Connect your phone to the room on the big screen.",
+    roomCode: "Room code",
+    name: "Name",
+    joinRoom: "Join room",
+    connectingController: "Connecting controller to server ...",
+    serverConnected: "Server connected.",
+    serverNotConnected: "No server connection yet.",
+    reconnectTitle: "Resume Session",
+    reconnectSubtitle: "This device still has a saved controller session.",
+    continueSession: "Resume session",
+    discardLocalSession: "Discard local session",
+    room: "Room",
+    notFoundTitle: "Page not found",
+    notFoundSubtitle: "The controller view could not be created.",
+    notFoundBody: "Reload the page or join the room again.",
+    controllerTitle: "Controller",
+    preparingGameView: "Preparing the game view.",
+    unsupportedGame: "The host has not started a supported game yet.",
+    phase: "Phase",
+    unknown: "unknown",
+    logout: "Log out",
+    fullscreen: "Fullscreen",
+    exitFullscreen: "Exit fullscreen",
+    fullscreenHint: "Click or press F to enter fullscreen",
+    exitFullscreenHint: "Esc or F exits fullscreen",
+    fullscreenHelp: "Fullscreen help",
+    fullscreenInstallTitle: "Play without browser toolbars",
+    fullscreenInstallBody: "This browser cannot switch the controller to fullscreen with a button. Open this page in Safari and choose Share → Add to Home Screen. If shown, enable Open as Web App.\n\nThen launch the controller from the new icon. Rejoin the room there if needed.",
+    fullscreenUnavailable: "This browser does not support fullscreen for the controller. You can keep playing here or use another browser.",
+    fullscreenFailed: "The browser refused to switch fullscreen mode. Close this message and try again. You can also keep playing without fullscreen.",
+    fullscreenHelpClose: "Got it",
+    score: "Score",
+    lobbySelected: (gameName: string) => `Selected: ${gameName}`,
+    lobbyWaitingHost: "The host is about to pick a game.",
+    leaveRoom: "Leave room",
+    ready: "Ready",
+    notReady: "Not ready",
+    chooseCharacterFirst: "Choose character first",
+    chooseSetupFirst: "Choose setup first",
+    setup: "Setup",
+    setupChooseTitle: "Choose Setup",
+    selectionCount: (selected: number, min: number, max: number) =>
+      `${selected}/${max} selected, at least ${min}`,
+    characterChooseTitle: "Choose Character",
+    characterChooseDescription: "Choose a character for the run first. Then you can ready up.",
+    yourCharacter: "Your character",
+    select: "Select",
+    chosenBy: (names: string) => `Chosen by ${names}`,
+    stillFree: "Still free",
+    players: "Players",
+    minRequired: (minPlayers: number) => `at least ${minPlayers} required`,
+    needsMorePlayers: "This game needs more players.",
+    readyCount: "Ready",
+    character: "Character",
+    noCharacter: "No character",
+    connectedReady: "ready",
+    connectedWaiting: "waiting",
+    nextRound: "Next Round",
+    nextRoundDescription: (readyCount: number, playerCount: number) =>
+      `Next round starts at ${readyCount}/${playerCount} ready.`,
+    readyForNextRound: "Ready for the next round",
+    readyForNextRoundQuestion: "Ready for the next round?",
+    waitForPlayers: (readyCount: number, playerCount: number) =>
+      `Waiting for all players. ${readyCount}/${playerCount} ready.`,
+    formatPhase: (phase: PublicGamePhase | string | undefined) => {
+      switch (phase) {
+        case "round_intro":
+          return "Intro";
+        case "countdown":
+          return "Countdown";
+        case "playing":
+          return "Playing";
+        case "locked":
+          return "Locked";
+        case "result":
+          return "Result";
+        case "scoreboard":
+          return "Scoreboard";
+        case "finished":
+          return "Finished";
+        default:
+          return "Waiting";
+      }
+    }
+  }
+} satisfies Record<"de" | "en", ControllerText>;
+
+const spanishControllerText: ControllerText = {
+  ...baseControllerText.en,
+  inputs: {
+    ...baseControllerText.en.inputs,
+    move: "MOVER",
+    aim: "APUNTAR",
+    look: "MIRAR",
+    joystickHint: "Mueve con precisión en el centro; en el borde, a toda velocidad.",
+    statusReport: "Informe",
+    cardBack: "Reverso",
+    driveStick: "Volante",
+    raceActions: "Acciones de carrera",
+    left: "IZQUIERDA",
+    right: "DERECHA",
+    forward: "ADELANTE",
+    reverse: "ATRÁS",
+    ready: "LISTO",
+    boost: "TURBO",
+    fire: "FUEGO",
+    drift: "DRIFT"
+  },
+  hostControlTitle: "Control del anfitrión",
+  hostControlTake: "Tomar el control",
+  hostControlPending: "Solicitud en curso.",
+  hostControlHeldByOther: (name: string) => `${name} tiene el control.`,
+  hostControlHandoverTitle: "¿Ceder el control?",
+  hostControlHandoverBody: (name: string) => `${name} quiere tomar el control.`,
+  hostControlHandoverKeep: "Conservar",
+  hostControlHandoverGive: "Ceder",
+  hostMenuOpen: "Menú del anfitrión",
+  hostMenuTitle: "Menú del anfitrión",
+  hostMenuPausedNote: "La ronda está en pausa mientras este menú esté abierto.",
+  hostMenuResume: "Seguir jugando",
+  hostMenuToMainMenu: "Volver al menú principal",
+  hostControlActive: "Tú controlas el anfitrión.",
+  hostControlRelease: "Soltar el control",
+  themeLabel: "Tema",
+  themeLight: "Claro",
+  themeDark: "Oscuro",
+  languageLabel: "Idioma",
+  hostControlChooseGame: "Elegir juego",
+  hostControlStartRound: "Empezar ronda",
+  hostControlBackToMenu: "Volver al menú",
+  hostControlRoster: "Jugadores en la sala",
+  hostControlRoundRunning: "Bloqueado durante una ronda activa.",
+  joinTitle: "Unirse",
+  joinSubtitle: "Conecta tu celular con la sala de la pantalla grande.",
+  roomCode: "Código de sala",
+  name: "Nombre",
+  joinRoom: "Entrar a la sala",
+  connectingController: "Conectando el control con el servidor…",
+  serverConnected: "Servidor conectado.",
+  serverNotConnected: "Sin conexión al servidor.",
+  reconnectTitle: "Continuar sesión",
+  reconnectSubtitle: "Hay una sesión guardada en este dispositivo.",
+  continueSession: "Continuar sesión",
+  discardLocalSession: "Descartar sesión local",
+  room: "Sala",
+  notFoundTitle: "Página no encontrada",
+  notFoundSubtitle: "No se pudo abrir el control.",
+  notFoundBody: "Recarga la página o vuelve a entrar a la sala.",
+  controllerTitle: "Control",
+  preparingGameView: "Preparando la vista del juego.",
+  unsupportedGame: "El anfitrión todavía no inició un juego compatible.",
+  phase: "Fase",
+  unknown: "desconocida",
+  logout: "Salir",
+  fullscreen: "Pantalla completa",
+  exitFullscreen: "Salir de pantalla completa",
+  fullscreenHint: "Toca o presiona F para entrar a pantalla completa",
+  exitFullscreenHint: "Esc o F para salir de pantalla completa",
+  fullscreenHelp: "Ayuda de pantalla completa",
+  fullscreenInstallTitle: "Juega sin las barras del navegador",
+  fullscreenInstallBody: "Este navegador no puede cambiar el control a pantalla completa con un botón. Abre esta página en Safari y elige Compartir → Agregar a pantalla de inicio. Si aparece, activa Abrir como app web.\n\nDespués abre el control desde el nuevo ícono. Vuelve a entrar a la sala si hace falta.",
+  fullscreenUnavailable: "Este navegador no permite pantalla completa para el control. Puedes seguir jugando aquí o usar otro navegador.",
+  fullscreenFailed: "El navegador rechazó la pantalla completa. Cierra este mensaje e inténtalo de nuevo. También puedes seguir jugando sin pantalla completa.",
+  fullscreenHelpClose: "Entendido",
+  chooseSetupFirst: "Elige tu configuración primero",
+  score: "Puntos",
+  lobbySelected: (gameName: string) => `Elegido: ${gameName}`,
+  lobbyWaitingHost: "El anfitrión está eligiendo juego.",
+  leaveRoom: "Salir de la sala",
+  ready: "Listo",
+  notReady: "No listo",
+  players: "Jugadores",
+  character: "Personaje",
+  chosenBy: (names: string) => `Elegido por ${names}`,
+  noCharacter: "Sin personaje",
+  chooseCharacterFirst: "Elige personaje primero",
+  yourCharacter: "Tu personaje",
+  select: "Elegir",
+  setup: "Configuración",
+  setupChooseTitle: "Elige tu configuración",
+  characterChooseTitle: "Elige personaje",
+  characterChooseDescription: "Elige un personaje para la partida. Después podrás marcarte listo.",
+  stillFree: "Libre",
+  minRequired: (minPlayers: number) => `mínimo ${minPlayers} jugadores`,
+  readyCount: "Listos",
+  connectedReady: "listo",
+  connectedWaiting: "esperando",
+  nextRound: "Siguiente ronda",
+  nextRoundDescription: (readyCount: number, playerCount: number) =>
+    `La siguiente ronda empieza con ${readyCount}/${playerCount} listos.`,
+  hostControlPendingCountdown: (seconds: number) =>
+    `Toma de control en ${seconds} s si nadie se opone.`,
+  hostControlKick: (name: string) => `Expulsar a ${name}`,
+  needsMorePlayers: "Faltan jugadores para empezar.",
+  waitForPlayers: (readyCount: number, playerCount: number) =>
+    `Esperando a todos. ${readyCount}/${playerCount} listos.`,
+  readyForNextRound: "Listo para la siguiente ronda",
+  readyForNextRoundQuestion: "¿Listos para la siguiente ronda?",
+  formatPhase: (phase: PublicGamePhase | string | undefined) => {
+    switch (phase) {
+      case "round_intro": return "Intro";
+      case "countdown": return "Cuenta regresiva";
+      case "playing": return "Jugando";
+      case "locked": return "Bloqueado";
+      case "result": return "Resultado";
+      case "scoreboard": return "Puntos";
+      case "finished": return "Terminado";
+      default: return "Esperando";
+    }
+  }
+};
+
+const controllerText: Record<SupportedLanguage, ControllerText> = {
+  ...baseControllerText,
+  es: spanishControllerText
+};
+
+export function getControllerText(language: SupportedLanguage | null | undefined): ControllerText {
+  return controllerText[normalizeLanguage(language)];
+}

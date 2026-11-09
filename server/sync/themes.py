@@ -40,7 +40,7 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import genres as genre_rules
 import tmdb
@@ -70,11 +70,21 @@ class Theme:
     tmdb_keywords: tuple[int, ...] = ()
     # (título plegado, año) de obras canónicas que TMDB no siempre etiqueta.
     seed_titles: tuple[tuple[str, int], ...] = ()
+    # Ventana recurrente por mes/día. `start_date`/`end_date` se usan para eventos
+    # de una sola vez (Mundial 2027, eclipse, elección…).
     start: tuple[int, int] | None = None
     end: tuple[int, int] | None = None
+    start_date: date | None = None
+    end_date: date | None = None
     limit: int = 24
     min_titles: int = 8
     always: bool = False
+    # Metadatos del calendario editorial: prioridad, superficie y textos del hero.
+    priority: int = 50
+    hero: bool = True
+    row: bool = True
+    badge: str = ""
+    eyebrow: str = "ESPECIAL DE TEMPORADA"
 
 
 # El orden importa: las temporadas primero y las permanentes al final. En octubre
@@ -86,6 +96,8 @@ THEMES: tuple[Theme, ...] = (
         title="Día de Muertos",
         start=(10, 24),
         end=(11, 4),
+        priority=95,
+        hero=True,
         # Nada de «muerto», «muerte», «terror» o «fantasma»: esas palabras metían
         # Harry Potter, Piratas del Caribe y dramas médicos en la fiesta mexicana.
         tmdb_keywords=(TMDB_DAY_OF_THE_DEAD, TMDB_DIA_DE_MUERTOS),
@@ -108,6 +120,8 @@ THEMES: tuple[Theme, ...] = (
         title="Halloween",
         start=(10, 1),
         end=(10, 31),
+        priority=85,
+        hero=True,
         # Solo la keyword canónica. Las variantes «halloween party/costume» metían
         # comedias románticas y episodios sueltos sin tono de Halloween.
         tmdb_keywords=(TMDB_HALLOWEEN,),
@@ -119,6 +133,8 @@ THEMES: tuple[Theme, ...] = (
         title="Navidad",
         start=(12, 1),
         end=(12, 31),
+        priority=90,
+        hero=True,
         title_keywords=(
             "navidad", "naviden", "santa", "papa noel", "nochebuena",
             "reno", "duende", "christmas", "milagro",
@@ -131,6 +147,8 @@ THEMES: tuple[Theme, ...] = (
         title="San Valentín",
         start=(2, 1),
         end=(2, 15),
+        priority=70,
+        hero=True,
         title_keywords=(
             "san valentin", "amor", "enamor", "boda", "pareja", "corazon",
             "romance", "desamor",
@@ -143,6 +161,8 @@ THEMES: tuple[Theme, ...] = (
         title="Día de las Madres",
         start=(5, 1),
         end=(5, 12),
+        priority=75,
+        hero=True,
         title_keywords=("mama", "madre", "maternal", "madrecita", "abuela"),
         synopsis_keywords=("dia de las madres", "amor de madre"),
         limit=20,
@@ -152,6 +172,8 @@ THEMES: tuple[Theme, ...] = (
         title="Día del Padre",
         start=(6, 1),
         end=(6, 21),
+        priority=60,
+        hero=False,
         title_keywords=("papa", "padre", "paternal", "papacito", "abuelo"),
         synopsis_keywords=("dia del padre", "amor de padre"),
         limit=20,
@@ -161,6 +183,8 @@ THEMES: tuple[Theme, ...] = (
         title="Fiestas Patrias",
         start=(9, 10),
         end=(9, 20),
+        priority=80,
+        hero=True,
         title_keywords=(
             "mexico", "mexican", "revolucion", "rancho", "charro", "norteno",
             "mariachi", "patria", "independencia",
@@ -175,6 +199,8 @@ THEMES: tuple[Theme, ...] = (
         title="Vacaciones",
         start=(7, 1),
         end=(8, 20),
+        priority=55,
+        hero=False,
         title_keywords=(
             "vacaciones", "verano", "playa", "viaje", "crucero", "hotel", "isla",
         ),
@@ -186,6 +212,8 @@ THEMES: tuple[Theme, ...] = (
         title="Regreso a clases",
         start=(8, 1),
         end=(9, 10),
+        priority=55,
+        hero=False,
         title_keywords=(
             "escuela", "colegio", "universidad", "estudiante", "maestro",
             "profesor", "prepa",
@@ -198,6 +226,8 @@ THEMES: tuple[Theme, ...] = (
         title="Año Nuevo",
         start=(12, 28),
         end=(1, 10),
+        priority=85,
+        hero=True,
         title_keywords=(
             "ano nuevo", "nuevo comienzo", "fin de ano", "proposito", "brindis",
         ),
@@ -210,8 +240,582 @@ THEMES: tuple[Theme, ...] = (
         genres=("Comedia",),
         limit=24,
         always=True,
+        priority=10,
+        hero=False,
     ),
 )
+
+# Capa de eventos y semanas especiales. Se conserva separada de las temporadas
+# base para que sea fácil revisar qué se agregó por coyuntura y qué es permanente.
+# `start`/`end` son recurrentes por mes/día; `start_date`/`end_date` son eventos
+# de una sola vez (Mundial 2027, eclipse, elección…).
+EVENTS: tuple[Theme, ...] = (
+    Theme(
+        id="tema-evento-planeta",
+        title="Planeta en juego",
+        start=(11, 9),
+        end=(11, 20),
+        priority=72,
+        hero=True,
+        badge="PLANETA EN JUEGO",
+        eyebrow="ESPECIAL COP31 · CLIMA",
+        title_keywords=(
+            "clima", "planeta", "tierra", "naturaleza", "ecolog", "calentamiento",
+            "desastre", "contaminacion", "sostenible", "futuro",
+        ),
+        synopsis_keywords=(
+            "cambio climatico", "medio ambiente", "calentamiento global",
+            "desastre natural", "emergencia climatica",
+        ),
+        genres=("Documental",),
+        limit=20,
+        min_titles=6,
+    ),
+    Theme(
+        id="tema-evento-otono",
+        title="Cine de otoño",
+        start=(11, 5),
+        end=(11, 30),
+        priority=40,
+        hero=True,
+        row=True,
+        badge="CINE DE OTOÑO",
+        eyebrow="NOVIEMBRE",
+        title_keywords=(
+            "otono", "lluvia", "noche", "misterio", "drama", "ciudad",
+            "regreso", "memoria", "familia",
+        ),
+        synopsis_keywords=("otono", "misterio", "familia", "regreso"),
+        genres=("Drama", "Misterio", "Suspenso"),
+        limit=18,
+        min_titles=6,
+    ),
+    Theme(
+        id="tema-evento-musica-latina",
+        title="Música latina",
+        start=(11, 9),
+        end=(11, 15),
+        priority=58,
+        hero=False,
+        badge="MÚSICA LATINA",
+        eyebrow="LATIN GRAMMY",
+        title_keywords=(
+            "musica", "cantante", "latino", "latina", "grammy", "concierto",
+            "baile", "ritmo", "banda", "rock", "pop",
+        ),
+        synopsis_keywords=("musica latina", "concierto", "cantante"),
+        genres=("Música",),
+        limit=20,
+        min_titles=5,
+    ),
+    Theme(
+        id="tema-evento-gratitud",
+        title="Familia y gratitud",
+        start=(11, 22),
+        end=(11, 28),
+        priority=78,
+        hero=True,
+        badge="FAMILIA Y GRATITUD",
+        eyebrow="THANKSGIVING",
+        title_keywords=(
+            "gracias", "gratitud", "familia", "thanksgiving", "accion de gracias",
+            "cena", "hogar", "amistad",
+        ),
+        synopsis_keywords=("accion de gracias", "familia", "gratitud"),
+        genres=("Comedia", "Familia"),
+        limit=20,
+        min_titles=6,
+    ),
+    Theme(
+        id="tema-evento-sagas",
+        title="Semana de sagas",
+        start=(12, 13),
+        end=(12, 20),
+        priority=92,
+        hero=True,
+        badge="SEMANA DE SAGAS",
+        eyebrow="BLOCKBUSTERS · FRANQUICIAS",
+        title_keywords=(
+            "avengers", "dune", "star wars", "marvel", "dc", "harry potter",
+            "senor de los anillos", "transformers", "mision imposible",
+            "jurassic", "matrix", "spider-man", "spiderman", "batman",
+        ),
+        synopsis_keywords=("franquicia", "superheroe", "galaxia", "secuela"),
+        genres=("Ciencia ficción", "Fantasía", "Aventuras", "Acción"),
+        limit=24,
+        min_titles=8,
+    ),
+    Theme(
+        id="tema-evento-reyes",
+        title="Magia y regalos",
+        start=(1, 4),
+        end=(1, 6),
+        priority=50,
+        hero=False,
+        badge="MAGIA Y REGALOS",
+        eyebrow="DÍA DE REYES",
+        title_keywords=(
+            "reyes", "magia", "regalo", "fantasia", "navidad", "juguete",
+            "aventura", "cuento",
+        ),
+        synopsis_keywords=("dia de reyes", "magia", "regalos"),
+        genres=("Fantasía", "Familia"),
+        limit=16,
+        min_titles=4,
+    ),
+    Theme(
+        id="tema-evento-globos",
+        title="Temporada de premios",
+        start=(1, 8),
+        end=(1, 10),
+        priority=88,
+        hero=True,
+        badge="TEMPORADA DE PREMIOS",
+        eyebrow="GOLDEN GLOBES",
+        title_keywords=(
+            "premio", "ganador", "globo", "oscar", "biografia", "nominado",
+            "aclamada", "aclamado",
+        ),
+        synopsis_keywords=("premio", "nominacion", "aclamada", "galardon"),
+        genres=("Drama", "Comedia"),
+        limit=20,
+        min_titles=8,
+    ),
+    Theme(
+        id="tema-evento-mlk",
+        title="Historia y justicia",
+        start=(1, 15),
+        end=(1, 18),
+        priority=55,
+        hero=False,
+        badge="HISTORIA Y JUSTICIA",
+        eyebrow="MARTIN LUTHER KING",
+        title_keywords=(
+            "derechos", "justicia", "libertad", "historia", "racismo",
+            "segregacion", "luther", "king", "igualdad",
+        ),
+        synopsis_keywords=("derechos civiles", "justicia social", "segregacion"),
+        genres=("Historia", "Documental"),
+        limit=16,
+        min_titles=4,
+    ),
+    Theme(
+        id="tema-evento-lunar",
+        title="Año Nuevo Lunar",
+        start=(2, 1),
+        end=(2, 7),
+        priority=86,
+        hero=True,
+        badge="AÑO NUEVO LUNAR",
+        eyebrow="AÑO DE LA CABRA DE FUEGO",
+        title_keywords=(
+            "china", "chino", "japon", "japones", "dragon", "kung fu",
+            "samurai", "anime", "lunar", "guerrero", "familia",
+        ),
+        synopsis_keywords=("ano nuevo lunar", "china", "japon", "familia"),
+        genres=("Animación", "Acción", "Fantasía", "Familia"),
+        limit=24,
+        min_titles=8,
+    ),
+    Theme(
+        id="tema-evento-grammys",
+        title="Música · Grammy",
+        start=(2, 5),
+        end=(2, 7),
+        priority=65,
+        hero=False,
+        badge="MÚSICA",
+        eyebrow="GRAMMY",
+        title_keywords=(
+            "musica", "cantante", "grammy", "concierto", "banda", "rock",
+            "pop", "artista", "escenario",
+        ),
+        synopsis_keywords=("grammy", "concierto", "carrera musical"),
+        genres=("Música",),
+        limit=18,
+        min_titles=5,
+    ),
+    Theme(
+        id="tema-evento-superbowl",
+        title="Super Domingo",
+        start=(2, 8),
+        end=(2, 14),
+        priority=90,
+        hero=True,
+        badge="SUPER DOMINGO",
+        eyebrow="SUPER BOWL LXI",
+        title_keywords=(
+            "super bowl", "nfl", "futbol americano", "football", "americano",
+            "deporte", "atleta", "campeon", "competencia",
+        ),
+        synopsis_keywords=("super bowl", "futbol americano", "deporte"),
+        genres=("Deporte", "Documental"),
+        limit=20,
+        min_titles=6,
+    ),
+    Theme(
+        id="tema-evento-carnaval",
+        title="Carnaval",
+        start=(2, 12),
+        end=(2, 16),
+        priority=60,
+        hero=False,
+        badge="CARNAVAL",
+        eyebrow="COLOR · MÚSICA · FIESTA",
+        title_keywords=(
+            "carnaval", "fiesta", "baile", "musica", "mascara", "brasil",
+            "venecia", "color",
+        ),
+        synopsis_keywords=("carnaval", "fiesta", "baile"),
+        genres=("Comedia", "Música"),
+        limit=18,
+        min_titles=5,
+    ),
+    Theme(
+        id="tema-evento-mujeres",
+        title="Mujeres en pantalla",
+        start=(3, 1),
+        end=(3, 8),
+        priority=75,
+        hero=True,
+        badge="MUJERES EN PANTALLA",
+        eyebrow="DÍA DE LA MUJER",
+        title_keywords=(
+            "mujer", "mujeres", "femin", "ella", "madre", "hija", "reina",
+            "lider", "valiente",
+        ),
+        synopsis_keywords=("mujer", "femin", "igualdad", "lider"),
+        genres=("Drama", "Historia"),
+        limit=20,
+        min_titles=6,
+    ),
+    Theme(
+        id="tema-evento-oscars",
+        title="Noche de premios",
+        start=(3, 8),
+        end=(3, 14),
+        priority=90,
+        hero=True,
+        badge="NOCHE DE PREMIOS",
+        eyebrow="OSCARS 99",
+        title_keywords=(
+            "premio", "oscar", "ganador", "biografia", "nominado", "aclamada",
+            "aclamado", "cine",
+        ),
+        synopsis_keywords=("oscar", "premio", "nominacion", "galardon"),
+        genres=("Drama", "Historia", "Comedia"),
+        limit=22,
+        min_titles=8,
+    ),
+    Theme(
+        id="tema-evento-semana-santa",
+        title="Semana Santa",
+        start=(3, 20),
+        end=(4, 5),
+        priority=80,
+        hero=True,
+        badge="SEMANA SANTA",
+        eyebrow="FE · HISTORIA · ÉPICA",
+        title_keywords=(
+            "jesus", "biblia", "cristo", "dios", "fe", "exodo", "gladiador",
+            "espartaco", "roma", "cruz",
+        ),
+        synopsis_keywords=("semana santa", "biblia", "jesus", "cristian"),
+        genres=("Historia", "Drama", "Aventuras"),
+        limit=20,
+        min_titles=5,
+    ),
+    Theme(
+        id="tema-evento-tierra",
+        title="Planeta",
+        start=(4, 19),
+        end=(4, 25),
+        priority=60,
+        hero=False,
+        badge="PLANETA",
+        eyebrow="DÍA DE LA TIERRA",
+        title_keywords=(
+            "tierra", "planeta", "naturaleza", "ecolog", "clima", "animales",
+            "oceano", "bosque", "agua",
+        ),
+        synopsis_keywords=("medio ambiente", "naturaleza", "planeta", "cambio climatico"),
+        genres=("Documental", "Familia"),
+        limit=18,
+        min_titles=5,
+    ),
+    Theme(
+        id="tema-evento-infancia",
+        title="Infancia",
+        start=(4, 26),
+        end=(5, 2),
+        priority=55,
+        hero=False,
+        badge="INFANCIA",
+        eyebrow="DÍA DEL NIÑO",
+        title_keywords=(
+            "nino", "nina", "infancia", "juguete", "escuela", "aventura",
+            "familia", "magia",
+        ),
+        synopsis_keywords=("dia del nino", "infancia", "familia"),
+        genres=("Animación", "Familia", "Infantil"),
+        limit=20,
+        min_titles=5,
+    ),
+    Theme(
+        id="tema-evento-star-wars",
+        title="Semana galáctica",
+        start=(5, 1),
+        end=(5, 8),
+        priority=78,
+        hero=True,
+        badge="SEMANA GALÁCTICA",
+        eyebrow="STAR WARS DAY",
+        title_keywords=(
+            "star wars", "guerra de las galaxias", "espacio", "galaxia",
+            "nave", "robot", "alien", "marte", "luna",
+        ),
+        synopsis_keywords=("espacio", "galaxia", "nave espacial", "alien"),
+        genres=("Ciencia ficción", "Aventuras", "Acción"),
+        limit=22,
+        min_titles=8,
+    ),
+    Theme(
+        id="tema-evento-festivales",
+        title="Mayo de festivales",
+        start=(5, 10),
+        end=(5, 22),
+        priority=80,
+        hero=True,
+        badge="MAYO DE FESTIVALES",
+        eyebrow="EUROVISIÓN · CANNES",
+        title_keywords=(
+            "musica", "cantante", "festival", "eurovision", "cannes", "cine",
+            "francia", "paris", "concierto", "baile",
+        ),
+        synopsis_keywords=("festival", "concierto", "cine europeo"),
+        genres=("Música", "Drama", "Comedia"),
+        limit=20,
+        min_titles=6,
+    ),
+    Theme(
+        id="tema-evento-orgullo",
+        title="Orgullo",
+        start=(6, 1),
+        end=(6, 30),
+        priority=65,
+        hero=False,
+        badge="ORGULLO",
+        eyebrow="MES DEL ORGULLO",
+        title_keywords=(
+            "orgullo", "lgbt", "gay", "lesbiana", "trans", "identidad",
+            "amor", "familia", "diversidad",
+        ),
+        synopsis_keywords=("lgbt", "orgullo", "identidad", "diversidad"),
+        genres=("Drama", "Comedia", "Romance"),
+        limit=20,
+        min_titles=5,
+    ),
+    Theme(
+        id="tema-evento-eleccion-mx",
+        title="Semana cívica",
+        start_date=date(2027, 6, 1),
+        end_date=date(2027, 6, 7),
+        priority=55,
+        hero=False,
+        badge="SEMANA CÍVICA",
+        eyebrow="ELECCIÓN MÉXICO 2027",
+        title_keywords=(
+            "politica", "presidente", "eleccion", "democracia", "gobierno",
+            "mexico", "voto", "historia",
+        ),
+        synopsis_keywords=("eleccion", "democracia", "politica", "gobierno"),
+        genres=("Historia", "Documental", "Drama"),
+        limit=16,
+        min_titles=4,
+    ),
+    Theme(
+        id="tema-evento-afcon",
+        title="África en juego",
+        start_date=date(2027, 6, 19),
+        end_date=date(2027, 7, 17),
+        priority=70,
+        hero=False,
+        badge="ÁFRICA EN JUEGO",
+        eyebrow="COPA AFRICANA 2027",
+        title_keywords=(
+            "africa", "africano", "futbol", "seleccion", "copa", "gol",
+            "deporte", "campeon",
+        ),
+        synopsis_keywords=("africa", "futbol", "seleccion", "copa"),
+        genres=("Deporte", "Documental", "Drama"),
+        limit=18,
+        min_titles=5,
+    ),
+    Theme(
+        id="tema-evento-mundial-femenil",
+        title="Mundial femenil",
+        start_date=date(2027, 6, 24),
+        end_date=date(2027, 7, 25),
+        priority=95,
+        hero=True,
+        badge="MUNDIAL FEMENIL",
+        eyebrow="BRASIL 2027",
+        title_keywords=(
+            "futbol", "mundial", "seleccion", "gol", "copa", "deporte",
+            "campeona", "femenil", "femenina", "brasil",
+        ),
+        synopsis_keywords=("futbol femenil", "mundial", "seleccion", "copa"),
+        genres=("Deporte", "Documental", "Drama"),
+        limit=24,
+        min_titles=6,
+    ),
+    Theme(
+        id="tema-evento-comiccon",
+        title="Cultura pop",
+        start=(7, 20),
+        end=(7, 26),
+        priority=78,
+        hero=True,
+        badge="CULTURA POP",
+        eyebrow="COMIC-CON",
+        title_keywords=(
+            "comic", "superheroe", "marvel", "dc", "anime", "fantasia",
+            "cosplay", "manga", "heroe", "villano",
+        ),
+        synopsis_keywords=("comic", "superheroe", "fantasia", "manga"),
+        genres=("Ciencia ficción", "Fantasía", "Animación", "Acción"),
+        limit=22,
+        min_titles=8,
+    ),
+    Theme(
+        id="tema-evento-panamericanos",
+        title="Juegos Panamericanos",
+        start_date=date(2027, 7, 23),
+        end_date=date(2027, 8, 8),
+        priority=65,
+        hero=False,
+        badge="JUEGOS PANAMERICANOS",
+        eyebrow="LIMA 2027",
+        title_keywords=(
+            "deporte", "atleta", "juego", "olimp", "campeon", "medalla",
+            "competencia", "seleccion",
+        ),
+        synopsis_keywords=("juegos panamericanos", "deporte", "atleta", "medalla"),
+        genres=("Deporte", "Documental"),
+        limit=18,
+        min_titles=5,
+    ),
+    Theme(
+        id="tema-evento-eclipse",
+        title="Semana del eclipse",
+        start_date=date(2027, 7, 30),
+        end_date=date(2027, 8, 8),
+        priority=85,
+        hero=True,
+        badge="SEMANA DEL ECLIPSE",
+        eyebrow="ECLIPSE TOTAL · 2 AGO 2027",
+        title_keywords=(
+            "espacio", "marte", "luna", "sol", "eclipse", "astronauta",
+            "nasa", "interestelar", "gravedad", "alien", "universo",
+        ),
+        synopsis_keywords=("espacio", "astronauta", "universo", "eclipse", "nasa"),
+        genres=("Ciencia ficción", "Documental", "Aventuras"),
+        limit=22,
+        min_titles=7,
+    ),
+    Theme(
+        id="tema-evento-cine-mexicano",
+        title="Cine mexicano",
+        start=(8, 13),
+        end=(8, 20),
+        priority=72,
+        hero=True,
+        badge="CINE MEXICANO",
+        eyebrow="DÍA DEL CINE MEXICANO",
+        title_keywords=(
+            "mexico", "mexicano", "mexicana", "rancho", "charro", "mariachi",
+            "norteno", "revolucion", "familia",
+        ),
+        synopsis_keywords=("cine mexicano", "mexico", "familia mexicana"),
+        genres=("Drama", "Comedia", "Historia"),
+        limit=22,
+        min_titles=6,
+    ),
+    Theme(
+        id="tema-evento-herencia",
+        title="Herencia hispana",
+        start=(9, 15),
+        end=(10, 15),
+        priority=65,
+        hero=False,
+        badge="HERENCIA HISPANA",
+        eyebrow="MES DE LA HERENCIA HISPANA",
+        title_keywords=(
+            "latino", "latina", "hispano", "espana", "espanol", "mexico",
+            "colombia", "argentina", "cuba", "familia",
+        ),
+        synopsis_keywords=("latino", "hispano", "familia", "inmigrante"),
+        genres=("Drama", "Comedia", "Música"),
+        limit=22,
+        min_titles=6,
+    ),
+    Theme(
+        id="tema-evento-ciencia",
+        title="Ciencia",
+        start=(10, 4),
+        end=(10, 11),
+        priority=55,
+        hero=False,
+        badge="CIENCIA",
+        eyebrow="PREMIOS NOBEL",
+        title_keywords=(
+            "ciencia", "cientifico", "nobel", "fisica", "quimica", "medicina",
+            "matematicas", "genio", "inventor", "tecnologia",
+        ),
+        synopsis_keywords=("ciencia", "cientifico", "nobel", "tecnologia"),
+        genres=("Documental", "Ciencia ficción", "Historia"),
+        limit=18,
+        min_titles=5,
+    ),
+    Theme(
+        id="tema-evento-deporte-global",
+        title="Deporte global",
+        start_date=date(2027, 10, 1),
+        end_date=date(2027, 11, 21),
+        priority=45,
+        hero=False,
+        badge="DEPORTE GLOBAL",
+        eyebrow="RUGBY · CRICKET",
+        title_keywords=(
+            "rugby", "cricket", "deporte", "seleccion", "copa", "mundial",
+            "campeon", "atleta",
+        ),
+        synopsis_keywords=("rugby", "cricket", "deporte", "copa"),
+        genres=("Deporte", "Documental"),
+        limit=16,
+        min_titles=4,
+    ),
+    Theme(
+        id="tema-evento-diwali",
+        title="Festival de la luz",
+        start=(10, 28),
+        end=(11, 3),
+        priority=45,
+        hero=False,
+        badge="FESTIVAL DE LA LUZ",
+        eyebrow="DIWALI",
+        title_keywords=(
+            "india", "indio", "bollywood", "diwali", "luz", "festival",
+            "familia", "color",
+        ),
+        synopsis_keywords=("india", "diwali", "festival de la luz"),
+        genres=("Drama", "Comedia", "Música"),
+        limit=16,
+        min_titles=4,
+    ),
+)
+
+ALL_THEMES: tuple[Theme, ...] = THEMES + EVENTS
 
 
 def _in_window(today: date, start: tuple[int, int] | None, end: tuple[int, int] | None) -> bool:
@@ -226,9 +830,28 @@ def _in_window(today: date, start: tuple[int, int] | None, end: tuple[int, int] 
     return md >= start_md or md <= end_md
 
 
+def _in_theme_window(today: date, theme: Theme) -> bool:
+    """Ventana del tema: fecha exacta (evento) o recurrente por mes/día."""
+    if theme.start_date and theme.end_date:
+        return theme.start_date <= today <= theme.end_date
+    return _in_window(today, theme.start, theme.end)
+
+
 def active_themes(today: date | None = None) -> list[Theme]:
+    """Temas activos ordenados para el Inicio.
+
+    Primero los que pueden ocupar el hero, luego las filas secundarias y, dentro
+    de cada grupo, por prioridad. Así el primer `tema-*` del índice es el que debe
+    abrir el billboard y las filas de apoyo quedan después.
+    """
     day = today or date.today()
-    return [theme for theme in THEMES if theme.always or _in_window(day, theme.start, theme.end)]
+    active = [
+        (index, theme)
+        for index, theme in enumerate(ALL_THEMES)
+        if theme.always or _in_theme_window(day, theme)
+    ]
+    active.sort(key=lambda pair: (0 if pair[1].hero else 1, -pair[1].priority, pair[0]))
+    return [theme for _, theme in active]
 
 
 def _chunks(items, size: int):
@@ -459,8 +1082,17 @@ async def _seed_matches(conn, seeds: tuple[tuple[str, int], ...]) -> list:
 
 
 async def _refresh_tmdb_members(conn, theme: Theme, discover=None) -> None:
-    """Refresca la foto de TMDB; si falla, deja la anterior (no inventa la fila)."""
+    """Refresca la foto de TMDB; si falla, deja la anterior (no inventa la fila).
+
+    La foto se conserva una semana: el calendario puede rearmar una fila al
+    cambiar de campaña sin gastar llamadas a TMDB en cada revisión de 15 min.
+    """
     if not theme.tmdb_keywords:
+        return
+    last = await conn.fetchval(
+        "select max(updated_at) from theme_tmdb where theme_id = $1", theme.id
+    )
+    if last is not None and last > datetime.now(timezone.utc) - timedelta(days=7):
         return
     fetch = discover or tmdb.discover_keyword_members
     try:
@@ -624,13 +1256,30 @@ async def _world_trending(conn, limit: int = 40) -> list[str]:
     return out
 
 
+_BUILD_LOCK = asyncio.Lock()
+
+
 async def build(
     pool,
     genres_by_id: dict | None = None,
     today: date | None = None,
     discover=None,
 ) -> int:
-    """Rehace las categorías `tema-*` activas (las vencidas desaparecen solas)."""
+    """Rehace las categorías `tema-*` activas (las vencidas desaparecen solas).
+
+    El candado evita que el ciclo del índice y el vigilante del calendario
+    reconstruyan las filas a la vez (el segundo corre cada 15 min).
+    """
+    async with _BUILD_LOCK:
+        return await _build(pool, genres_by_id, today, discover)
+
+
+async def _build(
+    pool,
+    genres_by_id: dict | None = None,
+    today: date | None = None,
+    discover=None,
+) -> int:
     changed = 0
     primary_by_id: dict[str, str | None] = {}
     if genres_by_id:
@@ -638,11 +1287,18 @@ async def build(
             primary_by_id[title_id] = genre_rules.primary_genre(genres)
     active = active_themes(today)
     async with pool.acquire() as conn:
-        await conn.execute("delete from title_categories where category_id like 'tema-%'")
-        await conn.execute("delete from categories where id like 'tema-%'")
-        # La foto de TMDB de un tema que ya no está activo no se conserva.
         await conn.execute(
-            "delete from theme_tmdb where theme_id <> all($1::text[])",
+            "delete from title_categories "
+            "where category_id like 'tema-%' or category_id like 'evento-%'"
+        )
+        await conn.execute(
+            "delete from categories where id like 'tema-%' or id like 'evento-%'"
+        )
+        # La foto de TMDB se conserva ~13 meses: al encender una temporada no
+        # dependemos de la red y el héroe puede cambiar en el mismo minuto.
+        await conn.execute(
+            "delete from theme_tmdb where theme_id <> all($1::text[]) "
+            "and updated_at < now() - interval '400 days'",
             [theme.id for theme in active],
         )
         position = 5

@@ -2,7 +2,6 @@ package com.chronosbvrx.visionplus.ui.player
 
 import com.chronosbvrx.visionplus.ui.components.dismissOnBack
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -566,11 +565,6 @@ internal fun PlayerMenuSurface(
                         ),
                         RoundedCornerShape(18.dp),
                     )
-                    .border(
-                        1.dp,
-                        VisionBlue.copy(alpha = 0.24f),
-                        RoundedCornerShape(18.dp),
-                    )
                     .pointerInput(Unit) { detectTapGestures { } }
                     .padding(horizontal = 10.dp, vertical = 12.dp),
             ) {
@@ -615,18 +609,15 @@ internal fun MenuOption(
             .onFocusChanged { focused = it.isFocused }
             .background(
                 when {
-                    focused -> Color.White.copy(alpha = 0.10f)
-                    selected -> VisionBlue.copy(alpha = 0.14f)
-                    else -> Color.Transparent
-                },
-                shape,
-            )
-            .border(
-                1.dp,
-                when {
-                    focused -> Color.White.copy(alpha = 0.55f)
-                    selected -> VisionBlue.copy(alpha = 0.30f)
-                    else -> Color.Transparent
+                    focused -> Brush.horizontalGradient(
+                        listOf(Color(0xFF4C9BFF), Color(0xFF1E5BD6)),
+                    )
+                    selected -> Brush.horizontalGradient(
+                        listOf(VisionBlue.copy(alpha = 0.30f), Color(0xFF0B1220)),
+                    )
+                    else -> Brush.horizontalGradient(
+                        listOf(Color.Transparent, Color.Transparent),
+                    )
                 },
                 shape,
             )
@@ -689,18 +680,15 @@ private fun MenuTileOption(
             .onFocusChanged { focused = it.isFocused }
             .background(
                 when {
-                    focused -> Color.White.copy(alpha = 0.10f)
-                    selected -> VisionBlue.copy(alpha = 0.15f)
-                    else -> Color.White.copy(alpha = 0.04f)
-                },
-                shape,
-            )
-            .border(
-                1.dp,
-                when {
-                    focused -> Color.White.copy(alpha = 0.55f)
-                    selected -> VisionBlue.copy(alpha = 0.34f)
-                    else -> Color.Transparent
+                    focused -> Brush.horizontalGradient(
+                        listOf(Color(0xFF4C9BFF), Color(0xFF1E5BD6)),
+                    )
+                    selected -> Brush.horizontalGradient(
+                        listOf(VisionBlue.copy(alpha = 0.30f), Color(0xFF0B1220)),
+                    )
+                    else -> Brush.horizontalGradient(
+                        listOf(Color(0x1AFFFFFF), Color(0x0AFFFFFF)),
+                    )
                 },
                 shape,
             )

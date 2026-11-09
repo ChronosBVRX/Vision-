@@ -595,6 +595,17 @@ async def ensure_catalog_category(pool) -> int:
     return count
 
 
+async def refresh_themes(pool) -> int:
+    """Rehace SOLO las filas `tema-*` (cambio de campaña, sin tocar el índice).
+
+    El vigilante del calendario corre cada 15 min y usa este camino: reconstruir
+    todo el índice en cada frontera sería caro e innecesario.
+    """
+    async with pool.acquire() as conn:
+        genres_by_id = await _genres_by_title(conn)
+    return await themes.build(pool, genres_by_id)
+
+
 async def build(pool) -> int:
     changed = 0
     now = datetime.now(timezone.utc)

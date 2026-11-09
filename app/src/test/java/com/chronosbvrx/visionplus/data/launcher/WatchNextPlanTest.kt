@@ -53,6 +53,24 @@ class WatchNextPlanTest {
     fun completedEntriesDoNotReachTheLauncher() {
         val done = entry(key = "m", positionMs = 600_000L, durationMs = 600_000L)
         assertTrue(watchNextSpecs(listOf(done)).isEmpty())
+        // Un «visto» manual tampoco debe reaparecer en el canal del sistema.
+        assertTrue(watchNextSpecs(listOf(done.copy(completed = true))).isEmpty())
+    }
+
+    @Test
+    fun aFinishedEpisodeWithANextOnePublishesTheNextNotAnEmptyRow() {
+        val finished = entry(
+            key = "e1", title = "Serie · T1 · C1", positionMs = 600_000L, durationMs = 600_000L,
+            seriesId = "s1", episodeIds = listOf("e1", "e2"), episodeIndex = 0,
+            seasonIds = listOf("s1"), seasonIndex = 0,
+        )
+        val spec = watchNextSpecs(listOf(finished)).single()
+        assertEquals("e2", spec.key)
+        assertEquals(1, spec.seasonNumber)
+        assertEquals(2, spec.episodeNumber)
+        assertEquals(0L, spec.positionMs)
+        assertEquals("e2", spec.code)
+        assertEquals("s1", spec.seriesId)
     }
 
     @Test

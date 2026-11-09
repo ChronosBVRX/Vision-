@@ -225,8 +225,7 @@ body {
 #screen-sports,
 #screen-grid,
 #screen-search,
-#screen-settings,
-#screen-games {
+#screen-settings {
   padding-top: var(--vt-topbar);
 }
 #screen-home { padding-top: 0; }
@@ -1257,26 +1256,6 @@ body {
 }
 .vt-arrows { color: #c7d7ef; letter-spacing: 0.35vw; font-size: 1.2vw; }
 
-
-#screen-games {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.vt-games-empty { width: 46vw; text-align: center; }
-.vt-games-icon {
-  width: 6vw;
-  height: 6vw;
-  margin: 0 auto 2vh;
-  border-radius: 1.4vw;
-  display: grid;
-  place-items: center;
-  background: #0d2a4d;
-  color: var(--vt-cyan);
-}
-.vt-games-icon .icon { width: 3vw; height: 3vw; }
-.vt-games-title { font-size: 2.4vw; font-weight: 900; }
-.vt-games-text { margin: 1.4vh 0 2.2vh; color: var(--vt-muted); font-size: 1vw; line-height: 1.5; }
 
 /* ---------- utilidades ---------- */
 .vt-hidden { display: none !important; }

@@ -153,13 +153,17 @@ function waitForPort(portFile, timeoutMs) {
   });
 }
 
-function ping(port) {
+function ping(port, attemptsLeft) {
   return new Promise((resolve) => {
     const request = http.request(
-      { host: "127.0.0.1", port, path: "/ping", method: "POST", headers: { "Content-Type": "application/json" }, timeout: 1500 },
+      { host: "127.0.0.1", port, path: "/ping", method: "POST", headers: { "Content-Type": "application/json" }, timeout: 5000 },
       (response) => {
         response.resume();
-        resolve(response.statusCode === 200);
+        if (response.statusCode === 200) {
+          resolve(true);
+          return;
+        }
+        resolve(false);
       },
     );
     request.on("error", () => resolve(false));
@@ -168,6 +172,9 @@ function ping(port) {
       resolve(false);
     });
     request.end("{}");
+  }).then((ok) => {
+    if (ok || !(attemptsLeft > 1)) return ok;
+    return new Promise((resolve) => setTimeout(resolve, 350)).then(() => ping(port, attemptsLeft - 1));
   });
 }
 
@@ -454,7 +461,7 @@ function bootstrap() {
     .then((port) => {
       clearInterval(splashTimer);
       setSplash(70, "Comprobando el motor local…");
-      return ping(port).then((ok) => ({ port, ok }));
+      return ping(port, 4).then((ok) => ({ port, ok }));
     })
     .then((result) => {
       if (!result.ok) throw new Error("El servidor local no responde en /ping.");

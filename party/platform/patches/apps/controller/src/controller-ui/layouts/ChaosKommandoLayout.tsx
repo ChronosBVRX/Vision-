@@ -1,0 +1,708 @@
+import { memo, useEffect, useRef, useState } from "react";
+import { ReadyPanel } from "../common/ReadyPanel.js";
+import type { ChaosKommandoLayoutModel } from "./models.js";
+
+interface StickVector {
+  x: number;
+  y: number;
+}
+
+interface StickPadProps {
+  label: string;
+  accentColor: string;
+  disabled: boolean;
+  resetKey: string;
+  onChange: (x: number, y: number) => void;
+  size: string;
+}
+
+interface ControlVector {
+  x: number;
+  y: number;
+}
+
+const DEADZONE = 0.12;
+
+function readableControlInk(color: string): string {
+  if (!/^#[\da-f]{6}$/i.test(color)) return "var(--ink)";
+  const channels = [1, 3, 5].map((at) => {
+    const value = Number.parseInt(color.slice(at, at + 2), 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722 > 0.179 ? "#000000" : "#ffffff";
+}
+
+function clampUnit(x: number, y: number): StickVector {
+  const magnitude = Math.hypot(x, y);
+
+  if (magnitude <= 0.0001) {
+    return { x: 0, y: 0 };
+  }
+
+  if (magnitude <= 1) {
+    return { x, y };
+  }
+
+  return {
+    x: x / magnitude,
+    y: y / magnitude
+  };
+}
+
+function hasMeaningfulStickChange(previous: ControlVector, next: ControlVector): boolean {
+  return Math.abs(previous.x - next.x) > 0.015 || Math.abs(previous.y - next.y) > 0.015;
+}
+
+function applyResponseMapping(x: number, y: number): ControlVector {
+  const clamped = clampUnit(x, y);
+  const magnitude = Math.hypot(clamped.x, clamped.y);
+
+  if (magnitude <= DEADZONE) {
+    return { x: 0, y: 0 };
+  }
+
+  const normalizedX = clamped.x / magnitude;
+  const normalizedY = clamped.y / magnitude;
+  const scaledMagnitude = (magnitude - DEADZONE) / (1 - DEADZONE);
+
+  return {
+    x: normalizedX * scaledMagnitude,
+    y: normalizedY * scaledMagnitude
+  };
+}
+
+const StickPad = memo(function StickPad({ label, accentColor, disabled, resetKey, onChange, size }: StickPadProps) {
+  const padRef = useRef<HTMLDivElement | null>(null);
+  const pointerIdRef = useRef<number | null>(null);
+  const onChangeRef = useRef(onChange);
+  const lastVectorRef = useRef<ControlVector>({ x: 0, y: 0 });
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  function emitMove(nextVector: ControlVector): void {
+    if (!hasMeaningfulStickChange(lastVectorRef.current, nextVector)) {
+      return;
+    }
+
+    lastVectorRef.current = nextVector;
+    onChangeRef.current(nextVector.x, nextVector.y);
+  }
+
+  useEffect(() => {
+    pointerIdRef.current = null;
+    setOffset({ x: 0, y: 0 });
+    if (lastVectorRef.current.x !== 0 || lastVectorRef.current.y !== 0) {
+      lastVectorRef.current = { x: 0, y: 0 };
+      onChangeRef.current(0, 0);
+    }
+  }, [disabled, resetKey]);
+
+  useEffect(() => {
+    return () => {
+      if (lastVectorRef.current.x !== 0 || lastVectorRef.current.y !== 0) {
+        onChangeRef.current(0, 0);
+      }
+    };
+  }, []);
+
+  function update(clientX: number, clientY: number): void {
+    const pad = padRef.current;
+
+    if (!pad) {
+      return;
+    }
+
+    const rect = pad.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const range = Math.min(rect.width, rect.height) * 0.32;
+    const rawX = (clientX - centerX) / range;
+    const rawY = (clientY - centerY) / range;
+    const display = clampUnit(rawX, rawY);
+    const nextVector = applyResponseMapping(rawX, rawY);
+
+    setOffset({
+      x: display.x * range,
+      y: display.y * range
+    });
+    emitMove(nextVector);
+  }
+
+  function reset(): void {
+    pointerIdRef.current = null;
+    setOffset({ x: 0, y: 0 });
+    if (lastVectorRef.current.x !== 0 || lastVectorRef.current.y !== 0) {
+      lastVectorRef.current = { x: 0, y: 0 };
+      onChangeRef.current(0, 0);
+    }
+  }
+
+  return (
+    <div
+      ref={padRef}
+      onPointerDown={(event) => {
+        if (disabled) {
+          return;
+        }
+
+        pointerIdRef.current = event.pointerId;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        update(event.clientX, event.clientY);
+      }}
+      onPointerMove={(event) => {
+        if (disabled || pointerIdRef.current !== event.pointerId) {
+          return;
+        }
+
+        event.preventDefault();
+        update(event.clientX, event.clientY);
+      }}
+      onPointerUp={(event) => {
+        if (pointerIdRef.current === event.pointerId) {
+          reset();
+        }
+      }}
+      onPointerCancel={reset}
+      onLostPointerCapture={reset}
+      style={{
+        position: "relative",
+        width: size,
+        aspectRatio: "1 / 1",
+        borderRadius: "999px",
+        border: `1px solid ${accentColor}`,
+        background: disabled
+          ? "radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--line-strong) 70%, transparent) 0%, color-mix(in srgb, var(--paper) 96%, transparent) 78%)"
+          : "radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent) 18%, transparent) 0%, color-mix(in srgb, var(--paper) 96%, transparent) 78%)",
+        boxShadow: disabled ? "none" : "0 18px 42px color-mix(in srgb, var(--accent) 18%, transparent)",
+        touchAction: "none",
+        userSelect: "none"
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: "16%",
+          borderRadius: "999px",
+          border: "1px solid color-mix(in srgb, var(--muted) 16%, transparent)"
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          inset: "34%",
+          borderRadius: "999px",
+          border: "1px solid color-mix(in srgb, var(--muted) 12%, transparent)"
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          width: "36%",
+          aspectRatio: "1 / 1",
+          borderRadius: "999px",
+          transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
+          background: accentColor,
+          display: "grid",
+          placeItems: "center",
+          color: readableControlInk(accentColor),
+          opacity: disabled ? 0.45 : 1,
+          fontWeight: 900,
+          letterSpacing: "0.02em",
+          fontSize: "0.64rem",
+          lineHeight: 1.15,
+          whiteSpace: "pre-line"
+        }}
+      >
+        {label.replace(" / ", "\n")}
+      </div>
+    </div>
+  );
+}, (previousProps, nextProps) =>
+  previousProps.label === nextProps.label &&
+  previousProps.accentColor === nextProps.accentColor &&
+  previousProps.disabled === nextProps.disabled &&
+  previousProps.resetKey === nextProps.resetKey &&
+  previousProps.size === nextProps.size
+);
+
+/**
+ * Muss mit `chargeWindowMs` im Chaos-Kommando-Server uebereinstimmen, sonst
+ * zeigt der Balken volle Kraft an, bevor der Server sie erreicht hat.
+ */
+const chargeWindowMs = 1_750;
+
+export function ChaosKommandoLayout({ model }: { model: ChaosKommandoLayoutModel }) {
+  const en = model.language === "en";
+  const controlColor = model.accentColor ?? "#ae4938";
+  const fireDisabled = model.fireDisabled ?? model.disabled;
+  const [hudMode, setHudMode] = useState<"kommando" | "steuerung">("steuerung");
+  const [isPortrait, setIsPortrait] = useState(() =>
+    typeof window !== "undefined" ? window.innerHeight >= window.innerWidth : true
+  );
+  const [isCharging, setIsCharging] = useState(false);
+  const [chargePct, setChargePct] = useState(0);
+  const chargingSinceRef = useRef<number | null>(null);
+  const endChargeRef = useRef<() => void>(() => undefined);
+  const selectedWeapon = model.weapons.find((weapon) => weapon.selected) ?? model.weapons[0] ?? null;
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      setIsPortrait(window.innerHeight >= window.innerWidth);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    chargingSinceRef.current = null;
+    setIsCharging(false);
+    setChargePct(0);
+    setHudMode("steuerung");
+  }, [model.resetKey, model.disabled]);
+
+  useEffect(() => {
+    if (!isCharging || chargingSinceRef.current === null) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      if (chargingSinceRef.current === null) {
+        setChargePct(0);
+        return;
+      }
+
+      setChargePct(Math.min(1, (Date.now() - chargingSinceRef.current) / chargeWindowMs));
+    }, 40);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [isCharging, model.resetKey]);
+
+  useEffect(() => {
+    if (model.fireMode !== "charged") {
+      chargingSinceRef.current = null;
+      setIsCharging(false);
+      setChargePct(0);
+    }
+  }, [model.fireMode]);
+
+  function beginCharge(): void {
+    if (model.fireDisabled ?? model.disabled) {
+      return;
+    }
+
+    chargingSinceRef.current = Date.now();
+    setIsCharging(true);
+    setChargePct(0);
+    model.onFireStart();
+  }
+
+  // Firefox auf Android liefert `pointerup` nicht zuverlaessig am Button,
+  // wenn der Finger waehrend des Haltens wandert. Global mitlauschen.
+  useEffect(() => {
+    if (!isCharging || typeof window === "undefined") {
+      return undefined;
+    }
+
+    const release = () => {
+      endChargeRef.current();
+    };
+
+    for (const event of ["pointerup", "pointercancel", "touchend", "touchcancel", "blur"]) {
+      window.addEventListener(event, release);
+    }
+
+    return () => {
+      for (const event of ["pointerup", "pointercancel", "touchend", "touchcancel", "blur"]) {
+        window.removeEventListener(event, release);
+      }
+    };
+  }, [isCharging]);
+
+  function endCharge(): void {
+    if (chargingSinceRef.current === null) {
+      return;
+    }
+
+    chargingSinceRef.current = null;
+    setIsCharging(false);
+    setChargePct(0);
+    model.onFireEnd();
+  }
+
+  endChargeRef.current = endCharge;
+
+  function handleFirePointerDown(event: React.PointerEvent<HTMLButtonElement>): void {
+    if (model.fireDisabled ?? model.disabled) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (model.fireMode === "instant") {
+      model.onFireStart();
+      return;
+    }
+
+    // setPointerCapture wirft in manchen mobilen Browsern fuer Touch-Pointer.
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* Pointer Capture ist optional. */
+    }
+
+    beginCharge();
+  }
+
+  function handleFirePointerUp(): void {
+    if (model.fireMode !== "charged") {
+      return;
+    }
+
+    endCharge();
+  }
+
+  const layoutGap = "clamp(10px, 2.8vw, 14px)";
+  const chipGap = "clamp(6px, 1.8vw, 8px)";
+  const panelGap = "clamp(10px, 2.8vw, 14px)";
+  const panelPadding = isPortrait ? "clamp(14px, 4vw, 18px)" : "clamp(14px, 2.2vw, 20px)";
+  const panelRadius = "clamp(20px, 5vw, 24px)";
+  const tileRadius = "clamp(18px, 4.5vw, 22px)";
+  const iconSize = isPortrait ? "clamp(60px, 18vw, 76px)" : "clamp(58px, 10vw, 74px)";
+  const stickSize = isPortrait ? "min(30vw, 25vh, 180px)" : "min(30vw, 50vh, 280px)";
+  const fireSize = isPortrait ? "min(23vw, 18vh, 130px)" : "min(19vw, 29vh, 164px)";
+  const jumpSize = isPortrait ? "min(18vw, 12vh, 86px)" : "min(13vw, 20vh, 102px)";
+  const weaponColumns = isPortrait ? "repeat(4, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))";
+
+  return (
+    <div style={{ display: "grid", gap: layoutGap, width: "100%" }}>
+      {model.ready ? <ReadyPanel ready={model.ready} /> : null}
+      <div role="status" style={weaponInfoStyle}>
+        <strong>{model.subtitle} · {model.turnOwnerLabel}</strong>
+        <span>{model.stats?.map((stat) => `${stat.label}: ${stat.value}`).join(" | ")} | {model.windLabel}</span>
+        <span style={{ color: "var(--text-muted)", fontSize: "0.84rem" }}>{model.helperText}</span>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+          gap: chipGap,
+          padding: "clamp(5px, 1.4vw, 6px)",
+          borderRadius: 999,
+          border: "1px solid color-mix(in srgb, var(--muted) 16%, transparent)",
+          background: "color-mix(in srgb, var(--surface) 76%, transparent)"
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setHudMode("kommando")}
+          style={modeToggleStyle(hudMode === "kommando", model.accentColor)}
+        >
+          {en ? "ARSENAL" : "WAFFEN"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setHudMode("steuerung")}
+          style={modeToggleStyle(hudMode === "steuerung", "var(--danger)")}
+        >
+          {en ? "CONTROLS" : "STEUERUNG"}
+        </button>
+      </div>
+
+      {hudMode === "kommando" ? (
+        <div
+          style={{
+            display: "grid",
+            gap: panelGap,
+            padding: panelPadding,
+            borderRadius: panelRadius,
+            border: "1px solid color-mix(in srgb, var(--muted) 16%, transparent)",
+            background: "linear-gradient(180deg, color-mix(in srgb, var(--surface) 88%, transparent) 0%, color-mix(in srgb, var(--accent-strong) 98%, transparent) 100%)"
+          }}
+        >
+          {selectedWeapon ? (
+            <div style={weaponInfoStyle}>
+              <strong style={{ fontSize: "0.98rem" }}>{selectedWeapon.label}</strong>
+              <span style={{ color: "var(--text-muted)", fontSize: "0.84rem" }}>{selectedWeapon.subtitle}</span>
+            </div>
+          ) : null}
+
+          <div
+            style={{
+              display: "grid",
+              gap: panelGap,
+              gridTemplateColumns: weaponColumns,
+              alignItems: "stretch"
+            }}
+          >
+            {model.weapons.map((weapon) => (
+              <button
+                key={weapon.id}
+                type="button"
+                disabled={weapon.disabled}
+                aria-label={`${weapon.label}, ${weapon.ammoLabel}`}
+                onClick={() => { weapon.onSelect(); setHudMode("steuerung"); }}
+                style={{
+                  position: "relative",
+                  display: "grid",
+                  placeItems: "center",
+                  width: "100%",
+                  aspectRatio: "1 / 1",
+                  padding: "clamp(10px, 3vw, 14px)",
+                  borderRadius: tileRadius,
+                  border: weapon.selected
+                    ? `1px solid ${weapon.accentColor ?? "var(--danger)"}`
+                    : "1px solid color-mix(in srgb, var(--muted) 16%, transparent)",
+                  background: weapon.selected
+                    ? "linear-gradient(180deg, color-mix(in srgb, var(--danger) 18%, transparent) 0%, color-mix(in srgb, var(--surface) 72%, transparent) 100%)"
+                    : "color-mix(in srgb, var(--surface) 68%, transparent)",
+                  color: "var(--ink)",
+                  opacity: weapon.disabled ? 0.42 : 1
+                }}
+              >
+                <span style={ammoBadgeStyle(weapon.selected ? weapon.accentColor ?? "var(--danger)" : "var(--muted)")}>
+                  {weapon.ammoLabel}
+                </span>
+                {weapon.iconPath ? (
+                  <img
+                    src={weapon.iconPath}
+                    alt=""
+                    style={{
+                      width: "68%",
+                      height: "68%",
+                      objectFit: "contain",
+                      filter: weapon.disabled ? "grayscale(1)" : "none"
+                    }}
+                  />
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
+            alignItems: "end",
+            gap: isPortrait ? "clamp(10px, 2.8vw, 14px)" : "clamp(14px, 2vw, 18px)"
+          }}
+        >
+          <div style={{ display: "grid", justifyItems: "center" }}>
+            <StickPad
+              label={en ? "WALK / ROPE" : "LAUFEN / SEIL"}
+              accentColor={model.accentColor ?? "var(--accent)"}
+              disabled={model.disabled}
+              resetKey={model.resetKey}
+              onChange={model.onMoveChange}
+              size={stickSize}
+            />
+          </div>
+
+          <div style={{ display: "grid", justifyItems: "center", gap: "clamp(14px, 3vw, 16px)" }}>
+            <button
+              type="button"
+              disabled={model.fireDisabled ?? model.disabled}
+              onLostPointerCapture={handleFirePointerUp}
+              onKeyDown={(event) => { if ((event.key === " " || event.key === "Enter") && !event.repeat) { event.preventDefault(); model.fireMode === "charged" ? beginCharge() : model.onFireStart(); } }}
+              onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") endCharge(); }}
+              onPointerDown={handleFirePointerDown}
+              onPointerUp={handleFirePointerUp}
+              onPointerCancel={handleFirePointerUp}
+              onContextMenu={(event) => event.preventDefault()}
+              style={{
+                position: "relative",
+                width: fireSize,
+                aspectRatio: "1 / 1",
+                borderRadius: "999px",
+                overflow: "hidden",
+                border: "1px solid color-mix(in srgb, var(--danger) 34%, transparent)",
+                background: fireDisabled
+                  ? "var(--surface-raised)"
+                  : controlColor,
+                color: fireDisabled ? "var(--ink-soft)" : readableControlInk(controlColor),
+                boxShadow: fireDisabled ? "none" : "0 18px 40px color-mix(in srgb, var(--danger) 22%, transparent)",
+                touchAction: "none",
+                userSelect: "none",
+                WebkitUserSelect: "none",
+                WebkitTouchCallout: "none"
+              }}
+            >
+              {model.fireMode === "charged" ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    transform: `scaleY(${chargePct})`,
+                    transformOrigin: "bottom",
+                    background: "linear-gradient(180deg, color-mix(in srgb, var(--danger-soft) 16%, transparent) 0%, color-mix(in srgb, var(--danger-soft) 46%, transparent) 100%)",
+                    pointerEvents: "none"
+                  }}
+                />
+              ) : null}
+
+              <div
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  display: "grid",
+                  placeItems: "center",
+                  width: "100%",
+                  height: "100%",
+                  fontWeight: 900,
+                  fontSize: "clamp(0.76rem, 2.3vw, 0.84rem)",
+                  letterSpacing: "0.08em",
+                  textAlign: "center",
+                  padding: "clamp(8px, 2vw, 10px)"
+                }}
+              >
+                {model.fireLabel}
+              </div>
+            </button>
+
+            <button
+              type="button"
+              disabled={model.disabled}
+              onClick={model.onJump}
+              style={{
+                width: jumpSize,
+                aspectRatio: "1 / 1",
+                marginTop: "clamp(8px, 2vw, 10px)",
+                borderRadius: "999px",
+                border: "1px solid color-mix(in srgb, var(--accent) 28%, transparent)",
+                background: model.disabled
+                  ? "linear-gradient(180deg, color-mix(in srgb, var(--line-strong) 86%, transparent) 0%, color-mix(in srgb, var(--surface-raised) 98%, transparent) 100%)"
+                  : controlColor,
+                color: model.disabled ? "var(--ink-soft)" : readableControlInk(controlColor),
+                fontWeight: 800,
+                fontSize: "clamp(0.7rem, 2vw, 0.76rem)",
+                letterSpacing: "0.06em"
+              }}
+            >
+              {en ? "HOP" : "SPRUNG"}
+            </button>
+            {model.onBackflip ? <button type="button" disabled={model.disabled} onClick={model.onBackflip} style={toggleStyle(false, model.accentColor)}>{en ? "BACKFLIP" : "SALTO"}</button> : null}
+          </div>
+
+          <div style={{ display: "grid", justifyItems: "center" }}>
+            <StickPad
+              label={en ? "AIM" : "ZIELEN"}
+              accentColor="var(--danger)"
+              disabled={model.disabled}
+              resetKey={model.resetKey}
+              onChange={model.onAimChange}
+              size={stickSize}
+            />
+          </div>
+        </div>
+      )}
+      {hudMode === "steuerung" && selectedWeapon ? <div style={weaponInfoStyle}><strong>{selectedWeapon.label}</strong><span>{model.fireHint}</span></div> : null}
+      {model.onRopeToggle ? <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <button type="button" disabled={model.ropeDisabled ?? model.disabled}
+          onClick={() => { model.onRopeToggle?.(); setHudMode("steuerung"); }}
+          style={toggleStyle(Boolean(model.ropeAttached), model.accentColor)}>
+          {model.ropeAttached ? en ? "RELEASE HOOK" : "HAKEN LOESEN" : en ? "HOOK" : "HAKEN"}
+        </button>
+        <button type="button" disabled={model.disabled || !model.ropeAttached}
+          aria-pressed={model.ropeReeling}
+          onPointerDown={(event) => { event.preventDefault(); try { event.currentTarget.setPointerCapture(event.pointerId); } catch {} model.onReelChange?.(-1); }}
+          onPointerUp={() => model.onReelChange?.(0)} onPointerCancel={() => model.onReelChange?.(0)}
+          onLostPointerCapture={() => model.onReelChange?.(0)} onBlur={() => model.onReelChange?.(0)}
+          onKeyDown={(event) => { if ((event.key === " " || event.key === "Enter") && !event.repeat) { event.preventDefault(); model.onReelChange?.(-1); } }}
+          onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") model.onReelChange?.(0); }}
+          style={{ ...toggleStyle(Boolean(model.ropeReeling), model.accentColor), touchAction: "none" }}>
+          {en ? "PULL UP (HOLD)" : "HOCHZIEHEN (HALTEN)"}
+        </button>
+      </div> : null}
+      {model.fuseSeconds !== undefined && model.onSetFuse ? <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        <span>{en ? "Fuse" : "Zuender"}</span>
+        {[1, 2, 3, 4, 5].map((seconds) => <button key={seconds} type="button" disabled={model.fireDisabled ?? model.disabled} onClick={() => model.onSetFuse?.(seconds)} style={toggleStyle(seconds === model.fuseSeconds, model.accentColor)}>{seconds}s</button>)}
+      </div> : null}
+      {model.onEndTurn ? <button type="button" disabled={model.disabled || !model.isLocalPlayersTurn} onClick={model.onEndTurn} style={toggleStyle(false, model.accentColor)}>{en ? "END TURN" : "ZUG BEENDEN"}</button> : null}
+    </div>
+  );
+}
+
+function modeToggleStyle(active: boolean, color: string | undefined) {
+  const resolvedColor = color ?? "var(--accent)";
+
+  return {
+    borderRadius: 999,
+    padding: "clamp(10px, 2.8vw, 12px) clamp(14px, 4vw, 16px)",
+    border: `1px solid ${active ? resolvedColor : "transparent"}`,
+    background: active ? `${resolvedColor}26` : "transparent",
+    color: "var(--ink)",
+    fontWeight: 800,
+    fontSize: "clamp(0.76rem, 2.2vw, 0.84rem)",
+    letterSpacing: "0.06em"
+  } as const;
+}
+
+function toggleStyle(active: boolean, color: string | undefined) {
+  const resolvedColor = color ?? "var(--accent)";
+
+  return {
+    borderRadius: 999,
+    padding: "clamp(9px, 2.4vw, 10px) clamp(12px, 3.6vw, 16px)",
+    border: `1px solid ${active ? resolvedColor : "color-mix(in srgb, var(--muted) 18%, transparent)"}`,
+    background: active ? `${resolvedColor}22` : "color-mix(in srgb, var(--surface) 60%, transparent)",
+    color: "var(--ink)",
+    fontWeight: 800,
+    fontSize: "clamp(0.74rem, 2.1vw, 0.82rem)",
+    letterSpacing: "0.06em"
+  } as const;
+}
+
+function statChipStyle(color: string) {
+  return {
+    borderRadius: 999,
+    padding: "clamp(6px, 1.7vw, 7px) clamp(10px, 3vw, 11px)",
+    background: `${color}1f`,
+    color: "var(--ink)",
+    border: `1px solid ${color}55`,
+    fontSize: "clamp(0.74rem, 2vw, 0.8rem)"
+  } as const;
+}
+
+const weaponInfoStyle = {
+  display: "grid",
+  gap: 4,
+  padding: "clamp(10px, 2.8vw, 12px) clamp(12px, 3.4vw, 14px)",
+  borderRadius: 18,
+  border: "1px solid color-mix(in srgb, var(--muted) 12%, transparent)",
+  background: "color-mix(in srgb, var(--surface) 56%, transparent)"
+} as const;
+
+function ammoBadgeStyle(color: string) {
+  return {
+    position: "absolute",
+    top: "clamp(8px, 2.2vw, 10px)",
+    left: "clamp(8px, 2.2vw, 10px)",
+    borderRadius: 999,
+    padding: "clamp(2px, 0.7vw, 3px) clamp(5px, 1.5vw, 6px)",
+    minWidth: 0,
+    textAlign: "center",
+    background: `${color}1f`,
+    border: `1px solid ${color}4d`,
+    color: "var(--ink)",
+    fontWeight: 800,
+    fontSize: "clamp(0.62rem, 1.8vw, 0.68rem)",
+    lineHeight: 1
+  } as const;
+}

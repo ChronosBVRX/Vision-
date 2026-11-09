@@ -1,0 +1,357 @@
+import Phaser from "phaser";
+import { zeichnenUndErratenManifest } from "../manifest.js";
+import { tokens } from "./platformTheme.js";
+
+/**
+ * Round intro and result screens for Zeichnen & Erraten.
+ *
+ * The platform ships no scoreboard or intro scene: everything a player looks at
+ * once a game has started belongs to the game. This module is this repo's own
+ * copy, so the look can diverge from the other games freely.
+ *
+ * The screens are drawn into a dedicated container above the playfield rather
+ * than into the scene itself. That matters for two reasons: scenes that keep
+ * persistent renderer objects between frames must not have their display list
+ * cleared underneath them, and the overlay has to disappear on its own the
+ * moment the round starts playing.
+ */
+
+const INTRO_PHASES = new Set(["round_intro", "countdown"]);
+const RESULT_PHASES = new Set(["result", "scoreboard", "finished"]);
+const OVERLAY_DEPTH = 10_000;
+
+/**
+ * The overlay's palette, read live from the room.
+ *
+ * These screens are chrome, so they follow the room's skin the way the platform
+ * shell does. The values were frozen to the warm paper palette, which left a
+ * dark room with a bright card between rounds. The accent stays the game's own
+ * hue — that is its identity, not a platform surface.
+ */
+const GAME_ACCENT = "#4f7d8c";
+
+const theme = {
+  get background() {
+    return tokens().color.background;
+  },
+  get surface() {
+    return tokens().color.surface;
+  },
+  get surfaceMuted() {
+    return tokens().color.surfaceMuted;
+  },
+  get ink() {
+    return tokens().color.text;
+  },
+  get inkSoft() {
+    return tokens().color.textSoft;
+  },
+  get muted() {
+    return tokens().color.muted;
+  },
+  get line() {
+    return tokens().color.line;
+  },
+  accent: GAME_ACCENT,
+  get titleFont() {
+    return tokens().font.display;
+  },
+  get bodyFont() {
+    return tokens().font.body;
+  },
+  get monoFont() {
+    return tokens().font.mono;
+  }
+};
+
+const hex = (color: string): number => Number.parseInt(color.slice(1), 16);
+
+interface ScoreEntryLike {
+  playerId: string;
+  delta: number;
+  total: number;
+}
+
+interface RoundScreenState {
+  phase: string | null;
+  message: string | null;
+  drawerName: string | null;
+  language: "de" | "en";
+  players: Array<{ id: string; name: string }>;
+  entries: ScoreEntryLike[];
+}
+
+const copy = {
+  de: {
+    getReady: "A continuación, dibuja",
+    roundOver: "redondear",
+    standings: "PUNTUACIÓN",
+    noPoints: "Aún no hay puntos.",
+    waiting: "Informe listo para la siguiente ronda."
+  },
+  en: {
+    getReady: "Drawing next",
+    roundOver: "Round over",
+    standings: "STANDINGS",
+    noPoints: "No points yet.",
+    waiting: "Ready up for the next round."
+  }
+};
+
+/** Narrows the loosely typed host state this scene receives. */
+function readState(input: unknown): RoundScreenState {
+  const state = (input ?? {}) as {
+    game?: { phase?: unknown; message?: unknown; state?: { drawerName?: unknown } | null } | null;
+    room?: { language?: unknown; players?: unknown; currentRound?: { phase?: unknown } | null } | null;
+    scoreboard?: { entries?: unknown } | null;
+  };
+
+  const phase =
+    typeof state.game?.phase === "string"
+      ? state.game.phase
+      : typeof state.room?.currentRound?.phase === "string"
+        ? state.room.currentRound.phase
+        : null;
+
+  const players = Array.isArray(state.room?.players)
+    ? (state.room?.players as Array<{ id?: unknown; name?: unknown }>)
+        .filter((player) => typeof player?.id === "string")
+        .map((player) => ({
+          id: String(player.id),
+          name: typeof player.name === "string" ? player.name : String(player.id)
+        }))
+    : [];
+
+  const entries = Array.isArray(state.scoreboard?.entries)
+    ? (state.scoreboard?.entries as Array<Record<string, unknown>>)
+        .filter((entry) => typeof entry?.playerId === "string")
+        .map((entry) => ({
+          playerId: String(entry.playerId),
+          delta: Number(entry.delta ?? 0),
+          total: Number(entry.total ?? 0)
+        }))
+    : [];
+
+  return {
+    phase,
+    message: typeof state.game?.message === "string" ? state.game.message : null,
+    drawerName: typeof state.game?.state?.drawerName === "string" ? state.game.state.drawerName : null,
+    language: state.room?.language === "en" ? "en" : "de",
+    players,
+    entries
+  };
+}
+
+/**
+ * The overlay container per scene.
+ *
+ * A WeakMap rather than scene data, so nothing has to be registered or torn
+ * down when the scene shuts down.
+ */
+const overlays = new WeakMap<Phaser.Scene, Phaser.GameObjects.Container>();
+
+/** Removes the overlay if one is up. Safe to call when there is none. */
+function clearOverlay(scene: Phaser.Scene): void {
+  const existing = overlays.get(scene);
+
+  if (existing) {
+    overlays.delete(scene);
+
+    // `scene` is null once Phaser has destroyed the object with the scene.
+    if (existing.scene) {
+      existing.destroy(true);
+    }
+  }
+}
+
+/** Starts a fresh overlay that fully covers the playfield. */
+function openOverlay(scene: Phaser.Scene): Phaser.GameObjects.Container {
+  clearOverlay(scene);
+
+  const layer = scene.add.container(0, 0).setDepth(OVERLAY_DEPTH);
+  const width = scene.scale.width;
+  const height = scene.scale.height;
+
+  layer.add(
+    scene.add.rectangle(0, 0, width, height, hex(theme.background), 1).setOrigin(0)
+  );
+
+  const decoration = scene.add.graphics();
+  decoration.fillStyle(hex(theme.accent), 0.08);
+  decoration.fillCircle(width * 0.16, height * 0.18, Math.max(width * 0.2, 180));
+  decoration.fillCircle(width * 0.84, height * 0.84, Math.max(width * 0.18, 160));
+  layer.add(decoration);
+
+  overlays.set(scene, layer);
+  return layer;
+}
+
+function textResolution(): number {
+  const ratio = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
+  return Math.min(Math.max(ratio, 1), 3);
+}
+
+function addText(
+  scene: Phaser.Scene,
+  layer: Phaser.GameObjects.Container,
+  x: number,
+  y: number,
+  content: string,
+  style: Phaser.Types.GameObjects.Text.TextStyle
+): Phaser.GameObjects.Text {
+  const text = scene.add.text(x, y, content, { resolution: textResolution(), ...style });
+  layer.add(text);
+  return text;
+}
+
+function renderIntro(scene: Phaser.Scene, state: RoundScreenState): void {
+  const layer = openOverlay(scene);
+  const words = copy[state.language === "en" ? "en" : "de"];
+
+  addText(
+    scene,
+    layer,
+    scene.scale.width / 2,
+    scene.scale.height / 2 - 44,
+    words.getReady,
+    {
+      fontFamily: theme.titleFont,
+      fontSize: "30px",
+      color: theme.ink,
+      align: "center",
+      wordWrap: { width: scene.scale.width - 160 }
+    }
+  ).setOrigin(0.5);
+
+  addText(
+    scene,
+    layer,
+    scene.scale.width / 2,
+    scene.scale.height / 2 + 20,
+    state.drawerName ?? state.message ?? zeichnenUndErratenManifest.translations[state.language === "en" ? "en" : "de"].displayName,
+    {
+      fontFamily: theme.titleFont,
+      fontSize: "54px",
+      color: theme.accent,
+      align: "center",
+      wordWrap: { width: scene.scale.width - 220 }
+    }
+  ).setOrigin(0.5);
+}
+
+function renderResult(scene: Phaser.Scene, state: RoundScreenState): void {
+  const layer = openOverlay(scene);
+  const words = copy[state.language === "en" ? "en" : "de"];
+  const nameById = new Map(state.players.map((player) => [player.id, player.name]));
+  const panelWidth = Math.min(760, scene.scale.width - 120);
+  const panelX = (scene.scale.width - panelWidth) / 2;
+
+  addText(scene, layer, panelX, 64, words.roundOver, {
+    fontFamily: theme.titleFont,
+    fontSize: "44px",
+    color: theme.ink
+  });
+  addText(scene, layer, panelX, 122, state.message ?? zeichnenUndErratenManifest.translations[state.language === "en" ? "en" : "de"].displayName, {
+    fontFamily: theme.bodyFont,
+    fontSize: "20px",
+    color: theme.muted,
+    wordWrap: { width: panelWidth }
+  });
+
+  const listTop = 190;
+  const rowHeight = 52;
+  const visible = state.entries.slice(0, 8);
+
+  addText(scene, layer, panelX, listTop - 28, words.standings, {
+    fontFamily: theme.monoFont,
+    fontSize: "13px",
+    color: theme.muted
+  });
+
+  if (visible.length === 0) {
+    addText(scene, layer, panelX, listTop, words.noPoints, {
+      fontFamily: theme.bodyFont,
+      fontSize: "20px",
+      color: theme.muted
+    });
+    return;
+  }
+
+  visible.forEach((entry, index) => {
+    const rowY = listTop + index * rowHeight;
+    const leader = index === 0;
+
+    layer.add(
+      scene.add
+        .rectangle(
+          panelX,
+          rowY,
+          panelWidth,
+          rowHeight - 8,
+          hex(leader ? theme.surface : theme.surfaceMuted),
+          1
+        )
+        .setOrigin(0)
+        .setStrokeStyle(leader ? 2 : 1, hex(leader ? theme.accent : theme.line), 1)
+    );
+
+    addText(scene, layer, panelX + 18, rowY + 10, `${index + 1}`, {
+      fontFamily: theme.titleFont,
+      fontSize: "22px",
+      color: leader ? theme.accent : theme.muted
+    });
+    addText(scene, layer, panelX + 58, rowY + 11, nameById.get(entry.playerId) ?? entry.playerId, {
+      fontFamily: theme.bodyFont,
+      fontSize: "20px",
+      color: theme.ink
+    });
+    addText(
+      scene,
+      layer,
+      panelX + panelWidth - 150,
+      rowY + 13,
+      `${entry.delta >= 0 ? "+" : ""}${entry.delta}`,
+      {
+        fontFamily: theme.monoFont,
+        fontSize: "16px",
+        color: entry.delta > 0 ? theme.accent : theme.muted
+      }
+    );
+    addText(scene, layer, panelX + panelWidth - 70, rowY + 10, `${entry.total}`, {
+      fontFamily: theme.titleFont,
+      fontSize: "22px",
+      color: theme.inkSoft
+    });
+  });
+
+  addText(scene, layer, panelX, listTop + visible.length * rowHeight + 18, words.waiting, {
+    fontFamily: theme.bodyFont,
+    fontSize: "16px",
+    color: theme.muted
+  });
+}
+
+/**
+ * Draws the intro or result overlay for the current phase.
+ *
+ * Returns true while the overlay owns the screen, so the caller can skip its
+ * own rendering. As soon as the phase moves on the overlay is removed and false
+ * is returned, handing the screen back to the game untouched.
+ */
+export function renderRoundScreens(scene: Phaser.Scene, input: unknown): boolean {
+  const state = readState(input);
+
+  if (state.phase && INTRO_PHASES.has(state.phase)) {
+    renderIntro(scene, state);
+    return true;
+  }
+
+  // This game draws its own result — a reveal sequence, a run summary — so the
+  // generic standings overlay must stay out of the way. `renderResult` is kept
+  // for reference and for the day that changes.
+  void RESULT_PHASES;
+  void renderResult;
+
+  clearOverlay(scene);
+  return false;
+}

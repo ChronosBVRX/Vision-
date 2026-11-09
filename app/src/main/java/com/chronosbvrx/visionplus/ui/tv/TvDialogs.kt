@@ -1,12 +1,17 @@
 package com.chronosbvrx.visionplus.ui.tv
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -23,17 +28,24 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Spacer
 import androidx.tv.material3.Border
@@ -41,7 +53,11 @@ import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import android.os.Build
+import android.view.Window
+import android.view.WindowManager
 import com.chronosbvrx.visionplus.data.AppUpdate
+import com.chronosbvrx.visionplus.DevicePerformance
 import com.chronosbvrx.visionplus.data.config.MigrationNotice
 import com.chronosbvrx.visionplus.ui.comingSoon
 import com.chronosbvrx.visionplus.ui.plugins.PluginUpdatesCopy
@@ -81,29 +97,115 @@ fun rememberDialogFocus(): DialogFocus {
 fun Modifier.dialogFocus(focus: DialogFocus): Modifier =
     focusRequester(focus.requester).onFocusChanged { focus.focused = it.isFocused }
 
-/** A TV dialog: a dark rounded panel with a title, [content] below it; Back closes it ([onDismiss]). */
+/**
+ * A TV dialog. The default skin is a dark rounded panel with a title and [content] below it.
+ * [glass] is the premium profile skin: a full-window scrim (75 % black, with a light blur on
+ * Android 12+) and a content slot that draws its own frosted card; nothing is dimmed twice.
+ * Back closes it ([onDismiss]).
+ */
 @Composable
-internal fun TvDialog(title: String, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+internal fun TvDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    glass: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     // Mientras el diálogo exista, el rescate de foco de la pantalla de atrás no debe robarle las teclas.
     DisposableEffect(Unit) {
         FocusRescue.dialogsOpen++
         onDispose { FocusRescue.dialogsOpen-- }
     }
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = if (glass) {
+            DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        } else {
+            DialogProperties()
+        },
+    ) {
         BackHandler(onBack = onDismiss)
-        Column(
-            Modifier
-                .widthIn(min = 420.dp, max = 640.dp)
-                .background(VisionSurface, RoundedCornerShape(16.dp))
-                .padding(28.dp)
-                .modalFocusTrap()
-                .dismissOnBack(onDismiss),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.headlineSmall, color = Color.White)
-            content()
+        if (glass) {
+            GlassDialogWindow()
+            var entered by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { entered = true }
+            val entrance by animateFloatAsState(
+                targetValue = if (entered) 1f else 0f,
+                animationSpec = tween(300),
+                label = "glass-dialog-in",
+            )
+            val rise = (1f - entrance) * 26f
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.75f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                        .graphicsLayer {
+                            alpha = entrance
+                            translationY = rise * density
+                        }
+                        .modalFocusTrap()
+                        .dismissOnBack(onDismiss),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    content()
+                }
+            }
+        } else {
+            Column(
+                Modifier
+                    .widthIn(min = 420.dp, max = 640.dp)
+                    .background(VisionSurface, RoundedCornerShape(16.dp))
+                    .padding(28.dp)
+                    .modalFocusTrap()
+                    .dismissOnBack(onDismiss),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                if (title.isNotBlank()) {
+                    Text(title, style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                }
+                content()
+            }
         }
     }
+}
+
+/**
+ * Ajusta la ventana del diálogo de cristal: el velo lo dibuja Compose (75 % negro), así que se
+ * apaga el dim del sistema; en Android 12+ se pide además el desenfoque de la app de atrás. En
+ * televisores que no lo soportan, el velo solo sigue viéndose elegante.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun GlassDialogWindow() {
+    val view = LocalView.current
+    LaunchedEffect(view) {
+        val window = view.dialogWindowOrNull() ?: return@LaunchedEffect
+        runCatching {
+            val attrs = window.attributes
+            attrs.dimAmount = 0f
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                !DevicePerformance.isLowEndDevice(view.context)
+            ) {
+                attrs.flags = attrs.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+                attrs.blurBehindRadius = (18f * view.resources.displayMetrics.density).toInt()
+            }
+            window.attributes = attrs
+        }
+    }
+}
+
+private fun android.view.View.dialogWindowOrNull(): Window? {
+    var parent: android.view.ViewParent? = this.parent
+    while (parent != null) {
+        if (parent is DialogWindowProvider) return parent.window
+        parent = parent.parent
+    }
+    return null
 }
 
 /**

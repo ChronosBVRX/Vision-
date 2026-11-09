@@ -79,10 +79,12 @@ fun LiveScreen(
     onPlay: (LiveChannel, List<String>, String?) -> Unit,
 ) {
     val state = rememberLiveState()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var adding by rememberSaveable { mutableStateOf(false) }
     var confirmingDelete by remember { mutableStateOf(false) }
     var selectedGenre by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedCountry by rememberSaveable { mutableStateOf<String?>(null) }
+    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding())) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -105,6 +107,31 @@ fun LiveScreen(
                 IconButton(onClick = { confirmingDelete = true }) { Icon(Icons.Default.Delete, contentDescription = LiveCopy.DELETE_LIST, tint = Color.White) }
             }
         }
+        val recentChannels = remember { com.chronosbvrx.visionplus.data.LiveHistory.recent(context) }
+        if (recentChannels.isNotEmpty()) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item(key = "recent_title") {
+                    Text(
+                        "Recientes",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = VisionTextSecondary,
+                        modifier = Modifier.padding(top = 10.dp, end = 4.dp),
+                    )
+                }
+                items(recentChannels, key = { "recent_${it.code}" }) { recent ->
+                    FilterChip(
+                        selected = false,
+                        onClick = {
+                            onPlay(recent.toChannel(), recentChannels.map { it.code }, "Recientes")
+                        },
+                        label = { Text(recent.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    )
+                }
+            }
+        }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -125,11 +152,16 @@ fun LiveScreen(
         val searching = state.query.isNotBlank()
         // Memoizado: con 1,000+ canales, recalcular gÃ©neros/paÃ­ses/filtros en cada
         // recomposiciÃ³n (teclear, cambiar chip) congelaba el hilo de UI.
-        val baseChannels = remember(state.channels, state.query, state.group) {
-            if (searching) {
+        val baseChannels = remember(state.channels, state.query, state.group, favoritesOnly) {
+            val base = if (searching) {
                 state.channels.filter { it.name.contains(state.query.trim(), ignoreCase = true) }
             } else {
                 state.shown
+            }
+            if (favoritesOnly) {
+                base.filter { com.chronosbvrx.visionplus.ui.live.LiveFavorites.has(context, it.url) }
+            } else {
+                base
             }
         }
         val genres = remember(baseChannels) { LiveTaxonomy.genresOf(baseChannels.map { it.name }) }
@@ -156,13 +188,22 @@ fun LiveScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item(key = "fav") {
-                CategoryChip("Favoritos", selected = false, onClick = { })
+                CategoryChip("Favoritos", selected = favoritesOnly, onClick = {
+                    favoritesOnly = !favoritesOnly
+                    if (favoritesOnly) selectedGenre = null
+                })
             }
             items(genres, key = { it }) { genre ->
-                CategoryChip(genre, selectedGenre == genre, onClick = { selectedGenre = genre })
+                CategoryChip(genre, selectedGenre == genre && !favoritesOnly, onClick = {
+                    favoritesOnly = false
+                    selectedGenre = genre
+                })
             }
             item(key = "all_genres") {
-                CategoryChip(LiveCopy.ALL_GROUPS, selectedGenre == null, onClick = { selectedGenre = null })
+                CategoryChip(LiveCopy.ALL_GROUPS, selectedGenre == null && !favoritesOnly, onClick = {
+                    favoritesOnly = false
+                    selectedGenre = null
+                })
             }
         }
 

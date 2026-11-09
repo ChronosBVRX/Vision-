@@ -53,7 +53,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -277,6 +276,18 @@ fun TvLiveScreen(
                 height = 38.dp,
                 onClick = { searchOpen = true },
             )
+            val lastSeen = com.chronosbvrx.visionplus.data.LiveHistory.last(context)
+            if (lastSeen != null) {
+                TvCompactAction(
+                    label = "Seguir viendo",
+                    icon = VisionIcons.Play,
+                    height = 38.dp,
+                    onClick = {
+                        val recent = com.chronosbvrx.visionplus.data.LiveHistory.recent(context)
+                        onPlay(lastSeen.toChannel(), recent.map { it.code }, "Recientes")
+                    },
+                )
+            }
             Box(Modifier.weight(1f)) {
                 LazyRow(
                     Modifier.fillMaxWidth(),
@@ -599,7 +610,7 @@ private fun TvLiveSearchDialog(
                             onClick = startVoice,
                             modifier = Modifier
                                 .focusRequester(voiceFocus)
-                                .focusProperties { down = keyboardFocus.requester },
+                                .softFocusDown(keyboardFocus.requester),
                         )
                         Spacer(Modifier.width(8.dp))
                         TvCompactAction("Cerrar", onClick = onDismiss)
@@ -614,7 +625,7 @@ private fun TvLiveSearchDialog(
                                 label = "Todos",
                                 selected = selectedCountry == null,
                                 onClick = { onCountry(null) },
-                                modifier = Modifier.focusProperties { down = keyboardFocus.requester },
+                                modifier = Modifier.softFocusDown(keyboardFocus.requester),
                             )
                         }
                         items(countries, key = { "search-country-$it" }) { country ->
@@ -622,7 +633,7 @@ private fun TvLiveSearchDialog(
                                 label = country,
                                 selected = selectedCountry == country,
                                 onClick = { onCountry(country) },
-                                modifier = Modifier.focusProperties { down = keyboardFocus.requester },
+                                modifier = Modifier.softFocusDown(keyboardFocus.requester),
                             )
                         }
                     }
@@ -645,7 +656,7 @@ private fun TvLiveSearchDialog(
                                         label = channel.name,
                                         selected = false,
                                         onClick = { onQuery(channel.name) },
-                                        modifier = Modifier.focusProperties { down = keyboardFocus.requester },
+                                        modifier = Modifier.softFocusDown(keyboardFocus.requester),
                                     )
                                 }
                             }
@@ -666,7 +677,7 @@ private fun TvLiveSearchDialog(
                                 onTextChange = onQuery,
                                 firstKey = Modifier
                                     .dialogFocus(keyboardFocus)
-                                    .focusProperties { up = voiceFocus },
+                                    .softFocusUp(voiceFocus),
                                 modifier = Modifier.fillMaxWidth().height(224.dp),
                             )
                             Text(

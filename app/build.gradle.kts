@@ -32,8 +32,8 @@ android {
     compileSdk = 36
 
     androidResources {
-        // La voz de la narradora va en .m4a (AAC-LC): sin comprimir para que
-        // MediaPlayer pueda abrirla con openRawResourceFd como los MP3.
+        // La bienvenida de Juegos usa MediaPlayer.openRawResourceFd: los .m4a
+        // deben viajar sin comprimir dentro del APK.
         noCompress += listOf("m4a")
     }
 
@@ -41,15 +41,8 @@ android {
         applicationId = "com.chronosbvrx.visionplus"
         minSdk = 24
         targetSdk = 35
-        versionCode = (project.findProperty("fiestsVersionCode")?.toString()?.toIntOrNull()) ?: 491
-        versionName = project.findProperty("fiestsVersionName")?.toString() ?: "2.5.247"
-        // Beta Fiesta 3.0: si se compila con -PfiestsBaseUrl=http://IP:8100,
-        // solo el cliente de juegos apunta al servidor local de pruebas.
-        buildConfigField(
-            "String",
-            "FIESTA_BASE_URL",
-            "\"${project.findProperty("fiestsBaseUrl") ?: ""}\"",
-        )
+        versionCode = 514
+        versionName = "2.6.21"
         ndk {
             // Solo ARM: el APK no empaqueta libs x86/x86_64 (los AAR traían credentials/
             // graphics.path de x86_64). En dispositivos x86_64 con traducción ARM (emulador
@@ -91,9 +84,9 @@ android {
         register("probe") {
             initWith(getByName("debug"))
             matchingFallbacks += listOf("debug")
-            isDebuggable = false
+            isDebuggable = true
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 

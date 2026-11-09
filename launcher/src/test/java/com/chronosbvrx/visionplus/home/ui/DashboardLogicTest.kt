@@ -4,6 +4,8 @@ import com.chronosbvrx.visionplus.home.contract.ContinueItem
 import java.util.Calendar
 import java.util.TimeZone
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Reglas puras del escritorio Bento que no dependen de Android ni de la red. */
@@ -53,5 +55,15 @@ class DashboardLogicTest {
                 ),
             ),
         )
+    }
+
+    @Test
+    fun profileAvatarsOnlyAcceptSafeResourceIds() {
+        assertTrue(isValidAvatarId("cine_noir"))
+        assertTrue(isValidAvatarId("anime_samurai"))
+        assertFalse(isValidAvatarId(""))
+        assertFalse(isValidAvatarId("../secret"))
+        assertFalse(isValidAvatarId("con espacio"))
+        assertFalse(isValidAvatarId("x".repeat(41)))
     }
 }

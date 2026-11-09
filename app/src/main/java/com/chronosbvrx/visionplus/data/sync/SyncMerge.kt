@@ -14,6 +14,8 @@ import com.chronosbvrx.visionplus.data.prune
  * - `fav`/`later`: por id; en la PRIMERA sincronización se unen (no se pisa lo de ningún
  *   equipo), después gana el timestamp mayor.
  * - `watched`: unión (marcar visto no se deshace entre equipos en esta fase).
+ * - `unwatched`: una clave atómica `serie|capítulo`; un borrado (marcar visto) viaja como
+ *   tombstone. Gana el timestamp mayor.
  * - `removed`: tombstones con su hora original; un presente más nuevo lo revive.
  */
 
@@ -21,8 +23,9 @@ internal const val KIND_RESUME = "resume"
 internal const val KIND_FAV = "fav"
 internal const val KIND_LATER = "later"
 internal const val KIND_WATCHED = "watched"
+internal const val KIND_UNWATCHED = "unwatched"
 
-internal val SYNC_KINDS = setOf(KIND_RESUME, KIND_FAV, KIND_LATER, KIND_WATCHED)
+internal val SYNC_KINDS = setOf(KIND_RESUME, KIND_FAV, KIND_LATER, KIND_WATCHED, KIND_UNWATCHED)
 
 /** Lo que este equipo tiene ahora mismo (y lo que el servidor devuelve ya tipado). */
 internal data class SyncSnapshot(
@@ -30,6 +33,7 @@ internal data class SyncSnapshot(
     val favorites: List<Film> = emptyList(),
     val watchLater: List<Film> = emptyList(),
     val watched: Set<String> = emptySet(),
+    val unwatched: Set<String> = emptySet(),
 )
 
 /** Un elemento que llegó del servidor: `resume`/`film` ya parseados, no JSON. */
@@ -59,6 +63,8 @@ internal fun snapshotKeys(snapshot: SyncSnapshot): Set<String> = buildSet {
     snapshot.watchLater.forEach { add(stampKey(KIND_LATER, it.id)) }
     // Los vistos viajan por serie (una fila con todos sus capítulos), no por capítulo.
     snapshot.watched.forEach { add(stampKey(KIND_WATCHED, it.substringBefore('|'))) }
+    // «No visto» viaja por capítulo: un episodio se puede desmarcar sin tocar los demás.
+    snapshot.unwatched.forEach { add(stampKey(KIND_UNWATCHED, it)) }
 }
 
 /**
@@ -125,6 +131,11 @@ internal fun mergeSync(
         val key = stampKey(KIND_WATCHED, episode.substringBefore('|'))
         outTimes[key] = outTimes[key] ?: nowMs
     }
+    val unwatched = local.unwatched.toMutableSet()
+    local.unwatched.forEach { episode ->
+        val key = stampKey(KIND_UNWATCHED, episode)
+        outTimes[key] = outTimes[key] ?: nowMs
+    }
 
     remote.forEach { item ->
         if (item.kind !in SYNC_KINDS) return@forEach
@@ -170,6 +181,19 @@ internal fun mergeSync(
                     outTimes[key] = maxOf(localAt, item.at)
                 }
             }
+            KIND_UNWATCHED -> {
+                if (item.deleted) {
+                    if (!first && item.at >= localAt) {
+                        unwatched.remove(item.key)
+                        outTimes.remove(key)
+                        outRemoved[key] = maxOf(outRemoved[key] ?: 0L, item.at)
+                    }
+                } else if (first || item.at >= localAt) {
+                    unwatched.add(item.key)
+                    outTimes[key] = maxOf(localAt, item.at)
+                    outRemoved.remove(key)
+                }
+            }
         }
     }
 
@@ -182,6 +206,7 @@ internal fun mergeSync(
             favorites = mergedFavorites,
             watchLater = mergedLater,
             watched = watched,
+            unwatched = unwatched,
         ),
         times = outTimes,
         removed = outRemoved,

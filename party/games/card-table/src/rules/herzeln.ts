@@ -1,0 +1,711 @@
+import type { ScoreEntry, SupportedLanguage } from "@open-party-lab/game-core";
+import { handOf, moveCard, toCardFace } from "../cards/cardTable.js";
+import type { CardInstance } from "../cards/cardTypes.js";
+import type {
+  CardTableActionState,
+  CardTableRuleSectionState,
+  CardTableStackState
+} from "../protocol.js";
+import { bestOf } from "../bots/tactics.js";
+import {
+  beginTrickPause,
+  handsEmpty,
+  hideLastTrick,
+  isTrickPending,
+  sweepTrick,
+  toggleLastTrick,
+  trickFaces,
+  trickWinnerId
+} from "./trickPause.js";
+import {
+  appendLog,
+  clearError,
+  finishGame,
+  playerName,
+  readNumber,
+  readText,
+  withError,
+  writeExtra,
+  type CardGameState,
+  type CardRuleset,
+  type CardRulesetContext
+} from "./types.js";
+
+/**
+ * Herzeln.
+ *
+ * Ein Stichspiel andersherum: Stiche will hier niemand haben. Jedes Herz zählt
+ * einen Strafpunkt, die Pik-Dame gleich dreizehn. Wer am Ende am wenigsten
+ * gesammelt hat, gewinnt die Runde - es sei denn, jemand nimmt gleich alles.
+ *
+ * Baut auf derselben Stichlogik auf wie die Stichwette und zeigt, dass ein
+ * Regelwerk mit umgekehrtem Vorzeichen werten darf.
+ */
+
+const trickZoneId = "stich";
+const wonZoneId = "abgelegt";
+const lastTrickZoneId = "letzter-stich";
+const leadKey = "leadSuitId";
+const trickLeaderKey = "trickLeaderIndex";
+const trickCountKey = "trickCount";
+const brokenKey = "heartsBroken";
+const openerKey = "openerCardId";
+const penaltyKey = (playerId: string): string => `pen:${playerId}`;
+
+const heartsSuit = "hearts";
+const spadesSuit = "spades";
+const queenRank = "queen";
+const noLead = "";
+const allPenalties = 26;
+
+const copy: Record<"de" | "en", Record<string, string>> = {
+  de: {
+    intro: "Herzeln: Stiche vermeiden. Jedes Herz zählt eins, die Pik-Dame dreizehn.",
+    notYourTurn: "Du bist nicht am Zug.",
+    notInHand: "Diese Karte liegt nicht auf deiner Hand.",
+    mustFollow: "Du musst Farbe bedienen.",
+    heartsClosed: "Herz ist noch nicht gebrochen.",
+    mustOpen: "Die Runde beginnt mit der Kreuz-Zwei.",
+    firstTrick: "Im ersten Stich keine Strafkarte abwerfen, solange du eine andere Karte hast.",
+    plays: "legt",
+    takesTrick: "nimmt den Stich",
+    points: "Punkte",
+    penalty: "Strafpunkte",
+    broken: "Herz ist gebrochen",
+    moon: "kassiert alles - alle anderen bekommen die Strafpunkte.",
+    wins: "hat die wenigsten Strafpunkte.",
+    trick: "Stich",
+    lastTrick: "Letzter Stich",
+    trickResting: "Der Stich liegt noch - kurz warten.",
+    yourPenalty: "Deine Strafpunkte",
+    end: "Runde beenden",
+    ended: "Der Host hat die Runde beendet."
+  },
+  en: {
+    intro: "Hearts: avoid tricks. Every heart counts one, the queen of spades thirteen.",
+    notYourTurn: "It is not your turn.",
+    notInHand: "That card is not in your hand.",
+    mustFollow: "You have to follow suit.",
+    heartsClosed: "Hearts have not been broken yet.",
+    mustOpen: "The round starts with the two of clubs.",
+    firstTrick: "Do not discard a penalty card on the first trick while you have another card.",
+    plays: "plays",
+    takesTrick: "takes the trick",
+    points: "points",
+    penalty: "penalty points",
+    broken: "hearts are broken",
+    moon: "shot the moon - everyone else takes the penalty instead.",
+    wins: "has the fewest penalty points.",
+    trick: "Trick",
+    lastTrick: "Last trick",
+    trickResting: "The trick is still on the table.",
+    yourPenalty: "Your penalty",
+    end: "End round",
+    ended: "The host ended the round."
+  }
+};
+
+function words(context: CardRulesetContext): Record<string, string> {
+  return copy[context.language === "en" ? "en" : "de"] ?? copy.de;
+}
+
+function penaltyOf(card: CardInstance): number {
+  if (card.suitId === spadesSuit && card.rankId === queenRank) {
+    return 13;
+  }
+
+  return card.suitId === heartsSuit ? 1 : 0;
+}
+
+function rankOrder(context: CardRulesetContext, card: CardInstance): number {
+  return context.deck.ranks.find((rank) => rank.id === card.rankId)?.order ?? 0;
+}
+
+function isActive(state: CardGameState, playerId: string): boolean {
+  return state.table.turnOrder[state.table.activeIndex] === playerId;
+}
+
+function trickCardIds(state: CardGameState): string[] {
+  return state.table.zones[trickZoneId] ?? [];
+}
+
+function penaltyPoints(state: CardGameState, playerId: string): number {
+  return readNumber(state, penaltyKey(playerId));
+}
+
+/** Höchste Karte der angespielten Farbe gewinnt. */
+function trickWinner(state: CardGameState, context: CardRulesetContext): string {
+  const cardIds = trickCardIds(state);
+  const order = state.table.turnOrder;
+  const leaderIndex = readNumber(state, trickLeaderKey);
+  const leadSuitId = readText(state, leadKey) ?? noLead;
+  let bestIndex = 0;
+  let bestScore = -1;
+
+  cardIds.forEach((cardId, index) => {
+    const card = state.table.cards[cardId];
+
+    if (!card || card.suitId !== leadSuitId) {
+      return;
+    }
+
+    const score = rankOrder(context, card);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  });
+
+  return order[(leaderIndex + bestIndex) % order.length] as string;
+}
+
+function finishDeal(state: CardGameState, context: CardRulesetContext): CardGameState {
+  const text = words(context);
+  const seats = state.table.turnOrder;
+  const shooter = seats.find((playerId) => penaltyPoints(state, playerId) >= allPenalties);
+  let next = state;
+
+  if (shooter) {
+    // Alles kassiert: Der Sammler kommt auf null, alle anderen auf die volle Last.
+    const flipped: Record<string, number> = { [penaltyKey(shooter)]: 0 };
+
+    for (const playerId of seats) {
+      if (playerId !== shooter) {
+        flipped[penaltyKey(playerId)] = allPenalties;
+      }
+    }
+
+    next = appendLog(writeExtra(next, flipped), playerName(context, shooter), text.moon as string);
+  }
+
+  const best = seats.reduce(
+    (leader, playerId) => (penaltyPoints(next, playerId) < penaltyPoints(next, leader) ? playerId : leader),
+    seats[0] ?? ""
+  );
+
+  for (const playerId of seats) {
+    next = appendLog(
+      next,
+      playerName(context, playerId),
+      `${penaltyPoints(next, playerId)} ${text.penalty}`
+    );
+  }
+
+  return finishGame(
+    next,
+    best || null,
+    best ? playerName(context, best) : null,
+    best ? `${playerName(context, best)} ${text.wins}` : (text.ended as string)
+  );
+}
+
+export const herzelnRuleset: CardRuleset = {
+  id: "herzeln",
+  label: { de: "Herzeln", en: "Hearts" },
+  defaultDeckId: "french-52",
+  fixedDeckId: "french-52",
+  defaultHandSize: 13,
+  /** Unter drei Sitzen ergibt das Spiel keinen Sinn. */
+  minSeats: 3,
+  openStartCard: false,
+  turnBased: true,
+
+  handSizeFor({ playerCount }) {
+    return Math.max(1, Math.floor(52 / Math.max(1, playerCount)));
+  },
+
+  setupRound(state, context) {
+    // Omit fixed low diamonds, preserving every penalty card and the opener.
+    const undealt = state.table.drawPile.length;
+    if (undealt > 0) {
+      const removed = new Set(Object.values(state.table.cards)
+        .filter((card) => card.suitId === "diamonds")
+        .sort((a, b) => rankOrder(context, a) - rankOrder(context, b))
+        .slice(0, undealt).map((card) => card.id));
+      const shuffled = [...state.table.turnOrder.flatMap((id) => handOf(state.table, id)), ...state.table.drawPile];
+      const dealt = shuffled.filter((id) => !removed.has(id));
+      state = { ...state, table: { ...state.table,
+        hands: Object.fromEntries(state.table.turnOrder.map((id, index) =>
+          [id, dealt.slice(index * state.handSize, (index + 1) * state.handSize)])),
+        drawPile: shuffled.filter((id) => removed.has(id))
+      } };
+    }
+    const counters: Record<string, number | string | boolean | null> = {
+      [leadKey]: noLead,
+      [trickLeaderKey]: 0,
+      [trickCountKey]: 0,
+      [brokenKey]: false,
+      [openerKey]: null
+    };
+
+    for (const playerId of state.table.turnOrder) {
+      counters[penaltyKey(playerId)] = 0;
+    }
+
+    // Wer die Kreuz-Zwei hat, eröffnet - wie am echten Tisch.
+    const opener = state.table.turnOrder.find((playerId) =>
+      handOf(state.table, playerId).some((cardId) => {
+        const card = state.table.cards[cardId];
+        return card?.suitId === "clubs" && card.rankId === "2";
+      })
+    );
+
+    if (opener) {
+      const cardId = handOf(state.table, opener).find((entry) => {
+        const card = state.table.cards[entry];
+        return card?.suitId === "clubs" && card.rankId === "2";
+      });
+      counters[openerKey] = cardId ?? null;
+    }
+
+    const activeIndex = opener ? Math.max(0, state.table.turnOrder.indexOf(opener)) : 0;
+
+    return {
+      ...state,
+      table: {
+        ...state.table,
+        activeIndex,
+        zones: { ...state.table.zones, [trickZoneId]: [], [lastTrickZoneId]: [], [wonZoneId]: [] }
+      },
+      extra: { ...state.extra, ...counters }
+    };
+  },
+
+  rules(context): CardTableRuleSectionState[] {
+    const en = context.language === "en";
+
+    return en
+      ? [
+          {
+            title: "Goal",
+            lines: [
+              "Take as few penalty cards as possible.",
+              "Every heart counts one point, the queen of spades counts thirteen.",
+              "Fewest points wins the round.",
+              "Individual deals without passing cards. Uneven deals omit the lowest diamonds; all penalty cards remain in play."
+            ]
+          },
+          {
+            title: "Playing a trick",
+            lines: [
+              "The round opens with the two of clubs.",
+              "Everyone must follow the suit that was led if they hold it.",
+              "On the first trick, discard no hearts or queen of spades unless your hand contains only penalty cards.",
+              "There is no trump: the highest card of the suit led takes the trick.",
+              "Whoever takes the trick leads the next one."
+            ]
+          },
+          {
+            title: "Hearts have to be broken",
+            lines: [
+              "A heart may not be led until a heart has fallen on an earlier trick.",
+              "If your hand is nothing but hearts, you may lead one anyway."
+            ]
+          },
+          {
+            title: "Shooting the moon",
+            lines: [
+              "Collecting every single penalty card turns the round around:",
+              "the collector drops to zero and everyone else takes the full load."
+            ]
+          }
+        ]
+      : [
+          {
+            title: "Ziel",
+            lines: [
+              "Nimm so wenige Strafkarten wie möglich.",
+              "Jedes Herz zählt einen Punkt, die Pik-Dame zählt dreizehn.",
+              "Wer am wenigsten hat, gewinnt die Runde.",
+              "Einzelne Runden ohne Kartenweitergabe. Bei ungleicher Teilung entfallen die niedrigsten Karos; alle Strafkarten bleiben im Spiel."
+            ]
+          },
+          {
+            title: "Einen Stich spielen",
+            lines: [
+              "Die Runde beginnt mit der Kreuz-Zwei.",
+              "Alle müssen die angespielte Farbe bedienen, wenn sie sie haben.",
+              "Im ersten Stich kein Herz und keine Pik-Dame abwerfen, außer du hast nur Strafkarten.",
+              "Es gibt keinen Trumpf: Die höchste Karte der angespielten Farbe nimmt den Stich.",
+              "Wer den Stich nimmt, spielt den nächsten an."
+            ]
+          },
+          {
+            title: "Herz muss erst gebrochen werden",
+            lines: [
+              "Herz darf erst angespielt werden, wenn in einem früheren Stich ein Herz gefallen ist.",
+              "Hast du nur noch Herz auf der Hand, darfst du trotzdem anspielen."
+            ]
+          },
+          {
+            title: "Alles kassieren",
+            lines: [
+              "Wer sämtliche Strafkarten einsammelt, dreht die Runde um:",
+              "Er kommt auf null, alle anderen bekommen die volle Last."
+            ]
+          }
+        ];
+  },
+
+  introMessage(context) {
+    return words(context).intro as string;
+  },
+
+  canPlayCard(state, context, playerId, cardId) {
+    const text = words(context);
+
+    if (!handOf(state.table, playerId).includes(cardId)) {
+      return { allowed: false, hint: text.notInHand as string };
+    }
+
+    // Solange der fertige Stich noch offen liegt, wird nicht weitergespielt.
+    if (isTrickPending(state)) {
+      return { allowed: false, hint: text.trickResting as string };
+    }
+
+    if (!isActive(state, playerId)) {
+      return { allowed: false, hint: text.notYourTurn as string };
+    }
+
+    const card = state.table.cards[cardId];
+
+    if (!card) {
+      return { allowed: false };
+    }
+
+    const opener = readText(state, openerKey);
+
+    if (opener) {
+      return cardId === opener ? { allowed: true } : { allowed: false, hint: text.mustOpen as string };
+    }
+
+    const leadSuitId = readText(state, leadKey) ?? noLead;
+    const hand = handOf(state.table, playerId);
+
+    if (leadSuitId === noLead) {
+      // Anspiel: Herz erst, wenn es gebrochen ist oder nichts anderes bleibt.
+      if (card.suitId === heartsSuit && state.extra[brokenKey] !== true) {
+        const onlyHearts = hand.every((entry) => state.table.cards[entry]?.suitId === heartsSuit);
+        return onlyHearts ? { allowed: true } : { allowed: false, hint: text.heartsClosed as string };
+      }
+
+      return { allowed: true };
+    }
+
+    if (card.suitId === leadSuitId) {
+      return { allowed: true };
+    }
+
+    const canFollow = hand.some((entry) => state.table.cards[entry]?.suitId === leadSuitId);
+
+    if (canFollow) {
+      return { allowed: false, hint: text.mustFollow as string };
+    }
+    if (readNumber(state, trickCountKey) === 0 && penaltyOf(card) > 0 &&
+      hand.some((entry) => penaltyOf(state.table.cards[entry] as CardInstance) === 0)) {
+      return { allowed: false, hint: text.firstTrick as string };
+    }
+    return { allowed: true };
+  },
+
+  playCard(state, context, playerId, cardId) {
+    const text = words(context);
+    const check = herzelnRuleset.canPlayCard(state, context, playerId, cardId);
+
+    if (!check.allowed) {
+      return withError(state, check.hint ?? (text.notYourTurn as string));
+    }
+
+    const card = state.table.cards[cardId] as CardInstance;
+    const face = toCardFace(context.deck, card);
+    const wasEmpty = trickCardIds(state).length === 0;
+    const table = moveCard(state.table, cardId, { kind: "zone", zoneId: trickZoneId }, "bottom");
+    const leadSuitId = wasEmpty ? card.suitId ?? noLead : readText(state, leadKey) ?? noLead;
+
+    let next = appendLog(
+      clearError(
+        writeExtra({ ...state, table, turnNumber: state.turnNumber + 1, updatedAt: context.now }, {
+          [leadKey]: leadSuitId,
+          [trickLeaderKey]: wasEmpty ? state.table.activeIndex : readNumber(state, trickLeaderKey),
+          [openerKey]: null
+        })
+      ),
+      playerName(context, playerId),
+      `${text.plays} ${face.rankLabel} ${face.suitSymbol}`
+    );
+
+    if (card.suitId === heartsSuit && next.extra[brokenKey] !== true) {
+      next = appendLog(writeExtra(next, { [brokenKey]: true }), null, text.broken as string);
+    }
+
+    if (trickCardIds(next).length < next.table.turnOrder.length) {
+      return {
+        ...next,
+        table: { ...next.table, activeIndex: (next.table.activeIndex + 1) % next.table.turnOrder.length }
+      };
+    }
+
+    const winnerId = trickWinner(next, context);
+    const winnerIndex = Math.max(0, next.table.turnOrder.indexOf(winnerId));
+    const played = trickCardIds(next);
+    const penalty = played.reduce((sum, entry) => {
+      const trickCard = next.table.cards[entry];
+      return sum + (trickCard ? penaltyOf(trickCard) : 0);
+    }, 0);
+    const trickCount = readNumber(next, trickCountKey) + 1;
+
+    next = appendLog(
+      writeExtra(
+        {
+          ...next,
+          table: { ...next.table, activeIndex: winnerIndex }
+        },
+        {
+          [penaltyKey(winnerId)]: penaltyPoints(next, winnerId) + penalty,
+          [leadKey]: noLead,
+          // Der sichtbare Stich behält seinen Anspieler bis zur ersten Karte des nächsten Stichs.
+          [trickCountKey]: trickCount
+        }
+      ),
+      playerName(context, winnerId),
+      penalty > 0
+        ? `${text.takesTrick} (+${penalty} ${text.points})`
+        : (text.takesTrick as string)
+    );
+
+    // Abgeräumt wird nicht hier, sondern in tick() nach der Pause - erst soll
+    // der vollständige Stich zu sehen sein.
+    return beginTrickPause(next, context, winnerId, handsEmpty(next));
+  },
+
+  drawCard(state) {
+    return state;
+  },
+
+  runAction(state, _context, _playerId, actionId) {
+    if (actionId === "last-trick") {
+      return (state.table.zones[lastTrickZoneId] ?? []).length === 0
+        ? state
+        : clearError(toggleLastTrick(state));
+    }
+
+    return state;
+  },
+
+  controllerActions(state, context): CardTableActionState[] {
+    // Einzige Aktion am Handy: den letzten Stich einblenden. Gezeigt wird er
+    // auf dem Tisch, deshalb läuft die Bitte über den Server.
+    return [
+      {
+        id: "last-trick",
+        label: words(context).lastTrick as string,
+        kind: "secondary",
+        enabled:
+          state.phase === "playing" &&
+          !state.gameOver &&
+          (state.table.zones[lastTrickZoneId] ?? []).length > 0
+      }
+    ];
+  },
+
+  hostActions(state, context): CardTableActionState[] {
+    return [
+      {
+        id: "end",
+        label: words(context).end as string,
+        kind: "danger",
+        enabled: state.phase === "playing" && !state.gameOver
+      }
+    ];
+  },
+
+  runHostAction(state, context, actionId) {
+    return actionId === "end" ? finishDeal(state, context) : state;
+  },
+
+  choiceForCard() {
+    return undefined;
+  },
+
+  tableStacks(state, context): CardTableStackState[] {
+    const text = words(context);
+    const cards = trickFaces(state, context, trickZoneId, readNumber(state, trickLeaderKey));
+    const total = readNumber(state, trickCountKey);
+    const seats = state.table.turnOrder.length;
+
+    const stacks: CardTableStackState[] = [
+      {
+        id: trickZoneId,
+        label: `${text.trick} ${total + (cards.length > 0 && !isTrickPending(state) ? 1 : 0)}`,
+        kind: "zone",
+        count: cards.length,
+        cards,
+        faceDown: false,
+        layout: "spread",
+        capacity: seats
+      }
+    ];
+
+    const lastCards = (state.table.zones[lastTrickZoneId] ?? [])
+      .map((cardId) => state.table.cards[cardId])
+      .filter((card): card is CardInstance => Boolean(card))
+      .map((card) => toCardFace(context.deck, card));
+
+    // Der zuletzt gewonnene Stich bleibt offen liegen, mit dem Namen dessen,
+    // der ihn bekommen hat - sonst wäre nie zu sehen, was gerade passiert ist.
+    if (lastCards.length > 0) {
+      const lastWinnerId = trickWinnerId(state);
+
+      stacks.push({
+        id: lastTrickZoneId,
+        label: lastWinnerId
+          ? `${text.lastTrick} · ${playerName(context, lastWinnerId)}`
+          : (text.lastTrick as string),
+        kind: "zone",
+        count: lastCards.length,
+        cards: lastCards,
+        faceDown: false,
+        layout: "spread",
+        capacity: seats,
+        onDemand: true
+      });
+    }
+
+    return stacks;
+  },
+
+  condition(state, context) {
+    return state.extra[brokenKey] === true
+      ? { label: words(context).broken as string, symbol: "♥", color: "red" }
+      : undefined;
+  },
+
+  privateNote(state, context, playerId) {
+    return `${words(context).yourPenalty}: ${penaltyPoints(state, playerId)}`;
+  },
+
+  seatStatus(state, context, playerId) {
+    const points = penaltyPoints(state, playerId);
+    return points > 0 ? `${points}` : undefined;
+  },
+
+  tick(state, context) {
+    const swept = sweepTrick(state, context, { trickZoneId, lastTrickZoneId, wonZoneId });
+
+    if (!swept) {
+      return state;
+    }
+
+    return handsEmpty(swept) ? finishDeal(swept, context) : swept;
+  },
+
+  isFinished(state) {
+    return state.gameOver;
+  },
+
+  buildScore(state): ScoreEntry[] {
+    const seats = state.table.turnOrder;
+
+    if (seats.length === 0) {
+      return [];
+    }
+
+    const best = seats.reduce((low, playerId) => Math.min(low, penaltyPoints(state, playerId)), Infinity);
+
+    return seats
+      .filter((playerId) => penaltyPoints(state, playerId) === best)
+      .map((playerId) => ({ playerId, delta: 1, reason: "Herzeln" }));
+  },
+
+  /**
+   * KI-Zug.
+   *
+   * Herzeln spielt man rückwärts: Der Stich ist die Strafe, nicht der Preis.
+   * Der Bot prüft für jede erlaubte Karte, ob sie den Stich gerade anführen
+   * würde. Kann er verlieren, wirft er das Teuerste ab, was er hat - die
+   * Pik-Dame zuerst. Muss er nehmen, nimmt er so billig wie möglich. Beim
+   * Anspiel geht er tief raus und lässt Strafkarten liegen.
+   */
+  botMove(state, context, playerId) {
+    if (!isActive(state, playerId)) {
+      return { kind: "wait" };
+    }
+
+    const playable = handOf(state.table, playerId).filter(
+      (cardId) => herzelnRuleset.canPlayCard(state, context, playerId, cardId).allowed
+    );
+
+    if (playable.length === 0) {
+      return { kind: "wait" };
+    }
+
+    const cost = (cardId: string): number => {
+      const card = state.table.cards[cardId];
+
+      return card ? rankOrder(context, card) + penaltyOf(card) * 20 : 0;
+    };
+
+    // Anspiel: tief herauskommen und nichts Teures verschenken.
+    if (trickCardIds(state).length === 0) {
+      const cardId = bestOf(playable, (entry) => -cost(entry));
+
+      return { kind: "play", cardId: cardId as string };
+    }
+
+    const takers = playable.filter((cardId) => wouldTakeTrick(state, context, playerId, cardId));
+    const safe = playable.filter((cardId) => !takers.includes(cardId));
+
+    if (safe.length > 0) {
+      // Sicher: das Teuerste abwerfen, denn dieser Stich gehört jemand anderem.
+      return { kind: "play", cardId: bestOf(safe, cost) as string };
+    }
+
+    return { kind: "play", cardId: bestOf(playable, (entry) => -cost(entry)) as string };
+  },
+
+  /**
+   * Farben gruppiert, innerhalb der Farbe von oben nach unten. Bei einem Spiel,
+   * in dem man Stiche vermeiden will, zählt vor allem, wo man kurz ist - das
+   * sieht man so sofort.
+   */
+  sortHand(state, context, _playerId, cardIds) {
+    const suitIndex = (suitId: string | null): number => {
+      const index = context.deck.suits.findIndex((suit) => suit.id === suitId);
+      return index < 0 ? 99 : index;
+    };
+
+    return [...cardIds].sort((left, right) => {
+      const a = state.table.cards[left];
+      const b = state.table.cards[right];
+
+      if (!a || !b) {
+        return 0;
+      }
+
+      if (a.suitId !== b.suitId) {
+        return suitIndex(a.suitId) - suitIndex(b.suitId);
+      }
+
+      return rankOrder(context, b) - rankOrder(context, a);
+    });
+  }
+};
+
+/** Würde diese Karte den Stich im Moment anführen? */
+function wouldTakeTrick(
+  state: CardGameState,
+  context: CardRulesetContext,
+  playerId: string,
+  cardId: string
+): boolean {
+  const simulated: CardGameState = {
+    ...state,
+    table: {
+      ...state.table,
+      zones: { ...state.table.zones, [trickZoneId]: [...trickCardIds(state), cardId] }
+    }
+  };
+
+  return trickWinner(simulated, context) === playerId;
+}

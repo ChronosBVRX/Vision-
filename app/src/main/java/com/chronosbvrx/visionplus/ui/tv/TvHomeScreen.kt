@@ -64,8 +64,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.tv.material3.Border
 import com.chronosbvrx.visionplus.ui.Route
 import com.chronosbvrx.visionplus.ui.icons.VisionIcons
@@ -105,6 +103,7 @@ import com.chronosbvrx.visionplus.data.UserLibrary
 import com.chronosbvrx.visionplus.data.allFilms
 import com.chronosbvrx.visionplus.data.continueOpensSeries
 import com.chronosbvrx.visionplus.data.isEpisodeEntry
+import com.chronosbvrx.visionplus.data.nextEpisodeEntry
 import com.chronosbvrx.visionplus.data.resumeSeriesFilm
 import com.chronosbvrx.visionplus.data.banners.BannerSource
 import com.chronosbvrx.visionplus.data.banners.bannerArtCacheKey
@@ -117,6 +116,7 @@ import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.ui.LocalReducedEffects
 import com.chronosbvrx.visionplus.ui.backdropFadeSpec
 import com.chronosbvrx.visionplus.ui.components.GhostRow
+import com.chronosbvrx.visionplus.ui.components.rememberPlaybackLongClick
 import com.chronosbvrx.visionplus.ui.components.rememberPosterLongClick
 import com.chronosbvrx.visionplus.ui.rememberHeroDrift
 import com.chronosbvrx.visionplus.ui.rememberScreenPx
@@ -162,7 +162,7 @@ private fun TvHeroItem.featured() = Featured(
 private fun isRobolectric(): Boolean =
     runCatching { Class.forName("org.robolectric.Robolectric") }.isSuccess
 
-private const val HERO_SCALE = 1.12f
+private const val HERO_SCALE = 1.04f
 private const val HERO_DRIFT_MS = 14_000
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -353,7 +353,10 @@ fun TvHomeScreen(
                 ?: allAvailableFilms.firstOrNull()?.featured()
         }
         delay(150)
-        if (!returnPending && !FocusRescue.screenHasFocus && (top10Films.isNotEmpty() || allAvailableFilms.isNotEmpty())) {
+        if (
+            !returnPending && !FocusRescue.screenHasFocus && FocusRescue.dialogsOpen <= 0 &&
+            (top10Films.isNotEmpty() || allAvailableFilms.isNotEmpty())
+        ) {
             landing.request()
         }
     }
@@ -396,6 +399,18 @@ fun TvHomeScreen(
                 }
             }.getOrDefault(emptyList())
             runCatching { BannerSource.load(context) }.getOrNull()?.let { homeBanners = it }
+        }
+    }
+    // El calendario cambia a medianoche: mientras el Inicio siga abierto, se
+    // revisa la copia cada 5 min. `BannerSource.load` no toca la red si la
+    // `nextRefreshAt` todavía no venció; al terminar la campaña, el servidor ya
+    // devuelve la siguiente temporada.
+    LaunchedEffect(Unit) {
+        if (!isRobolectric()) {
+            while (true) {
+                delay(300_000L)
+                runCatching { BannerSource.load(context) }.getOrNull()?.let { homeBanners = it }
+            }
         }
     }
     LaunchedEffect(Unit) {
@@ -600,7 +615,6 @@ fun TvHomeScreen(
                         model = heroImageRequest(context, f?.imageUrl, screenPx.width, screenPx.height),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
@@ -615,15 +629,16 @@ fun TvHomeScreen(
                 }
             }
         }
-        // Cortina horizontal: opaca donde vive el texto y todavía oscura sobre el
-        // arte de la derecha para que no se vea el color crudo de la foto.
+        // Cortina horizontal: oscura donde vive el texto, pero deja respirar el color
+        // del arte hacia la derecha. Sin filtros de saturación: el Inicio no puede
+        // convertir las portadas en blanco y negro.
         Box(
             Modifier.fillMaxSize().background(
                 Brush.horizontalGradient(
-                    0f to VisionBlack,
-                    0.48f to VisionBlack,
-                    0.72f to VisionBlack.copy(alpha = 0.42f),
-                    1f to VisionBlack.copy(alpha = 0.10f),
+                    0f to VisionBlack.copy(alpha = 0.92f),
+                    0.40f to VisionBlack.copy(alpha = 0.66f),
+                    0.68f to VisionBlack.copy(alpha = 0.26f),
+                    1f to Color.Transparent,
                 ),
             ),
         )
@@ -875,7 +890,7 @@ private data class TvQuickHub(
 )
 
 private val TV_QUICK_HUBS = listOf(
-    TvQuickHub("Juegos", "VISION+ PLAY", Icons.Default.Casino, Route.Games),
+    TvQuickHub("Juegos", "VISION+ PARTY", Icons.Default.Casino, Route.Games),
     TvQuickHub("Deportes en vivo", "EN DIRECTO", Icons.Default.SportsSoccer, Route.Sports),
     TvQuickHub("Descargas (USB)", "OFFLINE", Icons.Default.Usb, Route.Downloads),
     TvQuickHub("Anime", "COLECCIÓN", Icons.Default.Animation, Route.Section("anime", "Anime")),
@@ -1633,6 +1648,12 @@ private fun ContinueRow(
     val metrics = rememberTvRowMetrics()
     Column(modifier = Modifier.padding(top = metrics.topPadding)) {
         TvRowLabel("Seguir viendo", metrics.labelHeight, icon = VisionIcons.ContinueWatching)
+        Text(
+            "Mantén OK en una tarjeta para opciones",
+            style = MaterialTheme.typography.labelSmall,
+            color = VisionTextSecondary,
+            modifier = Modifier.padding(start = 48.dp, bottom = 2.dp),
+        )
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
                 state = rowState,
@@ -1643,8 +1664,11 @@ private fun ContinueRow(
                 itemsIndexed(cards, key = { _, card -> card.entry.key }) { idx, card ->
                     val film = card.film
                     val title = continueTitle(card)
-                    val opensSeries = continueOpensSeries(card) && card.completed
-                    val nextUp = card.completed && card.hasNext && opensSeries
+                    // Misma temporada: el código ya está en el historial y se abre directo.
+                    // Temporada nueva: la ficha decide y aterriza en la temporada correcta.
+                    val nextEntry = if (card.completed && card.hasNext) nextEpisodeEntry(card.entry) else null
+                    val opensSeries = continueOpensSeries(card) && card.completed && nextEntry == null
+                    val nextUp = card.completed && card.hasNext
                     val barProgress = if (nextUp) 0f else card.progress
                     val isReturn = returnRequester != null && (film?.id == returnFilmId || card.entry.key == returnFilmId || card.entry.xtvCode == returnFilmId)
                     Column(Modifier.width(196.dp)) {
@@ -1658,11 +1682,12 @@ private fun ContinueRow(
                                 else -> Modifier
                             },
                             onFocus = { film?.let(onFocusFilm) },
+                            onLongClick = rememberPlaybackLongClick(card),
                             onClick = {
-                                if (opensSeries) {
-                                    onOpenFilm(film ?: resumeSeriesFilm(card.entry))
-                                } else {
-                                    onResume(card)
+                                when {
+                                    nextEntry != null -> onResume(card.copy(entry = nextEntry))
+                                    opensSeries -> onOpenFilm(film ?: resumeSeriesFilm(card.entry))
+                                    else -> onResume(card)
                                 }
                             },
                         )

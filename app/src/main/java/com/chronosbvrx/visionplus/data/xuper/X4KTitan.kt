@@ -642,6 +642,13 @@ object X4KTitan {
 
     /** Copies the X4K .so set from assets into a private directory the loader can search. */
     private fun extractNativeLibs(app: Context, force: Boolean): File {
+        // El APK ya trae las libs nativas del motor en lib/<abi>. Usarlas evita
+        // duplicar 30 MB en assets y la copia/verificación en cada arranque.
+        val installed = File(app.applicationInfo.nativeLibraryDir)
+        if (LIB_NAMES.all { File(installed, it).isFile }) {
+            Log.i(TAG, "libs X4K desde el APK: $installed")
+            return installed
+        }
         val abi = pickNativeAbi(app)
         val libDir = File(app.filesDir, DIR_LIBS)
         // Versión nueva del APK: las libs viejas podrían no ser las del motor actual.

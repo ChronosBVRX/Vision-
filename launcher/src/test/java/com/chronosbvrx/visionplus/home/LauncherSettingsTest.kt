@@ -55,13 +55,16 @@ class LauncherSettingsTest {
     }
 
     @Test
-    fun theControlCenterOpensTheLauncherAndVisionSettings() {
+    fun theControlCenterOnlyOpensLauncherSettings() {
         val overlays = require("src/main/java/com/chronosbvrx/visionplus/home/ui/Overlays.kt")
         assertTrue(overlays.contains("onLauncherSettings"))
         assertTrue(overlays.contains("Ajustes de Vision+ Home"))
-        assertTrue(overlays.contains("Ajustes de Vision+"))
+        assertFalse("los ajustes de la app no viven en el launcher", overlays.contains("onOpenVisionSettings"))
+        assertFalse("fuera el acceso a los ajustes de Vision+", overlays.contains("title = \"Ajustes de Vision+\""))
 
         val screen = require("src/main/java/com/chronosbvrx/visionplus/home/LauncherScreen.kt")
+        assertTrue("el engrane del Inicio abre los Ajustes de Android", screen.contains("onSystemSettings = {") && screen.contains("appsRepo.openSystemSettings()"))
+        assertFalse("el launcher no abre los ajustes de la app", screen.contains("VisionLinks.settings()"))
         assertTrue(screen.contains("LauncherSettingsDialog("))
         assertTrue(screen.contains("LauncherSettingsActions("))
         assertTrue(screen.contains("settingsSection = LauncherSettingsSection.STARTUP"))

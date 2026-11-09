@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <meta name="theme-color" content="#f7f1e7" />
+    <script>
+      (() => {
+        if (new URLSearchParams(window.location.search).get("quality") !== "low") return;
+        window.__VISION_LOW_POWER__ = true;
+        document.documentElement.dataset.quality = "low";
+        try { Object.defineProperty(window, "devicePixelRatio", { get: () => 1 }); } catch {}
+        const original = window.matchMedia.bind(window);
+        window.matchMedia = (query) => query.includes("prefers-reduced-motion")
+          ? { matches: true, media: query, onchange: null, addListener() {}, removeListener() {},
+              addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false; } }
+          : original(query);
+      })();
+    </script>
+    <title>Vision+ Party — Host</title>
+    <style>
+      /* Warm paper base — must match --paper in packages/ui-kit. */
+      html,
+      body,
+      #app {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #f7f1e7;
+        color-scheme: light;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

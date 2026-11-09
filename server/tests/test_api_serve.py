@@ -1,7 +1,41 @@
 """Lo que el API sirve a la app: limpieza de marcas, preferencia TMDB y
 representante XTV en grupos mixtos."""
 
+import gzip
+import json
+import types
+
+import pytest
+
 import app
+
+
+def test_calendar_endpoint_is_registered():
+    paths = {getattr(route, "path", "") for route in app.app.routes}
+    assert "/v1/calendar" in paths
+    assert "/v1/banners" in paths
+    assert "/apoyar" in paths
+
+
+@pytest.mark.anyio
+async def test_donation_page_uses_the_links_from_the_environment(monkeypatch):
+    monkeypatch.setenv("STRIPE_CAFE_URL", "https://buy.stripe.com/test_cafe")
+    monkeypatch.setenv("STRIPE_CHELAS_URL", "https://buy.stripe.com/test_chelas")
+    response = await app.donation_page()
+    body = response.body.decode("utf-8")
+    assert "Invitame un café" in body
+    assert "Invitame unas chelas" in body
+    assert "https://buy.stripe.com/test_cafe" in body
+    assert "https://buy.stripe.com/test_chelas" in body
+
+
+@pytest.mark.anyio
+async def test_donation_page_is_honest_when_links_are_missing(monkeypatch):
+    monkeypatch.delenv("STRIPE_CAFE_URL", raising=False)
+    monkeypatch.delenv("STRIPE_CHELAS_URL", raising=False)
+    response = await app.donation_page()
+    body = response.body.decode("utf-8")
+    assert "Pagos en configuración" in body
 
 
 def _record(**over):
@@ -136,9 +170,6 @@ def test_team_tokens():
     assert "psg" in tokens2
 
 
-import pytest
-
-
 @pytest.mark.anyio
 async def test_enrich_matches_empty_or_inactive():
     res = await app._enrich_matches_with_epg([])
@@ -173,10 +204,25 @@ def test_index_limits_inside_each_category_without_temp_spill():
     # El LATERAL aplica el tope por categoría con el índice (category_id, position).
     import inspect
 
-    source = inspect.getsource(app.index)
+    source = inspect.getsource(app._build_index)
     assert "cross join lateral" in source
     assert "limit $1::int" in source
     assert "partition by tc.category_id" not in source
+
+
+def test_index_serves_precompressed_bytes_without_reencoding():
+    payload = {"version": 7, "categories": [{"title": "Ñandú", "films": []}]}
+    raw, gz = app._json_body(payload)
+    assert json.loads(raw) == payload
+
+    gzip_request = types.SimpleNamespace(headers={"accept-encoding": "gzip, deflate"})
+    compressed = app._json_response(raw, gz, gzip_request)
+    assert compressed.headers["content-encoding"] == "gzip"
+    assert gzip.decompress(compressed.body) == raw
+
+    plain = app._json_response(raw, gz, types.SimpleNamespace(headers={}))
+    assert plain.body == raw
+    assert "content-encoding" not in plain.headers
 
 
 def test_index_cache_lasts_and_keeps_a_last_good_copy():
@@ -192,15 +238,15 @@ async def test_index_serves_the_last_good_copy_when_the_database_fails(monkeypat
     app._INDEX_CACHE.clear()
     app._INDEX_LAST_GOOD.clear()
     good = {"version": 7, "upToDate": False, "updatedAt": None, "categories": []}
-    app._INDEX_LAST_GOOD[100] = good
+    app._INDEX_LAST_GOOD[100] = (good, *app._json_body(good))
 
     def boom():
         raise RuntimeError('could not write to file "base/pgsql_tmp/x": No space left on device')
 
     monkeypatch.setattr(app, "db", boom)
     try:
-        out = await app.index(since=0, limitFilms=100, x_api_key=app.API_KEY)
-        assert out is good
+        out = await app._index_payload(since=0, limitFilms=100)
+        assert out[0] is good
     finally:
         app._INDEX_LAST_GOOD.clear()
         app._INDEX_CACHE.clear()
@@ -216,7 +262,7 @@ async def test_index_still_fails_honestly_without_a_previous_copy(monkeypatch):
 
     monkeypatch.setattr(app, "db", boom)
     with pytest.raises(RuntimeError):
-        await app.index(since=0, limitFilms=100, x_api_key=app.API_KEY)
+        await app._index_payload(since=0, limitFilms=100)
 
 
 def test_search_fold_normalization():

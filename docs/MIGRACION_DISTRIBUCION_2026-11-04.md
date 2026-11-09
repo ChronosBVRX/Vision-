@@ -18,7 +18,7 @@
 
 - Nuevo `server/api/rate_limit.py`: ventana deslizante de 60 s por IP y grupo de endpoint.
 - Límites por defecto: índice 30/min, búsqueda 120/min, GeeSports 120/min, EPG 120/min,
-  diagnóstico 30/min, configuración 20/min, juegos 600/min, resto 300/min.
+  diagnóstico 30/min, configuración 20/min, resto 300/min.
 - Se aplica en `server/api/app.py` como middleware; `/` y `/healthz` quedan exentos.
 - La IP real se toma de `X-Forwarded-For` (la última entrada, la que añade Caddy).
 - Desplegado en el VPS y verificado: 20 peticiones a `/v1/config` pasan y la 21 devuelve **429**;

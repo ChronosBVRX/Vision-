@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para Mímica en llamas: puro teatro, cero palabras y vergüenza al rojo vivo.",
+      "Se prende Mímica en llamas. Saquen el actor que traen dentro, aunque dé pena.",
+      "Mímica en llamas, señoras y señores: gestos, sudor y cero explicaciones.",
+      "Mímica en llamas: el juego donde tu cara trabaja más que tú.",
+      "Atención, futuros mimos: aquí no se habla, se sufre con estilo.",
+      "Arranca Mímica en llamas. El que explique con la boca, pierde y se avergüenza.",
+      "Se armó el teatro: cuerpo, gestos y cero palabras. ¿Quién se atreve?",
+      "Mímica en llamas, la clase de actuación que nadie pidió y todos disfrutan.",
+      "Prepárense, porque hoy el ridículo se hace en silencio.",
+      "Enciendan las luces: Mímica en llamas empieza y la dignidad se queda en la puerta."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Mímica en llamas está que arde. Muevan el cuerpo y dejen de pensar en el ridículo.",
+      "La ronda ya corre. Si se quedan quietos, el fuego se los come.",
+      "Aquí se actúa con todo: cara, manos y poquita dignidad.",
+      "Mímica en llamas: actúen como si nadie los viera, aunque todos los están viendo.",
+      "Si se traban, exageren más. El ridículo bien hecho es arte.",
+      "La ronda sigue. Menos pensar y más mover las manos.",
+      "Aquí no hay palabras, pero sí muchas caras de “ya casi”.",
+      "El reloj corre y su actuación no se va a explicar sola.",
+      "Saquen el drama del sótano y pónganlo en el escenario.",
+      "Mímica en llamas: el único lugar donde hacer el ridículo suma puntos."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Se apagó la ronda de Mímica en llamas. Veamos quién brilló y quién solo humeó.",
+      "Terminó Mímica en llamas. Momento de aceptar que su actuación fue un incendio.",
+      "Resultados de Mímica en llamas. La tabla no tiene piedad con los dramáticos.",
+      "Se acabó la mímica. Veamos quién actuó de verdad y quién solo movió las cejas.",
+      "Ronda cerrada. El público decidió y su actuación ya tiene sentencia.",
+      "Resultados de Mímica en llamas: aplausos, burlas y cero devoluciones.",
+      "La función terminó. El que se creyó la gran estrella, que revise la tabla.",
+      "Se apagaron las luces. La vergüenza todavía sigue en el escenario.",
+      "Terminó la ronda. Ni el director de teatro les cree esa actuación.",
+      "Mímica en llamas: el telón baja y la tabla habla."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Así va la tabla de Mímica en llamas. Arriba los que actúan; abajo los que solo miran.",
+      "Marcador de Mímica en llamas. Los de arriba se lucen; los de abajo se queman.",
+      "Puntos de Mímica en llamas. Todavía pueden remontar, pero ya huele a humo.",
+      "Puntos de Mímica en llamas: arriba los que se atreven, abajo los que se esconden.",
+      "La tabla de la actuación. El que no se arriesgó, ya sabe cómo le fue.",
+      "Marcador de Mímica en llamas: el cuerpo habló y la tabla respondió.",
+      "Aquí van los puntos. El que se quedó tieso, que se lo cobre al pulso.",
+      "Tabla parcial: los dramáticos suman, los tímidos sobreviven.",
+      "Mímica en llamas: la tabla se está calentando y todavía hay ronda.",
+      "Puntos de la función. El que se ría primero, pierde."
+    ]
+  }
+]

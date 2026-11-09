@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.ui.tv
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -69,6 +70,16 @@ class TvHeroWiringTest {
     }
 
     @Test
+    fun theHeroKeepsTheArtInColorAndAtNativeQuality() {
+        val screen = source("ui/tv/TvHomeScreen.kt")
+        assertFalse("el Inicio no puede desaturar el arte", screen.contains("setToSaturation"))
+        assertTrue("zoom suave para no perder nitidez", screen.contains("private const val HERO_SCALE = 1.04f"))
+        assertTrue("la cortina deja ver color a la derecha", screen.contains("0.40f to VisionBlack.copy(alpha = 0.66f)"))
+        val server = file("server/api/banners.py")
+        assertTrue("el banner usa el máster de TMDB", server.contains("t/p/original"))
+    }
+
+    @Test
     fun theHeroScrimCoversTheTopAndTheBottom() {
         val screen = source("ui/tv/TvHomeScreen.kt")
         assertTrue("el velo de la tele cubre el borde superior", screen.contains("0f to VisionBlack.copy(alpha = 0.58f)"))
@@ -106,6 +117,12 @@ class TvHeroWiringTest {
             File("../app/src/main/java/com/chronosbvrx/visionplus/$rel"),
         ).firstOrNull { it.exists() }
         assertNotNull("fuente no encontrada: $rel", found)
+        return found!!.readText()
+    }
+
+    private fun file(rel: String): String {
+        val found = listOf(File(rel), File("../$rel")).firstOrNull { it.exists() }
+        assertNotNull("archivo no encontrado: $rel", found)
         return found!!.readText()
     }
 }

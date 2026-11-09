@@ -70,7 +70,7 @@ class HeroBannersWiringTest {
         val server = file("server/api/banners.py")
         assertTrue("vigencia diaria", server.contains("BANNER_TTL_SECONDS = 20 * 3600"))
         assertTrue("tabla propia", server.contains("launcher_banners"))
-        assertTrue("arte panorámico TMDB", server.contains("w1280"))
+        assertTrue("arte panorámico TMDB en resolución completa", server.contains("t/p/original"))
         assertTrue("selección pura", server.contains("def pick_movie_candidates("))
         assertTrue("refresco en segundo plano", server.contains("background.add_task(refresh_movies"))
         assertTrue("un solo refresco en el VPS", server.contains("pg_try_advisory_lock"))
