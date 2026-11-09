@@ -128,7 +128,6 @@ object PartyNetStack {
         return try {
             val req = Request.Builder()
                 .url(requestUrl)
-                .header("Accept-Encoding", "gzip")
                 .build()
             client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return null
