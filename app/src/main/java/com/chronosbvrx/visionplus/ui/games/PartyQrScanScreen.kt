@@ -271,12 +271,18 @@ private fun decodeReader(reader: MultiFormatReader, data: ByteArray, width: Int,
     }
 }
 
+/**
+ * Extrae el código de sala de cualquier QR que la tele emita: la URL del
+ * join (`https://…/#join?room=ABCD`), un deep link, o el código pelado.
+ */
 private fun normalizeRoomCode(raw: String?): String? {
-    val scanned = raw?.trim()?.uppercase()
-        ?.removePrefix("VISIONPLUS://PARTY/")
-        ?.removePrefix("VISIONPLUS://PARTY")
-        ?.trim()
-    return if (!scanned.isNullOrBlank() && scanned.length >= 4) scanned.take(4) else null
+    val text = raw?.trim() ?: return null
+    Regex("room=([A-Za-z0-9]{4})", RegexOption.IGNORE_CASE).find(text)?.let { return it.groupValues[1].uppercase() }
+    val s = text.uppercase()
+        .removePrefix("VISIONPLUS://PARTY/")
+        .removePrefix("VISIONPLUS://PARTY")
+        .trim()
+    return if (s.length >= 4) s.take(4) else null
 }
 
 /**
