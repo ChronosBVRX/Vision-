@@ -87,6 +87,16 @@ fun PartyHostScreen(gameId: String?, onBack: () -> Unit) {
     var webViewDestroyed by remember { mutableStateOf(false) }
     var reloadToken by remember { mutableIntStateOf(0) }
 
+    // La máscara de carga no depende solo de onPageFinished (en algunos
+    // WebView con socket.io en vivo ese evento nunca llega y la pantalla
+    // quedaba blanca para siempre). Tope absoluto de 12 s: pasado ese
+    // tiempo la sala se ve aunque el evento no haya llegado.
+    LaunchedEffect(gameId, reloadToken) {
+        loading = true
+        delay(12_000)
+        loading = false
+    }
+
     fun retry() {
         failed = false
         loading = true
