@@ -89,12 +89,15 @@ fun PartyHostScreen(gameId: String?, onBack: () -> Unit) {
 
     // La máscara de carga no depende solo de onPageFinished (en algunos
     // WebView con socket.io en vivo ese evento nunca llega y la pantalla
-    // quedaba blanca para siempre). Tope absoluto de 12 s: pasado ese
-    // tiempo la sala se ve aunque el evento no haya llegado.
-    LaunchedEffect(gameId, reloadToken) {
+    // quedaba blanca para siempre). Tope de 12 s por cada navegación: si el
+    // SPA cambia la URL al iniciar la escena (onPageStarted) el esfuerzo se
+    // reinicia (startSeq), no se queda enganchada desde la primera.
+    var startSeq by remember { mutableIntStateOf(0) }
+    LaunchedEffect(startSeq) {
         loading = true
         delay(12_000)
         loading = false
+        failed = false
     }
 
     fun retry() {
@@ -211,7 +214,7 @@ fun PartyHostScreen(gameId: String?, onBack: () -> Unit) {
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                             failed = false
-                            loading = true
+                            startSeq++
                         }
                         override fun onPageFinished(view: WebView?, url: String?) {
                             // La sala se crea y se selecciona el juego por socket.

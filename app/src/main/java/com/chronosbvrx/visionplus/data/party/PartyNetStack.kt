@@ -83,6 +83,31 @@ object PartyNetStack {
         return false
     }
 
+    // Parche de medidas del documento /host antes de que arranque Phaser:
+    // en WebViews viejos la cadena html/body/#app height:100% puede
+    // resolverse a 0 y el Scale.RESIZE de Phaser deja el canvas en 0 de
+    // altura (pantalla blanca con el shell encima). Forzamos alturas en px
+    // en el inicio (script clásico, antes de los módulos diferidos) y en
+    // resize.
+    private fun patchDocument(bytes: ByteArray): ByteArray {
+        val html = String(bytes, Charsets.UTF_8)
+        val marker = "<body>"
+        if (!html.contains(marker)) return bytes
+        val patch = "<body>" +
+            "<script>(function(){function f(){try{" +
+            "var a=document.getElementById('app');" +
+            "if(a){a.style.height=window.innerHeight+'px';a.style.maxHeight=window.innerHeight+'px';" +
+            "a.style.minHeight='100%';}" +
+            "document.body.style.minHeight=window.innerHeight+'px';" +
+            "}catch(e){}}" +
+            "window.addEventListener('resize',f);" +
+            "if(document.readyState==='loading'){" +
+            "document.addEventListener('DOMContentLoaded',f);" +
+            "}else{f();}" +
+            "requestAnimationFrame(f);})();</script>"
+        return html.replace(marker, patch, ignoreCase = true).toByteArray(Charsets.UTF_8)
+    }
+
     /**
      * Descarga con OkHttp (y caché de assets). Devuelve null si no se pudo
      * (el WebView decide el fallback/error).
@@ -138,14 +163,18 @@ object PartyNetStack {
                     mime = resp.header("Content-Type")?.substringBefore(';')?.trim() ?: mime
                 }
                 val encoding = if (isText(mime)) "utf-8" else null
+                var payload = bytes
+                if (isDocument) {
+                    payload = patchDocument(payload)
+                }
                 if (cacheKey != null) {
-                    synchronized(lock) { cache[cacheKey] = CacheEntry(bytes, mime, encoding) }
+                    synchronized(lock) { cache[cacheKey] = CacheEntry(payload, mime, encoding) }
                 }
                 android.util.Log.i(
                     "TVWEB",
                     "NETSTACK ${resp.code} $path ${bytes.size}b ${System.currentTimeMillis() - t0}ms",
                 )
-                respond(bytes, mime, encoding)
+                respond(payload, mime, encoding)
             }
         } catch (e: Exception) {
             android.util.Log.w("TVWEB", "NETSTACK FAIL $path ${e.javaClass.simpleName}: ${e.message}")
