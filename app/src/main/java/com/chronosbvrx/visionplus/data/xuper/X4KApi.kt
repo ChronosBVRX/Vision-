@@ -41,11 +41,15 @@ internal fun xtvPortalId(id: String): String {
 }
 
 /**
- * The XTV portal (Xuper's "masnew" tenant) as this app's second content source.
+ * El portal XTV (tenant "masnew") como segunda fuente de Vision+.
  *
- * The wire protocol is the family's own: `hex(base64(DESede/ECB/PKCS5(json)))` with the tenant
- * key. The session renews itself through `v3/snToken -> v8/active` (the account is bound to the
- * device's sn, no password), exactly like the provider's app.
+ * Desde 2026-11-12 el catálogo vive en los hosts de Magis: `masnew` para sesión, catálogo y
+ * SLB, y `masmobile` para firmar la licencia de `v9/startPlayVOD`. La llave histórica de XTV
+ * quedó retirada (sus hosts contestan `portal200001`).
+ *
+ * El protocolo es el de la familia: `hex(base64(DESede/ECB/PKCS5(json)))` con la llave del
+ * tenant. La sesión se renueva con `v3/snToken -> v8/active` (la cuenta va atada al sn del
+ * equipo, sin contraseña), igual que la app del proveedor.
  *
  * Sessions can be taken away at any time (another device activating, the service's own rhythm):
  * every call is therefore *self-healing* — when one fails, the session is minted again and the
@@ -54,34 +58,46 @@ internal fun xtvPortalId(id: String): String {
 object X4KApi {
     private const val TAG = "X4KApi"
 
-    /** The tenant key (568e194f-...), carried inside the provider's manifest. */
-    private const val KEY = "568e194f-d170-4369-96e8-4a457f641880"
+    /**
+     * La llave vigente de la familia (Magis/Xuper Hydra). La llave histórica de XTV
+     * (`568e194f-...`) quedó retirada: sus hosts contestan `portal200001` a cualquier
+     * acuñación desde 2026-11-12. El catálogo y las licencias ahora viven en los hosts
+     * de Magis, que entienden `portalCode=masnew` para metadatos y `masmobile` para el play.
+     */
+    private const val KEY = "37a759c3-fc2b-413d-b424-0bb0e1505a5e"
 
     /**
-     * The wire key bytes: y7a_decode("568e194f-...")[:24] (the family's own decoder, whose
+     * The wire key bytes: y7a_decode("37a759c3-...")[:24] (the family's own decoder, whose
      * invalid-base64 handling shapes the key; a plain Base64.decode gives different bytes).
      */
     private val KEY_BYTES = byteArrayOf(
-        0xe7.toByte(), 0xaf.toByte(), 0x1e.toByte(), 0xd7.toByte(), 0xde.toByte(), 0x1f.toByte(),
-        0xfd.toByte(), 0xdd.toByte(), 0x7b.toByte(), 0xd3.toByte(), 0xfe.toByte(), 0x37.toByte(),
-        0xeb.toByte(), 0xdf.toByte(), 0xfd.toByte(), 0xe9.toByte(), 0xef.toByte(), 0x3f.toByte(),
-        0xe1.toByte(), 0xae.toByte(), 0x39.toByte(), 0xed.toByte(), 0xfe.toByte(), 0xb8.toByte(),
+        0xdf.toByte(), 0xb6.toByte(), 0xbb.toByte(), 0xe7.toByte(), 0xd7.toByte(), 0x37.toByte(),
+        0xfd.toByte(), 0xf7.toByte(), 0x36.toByte(), 0x6f.toByte(), 0xfe.toByte(), 0x35.toByte(),
+        0xdd.toByte(), 0xdf.toByte(), 0xdb.toByte(), 0xe3.toByte(), 0x6e.toByte(), 0x3f.toByte(),
+        0xd1.toByte(), 0xb6.toByte(), 0xf4.toByte(), 0x7b.toByte(), 0x5e.toByte(), 0x74.toByte(),
     )
 
-    internal const val HOST_MAIN = "fuxok.nguvmqhpk.com"
-    internal const val HOST_BACKUP = "mptec.dhkrxuzcy.com"
+    internal const val HOST_MAIN = "rhokqi.ryh1gifvn.com"
+    internal const val HOST_BACKUP = "zgmnxa.ryh1gifvn.com"
 
     /** Identidad compartida de siempre (legado): todas las instalaciones sin slot propio
      *  la usan. Con slot, el equipo acuña SU sesión y nadie patea a nadie. */
     internal const val LEGACY_SN = "2392fe5186d83d73508a2c8c60a26ef6"
     internal const val LEGACY_USER_ID = "967111326"
+
+    /** Metadatos, sesión, catálogo y SLB. */
     private const val PORTAL = "masnew"
-    internal const val APP_ID = "com.android.msandroid"
-    internal const val APK_VER = "43404"
-    internal const val SPKG_VER = "2025-03-11 02:26:11_33_13_4.14.186-27270957"
+
+    /** Solo para `startPlayVOD`: el tenant de Magis es el que firma la licencia libre. */
+    private const val PORTAL_PLAY = "masmobile"
+
+    internal const val APP_ID = "com.msandroid.mobile"
+    internal const val APK_VER = "60507"
+    internal const val SPKG_VER = "13"
 
     private const val PREFS = "x4k_api"
     private const val K_USER_TOKEN = "user_token"
+    private const val K_USER_ID = "user_id"
     private const val K_SN_TOKEN = "sn_token"
     private const val K_SESSION_AT = "session_at"
     private const val K_ENTRIES = "entries_json"
@@ -92,6 +108,10 @@ object X4KApi {
     private const val K_LIVE = "live_json"
     private const val K_LIVE_AT = "live_at"
     private const val K_META = "xtv_meta"
+    private const val K_ENGINE_GEN = "engine_gen"
+
+    /** Sube cuando cambia el portal: invalida entries/params de la generación anterior. */
+    private const val ENGINE_GENERATION = 2
 
     /** Renew proactively after this long; kicked sessions recover reactively before that.
      *  Largo a propósito (6 h): la cuenta admite una sola sesión y renovar de más patea a
@@ -138,13 +158,25 @@ object X4KApi {
     @Volatile
     internal var slotUserId: String? = null
 
+    /**
+     * userId que devolvió `v8/active` para la sesión vigente. Puede no coincidir con el
+     * userId del slot (el portal reasigna cuentas al cambiar de tenant): las llamadas
+     * que mezclan un token con el userId de otra cuenta contestan `请求参数异常` y el
+     * play muere sin licencia. Se guarda junto al token.
+     */
+    @Volatile
+    private var sessionUserId: String? = null
+
     @Volatile
     private var slotsReady = false
 
     /** Identidad efectiva del portal: la propia si hay slot, la compartida si no. */
     internal fun snOf(): String = slotSn?.takeIf { it.isNotBlank() } ?: LEGACY_SN
 
-    internal fun userIdOf(): String = slotUserId?.takeIf { it.isNotBlank() } ?: LEGACY_USER_ID
+    internal fun userIdOf(): String =
+        sessionUserId?.takeIf { it.isNotBlank() }
+            ?: slotUserId?.takeIf { it.isNotBlank() }
+            ?: LEGACY_USER_ID
 
     /** Carga el slot propio (una vez por proceso; barato tras la primera). */
     fun initSlots(context: Context) {
@@ -155,6 +187,9 @@ object X4KApi {
                 slotSn = it.sn
                 slotUserId = it.userId
             }
+            prefs(context).getString(K_USER_ID, null)?.takeIf { it.isNotBlank() }?.let {
+                sessionUserId = it
+            }
         } catch (_: Exception) {
         }
     }
@@ -164,11 +199,12 @@ object X4KApi {
         SlotStore.save(context, slot)
         slotSn = slot.sn
         slotUserId = slot.userId
+        sessionUserId = null
         slotsReady = true
         try {
             prefs(context).edit()
-                .remove(K_USER_TOKEN).remove(K_SN_TOKEN).remove(K_SESSION_AT)
-                .remove(K_ENTRIES).remove(K_PARAMS).remove(K_ENGINE_AT)
+                .remove(K_USER_TOKEN).remove(K_USER_ID).remove(K_SN_TOKEN).remove(K_SESSION_AT)
+                .remove(K_ENTRIES).remove(K_PARAMS).remove(K_ENGINE_AT).remove(K_ENGINE_GEN)
                 .apply()
         } catch (_: Exception) {
         }
@@ -309,25 +345,33 @@ object X4KApi {
             if (userToken.isBlank() || userId.isBlank()) throw java.io.IOException("auto-alta rechazada")
             val slot = DeviceSlot(sn, userId)
             applySlot(context, slot)
-            storeSession(context, snToken, userToken)
+            storeSession(context, snToken, userToken, userId)
             val now = System.currentTimeMillis()
             lastMintAt = now
             slot
         }
     }
 
-    private fun storeSession(context: Context, snToken: String, userToken: String) {
-        prefs(context).edit()
-            .putString(K_SN_TOKEN, snToken)
-            .putString(K_USER_TOKEN, userToken)
-            .putLong(K_SESSION_AT, System.currentTimeMillis())
-            .apply()
+    private fun storeSession(
+        context: Context,
+        snToken: String,
+        userToken: String,
+        userId: String = "",
+    ) {
+        if (userId.isNotBlank()) sessionUserId = userId
+        prefs(context).edit().apply {
+            putString(K_SN_TOKEN, snToken)
+            putString(K_USER_TOKEN, userToken)
+            if (userId.isNotBlank()) putString(K_USER_ID, userId)
+            putLong(K_SESSION_AT, System.currentTimeMillis())
+        }.apply()
     }
 
     /** A fresh userToken, renewing through the device's own snToken when needed. */
     suspend fun ensureSession(context: Context): String = withContext(Dispatchers.IO) {
         synchronized(lock) {
             val p = prefs(context)
+            p.getString(K_USER_ID, null)?.takeIf { it.isNotBlank() }?.let { sessionUserId = it }
             val token = p.getString(K_USER_TOKEN, null)
             val at = p.getLong(K_SESSION_AT, 0L)
             if (!token.isNullOrBlank() && System.currentTimeMillis() - at < SESSION_TTL_MS) {
@@ -367,6 +411,7 @@ object X4KApi {
         if (!mintAllowed(now, lastMintAt, lastForcedMintAt, force)) {
             val existing = p.getString(K_USER_TOKEN, null)
             if (!existing.isNullOrBlank()) {
+                p.getString(K_USER_ID, null)?.takeIf { it.isNotBlank() }?.let { sessionUserId = it }
                 Log.i(TAG, "mint en silencio (${if (force) "forzado" else "normal"}); reusando token")
                 return existing
             }
@@ -387,8 +432,9 @@ object X4KApi {
             active = activeCall(sn)
         }
         val userToken = active.optString("userToken")
+        val userId = active.optString("userId")
         if (userToken.isBlank()) throw IOException("sin userToken")
-        storeSession(context, sn, userToken)
+        storeSession(context, sn, userToken, userId)
         // La marca de tiempo solo en ÉXITO: un mint fallido no debe bloquear el siguiente intento.
         lastMintAt = now
         lastMintFailAt = 0L
@@ -396,7 +442,7 @@ object X4KApi {
         // The entries embed the session: a new session means new entries (y licencias de vivo nuevas).
         memoryLiveMedias.clear()
         memoryLiveArray = null
-        p.edit().remove(K_ENTRIES).remove(K_PARAMS).remove(K_ENGINE_AT).remove(K_LIVE).apply()
+        p.edit().remove(K_ENTRIES).remove(K_PARAMS).remove(K_ENGINE_AT).remove(K_ENGINE_GEN).remove(K_LIVE).apply()
         Log.i(TAG, "sesión renovada (${if (force) "forzada" else "normal"})")
         return userToken
     }
@@ -468,7 +514,11 @@ object X4KApi {
         deferPrewarm: Boolean = false,
     ) = withContext(Dispatchers.IO) {
         val p = prefs(context)
-        val fresh = p.getString(K_ENTRIES, null)?.isNotBlank() == true &&
+        // Migración de portal: las entries viejas (XTV) llevan otro tenant/auth_id y no
+        // sirven con las licencias de Magis. Se piden una vez tras actualizar la app.
+        val generationOk = p.getInt(K_ENGINE_GEN, 0) == ENGINE_GENERATION
+        val fresh = generationOk &&
+            p.getString(K_ENTRIES, null)?.isNotBlank() == true &&
             p.getString(K_PARAMS, null)?.isNotBlank() == true &&
             System.currentTimeMillis() - p.getLong(K_ENGINE_AT, 0L) < ENGINE_TTL_MS
         if (fresh && !force) {
@@ -483,7 +533,7 @@ object X4KApi {
                 put("userIdentity", "1")
                 put("portalCode", PORTAL)
                 put("type", "merge")
-                put("appVer", "49902")
+                put("appVer", APK_VER)
                 put("lang", "es")
                 put("encMediaSupported", 1)
                 put("liveCodeList", JSONArray().put("masmobile_live"))
@@ -495,6 +545,7 @@ object X4KApi {
         p.edit()
             .putString(K_ENTRIES, slb.optJSONArray("cdn_list")?.toString().orEmpty())
             .putString(K_PARAMS, slb.optString("play_params"))
+            .putInt(K_ENGINE_GEN, ENGINE_GENERATION)
             .putLong(K_ENGINE_AT, System.currentTimeMillis())
             .apply()
         if (!deferPrewarm) prewarmEngine(context)
@@ -1160,11 +1211,11 @@ object X4KApi {
             val cid = xtvPortalId(contentId)
             for (type in listOf("2", "1")) {
                 val d = runCatching {
-                    callWithSession(context, "/api/portalCore/v10/startPlayVOD") { token ->
+                    callWithSession(context, "/api/portalCore/v9/startPlayVOD") { token ->
                         JSONObject().apply {
                             put("userToken", token)
                             put("userId", userIdOf())
-                            put("portalCode", PORTAL)
+                            put("portalCode", PORTAL_PLAY)
                             put("contentId", cid)
                             put("seriesContentId", "")
                             put("type", type)
@@ -1446,7 +1497,10 @@ object X4KApi {
             fun licenseBody(type: String, token: String): JSONObject = JSONObject().apply {
                 put("userToken", token)
                 put("userId", userIdOf())
-                put("portalCode", PORTAL)
+                // El tenant que firma la licencia libre es masmobile. Con masnew el
+                // portal responde portal100001 («门户信息不存在») aunque el resto del
+                // catálogo sí viva en masnew.
+                put("portalCode", PORTAL_PLAY)
                 put("contentId", cid)
                 put("seriesContentId", sid)
                 put("type", type)
@@ -1455,14 +1509,14 @@ object X4KApi {
                 put("episodeNumberList", JSONArray().put(1))
             }
             suspend fun license(type: String, connectMs: Int, readMs: Int): JSONObject? = runCatching {
-                post("/api/portalCore/v10/startPlayVOD", licenseBody(type, ensureSession(context)), connectMs, readMs)
+                post("/api/portalCore/v9/startPlayVOD", licenseBody(type, ensureSession(context)), connectMs, readMs)
             }.onFailure {
                 if (it is CancellationException) cancelledLicense = true
                 else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
             }.getOrNull()
             for (type in listOf("2", "1")) {
                 var d = runCatching {
-                    callWithSession(context, "/api/portalCore/v10/startPlayVOD") { token ->
+                    callWithSession(context, "/api/portalCore/v9/startPlayVOD") { token ->
                         licenseBody(type, token)
                     }
                 }.onFailure {
@@ -1475,7 +1529,7 @@ object X4KApi {
                     d = runCatching {
                         // Token rechazado: mint forzado (salta el silencio de 30 s).
                         val freshToken = renewSession(context, force = true)
-                        post("/api/portalCore/v10/startPlayVOD", licenseBody(type, freshToken))
+                        post("/api/portalCore/v9/startPlayVOD", licenseBody(type, freshToken))
                     }.onFailure {
                         if (it is CancellationException) cancelledLicense = true
                         else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"

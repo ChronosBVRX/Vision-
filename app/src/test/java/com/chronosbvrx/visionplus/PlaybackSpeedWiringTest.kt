@@ -99,6 +99,50 @@ class PlaybackSpeedWiringTest {
     }
 
     @Test
+    fun theVodPortalMigratedToMagisWithoutLosingTheCatalog() {
+        val api = source("data/xuper/X4KApi.kt")
+        // Los hosts/llave históricos de XTV contestan portal200001 desde 2026-11-12.
+        assertTrue("host principal de Magis", api.contains("rhokqi.ryh1gifvn.com"))
+        assertTrue("host de respaldo de Magis", api.contains("zgmnxa.ryh1gifvn.com"))
+        assertTrue("llave vigente", api.contains("37a759c3-fc2b-413d-b424-0bb0e1505a5e"))
+        assertTrue("appId de Magis", api.contains("com.msandroid.mobile"))
+        assertTrue("versión vigente", api.contains("APK_VER = \"60507\""))
+        assertTrue("el catálogo sigue en masnew", api.contains("PORTAL = \"masnew\""))
+        // La licencia libre solo la firma el tenant masmobile y solo por v9.
+        assertTrue("tenant de reproducción", api.contains("PORTAL_PLAY = \"masmobile\""))
+        assertTrue("play v9", api.contains("/api/portalCore/v9/startPlayVOD"))
+        assertTrue("el cuerpo usa el tenant de play", api.contains("put(\"portalCode\", PORTAL_PLAY)"))
+        assertFalse("no debe quedar el play v10, ya no entrega medios", api.contains("/api/portalCore/v10/startPlayVOD"))
+    }
+
+    @Test
+    fun theSessionKeepsTheUserIdThatSignedIn() {
+        val api = source("data/xuper/X4KApi.kt")
+        // v8/active puede devolver un userId distinto al del slot; mezclarlo con el token
+        // hace que el portal conteste «请求参数异常» y el play se quede sin licencia.
+        assertTrue("guarda el userId de la sesión", api.contains("K_USER_ID"))
+        assertTrue("storeSession recibe userId", api.contains("userId: String = \"\""))
+        assertTrue("active persiste su userId", api.contains("storeSession(context, sn, userToken, userId)"))
+        assertTrue("userIdOf prioriza la sesión", api.contains("sessionUserId?.takeIf { it.isNotBlank() }"))
+    }
+
+    @Test
+    fun theEngineIdentifiesAsTheNewPortal() {
+        val titan = source("data/xuper/X4KTitan.kt")
+        assertTrue("llave del motor", titan.contains("37a759c3-fc2b-413d-b424-0bb0e1505a5e"))
+        assertTrue("appId del motor", titan.contains("APP_ID = \"com.msandroid.mobile\""))
+        assertTrue("versión del motor", titan.contains("APP_VER = \"60507\""))
+    }
+
+    @Test
+    fun oldEngineEntriesAreInvalidatedOnThePortalMigration() {
+        val api = source("data/xuper/X4KApi.kt")
+        assertTrue("marca de generación", api.contains("K_ENGINE_GEN"))
+        assertTrue("generación del portal", api.contains("ENGINE_GENERATION = 2"))
+        assertTrue("no se reutilizan entries viejas", api.contains("generationOk = p.getInt(K_ENGINE_GEN, 0) == ENGINE_GENERATION"))
+    }
+
+    @Test
     fun theEngineNoLongerHashesItsDexOnEveryPlayerStart() {
         val titan = source("data/xuper/X4KTitan.kt")
         // La marca se enciende con un fallo (o una reparación) y se apaga al verificar bien.

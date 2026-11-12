@@ -23,7 +23,10 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-from wire import XTV_KEY, wire_decrypt, wire_encrypt
+# La llave de XTV (568e...) quedó retirada el 2026-11-12: sus hosts contestan
+# portal200001 a cualquier acuñación. Magis sirve el mismo catálogo masnew con su
+# llave vigente, y su tenant masmobile firma las licencias de reproducción.
+from wire import MAGIS_KEY as XTV_KEY, wire_decrypt, wire_encrypt
 
 log = logging.getLogger("xtv")
 
@@ -33,10 +36,10 @@ SN = "2392fe5186d83d73508a2c8c60a26ef6"
 # Vacío = se comporta como un aparato más (convivencia con renovaciones).
 SERVER_SN = os.environ.get("XTV_SERVER_SN", "").strip()
 PORTAL = "masnew"
-APP_ID = "com.android.msandroid"
-APK_VER = "43404"
-SPKG = "2025-03-11 02:26:11_33_13_4.14.186-27270957"
-HOSTS = ["fuxok.nguvmqhpk.com", "mptec.dhkrxuzcy.com"]
+APP_ID = "com.msandroid.mobile"
+APK_VER = "60507"
+SPKG = "13"
+HOSTS = ["rhokqi.ryh1gifvn.com", "zgmnxa.ryh1gifvn.com"]
 
 ROOT_FALLBACK = {
     "masnew_live": 76175,

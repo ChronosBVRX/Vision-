@@ -30,13 +30,15 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
-from wire import wire_decrypt, wire_encrypt, XTV_KEY
+# Misma migración que el worker: los hosts/llave históricos de XTV contestan
+# portal200001 desde 2026-11-12; el catálogo masnew vive ahora en Magis.
+from wire import wire_decrypt, wire_encrypt, MAGIS_KEY as XTV_KEY
 
 PORTAL = "masnew"
-APP_ID = "com.android.msandroid"
-APK_VER = "43404"
-SPKG = "2025-03-11 02:26:11_33_13_4.14.186-27270957"
-HOSTS = ["fuxok.nguvmqhpk.com", "mptec.dhkrxuzcy.com"]
+APP_ID = "com.msandroid.mobile"
+APK_VER = "60507"
+SPKG = "13"
+HOSTS = ["rhokqi.ryh1gifvn.com", "zgmnxa.ryh1gifvn.com"]
 # El campo `sn` del sobre no participa en la validación: el token manda. Se usa el SN
 # histórico para que el sobre quede idéntico al del worker.
 LEGACY_SN = "2392fe5186d83d73508a2c8c60a26ef6"

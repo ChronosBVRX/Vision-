@@ -220,9 +220,9 @@ object X4KTitan {
     /** Carpeta de las librerías nativas extraídas. */
     private const val DIR_LIBS = "x4k-libs"
 
-    const val COMMUNICATION_KEY = "568e194f-d170-4369-96e8-4a457f641880"
-    const val APP_ID = "com.android.msandroid"
-    const val APP_VER = "49902"
+    const val COMMUNICATION_KEY = "37a759c3-fc2b-413d-b424-0bb0e1505a5e"
+    const val APP_ID = "com.msandroid.mobile"
+    const val APP_VER = "60507"
 
     private val DEX_ASSETS = listOf(
         "x4k/x4k-sdk-1.dex",

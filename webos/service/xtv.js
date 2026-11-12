@@ -20,24 +20,25 @@ const https = require("https");
 const path = require("path");
 const urlmod = require("url");
 
-const KEY_HEX = "e7af1ed7de1ffddd7bd3fe37ebdffde9ef3fe1ae39edfeb8";
+const KEY_HEX = "dfb6bbe7d737fdf7366ffe35dddfdbe36e3fd1b6f47b5e74";
 const KEY = Buffer.from(KEY_HEX, "hex");
 const EMPTY_IV = Buffer.alloc(0);
 const SESSION_FILE = process.env.VISION_WEBOS_SESSION || "/tmp/visionplus-webos-session.json";
 const SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 const SNTOKEN_SALT = "ntFT65w6itH!lHCPw7D=@qnsFC5adD28";
 const PORTAL_CODE = "masnew";
-const APP_ID = "com.android.msandroid";
-const APK_VERSION = "49902";
-const APK_VER_HEADER = "43404";
-const SPKG_VER = "2025-08-07 05:40:11_36_16_";
+const PORTAL_PLAY = "masmobile";
+const APP_ID = "com.msandroid.mobile";
+const APK_VERSION = "60507";
+const APK_VER_HEADER = "60507";
+const SPKG_VER = "13";
 const USER_AGENT = "okhttp/3.12.12";
 const CONTENT_TYPE = "application/json;charset=utf-8";
 const UA_CDN = "Ranger/4.9.4-17294ac0";
 const REQUEST_TIMEOUT = 20000;
 const RATE_MS = 260;
 
-const HOSTS = (process.env.VISION_XTV_HOSTS || "osuhk.m3x8o50te.com,oogoy.f30c96w8.com")
+const HOSTS = (process.env.VISION_XTV_HOSTS || "rhokqi.ryh1gifvn.com,zgmnxa.ryh1gifvn.com")
   .split(",")
   .map((h) => h.trim())
   .filter(Boolean);
@@ -525,8 +526,9 @@ function loadPlay(contentId, seriesContentId, callback) {
   ensureSession((sessionError) => {
     if (sessionError) return callback(sessionError);
     call(
-      "v10/startPlayVOD",
+      "v9/startPlayVOD",
       {
+        portalCode: PORTAL_PLAY,
         contentId: trim(contentId),
         seriesContentId: trim(seriesContentId),
         startTime: 0,
@@ -554,7 +556,7 @@ function slbBean() {
     appVer: APK_VERSION,
     lang: "es",
     encMediaSupported: 1,
-    liveCodeList: ["masnew_live"],
+    liveCodeList: ["masmobile_live"],
     appParams: "",
     reserve1: "02:00:00:00:00:00",
     pipFlag: "0",
