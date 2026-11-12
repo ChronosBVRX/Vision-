@@ -8,9 +8,22 @@
 - Última estable del canal anterior: **2.6.1/vc494** (también publicada en el canal nuevo).
 - El repo nuevo conserva Android 2.6.1, launcher 1.3.18, PC 0.5.0 (`pc-latest`) y LG webOS 0.3.0.
 
+## Cierre definitivo del canal anterior (2026-11-12)
+
+- Se publicó **2.6.29/vc522** como puente final en `ChronosBVRX/Vision-` (canal anterior).
+  El repo se abrió a público, se actualizó `main` a `8c0d5e5` y se **archivó en solo lectura**.
+  Sus releases siguen descargables (HTTP 200), pero no se publicarán más versiones ahí.
+- La release **v2.6.29** del canal nuevo (`Vision-Releases`) es la estable actual y también
+  la última que ofrece el canal anterior; después de instalarla, la app queda apuntando a
+  `Vision-Releases`.
+- `min_version_code=522` y `migration_version_code=522`; fecha límite del aviso:
+  **2026-11-19 23:59:59 -06** (`1795154399000`).
+- Verificado sin autenticación: `/releases/latest` de los dos repos = `v2.6.29`,
+  `version.json` y `VisionPlus.apk` descargan, APK vc522 con la firma histórica.
+
 ## Estado
 
-- **Código:** `ChronosBVRX/Vision-` → **privado**.
+- **Código:** `ChronosBVRX/Vision-` → **público y archivado** (solo lectura).
 - **Distribución pública:** `ChronosBVRX/Vision-Releases` (solo APK, launcher, `version.json` y documentación visible).
 - **OTA:** la app y el launcher apuntan a `Vision-Releases`.
 
