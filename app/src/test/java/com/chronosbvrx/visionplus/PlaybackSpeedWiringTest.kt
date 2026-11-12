@@ -108,11 +108,13 @@ class PlaybackSpeedWiringTest {
         assertTrue("appId de Magis", api.contains("com.msandroid.mobile"))
         assertTrue("versión vigente", api.contains("APK_VER = \"60507\""))
         assertTrue("el catálogo sigue en masnew", api.contains("PORTAL = \"masnew\""))
-        // La licencia libre solo la firma el tenant masmobile y solo por v9.
+        // La licencia libre de 1080p la firma masmobile por v10 con la columna Free;
+        // v9 queda como respaldo para títulos fuera de Free (720p/480p).
         assertTrue("tenant de reproducción", api.contains("PORTAL_PLAY = \"masmobile\""))
-        assertTrue("play v9", api.contains("/api/portalCore/v9/startPlayVOD"))
-        assertTrue("el cuerpo usa el tenant de play", api.contains("put(\"portalCode\", PORTAL_PLAY)"))
-        assertFalse("no debe quedar el play v10, ya no entrega medios", api.contains("/api/portalCore/v10/startPlayVOD"))
+        assertTrue("play v10 libre", api.contains("/api/portalCore/v10/startPlayVOD"))
+        assertTrue("play v9 de respaldo", api.contains("/api/portalCore/v9/startPlayVOD"))
+        assertTrue("columna Free de masmobile", api.contains("FREE_COLUMN_CODE = \"masmobile_free\""))
+        assertTrue("cuerpo v10 con columna", api.contains("v10LicenseBody("))
     }
 
     @Test

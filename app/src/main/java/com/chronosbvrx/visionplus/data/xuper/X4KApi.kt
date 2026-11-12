@@ -110,6 +110,19 @@ object X4KApi {
     private const val K_META = "xtv_meta"
     private const val K_ENGINE_GEN = "engine_gen"
 
+    /** Columnas hijas de `masmobile_free` (películas y series). El tenant de play tiene
+     *  sus propias columnas; las de `masnew` no valen para `startPlayVOD`. */
+    private const val K_FREE_COLS = "free_cols"
+    private const val K_FREE_COLS_AT = "free_cols_at"
+    private const val FREE_COLUMNS_TTL_MS = 12L * 60 * 60 * 1000
+    private const val FREE_COLUMN_CODE = "masmobile_free"
+
+    /**
+     * IDs observados el 2026-11-12. Solo son red de seguridad si `masmobile_free` no
+     * responde: se refrescan solos en la siguiente reproducción.
+     */
+    private val FREE_COLUMN_FALLBACK = listOf(87_887, 87_888)
+
     /** Sube cuando cambia el portal: invalida entries/params de la generación anterior. */
     private const val ENGINE_GENERATION = 2
 
@@ -486,6 +499,82 @@ object X4KApi {
         Log.w(TAG, "falló: ${e.message}")
         null
     }
+
+    /**
+     * Cuerpo de `v10/startPlayVOD` para la licencia libre. El `type=0` + `columnId`
+     * identifica la columna Free de masmobile; sin ellos el portal solo devuelve las
+     * calidades sin `movieList` (y v9 baja a 720p/480p).
+     */
+    internal fun v10LicenseBody(
+        userToken: String,
+        userId: String,
+        contentId: String,
+        seriesContentId: String,
+        columnId: Int,
+    ): JSONObject = JSONObject().apply {
+        put("userToken", userToken)
+        put("userId", userId)
+        put("portalCode", PORTAL_PLAY)
+        put("contentId", contentId)
+        put("seriesContentId", seriesContentId)
+        put("columnId", columnId)
+        put("type", "0")
+        put("startTime", 0)
+        put("authType", "0")
+        put("episodeNumberList", JSONArray().put(1))
+    }
+
+    /** IDs de las columnas hijas de la portada `masmobile_free` (testeable, sin red). */
+    internal fun freeColumnIdsFrom(recommendList: JSONArray?): List<Int> {
+        if (recommendList == null) return emptyList()
+        val ids = ArrayList<Int>(recommendList.length())
+        for (i in 0 until recommendList.length()) {
+            val id = recommendList.optJSONObject(i)?.optInt("columnId", 0) ?: 0
+            if (id > 0 && !ids.contains(id)) ids += id
+        }
+        return ids
+    }
+
+    /**
+     * Columnas de la portada Free del tenant de play. `masmobile` tiene sus propias
+     * columnas (no las de `masnew`): pasarle un id de catálogo contesta portal100002.
+     * Se cachean 12 h para no sumar una ida y vuelta a cada reproducción; si el portal
+     * falla, se usan los ids observados y se reintenta refrescar en el siguiente play.
+     */
+    private suspend fun freePlayColumns(context: Context, force: Boolean = false): List<Int> =
+        withContext(Dispatchers.IO) {
+            val p = prefs(context)
+            val now = System.currentTimeMillis()
+            val cached = p.getString(K_FREE_COLS, "").orEmpty()
+                .split(',')
+                .mapNotNull { it.trim().toIntOrNull() }
+                .filter { it > 0 }
+            val fresh = cached.isNotEmpty() &&
+                now - p.getLong(K_FREE_COLS_AT, 0L) < FREE_COLUMNS_TTL_MS
+            if (fresh && !force) return@withContext cached
+            val fetched = guarded {
+                callWithSession(context, "/api/portalCore/getNextColumns") { token ->
+                    JSONObject().apply {
+                        put("userId", userIdOf())
+                        put("userToken", token)
+                        put("portalCode", PORTAL_PLAY)
+                        put("pageNum", 1)
+                        put("pageSize", 100)
+                        put("columnCode", FREE_COLUMN_CODE)
+                        put("version", "")
+                    }
+                }
+            }?.let { freeColumnIdsFrom(it.optJSONArray("recommendList")) }.orEmpty()
+            if (fetched.isNotEmpty()) {
+                p.edit()
+                    .putString(K_FREE_COLS, fetched.joinToString(","))
+                    .putLong(K_FREE_COLS_AT, now)
+                    .apply()
+                fetched
+            } else {
+                cached.ifEmpty { FREE_COLUMN_FALLBACK }
+            }
+        }
 
     /**
      * Precalienta el proceso `:x4k` en segundo plano (DEX + librerías .so + boot + SLB entries/env
@@ -1520,38 +1609,71 @@ object X4KApi {
                 if (it is CancellationException) cancelledLicense = true
                 else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
             }.getOrNull()
-            for (type in listOf("2", "1")) {
-                var d = runCatching {
-                    callWithSession(context, "/api/portalCore/v9/startPlayVOD") { token ->
-                        licenseBody(type, token)
-                    }
-                }.onFailure {
-                    if (it is CancellationException) cancelledLicense = true
-                    else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
-                }.getOrNull()
-                // Si la sesión guardada estaba desincronizada o el portal rechazó inicialmente,
-                // renovar sesión explícitamente y reintentar de inmediato antes de descartar.
-                if (d == null || collectMedias(d).length() == 0) {
-                    d = runCatching {
-                        // Token rechazado: mint forzado (salta el silencio de 30 s).
-                        val freshToken = renewSession(context, force = true)
-                        post("/api/portalCore/v9/startPlayVOD", licenseBody(type, freshToken))
+            // 1080p libre: el tenant masmobile firma v10 con la columna Free que contiene
+            // el título. v9 solo entrega 720p/480p (el grupo 1080p llega sin movieList).
+            // Las columnas Free son de masmobile, no las de masnew del catálogo.
+            if (medias == null) {
+                for (columnId in freePlayColumns(context)) {
+                    val d = runCatching {
+                        callWithSession(context, "/api/portalCore/v10/startPlayVOD") { token ->
+                            v10LicenseBody(token, userIdOf(), cid, sid, columnId)
+                        }
                     }.onFailure {
                         if (it is CancellationException) cancelledLicense = true
                         else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
-                    }.getOrNull() ?: d
-                }
-                if (d != null) {
-                    if (durMs <= 0L) {
-                        durMs = extractDurationMs(d)
+                    }.getOrNull()
+                    if (d != null) {
                         if (durMs <= 0L) {
-                            durMs = extractDurationMs(d.optJSONArray("episodeList")?.optJSONObject(0))
+                            durMs = extractDurationMs(d)
+                            if (durMs <= 0L) {
+                                durMs = extractDurationMs(d.optJSONArray("episodeList")?.optJSONObject(0))
+                            }
+                        }
+                        val list = collectMedias(d)
+                        if (list.length() > 0) {
+                            medias = list
+                            Log.i(TAG, "licencia v10 libre: columna=$columnId pistas=${list.length()}")
+                            break
                         }
                     }
-                    val list = collectMedias(d)
-                    if (list.length() > 0) {
-                        medias = list
-                        break
+                }
+            }
+            // v9 queda solo como respaldo: si v10 ya dio las pistas libres (1080p
+            // incluido), no se puede reemplazar por el 720p/480p de v9.
+            if (medias == null) {
+                for (type in listOf("2", "1")) {
+                    var d = runCatching {
+                        callWithSession(context, "/api/portalCore/v9/startPlayVOD") { token ->
+                            licenseBody(type, token)
+                        }
+                    }.onFailure {
+                        if (it is CancellationException) cancelledLicense = true
+                        else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
+                    }.getOrNull()
+                    // Si la sesión guardada estaba desincronizada o el portal rechazó inicialmente,
+                    // renovar sesión explícitamente y reintentar de inmediato antes de descartar.
+                    if (d == null || collectMedias(d).length() == 0) {
+                        d = runCatching {
+                            // Token rechazado: mint forzado (salta el silencio de 30 s).
+                            val freshToken = renewSession(context, force = true)
+                            post("/api/portalCore/v9/startPlayVOD", licenseBody(type, freshToken))
+                        }.onFailure {
+                            if (it is CancellationException) cancelledLicense = true
+                            else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
+                        }.getOrNull() ?: d
+                    }
+                    if (d != null) {
+                        if (durMs <= 0L) {
+                            durMs = extractDurationMs(d)
+                            if (durMs <= 0L) {
+                                durMs = extractDurationMs(d.optJSONArray("episodeList")?.optJSONObject(0))
+                            }
+                        }
+                        val list = collectMedias(d)
+                        if (list.length() > 0) {
+                            medias = list
+                            break
+                        }
                     }
                 }
             }
@@ -1887,7 +2009,43 @@ object X4KApi {
         } ?: false
     }
 
-    private fun collectMedias(result: JSONObject): JSONArray {
+    /** 2160/1080/720/480/0, para ordenar de mayor a menor resolución. */
+    private fun qualityRank(raw: String): Int {
+        val q = raw.trim().lowercase()
+        return when {
+            q.contains("2160") || q.contains("4k") || q.contains("uhd") -> 2160
+            q.contains("1080") || q.contains("fhd") -> 1080
+            q.contains("720") || q.contains("hd") -> 720
+            q.contains("480") || q.contains("sd") -> 480
+            else -> 0
+        }
+    }
+
+    /** H.264 primero: el motor reproduce H.265 en casi todo, pero no en todas las cajas. */
+    private fun codecRank(raw: String): Int = when (raw.trim().lowercase()) {
+        "h264", "avc", "avc1" -> 2
+        "h265", "hevc", "hvc1" -> 1
+        else -> 0
+    }
+
+    /**
+     * El portal devuelve primero el 1080p en H.265 y luego su copia H.264. El motor
+     * arranca con la primera pista, así que se ordena por resolución y, dentro de la
+     * misma resolución, H.264 antes que H.265. También deja 1080p por delante de 720p
+     * cuando el portal cambia el orden.
+     */
+    internal fun sortMediaArrayForPlayback(out: JSONArray): JSONArray {
+        val entries = ArrayList<JSONObject>(out.length())
+        for (i in 0 until out.length()) out.optJSONObject(i)?.let { entries += it }
+        entries.sortWith(
+            compareByDescending<JSONObject> { qualityRank(it.optString("q")) }
+                .thenByDescending { codecRank(it.optString("e")) }
+                .thenBy { it.optString("n") },
+        )
+        return JSONArray().apply { entries.forEach { put(it) } }
+    }
+
+    internal fun collectMedias(result: JSONObject): JSONArray {
         val out = JSONArray()
         val eps = result.optJSONArray("episodeList") ?: return out
         for (i in 0 until eps.length()) {
@@ -1913,7 +2071,7 @@ object X4KApi {
                 }
             }
         }
-        return out
+        return sortMediaArrayForPlayback(out)
     }
 
     private suspend fun launch(

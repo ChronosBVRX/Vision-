@@ -88,6 +88,13 @@ let queue = [];
 let lastCallAt = 0;
 let hostIndex = 0;
 
+// Columnas hijas de masmobile_free. No son las de masnew: startPlayVOD con un id
+// de catálogo contesta portal100002. Se refrescan cada 12 h.
+const FREE_COLUMN_CODE = "masmobile_free";
+const FREE_COLUMNS_TTL_MS = 12 * 60 * 60 * 1000;
+const FREE_COLUMN_FALLBACK = [87887, 87888];
+const freeColumnsCache = { ids: [], at: 0 };
+
 function log(...args) {
   console.log("[xtv]", ...args);
 }
@@ -495,13 +502,39 @@ function trackScore(track, preferredQuality) {
   return score;
 }
 
+function qualityRank(value) {
+  const q = trim(value).toLowerCase();
+  if (q.includes("2160") || q.includes("4k") || q.includes("uhd")) return 2160;
+  if (q.includes("1080") || q.includes("fhd")) return 1080;
+  if (q.includes("720") || q.includes("hd")) return 720;
+  if (q.includes("480") || q.includes("sd")) return 480;
+  return 0;
+}
+
+function codecRank(value) {
+  const codec = trim(value).toLowerCase();
+  if (codec === "h264" || codec === "avc" || codec === "avc1") return 2;
+  if (codec === "h265" || codec === "hevc" || codec === "hvc1") return 1;
+  return 0;
+}
+
 function collectTracks(episode) {
   const tracks = [];
   for (const group of (episode && episode.totalMovieList) || []) {
     for (const track of (group && group.movieList) || []) {
-      if (track && trim(track.contentId)) tracks.push(track);
+      if (!track || !trim(track.contentId)) continue;
+      const license = (track.licenseList && track.licenseList[0]) || null;
+      if (!license || trim(license.tag) !== "free") continue;
+      tracks.push(track);
     }
   }
+  // El portal manda primero 1080p H.265; en webOS conviene H.264 dentro de la
+  // misma resolución y nunca dejar que un 720p tape al 1080p.
+  tracks.sort(
+    (a, b) =>
+      qualityRank(b.quality) - qualityRank(a.quality) ||
+      codecRank(b.encodeFormat) - codecRank(a.encodeFormat),
+  );
   return tracks;
 }
 
@@ -521,30 +554,105 @@ function subtitleList(episode) {
   return list;
 }
 
+function loadFreeColumns(callback) {
+  const now = Date.now();
+  if (
+    freeColumnsCache.ids.length &&
+    now - freeColumnsCache.at < FREE_COLUMNS_TTL_MS
+  ) {
+    return callback(null, freeColumnsCache.ids);
+  }
+  ensureSession((sessionError) => {
+    if (sessionError) {
+      return callback(null, freeColumnsCache.ids.length ? freeColumnsCache.ids : FREE_COLUMN_FALLBACK);
+    }
+    call(
+      "getNextColumns",
+      {
+        portalCode: PORTAL_PLAY,
+        pageNum: 1,
+        pageSize: 100,
+        columnCode: FREE_COLUMN_CODE,
+        version: "",
+      },
+      (error, payload) => {
+        const ids = [];
+        for (const shelf of (!error && payload && payload.recommendList) || []) {
+          const id = parseInt(shelf && shelf.columnId, 10);
+          if (id > 0 && !ids.includes(id)) ids.push(id);
+        }
+        if (ids.length) {
+          freeColumnsCache.ids = ids;
+          freeColumnsCache.at = now;
+          return callback(null, ids);
+        }
+        callback(null, freeColumnsCache.ids.length ? freeColumnsCache.ids : FREE_COLUMN_FALLBACK);
+      },
+    );
+  });
+}
+
 function loadPlay(contentId, seriesContentId, callback) {
   if (!trim(contentId)) return callback(new Error("falta contentId"));
   ensureSession((sessionError) => {
     if (sessionError) return callback(sessionError);
-    call(
-      "v9/startPlayVOD",
-      {
-        portalCode: PORTAL_PLAY,
-        contentId: trim(contentId),
-        seriesContentId: trim(seriesContentId),
-        startTime: 0,
-        type: "1",
-        columnId: 0,
-        authType: "",
-      },
-      (error, payload) => {
-        if (error) return callback(error);
-        const episode = payload && payload.episodeList && payload.episodeList[0];
-        if (!episode) return callback(new Error("el portal no devolvió pistas de vídeo"));
-        const tracks = collectTracks(episode);
-        if (!tracks.length) return callback(new Error("el portal no devolvió pistas de vídeo"));
+    loadFreeColumns((_, columns) => {
+      let index = 0;
+      let lastError = null;
+      const finish = (payload, episode, tracks) => {
         callback(null, { play: payload, episode, tracks });
-      },
-    );
+      };
+      const tryV9 = () => {
+        call(
+          "v9/startPlayVOD",
+          {
+            portalCode: PORTAL_PLAY,
+            contentId: trim(contentId),
+            seriesContentId: trim(seriesContentId),
+            startTime: 0,
+            type: "1",
+            columnId: 0,
+            authType: "",
+          },
+          (error, payload) => {
+            if (error) return callback(lastError || error);
+            const episode = payload && payload.episodeList && payload.episodeList[0];
+            if (!episode) return callback(new Error("el portal no devolvió pistas de vídeo"));
+            const tracks = collectTracks(episode);
+            if (!tracks.length) return callback(new Error("el portal no devolvió pistas de vídeo"));
+            finish(payload, episode, tracks);
+          },
+        );
+      };
+      const tryV10 = () => {
+        if (index >= columns.length) return tryV9();
+        const columnId = columns[index++];
+        call(
+          "v10/startPlayVOD",
+          {
+            portalCode: PORTAL_PLAY,
+            contentId: trim(contentId),
+            seriesContentId: trim(seriesContentId),
+            startTime: 0,
+            type: "0",
+            columnId,
+            authType: "0",
+            episodeNumberList: [1],
+          },
+          (error, payload) => {
+            if (error) {
+              lastError = error;
+              return tryV10();
+            }
+            const episode = payload && payload.episodeList && payload.episodeList[0];
+            const tracks = collectTracks(episode);
+            if (!episode || !tracks.length) return tryV10();
+            finish(payload, episode, tracks);
+          },
+        );
+      };
+      tryV10();
+    });
   });
 }
 
