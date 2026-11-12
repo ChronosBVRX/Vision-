@@ -517,6 +517,12 @@ object X4KApi {
         // Migración de portal: las entries viejas (XTV) llevan otro tenant/auth_id y no
         // sirven con las licencias de Magis. Se piden una vez tras actualizar la app.
         val generationOk = p.getInt(K_ENGINE_GEN, 0) == ENGINE_GENERATION
+        if (!generationOk) {
+            // Las licencias de vivo también llevan el tenant viejo: se tiran con las entries.
+            p.edit().remove(K_LIVE).remove(K_LIVE_AT).apply()
+            memoryLiveMedias.clear()
+            memoryLiveArray = null
+        }
         val fresh = generationOk &&
             p.getString(K_ENTRIES, null)?.isNotBlank() == true &&
             p.getString(K_PARAMS, null)?.isNotBlank() == true &&
