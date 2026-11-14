@@ -207,24 +207,19 @@ compartido por ambos shells en vez de duplicar. Nunca romper la UI de TV al extr
 **Criterio de aceptación:** cada pantalla móvil debe verse intencional (no "Material por defecto"),
 tener estados de carga/error/vacío, y respetar las reglas §3 (anime, kids, deportes).
 
-### Auditoría ya hecha (hallazgos verificados, pendientes de corregir)
+### Auditoría (estado)
 
-**A1 — Kids en móvil sigue limitado (bug real, prioritario).**
-El chip "Infantil" **sí existe** en `ui/phone/SectionScreen.kt` (líneas 201-202), pero:
-- filtra solo en memoria: `rowsFinal.flatMap { it.films }.filter { it.kind == "kids" }` (líneas 263-264);
-- la paginación usa `"xtv-$section-all"` (línea 495-497), es decir `xtv-movies-all` / `xtv-series-all`, **no** `xtv-kids-all`.
+**A1 — Kids en móvil (RESUELTO en código, commit `21720f7`, pendiente release).**
+`ui/phone/SectionScreen.kt` ahora precarga `xtv-kids-all` en secciones `movies/series/kids`,
+combina `kidsServerFilms` al filtrar "Infantil" (respetando tipo película/serie por `seasons`),
+usa `targetCatId = "xtv-kids-all"` y permite paginación completa (~1400). Falta smoke en dispositivo.
 
-Resultado: en el teléfono el catálogo infantil queda acotado a lo que traiga el Home, no a los 1 404 títulos.
-**Fix esperado:** replicar en `SectionScreen.kt` la lógica que ya tiene `TvCategoryScreen.kt`
-(estado `kidsServerFilms` + `LaunchedEffect` que llama `RemoteIndexSource.categoryPage(context, "xtv-kids-all", 1, 60)`,
-y `targetCatId` que resuelve a `xtv-kids-all` cuando la categoría es "Infantil").
-
-**A2 — Deportes en móvil sin respaldo de logo.** La pieza compartida `ui/sports` aún no aplica
-`event.logo` como fallback cuando `homeLogo`/`awayLogo` vienen vacíos (el equivalente a
-`TvSportsCrest(logo, fallbackLogo = event.logo, ...)`). Solo 86/251 eventos traen escudos propios.
+**A2 — Deportes en móvil (RESUELTO en código, commit `21720f7`, pendiente release).**
+`ui/sports/SportsScreen.kt` usa `event.leagueLogo.ifBlank { event.logo }` en cabecera y
+`GeeTileTeamLine(logo, fallbackLogo = event.logo, ...)` para escudos de equipo.
 
 **A3 — `live/` y `profile/` son mínimos** (13 KB y 11 KB) frente a sus equivalentes TV: el modal
-de perfiles y el buscador de canales no están portados al shell táctil.
+de perfiles y el buscador de canales no están portados al shell táctil. Sigue pendiente (Fase D).
 
 ---
 
