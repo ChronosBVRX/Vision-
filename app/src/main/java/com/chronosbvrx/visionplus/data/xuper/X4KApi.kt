@@ -1579,7 +1579,7 @@ object X4KApi {
             put("userId", identity.userId)
             put("hasPay", "0")
             put("userIdentity", "1")
-            put("portalCode", PORTAL)
+            put("portalCode", if (identity.vip) PORTAL_PLAY else PORTAL)
             put("type", "merge")
             put("appVer", APK_VER)
             put("lang", "es")
@@ -1659,14 +1659,22 @@ object X4KApi {
     }
 
     /**
-     * Columna donde vive el título. El mapa NO se espera en el play: si aún no está, se arma en
-     * segundo plano y esta reproducción usa las columnas Free (o el v9) como siempre.
+     * Columna donde vive el título. El mapa se consulta en segundo plano si aún no está,
+     * pero espera hasta 2.5 s para no degradar el primer play si el portal responde rápido.
      */
     private suspend fun columnFor(context: Context, contentId: String): Int? {
         val cached = cachedColumns(context)
-        if (cached.length() > 0) return cached.optInt(contentId, 0).takeIf { it > 0 }
+        if (cached.length() > 0) {
+            val found = cached.optInt(contentId, 0).takeIf { it > 0 }
+            if (found != null) return found
+        }
         if (System.currentTimeMillis() - prefs(context).getLong(K_COL_MAP_AT, 0L) >= COL_MAP_RETRY_MS) {
-            CoroutineScope(Dispatchers.IO).launch { runCatching { columnsFor(context) } }
+            val fresh = runCatching {
+                kotlinx.coroutines.withTimeoutOrNull(2_500L) { columnsFor(context) }
+            }.getOrNull()
+            if (fresh != null && fresh.length() > 0) {
+                return fresh.optInt(contentId, 0).takeIf { it > 0 }
+            }
         }
         return null
     }
@@ -1707,12 +1715,15 @@ object X4KApi {
         put("userId", userId)
         put("portalCode", PORTAL_PLAY)
         put("contentId", contentId)
-        put("seriesContentId", seriesId)
+        val isSeries = seriesId.isNotBlank() && seriesId != contentId
+        put("seriesContentId", if (isSeries) seriesId else contentId)
         put("columnId", columnId)
         put("type", "0")
         put("startTime", 0)
-        put("authType", "0")
-        put("episodeNumberList", JSONArray().put(1))
+        put("authType", if (isSeries) "1" else "")
+        if (isSeries) {
+            put("episodeNumberList", JSONArray().put(1))
+        }
     }
 
     /**
@@ -1815,7 +1826,15 @@ object X4KApi {
             val brokerColumn = columnFor(context, cid)
                 ?: runCatching { freeColumns(context).firstOrNull() }.getOrNull()
                 ?: 0
-            val broker = VipBroker.play(context, cid, sid, brokerColumn, "0", intArrayOf(1))
+            val isSeriesPlay = sid.isNotBlank() && sid != cid
+            val broker = VipBroker.play(
+                context,
+                cid,
+                if (isSeriesPlay) sid else cid,
+                brokerColumn,
+                "0",
+                if (isSeriesPlay) intArrayOf(1) else intArrayOf(),
+            )
             var identity: PlayIdentity
             if (broker != null) {
                 medias = broker.medias
@@ -1833,11 +1852,14 @@ object X4KApi {
                 // catálogo sí viva en masnew.
                 put("portalCode", PORTAL_PLAY)
                 put("contentId", cid)
-                put("seriesContentId", sid)
+                val isSeries = sid.isNotBlank() && sid != cid
+                put("seriesContentId", if (isSeries) sid else cid)
                 put("type", type)
                 put("startTime", 0)
-                put("authType", "0")
-                put("episodeNumberList", JSONArray().put(1))
+                put("authType", if (isSeries) "1" else "")
+                if (isSeries) {
+                    put("episodeNumberList", JSONArray().put(1))
+                }
             }
             suspend fun license(type: String, connectMs: Int, readMs: Int): JSONObject? = runCatching {
                 post(

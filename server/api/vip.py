@@ -33,8 +33,8 @@ log = logging.getLogger("visionplus.vip")
 
 PLAY_PORTAL = "masmobile"
 # Columnas de respaldo cuando la app no manda una (deeplink/arranque en frío):
-# son columnas del catálogo móvil que autorizan los títulos en el `v10`.
-FALLBACK_COLUMNS = (87887, 87888, 87889, 77115)
+# 79715 es la columna principal de películas masmobile, 79716 de series.
+FALLBACK_COLUMNS = (79715, 79716, 76182, 87887, 87888, 87889, 77115)
 SESSION_TTL = 25 * 60.0
 CACHE_TTL = 6 * 60 * 60.0
 REQUEST_TIMEOUT = 18
@@ -312,6 +312,9 @@ def _play(content_id: str, series_id: str, column_id: int, kind: str, episodes: 
         return cached[1]
 
     last_error: Exception | None = None
+    is_series = bool(series_id and series_id != content_id)
+    effective_sid = series_id if is_series else content_id
+    auth_type = "1" if is_series else ""
     for attempt in (0, 1):
         token, user_id = _session(force=attempt > 0)
         columns = [column_id] if column_id > 0 else list(FALLBACK_COLUMNS)
@@ -323,12 +326,13 @@ def _play(content_id: str, series_id: str, column_id: int, kind: str, episodes: 
                 "userId": user_id,
                 "portalCode": PLAY_PORTAL,
                 "contentId": content_id,
-                "seriesContentId": series_id,
+                "seriesContentId": effective_sid,
                 "type": kind,
                 "startTime": 0,
-                "authType": "0",
-                "episodeNumberList": episodes,
+                "authType": auth_type,
             }
+            if is_series and episodes:
+                spec["episodeNumberList"] = episodes
             if column > 0:
                 spec["columnId"] = int(column)
             try:

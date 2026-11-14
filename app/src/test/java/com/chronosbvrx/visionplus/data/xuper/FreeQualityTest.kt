@@ -93,8 +93,13 @@ class FreeQualityTest {
         assertEquals("sid", body.getString("seriesContentId"))
         assertEquals(87887, body.getInt("columnId"))
         assertEquals("0", body.getString("type"))
-        assertEquals("0", body.getString("authType"))
+        assertEquals("1", body.getString("authType"))
         assertEquals(1, body.getJSONArray("episodeNumberList").getInt(0))
+
+        val movieBody = X4KApi.licenseColumnBody("token", "uid", "cid", "", 87887)
+        assertEquals("cid", movieBody.getString("seriesContentId"))
+        assertEquals("", movieBody.getString("authType"))
+        assertTrue(!movieBody.has("episodeNumberList"))
     }
 
     private fun names(array: JSONArray): List<String> {
