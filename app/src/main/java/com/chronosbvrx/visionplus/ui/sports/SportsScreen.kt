@@ -598,10 +598,11 @@ private fun GeeEventTile(
                     modifier = Modifier.size(13.dp),
                 )
                 Spacer(Modifier.width(5.dp))
-                if (event.leagueLogo.isNotBlank()) {
+                val headerLogo = event.leagueLogo.ifBlank { event.logo }
+                if (headerLogo.isNotBlank()) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(event.leagueLogo)
+                            .data(headerLogo)
                             .size(32, 32)
                             .crossfade(false)
                             .build(),
@@ -632,9 +633,9 @@ private fun GeeEventTile(
             }
             Spacer(Modifier.height(8.dp))
             if (hasTeams) {
-                GeeTileTeamLine(event.homeLogo, home, event.scoreHome, event.live)
+                GeeTileTeamLine(event.homeLogo, event.logo, home, event.scoreHome, event.live)
                 Spacer(Modifier.height(6.dp))
-                GeeTileTeamLine(event.awayLogo, away, event.scoreAway, event.live)
+                GeeTileTeamLine(event.awayLogo, event.logo, away, event.scoreAway, event.live)
             } else {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -670,16 +671,17 @@ private fun GeeEventTile(
 }
 
 @Composable
-private fun GeeTileTeamLine(logo: String, name: String, score: Int?, live: Boolean) {
+private fun GeeTileTeamLine(logo: String, fallbackLogo: String = "", name: String, score: Int?, live: Boolean) {
+    val effectiveLogo = logo.ifBlank { fallbackLogo }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier.size(22.dp).clip(CircleShape).background(VisionSurfaceHigh),
             contentAlignment = Alignment.Center,
         ) {
-            if (logo.isNotBlank()) {
+            if (effectiveLogo.isNotBlank()) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(logo)
+                        .data(effectiveLogo)
                         .size(44, 44)
                         .crossfade(false)
                         .build(),

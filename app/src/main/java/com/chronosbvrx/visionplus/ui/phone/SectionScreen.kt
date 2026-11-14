@@ -101,10 +101,19 @@ fun SectionScreen(
     var rows by remember(name) {
         mutableStateOf(RemoteIndexSource.cachedSection(context, name))
     }
+    var kidsServerFilms by remember(name) { mutableStateOf<List<Film>>(emptyList()) }
     LaunchedEffect(name) {
         val fresh = RemoteIndexSource.section(context, name)
         if (fresh.isNotEmpty() || rows == null) {
             rows = fresh
+        }
+        if (name in listOf("movies", "series", "kids")) {
+            val page1 = runCatching {
+                RemoteIndexSource.categoryPage(context, "xtv-kids-all", 1, 60)
+            }.getOrNull()
+            if (page1 != null && page1.films.isNotEmpty()) {
+                kidsServerFilms = page1.films
+            }
         }
     }
 
@@ -258,10 +267,18 @@ fun SectionScreen(
                     val categoryRow = remember(rowsFinal, activeCategory) {
                         rowsFinal.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
                     }
-                    val films = remember(categoryRow, rowsFinal, activeCategory) {
+                    val films = remember(categoryRow, rowsFinal, activeCategory, kidsServerFilms) {
                         val raw = when {
-                            activeCategory.equals("Infantil", ignoreCase = true) ->
-                                rowsFinal.flatMap { it.films }.filter { it.kind == "kids" }.distinctBy { it.id }
+                            activeCategory.equals("Infantil", ignoreCase = true) -> {
+                                val combined = (kidsServerFilms + rowsFinal.flatMap { it.films }.filter { it.kind == "kids" })
+                                    .distinctBy { it.id }
+                                val typed = when (name) {
+                                    "movies" -> combined.filter { it.seasons.isEmpty() }
+                                    "series" -> combined.filter { it.seasons.isNotEmpty() }
+                                    else -> combined
+                                }
+                                typed.ifEmpty { combined }
+                            }
                             categoryRow != null -> categoryRow.films
                             else -> rowsFinal.flatMap { it.films }
                                 .filter { it.synopsis.contains(activeCategory, ignoreCase = true) }
@@ -275,7 +292,7 @@ fun SectionScreen(
                         films = films,
                         categoryId = categoryRow?.id ?: "",
                         section = name,
-                        initialTotal = categoryRow?.total ?: films.size,
+                        initialTotal = if (activeCategory.equals("Infantil", ignoreCase = true)) 1400 else (categoryRow?.total ?: films.size),
                         columns = gridColumns,
                         contentPadding = contentPadding,
                         onClearFilter = { selectedCategory = null },
@@ -472,6 +489,16 @@ private fun CategoryGridFeed(
 
     val gridState = rememberLazyGridState()
 
+    val isKidsCategory = categoryName.equals("Infantil", ignoreCase = true)
+    val targetCatId = remember(categoryName, categoryId, section, isKidsCategory) {
+        when {
+            isKidsCategory -> "xtv-kids-all"
+            categoryId.isNotBlank() -> categoryId
+            section != null -> "xtv-$section-all"
+            else -> ""
+        }
+    }
+
     val shouldLoadMore by remember(allFilms.size, displayedFilms.size) {
         derivedStateOf {
             val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -491,9 +518,6 @@ private fun CategoryGridFeed(
         if (batchLimit < allFilms.size) {
             batchLimit = (batchLimit + batch).coerceAtMost(allFilms.size)
             return
-        }
-        val targetCatId = categoryId.ifBlank {
-            if (section != null) "xtv-$section-all" else ""
         }
         if (exhausted || targetCatId.isBlank() ||
             !SectionPaging.canLoadMore(allFilms.size, total, cap)
@@ -605,7 +629,7 @@ private fun CategoryGridFeed(
                             strokeWidth = 2.dp,
                         )
                         batchLimit < allFilms.size ||
-                            (categoryId.isNotBlank() && !exhausted &&
+                            (targetCatId.isNotBlank() && !exhausted &&
                                 SectionPaging.canLoadMore(allFilms.size, total, cap)) ->
                             Button(onClick = ::loadMore) { Text("Ver más") }
                         allFilms.size >= cap && total > allFilms.size -> Text(
