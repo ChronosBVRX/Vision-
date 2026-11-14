@@ -293,7 +293,7 @@ internal fun TvSportsHero(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                TvSportsCrest(event.homeLogo, homeName, 46.dp)
+                TvSportsCrest(event.homeLogo, event.logo, homeName, 46.dp)
                 Text(
                     GeeTiles.score(event),
                     color = Color.White,
@@ -301,22 +301,23 @@ internal fun TvSportsHero(
                     fontWeight = FontWeight.Black,
                     maxLines = 1,
                 )
-                TvSportsCrest(event.awayLogo, awayName, 46.dp)
+                TvSportsCrest(event.awayLogo, event.logo, awayName, 46.dp)
             }
         }
     }
 }
 
 @Composable
-private fun TvSportsCrest(logo: String, name: String, size: androidx.compose.ui.unit.Dp) {
+private fun TvSportsCrest(logo: String, fallbackLogo: String = "", name: String, size: androidx.compose.ui.unit.Dp) {
+    val effectiveLogo = logo.ifBlank { fallbackLogo }
     Box(
         Modifier.size(size).clip(CircleShape).background(Color(0x22FFFFFF)),
         contentAlignment = Alignment.Center,
     ) {
-        if (logo.isNotBlank()) {
+        if (effectiveLogo.isNotBlank()) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(logo)
+                    .data(effectiveLogo)
                     .size(160, 160)
                     .crossfade(false)
                     .build(),
@@ -473,9 +474,9 @@ internal fun TvSportsEventCard(
                 }
                 Spacer(Modifier.height(4.dp))
                 if (hasTeams) {
-                    TvSportsTeamLine(event.homeLogo, home, event.scoreHome, live)
+                    TvSportsTeamLine(event.homeLogo, event.logo, home, event.scoreHome, live)
                     Spacer(Modifier.height(2.dp))
-                    TvSportsTeamLine(event.awayLogo, away, event.scoreAway, live)
+                    TvSportsTeamLine(event.awayLogo, event.logo, away, event.scoreAway, live)
                     Spacer(Modifier.weight(1f))
                 } else {
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -509,16 +510,17 @@ internal fun TvSportsEventCard(
 }
 
 @Composable
-private fun TvSportsTeamLine(logo: String, name: String, score: Int?, live: Boolean) {
+private fun TvSportsTeamLine(logo: String, fallbackLogo: String = "", name: String, score: Int?, live: Boolean) {
+    val effectiveLogo = logo.ifBlank { fallbackLogo }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier.size(22.dp).clip(CircleShape).background(Color(0x22FFFFFF)),
             contentAlignment = Alignment.Center,
         ) {
-            if (logo.isNotBlank()) {
+            if (effectiveLogo.isNotBlank()) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(logo)
+                        .data(effectiveLogo)
                         .size(64, 64)
                         .crossfade(false)
                         .build(),

@@ -613,10 +613,11 @@ private fun TvGeeEventTile(
                     modifier = Modifier.size(15.dp),
                 )
                 Spacer(Modifier.width(6.dp))
-                if (event.leagueLogo.isNotBlank()) {
+                val headerLogo = event.leagueLogo.ifBlank { event.logo }
+                if (headerLogo.isNotBlank()) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(event.leagueLogo)
+                            .data(headerLogo)
                             .size(40, 40)
                             .crossfade(false)
                             .build(),
@@ -647,9 +648,9 @@ private fun TvGeeEventTile(
             }
             Spacer(Modifier.height(8.dp))
             if (hasTeams) {
-                TvGeeTileTeamLine(event.homeLogo, home, event.scoreHome, event.live)
+                TvGeeTileTeamLine(event.homeLogo, event.logo, home, event.scoreHome, event.live)
                 Spacer(Modifier.height(6.dp))
-                TvGeeTileTeamLine(event.awayLogo, away, event.scoreAway, event.live)
+                TvGeeTileTeamLine(event.awayLogo, event.logo, away, event.scoreAway, event.live)
                 Spacer(Modifier.weight(1f))
             } else {
                 Row(
@@ -686,16 +687,17 @@ private fun TvGeeEventTile(
 }
 
 @Composable
-private fun TvGeeTileTeamLine(logo: String, name: String, score: Int?, live: Boolean) {
+private fun TvGeeTileTeamLine(logo: String, fallbackLogo: String = "", name: String, score: Int?, live: Boolean) {
+    val effectiveLogo = logo.ifBlank { fallbackLogo }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier.size(34.dp).clip(CircleShape).background(VisionSurfaceHigh),
             contentAlignment = Alignment.Center,
         ) {
-            if (logo.isNotBlank()) {
+            if (effectiveLogo.isNotBlank()) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(logo)
+                        .data(effectiveLogo)
                         .size(68, 68)
                         .crossfade(false)
                         .build(),

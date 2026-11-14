@@ -120,11 +120,20 @@ fun TvCategoryScreen(
     var sectionRows by remember(section) {
         mutableStateOf(if (section != null) RemoteIndexSource.cachedSection(context, section) else null)
     }
-    LaunchedEffect(section) {
+    var kidsServerFilms by remember(key) { mutableStateOf<List<Film>>(emptyList()) }
+    LaunchedEffect(section, key) {
         if (section != null) {
             val fresh = RemoteIndexSource.section(context, section)
             if (fresh.isNotEmpty() || sectionRows == null) {
                 sectionRows = fresh
+            }
+        }
+        if (key.startsWith("kids") || key == "kids") {
+            val page1 = runCatching {
+                RemoteIndexSource.categoryPage(context, "xtv-kids-all", 1, 60)
+            }.getOrNull()
+            if (page1 != null && page1.films.isNotEmpty()) {
+                kidsServerFilms = page1.films
             }
         }
     }
@@ -145,19 +154,29 @@ fun TvCategoryScreen(
         landing.request()
     }
 
-    val films = remember(rows, key, sectionRows) {
-        val raw = if (key == "kids-movies") {
-            rows.flatMap { it.films }.filter { it.kind == "kids" && it.seasons.isEmpty() }.distinctBy { it.id }
-                .ifEmpty { rows.flatMap { it.films }.filter { it.kind == "kids" }.distinctBy { it.id } }
-        } else if (key == "kids-series") {
-            rows.flatMap { it.films }.filter { it.kind == "kids" && (it.seasons.isNotEmpty() || it.kind == "series") }.distinctBy { it.id }
-                .ifEmpty { rows.flatMap { it.films }.filter { it.kind == "kids" }.distinctBy { it.id } }
-        } else if (section != null) {
-            (sectionRows ?: emptyList()).flatMap { it.films }.distinctBy { it.id }
-        } else {
-            val byId = rows.firstOrNull { it.id.equals(key, ignoreCase = true) }
-            val byTitle = byId ?: rows.firstOrNull { fold(it.title).contains(fold(title)) }
-            byTitle?.films?.takeIf { it.isNotEmpty() } ?: searchFallback(rows, title)
+    val films = remember(rows, key, sectionRows, kidsServerFilms) {
+        val raw = when {
+            key == "kids-movies" -> {
+                val combined = (kidsServerFilms + rows.flatMap { it.films }.filter { it.kind == "kids" }).distinctBy { it.id }
+                val onlyMovies = combined.filter { it.seasons.isEmpty() }
+                onlyMovies.ifEmpty { combined }
+            }
+            key == "kids-series" -> {
+                val combined = (kidsServerFilms + rows.flatMap { it.films }.filter { it.kind == "kids" }).distinctBy { it.id }
+                val onlySeries = combined.filter { it.seasons.isNotEmpty() }
+                onlySeries.ifEmpty { combined }
+            }
+            key == "kids" -> {
+                (kidsServerFilms + rows.flatMap { it.films }.filter { it.kind == "kids" }).distinctBy { it.id }
+            }
+            section != null -> {
+                (sectionRows ?: emptyList()).flatMap { it.films }.distinctBy { it.id }
+            }
+            else -> {
+                val byId = rows.firstOrNull { it.id.equals(key, ignoreCase = true) }
+                val byTitle = byId ?: rows.firstOrNull { fold(it.title).contains(fold(title)) }
+                byTitle?.films?.takeIf { it.isNotEmpty() } ?: searchFallback(rows, title)
+            }
         }
         // Reordenado por impacto (rating con confianza + popularidad + recencia):
         // robusto ante caché vieja del servidor ordenada solo por score/año.
@@ -392,7 +411,7 @@ fun TvCategoryScreen(
             films = categoryFilms,
             categoryId = activeRow?.id ?: "",
             section = section,
-            initialTotal = activeRow?.total ?: categoryFilms.size,
+            initialTotal = if (key.startsWith("kids") || activeCategory.equals("Infantil", ignoreCase = true)) 1400 else (activeRow?.total ?: categoryFilms.size),
             onSelectChip = { chip ->
                 selectedCategory = if (chip == CHIP_ALL) null else chip
             },
@@ -488,8 +507,11 @@ private fun TvCategoryGrid(
             visibleCount = (visibleCount + batch).coerceAtMost(allFilms.size)
             return
         }
-        val targetCatId = categoryId.ifBlank {
-            if (section != null) "xtv-$section-all" else ""
+        val targetCatId = when {
+            categoryId.isNotBlank() -> categoryId
+            categoryName.equals("Infantil", ignoreCase = true) || categoryName.contains("kids", ignoreCase = true) -> "xtv-kids-all"
+            section != null -> "xtv-$section-all"
+            else -> ""
         }
         if (exhausted || targetCatId.isBlank() ||
             !SectionPaging.canLoadMore(allFilms.size, total, cap)

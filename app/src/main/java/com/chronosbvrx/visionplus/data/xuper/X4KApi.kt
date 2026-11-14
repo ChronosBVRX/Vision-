@@ -638,6 +638,13 @@ object X4KApi {
             } ?: continue
             val shelves = d.optJSONArray("recommendList") ?: continue
             var taken = 0
+            val kindOfCode = when {
+                code.contains("movie") -> "movie"
+                code.contains("series") -> "series"
+                code.contains("kids") -> "kids"
+                code.contains("anime") -> "anime"
+                else -> ""
+            }
             for (i in 0 until shelves.length()) {
                 val shelf = shelves.optJSONObject(i) ?: continue
                 val assets = shelf.optJSONArray("assetList") ?: continue
@@ -659,6 +666,7 @@ object X4KApi {
                         videoUrl = "xtv:$cid",
                         sourceUrl = "visionplus.tv",
                         score = portalScore(a),
+                        kind = kindOfCode,
                     )
                     // Professional metadata (score, cast, genres) kept for the details page.
                     metaStore.put(cid, JSONObject().apply {

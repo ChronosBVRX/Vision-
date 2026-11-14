@@ -135,9 +135,8 @@ object GeeSportsSource {
     private fun fileOf(context: Context, name: String) =
         java.io.File(context.applicationContext.filesDir, name)
 
-    /** Las imágenes del CMS a veces vienen en http:// (Android lo bloquea): a https. */
-    private fun safeImage(url: String): String =
-        if (url.startsWith("http://", ignoreCase = true)) "https://" + url.substring(7) else url
+    /** Limpia espacios de la URL de la imagen sin alterar el protocolo (HTTP/HTTPS permitidos con cleartext). */
+    private fun safeImage(url: String): String = url.trim()
 
     // ------------------------------------------------------------------ red
 
