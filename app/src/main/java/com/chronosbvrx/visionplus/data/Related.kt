@@ -27,15 +27,15 @@ object Related {
         "horror" to "terror",
         "sci fi" to "ciencia ficcion",
         "science fiction" to "ciencia ficcion",
-        "animacion" to "anime",
+        "animacion japonesa" to "anime",
     )
 
     /** La sección del índice que corresponde al tipo de la ficha. */
     internal fun sectionFor(film: Film): String = when {
-        film.kind.equals("movie", ignoreCase = true) -> "movies"
-        film.kind.equals("series", ignoreCase = true) -> "series"
         film.kind.equals("anime", ignoreCase = true) -> "anime"
-        film.kind.equals("kids", ignoreCase = true) -> "anime"
+        film.kind.equals("kids", ignoreCase = true) -> if (film.seasons.isNotEmpty()) "series" else "movies"
+        film.kind.equals("series", ignoreCase = true) -> "series"
+        film.kind.equals("movie", ignoreCase = true) -> "movies"
         film.kind.equals("novela", ignoreCase = true) ||
             film.kind.equals("novelas", ignoreCase = true) -> "series"
         film.seasons.isNotEmpty() -> "series"

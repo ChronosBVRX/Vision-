@@ -53,6 +53,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -618,107 +619,66 @@ private fun TvLiveSearchDialog(
             ) {
                 Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                        Modifier.fillMaxWidth().weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(24.dp),
                     ) {
-                        Column(Modifier.weight(1f)) {
+                        // Columna Izquierda: Entrada de texto, acciones y Teclado
+                        Column(
+                            Modifier.weight(0.46f).fillMaxHeight(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             Text(
                                 "Buscar canales",
-                                style = MaterialTheme.typography.headlineSmall,
+                                style = MaterialTheme.typography.titleLarge,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                             )
-                            Text(
-                                "Todo el catálogo o filtra por país. Escribe, dicta o usa el mando.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = VisionTextSecondary,
-                            )
-                        }
-                        TvCompactAction(
-                            "Dictar",
-                            icon = Icons.Default.Mic,
-                            onClick = startVoice,
-                            modifier = Modifier
-                                .focusRequester(voiceFocus)
-                                .focusProperties { down = keyboardFocus.requester }
-                                .softFocusDown(keyboardFocus.requester),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        TvCompactAction(
-                            "Cerrar",
-                            onClick = onDismiss,
-                            modifier = Modifier
-                                .focusProperties { down = keyboardFocus.requester }
-                                .softFocusDown(keyboardFocus.requester),
-                        )
-                    }
 
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth().focusGroup(),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp),
-                        contentPadding = PaddingValues(vertical = 2.dp),
-                    ) {
-                        item(key = "all-countries") {
-                            TvLiveCategoryChip(
-                                label = "Todos",
-                                selected = selectedCountry == null,
-                                onClick = { onCountry(null) },
+                            // Barra de texto de consulta
+                            Box(
                                 modifier = Modifier
-                                    .focusProperties { down = keyboardFocus.requester }
-                                    .softFocusDown(keyboardFocus.requester),
-                            )
-                        }
-                        items(countries, key = { "search-country-$it" }) { country ->
-                            TvLiveCategoryChip(
-                                label = country,
-                                selected = selectedCountry == country,
-                                onClick = { onCountry(country) },
-                                modifier = Modifier
-                                    .focusProperties { down = keyboardFocus.requester }
-                                    .softFocusDown(keyboardFocus.requester),
-                            )
-                        }
-                    }
-
-                    if (suggestions.isNotEmpty()) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(7.dp),
-                        ) {
-                            Text(
-                                "Quizá:",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = VisionTextSecondary,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            LazyRow(
-                                modifier = Modifier.focusGroup(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFF0F172A))
+                                    .padding(horizontal = 14.dp, vertical = 9.dp),
                             ) {
-                                items(suggestions, key = { "suggest-${it.url}" }) { channel ->
-                                    TvLiveCategoryChip(
-                                        label = channel.name,
-                                        selected = false,
-                                        onClick = { onQuery(channel.name) },
-                                        modifier = Modifier
-                                            .focusProperties { down = keyboardFocus.requester }
-                                            .softFocusDown(keyboardFocus.requester),
+                                Text(
+                                    if (query.isBlank()) "Escribe o dicta el canal..." else query,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (query.isBlank()) VisionTextSecondary else Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+
+                            // Fila de acciones accesibles directamente arriba del teclado
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                TvCompactAction(
+                                    "Dictar",
+                                    icon = Icons.Default.Mic,
+                                    onClick = startVoice,
+                                    modifier = Modifier
+                                        .focusRequester(voiceFocus)
+                                        .softFocusDown(keyboardFocus.requester),
+                                )
+                                if (query.isNotBlank()) {
+                                    TvCompactAction(
+                                        "Borrar",
+                                        onClick = { onQuery("") },
+                                        modifier = Modifier.softFocusDown(keyboardFocus.requester),
                                     )
                                 }
+                                TvCompactAction(
+                                    "Cerrar",
+                                    onClick = onDismiss,
+                                    modifier = Modifier.softFocusDown(keyboardFocus.requester),
+                                )
                             }
-                        }
-                    }
 
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        Column(Modifier.weight(0.47f).fillMaxHeight()) {
-                            Text(
-                                "TECLADO",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = VisionBlueBright,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Spacer(Modifier.height(5.dp))
+                            Spacer(Modifier.height(4.dp))
                             TvKeyboard(
                                 text = query,
                                 onTextChange = onQuery,
@@ -727,17 +687,19 @@ private fun TvLiveSearchDialog(
                                     .softFocusUp(voiceFocus),
                                 modifier = Modifier.fillMaxWidth().height(224.dp),
                             )
-                            Text(
-                                "Usa el mando para escribir. «Dictar» busca por voz.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = VisionTextSecondary,
-                                modifier = Modifier.padding(top = 7.dp),
-                            )
                         }
-                        Column(Modifier.weight(0.53f).fillMaxHeight()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+
+                        // Columna Derecha: Países, Sugerencias y Resultados
+                        Column(
+                            Modifier.weight(0.54f).fillMaxHeight(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
                                 Text(
-                                    "RESULTADOS",
+                                    "PAÍS",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = VisionBlueBright,
                                     fontWeight = FontWeight.Bold,
@@ -749,7 +711,55 @@ private fun TvLiveSearchDialog(
                                     color = VisionTextSecondary,
                                 )
                             }
-                            Spacer(Modifier.height(5.dp))
+
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth().focusGroup(),
+                                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                contentPadding = PaddingValues(vertical = 2.dp),
+                            ) {
+                                item(key = "all-countries") {
+                                    TvLiveCategoryChip(
+                                        label = "Todos",
+                                        selected = selectedCountry == null,
+                                        onClick = { onCountry(null) },
+                                    )
+                                }
+                                items(countries, key = { "search-country-$it" }) { country ->
+                                    TvLiveCategoryChip(
+                                        label = country,
+                                        selected = selectedCountry == country,
+                                        onClick = { onCountry(country) },
+                                    )
+                                }
+                            }
+
+                            if (suggestions.isNotEmpty()) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                ) {
+                                    Text(
+                                        "Quizá:",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = VisionTextSecondary,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    LazyRow(
+                                        modifier = Modifier.focusGroup(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        items(suggestions, key = { "suggest-${it.url}" }) { channel ->
+                                            TvLiveCategoryChip(
+                                                label = channel.name,
+                                                selected = false,
+                                                onClick = { onQuery(channel.name) },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
                             if (results.isEmpty()) {
                                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Text(

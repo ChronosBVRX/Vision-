@@ -194,9 +194,14 @@ fun SectionScreen(
                         }
                     }
                 // Selector horizontal de categorías (Chips / Pills)
-                val categoryChips = remember(rowsFinal) {
+                val categoryChips = remember(rowsFinal, name) {
                     val genres = rowsFinal.map { it.title.trim() }.filter { it.isNotBlank() }.distinct()
-                    listOf(CHIP_ALL) + genres
+                    val list = mutableListOf(CHIP_ALL)
+                    list.addAll(genres)
+                    if (name in listOf("movies", "series") && "Infantil" !in list) {
+                        list.add("Infantil")
+                    }
+                    list
                 }
 
                 LazyRow(
@@ -253,10 +258,15 @@ fun SectionScreen(
                     val categoryRow = remember(rowsFinal, activeCategory) {
                         rowsFinal.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
                     }
-                    val films = remember(categoryRow, rowsFinal) {
-                        val raw = categoryRow?.films ?: rowsFinal.flatMap { it.films }
-                            .filter { it.synopsis.contains(activeCategory, ignoreCase = true) }
-                            .distinctBy { it.id }
+                    val films = remember(categoryRow, rowsFinal, activeCategory) {
+                        val raw = when {
+                            activeCategory.equals("Infantil", ignoreCase = true) ->
+                                rowsFinal.flatMap { it.films }.filter { it.kind == "kids" }.distinctBy { it.id }
+                            categoryRow != null -> categoryRow.films
+                            else -> rowsFinal.flatMap { it.films }
+                                .filter { it.synopsis.contains(activeCategory, ignoreCase = true) }
+                                .distinctBy { it.id }
+                        }
                         Popularity.reorderRow(raw)
                     }
 
@@ -264,6 +274,7 @@ fun SectionScreen(
                         categoryName = activeCategory,
                         films = films,
                         categoryId = categoryRow?.id ?: "",
+                        section = name,
                         initialTotal = categoryRow?.total ?: films.size,
                         columns = gridColumns,
                         contentPadding = contentPadding,
@@ -416,6 +427,7 @@ private fun CategoryGridFeed(
     categoryName: String,
     films: List<Film>,
     categoryId: String,
+    section: String? = null,
     initialTotal: Int,
     columns: Int,
     contentPadding: PaddingValues,
@@ -480,7 +492,10 @@ private fun CategoryGridFeed(
             batchLimit = (batchLimit + batch).coerceAtMost(allFilms.size)
             return
         }
-        if (exhausted || categoryId.isBlank() ||
+        val targetCatId = categoryId.ifBlank {
+            if (section != null) "xtv-$section-all" else ""
+        }
+        if (exhausted || targetCatId.isBlank() ||
             !SectionPaging.canLoadMore(allFilms.size, total, cap)
         ) {
             return
@@ -489,7 +504,7 @@ private fun CategoryGridFeed(
         val loadedBefore = allFilms.size
         loadingMore = true
         scope.launch {
-            val result = RemoteIndexSource.categoryPage(context, categoryId, page, batch)
+            val result = RemoteIndexSource.categoryPage(context, targetCatId, page, batch)
             if (result.films.isNotEmpty()) {
                 extra = (extra + result.films).distinctBy { it.id }
             }

@@ -80,12 +80,19 @@ object SportsStatsSource {
         dateIso: String,
         leagueId: String,
     ): MatchStats? = withContext(Dispatchers.IO) {
-        if (dateIso.isBlank()) return@withContext null
+        if (dateIso.isBlank() || homeName.isBlank() || awayName.isBlank()) return@withContext null
+        val cacheKey = "$homeName|$awayName|$dateIso|$leagueId"
+        cache[cacheKey]?.takeIf { System.currentTimeMillis() - it.at in 0 until TTL_MS }?.let {
+            return@withContext it.stats
+        }
+
+        val home = fold(homeName)
+        val away = fold(awayName)
+
+        // 1. Intentar primero con la agenda de fútbol local
         val matches = SportsSource.cached(context, dateIso).ifEmpty {
             runCatching { SportsSource.matches(context, dateIso) }.getOrDefault(emptyList())
         }
-        val home = fold(homeName)
-        val away = fold(awayName)
         val match = matches.firstOrNull { candidate ->
             val ch = fold(candidate.home.name)
             val ca = fold(candidate.away.name)
@@ -93,15 +100,78 @@ object SportsStatsSource {
                 ((home in ch || ch in home) && (away in ca || ca in away))) ||
                 (home.isNotBlank() && away.isNotBlank() &&
                     (home in ca || ca in home) && (away in ch || ch in away))
-        } ?: return@withContext null
-        val key = match.id
-        cache[key]?.takeIf { System.currentTimeMillis() - it.at in 0 until TTL_MS }?.let {
-            return@withContext it.stats
         }
-        val path = espnPath(match.league.id) ?: return@withContext null
-        val stats = runCatching { fetch(path, key) }.getOrNull() ?: return@withContext null
-        cache[key] = CacheEntry(System.currentTimeMillis(), stats)
+
+        val (path, eventId) = if (match != null) {
+            val p = espnPath(match.league.id) ?: return@withContext null
+            p to match.id
+        } else {
+            // 2. Si es otro deporte (básquet, béisbol, NFL...) buscar en el Scoreboard de ESPN
+            val p = espnPath(leagueId) ?: espnPathFromTeams(homeName, awayName) ?: return@withContext null
+            val resolvedId = resolveEspnEventId(p, home, away) ?: return@withContext null
+            p to resolvedId
+        }
+
+        val stats = runCatching { fetch(path, eventId) }.getOrNull() ?: return@withContext null
+        cache[cacheKey] = CacheEntry(System.currentTimeMillis(), stats)
         stats
+    }
+
+    private fun resolveEspnEventId(path: String, home: String, away: String): String? {
+        val url = "https://site.api.espn.com/apis/site/v2/sports/$path/scoreboard"
+        val connection = runCatching {
+            (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 6_000
+                readTimeout = 8_000
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "VisionPlus/1.0 (sports scoreboard)")
+            }
+        }.getOrNull() ?: return null
+
+        return try {
+            if (connection.responseCode !in 200..299) return null
+            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val root = JSONObject(body)
+            val events = root.optJSONArray("events") ?: return null
+            for (i in 0 until events.length()) {
+                val ev = events.optJSONObject(i) ?: continue
+                val name = fold(ev.optString("name"))
+                val shortName = fold(ev.optString("shortName"))
+                if ((home.isNotBlank() && (home in name || name.contains(home))) ||
+                    (away.isNotBlank() && (away in name || name.contains(away)))
+                ) {
+                    val id = ev.optString("id").trim()
+                    if (id.isNotBlank()) return id
+                }
+                if ((home.isNotBlank() && (home in shortName || shortName.contains(home))) ||
+                    (away.isNotBlank() && (away in shortName || shortName.contains(away)))
+                ) {
+                    val id = ev.optString("id").trim()
+                    if (id.isNotBlank()) return id
+                }
+            }
+            null
+        } catch (_: Throwable) {
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun espnPathFromTeams(homeName: String, awayName: String): String? {
+        val combined = "$homeName $awayName".lowercase()
+        return when {
+            combined.contains("lakers") || combined.contains("warriors") || combined.contains("celtics") ||
+                combined.contains("bulls") || combined.contains("heat") || combined.contains("knicks") ||
+                combined.contains("nba") -> "basketball/nba"
+            combined.contains("yankees") || combined.contains("dodgers") || combined.contains("red sox") ||
+                combined.contains("astros") || combined.contains("mlb") -> "baseball/mlb"
+            combined.contains("chiefs") || combined.contains("49ers") || combined.contains("cowboys") ||
+                combined.contains("patriots") || combined.contains("nfl") -> "football/nfl"
+            combined.contains("nhl") -> "hockey/nhl"
+            else -> null
+        }
     }
 
     private fun fetch(path: String, eventId: String): MatchStats? {
@@ -313,8 +383,11 @@ object SportsStatsSource {
         "interceptions" -> "Intercepciones"
         "blockedShots" -> "Tiros bloqueados"
         "fieldGoalPct" -> "Tiros de campo"
+        "fieldGoalsMade-fieldGoalsAttempted" -> "Tiros anotados"
         "threePointFieldGoalPct" -> "Triples"
+        "threePointFieldGoalsMade-threePointFieldGoalsAttempted" -> "Triples anotados"
         "freeThrowPct" -> "Tiros libres"
+        "freeThrowsMade-freeThrowsAttempted" -> "Tiros libres anotados"
         "totalRebounds" -> "Rebotes"
         "assists" -> "Asistencias"
         "steals" -> "Robos"

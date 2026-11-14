@@ -22,7 +22,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.LiveTv
@@ -104,6 +106,11 @@ internal fun tvTopTabFor(route: Route): TvTopTab? = when (route) {
     Route.Games -> TvTopTab.GAMES
     Route.Library -> TvTopTab.LIBRARY
     Route.Downloads -> TvTopTab.LIBRARY
+    is Route.Category -> when (route.key) {
+        "kids-movies" -> TvTopTab.MOVIES
+        "kids-series" -> TvTopTab.SERIES
+        else -> null
+    }
     is Route.Section -> when (route.name) {
         "movies" -> TvTopTab.MOVIES
         "series", "anime", "novelas" -> TvTopTab.SERIES
@@ -120,6 +127,7 @@ internal fun tvTopTabFor(route: Route): TvTopTab? = when (route) {
 internal sealed interface TvTopEntry {
     data class Tab(val tab: TvTopTab) : TvTopEntry
     data object LiveHub : TvTopEntry
+    data object MoviesHub : TvTopEntry
     data object SeriesHub : TvTopEntry
     data object LibraryHub : TvTopEntry
 }
@@ -128,7 +136,7 @@ internal val TV_TOP_ENTRIES: List<TvTopEntry> = listOf(
     TvTopEntry.Tab(TvTopTab.HOME),
     TvTopEntry.LiveHub,
     TvTopEntry.Tab(TvTopTab.GAMES),
-    TvTopEntry.Tab(TvTopTab.MOVIES),
+    TvTopEntry.MoviesHub,
     TvTopEntry.SeriesHub,
     TvTopEntry.LibraryHub,
 )
@@ -176,14 +184,17 @@ internal fun TvTopBar(
     val avatar = if (profileName != null) profileAvatar else storedProfile?.avatar.orEmpty()
     val clock = rememberTopClock()
     var liveMenuOpen by remember { mutableStateOf(false) }
+    var moviesMenuOpen by remember { mutableStateOf(false) }
     var seriesMenuOpen by remember { mutableStateOf(false) }
     var libraryMenuOpen by remember { mutableStateOf(false) }
     val liveHubFocus = remember { FocusRequester() }
+    val moviesHubFocus = remember { FocusRequester() }
     val seriesHubFocus = remember { FocusRequester() }
     val libraryHubFocus = remember { FocusRequester() }
     // Al cambiar de sección el menú no puede quedarse abierto encima de la pantalla nueva.
     LaunchedEffect(active) {
         if (active != TvTopTab.LIVE && active != TvTopTab.SPORTS) liveMenuOpen = false
+        if (active != TvTopTab.MOVIES) moviesMenuOpen = false
         if (active != TvTopTab.SERIES) seriesMenuOpen = false
         if (active != TvTopTab.LIBRARY && active != null) libraryMenuOpen = false
     }
@@ -228,6 +239,7 @@ internal fun TvTopBar(
                 val entryActive = when (entry) {
                     is TvTopEntry.Tab -> entry.tab == active
                     TvTopEntry.LiveHub -> liveHubSelected(active)
+                    TvTopEntry.MoviesHub -> active == TvTopTab.MOVIES
                     TvTopEntry.SeriesHub -> active == TvTopTab.SERIES
                     TvTopEntry.LibraryHub -> active == TvTopTab.LIBRARY
                 }
@@ -243,6 +255,33 @@ internal fun TvTopBar(
                         onClick = { onTab(entry.tab) },
                         modifier = if (lands) Modifier.landingFocus(landing!!) else Modifier,
                     )
+                    TvTopEntry.MoviesHub -> Box {
+                        TopTabPill(
+                            label = "Películas",
+                            description = "Películas e infantil",
+                            selected = active == TvTopTab.MOVIES,
+                            onClick = { moviesMenuOpen = true },
+                            modifier = Modifier
+                                .focusRequester(moviesHubFocus)
+                                .then(if (lands) Modifier.landingFocus(landing!!) else Modifier),
+                        )
+                        if (moviesMenuOpen) {
+                            val density = LocalDensity.current
+                            val below = with(density) { 46.dp.roundToPx() }
+                            Popup(
+                                alignment = Alignment.TopStart,
+                                offset = IntOffset(0, below),
+                                onDismissRequest = { moviesMenuOpen = false },
+                                properties = PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true),
+                            ) {
+                                MoviesHubPanel(
+                                    active = active,
+                                    onPick = { route -> moviesMenuOpen = false; onRoute(route) },
+                                    onDismiss = { moviesMenuOpen = false },
+                                )
+                            }
+                        }
+                    }
                     TvTopEntry.LiveHub -> Box {
                         TopTabPill(
                             label = "En vivo",
@@ -409,6 +448,27 @@ private fun TopTabPill(
 }
 
 @Composable
+private fun MoviesHubPanel(
+    active: TvTopTab?,
+    onPick: (Route) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { delay(60); runCatching { first.requestFocus() } }
+    Column(
+        Modifier.width(256.dp).dismissOnBack(onDismiss)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xF20B1220))
+            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(14.dp))
+            .padding(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        RouteHubOption("Películas", "Catálogo de películas", Icons.Default.Movie, active == TvTopTab.MOVIES, first) { onPick(Route.Section("movies", "Películas")) }
+        RouteHubOption("Películas Infantiles", "Películas para chicos y familia", Icons.Default.ChildCare, false) { onPick(Route.Category("kids-movies", "Películas Infantiles")) }
+    }
+}
+
+@Composable
 private fun SeriesHubPanel(
     active: TvTopTab?,
     onPick: (Route) -> Unit,
@@ -417,7 +477,7 @@ private fun SeriesHubPanel(
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(60); runCatching { first.requestFocus() } }
     Column(
-        Modifier.width(246.dp).dismissOnBack(onDismiss)
+        Modifier.width(256.dp).dismissOnBack(onDismiss)
             .clip(RoundedCornerShape(14.dp))
             .background(Color(0xF20B1220))
             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(14.dp))
@@ -427,6 +487,7 @@ private fun SeriesHubPanel(
         RouteHubOption("Series", "Series de televisión", Icons.Default.Tv, active == TvTopTab.SERIES, first) { onPick(Route.Section("series", "Series")) }
         RouteHubOption("Anime", "Animación japonesa", Icons.Default.Animation, false) { onPick(Route.Section("anime", "Anime")) }
         RouteHubOption("Novelas", "Telenovelas y dramas", Icons.Default.AutoStories, false) { onPick(Route.Section("novelas", "Novelas")) }
+        RouteHubOption("Series Infantiles", "Dibujos animados y para chicos", Icons.Default.ChildCare, false) { onPick(Route.Category("kids-series", "Series Infantiles")) }
     }
 }
 

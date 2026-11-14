@@ -11,8 +11,8 @@ package com.chronosbvrx.visionplus.data
 object SectionPaging {
     internal const val LOW_END_BATCH = 24
     internal const val NORMAL_BATCH = 48
-    internal const val LOW_END_CAP = 180
-    internal const val NORMAL_CAP = 480
+    internal const val LOW_END_CAP = 1200
+    internal const val NORMAL_CAP = 4000
 
     internal fun batch(lowEnd: Boolean): Int = if (lowEnd) LOW_END_BATCH else NORMAL_BATCH
 
@@ -24,5 +24,5 @@ object SectionPaging {
 
     /** ¿Queda algo por pedir y el equipo aún no llegó a su techo? */
     internal fun canLoadMore(loaded: Int, total: Int, cap: Int): Boolean =
-        loaded < total && loaded < cap
+        (total <= 0 || loaded < total) && loaded < cap
 }

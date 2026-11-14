@@ -95,9 +95,9 @@ import kotlinx.coroutines.delay
  * antes se cambia por un degradado carbón/medianoche y el cian queda reservado para el foco del
  * mando y la acción principal.
  */
-private val GlassTop = Color(0xFF161B26)
-private val GlassBottom = Color(0xFF0B0E14)
-private val GlassBorder = Color(0x1AFFFFFF)
+private val GlassTop = Color(0xD90D1322)
+private val GlassBottom = Color(0xB3070A10)
+private val GlassBorder = Color(0x1A38BDF8)
 private val ProfileAccent = Color(0xFF38BDF8)
 private val ProfileMuted = Color(0xFF94A3B8)
 private val ProfileField = Color(0xFF090C10)
@@ -221,23 +221,34 @@ private fun ProfilesPanel(
 
     BoxWithConstraints(
         modifier = modifier
-            .fillMaxWidth(0.94f)
-            .widthIn(min = 420.dp, max = 900.dp)
+            .widthIn(min = 380.dp, max = 780.dp)
             .shadow(
-                elevation = 30.dp,
-                shape = RoundedCornerShape(24.dp),
+                elevation = 28.dp,
+                shape = RoundedCornerShape(28.dp),
                 clip = false,
-                ambientColor = Color.Black,
-                spotColor = Color.Black,
+                ambientColor = Color.Black.copy(alpha = 0.85f),
+                spotColor = Color.Black.copy(alpha = 0.85f),
             )
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(28.dp))
             .background(
-                Brush.linearGradient(
-                    colors = listOf(GlassTop, GlassBottom),
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xF0101828),
+                        Color(0xD90B101B),
+                        Color(0xB3070A12),
+                    ),
                 )
             )
-            .border(1.dp, GlassBorder, RoundedCornerShape(24.dp))
-            .padding(horizontal = 34.dp, vertical = 24.dp)
+            .border(
+                BorderStroke(
+                    1.dp,
+                    Brush.verticalGradient(
+                        listOf(Color(0x3338BDF8), Color(0x12FFFFFF), Color(0x00000000))
+                    )
+                ),
+                shape = RoundedCornerShape(28.dp)
+            )
+            .padding(horizontal = 28.dp, vertical = 22.dp)
             .modalFocusTrap()
             .dismissOnBack(onDismiss),
     ) {
@@ -401,6 +412,12 @@ private fun ProfileItem(
     val editFocus = remember { FocusRequester() }
     val cardFocus = remember { FocusRequester() }
     val upRequester = if (first) dialogFocus.requester else cardFocus
+    val editAlpha by animateFloatAsState(
+        targetValue = if (cardFocused || editFocused) 1f else 0.5f,
+        animationSpec = tween(160),
+        label = "profile-edit-alpha",
+    )
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.width(136.dp),
@@ -414,53 +431,46 @@ private fun ProfileItem(
                 .softFocusDown(editFocus),
             onClick = onSelect,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         Box(Modifier.height(32.dp), contentAlignment = Alignment.Center) {
-            androidx.compose.animation.AnimatedVisibility(
-                visible = cardFocused || editFocused,
-                enter = fadeIn(tween(160)),
-                exit = fadeOut(tween(120)),
+            Surface(
+                onClick = onEdit,
+                modifier = Modifier
+                    .height(30.dp)
+                    .graphicsLayer { alpha = editAlpha }
+                    .focusRequester(editFocus)
+                    .onFocusChanged { editFocused = it.isFocused }
+                    .softFocusUp(upRequester)
+                    .animateContentSize(),
+                shape = ClickableSurfaceDefaults.shape(CircleShape),
+                colors = ClickableSurfaceDefaults.colors(
+                    containerColor = if (editFocused) ProfileAccent else Color.White.copy(alpha = 0.08f),
+                    contentColor = if (editFocused) ProfileInk else Color.White,
+                    focusedContainerColor = ProfileAccent,
+                    focusedContentColor = ProfileInk,
+                ),
+                border = ClickableSurfaceDefaults.border(
+                    border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)), shape = CircleShape),
+                    focusedBorder = Border.None,
+                ),
             ) {
-                Surface(
-                    onClick = onEdit,
-                    modifier = Modifier
-                        .height(32.dp)
-                        .focusRequester(editFocus)
-                        .onFocusChanged { editFocused = it.isFocused }
-                        .softFocusUp(upRequester)
-                        .animateContentSize(),
-                    shape = ClickableSurfaceDefaults.shape(CircleShape),
-                    colors = ClickableSurfaceDefaults.colors(
-                        containerColor = Color.White.copy(alpha = 0.08f),
-                        contentColor = Color.White,
-                        focusedContainerColor = ProfileAccent,
-                        focusedContentColor = ProfileInk,
-                    ),
-                    border = ClickableSurfaceDefaults.border(
-                        border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)), shape = CircleShape),
-                        focusedBorder = Border.None,
-                    ),
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Edit,
-                            contentDescription = "Editar ${profile.name}",
-                            tint = if (editFocused) ProfileInk else Color.White,
-                            modifier = Modifier.size(15.dp),
-                        )
-                        if (editFocused) {
-                            Text(
-                                "Editar",
-                                color = ProfileInk,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-                    }
+                    Icon(
+                        imageVector = Icons.Rounded.Edit,
+                        contentDescription = "Editar ${profile.name}",
+                        tint = if (editFocused) ProfileInk else Color.White,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        "Editar",
+                        color = if (editFocused) ProfileInk else Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = if (editFocused) FontWeight.Bold else FontWeight.Medium,
+                    )
                 }
             }
         }

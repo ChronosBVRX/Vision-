@@ -146,7 +146,13 @@ fun TvCategoryScreen(
     }
 
     val films = remember(rows, key, sectionRows) {
-        val raw = if (section != null) {
+        val raw = if (key == "kids-movies") {
+            rows.flatMap { it.films }.filter { it.kind == "kids" && it.seasons.isEmpty() }.distinctBy { it.id }
+                .ifEmpty { rows.flatMap { it.films }.filter { it.kind == "kids" }.distinctBy { it.id } }
+        } else if (key == "kids-series") {
+            rows.flatMap { it.films }.filter { it.kind == "kids" && (it.seasons.isNotEmpty() || it.kind == "series") }.distinctBy { it.id }
+                .ifEmpty { rows.flatMap { it.films }.filter { it.kind == "kids" }.distinctBy { it.id } }
+        } else if (section != null) {
             (sectionRows ?: emptyList()).flatMap { it.films }.distinctBy { it.id }
         } else {
             val byId = rows.firstOrNull { it.id.equals(key, ignoreCase = true) }
@@ -213,7 +219,12 @@ fun TvCategoryScreen(
     val categoryChips = remember(loadedDisjoint, films, section) {
         if (section != null && loadedDisjoint != null) {
             val genres = loadedDisjoint.map { it.title.trim() }.filter { it.isNotBlank() }.distinct()
-            listOf(CHIP_ALL) + genres
+            val list = mutableListOf(CHIP_ALL)
+            list.addAll(genres)
+            if (section in listOf("movies", "series") && "Infantil" !in list) {
+                list.add("Infantil")
+            }
+            list
         } else {
             listOf(CHIP_ALL, "Mejor valoradas", "Novedades")
         }
@@ -352,6 +363,9 @@ fun TvCategoryScreen(
         // MODO 2: VISTA DE CATÁLOGO COMPLETO EN CUADRÍCULA (GRID)
         val categoryFilms = remember(activeCategory, loadedDisjoint, films, topRated, novelties, forYou) {
             val raw = when {
+                activeCategory == "Infantil" -> films.filter { it.kind == "kids" }.ifEmpty {
+                    rows.flatMap { it.films }.filter { it.kind == "kids" }
+                }
                 loadedDisjoint != null -> {
                     val matchingRow = loadedDisjoint.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
                     matchingRow?.films ?: loadedDisjoint.flatMap { it.films }
@@ -377,6 +391,7 @@ fun TvCategoryScreen(
             categoryChips = categoryChips,
             films = categoryFilms,
             categoryId = activeRow?.id ?: "",
+            section = section,
             initialTotal = activeRow?.total ?: categoryFilms.size,
             onSelectChip = { chip ->
                 selectedCategory = if (chip == CHIP_ALL) null else chip
@@ -420,6 +435,7 @@ private fun TvCategoryGrid(
     categoryChips: List<String>,
     films: List<Film>,
     categoryId: String,
+    section: String? = null,
     initialTotal: Int,
     onSelectChip: (String) -> Unit,
     onBackToAll: () -> Unit,
@@ -441,7 +457,7 @@ private fun TvCategoryGrid(
     var loadingMore by remember(categoryName) { mutableStateOf(false) }
     var exhausted by remember(categoryName) { mutableStateOf(false) }
     // El servidor manda el primer tope (40); «Ver más» pide páginas y respeta el
-    // techo del equipo (180 en una TV de 2 GB, 480 en equipos grandes).
+    // techo del equipo.
     val allFilms = remember(films, extra) { (films + extra).distinctBy { it.id } }
 
     var visibleCount by remember(categoryName) { mutableIntStateOf(GRID_BATCH_SIZE) }
@@ -472,7 +488,10 @@ private fun TvCategoryGrid(
             visibleCount = (visibleCount + batch).coerceAtMost(allFilms.size)
             return
         }
-        if (exhausted || categoryId.isBlank() ||
+        val targetCatId = categoryId.ifBlank {
+            if (section != null) "xtv-$section-all" else ""
+        }
+        if (exhausted || targetCatId.isBlank() ||
             !SectionPaging.canLoadMore(allFilms.size, total, cap)
         ) {
             return
@@ -481,7 +500,7 @@ private fun TvCategoryGrid(
         val loadedBefore = allFilms.size
         loadingMore = true
         scope.launch {
-            val result = RemoteIndexSource.categoryPage(context, categoryId, page, batch)
+            val result = RemoteIndexSource.categoryPage(context, targetCatId, page, batch)
             if (result.films.isNotEmpty()) {
                 extra = (extra + result.films).distinctBy { it.id }
             }

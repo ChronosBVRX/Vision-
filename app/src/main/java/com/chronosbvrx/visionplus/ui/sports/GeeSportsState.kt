@@ -104,15 +104,15 @@ class GeeSportsState(
     private fun isRobolectric(): Boolean =
         runCatching { Class.forName("org.robolectric.Robolectric") }.isSuccess
 
-    /** Los eventos que entran al modo elegido (Principal o todo el catálogo). */
+    /** Los eventos que entran al modo elegido (Principal, categoría específica o todo el catálogo). */
     private fun scoped(event: GeeSportsSource.GeeEvent): Boolean =
-        event.visible && (showAll || SportsRelevance.isMain(event))
+        event.visible && (showAll || selectedCategory != null || SportsRelevance.isMain(event))
 
     /** Deportes disponibles: fútbol primero y el resto por cantidad de eventos. */
     val categories: List<String>
         get() {
             val counts = events.asSequence()
-                .filter(::scoped)
+                .filter { it.visible }
                 .map { it.category }
                 .filter { it.isNotBlank() }
                 .groupingBy { it }
