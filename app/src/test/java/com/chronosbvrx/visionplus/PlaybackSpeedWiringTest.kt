@@ -108,11 +108,77 @@ class PlaybackSpeedWiringTest {
         assertTrue("appId de Magis", api.contains("com.msandroid.mobile"))
         assertTrue("versión vigente", api.contains("APK_VER = \"60507\""))
         assertTrue("el catálogo sigue en masnew", api.contains("PORTAL = \"masnew\""))
-        // La licencia libre solo la firma el tenant masmobile y solo por v9.
+        // La licencia libre solo la firma el tenant masmobile.
         assertTrue("tenant de reproducción", api.contains("PORTAL_PLAY = \"masmobile\""))
-        assertTrue("play v9", api.contains("/api/portalCore/v9/startPlayVOD"))
+        assertTrue("play v9 de respaldo", api.contains("/api/portalCore/v9/startPlayVOD"))
         assertTrue("el cuerpo usa el tenant de play", api.contains("put(\"portalCode\", PORTAL_PLAY)"))
-        assertFalse("no debe quedar el play v10, ya no entrega medios", api.contains("/api/portalCore/v10/startPlayVOD"))
+        // El v10 con la columna Free devuelve la calidad real (1080p); el v9 sin columna solo 480p.
+        assertTrue("play v10 con columna", api.contains("/api/portalCore/v10/startPlayVOD"))
+        assertTrue("columna del catálogo Free", api.contains("masmobile_free"))
+        assertTrue("el cuerpo lleva columnId", api.contains("put(\"columnId\", columnId)"))
+    }
+
+    @Test
+    fun freeColumnsAreTriedBeforeTheV9Fallback() {
+        val api = source("data/xuper/X4KApi.kt")
+        val prepare = between(api, "suspend fun prepareVod(", "suspend fun playVod(")
+        val v10 = prepare.indexOf("for (column in tries)")
+        val v9 = prepare.indexOf("for (type in listOf(\"2\", \"1\"))")
+        assertTrue("falta el intento v10", v10 >= 0)
+        assertTrue("falta el respaldo v9", v9 >= 0)
+        assertTrue("el v10 debe ir antes que el v9", v10 < v9)
+        assertTrue("las columnas Free se intentan", prepare.contains("freeCols.forEach"))
+        assertTrue("el v10 pide la columna", prepare.contains("licenseColumnBody"))
+        assertTrue("las columnas se cachean", api.contains("K_FREE_COLS_AT"))
+        assertTrue("caducidad de 12 h", api.contains("FREE_COLS_TTL_MS"))
+    }
+
+    @Test
+    fun theMappedColumnGoesBeforeFreeOnlyForTheCourtesyIdentity() {
+        val api = source("data/xuper/X4KApi.kt")
+        val prepare = between(api, "suspend fun prepareVod(", "suspend fun playVod(")
+        // Con cortesía el v10 firma FHD en la columna del título; sin cortesía esa columna
+        // contesta vacío, así que solo la cuenta elegible paga la consulta del mapa.
+        assertTrue("falta la columna del mapa", prepare.contains("if (identity.vip) columnFor(context, cid)"))
+        assertTrue("las Free no se repiten", prepare.contains("freeCols.forEach { if (it !in tries) tries += it }"))
+        assertTrue("el mapa se cachea", api.contains("COL_MAP_TTL_MS"))
+        assertTrue("el mapa se arma con el catálogo de play", api.contains("\"masmobile_movies\""))
+    }
+
+
+    @Test
+    fun courtesyAccountSignsHigherQualityWhenItHasDays() {
+        val api = source("data/xuper/X4KApi.kt")
+        // La cuenta histórica aún trae días de cortesía y firma las pistas VIP (FHD).
+        assertTrue("falta la identidad de cortesía", api.contains("playIdentity(context)"))
+        assertTrue("consulta la elegibilidad", api.contains("getAuthInfo"))
+        assertTrue("lee los días restantes", api.contains("remainingDays"))
+        assertTrue("usa la cuenta histórica", api.contains("LEGACY_SN"))
+        assertTrue("no mezcla la sesión del catálogo", api.contains("renewPlayIdentity"))
+        assertTrue("registra la identidad usada", api.contains("vip=\${identity.vip}"))
+    }
+
+    @Test
+    fun theVipLicenseUsesItsOwnCdnEntriesAndEnv() {
+        val api = source("data/xuper/X4KApi.kt")
+        val player = source("ui/player/X4KPlayerAty.kt")
+        val titan = source("data/xuper/X4KTitan.kt")
+        // Las entradas CDN del child van etiquetadas con su id: sin su SLB la pista no abre.
+        assertTrue("falta el SLB de la identidad", api.contains("slbFor(identity)"))
+        assertTrue("el play adjunta su SLB", api.contains("entriesJson = vipSlb?.first"))
+        assertTrue("el intent lleva el child", api.contains("putExtra(\"playUserId\""))
+        assertTrue("el reproductor lo consume", player.contains("getStringExtra(\"playUserId\")"))
+        // El Env también debe cambiar de cuenta aunque los params sean iguales.
+        assertTrue("el motor compara el usuario", titan.contains("lastSentUserId"))
+        assertTrue("el motor compara el equipo", titan.contains("lastSentDevId"))
+    }
+
+    @Test
+    fun anySignedLicenseIsPlayableNotOnlyTheFreeTag() {
+        val api = source("data/xuper/X4KApi.kt")
+        val collect = between(api, "private fun collectMedias(", "private suspend fun launch(")
+        assertTrue("exige licencia firmada", collect.contains("optString(\"license\").isBlank()"))
+        assertFalse("descarta las licencias VIP", collect.contains("!= \"free\") continue"))
     }
 
     @Test

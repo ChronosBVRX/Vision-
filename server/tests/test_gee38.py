@@ -868,9 +868,9 @@ async def test_gee38_events_merges_links_of_the_same_fixture(monkeypatch):
     assert cards, "la tarjeta del calendario debe servirse"
     urls = [lk["url"] for lk in cards[0]["links"]]
     assert "https://vivo1" in urls and "https://vivo2" in urls and "https://muerto" in urls
-    # El servidor conserva la lista del evento; la app ordena vivos primero al armar
-    # el selector (`geePickRows`), que es lo que ve el usuario.
-    assert cards[0]["total"] == 3
+    # El servidor conserva la lista del evento y añade la señal alternativa de TNT Sports (JrFlix).
+    assert any(lk.get("origin") == "jrflix" for lk in cards[0]["links"])
+    assert cards[0]["total"] >= 3
 
 
 def test_gee_pair_key_normalizes_order_and_accents():

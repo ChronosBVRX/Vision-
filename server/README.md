@@ -107,9 +107,42 @@ Restaurar: `docker compose exec -T postgres pg_restore -U catalog_user -d catalo
 | `GET /v1/section/{name}?limit=` | hileras de género de una sección (`movies`/`series`/`novelas`/`anime`), solo con títulos de esa sección |
 | `GET /v1/search?q=&limit=` | búsqueda por título (más adelante: título original/géneros) |
 | `GET /v1/sports?date=&days=` | agenda de fútbol (ESPN) por día con cadenas candidatas |
+| `POST /v1/play/vip` | licencia FHD firmada por la cuenta de cortesía del broker |
 
 La forma de cada título (`id`, `title`, `year`, `durationMin`, `synopsis`,
 `posterUrl`, `videoUrl`, `sourceUrl`) mapea 1:1 con `Film` en la app.
+
+### Broker FHD (`POST /v1/play/vip`)
+
+La app manda `contentId`, `seriesContentId`, `columnId`, `type` y
+`episodeNumberList`. El VPS firma la licencia con `VIP_SN`/`VIP_USER_ID` y
+devuelve las pistas; el `getSlbInfo` se pide **en el equipo** para que el CDN
+valide la IP del reproductor (la licencia no lleva IP). Las licencias se cachean
+en memoria hasta que el propio portal las vence (≈24 h). Si el broker no
+responde, la app cae a su flujo local y, si tampoco hay cuenta, al catálogo Free.
+
+**Regla de oro: la cuenta tiene UN solo dueño, el proceso `api`.**
+Medido con la cuenta real: seis reproducciones simultáneas con el mismo token
+funcionan (no hay tope de streams), pero acuñar una sesión nueva invalida la
+anterior (`aaa100028`). Por eso la cuenta no se abre en la app oficial ni en
+emuladores: si otro aparato acuña, empieza un ping-pong de patadas. Vision+ sí
+puede usarla porque pasa por el broker.
+
+Operación de la cuenta (`server/scripts/vip_account.py`):
+
+```bash
+python scripts/vip_account.py status                 # semáforo (días, patadas, caché)
+python scripts/vip_account.py check --sn S --uid U   # valida antes de publicar
+python scripts/vip_account.py apply --sn S --uid U   # rota, reinicia y revierte solo
+python scripts/vip_account.py watch --max-days 5     # alarma para cron
+```
+
+`check` acuña de verdad, así que patea la sesión vigente unos segundos; el
+broker se recupera solo. `apply` respalda `.env`, cambia las variables, reinicia
+`api` y verifica con `POST /v1/vip/probe`; si no firma, restaura y reinicia.
+`POST /v1/play/vip` responde **409** cuando la cuenta quedó sin días o el par
+`VIP_SN`/`VIP_USER_ID` no coincide, y **502** cuando el título no tiene pista:
+la app no reintenta y cae al flujo libre. El caché no se borra al rotar.
 
 ## Fases
 
@@ -121,6 +154,13 @@ La forma de cada título (`id`, `title`, `year`, `durationMin`, `synopsis`,
 - **Fase 4**: `RemoteIndexSource` en la app (consulta con caché + fallback local). ⏳
 
 ## Operación
+
+- Vigilancia de la cuenta VIP con cron (avisa en el log del sistema cuando quedan
+  menos de 5 días o el par `VIP_SN`/`VIP_USER_ID` no coincide):
+
+  ```cron
+  17 9 * * * cd /opt/vision/server && ./scripts/vip_account.py watch --max-days 5 --interval 86400 >> /var/log/vip_account.log 2>&1
+  ```
 
 - El portal XTV limita cada listado "All" a **10.000 títulos** (`portal100081`); el
   worker usa `XTV_MAX_PAGES=100` (100/página) y las colecciones propias van a 3

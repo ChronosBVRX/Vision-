@@ -519,6 +519,11 @@ class X4KPlayerAty : ComponentActivity() {
         val playParams = intent.getStringExtra("playParamsB64")?.let {
             runCatching { String(android.util.Base64.decode(it, android.util.Base64.DEFAULT)) }.getOrNull()
         }.orEmpty()
+        // Con licencia VIP, el Env debe llevar el child que la firmó (no el del catálogo).
+        val playUserId = intent.getStringExtra("playUserId").orEmpty()
+            .ifBlank { com.chronosbvrx.visionplus.data.xuper.X4KApi.userIdOf() }
+        val playDevId = intent.getStringExtra("playDevId").orEmpty()
+            .ifBlank { com.chronosbvrx.visionplus.data.xuper.X4KApi.snOf() }
         // La ficha editorial de un capítulo puede devolver la duración de la serie: en
         // series no se consulta para el total; el motor es la fuente de la duración real.
         if (declaredDurationMs <= 0L && !liveMode && !seriesContext) {
@@ -642,7 +647,7 @@ class X4KPlayerAty : ComponentActivity() {
         val resolvedParams = if (playParams.isNotBlank()) playParams else apiPrefs.getString("play_params", "").orEmpty()
 
         // Si el motor :x4k ya fue precalentado por X4KWarmupReceiver, montamos la superficie de video de inmediato en 0 ms.
-        if (X4KTitan.isConfigured(resolvedEntries, resolvedParams)) {
+        if (X4KTitan.isConfigured(resolvedEntries, resolvedParams, playUserId, playDevId)) {
             Log.i(TAG, "motor :x4k ya precalentado; montando UI en 0 ms")
             mountUi(root(), mode, code, title, aspect, medias)
         } else {
@@ -652,8 +657,8 @@ class X4KPlayerAty : ComponentActivity() {
                     val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID).orEmpty()
                     val ok = X4KTitan.ensureConfigured(
                         context = this,
-                        userId = com.chronosbvrx.visionplus.data.xuper.X4KApi.userIdOf(),
-                        devId = com.chronosbvrx.visionplus.data.xuper.X4KApi.snOf(),
+                        userId = playUserId,
+                        devId = playDevId,
                         androidId = androidId,
                         entriesJson = resolvedEntries,
                         playParams = resolvedParams,

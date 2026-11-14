@@ -271,6 +271,12 @@ object X4KTitan {
     @Volatile
     private var lastSentParams: String = ""
 
+    @Volatile
+    private var lastSentUserId: String = ""
+
+    @Volatile
+    private var lastSentDevId: String = ""
+
     private var facade: Any? = null
 
     private var envClass: Class<*>? = null
@@ -292,10 +298,17 @@ object X4KTitan {
     fun isLoaded(): Boolean = loader != null
 
     /** True when the engine is booted and already has the given SLB entries and play params. */
-    fun isConfigured(entriesJson: String?, playParams: String): Boolean {
+    fun isConfigured(
+        entriesJson: String?,
+        playParams: String,
+        userId: String = "",
+        devId: String = "",
+    ): Boolean {
         return booted && envSent &&
             (entriesJson.isNullOrBlank() || entriesJson == lastSentEntries) &&
-            playParams == lastSentParams
+            playParams == lastSentParams &&
+            (userId.isBlank() || userId == lastSentUserId) &&
+            (devId.isBlank() || devId == lastSentDevId)
     }
 
     /** Boots the engine and sends SLB entries + Env only if not already configured with them. */
@@ -314,9 +327,13 @@ object X4KTitan {
                     lastSentEntries = entriesJson
                 }
             }
-            if (!envSent || playParams != lastSentParams) {
+            if (!envSent || playParams != lastSentParams ||
+                userId != lastSentUserId || devId != lastSentDevId
+            ) {
                 if (sendEnv(userId = userId, devId = devId, androidId = androidId, params = playParams)) {
                     lastSentParams = playParams
+                    lastSentUserId = userId
+                    lastSentDevId = devId
                     envSent = true
                 }
             }
@@ -865,6 +882,8 @@ object X4KTitan {
         envSent = false
         lastSentEntries = ""
         lastSentParams = ""
+        lastSentUserId = ""
+        lastSentDevId = ""
         facade = null
         envClass = null
         programClass = null

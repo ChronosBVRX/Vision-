@@ -1019,7 +1019,17 @@ private fun PlayerCore(
                         }
                     }
                 }
-                if (state == Player.STATE_ENDED && introPlaying) startMainItem() else if (state == Player.STATE_ENDED) controls.bump()
+                if (state == Player.STATE_ENDED && introPlaying) {
+                    startMainItem()
+                } else if (state == Player.STATE_ENDED) {
+                    if (isLive) {
+                        // Un canal en vivo no debe terminar: si el CDN cierra la conexión
+                        // o cae al borde, se reconecta automáticamente en vez de apagarse en negro.
+                        beginRecovery("ended-live")
+                    } else {
+                        controls.bump()
+                    }
+                }
             }
 
             override fun onTracksChanged(tracks: Tracks) {

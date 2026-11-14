@@ -78,7 +78,7 @@ class PlaybackFocusTest {
 
     @Test
     fun theCatalogWaitsForThePlayer() {
-        val catalog = File("src/main/java/com/chronosbvrx/visionplus/data/XuperCatalog.kt").readText()
+        val catalog = File("src/main/java/com/chronosbvrx/visionplus/data/XuperCatalog.kt").readText().replace("\r\n", "\n")
         assertTrue("falta el guardián de silencio", catalog.contains("private suspend fun awaitPlaybackIdle()"))
         // Las tres fases pesadas lo consultan: índice en caché, filas del portal y la sync remota.
         assertTrue(catalog.contains("private suspend fun cachedIndexRows() {\n        awaitPlaybackIdle()"))

@@ -15,6 +15,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -266,7 +268,10 @@ fun TvLiveScreen(
                 label = "País: ${selectedCountry ?: "Todos"}",
                 icon = Icons.Default.Language,
                 onClick = { countryPicker = true },
-                modifier = Modifier.landingFocus(landing),
+                modifier = Modifier
+                    .landingFocus(landing)
+                    .focusProperties { down = entryRequester }
+                    .softFocusDown(entryRequester),
             )
             // Botón de búsqueda propio del bloque En vivo, a un paso del filtro
             // de país (el icono suelto del extremo era difícil de alcanzar).
@@ -275,6 +280,9 @@ fun TvLiveScreen(
                 icon = Icons.Default.Search,
                 height = 38.dp,
                 onClick = { searchOpen = true },
+                modifier = Modifier
+                    .focusProperties { down = entryRequester }
+                    .softFocusDown(entryRequester),
             )
             val lastSeen = com.chronosbvrx.visionplus.data.LiveHistory.last(context)
             if (lastSeen != null) {
@@ -286,11 +294,14 @@ fun TvLiveScreen(
                         val recent = com.chronosbvrx.visionplus.data.LiveHistory.recent(context)
                         onPlay(lastSeen.toChannel(), recent.map { it.code }, "Recientes")
                     },
+                    modifier = Modifier
+                        .focusProperties { down = entryRequester }
+                        .softFocusDown(entryRequester),
                 )
             }
             Box(Modifier.weight(1f)) {
                 LazyRow(
-                    Modifier.fillMaxWidth(),
+                    Modifier.fillMaxWidth().focusGroup(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(start = 2.dp, end = 12.dp),
                 ) {
@@ -302,6 +313,9 @@ fun TvLiveScreen(
                                 favoritesOnly = false
                                 selectedGenre = genre
                             },
+                            modifier = Modifier
+                                .focusProperties { down = entryRequester }
+                                .softFocusDown(entryRequester),
                         )
                     }
                 }
@@ -320,11 +334,27 @@ fun TvLiveScreen(
                 )
             }
             Spacer(Modifier.width(6.dp))
-            TvRoundIcon(Icons.Default.Star, "Favoritos", {
-                favoritesOnly = !favoritesOnly
-                selectedGenre = null
-            }, size = 38.dp)
-            TvRoundIcon(Icons.Default.Refresh, LiveCopy.REFRESH, { state.refresh() }, size = 38.dp)
+            TvRoundIcon(
+                Icons.Default.Star,
+                "Favoritos",
+                {
+                    favoritesOnly = !favoritesOnly
+                    selectedGenre = null
+                },
+                size = 38.dp,
+                modifier = Modifier
+                    .focusProperties { down = entryRequester }
+                    .softFocusDown(entryRequester),
+            )
+            TvRoundIcon(
+                Icons.Default.Refresh,
+                LiveCopy.REFRESH,
+                { state.refresh() },
+                size = 38.dp,
+                modifier = Modifier
+                    .focusProperties { down = entryRequester }
+                    .softFocusDown(entryRequester),
+            )
         }
 
         if (channels.isEmpty()) {
@@ -610,13 +640,21 @@ private fun TvLiveSearchDialog(
                             onClick = startVoice,
                             modifier = Modifier
                                 .focusRequester(voiceFocus)
+                                .focusProperties { down = keyboardFocus.requester }
                                 .softFocusDown(keyboardFocus.requester),
                         )
                         Spacer(Modifier.width(8.dp))
-                        TvCompactAction("Cerrar", onClick = onDismiss)
+                        TvCompactAction(
+                            "Cerrar",
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .focusProperties { down = keyboardFocus.requester }
+                                .softFocusDown(keyboardFocus.requester),
+                        )
                     }
 
                     LazyRow(
+                        modifier = Modifier.fillMaxWidth().focusGroup(),
                         horizontalArrangement = Arrangement.spacedBy(7.dp),
                         contentPadding = PaddingValues(vertical = 2.dp),
                     ) {
@@ -625,7 +663,9 @@ private fun TvLiveSearchDialog(
                                 label = "Todos",
                                 selected = selectedCountry == null,
                                 onClick = { onCountry(null) },
-                                modifier = Modifier.softFocusDown(keyboardFocus.requester),
+                                modifier = Modifier
+                                    .focusProperties { down = keyboardFocus.requester }
+                                    .softFocusDown(keyboardFocus.requester),
                             )
                         }
                         items(countries, key = { "search-country-$it" }) { country ->
@@ -633,7 +673,9 @@ private fun TvLiveSearchDialog(
                                 label = country,
                                 selected = selectedCountry == country,
                                 onClick = { onCountry(country) },
-                                modifier = Modifier.softFocusDown(keyboardFocus.requester),
+                                modifier = Modifier
+                                    .focusProperties { down = keyboardFocus.requester }
+                                    .softFocusDown(keyboardFocus.requester),
                             )
                         }
                     }
@@ -650,13 +692,18 @@ private fun TvLiveSearchDialog(
                                 color = VisionTextSecondary,
                                 fontWeight = FontWeight.SemiBold,
                             )
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            LazyRow(
+                                modifier = Modifier.focusGroup(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
                                 items(suggestions, key = { "suggest-${it.url}" }) { channel ->
                                     TvLiveCategoryChip(
                                         label = channel.name,
                                         selected = false,
                                         onClick = { onQuery(channel.name) },
-                                        modifier = Modifier.softFocusDown(keyboardFocus.requester),
+                                        modifier = Modifier
+                                            .focusProperties { down = keyboardFocus.requester }
+                                            .softFocusDown(keyboardFocus.requester),
                                     )
                                 }
                             }

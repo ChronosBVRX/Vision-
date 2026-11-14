@@ -70,7 +70,8 @@ class OfflineDownloadDispatchTest {
         )
         assertTrue(item.portable)
         assertTrue(item.vaultFilePath.endsWith(".pvpack"))
-        assertTrue(item.vaultFilePath.contains("/portable/"))
+        val normalized = item.vaultFilePath.replace('\\', '/')
+        assertTrue(normalized.contains("/portable/"))
     }
 
     @Test

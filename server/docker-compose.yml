@@ -45,6 +45,11 @@ services:
     environment:
       DATABASE_URL: "postgresql://${POSTGRES_USER:-catalog_user}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-catalog_db}"
       API_KEY: "${API_KEY:?define API_KEY en server/.env}"
+      # Cuenta del broker FHD: UN solo dueño (este proceso). No abrirla en la app
+      # oficial ni en emuladores: acuñar ahí invalida el token de aquí. Rotar con
+      # `scripts/vip_account.py apply`, no a mano.
+      VIP_SN: "${VIP_SN:-2392fe5186d83d73508a2c8c60a26ef6}"
+      VIP_USER_ID: "${VIP_USER_ID:-967111326}"
       # TheIntroDB: con cuenta sube el tope de 5,000 a 100,000 consultas/día.
       THEINTRODB_API_KEY: "${THEINTRODB_API_KEY:-}"
       CONFIG_ADMIN_KEY: "${CONFIG_ADMIN_KEY:-}"

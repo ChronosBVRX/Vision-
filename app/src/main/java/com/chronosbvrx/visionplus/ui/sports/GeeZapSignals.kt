@@ -75,7 +75,7 @@ internal object GeeZapSignals {
     /** El modal lo llama justo antes de `onPlay(picked)`. */
     fun arm(current: LiveChannel, ordered: List<LiveChannel>, eventInfo: EventInfo? = null) {
         armedUrl = current.url
-        signals = ordered
+        signals = if (ordered.any { it.url == current.url }) ordered else listOf(current) + ordered
         info = eventInfo
     }
 

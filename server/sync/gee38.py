@@ -423,8 +423,21 @@ def _busted_url(path_or_url: str) -> str:
 def _fetch(path_or_url: str, timeout: int = 25) -> str:
     url = _busted_url(path_or_url)
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*", "Cache-Control": "no-cache"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", "replace")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8", "replace")
+    except Exception as exc:
+        # Fallback al espejo de Cloudflare Pages (descubierto en Wiwy) si el CMS principal falla
+        if not path_or_url.startswith("http"):
+            fallback_url = "https://hello-how.pages.dev/" + path_or_url.lstrip("/")
+            try:
+                req_fb = urllib.request.Request(fallback_url, headers={"User-Agent": UA, "Accept": "*/*"})
+                with urllib.request.urlopen(req_fb, timeout=timeout) as resp_fb:
+                    log.info("gee38: archivo servido por CMS fallback (Cloudflare Pages): %s", path_or_url)
+                    return resp_fb.read().decode("utf-8", "replace")
+            except Exception:  # noqa: BLE001
+                pass
+        raise exc
 
 
 # ETag por archivo del CMS: el latido de metadatos pide `events.txt` cada 2 min,
@@ -1339,7 +1352,7 @@ async def _refresh_hot_links(pool: asyncpg.Pool, key: bytes) -> int:
             select id, payload from gee38_catalog
              where kind = 'event'
                and coalesce(payload->>'date_iso', '') between $1 and $2
-               and jsonb_array_length(coalesce(payload->'links', '[]'::jsonb)) > 0
+               and coalesce(payload->>'links_ref', '') <> ''
              order by (
                  jsonb_array_length(coalesce(payload->'link_names', '[]'::jsonb))
                  > jsonb_array_length(coalesce(payload->'links', '[]'::jsonb))

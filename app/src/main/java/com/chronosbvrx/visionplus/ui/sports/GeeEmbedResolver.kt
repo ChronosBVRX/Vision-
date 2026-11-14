@@ -123,6 +123,7 @@ internal fun GeeEmbedResolveDialog(
             }
 
             if (api.isNotBlank() && error == null) {
+            var currentApi = api
             AndroidView(
                 modifier = Modifier.size(1.dp),
                 factory = { context ->
@@ -146,7 +147,7 @@ internal fun GeeEmbedResolveDialog(
                                         onResolved(
                                             GeeResolvedStream(
                                                 url = clean,
-                                                headers = headersFor(api),
+                                                headers = headersFor(currentApi),
                                             ),
                                         )
                                     }
@@ -161,11 +162,12 @@ internal fun GeeEmbedResolveDialog(
                             ): WebResourceResponse? {
                                 val url = request?.url?.toString().orEmpty()
                                 if (isMediaUrl(url)) {
-                                    val headers = request?.requestHeaders?.mapKeys { it.key.lowercase() }.orEmpty()
+                                    val reqHeaders = request?.requestHeaders?.mapKeys { it.key.lowercase() }.orEmpty()
+                                    val merged = headersFor(currentApi) + reqHeaders
                                     view?.post {
                                         if (loaded) return@post
                                         loaded = true
-                                        onResolved(GeeResolvedStream(url, headers))
+                                        onResolved(GeeResolvedStream(url, merged))
                                     }
                                 }
                                 return super.shouldInterceptRequest(view, request)
@@ -177,7 +179,7 @@ internal fun GeeEmbedResolveDialog(
                                     view?.post {
                                         if (loaded) return@post
                                         loaded = true
-                                        onResolved(GeeResolvedStream(clean, headersFor(api)))
+                                        onResolved(GeeResolvedStream(clean, headersFor(currentApi)))
                                     }
                                 }
                                 super.onLoadResource(view, url)
@@ -192,18 +194,21 @@ internal fun GeeEmbedResolveDialog(
                                     view?.post {
                                         if (loaded) return@post
                                         loaded = true
-                                        onResolved(GeeResolvedStream(url, headersFor(api)))
+                                        onResolved(GeeResolvedStream(url, headersFor(currentApi)))
                                     }
                                     return true
                                 }
+                                if (!url.isNullOrBlank()) currentApi = url
                                 return super.shouldOverrideUrlLoading(view, request)
                             }
 
                             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                if (!url.isNullOrBlank()) currentApi = url
                                 super.onPageStarted(view, url, favicon)
                             }
 
                             override fun onPageFinished(view: WebView?, url: String?) {
+                                if (!url.isNullOrBlank()) currentApi = url
                                 super.onPageFinished(view, url)
                                 view?.evaluateJavascript(HOOK_JS, null)
                             }
@@ -241,9 +246,15 @@ private fun isMediaUrl(raw: String): Boolean {
     val url = raw.trim().lowercase()
     if (url.isBlank() || url.startsWith("data:") || url.startsWith("blob:")) return false
     val path = url.substringBefore('?').substringBefore('#')
-    return path.endsWith(".m3u8") || path.endsWith(".mpd") || path.endsWith(".ts") ||
-        path.endsWith(".mp4") || path.endsWith(".webm") || path.endsWith(".mkv") ||
-        url.contains(".m3u8?") || url.contains(".mpd?")
+    // Segmentos individuales (.ts) o videos de anuncio/intro (.mp4) no son streams de
+    // transmisión: si se capturan, el reproductor reproduce 2 segundos y se apaga en negro.
+    if (path.endsWith(".ts") || path.endsWith(".mp4") || path.endsWith(".webm") || path.endsWith(".mkv")) {
+        return false
+    }
+    return path.endsWith(".m3u8") || path.endsWith(".mpd") ||
+        url.contains(".m3u8?") || url.contains(".mpd?") ||
+        url.contains(".m3u8&") || url.contains(".mpd&") ||
+        url.contains("/m3u8") || url.contains("/manifest.mpd")
 }
 
 private const val HOOK_JS = """

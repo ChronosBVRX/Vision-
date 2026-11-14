@@ -35,6 +35,8 @@ import banners as launcher_banners
 import calendar_feed as editorial_calendar
 import sports_map
 import sync as device_sync
+import vip as vip_broker
+import wiwy_streams
 from epg_channels import canonical_channel, channel_country, epg_norms_for
 
 DATABASE_URL = os.environ["DATABASE_URL"]
@@ -1632,6 +1634,76 @@ async def launcher_banners_endpoint(
     )
 
 
+@app.post("/v1/play/vip")
+async def play_vip(request: Request, x_api_key: str | None = Header(default=None)):
+    """Licencia FHD firmada por el broker de cortesía.
+
+    La app manda el título y la columna; el SLB se pide luego en el equipo para
+    que el CDN vea su IP. Si el broker falla, la app sigue con su flujo normal.
+    """
+    require_key(x_api_key)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    content_id = str(body.get("contentId") or "").strip()
+    if not content_id or len(content_id) > 64:
+        raise HTTPException(status_code=400, detail="contentId inválido")
+    series_id = str(body.get("seriesContentId") or "").strip()[:64]
+    try:
+        column = int(body.get("columnId") or 0)
+    except (TypeError, ValueError):
+        column = 0
+    kind = str(body.get("type") or "0")
+    episodes = body.get("episodeNumberList")
+    if not isinstance(episodes, list):
+        episodes = [1]
+    try:
+        payload = await asyncio.wait_for(
+            asyncio.to_thread(vip_broker.play, content_id, series_id, column, kind, episodes),
+            timeout=25,
+        )
+    except vip_broker.AccountNoDays as exc:
+        # La app distingue 409: no reintenta, cae al flujo libre de inmediato.
+        log.warning("vip sin días: %s", exc)
+        raise HTTPException(status_code=409, detail="cuenta sin días")
+    except vip_broker.AccountMismatch as exc:
+        log.warning("vip cuenta mal configurada: %s", exc)
+        raise HTTPException(status_code=409, detail="cuenta mal configurada")
+    except Exception as exc:  # noqa: BLE001 - la app cae a su flujo local
+        log.warning("vip broker %s: %s", content_id, exc)
+        raise HTTPException(status_code=502, detail="sin licencia")
+    return payload
+
+
+@app.get("/v1/vip/status")
+async def vip_status(x_admin_key: str | None = Header(default=None)):
+    """Semáforo de la cuenta VIP (solo operador): días, expiración, caché, patadas."""
+    if not _config_admin_ok(x_admin_key, CONFIG_ADMIN_KEY):
+        raise HTTPException(status_code=403, detail="llave de administración inválida")
+    data = await asyncio.to_thread(vip_broker.status)
+    days = data.get("daysLeft")
+    data["alarm"] = (
+        bool(data.get("mismatch"))
+        or data.get("entitled") is False
+        or (isinstance(days, int) and days < 5)
+    )
+    return data
+
+
+@app.post("/v1/vip/probe")
+async def vip_probe(x_admin_key: str | None = Header(default=None)):
+    """Valida la cuenta de verdad: acuña y firma el título de sonda (sin caché)."""
+    if not _config_admin_ok(x_admin_key, CONFIG_ADMIN_KEY):
+        raise HTTPException(status_code=403, detail="llave de administración inválida")
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(vip_broker.probe), timeout=45)
+    except vip_broker.AccountNoDays as exc:
+        raise HTTPException(status_code=409, detail=f"cuenta sin días: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"sin licencia: {exc}")
+
+
 @app.get("/v1/sports")
 async def sports(
     date: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
@@ -1830,6 +1902,9 @@ async def _gee38_sports_payload() -> dict:
         for channel in group.get("channels") or []:
             channel["logo"] = _gee_logo(channel.get("logo") or "")
         groups.append(group)
+    alt_group = wiwy_streams.get_alt_sports_group()
+    if alt_group:
+        groups.append(alt_group)
     return {
         "app": _gee_payload(meta["v"]) if meta else None,
         "updatedAt": stamp.isoformat() if stamp else None,
@@ -2091,6 +2166,19 @@ async def _gee38_events_payload(
     # ADITIVO: no cambia `links`, `broadcasts` ni la agenda de GeeSports.
     for card in deduped:
         card["xtv"] = sports_map.options_for_gee_event(card)
+        # Señales alternativas Wiwy / JrFlix: se cruzan con las cadenas oficiales del partido
+        broadcasts = list(card.get("broadcasts") or [])
+        alts = wiwy_streams.match_alt_signals(broadcasts)
+        if alts:
+            existing_urls = {str(lk.get("url") or lk.get("link") or "").strip() for lk in card.get("links") or []}
+            card_links = list(card.get("links") or [])
+            for alt in alts:
+                if alt["url"] not in existing_urls:
+                    card_links.append(alt)
+                    existing_urls.add(alt["url"])
+            card["links"] = card_links
+            card["total"] = len(card_links)
+            card["alive"] = sum(1 for lk in card_links if lk.get("alive") is True)
     return {"events": deduped}
 
 
@@ -2575,7 +2663,13 @@ def _gee_pair_key(team_a: str, team_b: str) -> str:
     El CMS publica VARIAS entradas por partido («Everton vs Chelsea» del 17-oct con
     1 enlace muerto y la del 13-oct —visible— con 10, 6 vivos): la lista buena puede
     vivir en otra entrada del mismo cruce, así que se agrupan por esta clave."""
-    a, b = _fold(team_a), _fold(team_b)
+    def _sig_team(name: str) -> str:
+        toks = [
+            t for t in _gee_expand(_gee_tokens(name))
+            if t not in {"fc", "cf", "cd", "ac", "club", "de", "del", "la", "el", "los", "las", "sc", "sporting", "deportivo", "athletic", "real", "ud"}
+        ]
+        return " ".join(sorted(toks)) if toks else _fold(name)
+    a, b = _sig_team(team_a), _sig_team(team_b)
     if not a or not b or a == b:
         return ""
     return "|".join(sorted((a, b)))

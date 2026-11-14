@@ -109,6 +109,32 @@ object X4KApi {
     private const val K_LIVE_AT = "live_at"
     private const val K_META = "xtv_meta"
     private const val K_ENGINE_GEN = "engine_gen"
+    /** Columnas del catálogo Free: el portal firma ahí la licencia libre en 1080p. */
+    private const val K_FREE_COLS = "free_cols"
+    private const val K_FREE_COLS_AT = "free_cols_at"
+    private const val FREE_COLS_CODE = "masmobile_free"
+    private const val FREE_COLS_TTL_MS = 12L * 60 * 60 * 1000
+    /** Mapa contentId -> columnId del catálogo `masmobile`: la columna es lo que autoriza la
+     *  licencia (v10). El catálogo `masnew` trae ids de otra familia y no sirven para el play. */
+    private const val K_COL_MAP = "col_map"
+    private const val K_COL_MAP_AT = "col_map_at"
+    private const val COL_MAP_TTL_MS = 12L * 60 * 60 * 1000
+    /** Tras un mapa vacío no se reintenta en cada play (el portal puede estar caído). */
+    private const val COL_MAP_RETRY_MS = 10L * 60 * 1000
+    private val COL_MAP_CODES = listOf(
+        "masmobile_free",
+        "masmobile_movies",
+        "masmobile_series",
+        "masmobile_kids",
+    )
+    /** Sesión con la cuenta de cortesía (la histórica) para firmar licencias VIP/FHD. */
+    private const val K_VIP_TOKEN = "vip_play_token"
+    private const val K_VIP_USER_ID = "vip_play_user_id"
+    private const val K_VIP_AT = "vip_play_at"
+    private const val K_VIP_CHECK_AT = "vip_play_check_at"
+    private const val K_VIP_OK = "vip_play_ok"
+    private const val VIP_SESSION_TTL_MS = 30L * 60 * 1000
+    private const val VIP_CHECK_TTL_MS = 60L * 60 * 1000
 
     /** Sube cuando cambia el portal: invalida entries/params de la generación anterior. */
     private const val ENGINE_GENERATION = 2
@@ -161,7 +187,7 @@ object X4KApi {
     /**
      * userId que devolvió `v8/active` para la sesión vigente. Puede no coincidir con el
      * userId del slot (el portal reasigna cuentas al cambiar de tenant): las llamadas
-     * que mezclan un token con el userId de otra cuenta contestan `请求参数异常` y el
+     * que mezclan un token con el userId de otra cuenta contestan `è¯·æ±‚å‚æ•°å¼‚å¸¸` y el
      * play muere sin licencia. Se guarda junto al token.
      */
     @Volatile
@@ -210,11 +236,11 @@ object X4KApi {
         }
     }
 
-    /** Códigos del portal que significan «tu sesión ya no sirve» (pateada o expirada). */
-    // 100006/100007/100008 son errores de CONTENIDO («no existe»), no de sesión: tratarlos
+    /** Códigos del portal que significan Â«tu sesión ya no sirveÂ» (pateada o expirada). */
+    // 100006/100007/100008 son errores de CONTENIDO (Â«no existeÂ»), no de sesión: tratarlos
     // como patada renovaba la sesión en tormenta cada vez que un título desaparecía del
     // portal (y un mint real borra entries/params a media reproducción). Solo 100001..100005,
-    // 200000..200002 y 300001..300002 significan «la sesión ya no sirve».
+    // 200000..200002 y 300001..300002 significan Â«la sesión ya no sirveÂ».
     private val SESSION_CODE_RX = Regex("portal\\s*(?:10000[1-5]|20000[0-2]|30000[1-2])")
 
     /** ¿Se puede acuñar ahora? [force] (token rechazado) salta el silencio normal pero
@@ -303,12 +329,13 @@ object X4KApi {
         throw last ?: IOException("sin hosts disponibles")
     }
 
-    private fun snTokenCall(): String =
+    private fun snTokenCall(snOverride: String? = null): String =
         post("/api/portalCore/v3/snToken", JSONObject().apply {
             put("channel", "default")
             put("macAddr", "02:00:00:00:00:00")
             put("snToken", "")
             put("portalCode", PORTAL)
+            if (!snOverride.isNullOrBlank()) put("sn", snOverride)
         }).optString("snToken")
 
     private fun activeCall(snToken: String, snOverride: String? = null): JSONObject =
@@ -331,7 +358,7 @@ object X4KApi {
         return digest.joinToString("") { "%02x".format(it) }.lowercase()
     }
 
-    /** Alta automática (réplica Hydra, cero pool): snToken virgen → SN derivado → active.
+    /** Alta automática (réplica Hydra, cero pool): snToken virgen ’ SN derivado ’ active.
      *  Devuelve el slot propio ya aplicado, o lanza si el portal lo rechaza. */
     suspend fun mintOwnSlot(context: Context): DeviceSlot = withContext(Dispatchers.IO) {
         synchronized(lock) {
@@ -447,7 +474,7 @@ object X4KApi {
         return userToken
     }
 
-    /** Solo esto significa «la sesión ya no sirve»; detecta los errores de sesión del portal. */
+    /** Solo esto significa Â«la sesión ya no sirveÂ»; detecta los errores de sesión del portal. */
     internal fun isSessionFailure(e: Exception): Boolean {
         val m = e.message.orEmpty().lowercase()
         // `http 4` a secas metía en el saco a cualquier 400/404 (p. ej. un rechazo de región):
@@ -466,17 +493,19 @@ object X4KApi {
     private suspend fun callWithSession(
         context: Context,
         path: String,
+        connectMs: Int = 15_000,
+        readMs: Int = 25_000,
         spec: (String) -> JSONObject,
     ): JSONObject = withContext(Dispatchers.IO) {
         val token = ensureSession(context)
         try {
-            post(path, spec(token))
+            post(path, spec(token), connectMs, readMs)
         } catch (e: Exception) {
             if (!isSessionFailure(e)) throw e
             Log.w(TAG, "$path falló con la sesión actual; renovando… (${e.message})")
             // Token rechazado = patada: re-acuñar de inmediato aunque el silencio normal siga.
             val fresh = renewSession(context, force = true)
-            post(path, spec(fresh))
+            post(path, spec(fresh), connectMs, readMs)
         }
     }
 
@@ -718,7 +747,7 @@ object X4KApi {
     suspend fun detailFor(context: Context, contentId: String): JSONObject? = withContext(Dispatchers.IO) {
         guarded {
             val item = itemInfo(context, contentId)
-            // El «play» puede no existir para teleplay en algunos tipos: la ficha sigue con el item.
+            // El Â«playÂ» puede no existir para teleplay en algunos tipos: la ficha sigue con el item.
             val play = runCatching { playInfo(context, contentId) }.getOrNull()
             if (item == null && play == null) return@guarded null
             JSONObject().apply {
@@ -731,7 +760,7 @@ object X4KApi {
     private var memoryLiveChannels: List<com.chronosbvrx.visionplus.data.LiveChannel>? = null
     private var memoryLiveChannelsAt = 0L
 
-    /** Índice en memoria O(1) de channelCode -> mediasJson pre-serializado para apertura instantánea en 0 ms. */
+    /** Ándice en memoria O(1) de channelCode -> mediasJson pre-serializado para apertura instantánea en 0 ms. */
     private val memoryLiveMedias = ConcurrentHashMap<String, String>()
 
     @Volatile
@@ -814,7 +843,7 @@ object X4KApi {
         val upperCode = code.uppercase()
         val lowerName = trimmed.lowercase()
         return when {
-            // El portal etiqueta TNT (entretenimiento) como «TNT SPORTS HD»; el
+            // El portal etiqueta TNT (entretenimiento) como Â«TNT SPORTS HDÂ»; el
             // TNT Sports deportivo real es HD+/FHD (Chile). No lo cruces.
             upperCode == "CYX_TNTSPORTS3" || lowerName == "tnt sports hd" -> "TNT HD"
             upperCode == "CYX_BITME☆" || lowerName == "animal planet hd+" -> "BitMe HD"
@@ -957,7 +986,7 @@ object X4KApi {
     }
 
     /**
-     * El portal camufla ESPN/Star+ como «Elite Sports Hub»; la guía del VPS los conoce
+     * El portal camufla ESPN/Star+ como Â«Elite Sports HubÂ»; la guía del VPS los conoce
      * como ESPN. El mapeo vale para el endpoint individual y para el masivo.
      */
     private fun epgNameFor(channelCode: String, channelName: String): String = when {
@@ -1162,7 +1191,7 @@ object X4KApi {
         guarded {
             val cid = xtvPortalId(seriesId)
             // Espejo primero: la copia del servidor tarda ~ms y NO gasta la sesión del
-            // equipo. Cualquier ausencia/fallo → null → el portal EXACTO de siempre
+            // equipo. Cualquier ausencia/fallo ’ null ’ el portal EXACTO de siempre
             // (el espejo solo puede mejorar, jamás empeorar).
             val mirrored = EpisodeMirror.episodes(seriesId)?.let { parseEpisodePrograms(it) }
             if (!mirrored.isNullOrEmpty()) return@guarded mirrored
@@ -1347,7 +1376,16 @@ object X4KApi {
     }
 
     /** A VOD play resolved to data, without launching: the player reuses it for "next" in place. */
-    data class VodMedia(val mediasJson: String, val durationMs: Long, val subsLangs: String)
+    data class VodMedia(
+        val mediasJson: String,
+        val durationMs: Long,
+        val subsLangs: String,
+        val entriesJson: String = "",
+        val playParams: String = "",
+        val playUserId: String = "",
+        val playDevId: String = "",
+        val playToken: String = "",
+    )
 
     /** Handshake adelantado desde la ficha (una sola reproducción por entrada). */
     private class PrefetchedVod(val atMs: Long, val media: VodMedia)
@@ -1404,6 +1442,277 @@ object X4KApi {
                 }
             }
         }
+    }
+
+    /**
+     * Columnas del catálogo Free (`masmobile_free`). El portal firma la licencia libre dentro de
+     * la columna donde vive el título: pedirla sin columna (v9) devuelve solo 480p; con la columna
+     * correcta (v10) entrega 1080p/720p/480p. Se cachean 12 h porque cambian poco y cada play no
+     * debe pagar la consulta.
+     */
+    private suspend fun freeColumns(context: Context): List<Int> = withContext(Dispatchers.IO) {
+        val p = prefs(context)
+        val cached = p.getString(K_FREE_COLS, "").orEmpty()
+            .split(',')
+            .mapNotNull { it.trim().toIntOrNull() }
+            .filter { it > 0 }
+        if (cached.isNotEmpty() &&
+            System.currentTimeMillis() - p.getLong(K_FREE_COLS_AT, 0L) < FREE_COLS_TTL_MS
+        ) {
+            return@withContext cached
+        }
+        val fresh = runCatching {
+            callWithSession(context, "/api/portalCore/getNextColumns", 10_000, 15_000) { token ->
+                JSONObject().apply {
+                    put("userId", userIdOf())
+                    put("userToken", token)
+                    put("portalCode", PORTAL_PLAY)
+                    put("pageNum", 1)
+                    put("pageSize", 100)
+                    put("columnCode", FREE_COLS_CODE)
+                    put("version", "")
+                }
+            }
+        }.getOrNull()?.let { freeColumnsFrom(it) }.orEmpty()
+        if (fresh.isNotEmpty()) {
+            p.edit()
+                .putString(K_FREE_COLS, fresh.joinToString(","))
+                .putLong(K_FREE_COLS_AT, System.currentTimeMillis())
+                .apply()
+            fresh
+        } else {
+            cached
+        }
+    }
+
+    /** Identidad con la que se firma la licencia: la propia o la cuenta de cortesía. */
+    private class PlayIdentity(
+        val token: String,
+        val userId: String,
+        val devId: String,
+        val vip: Boolean,
+    )
+
+    /**
+     * `getAuthInfo` dice si la cuenta puede firmar licencias VIP (FHD). La cuenta histórica
+     * conserva días de cortesía aunque no haya compra; es la que destraba 1080p en TODO el
+     * catálogo. Solo se usa para la licencia de reproducción, no para la sesión del catálogo.
+     */
+    private suspend fun legacyEntitled(context: Context, token: String, userId: String): Boolean =
+        runCatching {
+            post("/api/portalCore/v9/getAuthInfo", JSONObject().apply {
+                put("userToken", token)
+                put("userId", userId)
+                put("portalCode", PORTAL)
+                put("lang", "es")
+                put("type", "1")
+            }).let { info ->
+                val days = info.optInt("remainingDays", 0)
+                info.optString("hasPay") == "1" ||
+                    info.optString("hasFreeAuth") == "1" ||
+                    info.optString("restrictedStatus") == "0" ||
+                    days > 0
+            }
+        }.getOrDefault(false)
+
+    private suspend fun mintVipIdentity(context: Context): PlayIdentity? = runCatching {
+        val sn = LEGACY_SN
+        val snToken = snTokenCall(sn)
+        if (snToken.isBlank()) return@runCatching null
+        val active = activeCall(snToken, sn)
+        val token = active.optString("userToken")
+        val userId = active.optString("userId")
+        if (token.isBlank() || userId.isBlank()) return@runCatching null
+        prefs(context).edit()
+            .putString(K_VIP_TOKEN, token)
+            .putString(K_VIP_USER_ID, userId)
+            .putLong(K_VIP_AT, System.currentTimeMillis())
+            .apply()
+        PlayIdentity(token, userId, LEGACY_SN, vip = true)
+    }.getOrNull()
+
+    /** Resuelve con qué cuenta se pide la licencia (cortesía si tiene días; si no, la propia). */
+    private suspend fun playIdentity(context: Context): PlayIdentity = withContext(Dispatchers.IO) {
+        val p = prefs(context)
+        val now = System.currentTimeMillis()
+        val checked = now - p.getLong(K_VIP_CHECK_AT, 0L) < VIP_CHECK_TTL_MS
+        if (checked && p.getInt(K_VIP_OK, 0) == 1) {
+            val token = p.getString(K_VIP_TOKEN, "").orEmpty()
+            val userId = p.getString(K_VIP_USER_ID, "").orEmpty()
+            if (token.isNotBlank() && userId.isNotBlank()) {
+                return@withContext PlayIdentity(token, userId, LEGACY_SN, vip = true)
+            }
+        }
+        if (!checked) {
+            val token = p.getString(K_VIP_TOKEN, "").orEmpty()
+            val userId = p.getString(K_VIP_USER_ID, "").orEmpty()
+            if (token.isNotBlank() && userId.isNotBlank() &&
+                now - p.getLong(K_VIP_AT, 0L) < VIP_SESSION_TTL_MS &&
+                legacyEntitled(context, token, userId)
+            ) {
+                p.edit().putInt(K_VIP_OK, 1).putLong(K_VIP_CHECK_AT, now).apply()
+                return@withContext PlayIdentity(token, userId, LEGACY_SN, vip = true)
+            }
+            val fresh = mintVipIdentity(context)
+            if (fresh != null && legacyEntitled(context, fresh.token, fresh.userId)) {
+                p.edit().putInt(K_VIP_OK, 1).putLong(K_VIP_CHECK_AT, now).apply()
+                Log.i(TAG, "licencia con cuenta de cortesía (FHD)")
+                return@withContext fresh
+            }
+            p.edit().putInt(K_VIP_OK, 0).putLong(K_VIP_CHECK_AT, now).apply()
+        }
+        PlayIdentity(ensureSession(context), userIdOf(), snOf(), vip = false)
+    }
+
+    /** Renueva solo la identidad usada para la licencia, sin tocar la sesión del catálogo. */
+    private suspend fun renewPlayIdentity(context: Context, identity: PlayIdentity): PlayIdentity =
+        if (identity.vip) {
+            mintVipIdentity(context) ?: PlayIdentity(renewSession(context, force = true), userIdOf(), snOf(), false)
+        } else {
+            PlayIdentity(renewSession(context, force = true), userIdOf(), snOf(), false)
+        }
+
+    /** SLB (entradas CDN + params) de la identidad que va a firmar la licencia. */
+    private suspend fun slbFor(identity: PlayIdentity): Pair<String, String>? = runCatching {
+        post("/api/portalCore/v14/getSlbInfo", JSONObject().apply {
+            put("userToken", identity.token)
+            put("userId", identity.userId)
+            put("hasPay", "0")
+            put("userIdentity", "1")
+            put("portalCode", PORTAL)
+            put("type", "merge")
+            put("appVer", APK_VER)
+            put("lang", "es")
+            put("encMediaSupported", 1)
+            put("liveCodeList", JSONArray().put("masmobile_live"))
+            put("appParams", "")
+            put("reserve1", "000000000000")
+            put("pipFlag", "0")
+        })
+    }.getOrNull()?.let { slb ->
+        val entries = slb.optJSONArray("cdn_list")?.toString().orEmpty()
+        if (entries.isBlank()) null else entries to slb.optString("play_params")
+    }
+
+    /** Columnas válidas de una respuesta de `getNextColumns` (deduplicadas, sin ceros). */
+    internal fun freeColumnsFrom(result: JSONObject): List<Int> {
+        val rows = result.optJSONArray("recommendList") ?: return emptyList()
+        val out = LinkedHashSet<Int>()
+        for (i in 0 until rows.length()) {
+            val id = rows.optJSONObject(i)?.optInt("columnId", 0) ?: 0
+            if (id > 0) out.add(id)
+        }
+        return out.toList()
+    }
+
+    /**
+     * Mapa contentId -> columnId de los estantes con assets. Puro y testeable: el v10 solo
+     * firma si la columna es la del título, así que el mapa es lo que destraba el FHD fuera
+     * del catálogo Free cuando la cuenta de cortesía sigue vigente.
+     */
+    internal fun indexColumnMap(result: JSONObject, into: JSONObject = JSONObject()): JSONObject {
+        val rows = result.optJSONArray("recommendList") ?: return into
+        for (i in 0 until rows.length()) {
+            val row = rows.optJSONObject(i) ?: continue
+            val column = row.optInt("columnId", 0)
+            if (column <= 0) continue
+            val assets = row.optJSONArray("assetList") ?: continue
+            for (j in 0 until assets.length()) {
+                val cid = assets.optJSONObject(j)?.optString("contentId").orEmpty()
+                if (cid.isNotBlank()) into.put(cid, column)
+            }
+        }
+        return into
+    }
+
+    private fun cachedColumns(context: Context): JSONObject =
+        runCatching { JSONObject(prefs(context).getString(K_COL_MAP, "{}") ?: "{}") }.getOrDefault(JSONObject())
+
+    /** Columnas del catálogo completo por título, cacheadas 12 h (tres consultas la primera vez). */
+    private suspend fun columnsFor(context: Context): JSONObject = withContext(Dispatchers.IO) {
+        val p = prefs(context)
+        val cached = cachedColumns(context)
+        val at = p.getLong(K_COL_MAP_AT, 0L)
+        val freshEnough = if (cached.length() > 0) COL_MAP_TTL_MS else COL_MAP_RETRY_MS
+        if (System.currentTimeMillis() - at < freshEnough) return@withContext cached
+        val fresh = JSONObject()
+        for (code in COL_MAP_CODES) {
+            runCatching {
+                callWithSession(context, "/api/portalCore/getNextColumns", 10_000, 15_000) { token ->
+                    JSONObject().apply {
+                        put("userId", userIdOf())
+                        put("userToken", token)
+                        put("portalCode", PORTAL_PLAY)
+                        put("pageNum", 1)
+                        put("pageSize", 100)
+                        put("columnCode", code)
+                        put("version", "")
+                    }
+                }
+            }.getOrNull()?.let { indexColumnMap(it, fresh) }
+        }
+        p.edit()
+            .putString(K_COL_MAP, if (fresh.length() > 0) fresh.toString() else p.getString(K_COL_MAP, "{}"))
+            .putLong(K_COL_MAP_AT, System.currentTimeMillis())
+            .apply()
+        if (fresh.length() > 0) fresh else cached
+    }
+
+    /**
+     * Columna donde vive el título. El mapa NO se espera en el play: si aún no está, se arma en
+     * segundo plano y esta reproducción usa las columnas Free (o el v9) como siempre.
+     */
+    private suspend fun columnFor(context: Context, contentId: String): Int? {
+        val cached = cachedColumns(context)
+        if (cached.length() > 0) return cached.optInt(contentId, 0).takeIf { it > 0 }
+        if (System.currentTimeMillis() - prefs(context).getLong(K_COL_MAP_AT, 0L) >= COL_MAP_RETRY_MS) {
+            CoroutineScope(Dispatchers.IO).launch { runCatching { columnsFor(context) } }
+        }
+        return null
+    }
+
+    /** Altura declarada de una calidad; sirve para ordenar y para forzar la mejor pista. */
+    internal fun qualityRank(raw: String): Int {
+        val q = raw.trim().lowercase()
+        return when {
+            q.contains("2160") || q.contains("4k") || q.contains("uhd") -> 2160
+            q.contains("1080") || q.contains("fhd") -> 1080
+            q.contains("720") || q.contains("hd") -> 720
+            q.contains("480") || q.contains("sd") -> 480
+            q.contains("360") -> 360
+            else -> 0
+        }
+    }
+
+    /** Deja al frente la mejor calidad: el motor arranca con la PRIMERA media de la lista. */
+    internal fun sortMediasBestFirst(medias: JSONArray): JSONArray {
+        if (medias.length() < 2) return medias
+        val sorted = ArrayList<JSONObject>()
+        for (i in 0 until medias.length()) medias.optJSONObject(i)?.let { sorted.add(it) }
+        sorted.sortByDescending { qualityRank(it.optString("q")) }
+        val out = JSONArray()
+        sorted.forEach { out.put(it) }
+        return out
+    }
+
+    /** Cuerpo del play v10: la columna es la que autoriza la licencia libre en su calidad real. */
+    internal fun licenseColumnBody(
+        token: String,
+        userId: String,
+        contentId: String,
+        seriesId: String,
+        columnId: Int,
+    ): JSONObject = JSONObject().apply {
+        put("userToken", token)
+        put("userId", userId)
+        put("portalCode", PORTAL_PLAY)
+        put("contentId", contentId)
+        put("seriesContentId", seriesId)
+        put("columnId", columnId)
+        put("type", "0")
+        put("startTime", 0)
+        put("authType", "0")
+        put("episodeNumberList", JSONArray().put(1))
     }
 
     /**
@@ -1499,12 +1808,28 @@ object X4KApi {
             // Salir de la ficha cancela el prefetch de la licencia: eso NO es un fallo de
             // reproducción y no debe reportarse como PLAYBACK_LICENSE_FAIL.
             var cancelledLicense = false
+            // Cuenta con la que se firma: el broker del VPS si responde; si no, la de
+            // cortesía local (FHD) mientras conserve días y, en último caso, la propia.
+            // El broker solo firma la licencia: el SLB se pide aquí para que el CDN vea
+            // la IP del equipo (el `client_ip` del auth no puede ser el del VPS).
+            val brokerColumn = columnFor(context, cid)
+                ?: runCatching { freeColumns(context).firstOrNull() }.getOrNull()
+                ?: 0
+            val broker = VipBroker.play(context, cid, sid, brokerColumn, "0", intArrayOf(1))
+            var identity: PlayIdentity
+            if (broker != null) {
+                medias = broker.medias
+                identity = PlayIdentity(broker.token, broker.userId, broker.sn.ifBlank { LEGACY_SN }, vip = true)
+                Log.i(TAG, "licencia broker: columna=$brokerColumn pistas=${broker.medias.length()}")
+            } else {
+                identity = playIdentity(context)
+            }
             // Cuerpo de la licencia (type "2" = directo, "1" = respaldo del portal).
-            fun licenseBody(type: String, token: String): JSONObject = JSONObject().apply {
+            fun licenseBody(type: String, token: String, userId: String): JSONObject = JSONObject().apply {
                 put("userToken", token)
-                put("userId", userIdOf())
+                put("userId", userId)
                 // El tenant que firma la licencia libre es masmobile. Con masnew el
-                // portal responde portal100001 («门户信息不存在») aunque el resto del
+                // portal responde portal100001 (Â«é—¨æˆ·ä¿¡æ¯ä¸å­˜åœ¨Â») aunque el resto del
                 // catálogo sí viva en masnew.
                 put("portalCode", PORTAL_PLAY)
                 put("contentId", cid)
@@ -1515,33 +1840,45 @@ object X4KApi {
                 put("episodeNumberList", JSONArray().put(1))
             }
             suspend fun license(type: String, connectMs: Int, readMs: Int): JSONObject? = runCatching {
-                post("/api/portalCore/v9/startPlayVOD", licenseBody(type, ensureSession(context)), connectMs, readMs)
+                post(
+                    "/api/portalCore/v9/startPlayVOD",
+                    licenseBody(type, identity.token, identity.userId),
+                    connectMs,
+                    readMs,
+                )
             }.onFailure {
                 if (it is CancellationException) cancelledLicense = true
                 else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
             }.getOrNull()
-            for (type in listOf("2", "1")) {
-                var d = runCatching {
-                    callWithSession(context, "/api/portalCore/v9/startPlayVOD") { token ->
-                        licenseBody(type, token)
-                    }
-                }.onFailure {
-                    if (it is CancellationException) cancelledLicense = true
-                    else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
-                }.getOrNull()
-                // Si la sesión guardada estaba desincronizada o el portal rechazó inicialmente,
-                // renovar sesión explícitamente y reintentar de inmediato antes de descartar.
-                if (d == null || collectMedias(d).length() == 0) {
-                    d = runCatching {
-                        // Token rechazado: mint forzado (salta el silencio de 30 s).
-                        val freshToken = renewSession(context, force = true)
-                        post("/api/portalCore/v9/startPlayVOD", licenseBody(type, freshToken))
+            // La licencia se firma en la COLUMNA donde vive el título. El v9 sin columna solo
+            // entrega 480p; el v10 con una columna Free entrega la calidad real del título
+            // (1080p incluido) y, con la cuenta de cortesía, también las pistas VIP.
+            if (medias == null) {
+                // Con la cuenta de cortesía, el título se firma en SU columna (1080p en todo el
+                // catálogo). Sin cortesía solo valen las columnas Free: en otra columna el
+                // portal contesta vacío, así que no se paga esa ida y vuelta.
+                val freeCols = runCatching { freeColumns(context) }.getOrDefault(emptyList())
+                val tries = ArrayList<Int>(freeCols.size + 1)
+                if (identity.vip) columnFor(context, cid)?.let { tries += it }
+                freeCols.forEach { if (it !in tries) tries += it }
+                for (column in tries) {
+                    suspend fun v10(): JSONObject? = runCatching {
+                        post(
+                            "/api/portalCore/v10/startPlayVOD",
+                            licenseColumnBody(identity.token, identity.userId, cid, sid, column),
+                            8_000,
+                            12_000,
+                        )
                     }.onFailure {
                         if (it is CancellationException) cancelledLicense = true
                         else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
-                    }.getOrNull() ?: d
-                }
-                if (d != null) {
+                    }.getOrNull()
+                    var d = v10()
+                    if (d == null) {
+                        identity = renewPlayIdentity(context, identity)
+                        d = v10()
+                    }
+                    if (d == null) continue
                     if (durMs <= 0L) {
                         durMs = extractDurationMs(d)
                         if (durMs <= 0L) {
@@ -1551,12 +1888,52 @@ object X4KApi {
                     val list = collectMedias(d)
                     if (list.length() > 0) {
                         medias = list
+                        Log.i(
+                            TAG,
+                            "licencia v10: columna=$column vip=${identity.vip} " +
+                                "pistas=${list.length()} mejor=${list.optJSONObject(0)?.optString("q")}",
+                        )
                         break
                     }
                 }
             }
+            if (medias == null) {
+                for (type in listOf("2", "1")) {
+                    var d = runCatching {
+                        post("/api/portalCore/v9/startPlayVOD", licenseBody(type, identity.token, identity.userId))
+                    }.onFailure {
+                        if (it is CancellationException) cancelledLicense = true
+                        else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
+                    }.getOrNull()
+                    // Si la sesión guardada estaba desincronizada o el portal rechazó inicialmente,
+                    // renovar sesión explícitamente y reintentar de inmediato antes de descartar.
+                    if (d == null || collectMedias(d).length() == 0) {
+                        d = runCatching {
+                            // Token rechazado: mint forzado (salta el silencio de 30 s).
+                            identity = renewPlayIdentity(context, identity)
+                            post("/api/portalCore/v9/startPlayVOD", licenseBody(type, identity.token, identity.userId))
+                        }.onFailure {
+                            if (it is CancellationException) cancelledLicense = true
+                            else lastLicenseError = "${it.javaClass.simpleName}: ${it.message}"
+                        }.getOrNull() ?: d
+                    }
+                    if (d != null) {
+                        if (durMs <= 0L) {
+                            durMs = extractDurationMs(d)
+                            if (durMs <= 0L) {
+                                durMs = extractDurationMs(d.optJSONArray("episodeList")?.optJSONObject(0))
+                            }
+                        }
+                        val list = collectMedias(d)
+                        if (list.length() > 0) {
+                            medias = list
+                            break
+                        }
+                    }
+                }
+            }
             // Último intento con más paciencia: en una tele con el portal a 45 s el tope de 25 s
-            // cortaba la licencia y el play moría como «sin-medios» (TCL, 2.5.138).
+            // cortaba la licencia y el play moría como Â«sin-mediosÂ» (TCL, 2.5.138).
             if (medias == null) {
                 val d = license("2", connectMs = 25_000, readMs = 60_000)
                     ?: license("1", connectMs = 25_000, readMs = 60_000)
@@ -1584,10 +1961,18 @@ object X4KApi {
                         "totalMs=$totalMs healed=$healed",
                 )
             }
+            // La licencia VIP solo reproduce si el motor usa el SLB de la MISMA identidad: sus
+            // entradas CDN van etiquetadas con el child de cortesía. Se adjuntan al play.
+            val vipSlb = if (identity.vip) slbFor(identity) else null
             VodMedia(
                 mediasJson = m.toString(),
                 durationMs = durMs,
                 subsLangs = item?.optString("subsInfo").orEmpty(),
+                entriesJson = vipSlb?.first.orEmpty(),
+                playParams = vipSlb?.second.orEmpty(),
+                playUserId = identity.userId,
+                playDevId = identity.devId,
+                playToken = identity.token,
             )
         }
     }
@@ -1733,6 +2118,11 @@ object X4KApi {
             markersEp = if (isSeries) markerEp else 0,
             markersLengthSec = if (isSeries) markerLengthSec else 0,
             markersJson = cachedMarkers,
+            entriesJson = prep.entriesJson,
+            playParams = prep.playParams,
+            playUserId = prep.playUserId,
+            playDevId = prep.playDevId,
+            playToken = prep.playToken,
         )
         true
     }
@@ -1900,7 +2290,10 @@ object X4KApi {
                     val licenses = movie.optJSONArray("licenseList") ?: continue
                     for (l in 0 until licenses.length()) {
                         val lic = licenses.optJSONObject(l) ?: continue
-                        if (lic.optString("tag") != "free") continue
+                        // `free` es la licencia del catálogo abierto; las cuentas con cortesía/VIP
+                        // devuelven el identificador de su child en `tag`. Cualquier licencia
+                        // firmada (con `license` no vacío) es reproducible.
+                        if (lic.optString("license").isBlank()) continue
                         out.put(JSONObject().apply {
                             put("n", movie.optString("contentId"))
                             put("l", lic.optString("license"))
@@ -1913,7 +2306,7 @@ object X4KApi {
                 }
             }
         }
-        return out
+        return sortMediasBestFirst(out)
     }
 
     private suspend fun launch(
@@ -1941,18 +2334,30 @@ object X4KApi {
         markersEp: Int = 0,
         markersLengthSec: Int = 0,
         markersJson: String = "",
+        entriesJson: String = "",
+        playParams: String = "",
+        playUserId: String = "",
+        playDevId: String = "",
+        playToken: String = "",
     ) {
         val p = prefs(context)
         // A partir de este instante el motor manda: el trabajo de fondo del catálogo espera.
         com.chronosbvrx.visionplus.data.PlaybackFocus.launched()
-        var entries = p.getString(K_ENTRIES, "").orEmpty()
-        var params = p.getString(K_PARAMS, "").orEmpty()
+        var entries = entriesJson.ifBlank { p.getString(K_ENTRIES, "").orEmpty() }
+        var params = playParams.ifBlank { p.getString(K_PARAMS, "").orEmpty() }
         // Una renovación a media preparación borra entries/params; sin SLB el motor no
-        // resuelve el CDN y el play falla. Se piden de nuevo antes de abrir el reproductor.
+        // resuelve el CDN y el play falla. Con licencia VIP deben venir del MISMO child.
         if (entries.isBlank() || params.isBlank()) {
-            runCatching { ensureEngineData(context, deferPrewarm = true) }
-            entries = p.getString(K_ENTRIES, "").orEmpty()
-            params = p.getString(K_PARAMS, "").orEmpty()
+            if (playToken.isNotBlank()) {
+                slbFor(PlayIdentity(playToken, playUserId, playDevId, vip = true))?.let { slb ->
+                    entries = slb.first
+                    params = slb.second
+                }
+            } else {
+                runCatching { ensureEngineData(context, deferPrewarm = true) }
+                entries = p.getString(K_ENTRIES, "").orEmpty()
+                params = p.getString(K_PARAMS, "").orEmpty()
+            }
         }
         fun b64(s: String) = Base64.encodeToString(s.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
         val intent = Intent().apply {
@@ -1965,6 +2370,8 @@ object X4KApi {
             if (subsLangs.isNotBlank()) putExtra("subsLangs", subsLangs)
             if (entries.isNotBlank()) putExtra("entriesB64", b64(entries))
             if (params.isNotBlank()) putExtra("playParamsB64", b64(params))
+            if (playUserId.isNotBlank()) putExtra("playUserId", playUserId)
+            if (playDevId.isNotBlank()) putExtra("playDevId", playDevId)
             if (seriesId.isNotBlank() && (episodeIds.size > 1 || seasonIds.size > 1)) {
                 putExtra("seriesId", seriesId)
                 putStringArrayListExtra("epIds", ArrayList(episodeIds))
@@ -1996,6 +2403,19 @@ object X4KApi {
                 putExtra(RemoteBridge.EXTRA_HOST_MESSENGER, RemoteBridge.hostMessenger)
             }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        // Aviso discreto con la calidad REAL que se va a usar (la mejor disponible).
+        runCatching {
+            val q = org.json.JSONArray(mediasJson).optJSONObject(0)?.optString("q").orEmpty()
+            if (q.isNotBlank()) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Calidad: $q",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
         }
         context.startActivity(intent)
         Log.i(TAG, "reproductor XTV lanzado: $mode $code")
