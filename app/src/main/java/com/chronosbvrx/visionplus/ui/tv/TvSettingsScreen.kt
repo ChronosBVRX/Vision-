@@ -79,6 +79,7 @@ enum class TvSettingsTab(val label: String) {
     SCREEN("Pantalla y rendimiento"),
     SYSTEM("Sistema y red"),
     ACCOUNT("Cuenta y perfiles"),
+    INSTALL("Instalar en otra TV"),
     UPDATES("Actualizaciones"),
 }
 
@@ -117,10 +118,11 @@ fun TvSettingsScreen(initialTab: TvSettingsTab = TvSettingsTab.PLAYBACK) {
         ) {
             when (tab) {
                 TvSettingsTab.PLAYBACK -> TvPlaybackTab()
-                TvSettingsTab.SCREEN -> TvSystemTab(showPerformance = true)
-                TvSettingsTab.SYSTEM -> TvSystemTab(showNetwork = true)
-                TvSettingsTab.ACCOUNT -> TvSystemTab(showAccount = true)
-                TvSettingsTab.UPDATES -> TvSystemTab(showUpdates = true)
+                TvSettingsTab.SCREEN -> TvSystemTab(showPerformance = true, onSelectTab = { tab = it })
+                TvSettingsTab.SYSTEM -> TvSystemTab(showNetwork = true, onSelectTab = { tab = it })
+                TvSettingsTab.ACCOUNT -> TvSystemTab(showAccount = true, onSelectTab = { tab = it })
+                TvSettingsTab.INSTALL -> TvInstallTab()
+                TvSettingsTab.UPDATES -> TvSystemTab(showUpdates = true, onSelectTab = { tab = it })
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -265,6 +267,7 @@ private fun ColumnScope.TvSystemTab(
     showNetwork: Boolean = false,
     showAccount: Boolean = false,
     showUpdates: Boolean = false,
+    onSelectTab: ((TvSettingsTab) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val s = VisionSettings
@@ -368,9 +371,15 @@ private fun ColumnScope.TvSystemTab(
     ) { showProfiles = true }
     Note("Cada perfil tiene su «Seguir viendo», historial y Mi lista. Los ajustes y las descargas son del equipo.")
 
-    TvSectionTitle("Continuidad entre equipos")
+    TvSectionTitle("Continuidad y compartir")
     TvActionOption("Sincronizar con mi teléfono") { showSync = true }
     Note("Comparte el minuto donde te quedaste y Mi lista. La tele muestra un código; se escribe una vez en el teléfono.")
+    if (onSelectTab != null) {
+        TvActionOption("Instalar en otra tele o compartir por WhatsApp") {
+            onSelectTab(TvSettingsTab.INSTALL)
+        }
+        Note("Abre el tutorial con el código Downloader 4999823 y el código QR de WhatsApp.")
+    }
 
     TvSectionTitle("Modo niños")
     TvKidsSettingsRows()

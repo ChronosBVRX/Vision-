@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Tv
@@ -78,6 +79,7 @@ import com.chronosbvrx.visionplus.ui.settings.VisionSettings
 import com.chronosbvrx.visionplus.ui.settings.rememberUpdateCheck
 import com.chronosbvrx.visionplus.ui.kids.ActivitySettingsBlock
 import com.chronosbvrx.visionplus.ui.kids.KidsSettingsBlock
+import com.chronosbvrx.visionplus.ui.share.ShareTutorialConfig
 import com.chronosbvrx.visionplus.ui.theme.VisionBlue
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextPrimary
@@ -86,6 +88,7 @@ import kotlinx.coroutines.launch
 
 private enum class SettingsTab(val label: String) {
     MY_TV("Mi tele"),
+    INSTALL("Instalar en TV"),
     PLAYBACK("Reproducción"),
     SCREEN("Pantalla y rendimiento"),
     SYSTEM("Sistema y red"),
@@ -137,6 +140,7 @@ fun SettingsScreen(contentPadding: PaddingValues) {
             ) {
                 when (tab) {
                     SettingsTab.MY_TV -> TvHomeSetupSection()
+                    SettingsTab.INSTALL -> MobileInstallSection()
                     SettingsTab.PLAYBACK -> PlaybackTab()
                     SettingsTab.SCREEN -> ScreenTab()
                     SettingsTab.SYSTEM -> SystemTab()
@@ -175,6 +179,7 @@ private fun SettingsTabChip(tab: SettingsTab, selected: Boolean, onClick: () -> 
 
 private fun SettingsTab.icon(): ImageVector = when (this) {
     SettingsTab.MY_TV -> Icons.Rounded.Tv
+    SettingsTab.INSTALL -> Icons.Rounded.Share
     SettingsTab.PLAYBACK -> Icons.Rounded.PlayArrow
     SettingsTab.SCREEN -> Icons.Rounded.Tune
     SettingsTab.SYSTEM -> Icons.Rounded.Settings
@@ -222,6 +227,85 @@ private fun TabRowEdges(scroll: ScrollState, modifier: Modifier) {
 }
 
 private val EDGE_FADE = 32.dp
+
+@Composable
+private fun MobileInstallSection() {
+    val context = LocalContext.current
+    SettingsSection("Descarga con Downloader en TV") {
+        SettingsBlock {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    "Código Downloader para Smart TV:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = VisionTextSecondary,
+                )
+                Text(
+                    ShareTutorialConfig.DOWNLOADER_CODE,
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
+                    color = VisionBlue,
+                )
+                Text(
+                    "1. En tu TV o Firestick abre la app Downloader.\n" +
+                        "2. Escribe ${ShareTutorialConfig.DOWNLOADER_CODE} y pulsa Go.\n" +
+                        "3. Instala y listo.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = VisionTextPrimary,
+                )
+                Button(
+                    onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("Código Downloader", ShareTutorialConfig.DOWNLOADER_CODE)
+                        clipboard?.setPrimaryClip(clip)
+                        android.widget.Toast.makeText(context, "Código copiado: ${ShareTutorialConfig.DOWNLOADER_CODE}", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = VisionSurfaceHigh),
+                ) {
+                    Text("Copiar código ${ShareTutorialConfig.DOWNLOADER_CODE}", color = Color.White)
+                }
+            }
+        }
+    }
+
+    SettingsSection("Compartir por WhatsApp") {
+        SettingsBlock {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    "Envía este tutorial con el enlace de descarga a tus amigos o familiares.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = VisionTextSecondary,
+                )
+                Button(
+                    onClick = {
+                        runCatching {
+                            val intent = android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(ShareTutorialConfig.buildWhatsAppUrl()),
+                            )
+                            context.startActivity(intent)
+                        }.onFailure {
+                            val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, ShareTutorialConfig.buildShareMessage())
+                            }
+                            context.startActivity(android.content.Intent.createChooser(sendIntent, "Compartir Vision+"))
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Enviar por WhatsApp", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun PlaybackTab() {
