@@ -65,6 +65,7 @@ import coil.compose.AsyncImage
 import com.chronosbvrx.visionplus.DevicePerformance
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.KidsCatalog
 import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.SectionPaging
 import com.chronosbvrx.visionplus.data.UserLibrary
@@ -128,13 +129,21 @@ fun TvCategoryScreen(
                 sectionRows = fresh
             }
         }
-        if (key.startsWith("kids") || key == "kids") {
-            val page1 = runCatching {
-                RemoteIndexSource.categoryPage(context, "xtv-kids-all", 1, 60)
-            }.getOrNull()
-            if (page1 != null && page1.films.isNotEmpty()) {
-                kidsServerFilms = page1.films
+        // Infantil reproducible: las dos hijas del catálogo XTV (películas y series) se
+        // firman bien; `xtv-kids-all` mezcla títulos sin licencia y dejaba fichas sin play.
+        if (KidsCatalog.isKidsKey(key) || section == "movies" || section == "series") {
+            val cats = when {
+                key == "kids" -> listOf(KidsCatalog.MOVIES, KidsCatalog.SERIES)
+                key == "kids-series" || section == "series" -> listOf(KidsCatalog.SERIES)
+                else -> listOf(KidsCatalog.MOVIES)
             }
+            val acc = ArrayList<Film>()
+            cats.forEach { cat ->
+                runCatching {
+                    RemoteIndexSource.categoryPage(context, cat, 1, 60)
+                }.getOrNull()?.films?.let { acc += it }
+            }
+            if (acc.isNotEmpty()) kidsServerFilms = acc.distinctBy { it.id }
         }
     }
 
@@ -148,6 +157,13 @@ fun TvCategoryScreen(
     // la cuadrícula conserva el foco en el chip que se acaba de pulsar (antes saltaba al botón
     // «Volver a Todo» en cada selección).
     val activeCategory = selectedCategory
+    val kidsPagingCategory = when {
+        key == "kids-series" -> KidsCatalog.SERIES
+        KidsCatalog.isKidsKey(key) -> KidsCatalog.MOVIES
+        section == "series" -> KidsCatalog.SERIES
+        section == "movies" -> KidsCatalog.MOVIES
+        else -> ""
+    }
     val gridMode = activeCategory != null
     LaunchedEffect(gridMode) {
         delay(120)
@@ -155,20 +171,15 @@ fun TvCategoryScreen(
     }
 
     val films = remember(rows, key, sectionRows, kidsServerFilms) {
+        // El catálogo del portal ya viene separado por tipo: no se vuelve a filtrar por
+        // `seasons` (el índice no siempre las trae y dejaba las dos vitrinas idénticas).
+        val kidsPool = KidsCatalog.keep(kidsServerFilms).ifEmpty {
+            rows.flatMap { it.films }.filter { it.kind == "kids" }.distinctBy { it.id }
+        }
         val raw = when {
-            key == "kids-movies" -> {
-                val combined = (kidsServerFilms + rows.flatMap { it.films }.filter { it.kind == "kids" }).distinctBy { it.id }
-                val onlyMovies = combined.filter { it.seasons.isEmpty() }
-                onlyMovies.ifEmpty { combined }
-            }
-            key == "kids-series" -> {
-                val combined = (kidsServerFilms + rows.flatMap { it.films }.filter { it.kind == "kids" }).distinctBy { it.id }
-                val onlySeries = combined.filter { it.seasons.isNotEmpty() }
-                onlySeries.ifEmpty { combined }
-            }
-            key == "kids" -> {
-                (kidsServerFilms + rows.flatMap { it.films }.filter { it.kind == "kids" }).distinctBy { it.id }
-            }
+            key == "kids-movies" -> kidsPool
+            key == "kids-series" -> kidsPool
+            key == "kids" -> kidsPool
             section != null -> {
                 (sectionRows ?: emptyList()).flatMap { it.films }.distinctBy { it.id }
             }
@@ -380,10 +391,12 @@ fun TvCategoryScreen(
         }
     } else {
         // MODO 2: VISTA DE CATÁLOGO COMPLETO EN CUADRÍCULA (GRID)
-        val categoryFilms = remember(activeCategory, loadedDisjoint, films, topRated, novelties, forYou) {
+        val categoryFilms = remember(activeCategory, loadedDisjoint, films, topRated, novelties, forYou, kidsServerFilms) {
             val raw = when {
-                activeCategory == "Infantil" -> films.filter { it.kind == "kids" }.ifEmpty {
-                    rows.flatMap { it.films }.filter { it.kind == "kids" }
+                activeCategory == "Infantil" -> KidsCatalog.keep(kidsServerFilms).ifEmpty {
+                    films.filter { it.kind == "kids" }.ifEmpty {
+                        rows.flatMap { it.films }.filter { it.kind == "kids" }
+                    }
                 }
                 loadedDisjoint != null -> {
                     val matchingRow = loadedDisjoint.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
@@ -411,7 +424,10 @@ fun TvCategoryScreen(
             films = categoryFilms,
             categoryId = activeRow?.id ?: "",
             section = section,
-            initialTotal = if (key.startsWith("kids") || activeCategory.equals("Infantil", ignoreCase = true)) 1400 else (activeRow?.total ?: categoryFilms.size),
+            kidsCategoryId = kidsPagingCategory,
+            initialTotal = if (kidsPagingCategory.isNotBlank() &&
+                (KidsCatalog.isKidsKey(key) || activeCategory.equals("Infantil", ignoreCase = true))
+            ) 700 else (activeRow?.total ?: categoryFilms.size),
             onSelectChip = { chip ->
                 selectedCategory = if (chip == CHIP_ALL) null else chip
             },
@@ -455,6 +471,7 @@ private fun TvCategoryGrid(
     films: List<Film>,
     categoryId: String,
     section: String? = null,
+    kidsCategoryId: String = "",
     initialTotal: Int,
     onSelectChip: (String) -> Unit,
     onBackToAll: () -> Unit,
@@ -507,9 +524,11 @@ private fun TvCategoryGrid(
             visibleCount = (visibleCount + batch).coerceAtMost(allFilms.size)
             return
         }
+        val isKidsCategory = categoryName.equals("Infantil", ignoreCase = true) ||
+            categoryName.contains("kids", ignoreCase = true)
         val targetCatId = when {
+            isKidsCategory && kidsCategoryId.isNotBlank() -> kidsCategoryId
             categoryId.isNotBlank() -> categoryId
-            categoryName.equals("Infantil", ignoreCase = true) || categoryName.contains("kids", ignoreCase = true) -> "xtv-kids-all"
             section != null -> "xtv-$section-all"
             else -> ""
         }

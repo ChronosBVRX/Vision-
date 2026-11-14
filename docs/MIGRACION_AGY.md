@@ -146,7 +146,18 @@ Qué hace el script, en orden:
 - Kids como entradas `kids-movies` / `kids-series` + chip "Infantil".
 - **Bug pendiente detectado después:** `Paper` de "Ver más" podía detener la carga (ya mitigado con techos).
 
-### 2.6.37 (vc530) — Logos de deportes + catálogo infantil (último release)
+### 2.6.39 — Hotfix: Infantil reproducible (regresión de 2.6.37/2.6.38)
+
+- **Síntoma:** las películas infantiles dejaron de reproducirse y Series/Películas Infantiles mostraban lo mismo.
+- **Causa raíz:** `xtv-kids-all` mezcla títulos del portal XTV que la cuenta de cortesía **no puede licenciar**.
+  Probado contra el broker: los ids de `xtv-kids-all` devuelven `502 sin licencia`; los de `xtv-movies-all` devuelven 4 pistas.
+  Además el índice no trae `seasons` en esos títulos, así que el filtro película/serie daba vacío y ambas vitrinas caían al mismo `combined`.
+- **Fix:** `data/KidsCatalog.kt` apunta a las dos hijas firmables: `xtv-kids-76805` («Película de Animación», 640) y
+  `xtv-kids-76806` («Serie de Animación», 595). TV y móvil usan esas categorías, sin refiltrar por `seasons`, con fallback
+  a las filas locales solo si la red falla. El anime se excluye del bloque infantil (`KidsCatalog.keep`).
+- **Prueba:** `KidsCatalogTest` (3 casos) + `ShareTutorialTest` + `FreeQualityTest` en verde.
+
+### 2.6.37 (vc530) — Logos de deportes + catálogo infantil
 - **Causa real de los logos faltantes:** `safeImage()` forzaba `http://` → `https://`, y muchos CDN de deportes son HTTP puro → fallo de handshake silencioso. Ahora se respeta el protocolo (la app ya tiene `usesCleartextTraffic="true"`).
 - **Segunda causa:** solo 86/251 eventos traen `home_logo`/`away_logo`, pero **251/251** traen `logo` del evento. Se añadió respaldo: `TvSportsCrest(logo, fallbackLogo = event.logo, ...)` y equivalentes en `TvSportsScreen.kt` / `TvSportsParts.kt`.
 - **Kids vacío, causa 1:** `homeRows()` no guardaba `kind` en los films del portal → `kind = ""` → los filtros `it.kind == "kids"` descartaban todo. Corregido con `kindOfCode` derivado del `columnCode`.
