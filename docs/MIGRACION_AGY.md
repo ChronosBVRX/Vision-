@@ -153,8 +153,7 @@ Qué hace el script, en orden:
 - **Kids vacío, causa 2:** la app solo miraba los rows de Home. Ahora `kids-movies` / `kids-series` / chip "Infantil" conectan directo a **`xtv-kids-all`** (1 404 títulos reales en el backend) con paginación continua.
 - Archivos tocados: `X4KApi.kt`, `GeeSportsSource.kt`, `TvCategoryScreen.kt`, `TvSportsParts.kt`, `TvSportsScreen.kt`.
 
-> Nota: `ui/phone/SectionScreen.kt` también tiene filtros de kids, pero **la paridad móvil de estas
-> dos correcciones no se auditó** — es parte de la Tarea #1.
+> Nota: `ui/phone/SectionScreen.kt` ya fue alineado (kids + `xtv-kids-all`, paginación y respaldo de logos en `ui/sports/SportsScreen.kt`) en commits `21720f7`/`115611c`. Restan otras brechas de paridad móvil (ver A3 y fases).
 
 ---
 
