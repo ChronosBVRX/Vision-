@@ -15,8 +15,9 @@ class SectionPagingTest {
     fun batchesAndCapsFollowTheDevice() {
         assertEquals(24, SectionPaging.batch(lowEnd = true))
         assertEquals(48, SectionPaging.batch(lowEnd = false))
-        assertEquals(180, SectionPaging.cap(lowEnd = true))
-        assertEquals(480, SectionPaging.cap(lowEnd = false))
+        // El techo cubre el catálogo completo (~10.500 películas / ~10.300 series).
+        assertEquals(12_000, SectionPaging.cap(lowEnd = true))
+        assertEquals(12_000, SectionPaging.cap(lowEnd = false))
     }
 
     @Test

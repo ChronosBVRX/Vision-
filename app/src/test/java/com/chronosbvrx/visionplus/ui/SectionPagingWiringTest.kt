@@ -29,6 +29,10 @@ class SectionPagingWiringTest {
         assertTrue("respeta el techo", screen.contains("SectionPaging.canLoadMore("))
         assertTrue("lote por equipo", screen.contains("SectionPaging.batch(lowEnd)"))
         assertTrue("muestra el avance", screen.contains("\"Mostrando \${displayedFilms.size} de "))
+        assertTrue("acceso al catálogo completo", screen.contains("CHIP_CATALOG"))
+        assertTrue("categoría completa del servidor", screen.contains("\"xtv-\$name-all\""))
+        assertTrue("página 1 exacta al abrir", screen.contains("categoryPage(context, targetCatId, 1, batch)"))
+        assertTrue("scroll infinito", screen.contains("nearEnd"))
     }
 
     @Test
@@ -41,6 +45,9 @@ class SectionPagingWiringTest {
         assertTrue("respeta el techo", screen.contains("SectionPaging.canLoadMore("))
         assertTrue("lote por equipo", screen.contains("SectionPaging.batch(lowEnd)"))
         assertTrue("muestra el avance", screen.contains("\"Mostrando \${displayedFilms.size} de "))
+        assertTrue("acceso al catálogo completo", screen.contains("CHIP_CATALOG"))
+        assertTrue("página 1 exacta al abrir", screen.contains("categoryPage(context, targetCatId, 1, batch)"))
+        assertTrue("scroll infinito", screen.contains("nearEnd"))
     }
 
     @Test

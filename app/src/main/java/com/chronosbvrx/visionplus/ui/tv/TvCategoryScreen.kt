@@ -82,6 +82,7 @@ import kotlinx.coroutines.launch
 import java.text.Normalizer
 
 private const val CHIP_ALL = "Todo / Destacados"
+private const val CHIP_CATALOG = "Catálogo completo"
 private const val CAROUSEL_LIMIT = 15
 private const val GRID_BATCH_SIZE = 24
 
@@ -250,6 +251,8 @@ fun TvCategoryScreen(
         if (section != null && loadedDisjoint != null) {
             val genres = loadedDisjoint.map { it.title.trim() }.filter { it.isNotBlank() }.distinct()
             val list = mutableListOf(CHIP_ALL)
+            // Todo el catálogo, no solo los 30 de cada hilera.
+            if (section in listOf("movies", "series", "anime")) list.add(CHIP_CATALOG)
             list.addAll(genres)
             if (section in listOf("movies", "series") && "Infantil" !in list) {
                 list.add("Infantil")
@@ -393,6 +396,7 @@ fun TvCategoryScreen(
         // MODO 2: VISTA DE CATÁLOGO COMPLETO EN CUADRÍCULA (GRID)
         val categoryFilms = remember(activeCategory, loadedDisjoint, films, topRated, novelties, forYou, kidsServerFilms) {
             val raw = when {
+                activeCategory == CHIP_CATALOG -> emptyList() // la cuadrícula pide la página 1
                 activeCategory == "Infantil" -> KidsCatalog.keep(kidsServerFilms).ifEmpty {
                     films.filter { it.kind == "kids" }.ifEmpty {
                         rows.flatMap { it.films }.filter { it.kind == "kids" }
@@ -422,12 +426,19 @@ fun TvCategoryScreen(
             categoryName = activeCategory,
             categoryChips = categoryChips,
             films = categoryFilms,
-            categoryId = activeRow?.id ?: "",
+            categoryId = if (activeCategory == CHIP_CATALOG) {
+                "xtv-${section ?: key}-all"
+            } else {
+                activeRow?.id ?: ""
+            },
             section = section,
             kidsCategoryId = kidsPagingCategory,
-            initialTotal = if (kidsPagingCategory.isNotBlank() &&
-                (KidsCatalog.isKidsKey(key) || activeCategory.equals("Infantil", ignoreCase = true))
-            ) 700 else (activeRow?.total ?: categoryFilms.size),
+            initialTotal = when {
+                activeCategory == CHIP_CATALOG -> 0
+                kidsPagingCategory.isNotBlank() &&
+                    (KidsCatalog.isKidsKey(key) || activeCategory.equals("Infantil", ignoreCase = true)) -> 700
+                else -> activeRow?.total ?: categoryFilms.size
+            },
             onSelectChip = { chip ->
                 selectedCategory = if (chip == CHIP_ALL) null else chip
             },
@@ -486,15 +497,52 @@ private fun TvCategoryGrid(
     val lowEnd = remember { DevicePerformance.isLowEndDevice(context) }
     val batch = remember { SectionPaging.batch(lowEnd) }
     val cap = remember { SectionPaging.cap(lowEnd) }
-    var extra by remember(categoryName) { mutableStateOf<List<Film>>(emptyList()) }
-    var total by remember(categoryName) {
-        mutableIntStateOf(initialTotal.coerceAtLeast(films.size))
+
+    val isKidsCategory = categoryName.equals("Infantil", ignoreCase = true) ||
+        categoryName.contains("kids", ignoreCase = true)
+    val targetCatId = remember(categoryName, categoryId, section, isKidsCategory, kidsCategoryId) {
+        when {
+            categoryId.isNotBlank() -> categoryId
+            isKidsCategory && kidsCategoryId.isNotBlank() -> kidsCategoryId
+            section != null -> "xtv-$section-all"
+            else -> ""
+        }
     }
-    var loadingMore by remember(categoryName) { mutableStateOf(false) }
-    var exhausted by remember(categoryName) { mutableStateOf(false) }
-    // El servidor manda el primer tope (40); «Ver más» pide páginas y respeta el
-    // techo del equipo.
-    val allFilms = remember(films, extra) { (films + extra).distinctBy { it.id } }
+
+    // La hilera trae 30 títulos: al abrir el género se pide la página 1 con el lote
+    // del equipo para que la paginación sea exacta (antes `nextPage(30, 48)` volvía
+    // a pedir la página 1 y «Ver más» moría en el primer toque).
+    var seed by remember(categoryName, targetCatId) { mutableStateOf<List<Film>>(emptyList()) }
+    var seedLoading by remember(categoryName, targetCatId) {
+        mutableStateOf(targetCatId.isNotBlank() && films.isEmpty())
+    }
+    var total by remember(categoryName, targetCatId) {
+        mutableIntStateOf(if (targetCatId.isNotBlank()) 0 else initialTotal.coerceAtLeast(films.size))
+    }
+    LaunchedEffect(categoryName, targetCatId) {
+        if (targetCatId.isBlank()) {
+            seedLoading = false
+            return@LaunchedEffect
+        }
+        seedLoading = true
+        val page1 = runCatching {
+            RemoteIndexSource.categoryPage(context, targetCatId, 1, batch)
+        }.getOrNull()
+        if (page1 != null && page1.films.isNotEmpty()) {
+            seed = page1.films
+            if (page1.total > 0) total = page1.total
+        } else if (films.isNotEmpty()) {
+            total = initialTotal.coerceAtLeast(films.size)
+        }
+        seedLoading = false
+    }
+
+    val base = remember(seed, films) { seed.ifEmpty { films } }
+    var extra by remember(categoryName, targetCatId) { mutableStateOf<List<Film>>(emptyList()) }
+    var page by remember(categoryName, targetCatId) { mutableIntStateOf(1) }
+    var loadingMore by remember(categoryName, targetCatId) { mutableStateOf(false) }
+    var exhausted by remember(categoryName, targetCatId) { mutableStateOf(false) }
+    val allFilms = remember(base, extra) { (base + extra).distinctBy { it.id } }
 
     var visibleCount by remember(categoryName) { mutableIntStateOf(GRID_BATCH_SIZE) }
     val displayedFilms = remember(allFilms, visibleCount) { allFilms.take(visibleCount) }
@@ -524,36 +572,42 @@ private fun TvCategoryGrid(
             visibleCount = (visibleCount + batch).coerceAtMost(allFilms.size)
             return
         }
-        val isKidsCategory = categoryName.equals("Infantil", ignoreCase = true) ||
-            categoryName.contains("kids", ignoreCase = true)
-        val targetCatId = when {
-            isKidsCategory && kidsCategoryId.isNotBlank() -> kidsCategoryId
-            categoryId.isNotBlank() -> categoryId
-            section != null -> "xtv-$section-all"
-            else -> ""
-        }
-        if (exhausted || targetCatId.isBlank() ||
+        if (exhausted || loadingMore || targetCatId.isBlank() ||
             !SectionPaging.canLoadMore(allFilms.size, total, cap)
         ) {
             return
         }
-        val page = SectionPaging.nextPage(allFilms.size, batch)
+        val next = page + 1
         val loadedBefore = allFilms.size
         loadingMore = true
         scope.launch {
-            val result = RemoteIndexSource.categoryPage(context, targetCatId, page, batch)
+            val result = RemoteIndexSource.categoryPage(context, targetCatId, next, batch)
             if (result.films.isNotEmpty()) {
                 extra = (extra + result.films).distinctBy { it.id }
+                page = next
             }
             if (result.total > 0) total = result.total
-            if (result.films.isEmpty()) exhausted = true
-            val loadedAfter = (films + extra).distinctBy { it.id }.size
-            if (loadedAfter >= cap || (result.films.isEmpty() && loadedAfter <= loadedBefore)) {
+            val loadedAfter = (base + extra).distinctBy { it.id }.size
+            if (result.films.isEmpty() || loadedAfter <= loadedBefore || loadedAfter >= cap ||
+                (total > 0 && loadedAfter >= total)
+            ) {
                 exhausted = true
             }
             visibleCount = (visibleCount + batch).coerceAtMost(loadedAfter)
             loadingMore = false
         }
+    }
+
+    // Scroll infinito: al llegar al final de lo cargado se pide la página siguiente
+    // sola (el botón «Ver más» sigue disponible para forzarla).
+    val nearEnd by remember(allFilms.size, displayedFilms.size) {
+        derivedStateOf {
+            allFilms.isNotEmpty() && displayedFilms.size >= allFilms.size &&
+                (gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= displayedFilms.size - 4
+        }
+    }
+    LaunchedEffect(nearEnd, allFilms.size) {
+        if (nearEnd) loadMore()
     }
 
     Column(
@@ -608,7 +662,7 @@ private fun TvCategoryGrid(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "No se encontraron títulos en esta categoría",
+                    text = if (seedLoading) "Cargando catálogo…" else "No se encontraron títulos en esta categoría",
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color.White.copy(alpha = 0.6f),
                 )

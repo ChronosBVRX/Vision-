@@ -11,8 +11,10 @@ package com.chronosbvrx.visionplus.data
 object SectionPaging {
     internal const val LOW_END_BATCH = 24
     internal const val NORMAL_BATCH = 48
-    internal const val LOW_END_CAP = 1200
-    internal const val NORMAL_CAP = 4000
+    // Techo alto: el catálogo real es ~10.500 películas y ~10.300 series. El tope
+    // anterior (1.200/4.000) cortaba «Ver más» mucho antes de terminar el catálogo.
+    internal const val LOW_END_CAP = 12_000
+    internal const val NORMAL_CAP = 12_000
 
     internal fun batch(lowEnd: Boolean): Int = if (lowEnd) LOW_END_BATCH else NORMAL_BATCH
 

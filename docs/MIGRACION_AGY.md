@@ -146,6 +146,21 @@ Qué hace el script, en orden:
 - Kids como entradas `kids-movies` / `kids-series` + chip "Infantil".
 - **Bug pendiente detectado después:** `Paper` de "Ver más" podía detener la carga (ya mitigado con techos).
 
+### 2.6.40 — Catálogo completo real (películas/series/anime)
+
+- **Síntoma:** «Ver más» mostraba pocos títulos y no se llegaba al catálogo completo.
+- **Causa 1 (paginación rota):** la hilera llega con 30 títulos y el lote del equipo es 48.
+  `nextPage(loaded=30, batch=48)` volvía a pedir la **página 1**; el resultado se deduplicaba,
+  no entraba nada nuevo y `exhausted` se marcaba en el primer toque.
+- **Causa 2 (sin acceso al total):** las vitrinas solo ofrecían los géneros (30 por hilera).
+  No había una entrada al catálogo completo (`xtv-movies-all` = 10 540; `xtv-series-all` = 10 267;
+  `xtv-anime-all` = 3 760).
+- **Causa 3 (techo bajo):** `SectionPaging` cortaba en 1 200/4 000.
+- **Fix:** chip **«Catálogo completo»** en Películas/Series/Anime; al abrir una categoría se pide la
+  **página 1 con el lote exacto** (`categoryPage(..., 1, batch)`) y las siguientes avanzan `page + 1`;
+  **scroll infinito** al llegar al final; techo 12 000. TV y móvil.
+- **Pruebas:** `SectionPagingTest`, `SectionPagingWiringTest`, `KidsCatalogTest` en verde.
+
 ### 2.6.39 — Hotfix: Infantil reproducible (regresión de 2.6.37/2.6.38)
 
 - **Síntoma:** las películas infantiles dejaron de reproducirse y Series/Películas Infantiles mostraban lo mismo.
