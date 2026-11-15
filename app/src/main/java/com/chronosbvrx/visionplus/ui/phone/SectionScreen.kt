@@ -98,6 +98,7 @@ fun SectionScreen(
     contentPadding: PaddingValues,
     onBack: () -> Unit,
     onOpenFilm: (Film) -> Unit,
+    initialCategory: String? = null,
 ) {
     val context = LocalContext.current
     var rows by remember(name) {
@@ -127,7 +128,7 @@ fun SectionScreen(
         }
     }
 
-    var selectedCategory by rememberSaveable(name) { mutableStateOf<String?>(null) }
+    var selectedCategory by rememberSaveable(name, initialCategory) { mutableStateOf<String?>(initialCategory) }
 
     // Al estar filtrando por categoría, 'Atrás' regresa primero a "Todo / Destacados".
     BackHandler(enabled = selectedCategory != null) {

@@ -15,7 +15,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.ChildCare
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Cast
@@ -101,6 +106,28 @@ import com.chronosbvrx.visionplus.ui.remote.RemoteScreen
 
 internal data class Tab(val route: Route, val label: String, val icon: ImageVector)
 
+/** Un hijo del submenú de Películas / Series en el menú lateral. */
+internal data class HubEntry(val label: String, val route: Route, val icon: ImageVector)
+
+/**
+ * Submenús desplegables del menú lateral, espejo de los hubs de la TV:
+ * Películas (con Infantil) y Series (con Infantil, Anime y Novelas).
+ */
+internal val HUB_GROUPS: Map<Route, List<HubEntry>> = mapOf(
+    Route.Section("movies", "Películas") to listOf(
+        HubEntry("Películas", Route.Section("movies", "Películas"), Icons.Default.Movie),
+        HubEntry("Películas Infantiles", Route.Category("kids-movies", "Películas Infantiles"), Icons.Default.ChildCare),
+    ),
+    Route.Section("series", "Series") to listOf(
+        HubEntry("Series", Route.Section("series", "Series"), Icons.Default.Theaters),
+        HubEntry("Series Infantiles", Route.Category("kids-series", "Series Infantiles"), Icons.Default.ChildCare),
+        HubEntry("Anime", Route.Section("anime", "Anime"), Icons.Default.Animation),
+        HubEntry("Novelas", Route.Section("novelas", "Novelas"), Icons.Default.AutoStories),
+    ),
+)
+
+private val HUB_ROUTES: List<Route> = HUB_GROUPS.values.flatten().map { it.route }
+
 /** El menú lateral del móvil/tablet (drawer y riel en apaisado), en orden de aparición. */
 internal val TABS = listOf(
     Tab(Route.Home, "Inicio", Icons.Default.Home),
@@ -136,7 +163,7 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
         }
     }
     val rows = catalog.rows
-    val isTab = TABS.any { it.route == route }
+    val isTab = TABS.any { it.route == route } || HUB_ROUTES.any { it == route }
     val isWide = isLandscapeTablet()
     val inGame = route == Route.Games || route is Route.PartyHost || route is Route.PartyController
     val isOnline by com.chronosbvrx.visionplus.data.offline.NetworkMonitor.isOnline.collectAsState()
@@ -174,6 +201,8 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
 
     // Modo niños: las secciones sensibles piden el PIN (pase de 15 min, sin desbloquear).
     var pinRoute by remember { mutableStateOf<Route?>(null) }
+    // Qué hub está desplegado en el menú (Películas / Series). Se recuerda entre aperturas.
+    var expandedHub by rememberSaveable { mutableStateOf<String?>(null) }
     fun goTabGuarded(route: Route) {
         val gated = route == Route.Live || route == Route.Library || route == Route.Downloads ||
             route is Route.Section || route == Route.Categories || route == Route.Sports
@@ -296,10 +325,33 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
                     VisionWordmark(height = 30.dp, modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp))
                     Spacer(Modifier.height(8.dp))
                     TABS.forEach { tab ->
+                        val hub = HUB_GROUPS[tab.route]
+                        val childActive = hub?.any { it.route == route } == true
+                        val selected = tab.route == route || childActive
                         NavigationDrawerItem(
                             icon = { Icon(tab.icon, contentDescription = tab.label) },
-                            label = { Text(tab.label) },
-                            selected = tab.route == route,
+                            label = { Text(tab.label, maxLines = 1) },
+                            selected = selected,
+                            badge = if (hub != null) {
+                                {
+                                    IconButton(
+                                        onClick = {
+                                            expandedHub = if (expandedHub == tab.label) null else tab.label
+                                        },
+                                    ) {
+                                        Icon(
+                                            if (expandedHub == tab.label || childActive) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                            contentDescription = if (expandedHub == tab.label) {
+                                                "Contraer ${tab.label}"
+                                            } else {
+                                                "Desplegar ${tab.label}"
+                                            },
+                                        )
+                                    }
+                                }
+                            } else {
+                                null
+                            },
                             colors = NavigationDrawerItemDefaults.colors(
                                 selectedContainerColor = VisionBlue.copy(alpha = 0.15f),
                                 selectedIconColor = VisionBlue,
@@ -308,11 +360,40 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
                                 unselectedTextColor = Color.White,
                             ),
                             onClick = {
+                                // Tocar el padre navega y deja el submenú abierto para la próxima.
+                                if (hub != null) expandedHub = tab.label
                                 scope.launch { drawerState.close() }
                                 goTabGuarded(tab.route)
                             },
                             modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
                         )
+                        if (hub != null && (expandedHub == tab.label || childActive)) {
+                            hub.forEach { child ->
+                                NavigationDrawerItem(
+                                    icon = {
+                                        Icon(
+                                            child.icon,
+                                            contentDescription = child.label,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    },
+                                    label = { Text(child.label, maxLines = 1) },
+                                    selected = child.route == route,
+                                    colors = NavigationDrawerItemDefaults.colors(
+                                        selectedContainerColor = VisionBlue.copy(alpha = 0.12f),
+                                        selectedIconColor = VisionBlue,
+                                        selectedTextColor = VisionBlue,
+                                        unselectedIconColor = Color.White.copy(alpha = 0.75f),
+                                        unselectedTextColor = Color.White.copy(alpha = 0.85f),
+                                    ),
+                                    onClick = {
+                                        scope.launch { drawerState.close() }
+                                        goTabGuarded(child.route)
+                                    },
+                                    modifier = Modifier.padding(start = 34.dp, end = 12.dp, top = 1.dp, bottom = 1.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -322,12 +403,36 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
             if (isWide && isTab) {
                 NavigationRail(containerColor = VisionBlack) {
                     TABS.forEach { tab ->
+                        val hub = HUB_GROUPS[tab.route]
+                        val childActive = hub?.any { it.route == route } == true
+                        val expanded = hub != null && (expandedHub == tab.label || childActive)
                         NavigationRailItem(
-                            selected = tab.route == route,
-                            onClick = { goTabGuarded(tab.route) },
+                            selected = tab.route == route || childActive,
+                            onClick = {
+                                if (hub != null) {
+                                    expandedHub = if (expanded) null else tab.label
+                                }
+                                goTabGuarded(tab.route)
+                            },
                             icon = { Icon(tab.icon, contentDescription = tab.label) },
-                            label = { Text(tab.label) },
+                            label = { Text(tab.label, maxLines = 1) },
                         )
+                        if (hub != null && expanded) {
+                            hub.forEach { child ->
+                                NavigationRailItem(
+                                    selected = child.route == route,
+                                    onClick = { goTabGuarded(child.route) },
+                                    icon = {
+                                        Icon(
+                                            child.icon,
+                                            contentDescription = child.label,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    },
+                                    label = { Text(child.label, fontSize = 9.sp, maxLines = 1) },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -424,6 +529,20 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
                             name = current.name,
                             title = current.title,
                             contentPadding = padding,
+                            onBack = { nav.pop() },
+                            onOpenFilm = { nav.push(Route.Title(it)) },
+                        )
+                        // Submenús (Películas/Series Infantiles): abren su sección con el
+                        // filtro «Infantil» ya puesto.
+                        is Route.Category -> SectionScreen(
+                            name = when (current.key) {
+                                "kids-movies" -> "movies"
+                                "kids-series" -> "series"
+                                else -> current.key
+                            },
+                            title = current.title,
+                            contentPadding = padding,
+                            initialCategory = if (current.key.startsWith("kids")) "Infantil" else null,
                             onBack = { nav.pop() },
                             onOpenFilm = { nav.push(Route.Title(it)) },
                         )

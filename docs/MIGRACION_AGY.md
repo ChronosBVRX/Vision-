@@ -146,6 +146,16 @@ Qué hace el script, en orden:
 - Kids como entradas `kids-movies` / `kids-series` + chip "Infantil".
 - **Bug pendiente detectado después:** `Paper` de "Ver más" podía detener la carga (ya mitigado con techos).
 
+### 2.6.41 — Submenús de Películas y Series en el móvil
+
+- El menú lateral (drawer) y el riel de tablet ahora **despliegan** Películas y Series, igual que los hubs de TV:
+  - **Películas** → Películas · Películas Infantiles.
+  - **Series** → Series · Series Infantiles · Anime · Novelas.
+- Cada hijo navega a su destino raíz; «Películas Infantiles» / «Series Infantiles» abren la sección con el chip
+  **Infantil** ya seleccionado (`SectionScreen(initialCategory = "Infantil")`).
+- El hub se marca activo cuando cualquiera de sus hijos lo está y recuerda si quedó desplegado.
+- `PhoneHubMenuTest` fija el contenido de ambos hubs.
+
 ### 2.6.40 — Catálogo completo real (películas/series/anime)
 
 - **Síntoma:** «Ver más» mostraba pocos títulos y no se llegaba al catálogo completo.
