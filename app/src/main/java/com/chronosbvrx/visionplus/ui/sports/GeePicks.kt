@@ -33,7 +33,7 @@ internal data class GeePickRow(
     val typeLabel: String
         get() = when {
             type == "xtv" -> "En tu TV"
-            link.isBlank() && tokenApi.isNotBlank() -> "Se resuelve al tocar"
+            link.isBlank() && tokenApi.isNotBlank() -> "Se prepara al abrir"
             !playable -> "Sin señal"
             type == "dash" && !channel.drmKey.isNullOrBlank() -> "DASH · ClearKey"
             type == "dash" -> "DASH"

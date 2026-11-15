@@ -5,6 +5,7 @@ import com.chronosbvrx.visionplus.data.banners.HomeBanner
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.gee.SportsRelevance
 import com.chronosbvrx.visionplus.home.contract.SportsLeagues
+import com.chronosbvrx.visionplus.home.contract.SportsSchedule
 import com.chronosbvrx.visionplus.home.contract.durationLabel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -160,7 +161,11 @@ private fun GeeSportsSource.GeeEvent.toTvHero(nowMs: Long): TvHeroItem? {
         name.ifBlank { teamA + " vs " + teamB }.ifBlank { "Evento en vivo" }
     }
     val whenText = if (isLive) {
-        detail.ifBlank { "EN VIVO" }
+        SportsSchedule.liveDetail(
+            geeStartMs(this).takeIf { it > 0L },
+            category,
+            detail,
+        )
     } else {
         listOf(dateText, time.take(5)).filter { it.isNotBlank() }.joinToString(" · ")
     }

@@ -103,7 +103,7 @@ internal fun GeeAliveBadge(alive: Boolean?, playable: Boolean = true, resolvable
         return
     }
     if (resolvable) {
-        Text("Al tocar", style = MaterialTheme.typography.bodySmall, color = VisionBlueBright)
+        Text("Lista para abrir", style = MaterialTheme.typography.bodySmall, color = VisionBlueBright)
         return
     }
     val (label, color) = when (alive) {
@@ -312,12 +312,10 @@ internal fun GeeLinkPickDialog(
     val geeRows = remember(title, links, checks, playingUrl) {
         geePickRows(title, links, checks, playingUrl)
     }
-    // GeeSports manda: es la fuente que está entregando los partidos. La
-    // segunda opción de la casa solo aparece como RESPALDO cuando GeeSports no
-    // publicó ninguna señal sintonizable; además, la casa abre el motor nativo
-    // (sin el HUD de estadísticas).
-    val xtvRows = remember(xtv, playingUrl, geeRows) {
-        if (geeRows.any { it.playable }) emptyList() else xtvPickRows(xtv, playingUrl)
+    // Fuentes del evento: señales de GeeSports (geforce) y opciones de Wiwi Súper/XTV,
+    // ambas visibles para que el usuario elija. Las opciones XTV abren el motor nativo.
+    val xtvRows = remember(xtv, playingUrl) {
+        xtvPickRows(xtv, playingUrl)
     }
     val rows = remember(geeRows, xtvRows) { geeRows + xtvRows }
     var resolving by remember { mutableStateOf<GeePickRow?>(null) }

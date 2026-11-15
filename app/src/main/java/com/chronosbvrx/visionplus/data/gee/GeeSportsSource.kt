@@ -138,6 +138,22 @@ object GeeSportsSource {
     /** Limpia espacios de la URL de la imagen sin alterar el protocolo (HTTP/HTTPS permitidos con cleartext). */
     private fun safeImage(url: String): String = url.trim()
 
+    /**
+     * Nombres reales de los dos lados del evento; ("","") cuando no hay
+     * confrontación. El CMS repite el show o la liga en `team_a`/`team_b`
+     * (WWE, F1): ahí sus imágenes son el logo del programa, no escudos.
+     */
+    private fun realTeams(name: String, teamA: String, teamB: String): Pair<String, String> {
+        val home = teamA.trim()
+        val away = teamB.trim()
+        if (home.isEmpty() || away.isEmpty()) return "" to ""
+        val event = name.trim()
+        if (home.equals(away, true) || home.equals(event, true) || away.equals(event, true)) {
+            return "" to ""
+        }
+        return home to away
+    }
+
     // ------------------------------------------------------------------ red
 
     private fun get(url: String): String {
@@ -267,6 +283,17 @@ object GeeSportsSource {
             val name = e.optString("event")
             if (name.isBlank()) continue
             val score = e.optJSONObject("score")
+            val teamA = e.optString("team_a").trim()
+            val teamB = e.optString("team_b").trim()
+            val (realHome, realAway) = realTeams(name, teamA, teamB)
+            // Respaldo para servidores viejos o caché previa: la cara de cada lado
+            // viene en `flag_a`/`flag_b` (escudo del equipo o retrato del peleador).
+            val homeLogo = safeImage(e.optString("home_logo")).ifBlank {
+                if (realHome.isNotBlank()) safeImage(e.optString("flag_a")) else ""
+            }
+            val awayLogo = safeImage(e.optString("away_logo")).ifBlank {
+                if (realAway.isNotBlank()) safeImage(e.optString("flag_b")) else ""
+            }
             out.add(
                 GeeEvent(
                     // El respaldo (servidor viejo o caché previa) lleva los EQUIPOS en la
@@ -278,18 +305,18 @@ object GeeSportsSource {
                     category = e.optString("category"),
                     name = name,
                     logo = safeImage(e.optString("logo")),
-                    teamA = e.optString("team_a"),
-                    teamB = e.optString("team_b"),
+                    teamA = teamA,
+                    teamB = teamB,
                     dateIso = e.optString("date_iso"),
                     dateText = e.optString("date"),
                     time = e.optString("time"),
                     alive = e.optInt("alive"),
                     total = e.optInt("total"),
                     links = jsonLinks(e.optJSONArray("links")),
-                    homeName = e.optString("home_name"),
-                    awayName = e.optString("away_name"),
-                    homeLogo = safeImage(e.optString("home_logo")),
-                    awayLogo = safeImage(e.optString("away_logo")),
+                    homeName = e.optString("home_name").ifBlank { realHome },
+                    awayName = e.optString("away_name").ifBlank { realAway },
+                    homeLogo = homeLogo,
+                    awayLogo = awayLogo,
                     leagueLabel = e.optString("league_label"),
                     leagueLogo = safeImage(e.optString("league_logo")),
                     leagueId = e.optString("league_id"),

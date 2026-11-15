@@ -1834,6 +1834,46 @@ def _gee_fix_logos(event: dict) -> None:
             event[key] = _gee_logo(value)
 
 
+def _gee_team_names(event: dict) -> tuple[str, str]:
+    """Los dos lados reales del evento; ("", "") cuando no hay confrontación.
+
+    El CMS repite el nombre del show o de la liga en `team_a`/`team_b` (WWE, F1):
+    ahí sus imágenes son el logo del programa, no escudos de equipo, y pintarlas
+    en las dos esquinas duplicaría el mismo icono.
+    """
+    name = _fold(event.get("event") or "")
+    home = str(event.get("home_name") or event.get("team_a") or "").strip()
+    away = str(event.get("away_name") or event.get("team_b") or "").strip()
+    if not home or not away:
+        return "", ""
+    if _fold(home) == _fold(away) or _fold(home) == name or _fold(away) == name:
+        return "", ""
+    return home, away
+
+
+def _gee_fill_team_art(event: dict) -> None:
+    """Completa nombres y escudos con las imágenes por lado del CMS.
+
+    `flag_a`/`flag_b` traen la cara real de cada lado: el escudo del equipo en
+    deportes de conjunto y el retrato del peleador en UFC/box. El cruce con ESPN
+    solo cubre las ligas de la agenda; sin este respaldo, 117 de 120 partidos de
+    fútbol salían con el logo de la liga en los dos lados. Los escudos de ESPN,
+    cuando existen, ya vienen puestos y aquí NO se reemplazan (el cruce con la
+    agenda sigue teniendo prioridad).
+    """
+    home, away = _gee_team_names(event)
+    if not home or not away:
+        return
+    if not str(event.get("home_name") or "").strip():
+        event["home_name"] = home
+    if not str(event.get("away_name") or "").strip():
+        event["away_name"] = away
+    if not str(event.get("home_logo") or "").strip():
+        event["home_logo"] = str(event.get("flag_a") or "").strip()
+    if not str(event.get("away_logo") or "").strip():
+        event["away_logo"] = str(event.get("flag_b") or "").strip()
+
+
 def _gee_fix_event_times(event: dict) -> None:
     """El CMS marca los horarios en UTC: a hora de México (para mostrar y ordenar)."""
     day = (event.get("date_iso") or "").strip()
@@ -1975,6 +2015,7 @@ async def _gee38_events_payload(
     for event in events:
         _gee_fix_event_times(event)
         _gee_fix_logos(event)
+        _gee_fill_team_art(event)
         _gee_complete_event_links(event)
     if not events:
         return {"events": events}
@@ -3329,6 +3370,16 @@ def _gee_merge_groups(groups: list[list[dict]]) -> list[dict]:
             incoming = [str(n).strip() for n in (card.get("link_names") or []) if str(n).strip()]
             names = _gee_merge_declared(names, incoming)
         merged = dict(base)
+        # La agenda aporta marcador y escudos; si a su copia le falta una cara
+        # (equipo que ESPN no publica con logo), la tarjeta del CMS la completa.
+        # Nunca al revés: el logo de ESPN, cuando existe, siempre gana.
+        for key in ("home_name", "away_name", "home_logo", "away_logo", "league_logo"):
+            if not str(merged.get(key) or "").strip():
+                for card in group:
+                    value = str(card.get(key) or "").strip()
+                    if value:
+                        merged[key] = value
+                        break
         merged["link_names"] = names
         merged["links"] = links
         merged.pop("total", None)

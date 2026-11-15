@@ -326,7 +326,7 @@ fun TvCategoryScreen(
                             )
                         }
                     }
-                    itemsIndexed(otherRows, key = { _, row -> row.id }) { index, row ->
+                    itemsIndexed(otherRows, key = { _, row -> row.id }, contentType = { _, _ -> "row" }) { index, row ->
                         val isTop = premiereRow == null && index == 0
                         SectionRow(
                             label = row.title,
@@ -463,7 +463,7 @@ private fun CategoryChipsRow(
         contentPadding = PaddingValues(horizontal = 48.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(chips.size, key = { chips[it] }) { idx ->
+        items(chips.size, key = { chips[it] }, contentType = { "chip" }) { idx ->
             val chip = chips[idx]
             val isSelected = if (selected == null) chip == CHIP_ALL else chip.equals(selected, ignoreCase = true)
             TvCategoryPill(
@@ -676,7 +676,7 @@ private fun TvCategoryGrid(
                 verticalArrangement = Arrangement.spacedBy(20.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                itemsIndexed(displayedFilms, key = { _, film -> "grid-${film.id}" }) { index, film ->
+                itemsIndexed(displayedFilms, key = { _, film -> "grid-${film.id}" }, contentType = { _, _ -> "card" }) { index, film ->
                     val isReturn = returnRequester != null && film.id == returnFilmId
                     Column(
                         modifier = Modifier.width(140.dp),
@@ -882,7 +882,7 @@ private fun SectionRow(
         contentPadding = PaddingValues(horizontal = 48.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        itemsIndexed(safeFilms, key = { _, film -> "${label}-${film.id}" }) { idx, film ->
+        itemsIndexed(safeFilms, key = { _, film -> "${label}-${film.id}" }, contentType = { _, _ -> "card" }) { idx, film ->
             val rank = if (isTopRow && idx in 0..9) idx + 1 else null
             val isReturn = isReturnRow && returnRequester != null && film.id == returnFilmId
             Column(Modifier.width(140.dp)) {

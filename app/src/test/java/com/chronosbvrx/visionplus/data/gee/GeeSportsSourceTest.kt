@@ -253,6 +253,59 @@ class GeeSportsSourceTest {
     }
 
     @Test
+    fun parseEventsUsesCmsSideArtAndNamesWhenTheAgendaHasNoMatch() {
+        // El servidor nuevo ya manda home_logo/away_logo; el respaldo cubre la
+        // caché previa y servidores viejos: `flag_a`/`flag_b` traen el escudo
+        // del equipo y, en peleas, el retrato de cada peleador.
+        val json = """
+            {"events":[
+              {"id":"event:uefa","category":"Football","event":"UEFA Nations League",
+               "team_a":"Portugal","team_b":"Denmark",
+               "flag_a":"https://s/team/1","flag_b":"https://s/team/2",
+               "logo":"https://s/league","date_iso":"2026-11-14","time":"13:45:00","links":[]},
+              {"id":"event:ufc","category":"Boxing","event":"UFC",
+               "team_a":"Ciryl Gane","team_b":"Josh Hokit",
+               "flag_a":"https://s/fighter/1","flag_b":"https://s/fighter/2",
+               "logo":"https://s/ufc","date_iso":"2026-11-14","time":"18:00:00","links":[]},
+              {"id":"event:show","category":"Boxing","event":"WWE NXT",
+               "team_a":"WWE NXT","team_b":"WWE NXT",
+               "flag_a":"https://s/wwe","flag_b":"https://s/wwe",
+               "logo":"https://s/wwe","date_iso":"2026-11-14","time":"18:00:00","links":[]}
+            ]}
+        """.trimIndent()
+        val events = GeeSportsSource.parseEvents(json)
+        assertEquals("Portugal", events[0].homeName)
+        assertEquals("Denmark", events[0].awayName)
+        assertEquals("https://s/team/1", events[0].homeLogo)
+        assertEquals("https://s/team/2", events[0].awayLogo)
+        assertEquals("Ciryl Gane", events[1].homeName)
+        assertEquals("https://s/fighter/1", events[1].homeLogo)
+        assertEquals("https://s/fighter/2", events[1].awayLogo)
+        // Un show no tiene dos lados: se queda con el logo del evento.
+        assertEquals("", events[2].homeName)
+        assertEquals("", events[2].homeLogo)
+        assertEquals("https://s/wwe", events[2].logo)
+    }
+
+    @Test
+    fun parseEventsPrefersExplicitTeamLogosOverCmsFlags() {
+        val json = """
+            {"events":[
+              {"id":"event:espn","category":"Football","event":"Liga MX",
+               "team_a":"Querétaro","team_b":"Monterrey",
+               "flag_a":"https://s/flag/a","flag_b":"https://s/flag/b",
+               "home_name":"Querétaro","away_name":"Monterrey",
+               "home_logo":"https://a.espncdn.com/home.png",
+               "away_logo":"https://a.espncdn.com/away.png",
+               "date_iso":"2026-11-14","time":"17:00:00","links":[]}
+            ]}
+        """.trimIndent()
+        val event = GeeSportsSource.parseEvents(json).single()
+        assertEquals("https://a.espncdn.com/home.png", event.homeLogo)
+        assertEquals("https://a.espncdn.com/away.png", event.awayLogo)
+    }
+
+    @Test
     fun parseEventsReadsTheServerRelevanceFields() {
         val json = """
             {"events":[

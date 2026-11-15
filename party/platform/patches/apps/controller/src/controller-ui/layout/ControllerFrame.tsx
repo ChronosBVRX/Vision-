@@ -18,7 +18,7 @@ export function ControllerFrame({ eyebrow, title, subtitle, footer, wide = false
         gap: bare ? 0 : wide ? 8 : 14,
         maxWidth: bare ? "none" : wide ? 1040 : 680,
         width: "100%",
-        minHeight: bare ? "min(82vh, 760px)" : undefined,
+        minHeight: bare ? undefined : undefined,
         margin: "0 auto",
         background: bare ? "transparent" : wide ? "color-mix(in srgb, var(--paper) 64%, transparent)" : "var(--panel-bg)",
         border: bare ? "0" : wide ? "1px solid color-mix(in srgb, var(--muted) 14%, transparent)" : "1px solid var(--panel-border)",
@@ -36,7 +36,7 @@ export function ControllerFrame({ eyebrow, title, subtitle, footer, wide = false
         </header>
       ) : null}
       <section>{children}</section>
-      {footer ? <footer>{footer}</footer> : null}
+      {footer ? <footer style={{ position: "sticky", bottom: 0, marginTop: "auto" }}>{footer}</footer> : null}
     </main>
   );
 }

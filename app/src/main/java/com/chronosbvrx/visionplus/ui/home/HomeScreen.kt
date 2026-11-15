@@ -349,7 +349,7 @@ fun HomeScreen(
                 )
             }
         }
-        items(themeRows, key = { it.id }) { row ->
+        items(themeRows, key = { it.id }, contentType = { "row" }) { row ->
             FilmRow(
                 row = row,
                 posterWidth = sizes.posterWidth,
@@ -386,7 +386,7 @@ fun HomeScreen(
                 )
             }
         }
-        items(kindRowsForHome, key = { it.id }) { row ->
+        items(kindRowsForHome, key = { it.id }, contentType = { "row" }) { row ->
             FilmRow(
                 row = row,
                 posterWidth = sizes.posterWidth,
@@ -407,7 +407,7 @@ fun HomeScreen(
                 }
             }
         }
-        items(otherRows, key = { it.id }) { row ->
+        items(otherRows, key = { it.id }, contentType = { "row" }) { row ->
             val seeAllAction: (() -> Unit)? = remember(row) {
                 val t = row.title.lowercase()
                 when {
@@ -467,7 +467,7 @@ private fun Hero(
             .fillMaxWidth()
             .height(sizes.heroHeight),
     ) {
-        coil.compose.SubcomposeAsyncImage(
+        coil.compose.AsyncImage(
             model = ImageRequest.Builder(context)
                 .data(backdropUrl)
                 .crossfade(0)
@@ -640,7 +640,7 @@ private fun FilmRow(
         ) {
             // dedupe: una tarjeta por obra (mismo TMDB/contentId) y clave única para la
             // LazyRow; sin esto, una hilera repetida del servidor tumbaba el Inicio.
-            itemsIndexed(Popularity.dedupe(row.films).take(15), key = { _, film -> "${row.id}-${film.id}" }) { index, film ->
+            itemsIndexed(Popularity.dedupe(row.films).take(15), key = { _, film -> "${row.id}-${film.id}" }, contentType = { _, _ -> "card" }) { index, film ->
                 val rank = if (isTopRow && index in 0..9) index + 1 else null
                 PosterCard(
                     title = film.title,
@@ -679,7 +679,7 @@ private fun Selections(onGo: (Route) -> Unit) {
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(SELECTIONS, key = { it.label }) { s -> SelectionCard(s, onGo) }
+            items(SELECTIONS, key = { it.label }, contentType = { "chip" }) { s -> SelectionCard(s, onGo) }
         }
     }
 }
@@ -758,7 +758,7 @@ private fun ContinueRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(cards, key = { it.entry.key }) { card ->
+            items(cards, key = { it.entry.key }, contentType = { "card" }) { card ->
                 // El siguiente capítulo de la MISMA temporada ya tiene código y se puede
                 // abrir directo; al cruzar de temporada la ficha aterriza en la nueva.
                 val nextEntry = if (card.completed && card.hasNext) nextEpisodeEntry(card.entry) else null
@@ -838,7 +838,7 @@ private fun FollowRow(cards: List<FollowAiring>, posterWidth: Dp, onOpen: (Film)
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(cards, key = { it.key }) { card ->
+            items(cards, key = { it.key }, contentType = { "card" }) { card ->
                 PosterCard(
                     title = card.film.title,
                     imageUrl = card.film.posterUrl,

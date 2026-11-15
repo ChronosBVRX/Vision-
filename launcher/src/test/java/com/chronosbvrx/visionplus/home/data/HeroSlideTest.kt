@@ -137,7 +137,7 @@ class HeroSlideTest {
         val slide = sportsSlide(sport("m:1", now - 10 * 60 * 1000L, live = true), now)!!
         assertTrue(slide.sports)
         assertEquals("EN VIVO", slide.badge)
-        assertEquals("67'", slide.detail)
+        assertEquals("Empezó 19:50 · Termina ~21:50 · 67'", slide.detail)
         assertEquals(2, slide.homeScore)
         assertEquals(1, slide.awayScore)
         assertEquals(

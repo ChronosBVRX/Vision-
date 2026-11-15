@@ -112,6 +112,11 @@ object RemoteIndexSource {
     private val memorySearchCache = java.util.concurrent.ConcurrentHashMap<String, List<Film>>()
     private val memorySearchCacheAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
     private const val SEARCH_CACHE_TTL_MS = 5L * 60 * 1000
+
+    /** Caché en memoria de páginas de categoría (Ver más), para no repetir la red al volver. */
+    private val memoryCategoryPages = java.util.concurrent.ConcurrentHashMap<String, CategoryPage>()
+    private val memoryCategoryPagesAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private const val CATEGORY_PAGE_TTL_MS = 5L * 60 * 1000
     private var memoryIndexRows: List<CatalogRow>? = null
     private var memoryIndexRowsAt = 0L
 
@@ -341,6 +346,14 @@ object RemoteIndexSource {
         if (categoryId.isBlank() || page < 1 || pageSize < 1) {
             return@withContext CategoryPage(emptyList(), 0)
         }
+        val cacheKey = "$categoryId|$page|$pageSize"
+        val cached = memoryCategoryPages[cacheKey]
+        val cachedAt = memoryCategoryPagesAt[cacheKey] ?: 0L
+        if (cached != null && cached.films.isNotEmpty() &&
+            System.currentTimeMillis() - cachedAt < CATEGORY_PAGE_TTL_MS
+        ) {
+            return@withContext cached
+        }
         val encoded = java.net.URLEncoder.encode(categoryId, "UTF-8")
         val connection = (URL("$BASE_URL/v1/category/$encoded?page=$page&pageSize=$pageSize")
             .openConnection() as HttpURLConnection).apply {
@@ -354,7 +367,12 @@ object RemoteIndexSource {
                 return@withContext CategoryPage(emptyList(), 0)
             }
             val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            parseCategoryPage(text)
+            val result = parseCategoryPage(text)
+            if (result.films.isNotEmpty()) {
+                memoryCategoryPages[cacheKey] = result
+                memoryCategoryPagesAt[cacheKey] = System.currentTimeMillis()
+            }
+            result
         } catch (_: Exception) {
             CategoryPage(emptyList(), 0)
         } finally {

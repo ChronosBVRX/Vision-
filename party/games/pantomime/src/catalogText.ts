@@ -24,53 +24,29 @@ export const pantomimeText = {
     "visual": {
       "eyebrow": "Teatro en llamas"
     }
-  },
+  }
+,
   "en": {
     "displayName": "Mímica en llamas",
-    "description": "Pure theater, zero words and red-hot embarrassment. Act, guess and survive the blaze.",
+    "description": "Puro teatro, cero palabras y vergüenza al rojo vivo. Actúa, adivina y sobrevive al incendio.",
     "lobbySetup": {
-      "title": "Set up Mímica en llamas",
+      "title": "Prende la mímica",
       "fields": {
         "mode": {
-          "label": "Game mode",
-          "options": {
-            "solo": {
-              "label": "Free-for-all",
-              "description": "Everyone except the actor guesses and claims their own correct answers."
-            },
-            "team": {
-              "label": "Teams",
-              "description": "Two teams alternate by join order. Only the active team guesses. Requires at least 4 players."
-            }
-          }
+          "label": "Modo de fuego"
         },
         "category": {
-          "label": "Words",
-          "options": {
-            "standard": {
-              "label": "Family",
-              "description": "124 family-friendly prompts."
-            },
-            "adult": {
-              "label": "18+",
-              "description": "76 adult prompts about sex, relationships and nightlife."
-            },
-            "all": {
-              "label": "All",
-              "description": "Family and adult prompts mixed together. For adult groups."
-            }
-          }
+          "label": "Términos en llamas"
         },
         "duration": {
-          "label": "Seconds per actor"
+          "label": "Segundos por actor"
         },
         "skips": {
-          "label": "Skips per actor turn"
+          "label": "Saltos por actor"
         }
       }
     },
     "visual": {
-      "eyebrow": "Theater on fire"
+      "eyebrow": "Teatro en llamas"
     }
-  }
-} as const satisfies Partial<LocalizedGameTextMap>;
+  }} as const satisfies Partial<LocalizedGameTextMap>;

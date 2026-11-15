@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -242,6 +243,9 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
                 film.durationMin > 0 -> film.durationMin * 60_000L
                 else -> 0L
             },
+            posterUrl = download?.posterUrl ?: film.posterUrl,
+            synopsis = vaultFilm?.synopsis ?: film.synopsis,
+            episodeTitle = episode?.episodeNames?.getOrNull(episode.episodeIndex),
         )
         return
     }
@@ -309,6 +313,9 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
         resumeInfo = ResumeInfo(film.videoUrl, film.title, film.posterUrl, streamUrl),
         resumeMs = resumeMs,
         declaredDurationMs = if (episode != null && episode.durationMs > 0) episode.durationMs else if (film.durationMin > 0) film.durationMin * 60_000L else 0L,
+        posterUrl = film.posterUrl,
+        synopsis = film.synopsis,
+        episodeTitle = episode?.episodeNames?.getOrNull(episode.episodeIndex),
     )
 }
 
@@ -382,34 +389,8 @@ fun LivePlayerScreen(
     // El contexto del partido (liga, marcador, dónde se transmite) para el aviso de cable del
     // reproductor: la MISMA interfaz que la TV en vivo. Se lee ANTES que las señales.
     val eventInfo = remember(streamUrl, channel) { GeeZapSignals.takeInfoFor(channel) }
-    // Respaldo AUTOMÁTICO del partido: cuando el reproductor se queda sin ninguna señal de la
-    // fuente deportiva, pide el canal confirmado del catálogo de la casa y aquí se abre con el
-    // reproductor nativo (el mismo de TV en vivo). La fuente deportiva manda hasta el final.
-    val fallbackRequested by GeeZapSignals.fallbackRequest
-    var autoFallback by remember(channel.url) { mutableStateOf<LiveChannel?>(null) }
-    LaunchedEffect(fallbackRequested) {
-        fallbackRequested?.let { autoFallback = GeeZapSignals.consumeFallback() }
-    }
-    autoFallback?.let { target ->
-        EngineDownloadGate(isTv = isTv, onCancel = onBack) {
-            val context = androidx.compose.ui.platform.LocalContext.current
-            XtvHandoff(
-                title = target.name,
-                prepare = {
-                    com.chronosbvrx.visionplus.data.xuper.X4KApi.playLive(
-                        context,
-                        target.url.substringAfter(':'),
-                        target.name,
-                        channelCodes = channelCodes,
-                        groupTitle = groupTitle,
-                        logo = target.logo.orEmpty(),
-                    )
-                },
-                onDone = onBack,
-            )
-        }
-        return
-    }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val auditScope = androidx.compose.runtime.rememberCoroutineScope()
     LaunchedEffect(channel.url) { LiveArtwork.logo = channel.logo.orEmpty() }
     DisposableEffect(channel.url) {
         onDispose { if (LiveArtwork.logo == channel.logo.orEmpty()) LiveArtwork.logo = "" }
@@ -449,7 +430,34 @@ fun LivePlayerScreen(
                     ),
                 )
             }
-        }.distinctBy { it.url }
+        }.distinctBy { it.url }.let { list ->
+            // Adaptive Signal Memory: si ya sabemos qué señal funcionó para este evento,
+            // la promovemos a la primera posición para arrancar por la buena.
+            val preferred = com.chronosbvrx.visionplus.data.SignalPreference.preferredUrl(
+                context,
+                channel.name,
+            )
+            if (preferred.isNullOrBlank() || list.size < 2) {
+                list
+            } else {
+                val idx = list.indexOfFirst { it.url == preferred }
+                if (idx <= 0) list else list.toMutableList().apply {
+                    val item = removeAt(idx)
+                    add(0, item)
+                }
+            }
+        }
+    }
+    // Auditoría proactiva de señales (segundo plano): promueve la que responde como preferida.
+    androidx.compose.runtime.LaunchedEffect(channel.name, zapTargets.size) {
+        if (zapTargets.size >= 2) {
+            com.chronosbvrx.visionplus.data.SignalAudit.auditEvent(
+                context,
+                channel.name,
+                zapTargets.map { it.url },
+                auditScope,
+            )
+        }
     }
     PlayerCore(
         title = channel.name,
@@ -494,6 +502,10 @@ private fun PlayerCore(
     resumeInfo: com.chronosbvrx.visionplus.data.ResumeInfo? = null,
     resumeMs: Long = 0,
     declaredDurationMs: Long = 0L,
+    // Portada y sinopsis para el overlay premium del reproductor (películas/series).
+    posterUrl: String = "",
+    synopsis: String = "",
+    episodeTitle: String? = null,
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -616,6 +628,12 @@ private fun PlayerCore(
     val recoveryScope = rememberCoroutineScope()
 
     var playing by remember { mutableStateOf(true) }
+    // Si la reproducción arranca bien, el canal deja de estar marcado como fallido.
+    androidx.compose.runtime.LaunchedEffect(playing) {
+        if (isLive && playing) {
+            com.chronosbvrx.visionplus.data.DeadChannelStore.clear(context, title)
+        }
+    }
     var buffering by remember { mutableStateOf(true) }
     var positionMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(declaredDurationMs) }
@@ -781,7 +799,6 @@ private fun PlayerCore(
         matchHudPage = MatchHudPage.SUMMARY
     }
     var failovers by remember { mutableStateOf(0) }
-    var fellBackToXtv by remember { mutableStateOf(false) }
     val canZap = isLive && zapTargets.size > 1 && !introPlaying
     // La señal en pantalla (la que el aviso de cable rotula como «AHORA»): su dirección y su
     // cifrado son los del destino actual, que cambia al zappear.
@@ -803,6 +820,11 @@ private fun PlayerCore(
         if (index < 0 || index >= zapTargets.size || index == zapIndex) return
         val target = zapTargets[index]
         zapIndex = index
+        // Adaptive Signal Memory: la señal a la que saltamos (manual o failover) queda
+        // registrada como la buena para este evento, para arrancar por ella la próxima vez.
+        if (isLive) {
+            com.chronosbvrx.visionplus.data.SignalPreference.setPreferred(context, title, target.url)
+        }
         if (eventInfo != null) {
             com.chronosbvrx.visionplus.ui.sports.DeportesReturn.updateWatchingUrl(target.url)
         }
@@ -846,22 +868,12 @@ private fun PlayerCore(
             zapTo(next)
             return
         }
-        // Señales agotadas: si el partido trae un respaldo confirmado en el catálogo de la casa,
-        // se pide desde aquí (el reproductor en vivo lo atiende y cambia SOLO a él) en vez de
-        // dejar la tarjeta de error. La fuente deportiva mandó hasta el final: con cualquier
-        // señal suya viva, esto no corre.
-        val back = eventInfo?.fallback
-        if (back != null && !fellBackToXtv) {
-            fellBackToXtv = true
-            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-                "PLAYER_FAILOVER_XTV",
-                "$detail respaldo=${back.name} intentos=$recoveryAttempts",
-            )
-            com.chronosbvrx.visionplus.ui.sports.GeeZapSignals.requestFallback(back)
-            return
-        }
         error = if (isLive) "No se pudo reproducir este canal." else "No se pudo reproducir este video."
         buffering = false
+        // Marca el canal como fallido (degradado, no oculto) para priorizarlo menos en listas.
+        if (isLive) {
+            com.chronosbvrx.visionplus.data.DeadChannelStore.markDead(context, title)
+        }
         com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
             "PLAYER_RECONNECT_FAIL",
             "$detail intentos=$recoveryAttempts " + (if (isLive) "vivo" else "vod"),
@@ -1938,6 +1950,61 @@ private fun PlayerCore(
                     }
                 }
 
+                // Overlay premium (películas/series): portada a la derecha con sinopsis degradada.
+                if (!isLive && controls.visible && (posterUrl.isNotBlank() || (synopsis.isNotBlank()) || (episodeTitle != null))) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .systemBarsPadding()
+                            .padding(top = 12.dp, end = 16.dp)
+                            .widthIn(max = 360.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f, fill = false)
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            colors = listOf(Color.Transparent, Color(0xCC000000)),
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                    )
+                                    .padding(12.dp),
+                            ) {
+                                val head = episodeTitle?.takeIf { it.isNotBlank() } ?: title
+                                Text(
+                                    head,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (synopsis.isNotBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        synopsis,
+                                        color = Color.White.copy(alpha = 0.85f),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 4,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                            if (posterUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = posterUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .width(110.dp)
+                                        .aspectRatio(2f / 3f)
+                                        .clip(RoundedCornerShape(10.dp)),
+                                    contentScale = ContentScale.Crop,
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -2655,6 +2722,8 @@ private fun MatchStatsPanel(
                 awayName = info.awayName,
                 dateIso = info.dateIso,
                 leagueId = info.leagueId,
+                category = runCatching { info.category }.getOrDefault(""),
+                leagueLabel = runCatching { info.league }.getOrDefault(""),
             )
         }.getOrNull()
         loading = false
@@ -2752,7 +2821,9 @@ private fun MatchStatsPanel(
 
             val current = stats
             if (current != null) {
-                val keys = remember(current) { matchStatLabels(current) }
+                val keys = remember(current, info.category, info.leagueId, info.league) {
+                    matchStatLabels(current, info.category, info.leagueId, info.league)
+                }
                 if (keys.isNotEmpty()) {
                     keys.take(3).forEach { label ->
                         MatchStatRow(

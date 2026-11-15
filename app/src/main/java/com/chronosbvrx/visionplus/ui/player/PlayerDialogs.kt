@@ -338,6 +338,8 @@ internal fun GeeMatchInfoDialog(
                 awayName = current.awayName,
                 dateIso = current.dateIso,
                 leagueId = current.leagueId,
+                category = runCatching { current.category }.getOrDefault(""),
+                leagueLabel = runCatching { current.league }.getOrDefault(""),
             )
         }.getOrNull()
         loading = false

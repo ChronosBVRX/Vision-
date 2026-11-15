@@ -7,12 +7,12 @@ export const buzzwortText = {
     "visual": {
       "eyebrow": "Labia maldita"
     }
-  },
+  }
+,
   "en": {
     "displayName": "Palabra maldita",
-    "description": "Explain the term without letting the burning words slip. A watcher is listening to every mistake.",
+    "description": "Explica el término sin soltar las palabras que queman. Un guardián vigila cada error.",
     "visual": {
-      "eyebrow": "Cursed words"
+      "eyebrow": "Labia maldita"
     }
-  }
-} as const satisfies Partial<LocalizedGameTextMap>;
+  }} as const satisfies Partial<LocalizedGameTextMap>;

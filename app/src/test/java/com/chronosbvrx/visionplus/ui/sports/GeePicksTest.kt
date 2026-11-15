@@ -148,7 +148,7 @@ class GeePicksTest {
         )
         assertEquals(1, rows.size)
         assertTrue("se puede tocar para resolver", rows[0].playable)
-        assertEquals("Se resuelve al tocar", rows[0].typeLabel)
+        assertEquals("Se prepara al abrir", rows[0].typeLabel)
         assertTrue(rows[0].tokenApi.isNotBlank())
     }
 

@@ -83,7 +83,7 @@ private fun TvGeeSignalBadge(alive: Boolean?, playable: Boolean = true, resolvab
         return
     }
     if (resolvable) {
-        Text("Al tocar", style = MaterialTheme.typography.bodySmall, color = VisionBlueBright)
+        Text("Lista para abrir", style = MaterialTheme.typography.bodySmall, color = VisionBlueBright)
         return
     }
     when (alive) {
@@ -289,8 +289,8 @@ internal fun TvGeeLinkPickDialog(
     // segunda opción de la casa solo aparece como RESPALDO cuando GeeSports no
     // publicó ninguna señal sintonizable; además, la casa abre el motor nativo
     // (sin el HUD de estadísticas).
-    val xtvRows = remember(xtv, playingUrl, geeRows) {
-        if (geeRows.any { it.playable }) emptyList() else xtvPickRows(xtv, playingUrl)
+    val xtvRows = remember(xtv, playingUrl) {
+        xtvPickRows(xtv, playingUrl)
     }
     val rows = remember(geeRows, xtvRows) { geeRows + xtvRows }
     var resolving by remember { mutableStateOf<GeePickRow?>(null) }

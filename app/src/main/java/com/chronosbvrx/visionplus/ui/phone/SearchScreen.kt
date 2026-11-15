@@ -43,6 +43,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -174,12 +175,16 @@ fun SearchScreen(rows: List<CatalogRow>, onBack: () -> Unit, onOpenFilm: (Film) 
         }
     }
 
-    val suggestions = remember(text, results, knownTitles) {
-        if (text.isBlank()) emptyList()
-        else suggestTitles(text, results.map { it.title } + knownTitles, limit = 6)
+    val suggestions by remember(text, results, knownTitles) {
+        derivedStateOf {
+            if (text.isBlank()) emptyList()
+            else suggestTitles(text, results.map { it.title } + knownTitles, limit = 6)
+        }
     }
-    val shown = remember(results, filter) {
-        results.filter { matchesSearchFilter(it.kind, filter) }.distinctBy { it.id }
+    val shown by remember(results, filter) {
+        derivedStateOf {
+            results.filter { matchesSearchFilter(it.kind, filter) }.distinctBy { it.id }
+        }
     }
 
     Column(Modifier.fillMaxSize().background(VisionBlack).statusBarsPadding()) {

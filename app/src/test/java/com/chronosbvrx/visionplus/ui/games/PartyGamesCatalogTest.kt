@@ -7,7 +7,7 @@ import org.junit.Test
 class PartyGamesCatalogTest {
     @Test
     fun catalogShowsPlayersTimeAndDescriptorForEveryGame() {
-        assertEquals(13, PARTY_GAMES.size)
+        assertEquals(14, PARTY_GAMES.size)
 
         for (game in PARTY_GAMES) {
             assertTrue("${game.id} necesita jugadores mínimos", game.minPlayers >= 1)

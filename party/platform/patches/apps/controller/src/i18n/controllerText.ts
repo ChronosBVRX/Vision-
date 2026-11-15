@@ -414,6 +414,7 @@ const spanishControllerText: ControllerText = {
   hostControlHandoverBody: (name: string) => `${name} quiere tomar el control.`,
   hostControlHandoverKeep: "Conservar",
   hostControlHandoverGive: "Ceder",
+  hostControlHandoverCountdown: (seconds: number) => `Sin respuesta, cambia en ${seconds} s.`,
   hostMenuOpen: "Menú del anfitrión",
   hostMenuTitle: "Menú del anfitrión",
   hostMenuPausedNote: "La ronda está en pausa mientras este menú esté abierto.",
@@ -478,6 +479,7 @@ const spanishControllerText: ControllerText = {
   select: "Elegir",
   setup: "Configuración",
   setupChooseTitle: "Elige tu configuración",
+  selectionCount: (selected: number, min: number, max: number) => `${selected}/${max} elegidos, mínimo ${min}`,
   characterChooseTitle: "Elige personaje",
   characterChooseDescription: "Elige un personaje para la partida. Después podrás marcarte listo.",
   stillFree: "Libre",
@@ -510,11 +512,8 @@ const spanishControllerText: ControllerText = {
   }
 };
 
-const controllerText: Record<SupportedLanguage, ControllerText> = {
-  ...baseControllerText,
-  es: spanishControllerText
-};
+export const controllerText: ControllerText = spanishControllerText;
 
 export function getControllerText(language: SupportedLanguage | null | undefined): ControllerText {
-  return controllerText[normalizeLanguage(language)];
+  return controllerText;
 }

@@ -8,7 +8,7 @@ const maxHealth = 8;
 const bossPhaseNames = ["Der Vertrag", "Das Drachenfeuer", "Die letzte Klausel"];
 const bossPhaseCount = bossPhaseNames.length;
 const bossPhaseAttemptLimit = 2;
-const classNames: Record<string, string> = { warrior: "Krieger", mage: "Magier", rogue: "Schurke", cleric: "Kleriker", bard: "Barde", tinkerer: "Tüftler" };
+const classNames: Record<string, string> = { warrior: "Guerrero", mage: "Mago", rogue: "Picaro", cleric: "Clerigo", bard: "Bardo", tinkerer: "Inventor" };
 function createEncounters(playerCount: number, language: "de" | "en", initialSeed: number): DungeonEncounter[] {
   let seed = initialSeed;
   const random = (length: number) => { seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0; return (seed >>> 8) % length; };
@@ -23,10 +23,10 @@ function createEncounters(playerCount: number, language: "de" | "en", initialSee
   const late = shuffle(roomPools.late);
   const rules = shuffle(roomRules(language));
   const room = (template: (typeof early)[number], index: number) => ({ ...localizedRoom(template, language, scale), rule: rules[index % rules.length] });
-  const branch = (id: string): DungeonEncounter => ({ id, name: language === "en" ? "Fork in the dungeon" : "Weggabelung im Dungeon", flavor: "", kind: "event", difficulty: 0, health: 0, maxHealth: 0, cleared: false });
+  const branch = (id: string): DungeonEncounter => ({ id, name: language === "en" ? "Bifurcación en la mazmorra" : "Bifurcación en la mazmorra", flavor: "", kind: "event", difficulty: 0, health: 0, maxHealth: 0, cleared: false });
   return [room(early[0]!, 0), room(early[1]!, 1), branch("first-route"), room(middle[0]!, 2), branch("second-route"), room(middle[1]!, 3), room(late[0]!, 4), {
-    id: "boss", artKey: "boss", name: language === "en" ? "The dragon with the small print" : "Der Drache mit dem Kleingedruckten",
-    flavor: language === "en" ? "The final boss would like to discuss the terms." : "Der Endgegner möchte kurz die Bedingungen besprechen.", kind: "boss", difficulty: 24 + scale, health: 3, maxHealth: 3, cleared: false
+    id: "boss", artKey: "boss", name: language === "en" ? "El dragón de la letra chiquita" : "El dragón de la letra chiquita",
+    flavor: language === "en" ? "El jefe final quiere discutir las condiciones." : "Der Endgegner möchte kurz die Bedingungen besprechen.", kind: "boss", difficulty: 24 + scale, health: 3, maxHealth: 3, cleared: false
   }];
 }
 
@@ -51,7 +51,7 @@ function pickClass(selectedId: string | null | undefined): string {
 
 function startPlanning(state: DungeonPartyState, now: number, encounterIndex: number, routeResolved = false): DungeonPartyState {
   if ([3, 7].includes(encounterIndex) && !state.completedCamps.includes(encounterIndex)) {
-    return { ...state, stage: "camp", encounterIndex, campChoicesByPlayer: {}, campResults: [], continueByPlayerId: {}, completedCamps: [...state.completedCamps, encounterIndex], lastResolution: undefined, lastRolls: undefined, message: state.language === "en" ? "Prepare at the campfire." : "Bereitet euch am Lagerfeuer vor.", updatedAt: now };
+    return { ...state, stage: "camp", encounterIndex, campChoicesByPlayer: {}, campResults: [], continueByPlayerId: {}, completedCamps: [...state.completedCamps, encounterIndex], lastResolution: undefined, lastRolls: undefined, message: state.language === "en" ? "Prepárense junto a la fogata." : "Prepárense junto a la fogata.", updatedAt: now };
   }
   if (!routeResolved && [2, 4].includes(encounterIndex)) {
     return {
@@ -90,8 +90,8 @@ function resolveRouteVote(state: DungeonPartyState, now: number): DungeonPartySt
   const encounters = state.encounters.map((encounter, index) => index === state.encounterIndex
     ? { ...selected, flavor: selected.description }
     : encounter);
-  const next = startPlanning({ ...state, encounters, routeHistory, message: dungeonCopy(state.language, `Der Weg ist gewählt: ${selected.name}.`, `Route chosen: ${selected.name}.`) }, now, state.encounterIndex, true);
-  return { ...next, message: dungeonCopy(state.language, `Der Weg ist gewählt: ${selected.name}.${counts[0]!.votes === counts[1]!.votes ? " Gleichstand: Die leichtere Route gewinnt." : ""}`, `Route chosen: ${selected.name}.${counts[0]!.votes === counts[1]!.votes ? " Tie: the easier route wins." : ""}`) };
+  const next = startPlanning({ ...state, encounters, routeHistory, message: dungeonCopy(state.language, `Der Weg ist gewählt: ${selected.name}.`, `Camino elegido: ${selected.name}.`) }, now, state.encounterIndex, true);
+  return { ...next, message: dungeonCopy(state.language, `Der Weg ist gewählt: ${selected.name}.${counts[0]!.votes === counts[1]!.votes ? " Empate: gana la ruta más fácil." : ""}`, `Camino elegido: ${selected.name}.${counts[0]!.votes === counts[1]!.votes ? " Empate: gana la ruta más fácil." : ""}`) };
 }
 
 function openResponseWindow(state: DungeonPartyState, now: number): DungeonPartyState {
@@ -210,7 +210,7 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
     }
     if (choice.action === "warrior_guard") protectedPlayerIds.add(hero.playerId);
     if (choice.action === "bard_inspire") {
-      hero.lastOutcome = dungeonCopy(state.language, "Dein Kampflied gibt der Gruppe +2 Kampfkraft.", "Your battle song gives the party +2 combat power.");
+      hero.lastOutcome = dungeonCopy(state.language, "Tu canción de batalla da +2 de fuerza al grupo.", "Your Canción de batalla da al grupo +2 de fuerza.");
     }
   }
 
@@ -224,7 +224,7 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
           target.lastFameDelta = (target.lastFameDelta ?? 0) - stolenFame;
           hero.fame += stolenFame;
           hero.lastFameDelta = (hero.lastFameDelta ?? 0) + stolenFame;
-          hero.lastOutcome = dungeonCopy(state.language, `Intrige: ${target.name} verliert ${stolenFame} Ruhm; du erhältst ${stolenFame} Ruhm.`, `Intrigue: ${target.name} loses ${stolenFame} fame; you gain ${stolenFame} fame.`);
+          hero.lastOutcome = dungeonCopy(state.language, `Intriga: ${target.name} pierde ${stolenFame} Ruhm; du erhältst ${stolenFame} fama.`, `Intrigue: ${target.name} loses ${stolenFame} fame; you gain ${stolenFame} fama.`);
           partyPower -= 2;
           sabotagePlayers.push({ hero, card });
         }
@@ -234,14 +234,14 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
           const stolen = Math.min(2, target.gold);
           target.gold -= stolen;
           hero.gold += stolen;
-          hero.lastOutcome = dungeonCopy(state.language, `Falsche Rechnung: ${target.name} zahlt ${stolen} Gold.`, `False invoice: ${target.name} pays ${stolen} gold.`);
+          hero.lastOutcome = dungeonCopy(state.language, `Factura falsa: ${target.name} paga ${stolen} de oro.`, `False invoice: ${target.name} pays ${stolen} gold.`);
         }
         break;
       case "rally":
         partyPower += 4;
         hero.fame += 1;
         hero.lastFameDelta = (hero.lastFameDelta ?? 0) + 1;
-        hero.lastOutcome = dungeonCopy(state.language, "Dein Heldengesang bringt +4 Gruppenstärke.", "Your heroic song adds +4 party power.");
+        hero.lastOutcome = dungeonCopy(state.language, "Dein Canto heroico suma +4 Gruppenstärke.", "Your Canto heroico suma +4 fuerza al grupo.");
         break;
       case "ward":
         if (target) {
@@ -263,7 +263,7 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
         break;
       case "reinforce":
         difficultyModifier += 5;
-        hero.lastOutcome = dungeonCopy(state.language, "Du hast dem Gegner Verstärkung verschafft.", "You have sent reinforcements to the enemy.");
+        hero.lastOutcome = dungeonCopy(state.language, "Du hast dem Gegner Verstärkung le diste.", "You have sent refuerzos to the enemy.");
         sabotagePlayers.push({ hero, card });
         break;
       case "heal":
@@ -322,8 +322,8 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
       attemptLimit: isBoss ? bossPhaseAttemptLimit : undefined,
       difficulty: targetDifficulty, partyPower,
       resolution: isBoss
-        ? (success ? dungeonCopy(state.language, `${bossPhaseName(state.language, bossPhaseIndex)} geschafft!`, `${bossPhaseName(state.language, bossPhaseIndex)} completed!`) : bossRunFailed ? dungeonCopy(state.language, "Der Drache hält die Gruppe auf.", "The dragon stops the party.") : dungeonCopy(state.language, "Die Phase beginnt von vorn.", "The phase starts again."))
-        : success ? dungeonCopy(state.language, "Geschafft!", "Success!") : dungeonCopy(state.language, "Der Dungeon merkt sich das.", "The dungeon will remember this.")
+        ? (success ? dungeonCopy(state.language, `${bossPhaseName(state.language, bossPhaseIndex)} geschafft!`, `${bossPhaseName(state.language, bossPhaseIndex)} completed!`) : bossRunFailed ? dungeonCopy(state.language, "Der Drache hält die Gruppe auf.", "The dragon stops the party.") : dungeonCopy(state.language, "La fase empieza de nuevo.", "The phase starts again."))
+        : success ? dungeonCopy(state.language, "¡Logrado!", "Success!") : dungeonCopy(state.language, "La mazmorra se acordará de esto.", "The dungeon will remember this.")
     }
     : encounter);
 
@@ -336,8 +336,8 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
         target.gold -= stolen;
         hero.gold += stolen;
         hero.fame += 1;
-        hero.lastOutcome = dungeonCopy(state.language, `${target.name} verliert ${stolen} Gold durch dein Taschenspiel.`, `${target.name} loses ${stolen} gold to your sleight of hand.`);
-      } else hero.lastOutcome = dungeonCopy(state.language, "Niemand hatte Gold, das du stehlen konntest.", "Nobody had any gold for you to steal.");
+        hero.lastOutcome = dungeonCopy(state.language, `${target.name} pierde ${stolen} Gold durch dein Taschenspiel.`, `${target.name} loses ${stolen} gold to your sleight of hand.`);
+      } else hero.lastOutcome = dungeonCopy(state.language, "Nadie tenía oro que pudieras robar.", "Nobody had any gold for you to steal.");
     }
     if (success && action === "loot") {
       const firstCard = grantLootCard(hero, handsByPlayerId, seed + heroes.indexOf(hero) * 7919, state.encounterIndex, 0, state.language);
@@ -346,16 +346,16 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
       hero.lastFameDelta = (hero.lastFameDelta ?? 0) + 2;
       const extraCard = current.id === "cursed-armory" ? grantLootCard(hero, handsByPlayerId, seed + heroes.indexOf(hero) * 7919, state.encounterIndex, 1, state.language) : undefined;
       if (extraCard) gainedCards.push({ hero, card: extraCard, source: "loot" });
-      const rewards = [firstCard, extraCard].filter((card): card is DungeonCard => Boolean(card)).map((card) => card.kind === "equipment" ? dungeonCopy(state.language, `Ausrüstung: ${card.name}.`, `Equipment: ${card.name}.`) : dungeonCopy(state.language, `Karte gezogen: ${card.name}.`, `Card drawn: ${card.name}.`)).join(" ");
+      const rewards = [firstCard, extraCard].filter((card): card is DungeonCard => Boolean(card)).map((card) => card.kind === "equipment" ? dungeonCopy(state.language, `Ausrüstung: ${card.name}.`, `Equipo: ${card.name}.`) : dungeonCopy(state.language, `Carta robada: ${card.name}.`, `Carta robada: ${card.name}.`)).join(" ");
       hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${rewards}`;
     }
     if (!success) {
       const baseDamage = (action === "loot" || action === "rogue_lift" ? 2 : 1) + (current.rule?.id === "danger" ? 1 : 0);
       const damage = Math.max(0, baseDamage - (protectedPlayerIds.has(hero.playerId) ? 1 : 0));
       hero.health = Math.max(0, hero.health - damage);
-      hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${damage < baseDamage ? dungeonCopy(state.language, "Dein Schutz fängt 1 Schaden ab. ", "Your protection absorbs 1 damage. ") : ""}${dungeonCopy(state.language, `Dungeon-Schaden: ${damage}.`, `Dungeon damage: ${damage}.`)}`;
+      hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${damage < baseDamage ? dungeonCopy(state.language, "Dein Schutz fängt 1 de daño. ", "Tu protección absorbe 1 de daño. ") : ""}${dungeonCopy(state.language, `Daño de mazmorra: ${damage}.`, `Daño de mazmorra: ${damage}.`)}`;
     }
-    if (playedCards.some((entry) => entry.targetPlayerId === hero.playerId)) hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${dungeonCopy(state.language, `Du warst Ziel einer Aktionskarte.`, `You were targeted by an action card.`)}`;
+    if (playedCards.some((entry) => entry.targetPlayerId === hero.playerId)) hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${dungeonCopy(state.language, `Du warst fuiste objetivo de una carta de acción.`, `fuiste objetivo de una carta de acción.`)}`;
   }
 
   if (success && current.rule?.id === "riches") {
@@ -376,7 +376,7 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
     for (const hero of heroes) {
       const card = grantBossReward(hero, handsByPlayerId, seed + heroes.indexOf(hero) * 7919, state.encounterIndex, bossPhaseIndex, state.language);
       gainedCards.push({ hero, card, source: "boss" });
-      hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${dungeonCopy(state.language, `Drachenbeute: ${card.name} kommt auf deine Hand.`, `Dragon loot: ${card.name} goes into your hand.`)}`;
+      hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${dungeonCopy(state.language, `Botín del dragón: ${card.name} va a tu mano.`, `Botín del dragón: ${card.name} va a tu mano.`)}`;
     }
   }
 
@@ -384,20 +384,20 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
     const fameDelta = success ? (card.sabotageReward ?? 0) : -(card.sabotagePenalty ?? 2);
     hero.fame += fameDelta;
     hero.lastFameDelta = (hero.lastFameDelta ?? 0) + fameDelta;
-    const result = success ? dungeonCopy(state.language, `Die Sabotage gelingt: ${fameDelta > 0 ? `+${fameDelta}` : "kein"} Ruhm.`, `Sabotage succeeds: ${fameDelta > 0 ? `+${fameDelta}` : "no"} fame.`) : dungeonCopy(state.language, `Die Gruppe scheitert: ${fameDelta} Ruhm für deine Sabotage.`, `The party fails: ${fameDelta} fame for your sabotage.`);
+    const result = success ? dungeonCopy(state.language, `Die La sabotaje funciona: ${fameDelta > 0 ? `+${fameDelta}` : "sin"} fama.`, `La sabotaje funciona: ${fameDelta > 0 ? `+${fameDelta}` : "no"} fama.`) : dungeonCopy(state.language, `El grupo falla: ${fameDelta} Ruhm für deine Sabotage.`, `El grupo falla: ${fameDelta} fame for your sabotage.`);
     hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${result}`;
   }
 
   if (success && current.id === "merchant") {
-    for (const hero of heroes) { hero.gold += 1; hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${dungeonCopy(state.language, `Händlerbonus: +1 Gold.`, `Merchant bonus: +1 gold.`)}`; }
+    for (const hero of heroes) { hero.gold += 1; hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${dungeonCopy(state.language, `Händlerbonus: +1 de oro.`, `Bono de comerciante: +1 gold.`)}`; }
   } else if (success && current.id === "crypt") {
     const topPower = Math.max(...rolls.map((roll) => roll.contribution));
     for (const hero of heroes.filter((hero) => rolls.some((roll) => roll.playerId === hero.playerId && roll.contribution === topPower))) {
-      hero.fame += 2; hero.lastFameDelta = (hero.lastFameDelta ?? 0) + 2; hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${dungeonCopy(state.language, `Gruftbonus: +2 Ruhm für den stärksten Beitrag.`, `Crypt bonus: +2 fame for the strongest contribution.`)}`;
+      hero.fame += 2; hero.lastFameDelta = (hero.lastFameDelta ?? 0) + 2; hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${dungeonCopy(state.language, `Bono de cripta: +2 Ruhm für den stärksten Beitrag.`, `Bono de cripta: +2 fame for the mayor aporte.`)}`;
     }
   } else if (success && ["shrine", "well"].includes(current.id)) {
     for (const hero of heroes) {
-      if (hero.health < maxHealth) { hero.health += 1; hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${dungeonCopy(state.language, `Der Schrein heilt 1 Leben.`, `The shrine restores 1 health.`)}`; }
+      if (hero.health < maxHealth) { hero.health += 1; hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${dungeonCopy(state.language, `El santuario cura 1 de vida.`, `El santuario cura 1 de vida.`)}`; }
     }
   } else if (success && current.id === "library") {
     for (const hero of heroes) if (["aid", "cleric_heal"].includes(state.actionsByPlayer[hero.playerId]?.action ?? "")) hero.fame += 2;
@@ -410,7 +410,7 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
   if (success) {
     const topPower = Math.max(...rolls.map((roll) => roll.contribution));
     for (const top of heroes.filter((hero) => rolls.some((roll) => roll.playerId === hero.playerId && roll.contribution === topPower))) {
-      top.fame += 1; top.lastFameDelta = (top.lastFameDelta ?? 0) + 1; top.lastOutcome = `${top.lastOutcome ? `${top.lastOutcome} ` : ""}${dungeonCopy(state.language, `Stärkster Kraftbeitrag: +1 Ruhm.`, `Strongest power contribution: +1 fame.`)}`;
+      top.fame += 1; top.lastFameDelta = (top.lastFameDelta ?? 0) + 1; top.lastOutcome = `${top.lastOutcome ? `${top.lastOutcome} ` : ""}${dungeonCopy(state.language, `Stärkster Kraftbeitrag: +1 fama.`, `Mayor aporte de fuerza: +1 fama.`)}`;
     }
   }
   const encounter = nextEncounters[state.encounterIndex]!;
@@ -457,7 +457,7 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
     winnerPlayerId: campaignEnded ? finalWinner?.playerId : undefined,
     winnerPlayerIds: campaignEnded && finalWinner ? finalHeroes.filter((hero) => hero.fame === finalWinner.fame && hero.gold === finalWinner.gold && hero.health === finalWinner.health).map((hero) => hero.playerId) : undefined,
     updatedAt: now,
-    message: bossPhaseComplete ? dungeonCopy(state.language, "Der Drache ist besiegt!", "The dragon is defeated!") : bossRunFailed ? dungeonCopy(state.language, "Der Drache hält stand. Die Gruppe muss sich zurückziehen.", "The dragon holds firm. The party must retreat.") : success ? dungeonCopy(state.language, `${encounter.name}: bestanden!`, `${encounter.name}: cleared!`) : dungeonCopy(state.language, `${encounter.name}: gescheitert.`, `${encounter.name}: failed.`)
+    message: bossPhaseComplete ? dungeonCopy(state.language, "¡El dragón está derrotado!", "The dragon is defeated!") : bossRunFailed ? dungeonCopy(state.language, "Der Drache hält stand. Die Gruppe muss sich zurückziehen.", "The dragon holds firm. The party must retreat.") : success ? dungeonCopy(state.language, `${encounter.name}: ¡superado!`, `${encounter.name}: ¡superado!`) : dungeonCopy(state.language, `${encounter.name}: fallido.`, `${encounter.name}: fallido.`)
   };
   return campaignEnded ? transitionRoundState(next, "locked", now, { durationMs: roundPhaseDurations.lockedMs, message: next.message }) : next;
 }
@@ -468,7 +468,7 @@ export const serverGame: ServerGame<DungeonPartyState, DungeonPartyInput, Dungeo
     const seed = (context.now + context.players.length * 997) >>> 0;
     const catalog = cardCatalog(context.language === "en" ? "en" : "de").filter((card) => card.kind === "effect");
     return {
-      ...createBaseRoundState("round_intro", context.now, { durationMs: roundPhaseDurations.roundIntroMs, message: dungeonCopy(context.language === "en" ? "en" : "de", "Der Dungeon wartet.", "The dungeon awaits.") }),
+      ...createBaseRoundState("round_intro", context.now, { durationMs: roundPhaseDurations.roundIntroMs, message: dungeonCopy(context.language === "en" ? "en" : "de", "La mazmorra espera.", "The dungeon awaits.") }),
       stage: "planning", language: context.language === "en" ? "en" : "de", encounterIndex: 0, encounters: createEncounters(context.players.length, context.language === "en" ? "en" : "de", seed),
       heroes: context.players.map((player) => ({ playerId: player.id, name: player.name, classId: pickClass(player.selectedCharacterId), health: maxHealth, fame: 0, gold: 2, items: [] })),
       handsByPlayerId: Object.fromEntries(context.players.map((player, index) => {
@@ -541,7 +541,7 @@ export const serverGame: ServerGame<DungeonPartyState, DungeonPartyInput, Dungeo
   isRoundFinished(state) { return state.stage === "complete"; },
   buildScore(state): ScoreEntry[] {
     if (state.stage !== "complete") return [];
-    return state.heroes.map((hero) => ({ playerId: hero.playerId, delta: hero.fame, reason: dungeonCopy(state.language, "Dungeon-Ruhm", "Dungeon fame") }));
+    return state.heroes.map((hero) => ({ playerId: hero.playerId, delta: hero.fame, reason: dungeonCopy(state.language, "Fama de mazmorra", "Dungeon fame") }));
   },
   toPublicState(state) {
     const { actionsByPlayer: _actions, responsesByPlayerId: _responses, handsByPlayerId: _hands, routeVotesByPlayer: _votes, campChoicesByPlayer: _camp, seed: _seed, ...publicState } = state;

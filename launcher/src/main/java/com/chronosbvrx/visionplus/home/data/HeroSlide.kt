@@ -4,6 +4,7 @@ import com.chronosbvrx.visionplus.home.contract.HeroItem
 import com.chronosbvrx.visionplus.home.contract.MediaKind
 import com.chronosbvrx.visionplus.home.contract.SportsItem
 import com.chronosbvrx.visionplus.home.contract.SportsLeagues
+import com.chronosbvrx.visionplus.home.contract.SportsSchedule
 import com.chronosbvrx.visionplus.home.contract.VisionLinks
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -89,7 +90,7 @@ internal fun sportsSlide(item: SportsItem, nowMs: Long = System.currentTimeMilli
     val soon = !live && (start == 0L || start > nowMs)
     if (!live && !soon) return null
     val whenText = when {
-        live -> item.detail.ifBlank { "EN VIVO" }
+        live -> SportsSchedule.liveDetail(start.takeIf { it > 0 }, item.category, item.detail)
         start > 0 -> "${heroDayLabel(start, nowMs)} · ${heroTimeLabel(start)}"
         else -> listOf(item.dateText, item.time).filter { it.isNotBlank() }.joinToString(" · ")
     }

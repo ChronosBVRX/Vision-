@@ -108,7 +108,9 @@ import com.chronosbvrx.visionplus.data.resumeSeriesFilm
 import com.chronosbvrx.visionplus.data.banners.BannerSource
 import com.chronosbvrx.visionplus.data.banners.bannerArtCacheKey
 import com.chronosbvrx.visionplus.data.banners.HomeBanner
+import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.home.contract.SportsSchedule
 import com.chronosbvrx.visionplus.data.XuperCatalog
 import com.chronosbvrx.visionplus.data.XuperStatus
 import com.chronosbvrx.visionplus.data.formatResume
@@ -912,7 +914,7 @@ private fun TvQuickHubsRow(
                 contentPadding = PaddingValues(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                items(TV_QUICK_HUBS, key = { it.title }) { hub ->
+                items(TV_QUICK_HUBS, key = { it.title }, contentType = { "hub" }) { hub ->
                     TvQuickHubCard(hub = hub, onClick = { onGoRoute(hub.route) })
                 }
             }
@@ -1354,7 +1356,7 @@ private fun TvSportsScoreboard(event: GeeSportsSource.GeeEvent) {
                 fontWeight = FontWeight.Black,
             )
             Text(
-                text = event.detail.ifBlank { if (event.live) "EN VIVO" else event.time.take(5) },
+                text = event.detail.ifBlank { if (event.live) SportsSchedule.liveDetail(GeeAgenda.startMs(event).takeIf { it != null && it > 0L }, event.category, event.detail) else event.time.take(5) },
                 style = MaterialTheme.typography.titleSmall,
                 color = if (event.live) Color(0xFFFF8A8D) else VisionTextSecondary,
                 maxLines = 1,
@@ -1502,7 +1504,7 @@ internal fun HomePosterRow(
                 contentPadding = PaddingValues(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                itemsIndexed(safeFilms, key = { idx, film -> "${title}-${film.id}-${idx}" }) { idx, film ->
+                itemsIndexed(safeFilms, key = { idx, film -> "${title}-${film.id}-${idx}" }, contentType = { _, _ -> "card" }) { idx, film ->
                     val rank = if (isTop10 && idx in 0..9) idx + 1 else null
                     val isReturn = returnRequester != null && film.id == returnFilmId
                     Column(Modifier.width(metrics.cardWidth)) {
@@ -1574,7 +1576,7 @@ private fun HomeAiringRow(
                 contentPadding = PaddingValues(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                itemsIndexed(cards, key = { _, card -> card.key }) { idx, card ->
+                itemsIndexed(cards, key = { _, card -> card.key }, contentType = { _, _ -> "card" }) { idx, card ->
                     val isReturn = returnRequester != null && card.film.id == returnFilmId
                     Column(Modifier.width(metrics.cardWidth)) {
                         TvPosterCard(
@@ -1661,7 +1663,7 @@ private fun ContinueRow(
                 contentPadding = PaddingValues(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                itemsIndexed(cards, key = { _, card -> card.entry.key }) { idx, card ->
+                itemsIndexed(cards, key = { _, card -> card.entry.key }, contentType = { _, _ -> "card" }) { idx, card ->
                     val film = card.film
                     val title = continueTitle(card)
                     // Misma temporada: el código ya está en el historial y se abre directo.

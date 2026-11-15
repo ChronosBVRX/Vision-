@@ -159,6 +159,22 @@ export function ControllerPage({ state, onLeaveRoom, onInput, onSetReady }: Cont
   const minimalChrome = chrome.minimal || bareChrome || joystickChrome;
   const hideSubtitle = chrome.hideSubtitle || cleanJoystickChrome;
 
+  // Force landscape for D-pad games
+  useEffect(() => {
+    if (!chrome.landscape) return;
+    const lock = async () => {
+      try {
+        await (screen as any).orientation?.lock?.("landscape");
+      } catch {
+        // Not supported (e.g., desktop browsers)
+      }
+    };
+    lock();
+    return () => {
+      try { (screen as any).orientation?.unlock?.(); } catch { /* ignore */ }
+    };
+  }, [chrome.landscape]);
+
   return (
     <ControllerFrame
       title={minimalChrome ? "" : gameName}

@@ -97,11 +97,60 @@ internal fun hudPlayerName(name: String): String {
     return parts.first().first().uppercaseChar() + ". " + parts.drop(1).joinToString(" ")
 }
 
-/** Las cifras de la primera página, en el orden en que importan durante el partido. */
+/** Las cifras de la primera página, en el orden en que importan durante el partido (fútbol, compatibilidad). */
 internal val HUD_SUMMARY_STATS = listOf("Posesión", "Tiros", "Tiros a puerta", "Córners")
 
-/** La segunda página: disciplina y ataques. */
+/** La segunda página: disciplina y ataques (fútbol, compatibilidad). */
 internal val HUD_DISCIPLINE_STATS = listOf("Faltas", "Amarillas", "Rojas", "Fueras de juego")
+
+/** Etiquetas de stats disponibles para el evento, en orden preferido del deporte. */
+internal fun hudStatLabels(
+    stats: MatchStats,
+    category: String = "",
+    leagueId: String = "",
+    leagueLabel: String = "",
+): List<String> = matchStatLabels(stats, category, leagueId, leagueLabel)
+
+internal fun hudIsSoccer(category: String, leagueId: String = "", leagueLabel: String = ""): Boolean =
+    SportsStatsSource.isSoccerCategory(category, leagueId, leagueLabel)
+
+internal fun hudPageLabel(page: MatchHudPage, isSoccer: Boolean): String = when (page) {
+    MatchHudPage.SUMMARY -> "1. Resumen"
+    MatchHudPage.STATS -> "2. Estadísticas"
+    MatchHudPage.TIMELINE -> if (isSoccer) "3. Tarjetas y Goles" else "3. Cronología"
+    MatchHudPage.LINEUPS -> "4. Alineaciones"
+}
+
+internal fun hudPageShortLabel(page: MatchHudPage, isSoccer: Boolean): String =
+    hudPageLabel(page, isSoccer).substringAfter(". ")
+
+internal fun hudStatsPages(
+    stats: MatchStats?,
+    category: String = "",
+    leagueId: String = "",
+    leagueLabel: String = "",
+): Pair<List<String>, List<String>> {
+    if (stats == null) {
+        return if (hudIsSoccer(category, leagueId, leagueLabel)) HUD_SUMMARY_STATS to HUD_DISCIPLINE_STATS
+        else emptyList<String>() to emptyList()
+    }
+    val labels = hudStatLabels(stats, category, leagueId, leagueLabel)
+    if (hudIsSoccer(category, leagueId, leagueLabel)) {
+        val summary = HUD_SUMMARY_STATS.filter { it in labels }
+        val discipline = HUD_DISCIPLINE_STATS.filter { it in labels }
+        val used = (summary + discipline).toSet()
+        val rest = labels.filterNot { it in used }
+        return if (summary.isEmpty() && discipline.isEmpty() && rest.isNotEmpty()) {
+            val first = rest.take(4)
+            first to rest.drop(4).take(4)
+        } else {
+            summary.ifEmpty { rest.take(4) } to (discipline + rest.drop(if (summary.isEmpty()) 4 else 0)).take(4)
+        }
+    }
+    val first = labels.take(4)
+    val second = labels.drop(4).take(4)
+    return first to second
+}
 
 private val HudBg = Color(0xD9020617)
 private val HudCyan = Color(0xFF38BDF8)
@@ -148,6 +197,8 @@ internal fun MatchCenterHud(
                 awayName = info.awayName,
                 dateIso = info.dateIso,
                 leagueId = info.leagueId,
+                category = info.category,
+                leagueLabel = info.league,
             )
         }.getOrNull()
         loading = false
@@ -157,6 +208,7 @@ internal fun MatchCenterHud(
     val awayName = info.awayName.ifBlank { stats?.away?.name.orEmpty() }.ifBlank { "Visitante" }
     val homeLogo = info.homeLogo.ifBlank { stats?.home?.logo.orEmpty() }
     val awayLogo = info.awayLogo.ifBlank { stats?.away?.logo.orEmpty() }
+    val isSoccer = hudIsSoccer(info.category, info.leagueId, info.league)
     val events = stats?.events.orEmpty()
     val homeEvents = events.filter { hudSameTeam(it.team, homeName) }
     val awayEvents = events.filter { hudSameTeam(it.team, awayName) }
@@ -165,6 +217,9 @@ internal fun MatchCenterHud(
     val homeReds = homeEvents.filter { it.type == MatchEventType.RED }
     val awayReds = awayEvents.filter { it.type == MatchEventType.RED }
     val score = hudScore(info)
+    val (summaryLabels, statsLabels) = remember(stats, info.category, info.leagueId, info.league) {
+        hudStatsPages(stats, info.category, info.leagueId, info.league)
+    }
     val shape = RoundedCornerShape(24.dp)
 
     Column(
@@ -178,7 +233,7 @@ internal fun MatchCenterHud(
             .border(1.dp, Color.White.copy(alpha = 0.15f), shape)
             .testTag("match_hud"),
     ) {
-        HudTopBar(info = info, page = page, isTv = isTv, onPageChange = onPageChange)
+        HudTopBar(info = info, page = page, isTv = isTv, isSoccer = isSoccer, onPageChange = onPageChange)
         Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.10f)))
         HudScoreHeader(
             homeName = homeName,
@@ -202,12 +257,12 @@ internal fun MatchCenterHud(
             when (page) {
                 MatchHudPage.SUMMARY -> HudStatsPage(
                     stats = stats,
-                    labels = HUD_SUMMARY_STATS,
+                    labels = summaryLabels,
                     loading = loading,
                 )
                 MatchHudPage.STATS -> HudStatsPage(
                     stats = stats,
-                    labels = HUD_DISCIPLINE_STATS,
+                    labels = statsLabels.ifEmpty { summaryLabels.drop(4) },
                     loading = loading,
                 )
                 MatchHudPage.TIMELINE -> HudTimelinePage(
@@ -243,6 +298,7 @@ private fun HudTopBar(
     info: GeeZapSignals.EventInfo,
     page: MatchHudPage,
     isTv: Boolean,
+    isSoccer: Boolean = true,
     onPageChange: (MatchHudPage) -> Unit,
 ) {
     Row(
@@ -291,6 +347,7 @@ private fun HudTopBar(
             if (isTv) {
                 MatchHudPage.entries.forEach { candidate ->
                     val active = candidate == page
+                    val label = hudPageLabel(candidate, isSoccer)
                     Box(
                         Modifier
                             .clip(RoundedCornerShape(50))
@@ -304,7 +361,7 @@ private fun HudTopBar(
                             .padding(horizontal = 9.dp, vertical = 4.dp),
                     ) {
                         Text(
-                            candidate.tab,
+                            label,
                             color = if (active) Color.White else Color.White.copy(alpha = 0.62f),
                             fontSize = 9.sp,
                             fontWeight = if (active) FontWeight.Black else FontWeight.Medium,
@@ -323,7 +380,7 @@ private fun HudTopBar(
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                 ) {
                     Text(
-                        "${page.ordinal + 1}/4 · ${page.tab.substringAfter(". ")}",
+                        "${page.ordinal + 1}/4 · ${hudPageShortLabel(page, isSoccer)}",
                         color = Color.White,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Black,
@@ -543,6 +600,10 @@ private fun HudStatsPage(
 ) {
     if (stats == null) {
         HudEmpty(if (loading) "Cargando estadísticas del partido…" else "La fuente aún no publica estadísticas de este partido.")
+        return
+    }
+    if (labels.isEmpty()) {
+        HudEmpty(if (loading) "Cargando estadísticas del partido…" else "La fuente aún no publica estadísticas para este evento.")
         return
     }
     Column(

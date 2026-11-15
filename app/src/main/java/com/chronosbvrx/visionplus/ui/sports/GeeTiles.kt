@@ -1,6 +1,8 @@
 package com.chronosbvrx.visionplus.ui.sports
 
+import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.home.contract.SportsSchedule
 
 /**
  * Lógica pura del mosaico de "Deportes en vivo" (móvil y TV): los equipos de un
@@ -28,11 +30,13 @@ internal object GeeTiles {
         return if (home != null && away != null) "$home - $away" else "VS"
     }
 
-    /** "EN VIVO" o "EN VIVO · 23'" cuando la agenda trae el minuto/periodo. */
-    fun liveLabel(event: GeeSportsSource.GeeEvent): String {
-        val detail = event.detail.trim()
-        return if (detail.isBlank() || detail.equals("in", true)) "EN VIVO" else "EN VIVO · $detail"
-    }
+    /**
+     * "EN VIVO · 19:00–21:00 · 23'" cuando la agenda trae el minuto. El horario va
+     * SIEMPRE que haya hora de inicio: es la hora real de arranque y el fin típico
+     * del deporte (ni ESPN ni el CMS publican la hora final).
+     */
+    fun liveLabel(event: GeeSportsSource.GeeEvent): String =
+        SportsSchedule.liveBadge(GeeAgenda.startMs(event), event.category, event.detail)
 
     /**
      * El estado del partido: en vivo (con minuto), Final, o el día y la hora.

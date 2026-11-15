@@ -58,6 +58,10 @@ dirección siguen como «Sin señal».
 - Nunca se reemplaza una lista guardada por una copia más pobre del CMS.
 - Los enlaces se emparejan por **nombre actual**, no por slots viejos.
 - Se conservan las repeticiones del mismo evento (p. ej. dos «ESPN HD»).
+- `flag_a`/`flag_b` del CMS son la imagen de **cada lado** (escudo del equipo en
+  deportes de conjunto, retrato del peleador en UFC/box). La API los expone como
+  `home_logo`/`away_logo` cuando ESPN no trae el partido, y la app los usa como
+  respaldo aunque su caché sea vieja. Los escudos de ESPN mandan cuando existen.
 - Un evento con `link_names` siempre devuelve una fila por nombre, aunque falte URL.
 - La UI no muestra el nombre de la fuente; las no disponibles dicen «Sin señal».
 - La app pide eventos frescos al abrir Deportes y al volver del reproductor.

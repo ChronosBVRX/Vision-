@@ -64,7 +64,7 @@ import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.delay
 
-/** Etiquetas de las cifras en el orden en que importan durante un partido. */
+/** Etiquetas de las cifras en el orden en que importan durante un partido (fútbol, compatibilidad). */
 internal val MATCH_STAT_ORDER = listOf(
     "Posesión",
     "Tiros",
@@ -82,10 +82,21 @@ internal val MATCH_STAT_ORDER = listOf(
 /**
  * Las cifras publicadas para ESTE partido, con las imprescindibles primero y
  * cualquier etiqueta extra que mande la fuente al final. Puro: lo usan el panel
- * compacto y la tarjeta completa.
+ * compacto y la tarjeta completa. Cuando se conoce el deporte/categoría, usa el
+ * orden preferido de ese deporte para no mostrar métricas de fútbol en otros sports.
  */
-internal fun matchStatLabels(stats: MatchStats): List<String> {
-    val known = MATCH_STAT_ORDER.filter { label ->
+internal fun matchStatLabels(
+    stats: MatchStats,
+    category: String = "",
+    leagueId: String = "",
+    leagueLabel: String = "",
+): List<String> {
+    val preferred = if (category.isNotBlank() || leagueId.isNotBlank() || leagueLabel.isNotBlank()) {
+        SportsStatsSource.statOrderFor(category, leagueId, leagueLabel)
+    } else {
+        MATCH_STAT_ORDER
+    }
+    val known = preferred.filter { label ->
         stats.home.values[label].orEmpty().isNotBlank() ||
             stats.away.values[label].orEmpty().isNotBlank()
     }
@@ -130,6 +141,8 @@ internal fun MatchStatsDialog(
                 awayName = info.awayName,
                 dateIso = info.dateIso,
                 leagueId = info.leagueId,
+                category = info.category,
+                leagueLabel = info.league,
             )
         }.getOrNull()
         loading = false
@@ -219,6 +232,9 @@ internal fun MatchStatsDialog(
                                 stats = current,
                                 first = firstContent,
                                 isTv = isTv,
+                                category = info.category,
+                                leagueId = info.leagueId,
+                                leagueLabel = info.league,
                             )
                         } else {
                             LineupsPage(
@@ -366,8 +382,17 @@ private fun StatsHint(isTv: Boolean) {
 }
 
 @Composable
-internal fun StatsPage(stats: MatchStats, first: FocusRequester, isTv: Boolean) {
-    val labels = remember(stats) { matchStatLabels(stats) }
+internal fun StatsPage(
+    stats: MatchStats,
+    first: FocusRequester,
+    isTv: Boolean,
+    category: String = "",
+    leagueId: String = "",
+    leagueLabel: String = "",
+) {
+    val labels = remember(stats, category, leagueId, leagueLabel) {
+        matchStatLabels(stats, category, leagueId, leagueLabel)
+    }
     val home = stats.home
     val away = stats.away
     Column(Modifier.fillMaxSize()) {

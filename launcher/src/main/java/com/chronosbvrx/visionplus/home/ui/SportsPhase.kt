@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.home.ui
 
 import com.chronosbvrx.visionplus.home.contract.SportsItem
+import com.chronosbvrx.visionplus.home.contract.SportsSchedule
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -75,14 +76,14 @@ internal fun sportsPhaseSubtitle(phase: SportsPhase, count: Int): String = when 
 
 /** Lo que va en la esquina/cabecera de la tarjeta según la fase. */
 internal fun sportsDetailLabel(event: SportsItem, phase: SportsPhase): String = when (phase) {
-    SportsPhase.Live -> event.detail.ifBlank { "EN VIVO" }
+    SportsPhase.Live -> SportsSchedule.liveRangeDetail(sportsStartMs(event), event.category, event.detail)
     SportsPhase.Done -> event.detail.ifBlank { "Final" }
     SportsPhase.Soon -> sportsClock(event.time).ifBlank { event.dateText }
 }
 
 /** El pie: minuto en vivo, «Final» al terminar, hora cuando aún no empieza. */
 internal fun sportsFooterLabel(event: SportsItem, phase: SportsPhase): String = when (phase) {
-    SportsPhase.Live -> event.detail.ifBlank { "En juego" }
+    SportsPhase.Live -> SportsSchedule.liveDetail(sportsStartMs(event), event.category, event.detail)
     SportsPhase.Done -> event.detail.ifBlank { "Final" }
     SportsPhase.Soon -> sportsClock(event.time).ifBlank { event.dateText }
 }

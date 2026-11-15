@@ -50,6 +50,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.home.contract.SportsSchedule
 import com.chronosbvrx.visionplus.data.sports.SportsSource
 import com.chronosbvrx.visionplus.ui.sports.GeeTiles
 import com.chronosbvrx.visionplus.ui.sports.geeEventTitle
@@ -215,7 +216,11 @@ internal fun TvSportsHero(
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             val detail = if (live) {
-                event.detail.ifBlank { "EN VIVO" }
+                SportsSchedule.liveDetail(
+                    GeeAgenda.startMs(event).takeIf { it != null && it > 0L },
+                    event.category,
+                    event.detail,
+                )
             } else {
                 listOf(
                     if (event.dateIso == SportsSource.todayIso()) "Hoy" else event.dateText,

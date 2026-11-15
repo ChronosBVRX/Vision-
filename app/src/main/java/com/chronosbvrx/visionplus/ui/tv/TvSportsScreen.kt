@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Tv
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -160,6 +161,7 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                 awayScore = event.scoreAway,
                 dateIso = event.dateIso,
                 leagueId = event.leagueId,
+                category = event.category,
             )
         }
     }
@@ -170,13 +172,17 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
     val leagues = remember(events) { GeeAgenda.leagueNames(events) }
     val leagueLogos = remember(events) { GeeAgenda.leagueLogos(events) }
     val activeLeague = remember(league, leagues) { league?.takeIf { it in leagues } }
-    val filtered = remember(events, activeLeague) {
-        events.filter { GeeAgenda.matchesLeague(it, activeLeague) }
+    val filtered by remember(events, activeLeague) {
+        derivedStateOf {
+            events.filter { GeeAgenda.matchesLeague(it, activeLeague) }
+        }
     }
     // El reloj entra en la llave: al pasar el tiempo los bloques se rearman solos (el
     // candado de «aún no comienza» se abre al llegar la hora).
     val now = gee.clockMs
-    val sections = remember(filtered, now) { GeeAgenda.sections(filtered, now) }
+    val sections by remember(filtered, now) {
+        derivedStateOf { GeeAgenda.sections(filtered, now) }
+    }
     // El hero de Deportes sigue la misma regla que el de TV en vivo: primero el
     // partido en vivo y, si no hay, el próximo. Nunca un evento de liga secundaria.
     val featured = remember(sections) {

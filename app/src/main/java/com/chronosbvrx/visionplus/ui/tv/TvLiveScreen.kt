@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -178,32 +179,34 @@ fun TvLiveScreen(
         }
     }
 
-    val channels = remember(
+    val channels by remember(
         allChannels,
         state.query,
         selectedCountry,
         selectedGenre,
         favoritesOnly,
     ) {
-        allChannels.asSequence()
-            .filter { channel ->
-                (selectedCountry == null || LiveTaxonomy.countryFor(channel.name) == selectedCountry) &&
-                    (selectedGenre == null || LiveTaxonomy.genreFor(channel.name) == selectedGenre) &&
-                    (!favoritesOnly || LiveFavorites.has(channel.url)) &&
-                    (state.query.isBlank() || channel.name.contains(state.query.trim(), ignoreCase = true))
-            }
-            // Una sola tarjeta por URL y por canal: «CANAL 5 HD» y «CANAL 5 FHD»
-            // no deben ocupar dos de las 4–5 tarjetas visibles (el launcher ya lo hacía).
-            .distinctBy { it.url }
-            .distinctBy { LiveTaxonomy.channelKey(it.name).ifBlank { it.url } }
-            .sortedWith(
-                compareBy(
-                    { LiveTaxonomy.popularityRank(it.name) },
-                    { LiveTaxonomy.countryFor(it.name) != "México" },
-                    { it.name },
-                ),
-            )
-            .toList()
+        derivedStateOf {
+            allChannels.asSequence()
+                .filter { channel ->
+                    (selectedCountry == null || LiveTaxonomy.countryFor(channel.name) == selectedCountry) &&
+                        (selectedGenre == null || LiveTaxonomy.genreFor(channel.name) == selectedGenre) &&
+                        (!favoritesOnly || LiveFavorites.has(channel.url)) &&
+                        (state.query.isBlank() || channel.name.contains(state.query.trim(), ignoreCase = true))
+                }
+                // Una sola tarjeta por URL y por canal: «CANAL 5 HD» y «CANAL 5 FHD»
+                // no deben ocupar dos de las 4–5 tarjetas visibles (el launcher ya lo hacía).
+                .distinctBy { it.url }
+                .distinctBy { LiveTaxonomy.channelKey(it.name).ifBlank { it.url } }
+                .sortedWith(
+                    compareBy(
+                        { LiveTaxonomy.popularityRank(it.name) },
+                        { LiveTaxonomy.countryFor(it.name) != "México" },
+                        { it.name },
+                    ),
+                )
+                .toList()
+        }
     }
 
     LaunchedEffect(channels) {

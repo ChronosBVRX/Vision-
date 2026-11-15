@@ -2252,6 +2252,82 @@ class X4KPlayerAty : ComponentActivity() {
         )
         controlsTop = topWrap
 
+        // Overlay premium (películas/series): póster a la derecha + (capítulo y sinopsis) con
+        // degradado de derecha a izquierda, sin tapar los controles de abajo.
+        if (!liveMode && isTv) {
+            val infoCard = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+                background = GradientDrawable(
+                    GradientDrawable.Orientation.LEFT_RIGHT,
+                    intArrayOf(0x00000000, 0xD9000000.toInt()),
+                ).apply { cornerRadius = dp(14).toFloat() }
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+            }
+            val art = android.widget.ImageView(this).apply {
+                scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                visibility = if (intentPoster.isNotBlank()) View.VISIBLE else View.GONE
+            }
+            if (intentPoster.isNotBlank()) {
+                runCatching {
+                    val req = coil.request.ImageRequest.Builder(this)
+                        .data(intentPoster).size(240)
+                        .target(onSuccess = { art.setImageDrawable(it); art.visibility = View.VISIBLE },
+                            onError = { art.visibility = View.GONE })
+                        .build()
+                    coil.Coil.imageLoader(this).enqueue(req)
+                }
+            }
+            infoCard.addView(art, LinearLayout.LayoutParams(dp(84), dp(126)).apply { rightMargin = dp(12) })
+
+            val textCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            val head = TextView(this).apply {
+                text = if (epNames.isNotEmpty()) epNames.getOrNull(curEpIndex)?.takeIf { it.isNotBlank() } ?: curTitle else curTitle
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.WHITE)
+                maxLines = 2
+                ellipsize = TextUtils.TruncateAt.END
+            }
+            textCol.addView(head)
+            val syn = TextView(this).apply {
+                textSize = 12f
+                setTextColor(0xB3FFFFFF.toInt())
+                maxLines = 4
+                ellipsize = TextUtils.TruncateAt.END
+                visibility = View.GONE
+            }
+            textCol.addView(syn)
+            infoCard.addView(textCol, LinearLayout.LayoutParams(dp(220), ViewGroup.LayoutParams.WRAP_CONTENT))
+            overlay.addView(
+                infoCard,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.TOP or Gravity.END,
+                ).apply {
+                    topMargin = topSafe + dp(6)
+                    rightMargin = hPad
+                },
+            )
+            // Sinopsis asíncrona (solo series con contexto).
+            if (curSeries.isNotBlank()) {
+                Thread {
+                    val info = runCatching {
+                        kotlinx.coroutines.runBlocking {
+                            com.chronosbvrx.visionplus.data.mirror.EpisodeMirror.info(curSeries, curCode)
+                        }
+                    }.getOrNull()
+                    if (info?.overview?.isNotBlank() == true) {
+                        runOnUiThread {
+                            syn.text = info.overview
+                            syn.visibility = View.VISIBLE
+                        }
+                    }
+                }.start()
+            }
+        }
+
         // Bottom panel: seek arriba y una sola fila de transporte + pills (ancha, compacta).
         // El margen contra el overscan vive FUERA del panel (transparente): la barra oscura
         // solo cubre los controles y no se come el video por abajo.

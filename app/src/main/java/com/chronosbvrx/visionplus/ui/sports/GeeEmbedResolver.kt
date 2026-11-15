@@ -56,7 +56,7 @@ internal data class GeeResolvedStream(
  * en un WebView oculto y captura la primera petición de media (`.m3u8`, `.mpd`, `.ts`…).
  *
  * No es un enlace caído: la fuente no publica la URL hasta que su reproductor web
- * arranca. Por eso la lista lo muestra como «Se resuelve al tocar» y no como «Sin señal».
+ * arranca. Por eso la lista lo muestra como «Se prepara al abrir» y no como «Sin señal».
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -107,13 +107,13 @@ internal fun GeeEmbedResolveDialog(
                                 modifier = Modifier.size(18.dp),
                             )
                             Text(
-                                "Resolviendo enlace…",
+                                "Preparando señal…",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White.copy(alpha = 0.86f),
                             )
                         }
                         Text(
-                            "La fuente abre su reproductor y entrega la señal. Suele tardar unos segundos.",
+                            "Esta señal se prepara al abrirla. Suele tardar unos segundos.",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.55f),
                         )

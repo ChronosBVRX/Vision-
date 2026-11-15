@@ -79,9 +79,11 @@ object SportsStatsSource {
         awayName: String,
         dateIso: String,
         leagueId: String,
+        category: String = "",
+        leagueLabel: String = "",
     ): MatchStats? = withContext(Dispatchers.IO) {
         if (dateIso.isBlank() || homeName.isBlank() || awayName.isBlank()) return@withContext null
-        val cacheKey = "$homeName|$awayName|$dateIso|$leagueId"
+        val cacheKey = "$homeName|$awayName|$dateIso|$leagueId|$category"
         cache[cacheKey]?.takeIf { System.currentTimeMillis() - it.at in 0 until TTL_MS }?.let {
             return@withContext it.stats
         }
@@ -89,26 +91,37 @@ object SportsStatsSource {
         val home = fold(homeName)
         val away = fold(awayName)
 
-        // 1. Intentar primero con la agenda de fútbol local
-        val matches = SportsSource.cached(context, dateIso).ifEmpty {
-            runCatching { SportsSource.matches(context, dateIso) }.getOrDefault(emptyList())
+        // 1. Intentar primero con la agenda de fútbol local (solo cuando aplica a fútbol)
+        val isSoccer = isSoccerCategory(category, leagueId, leagueLabel)
+        val matches = if (isSoccer) {
+            SportsSource.cached(context, dateIso).ifEmpty {
+                runCatching { SportsSource.matches(context, dateIso) }.getOrDefault(emptyList())
+            }
+        } else {
+            emptyList()
         }
-        val match = matches.firstOrNull { candidate ->
-            val ch = fold(candidate.home.name)
-            val ca = fold(candidate.away.name)
-            (home.isNotBlank() && away.isNotBlank() &&
-                ((home in ch || ch in home) && (away in ca || ca in away))) ||
+        val match = if (isSoccer) {
+            matches.firstOrNull { candidate ->
+                val ch = fold(candidate.home.name)
+                val ca = fold(candidate.away.name)
                 (home.isNotBlank() && away.isNotBlank() &&
-                    (home in ca || ca in home) && (away in ch || ch in away))
+                    ((home in ch || ch in home) && (away in ca || ca in away))) ||
+                    (home.isNotBlank() && away.isNotBlank() &&
+                        (home in ca || ca in home) && (away in ch || ch in away))
+            }
+        } else {
+            null
         }
 
         val (path, eventId) = if (match != null) {
-            val p = espnPath(match.league.id) ?: return@withContext null
+            val p = espnPath(match.league.id, category, leagueLabel) ?: return@withContext null
             p to match.id
         } else {
-            // 2. Si es otro deporte (básquet, béisbol, NFL...) buscar en el Scoreboard de ESPN
-            val p = espnPath(leagueId) ?: espnPathFromTeams(homeName, awayName) ?: return@withContext null
-            val resolvedId = resolveEspnEventId(p, home, away) ?: return@withContext null
+            // 2. Otros deportes (NFL, NBA, MLB, NHL...) o fútbol no resuelto localmente: Scoreboard de ESPN
+            val p = espnPath(leagueId, category, leagueLabel)
+                ?: espnPathFromTeams(homeName, awayName, category, leagueLabel)
+                ?: return@withContext null
+            val resolvedId = resolveEspnEventId(p, home, away, dateIso) ?: return@withContext null
             p to resolvedId
         }
 
@@ -117,59 +130,135 @@ object SportsStatsSource {
         stats
     }
 
-    private fun resolveEspnEventId(path: String, home: String, away: String): String? {
-        val url = "https://site.api.espn.com/apis/site/v2/sports/$path/scoreboard"
-        val connection = runCatching {
-            (URL(url).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 6_000
-                readTimeout = 8_000
-                requestMethod = "GET"
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "VisionPlus/1.0 (sports scoreboard)")
-            }
-        }.getOrNull() ?: return null
+    private fun resolveEspnEventId(path: String, home: String, away: String, dateIso: String = ""): String? {
+        val dateParam = dateIso.filter { it.isDigit() }
+        val urls = buildList {
+            if (dateParam.length == 8) add("https://site.api.espn.com/apis/site/v2/sports/$path/scoreboard?dates=$dateParam")
+            add("https://site.api.espn.com/apis/site/v2/sports/$path/scoreboard")
+        }.distinct()
 
-        return try {
-            if (connection.responseCode !in 200..299) return null
-            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val root = JSONObject(body)
-            val events = root.optJSONArray("events") ?: return null
-            for (i in 0 until events.length()) {
-                val ev = events.optJSONObject(i) ?: continue
-                val name = fold(ev.optString("name"))
-                val shortName = fold(ev.optString("shortName"))
-                if ((home.isNotBlank() && (home in name || name.contains(home))) ||
-                    (away.isNotBlank() && (away in name || name.contains(away)))
-                ) {
-                    val id = ev.optString("id").trim()
-                    if (id.isNotBlank()) return id
+        for (url in urls) {
+            val connection = runCatching {
+                (URL(url).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 6_000
+                    readTimeout = 8_000
+                    requestMethod = "GET"
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("User-Agent", "VisionPlus/1.0 (sports scoreboard)")
                 }
-                if ((home.isNotBlank() && (home in shortName || shortName.contains(home))) ||
-                    (away.isNotBlank() && (away in shortName || shortName.contains(away)))
-                ) {
-                    val id = ev.optString("id").trim()
-                    if (id.isNotBlank()) return id
+            }.getOrNull() ?: continue
+
+            val id = try {
+                if (connection.responseCode !in 200..299) {
+                    null
+                } else {
+                    val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    val root = JSONObject(body)
+                    val events = root.optJSONArray("events") ?: org.json.JSONArray()
+                    findEventId(events, home, away)
+                }
+            } catch (_: Throwable) {
+                null
+            } finally {
+                connection.disconnect()
+            }
+            if (!id.isNullOrBlank()) return id
+        }
+        return null
+    }
+
+    private fun findEventId(events: org.json.JSONArray, home: String, away: String): String? {
+        fun namesOf(ev: JSONObject): Pair<String, String> {
+            val comps = ev.optJSONArray("competitions")?.optJSONObject(0)?.optJSONArray("competitors")
+            var h = ""
+            var a = ""
+            if (comps != null) {
+                for (j in 0 until comps.length()) {
+                    val c = comps.optJSONObject(j) ?: continue
+                    val n = fold(
+                        c.optJSONObject("team")?.optString("displayName")
+                            ?.ifBlank { c.optJSONObject("team")?.optString("shortDisplayName").orEmpty() }
+                            .orEmpty()
+                    )
+                    when (c.optString("homeAway")) {
+                        "home" -> h = n
+                        "away" -> a = n
+                    }
                 }
             }
-            null
-        } catch (_: Throwable) {
-            null
-        } finally {
-            connection.disconnect()
+            return h to a
+        }
+        fun matches(h: String, a: String): Boolean {
+            if (home.isBlank() || away.isBlank()) return false
+            val direct = (home in h || h in home) && (away in a || a in away)
+            val swapped = (home in a || a in home) && (away in h || h in away)
+            return direct || swapped
+        }
+        for (i in 0 until events.length()) {
+            val ev = events.optJSONObject(i) ?: continue
+            val (h, a) = namesOf(ev)
+            if (matches(h, a)) return ev.optString("id").trim().ifBlank { null }
+            val name = fold(ev.optString("name"))
+            val shortName = fold(ev.optString("shortName"))
+            val blob = "$name $shortName"
+            val hitHome = home.isNotBlank() && (home in blob)
+            val hitAway = away.isNotBlank() && (away in blob)
+            if (hitHome && hitAway) return ev.optString("id").trim().ifBlank { null }
+        }
+        return null
+    }
+
+    internal fun isSoccerCategory(category: String, leagueId: String = "", leagueLabel: String = ""): Boolean {
+        val c = fold(category)
+        val lid = leagueId.trim().lowercase()
+        val ll = fold(leagueLabel)
+        if (lid in SOCCER_LEAGUES || lid.startsWith("soccer/")) return true
+        if (c == "football" || c.contains("soccer") || c.contains("futbol")) return true
+        if (c.contains("american")) return false
+        if (lid.contains("nfl") || lid.contains("ncaa.football") || ll.contains("nfl")) return false
+        return false
+    }
+
+    private fun sportHint(category: String, leagueId: String = "", leagueLabel: String = ""): String {
+        val c = fold(category)
+        val lid = leagueId.trim().lowercase()
+        val ll = fold(leagueLabel)
+        return when {
+            lid.contains("nfl") || (c.contains("american") && c.contains("football")) || ll.contains("nfl") -> "football/nfl"
+            c.contains("basket") || lid.contains("nba") || lid.contains("basketball") -> when {
+                lid.contains("wnba") -> "basketball/wnba"
+                else -> "basketball/nba"
+            }
+            c.contains("baseball") || lid.contains("mlb") || lid.contains("baseball") -> "baseball/mlb"
+            c.contains("hockey") || lid.contains("nhl") || lid.contains("hockey") -> "hockey/nhl"
+            isSoccerCategory(category, leagueId, leagueLabel) -> "soccer"
+            else -> ""
         }
     }
 
-    private fun espnPathFromTeams(homeName: String, awayName: String): String? {
+    private fun espnPathFromTeams(
+        homeName: String,
+        awayName: String,
+        category: String = "",
+        leagueLabel: String = "",
+    ): String? {
+        val hint = sportHint(category, "", leagueLabel)
+        if (hint.isNotBlank() && hint != "soccer") return hint
         val combined = "$homeName $awayName".lowercase()
         return when {
+            combined.contains("nfl") || combined.contains("chiefs") || combined.contains("49ers") ||
+                combined.contains("cowboys") || combined.contains("patriots") ||
+                combined.contains("eagles") || combined.contains("packers") ||
+                combined.contains("steelers") || combined.contains("ravens") ||
+                combined.contains("bills") || combined.contains("dolphins") ||
+                combined.contains("jets") || combined.contains("giants") -> "football/nfl"
             combined.contains("lakers") || combined.contains("warriors") || combined.contains("celtics") ||
                 combined.contains("bulls") || combined.contains("heat") || combined.contains("knicks") ||
                 combined.contains("nba") -> "basketball/nba"
             combined.contains("yankees") || combined.contains("dodgers") || combined.contains("red sox") ||
                 combined.contains("astros") || combined.contains("mlb") -> "baseball/mlb"
-            combined.contains("chiefs") || combined.contains("49ers") || combined.contains("cowboys") ||
-                combined.contains("patriots") || combined.contains("nfl") -> "football/nfl"
-            combined.contains("nhl") -> "hockey/nhl"
+            combined.contains("nhl") || combined.contains("rangers") || combined.contains("bruins") -> "hockey/nhl"
+            hint == "soccer" -> null
             else -> null
         }
     }
@@ -389,29 +478,84 @@ object SportsStatsSource {
         "freeThrowPct" -> "Tiros libres"
         "freeThrowsMade-freeThrowsAttempted" -> "Tiros libres anotados"
         "totalRebounds" -> "Rebotes"
+        "offensiveRebounds" -> "Rebotes ofensivos"
+        "defensiveRebounds" -> "Rebotes defensivos"
         "assists" -> "Asistencias"
         "steals" -> "Robos"
         "blocks" -> "Bloqueos"
-        "turnovers" -> "Pérdidas"
-        "totalYards" -> "Yardas"
-        "passingYards" -> "Yardas por pase"
+        "turnovers" -> "Pérdidas de balón"
+        "totalYards" -> "Yardas totales"
+        "netPassingYards", "passingYards" -> "Yardas por pase"
         "rushingYards" -> "Yardas por carrera"
+        "yardsPerPlay" -> "Yardas por jugada"
+        "firstDowns" -> "Primeros y diez"
+        "thirdDownEff" -> "3.ª oportunidad"
+        "fourthDownEff" -> "4.ª oportunidad"
+        "totalPenaltiesYards", "penalties" -> "Castigos"
+        "possessionTime" -> "Posesión"
+        "sacksYardsLost", "sacks" -> "Capturas"
+        "completionAttempts", "completions/passingAttempts" -> "Pases completos"
+        "rushingAttempts" -> "Acarreos"
         "hits" -> "Hits"
         "runs" -> "Carreras"
         "errors" -> "Errores"
         "homeRuns" -> "Jonrones"
+        "totalTackles" -> "Tacleadas"
+        "passingTouchdowns" -> "TD por pase"
+        "rushingTouchdowns" -> "TD por carrera"
+        "totalTouchdowns" -> "Touchdowns"
         else -> null
     }
 
-    private fun espnPath(leagueId: String): String? {
-        val clean = leagueId.trim()
+    /** Orden preferido de estadísticas según el deporte (etiquetas ya traducidas). */
+    internal fun statOrderFor(category: String = "", leagueId: String = "", leagueLabel: String = ""): List<String> {
+        val c = fold(category)
+        val lid = leagueId.trim().lowercase()
+        val ll = fold(leagueLabel)
+        return when {
+            lid.contains("nfl") || (c.contains("american") && c.contains("football")) || ll.contains("nfl") || lid.contains("football/nfl") || lid.contains("college-football") -> listOf(
+                "Yardas totales", "Yardas por pase", "Yardas por carrera", "Primeros y diez",
+                "3.ª oportunidad", "4.ª oportunidad", "Pases completos", "Acarreos",
+                "Pérdidas de balón", "Castigos", "Posesión",
+            )
+            c.contains("basket") || lid.contains("nba") || lid.contains("basketball") -> listOf(
+                "Tiros de campo", "Triples", "Tiros libres", "Rebotes", "Rebotes ofensivos",
+                "Rebotes defensivos", "Asistencias", "Robos", "Bloqueos", "Pérdidas de balón",
+            )
+            c.contains("baseball") || lid.contains("mlb") || lid.contains("baseball") -> listOf(
+                "Carreras", "Hits", "Errores", "Jonrones",
+            )
+            c.contains("hockey") || lid.contains("nhl") || lid.contains("hockey") -> listOf(
+                "Tiros", "Tiros a puerta", "Atajadas", "Castigos", "Bloqueos",
+            )
+            else -> listOf(
+                "Posesión", "Tiros", "Tiros a puerta", "Córners", "Faltas",
+                "Amarillas", "Rojas", "Atajadas", "Fueras de juego", "Pases", "Precisión de pase",
+            )
+        }
+    }
+
+    private fun espnPath(leagueId: String, category: String = "", leagueLabel: String = ""): String? {
+        val raw = leagueId.trim()
+        val clean = raw.lowercase()
+        if (clean.contains('/')) return raw
+        val hint = sportHint(category, raw, leagueLabel)
+        if (hint.isNotBlank()) {
+            return when {
+                hint == "soccer" -> {
+                    if (clean.isNotBlank() && (clean in SOCCER_LEAGUES || clean.contains('.'))) "soccer/${raw}" else "soccer/usa.1"
+                }
+                else -> hint
+            }
+        }
         if (clean.isBlank()) return null
-        if (clean.contains('/')) return clean
-        if (clean in SOCCER_LEAGUES) return "soccer/$clean"
+        if (clean in SOCCER_LEAGUES || clean.contains('.')) return "soccer/$raw"
         return when (clean) {
             "nba" -> "basketball/nba"
+            "wnba" -> "basketball/wnba"
             "euroleague" -> "basketball/euroleague"
             "nfl" -> "football/nfl"
+            "ncaaf", "college-football", "college football" -> "football/college-football"
             "mlb" -> "baseball/mlb"
             "nhl" -> "hockey/nhl"
             else -> null

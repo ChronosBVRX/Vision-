@@ -152,4 +152,14 @@ val PARTY_GAMES: List<PartyGame> = listOf(
         duration = "30–45 min",
         cover = R.drawable.party_dungeon_party,
     ),
+    PartyGame(
+        id = "magic-duell",
+        title = "Duelo mágico",
+        tagline = "Duelo de magos en 3D con hechizos dibujados en el celular.",
+        tag = "Duelo",
+        minPlayers = 2,
+        maxPlayers = 2,
+        duration = "2–4 min",
+        cover = R.drawable.party_magic_duell,
+    ),
 )

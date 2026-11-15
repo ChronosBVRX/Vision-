@@ -101,7 +101,7 @@ class RelatedTest {
         assertEquals("series", Related.sectionFor(film("2", "B", kind = "series")))
         assertEquals("series", Related.sectionFor(film("3", "C", kind = "novela")))
         assertEquals("anime", Related.sectionFor(film("4", "D", kind = "anime")))
-        assertEquals("anime", Related.sectionFor(film("5", "E", kind = "kids")))
+        assertEquals("movies", Related.sectionFor(film("5", "E", kind = "kids")))
         assertEquals(
             "series",
             Related.sectionFor(film("6", "F", kind = "", videoUrl = "xtv:6").copy(seasons = listOf(SeasonRef(1, "xtv:6", "xtv:6")))),

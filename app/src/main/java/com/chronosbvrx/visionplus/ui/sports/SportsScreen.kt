@@ -58,6 +58,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
+import com.chronosbvrx.visionplus.home.contract.SportsSchedule
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
 import com.chronosbvrx.visionplus.data.sports.SportsReminder
 import com.chronosbvrx.visionplus.data.sports.SportsSource
@@ -137,6 +138,7 @@ fun SportsScreen(
                 awayScore = event.scoreAway,
                 dateIso = event.dateIso,
                 leagueId = event.leagueId,
+                category = event.category,
             )
         }
     }
@@ -532,8 +534,14 @@ internal fun geeEventTitle(event: GeeSportsSource.GeeEvent): String {
 /** "Liga MX · Hoy 18:30" para el encabezado del selector de transmisiones. */
 internal fun geeEventSubtitle(event: GeeSportsSource.GeeEvent): String {
     val today = SportsSource.todayIso()
-    val whenText = if (event.dateIso == today) "Hoy" else event.dateText.ifBlank { event.dateIso }
-    return listOf(GeeAgenda.leagueLabel(event), "$whenText ${geeTimeLabel(event.time)}".trim())
+    val live = event.live || GeeAgenda.phaseOf(event) == GeeAgenda.Phase.Live
+    val whenText = if (live) {
+        SportsSchedule.liveDetail(GeeAgenda.startMs(event).takeIf { it != null && it > 0L }, event.category, event.detail)
+    } else {
+        val day = if (event.dateIso == today) "Hoy" else event.dateText.ifBlank { event.dateIso }
+        "$day ${geeTimeLabel(event.time)}".trim()
+    }
+    return listOf(GeeAgenda.leagueLabel(event), whenText)
         .filter { it.isNotBlank() }
         .joinToString(" · ")
 }

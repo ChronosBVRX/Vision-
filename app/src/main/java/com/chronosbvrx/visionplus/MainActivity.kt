@@ -515,6 +515,18 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // Anuncio remoto (KronosTV-style): el servidor puede enviar un mensaje
+                    // (`announcement`) que se muestra como toast una sola vez por texto nuevo.
+                    LaunchedEffect(bootReady, isOnline) {
+                        if (!bootReady) return@LaunchedEffect
+                        val msg = RemoteConfig.stringFlag(this@MainActivity, "announcement", "")
+                        if (msg.isBlank()) return@LaunchedEffect
+                        val prefs = getSharedPreferences("vision_announcements", Context.MODE_PRIVATE)
+                        val last = prefs.getString("last", "")
+                        if (msg == last) return@LaunchedEffect
+                        prefs.edit().putString("last", msg).apply()
+                        android.widget.Toast.makeText(this@MainActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+                    }
                     // La sesión del reproductor (alta/baja o play/pausa) actualiza las acciones
                     // y la entrada automática al PiP, sin crecer la firma de PlayerCore.
                     LaunchedEffect(PipSession.revision) { updatePipParams() }

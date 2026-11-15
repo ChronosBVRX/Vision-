@@ -1,0 +1,107 @@
+Starting a Gradle Daemon, 1 busy and 15 stopped Daemons could not be reused, use --status for details
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preNormalReleaseBuild UP-TO-DATE
+> Task :app:mergeNormalReleaseJniLibFolders UP-TO-DATE
+> Task :home-contract:preBuild UP-TO-DATE
+> Task :home-contract:preReleaseBuild UP-TO-DATE
+> Task :home-contract:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :home-contract:mergeReleaseNativeLibs NO-SOURCE
+> Task :home-contract:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :app:mergeNormalReleaseNativeLibs UP-TO-DATE
+> Task :app:stripNormalReleaseDebugSymbols UP-TO-DATE
+> Task :app:extractNormalReleaseNativeSymbolTables UP-TO-DATE
+> Task :app:mergeNormalReleaseNativeDebugMetadata NO-SOURCE
+> Task :home-contract:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :home-contract:generateReleaseResValues UP-TO-DATE
+> Task :home-contract:generateReleaseResources UP-TO-DATE
+> Task :home-contract:packageReleaseResources UP-TO-DATE
+> Task :home-contract:parseReleaseLocalResources UP-TO-DATE
+> Task :home-contract:generateReleaseRFile UP-TO-DATE
+> Task :home-contract:compileReleaseKotlin UP-TO-DATE
+> Task :home-contract:javaPreCompileRelease UP-TO-DATE
+> Task :home-contract:compileReleaseJavaWithJavac NO-SOURCE
+> Task :home-contract:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :home-contract:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :app:buildKotlinToolingMetadata UP-TO-DATE
+> Task :app:checkNormalReleaseDuplicateClasses UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateNormalReleaseBuildConfig UP-TO-DATE
+> Task :home-contract:writeReleaseAarMetadata UP-TO-DATE
+> Task :app:checkNormalReleaseAarMetadata UP-TO-DATE
+> Task :app:generateNormalReleaseResValues UP-TO-DATE
+> Task :app:mapNormalReleaseSourceSetPaths UP-TO-DATE
+> Task :app:generateNormalReleaseResources UP-TO-DATE
+> Task :app:mergeNormalReleaseResources UP-TO-DATE
+> Task :app:packageNormalReleaseResources UP-TO-DATE
+> Task :app:parseNormalReleaseLocalResources UP-TO-DATE
+> Task :app:createNormalReleaseCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksNormalRelease UP-TO-DATE
+> Task :home-contract:extractDeepLinksRelease UP-TO-DATE
+> Task :home-contract:processReleaseManifest UP-TO-DATE
+> Task :app:processNormalReleaseMainManifest UP-TO-DATE
+> Task :app:processNormalReleaseManifest UP-TO-DATE
+> Task :app:processNormalReleaseManifestForPackage UP-TO-DATE
+> Task :app:processNormalReleaseResources UP-TO-DATE
+> Task :home-contract:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :app:compileNormalReleaseKotlin UP-TO-DATE
+> Task :app:javaPreCompileNormalRelease UP-TO-DATE
+> Task :app:compileNormalReleaseJavaWithJavac UP-TO-DATE
+> Task :home-contract:prepareReleaseArtProfile UP-TO-DATE
+> Task :app:mergeNormalReleaseArtProfile UP-TO-DATE
+> Task :home-contract:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :app:expandNormalReleaseArtProfileWildcards UP-TO-DATE
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :app:mergeNormalReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :app:processNormalReleaseJavaRes UP-TO-DATE
+> Task :home-contract:processReleaseJavaRes UP-TO-DATE
+> Task :app:mergeNormalReleaseJavaResource UP-TO-DATE
+> Task :app:mergeNormalReleaseStartupProfile UP-TO-DATE
+> Task :app:mergeNormalReleaseShaders UP-TO-DATE
+> Task :app:compileNormalReleaseShaders NO-SOURCE
+> Task :app:generateNormalReleaseAssets UP-TO-DATE
+> Task :home-contract:mergeReleaseShaders UP-TO-DATE
+> Task :home-contract:compileReleaseShaders NO-SOURCE
+> Task :home-contract:generateReleaseAssets UP-TO-DATE
+> Task :home-contract:mergeReleaseAssets UP-TO-DATE
+> Task :app:mergeNormalReleaseAssets UP-TO-DATE
+> Task :app:compressNormalReleaseAssets UP-TO-DATE
+> Task :app:extractNormalReleaseVersionControlInfo UP-TO-DATE
+> Task :home-contract:createFullJarRelease UP-TO-DATE
+> Task :home-contract:extractProguardFiles UP-TO-DATE
+> Task :home-contract:generateReleaseLintModel UP-TO-DATE
+> Task :home-contract:prepareLintJarForPublish UP-TO-DATE
+> Task :app:generateNormalReleaseLintVitalReportModel UP-TO-DATE
+> Task :home-contract:stripReleaseDebugSymbols NO-SOURCE
+> Task :home-contract:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :home-contract:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :home-contract:extractReleaseAnnotations UP-TO-DATE
+> Task :home-contract:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :home-contract:mergeReleaseJavaResource UP-TO-DATE
+> Task :home-contract:syncReleaseLibJars UP-TO-DATE
+> Task :home-contract:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :home-contract:lintVitalAnalyzeRelease UP-TO-DATE
+> Task :home-contract:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :home-contract:generateReleaseLintVitalModel UP-TO-DATE
+> Task :app:collectNormalReleaseDependencies UP-TO-DATE
+> Task :app:sdkNormalReleaseDependencyData UP-TO-DATE
+> Task :app:validateSigningNormalRelease UP-TO-DATE
+> Task :app:writeNormalReleaseAppMetadata UP-TO-DATE
+> Task :app:writeNormalReleaseSigningConfigVersions UP-TO-DATE
+> Task :app:minifyNormalReleaseWithR8
+> Task :app:lintVitalAnalyzeNormalRelease
+> Task :app:lintVitalReportNormalRelease
+> Task :app:lintVitalNormalRelease
+
+> Task :app:verifyEngineNamespace
+verifyEngineNamespace: motor=16395 clases, nuestras renombradas=5960, nombres reales compartidos=14, colisiones generadas=0.
+
+> Task :app:compileNormalReleaseArtProfile
+> Task :app:convertShrunkResourcesToBinaryNormalRelease
+> Task :app:optimizeNormalReleaseResources
+> Task :app:packageNormalRelease
+> Task :app:createNormalReleaseApkListingFileRedirect
+> Task :app:assembleNormalRelease
+w: Detected multiple Kotlin daemon sessions at 
+
+BUILD SUCCESSFUL in 5m 13s
+84 actionable tasks: 10 executed, 74 up-to-date

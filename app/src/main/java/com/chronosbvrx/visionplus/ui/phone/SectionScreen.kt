@@ -230,7 +230,7 @@ fun SectionScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(categoryChips.size, key = { categoryChips[it] }) { idx ->
+                    items(categoryChips.size, key = { categoryChips[it] }, contentType = { "chip" }) { idx ->
                         val chip = categoryChips[idx]
                         val isSelected = (selectedCategory == null && chip == CHIP_ALL) ||
                             (selectedCategory == chip)
@@ -254,7 +254,7 @@ fun SectionScreen(
                         ),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        itemsIndexed(rowsFinal, key = { _, row -> row.id }) { index, row ->
+                        itemsIndexed(rowsFinal, key = { _, row -> row.id }, contentType = { _, _ -> "row" }) { index, row ->
                             // Las filas curadas del servidor (estrenos/tendencias) conservan
                             // SU orden (es lo que las hace cambiar); los géneros se rankean
                             // por impacto como antes.
@@ -395,7 +395,7 @@ private fun CuratedSectionModule(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            itemsIndexed(limitedFilms, key = { _, film -> "${row.id}-${film.id}" }) { idx, film ->
+            itemsIndexed(limitedFilms, key = { _, film -> "${row.id}-${film.id}" }, contentType = { _, _ -> "card" }) { idx, film ->
                 val rank = if (isTopRow && idx in 0..9) idx + 1 else null
                 PosterCard(
                     title = film.title,

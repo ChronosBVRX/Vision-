@@ -323,9 +323,7 @@ export class ControllerSocketClient {
     if (!reconnectToken) {
       this.updateState({
         error:
-          this.state.preferredLanguage === "en"
-            ? "No saved session found."
-            : "Keine gespeicherte Session gefunden.",
+          "No se encontró una sesión guardada.",
         hasStoredSession: false
       });
       return;
@@ -421,9 +419,7 @@ export class ControllerSocketClient {
           rotateDeviceId: true,
           disconnect: true,
           error:
-            this.state.preferredLanguage === "en"
-              ? "You left the room."
-              : "Du hast den Raum verlassen."
+            "Has salido de la sala.",
         });
       }
     );

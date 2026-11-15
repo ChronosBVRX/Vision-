@@ -1032,6 +1032,107 @@ def test_gee_enrich_event_keeps_sofascore_flags_when_unmatched():
     assert out.get("home_logo") is None
 
 
+def test_gee_fill_team_art_uses_cms_flags_for_teams():
+    # El CMS sí trae la cara de cada lado aunque el partido no esté en la agenda
+    # de ESPN (UEFA Nations League, amistosos, NCAA…): sin esto la app pintaba
+    # el logo de la liga en las dos esquinas.
+    event = _gee_event(event="UEFA Nations League", team_a="Portugal", team_b="Denmark")
+    api_app._gee_fix_logos(event)
+    api_app._gee_fill_team_art(event)
+    assert event["home_name"] == "Portugal"
+    assert event["away_name"] == "Denmark"
+    assert event["home_logo"] == "https://sofascore/team/1"
+    assert event["away_logo"] == "https://sofascore/team/2"
+
+
+def test_gee_fill_team_art_uses_fighter_photos():
+    event = _gee_event(
+        category="Boxing", event="UFC", team_a="Ciryl Gane", team_b="Josh Hokit",
+        flag_a="https://img.sofascore.com/api/v1/team/461602/image",
+        flag_b="https://img.sofascore.com/api/v1/team/493385/image",
+    )
+    api_app._gee_fix_logos(event)
+    api_app._gee_fill_team_art(event)
+    assert event["home_logo"].endswith("/team/461602/image")
+    assert event["away_logo"].endswith("/team/493385/image")
+
+
+def test_gee_fill_team_art_keeps_espn_logos_first():
+    event = _gee_event(
+        home_name="Querétaro",
+        away_name="Monterrey",
+        home_logo="https://a.espncdn.com/i/teamlogos/soccer/500/222.png",
+        away_logo="https://a.espncdn.com/i/teamlogos/soccer/500/220.png",
+    )
+    api_app._gee_fill_team_art(event)
+    assert "espncdn" in event["home_logo"]
+    assert "espncdn" in event["away_logo"]
+
+
+def test_gee_fill_team_art_skips_shows_without_teams():
+    # WWE/F1 repiten el nombre del show en team_a/team_b: no hay confrontación
+    # y su imagen es el logo del programa, no dos escudos distintos.
+    event = _gee_event(category="Boxing", event="WWE NXT", team_a="WWE NXT", team_b="WWE NXT")
+    api_app._gee_fill_team_art(event)
+    assert event.get("home_logo") is None
+    assert event.get("home_name") is None
+
+
+def test_gee_merge_groups_fills_missing_espn_art_from_the_cms_copy():
+    # La agenda manda; si su copia no trae el escudo (equipo sin logo en ESPN),
+    # la tarjeta del CMS lo completa. El logo de ESPN nunca se reemplaza.
+    agenda = {
+        "id": "espn:m1", "category": "Football", "date_iso": "2026-10-17",
+        "team_a": "Portugal", "team_b": "Denmark",
+        "home_name": "Portugal", "away_name": "Denmark",
+        "home_logo": "", "away_logo": "",
+        "links": [], "link_names": [],
+    }
+    cms = {
+        "id": "event:nations", "category": "Football", "date_iso": "2026-10-17",
+        "team_a": "Portugal", "team_b": "Denmark",
+        "home_logo": "https://img.sofascore.com/api/v1/team/4704/image",
+        "away_logo": "https://img.sofascore.com/api/v1/team/4476/image",
+        "links": [], "link_names": [],
+    }
+    merged = api_app._gee_merge_groups([[agenda, cms]])[0]
+    assert merged["home_logo"].endswith("/team/4704/image")
+    assert merged["away_logo"].endswith("/team/4476/image")
+
+
+@pytest.mark.anyio
+async def test_gee38_events_exposes_cms_team_art_without_espn_match(monkeypatch):
+    # 117 de 120 partidos de fútbol no están en la agenda de ESPN: su escudo
+    # viaja en `flag_a`/`flag_b` y la API debe servirlo como home_logo/away_logo.
+    today = date.today().isoformat()
+    cms = json.dumps({
+        "id": "event:nations", "category": "Football", "event": "UEFA Nations League",
+        "team_a": "Portugal", "team_b": "Denmark",
+        "date_iso": today, "time": "13:45:00",
+        "flag_a": "http://img.sofascore.com/api/v1/team/4704/image",
+        "flag_b": "http://img.sofascore.com/api/v1/team/4476/image",
+        "logo": "http://img.sofascore.com/api/v1/unique-tournament/10783/image/dark",
+        "link_names": ["DAZN SPORTS FHD"],
+        "links": [{"name": "DAZN SPORTS FHD", "url": "https://x/dazn.mpd",
+                   "link": "https://x/dazn.mpd", "alive": True, "slot": 0}],
+    })
+    fake = _FakePool(rows=[{"payload": cms}])
+    monkeypatch.setattr(api_app, "pool", fake)
+
+    async def no_window(events):
+        return []
+
+    monkeypatch.setattr(api_app, "_gee_window_matches", no_window)
+    out = await api_app.gee38_events(category=None, day=None, days=0, x_api_key="test-key")
+    card = next(e for e in out["events"] if e["id"] == "event:nations")
+    assert card["home_name"] == "Portugal"
+    assert card["away_name"] == "Denmark"
+    assert card["home_logo"] == "https://img.sofascore.com/api/v1/team/4704/image"
+    assert card["away_logo"] == "https://img.sofascore.com/api/v1/team/4476/image"
+    # El `logo` del evento sigue siendo el de la competición (cabecera).
+    assert card["logo"] == "https://img.sofascore.com/api/v1/unique-tournament/10783/image/dark"
+
+
 def test_gee_fix_event_times_moves_utc_to_mexico():
     event = _gee_event(date_iso="2026-10-17", time="03:00:00")  # 03:00 UTC
     api_app._gee_fix_event_times(event)

@@ -7,12 +7,12 @@ export const schaetzoramaText = {
     "visual": {
       "eyebrow": "Cifras salvajes"
     }
-  },
+  }
+,
   "en": {
     "displayName": "Cifras salvajes",
-    "description": "Numbers in the air, dubious estimates and no fear of looking silly. Estimate, sort and bet.",
+    "description": "Números al aire, estimaciones dudosas y cero miedo al ridículo. Estima, ordena y apuesta.",
     "visual": {
-      "eyebrow": "Wild numbers"
+      "eyebrow": "Cifras salvajes"
     }
-  }
-} as const satisfies Partial<LocalizedGameTextMap>;
+  }} as const satisfies Partial<LocalizedGameTextMap>;

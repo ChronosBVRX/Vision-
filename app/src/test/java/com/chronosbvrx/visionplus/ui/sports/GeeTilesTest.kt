@@ -82,22 +82,22 @@ class GeeTilesTest {
 
     @Test
     fun liveLabelShowsTheMinuteWhenTheAgendaProvidesIt() {
-        assertEquals("EN VIVO", GeeTiles.liveLabel(event(live = true)))
-        assertEquals("EN VIVO", GeeTiles.liveLabel(event(live = true, detail = "in")))
-        assertEquals("EN VIVO · 45+2'", GeeTiles.liveLabel(event(live = true, detail = "45+2'")))
+        assertEquals("EN VIVO · 19:00–21:00", GeeTiles.liveLabel(event(live = true)))
+        assertEquals("EN VIVO · 19:00–21:00", GeeTiles.liveLabel(event(live = true, detail = "in")))
+        assertEquals("EN VIVO · 19:00–21:00 · 45+2'", GeeTiles.liveLabel(event(live = true, detail = "45+2'")))
     }
 
     @Test
     fun statePrefersLiveThenFinalThenDayAndTime() {
         val today = "2026-10-17"
-        assertEquals("EN VIVO · 23'", GeeTiles.state(event(live = true, detail = "23'"), today))
+        assertEquals("EN VIVO · 19:00–21:00 · 23'", GeeTiles.state(event(live = true, detail = "23'"), today))
         assertEquals("Final", GeeTiles.state(event(status = "post", scoreHome = 3, scoreAway = 0), today))
         assertEquals("Hoy 19:00", GeeTiles.state(event(dateIso = today), today))
         assertEquals("18/10/2026 21:30", GeeTiles.state(event(dateIso = "2026-10-18", dateText = "18/10/2026", time = "21:30:00"), today))
         // Sin fecha de calendario: al menos la hora.
         assertEquals("19:00", GeeTiles.state(event(dateIso = "", dateText = ""), today))
         // El reloj ya abrió el partido aunque la agenda siga en «pre»: dice EN VIVO, no la hora.
-        assertEquals("EN VIVO", GeeTiles.state(event(dateIso = today), today, liveByClock = true))
+        assertEquals("EN VIVO · 19:00–21:00", GeeTiles.state(event(dateIso = today), today, liveByClock = true))
     }
 
     @Test

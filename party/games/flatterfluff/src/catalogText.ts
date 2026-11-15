@@ -30,35 +30,35 @@ export const flatterfluffText = {
     "visual": {
       "eyebrow": "Puntería dulce"
     }
-  },
+  }
+,
   "en": {
     "displayName": "Dulce puntería",
-    "description": "Winged marshmallows, colorful crosshairs and hot trigger fingers. Aim, shoot and reload before they escape.",
+    "description": "Malvaviscos alados, miras de colores y dedos calientes. Apunta, dispara y recarga antes de que se escapen.",
     "lobbySetup": {
-      "title": "Dulce puntería setup",
-      "description": "Choose a timed hunt or an open round.",
+      "title": "Prepara la puntería",
+      "description": "Elige la búsqueda del tiempo o una ronda abierta sin fin.",
       "fields": {
         "mode": {
-          "label": "Game mode",
+          "label": "Modo de cacería",
           "options": {
             "timed": {
-              "label": "Timed hunt",
-              "description": "Score as many points as possible before time runs out."
+              "label": "Cacería cronometrada",
+              "description": "Recoge tantos puntos como puedas antes de que se acabe el tiempo."
             },
             "endless": {
-              "label": "Endless",
+              "label": "Sin fin",
               "description": "Juega sin límite de tiempo hasta que el anfitrión termine la ronda."
             }
           }
         },
         "roundSeconds": {
-          "label": "Round duration",
-          "description": "Length of the timed hunt in seconds."
+          "label": "Duración de la cacería",
+          "description": "Cuánto dura la cacería, en segundos."
         }
       }
     },
     "visual": {
-      "eyebrow": "Sweet aim"
+      "eyebrow": "Puntería dulce"
     }
-  }
-} as const satisfies Partial<LocalizedGameTextMap>;
+  }} as const satisfies Partial<LocalizedGameTextMap>;

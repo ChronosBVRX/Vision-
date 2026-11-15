@@ -1,4 +1,5 @@
 import type { PlayerSetupValue, PlayerSnapshot, RoomSnapshot } from "@open-party-lab/protocol";
+import { hasHostControl } from "@open-party-lab/protocol";
 import { resolveGameMaxPlayers, resolveGameMinPlayers } from "@open-party-lab/game-core";
 import { ControllerFrame } from "../controller-ui/layout/ControllerFrame.js";
 import { HostControlPanel } from "../controller-ui/common/HostControlPanel.js";
@@ -481,6 +482,7 @@ export function LobbyPage({
   const setupBlockedLabel = playerSetup?.kind === "multi-select"
     ? playerSetup.readyBlockedLabel ?? text.chooseSetupFirst
     : text.chooseCharacterFirst;
+  const inControl = Boolean(room && hasHostControl(room.hostControl, player?.id ?? null));
 
   return (
     <ControllerFrame
@@ -489,10 +491,12 @@ export function LobbyPage({
       footer={error ? <p style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
     >
       <div style={{ display: "grid", gap: 14 }}>
-        {currentPlayer && room && <PlayerProfileEditor key={currentPlayer.id} player={currentPlayer} language={room.language} onSave={onSetProfile} />}
-        <button type="button" onClick={onLeaveRoom} style={leaveRoomButtonStyle}>
-          {text.leaveRoom}
-        </button>
+        {!inControl && currentPlayer && room && <PlayerProfileEditor key={currentPlayer.id} player={currentPlayer} language={room.language} onSave={onSetProfile} />}
+        {!inControl && (
+          <button type="button" onClick={onLeaveRoom} style={leaveRoomButtonStyle}>
+            {text.leaveRoom}
+          </button>
+        )}
 
         {room ? (
           <HostControlPanel
@@ -509,7 +513,8 @@ export function LobbyPage({
           />
         ) : null}
 
-        <button
+        {!inControl && (
+          <button
           type="button"
           onClick={() => onSetReady(!(currentPlayer?.isReady ?? false))}
           disabled={playerSetupSelectionMissing}
@@ -533,8 +538,9 @@ export function LobbyPage({
               ? text.notReady
               : text.ready}
         </button>
+        )}
 
-        {selectedGame ? (
+        {!inControl && selectedGame ? (
           <div
             className="lobby-game-summary"
             style={{
