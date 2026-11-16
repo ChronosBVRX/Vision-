@@ -200,6 +200,6 @@ val PARTY_GAMES: List<PartyGame> = listOf(
         minPlayers = 2,
         maxPlayers = 8,
         duration = "5–10 min",
-        cover = R.drawable.party_default,
+        cover = R.drawable.party_light_trails,
     ),
 )

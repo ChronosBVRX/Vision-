@@ -3,7 +3,7 @@ import { lightTrailsManifest } from "../manifest.js";
 import type { LightTrailsState } from "../protocol.js";
 import { createLightTrailsInput } from "./lightTrailsBindings.js";
 
-type SupportedLanguage = "de" | "en";
+type SupportedLanguage = "de" | "en" | "es";
 
 interface ReadyLayoutModel {
   currentPlayerReady: boolean;
@@ -62,26 +62,26 @@ function formatStatusLabel(options: {
   en: boolean;
 }): { label: string; key: string } {
   if (options.won) {
-    return { label: options.en ? "Won" : "Gewonnen", key: "won" };
+    return { label: options.en ? "Won" : "Ganaste", key: "won" };
   }
 
   if (!options.alive) {
-    return { label: options.en ? "Eliminated" : "Ausgeschieden", key: "out" };
+    return { label: options.en ? "Eliminated" : "Eliminado", key: "out" };
   }
 
   if (options.phase === "playing") {
-    return { label: options.en ? "Playing" : "Spielt", key: "playing" };
+    return { label: options.en ? "Playing" : "Jugando", key: "playing" };
   }
 
   if (options.isDraw && options.phase !== "playing") {
-    return { label: options.en ? "Draw" : "Unentschieden", key: "draw" };
+    return { label: options.en ? "Draw" : "Empate", key: "draw" };
   }
 
   if (options.phase === "countdown") {
     return { label: "Countdown", key: "countdown" };
   }
 
-  return { label: options.en ? "Waiting" : "Wartet", key: "waiting" };
+  return { label: options.en ? "Waiting" : "Esperando", key: "waiting" };
 }
 
 export function buildLightTrailsControllerModel(
@@ -110,37 +110,37 @@ export function buildLightTrailsControllerModel(
   const waitingForReady = phase === "finished";
   const waitingHelperText = en
     ? `Next round starts automatically when ${readyCount}/${playerCount} are ready.`
-    : `Naechste Runde startet automatisch bei ${readyCount}/${playerCount} bereit.`;
+    : `La siguiente ronda comienza cuando ${readyCount}/${playerCount} estén listos.`;
   const defaultHelperText = en
     ? "Hold LEFT or RIGHT to steer your trail through the arena."
-    : "Halte LINKS oder RECHTS gedrueckt, um deine Spur durch die Arena zu lenken.";
-  const readyLabel = en ? "Next Round" : "Naechste Runde";
+    : "Mantén presionado IZQUIERDA o DERECHA para girar tu estela por la arena.";
+  const readyLabel = en ? "Next Round" : "Siguiente ronda";
   const statusValue = alive
     ? en
       ? "Hold the line"
-      : "Spur halten"
+      : "Mantén la estela"
     : en
       ? "Waiting for next round"
-      : "Warten auf naechste Runde";
+      : "Esperando la siguiente ronda";
 
   return {
     kind: "left_right_hold",
-    title: "Light Trails",
+    title: "Estelas de Luz",
     subtitle:
       phase === "playing"
         ? en
           ? "Hold to steer"
-          : "Gedrueckt halten zum Lenken"
+          : "Mantén presionado para girar"
         : en
           ? "Get ready"
-          : "Bereit machen",
+          : "Prepárate",
     helperText: context.state.game?.message ?? (waitingForReady ? waitingHelperText : defaultHelperText),
     disabled: phase !== "playing" || !alive,
     accentColor: context.state.player?.color ?? ownPlayerState?.color,
     statusLabel: status.label,
     statusKey: `${phase ?? "unknown"}:${status.key}`,
-    leftLabel: en ? "LEFT" : "LINKS",
-    rightLabel: en ? "RIGHT" : "RECHTS",
+    leftLabel: en ? "LEFT" : "IZQUIERDA",
+    rightLabel: en ? "RIGHT" : "DERECHA",
     ready:
       waitingForReady && context.onSetReady
         ? {
@@ -150,7 +150,7 @@ export function buildLightTrailsControllerModel(
             label: readyLabel,
             description: en
               ? `Tap "${readyLabel}". Starts when ${readyCount}/${playerCount} are ready.`
-              : `Tippe auf "${readyLabel}". Start bei ${readyCount}/${playerCount} bereit.`,
+              : `Toca "${readyLabel}". Inicia cuando ${readyCount}/${playerCount} estén listos.`,
             language: context.state.room?.language,
             onToggleReady: () => context.onSetReady?.(!currentPlayerReady)
           }
@@ -158,7 +158,7 @@ export function buildLightTrailsControllerModel(
     stats: [
       {
         label: en ? "Player color" : "Spielerfarbe",
-        value: context.state.player?.color ?? ownPlayerState?.color ?? (en ? "unknown" : "unbekannt")
+        value: context.state.player?.color ?? ownPlayerState?.color ?? (en ? "unknown" : "desconocido")
       },
       {
         label: en ? "Still racing" : "Noch im Rennen",
@@ -166,7 +166,7 @@ export function buildLightTrailsControllerModel(
       },
       gameState?.winnerName
         ? {
-            label: en ? "Winner" : "Sieger",
+            label: en ? "Winner" : "Ganador",
             value: gameState.winnerName,
             highlighted: true
           }

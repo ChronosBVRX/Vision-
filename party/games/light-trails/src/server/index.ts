@@ -402,20 +402,19 @@ function simulateTick(
     totalPlayers > 1
       ? alivePlayerIds.length === 0 || (timedOut && alivePlayerIds.length > 1)
       : alivePlayerIds.length === 0;
-  const en = context.language === "en";
   const message = resolvedWinnerPlayerId
     ? totalPlayers === 1
-      ? en ? `${resolvedWinnerName ?? "You"} survived until the time limit.` : `${resolvedWinnerName ?? "Du"} haelt bis zum Zeitlimit durch.`
-      : en ? `${resolvedWinnerName ?? "A player"} is the last one standing.` : `${resolvedWinnerName ?? "Ein Spieler"} ueberlebt als Letzter.`
+      ? `${resolvedWinnerName ?? "Tú"} sobrevivió hasta el límite de tiempo.`
+      : `${resolvedWinnerName ?? "Un jugador"} es el último en pie.`
     : timedOut
       ? totalPlayers === 1
-        ? en ? "Time is up." : "Zeit abgelaufen."
-        : en ? "Time is up. This round ends in a draw." : "Zeit abgelaufen. Diese Runde endet unentschieden."
+        ? "¡Se acabó el tiempo!"
+        : "¡Se acabó el tiempo! Esta ronda termina en empate."
       : alivePlayerIds.length === 0
         ? totalPlayers === 1
-          ? en ? "Collision. Solo test ended." : "Kollision. Solo-Test beendet."
-          : en ? "Everyone crashed. Draw." : "Alle sind kollidiert. Unentschieden."
-        : en ? `${alivePlayerIds.length} drivers are still racing.` : `${alivePlayerIds.length} Fahrer sind noch im Rennen.`;
+          ? "Colisión. Prueba en solitario terminada."
+          : "Todos chocaron. Empate."
+        : `${alivePlayerIds.length} corredores siguen en carrera.`;
 
   return {
     ...nextState,
@@ -443,9 +442,7 @@ export const serverGame: ServerGame<
     return {
       ...createBaseRoundState("round_intro", context.now, {
         durationMs: phaseTimings.roundIntroMs,
-        message: context.language === "en"
-          ? "Hold left or right. Do not touch the trail."
-          : "Links oder rechts gedrueckt halten. Nicht die Spur beruehren."
+        message: "Mantén presionado izquierda o derecha. No toques la estela."
       }),
       arenaWidth: lightTrailsConfig.arenaWidth,
       arenaHeight: lightTrailsConfig.arenaHeight,
@@ -466,13 +463,13 @@ export const serverGame: ServerGame<
       {
         ...state,
         finishAt: context.now + lightTrailsConfig.maxPlayingMs,
-        message: context.language === "en" ? "Steer, survive, win." : "Lenken, ueberleben, gewinnen."
+        message: "Gira, sobrevive y gana."
       },
       "playing",
       context.now,
       {
         startedAt: context.now,
-        message: context.language === "en" ? "Steer, survive, win." : "Lenken, ueberleben, gewinnen."
+        message: "Gira, sobrevive y gana."
       }
     );
   },

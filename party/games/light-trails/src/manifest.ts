@@ -4,8 +4,8 @@ import type { GameManifest } from "@open-party-lab/game-core";
 export const lightTrailsManifest = {
   id: "light-trails",
   translations: lightTrailsText,
-  displayName: "Light Trails",
-  description: "Lenke deine Spur durch die Arena und ueberlebe am laengsten.",
+  displayName: "Estelas de Luz",
+  description: "Gira tu estela por la arena y sé el último en pie.",
   minPlayers: 1,
   maxPlayers: 8,
   hostView: "LightTrailsHostScene",
