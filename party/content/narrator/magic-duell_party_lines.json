@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para Duelo Mágico: dibuja hechizos y lánzalos en la arena.",
+      "Se abre el duelo de magos. Toma tu celular y dibuja tu primer hechizo.",
+      "Duelo Mágico comienza. Maná, hechizos y cero piedad.",
+      "La arena mágica se enciende. Dibuja, lanza y sobrevive.",
+      "Prepárense: el duelo de magos está por empezar.",
+      "Duelo Mágico: hechizos dibujados, maná limitado y un solo ganador.",
+      "La arena se ilumina. Toma tu celular y prepárate para lanzar.",
+      "Duelo Mágico arranca. Dibuja tu hechizo y no falles.",
+      "Se abre el duelo. Maná, hechizos y reflejos rápidos.",
+      "Prepárense para el duelo de magos. Dibuja y lanza."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Lanza tus hechizos y gestiona tu maná con cuidado.",
+      "El duelo está en marcha. Dibuja y lanza sin parar.",
+      "Maná limitado, hechizos poderosos. Elige bien.",
+      "Lanza, esquiva y contraataca. El duelo continúa.",
+      "Dibuja con precisión. Un hechizo fallido cuesta caro.",
+      "El maná se regenera. Aprovecha cada oportunidad.",
+      "Lanza tus hechizos y protege tu vida.",
+      "El duelo arde. Dibuja y lanza sin dudar.",
+      "Gestiona tu maná y lanza en el momento justo.",
+      "Sigue lanzando. El duelo no espera."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Duelo terminado. El mago más hábil se impuso.",
+      "Fin del duelo. Revisa el daño y el maná gastado.",
+      "Duelo terminado. El último en pie es el ganador.",
+      "Fin del duelo. El maná y los hechizos lo decidieron.",
+      "Duelo terminado. El mejor mago se lleva la victoria.",
+      "Fin del duelo. Ajusta tu mazo y vuelve a intentar.",
+      "Duelo terminado. La precisión del trazo marcó la diferencia.",
+      "Fin del duelo. El ganador dominó la arena.",
+      "Duelo terminado. Prepárense para la revancha.",
+      "Fin del duelo. El maná se agotó para uno."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Marcador actualizado. El mago líder se impone.",
+      "Aquí va el marcador del duelo. Que tiemble el segundo.",
+      "Marcador listo. El maná y el daño lo decidieron.",
+      "Marcador actualizado. A ajustar la estrategia.",
+      "Aquí está el marcador. El primero manda.",
+      "Marcador listo. Prepárense para la siguiente ronda.",
+      "Marcador actualizado. Que siga el duelo.",
+      "Aquí va el marcador. El ganador lidera.",
+      "Marcador listo. La arena mágica se prepara.",
+      "Marcador actualizado. A lanzar de nuevo."
+    ]
+  }
+]

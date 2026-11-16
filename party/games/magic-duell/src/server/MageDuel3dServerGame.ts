@@ -79,7 +79,26 @@ const mageDuelText = {
     fizzled: (name: string) => `${name}'s spell fizzles.`,
     wins: (name: string) => `${name} wins the mage duel!`,
     draw: "The duel ends in a draw."
-  }
+  },
+  es: {
+    intro: "Duelo Mágico: dibuja hechizos en tu celular.",
+    start: "El duelo comienza. El maná se regenera automáticamente.",
+    fallbackPlayer: "Mago",
+    unknownGesture: (name: string, reason: string) => `${name}: ${reason}.`,
+    noMana: (name: string, spell: string) => `${name} no tiene suficiente maná para ${spell}.`,
+    cooldown: (name: string, spell: string) => `${spell} aún no está listo para ${name}.`,
+    casting: (name: string, spell: string) => `${name} lanza ${spell}.`,
+    fire: (name: string, target: string, damage: number) => `${name} golpea a ${target} por ${damage} de daño.`,
+    shield: (name: string) => `${name} invoca un escudo.`,
+    heal: (name: string, heal: number) => `${name} restaura ${heal} de salud.`,
+    regeneration: (name: string) => `${name} comienza a regenerarse.`,
+    fireWall: (name: string) => `${name} levanta un muro de fuego.`,
+    manaSurge: (name: string, mana: number) => `${name} acumula ${mana} de maná.`,
+    projectile: (name: string, spell: string) => `${name} dispara ${spell}.`,
+    fizzled: (name: string) => `El hechizo de ${name} se desvanece.`,
+    wins: (name: string) => `¡${name} gana el duelo de magos!`,
+    draw: "El duelo termina en empate."
+  },
 } satisfies Record<SupportedLanguage, {
   intro: string;
   start: string;

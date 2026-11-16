@@ -23,7 +23,7 @@ const spellSecondaryByColor = {
 const spellSetupOptions = mageDuelSpellCatalog.map((spell) => ({
   id: spell.id,
   name: spell.displayName,
-  title: `${spell.manaCost} Mana | ${(spell.cooldownMs / 1000).toFixed(1)}s Abklingzeit`,
+  title: `${spell.manaCost} maná | ${(spell.cooldownMs / 1000).toFixed(1)}s de enfriamiento`,
   description: spell.description,
   iconPath: getMageDuelShapeIconPath(spell.shape),
   visual: {
@@ -36,8 +36,8 @@ const spellSetupOptions = mageDuelSpellCatalog.map((spell) => ({
 export const magicDuellManifest = {
   id: "magic-duell",
   translations: catalogText,
-  displayName: "Magic Duell",
-  description: "Statisches 3D-Magierduell mit gezeichneten Handy-Zaubern.",
+  displayName: "Duelo Mágico",
+  description: "Un duelo de magos en 3D con hechizos dibujados en el celular.",
   minPlayers: 2,
   maxPlayers: 2,
   hostView: "MageDuel3dHostScene",
@@ -49,13 +49,13 @@ export const magicDuellManifest = {
   playerSetup: {
     kind: "multi-select",
     selectionKey: "spellLoadout",
-    title: "Zauber wählen",
-    description: "Waehle die Zauber, die auf deinem Handy-Controller verfuegbar sein sollen.",
+    title: "Elige hechizos",
+    description: "Elige los hechizos que quieres usar en tu celular.",
     required: true,
     minSelections: mageDuelMinLoadoutSize,
     maxSelections: mageDuelLoadoutSize,
     defaultValue: defaultMageDuelLoadoutSpellIds,
-    readyBlockedLabel: "Zuerst Zauber wählen",
+    readyBlockedLabel: "Elige tus hechizos primero",
     options: spellSetupOptions
   },
   phaseDurations: {

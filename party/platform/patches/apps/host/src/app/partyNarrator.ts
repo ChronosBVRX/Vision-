@@ -11,7 +11,8 @@ const NARRATED_GAMES = new Set([
   "magic-arena",
   "card-table",
   "dungeon-party",
-  "light-trails"
+  "light-trails",
+  "magic-duell"
 ]);
 
 const momentForPhase = (phase: string | null | undefined): "intro" | "playing" | "result" | "scoreboard" | null => {

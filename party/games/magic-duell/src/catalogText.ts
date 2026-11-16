@@ -1,5 +1,139 @@
 import type { LocalizedGameTextMap } from "@open-party-lab/game-core";
 export const catalogText = {
+  "es": {
+    "displayName": "Duelo Mágico",
+    "description": "Un duelo de magos en 3D con hechizos dibujados en el celular.",
+    "playerSetup": {
+      "title": "Elige hechizos",
+      "description": "Elige los hechizos que quieres usar en tu celular.",
+      "readyBlockedLabel": "Elige tus hechizos primero",
+      "options": {
+        "fire_bolt": {
+          "name": "Lanza de Fuego",
+          "description": "Trazo rojo de abajo hacia arriba. Lanza un ataque directo de fuego.",
+          "title": "20 maná | 4.5s de enfriamiento",
+        },
+        "flame_drop": {
+          "name": "Lluvia de Llamas",
+          "description": "Trazo rojo de arriba hacia abajo. Lluvia de fuego sobre el rival.",
+          "title": "24 maná | 7.0s de enfriamiento",
+        },
+        "fire_wall": {
+          "name": "Muro de Fuego",
+          "description": "Triángulo rojo. Potencia tus siguientes hechizos de ataque por 10 segundos.",
+          "title": "55 maná | 60.0s de enfriamiento",
+        },
+        "ember_orb": {
+          "name": "Orbe de Brasas",
+          "description": "Círculo rojo. Lanza un orbe de brasas más lento.",
+          "title": "28 maná | 9.0s de enfriamiento",
+        },
+        "meteor_square": {
+          "name": "Cuadrado de Magma",
+          "description": "Cuadrado rojo. Impacto pesado que también quema maná.",
+          "title": "38 maná | 16.0s de enfriamiento",
+        },
+        "burn_spiral": {
+          "name": "Espiral Ardiente",
+          "description": "Espiral roja. Prende fuego al rival con daño en el tiempo.",
+          "title": "42 maná | 21.0s de enfriamiento",
+        },
+        "scarlet_lightning": {
+          "name": "Relámpago Escarlata",
+          "description": "Rayo rojo. Ataque muy rápido y potente.",
+          "title": "34 maná | 14.0s de enfriamiento",
+        },
+        "rift_cleave": {
+          "name": "Hoja de Grieta",
+          "description": "Triángulo rojo con trazo. Atraviesa parte del escudo del objetivo.",
+          "title": "36 maná | 17.0s de enfriamiento",
+        },
+        "arcane_bolt": {
+          "name": "Lanza Arcana",
+          "description": "Trazo azul de abajo hacia arriba. Ataque arcano rápido y económico.",
+          "title": "14 maná | 5.0s de enfriamiento",
+        },
+        "frost_ward": {
+          "name": "Guardia de Hielo",
+          "description": "Trazo azul de arriba hacia abajo. Protección breve.",
+          "title": "22 maná | 9.5s de enfriamiento",
+        },
+        "shield": {
+          "name": "Escudo Triangular",
+          "description": "Triángulo azul. Burbuja protectora alrededor del mago.",
+          "title": "35 maná | 11.0s de enfriamiento",
+        },
+        "mana_surge": {
+          "name": "Círculo de Maná",
+          "description": "Círculo azul. Restaura maná.",
+          "title": "5 maná | 26.0s de enfriamiento",
+        },
+        "mirror_square": {
+          "name": "Cuadrado Espejo",
+          "description": "Cuadrado azul. Escudo fuerte y duradero.",
+          "title": "42 maná | 19.0s de enfriamiento",
+        },
+        "mana_triplet": {
+          "name": "Trío de Maná",
+          "description": "Tres círculos azules. Restaura maná y reduce enfriamientos actuales.",
+          "title": "8 maná | 34.0s de enfriamiento",
+        },
+        "null_cross": {
+          "name": "Cruz Nula",
+          "description": "Cruz azul. Poco daño pero drena el maná del rival.",
+          "title": "26 maná | 18.0s de enfriamiento",
+        },
+        "tide_barrier": {
+          "name": "Barrera de Marea",
+          "description": "Onda azul. Elimina efectos de daño en el tiempo y da protección breve.",
+          "title": "32 maná | 24.0s de enfriamiento",
+        },
+        "thorn_lance": {
+          "name": "Lanza de Espinas",
+          "description": "Trazo verde de abajo hacia arriba. Ataque ligero de naturaleza.",
+          "title": "16 maná | 6.5s de enfriamiento",
+        },
+        "heal": {
+          "name": "Retorno Verde",
+          "description": "Trazo verde de arriba hacia abajo. Restaura salud al instante.",
+          "title": "30 maná | 13.0s de enfriamiento",
+        },
+        "vine_wall": {
+          "name": "Muro de Enredaderas",
+          "description": "Triángulo verde. Escudo más débil pero duradero.",
+          "title": "27 maná | 14.0s de enfriamiento",
+        },
+        "clover_bloom": {
+          "name": "Flor de Trébol",
+          "description": "Tres círculos verdes. Cura al instante y con el tiempo.",
+          "title": "46 maná | 32.0s de enfriamiento",
+        },
+        "poison_spiral": {
+          "name": "Espiral Venenosa",
+          "description": "Espiral verde. Envenena al rival con daño en el tiempo.",
+          "title": "38 maná | 23.0s de enfriamiento",
+        },
+        "root_snare": {
+          "name": "Trampa de Raíces",
+          "description": "Zigzag verde. Daño ligero y altera el maná del rival.",
+          "title": "25 maná | 13.0s de enfriamiento",
+        },
+        "verdant_chevron": {
+          "name": "Foco Natural",
+          "description": "Chevron verde. Cura un poco y acelera la regeneración de maná.",
+          "title": "34 maná | 28.0s de enfriamiento",
+        },
+        "regeneration": {
+          "name": "Círculo de Vida",
+          "description": "Círculo verde. Restaura salud durante 20 segundos.",
+          "title": "45 maná | 30.0s de enfriamiento",
+        },
+      },
+    },
+    "visual": {
+      "eyebrow": "Duelo",
+    },
+  },
   "de": {
     "displayName": "Magic Duell",
     "description": "Statisches 3D-Magierduell mit gezeichneten Handy-Zaubern.",

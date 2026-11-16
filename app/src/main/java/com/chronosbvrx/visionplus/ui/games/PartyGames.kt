@@ -160,7 +160,7 @@ val PARTY_GAMES: List<PartyGame> = listOf(
         minPlayers = 2,
         maxPlayers = 2,
         duration = "10–15 min",
-        cover = R.drawable.party_default,
+        cover = R.drawable.party_magic_duell,
     ),
     PartyGame(
         id = "arena-survivor",

@@ -11,7 +11,7 @@ export interface ReadyLayoutModel {
   playerCount: number;
   label: string;
   description?: string;
-  language?: "de" | "en";
+  language?: "de" | "en" | "es";
   onToggleReady: () => void;
 }
 
@@ -52,7 +52,7 @@ export interface SpellCastingLayoutModel {
   title: string;
   subtitle?: string;
   helperText?: string;
-  language?: "de" | "en";
+  language?: "de" | "en" | "es";
   disabled: boolean;
   ready?: ReadyLayoutModel;
   resetKey: string;

@@ -12,7 +12,7 @@ import { createMageDuelGestureInput } from "./mageDuel3dBindings.js";
 
 function getSpellLabel(spellBook: MageDuelSpellDefinition[], spellId: MageDuelSpellId | null, en: boolean): string {
   if (!spellId) {
-    return en ? "Unclear" : "Unklar";
+    return en ? "Unclear" : "No claro";
   }
 
   return spellBook.find((spell) => spell.id === spellId)?.displayName ?? spellId;
@@ -95,7 +95,7 @@ export function buildMageDuel3dControllerModel(
       state.game?.message ??
       (en
         ? "Choose a spell, draw its symbol, and release."
-        : "Waehle einen Zauber, zeichne sein Symbol und lasse los."),
+        : "Elige un hechizo, dibuja su símbolo y suelta."),
     language: state.room?.language,
     disabled: state.game?.phase !== "playing" || !self || !opponent || busy || dead,
     resetKey: `${state.game?.roundNumber ?? 0}:${state.game?.phase ?? "idle"}:${self?.activeCast?.id ?? "ready"}`,

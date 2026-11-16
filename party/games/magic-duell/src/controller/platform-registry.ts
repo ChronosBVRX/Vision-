@@ -1,8 +1,8 @@
 export interface ControllerGameRenderContext {
   state: {
-    preferredLanguage?: "de" | "en";
+    preferredLanguage?: "de" | "en" | "es";
     room?: {
-      language?: "de" | "en";
+      language?: "de" | "en" | "es";
       selectedGameId?: string;
       availableGames?: Array<{ id: string; displayName?: string; roundCompletionMode?: string }>;
       players?: Array<{ id: string; name: string; isReady?: boolean }>;
