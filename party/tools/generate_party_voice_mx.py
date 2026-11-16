@@ -82,6 +82,7 @@ STANDARD = [
     "light-trails",
     "magic-duell",
     "chaos-kommando",
+    "arena-survivor",
 ]
 
 GAME_VOICE = {

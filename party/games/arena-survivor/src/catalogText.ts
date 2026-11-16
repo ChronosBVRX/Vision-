@@ -1,3 +1,4 @@
+export const arenaSurvivorText = {
 import { arenaSurvivorCharacterDefinitions } from "./server/content/characterDefinitions.js";
 import { localizeArenaSurvivorCharacter } from "./contentText.js";
 import type { LocalizedGameTextMap } from "@open-party-lab/game-core";
@@ -5,16 +6,61 @@ import type { LocalizedGameTextMap } from "@open-party-lab/game-core";
 
 const archetypes = {
   de: { ranged: "Fernkampf", melee: "Nahkampf", magic: "Magie", lifesteal: "Lebensraub", regen: "Regeneration", tank: "Panzer", speed: "Tempo", hybrid: "Allrounder", luck: "Glück", economy: "Wirtschaft" },
-  en: { ranged: "Ranged", melee: "Melee", magic: "Magic", lifesteal: "Life steal", regen: "Regeneration", tank: "Tank", speed: "Speed", hybrid: "All-rounder", luck: "Luck", economy: "Economy" }
+  en: { ranged: "Ranged", melee: "Melee", magic: "Magic", lifesteal: "Life steal", regen: "Regeneration", tank: "Tank", speed: "Speed", hybrid: "All-rounder", luck: "Luck", economy: "Economy" },
+  es: { ranged: "A distancia", melee: "Cuerpo a cuerpo", magic: "Magia", lifesteal: "Robo de vida", regen: "Regeneración", tank: "Tanque", speed: "Velocidad", hybrid: "Versátil", luck: "Suerte", economy: "Economía" }
 };
-function characterSetupText(language: "de" | "en") {
+function characterSetupText(language: "de" | "en" | "es") {
+  const contentLanguage = language === "es" ? "en" : language;
   return Object.fromEntries(arenaSurvivorCharacterDefinitions.map(character => {
-    const text = localizeArenaSurvivorCharacter(character, language);
+    const text = localizeArenaSurvivorCharacter(character, contentLanguage);
     return [character.id, { name: text.name, title: text.title, description: text.description, archetype: archetypes[language][character.archetype] }];
   }));
 }
 
-export const arenaSurvivorText = {
+  "es": {
+    "displayName": "Arena Survivor",
+    "description": "Lucha en equipo en modo Oleadas o explora Frostfire en modo Supervivencia con subidas de nivel, botín y evolución de armas.",
+    "lobbySetup": {
+      "title": "Configuración de la partida",
+      "description": "Elige la dificultad y desbloquea la partida.",
+      "fields": {
+        "mode": {
+          "label": "Modo",
+          "description": "Oleadas: oleadas y tiendas. Supervivencia: 20 minutos en el amplio mundo de Frostfire.",
+          "options": {
+            "wave": { "label": "Oleadas" },
+            "survival": { "label": "Supervivencia · Frostfire Saga" }
+          }
+        },
+        "visualTheme": {
+          "label": "Estilo visual",
+          "description": "Elige el conjunto visual completo para el mapa, personajes, enemigos y equipo.",
+          "options": {
+            "marshmallow-mayhem": { "label": "Marshmallow Mayhem", "description": "Un mundo acuarela tostado con figuras expresivas, ojos animados y monstruos dulces." },
+            "frostfire-saga": { "label": "Frostfire Saga", "description": "Un mundo de cuento nórdico pintado a mano con hielo, brasas, runas y madera tallada." },
+            "obsidian-relay": { "label": "Obsidian Relay", "description": "Ruinas de ciencia ficción detalladas, plasma, cobre y metal negro." },
+            "classic": { "label": "Clásico", "description": "El estilo original cálido y orgánico de la arena." }
+          }
+        },
+        "difficulty": {
+          "label": "Dificultad",
+          "description": "Nivel de peligro del 1 al 5."
+        }
+      },
+      "confirmation": {
+        "label": "Desbloquear partida",
+        "description": "Comienza automáticamente cuando todos los jugadores estén listos."
+      }
+    },
+    "visual": {
+      "eyebrow": "Arena"
+    },
+    "playerSetup": {
+      "title": "Elige tu personaje",
+      "description": "Elige un personaje para esta partida.",
+      "options": characterSetupText("es")
+    }
+  },
   "de": {
     "displayName": "Arena Survivor",
     "description": "Kaempft gemeinsam im Wave-Modus oder erkundet Frostfire im Survival-Modus mit Level-Ups, Loot und Waffen-Evolutionen.",

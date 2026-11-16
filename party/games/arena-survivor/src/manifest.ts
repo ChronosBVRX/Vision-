@@ -13,7 +13,7 @@ export const arenaSurvivorManifest = {
   id: "arena-survivor",
   translations: arenaSurvivorText,
   displayName: "Arena Survivor",
-  description: "Ueberlebe in der Arena gegen immer neue Gegner.",
+  description: "Sobrevive en la arena contra oleadas de enemigos.",
   minPlayers: 1,
   maxPlayers: 4,
   hostView: "ArenaSurvivorHostScene",
@@ -23,16 +23,16 @@ export const arenaSurvivorManifest = {
   estimatedRoundDurationMs: 45_000,
   roundCompletionMode: "wait_for_ready",
   lobbySetup: {
-    title: "Run Setup",
-    description: "Lege die Schwierigkeit fest und gib den Run frei.",
+    title: "Configuración de la partida",
+    description: "Elige la dificultad y desbloquea la partida.",
     fields: [
       {
         kind: "select",
         id: "mode",
         settingKey: "arenaSurvivorMode",
         actionKey: "mode",
-        label: "Modus / Mode",
-        description: "Wave: Wellen und Shops. Survival: 20 Minuten in der grossen Frostfire-Welt.",
+        label: "Modo",
+        description: "Oleadas: oleadas y tiendas. Supervivencia: 20 minutos en el amplio mundo de Frostfire.",
         options: [{ id: "wave", label: "Wave" }, { id: "survival", label: "Survival · Frostfire Saga" }],
         defaultValue: "wave"
       },
@@ -41,8 +41,8 @@ export const arenaSurvivorManifest = {
         id: "visualTheme",
         settingKey: arenaSurvivorRoomSettingKeys.visualTheme,
         actionKey: "visualTheme",
-        label: "Art Design",
-        description: "Waehle das komplette visuelle Set fuer Map, Figuren, Gegner und Ausruestung.",
+        label: "Estilo visual",
+        description: "Elige el conjunto visual completo para el mapa, personajes, enemigos y equipo.",
         options: arenaSurvivorVisualThemeOptions,
         defaultValue: arenaSurvivorSetupConfig.visualTheme.defaultValue
       },
@@ -51,8 +51,8 @@ export const arenaSurvivorManifest = {
         id: "difficulty",
         settingKey: arenaSurvivorRoomSettingKeys.difficultyTier,
         actionKey: "difficulty",
-        label: "Schwierigkeit",
-        description: "Gefahr 1 bis 5.",
+        label: "Dificultad",
+        description: "Nivel de peligro del 1 al 5.",
         min: arenaSurvivorSetupConfig.difficulty.min,
         max: arenaSurvivorSetupConfig.difficulty.max,
         step: arenaSurvivorSetupConfig.difficulty.step,
@@ -62,14 +62,14 @@ export const arenaSurvivorManifest = {
     confirmation: {
       settingKey: arenaSurvivorRoomSettingKeys.setupConfirmed,
       actionType: "confirm-lobby",
-      label: "Run freigeben",
-      description: "Startet automatisch, sobald alle Spieler bereit sind."
+      label: "Desbloquear partida",
+      description: "Comienza automáticamente cuando todos los jugadores estén listos."
     }
   },
   playerSetup: {
     kind: "choice",
-    title: "Charakterwahl",
-    description: "Waehle deinen Charakter fuer den Run.",
+    title: "Elige tu personaje",
+    description: "Elige un personaje para esta partida.",
     required: true,
     options: arenaSurvivorCharacterDefinitions.map((character) => ({
       id: character.id,

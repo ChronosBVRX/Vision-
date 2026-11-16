@@ -228,22 +228,22 @@ function resolveCurrentPlayer(
 
 function formatStatus(player: ArenaSurvivorPlayerState | null, state: ArenaSurvivorState | null, en: boolean): string {
   if (!player || !state) {
-    return en ? "Waiting" : "Wartet";
+    return en ? "Waiting" : "Esperando";
   }
 
   if (state.result.outcome === "survived") {
-    return en ? "Won" : "Gewonnen";
+    return en ? "Won" : "Ganaste";
   }
 
   if (state.result.outcome === "defeated") {
-    return en ? "Lost" : "Verloren";
+    return en ? "Lost" : "Perdiste";
   }
 
   if (!player.alive) {
-    return en ? "Out" : "Ausgeschieden";
+    return en ? "Out" : "Eliminado";
   }
 
-  return en ? "Active" : "Aktiv";
+  return en ? "Active" : "Activo";
 }
 
 function resolvePlayerStats(player: ArenaSurvivorPlayerState | null, language?: "de" | "en"): Array<{ label: string; value: string }> {
@@ -292,13 +292,13 @@ function buildArenaSurvivorShopModel(
     kind: "arena_survivor_modern_shop",
     language,
     title: choosingLevelBonus
-      ? en ? `${player.name} Level Up` : `${player.name} Level-Up`
+      ? en ? `${player.name} Level Up` : `${player.name} Sube de nivel`
       : `${player.name} Shop`,
     subtitle: choosingLevelBonus
       ? en
         ? `${player.pendingLevelUpChoices} bonus ${player.pendingLevelUpChoices === 1 ? "choice" : "choices"} remaining`
         : `Noch ${player.pendingLevelUpChoices} Bonus-${player.pendingLevelUpChoices === 1 ? "Wahl" : "Wahlen"}`
-      : `${en ? "Wave" : "Welle"} ${state.waveNumber} | ${en ? "Materials" : "Material"} ${player.materials}`,
+      : `${en ? "Wave" : "Oleada"} ${state.waveNumber} | ${en ? "Materials" : "Material"} ${player.materials}`,
     helperText:
       choosingLevelBonus
         ? en
@@ -327,7 +327,7 @@ function buildArenaSurvivorShopModel(
           readyCount,
           playerCount,
           language,
-          label: en ? "Next Wave" : "Naechste Welle",
+          label: en ? "Next Wave" : "Siguiente oleada",
           description: waitingForPlayers
             ? en
               ? "Buy upgrades, then ready up."
@@ -415,8 +415,8 @@ function buildArenaSurvivorJoystickModel(
     state?.result.outcome === "running";
   const timeText =
     state?.result.outcome === "running"
-      ? `${en ? "Time" : "Zeit"} ${formatTime(state.remainingMs)}`
-      : `${en ? "Survived" : "Ueberlebt"} ${formatTime(state?.elapsedMs ?? 0)}`;
+      ? `${en ? "Time" : "Tiempo"} ${formatTime(state.remainingMs)}`
+      : `${en ? "Survived" : "Sobrevivió"} ${formatTime(state?.elapsedMs ?? 0)}`;
 
   return {
     kind: "virtual_joystick",
@@ -436,18 +436,18 @@ function buildArenaSurvivorJoystickModel(
         ? en
           ? "Your weapon fires automatically. Collected material is shared with the whole team."
           : "Deine Waffe schiesst automatisch. Gesammeltes Material erhaelt das ganze Team."
-        : state?.result.title ?? (en ? "Move your character with the virtual stick." : "Bewege den Charakter mit dem virtuellen Stick."),
+        : state?.result.title ?? (en ? "Move your character with the virtual stick." : "Mueve el personaje con el stick virtual."),
     disabled: !running,
     accentColor: player?.color ?? context.state.player?.color ?? "#38bdf8",
     resetKey: `${context.state.game?.roundNumber ?? 0}:${context.state.game?.phase ?? "idle"}`,
-    centerLabel: en ? "MOVE" : "LOS",
+    centerLabel: en ? "MOVE" : "MOVER",
     stats: [
-      { label: en ? "HP" : "Leben", value: `${formatRoundedHp(player?.hp)}/${formatRoundedHp(player?.maxHp)}` },
-      { label: en ? "Lvl." : "Stufe", value: `${player?.level ?? 1}` },
+      { label: en ? "HP" : "Vida", value: `${formatRoundedHp(player?.hp)}/${formatRoundedHp(player?.maxHp)}` },
+      { label: en ? "Lvl." : "Nivel", value: `${player?.level ?? 1}` },
       { label: en ? "XP" : "EP", value: `${Math.round(player?.experience ?? 0)}/${Math.round(player?.experienceToNextLevel ?? 1)}` },
       { label: en ? "Materials" : "Material", value: `${player?.materials ?? 0}` },
       { label: "Status", value: formatStatus(player, state, en), highlighted: true },
-      { label: en ? "Time" : "Zeit", value: timeText },
+      { label: en ? "Time" : "Tiempo", value: timeText },
       { label: state?.survival ? (en ? "Intensity" : "Intensitaet") : en ? "Wave" : "Welle", value: `${state?.waveNumber ?? 1}` },
       ...(state?.survival ? [{ label: en ? "Cores" : "Kerne", value: `${player?.evolutionCores ?? 0}` }] : [])
     ],

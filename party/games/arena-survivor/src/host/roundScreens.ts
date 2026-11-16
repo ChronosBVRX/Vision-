@@ -76,12 +76,19 @@ interface ScoreEntryLike {
 interface RoundScreenState {
   phase: string | null;
   message: string | null;
-  language: "de" | "en";
+  language: "de" | "en" | "es";
   players: Array<{ id: string; name: string }>;
   entries: ScoreEntryLike[];
 }
 
 const copy = {
+  es: {
+    getReady: "Comenzará pronto",
+    roundOver: "Ronda terminada",
+    standings: "MARCADOR",
+    noPoints: "Sin puntos aún.",
+    waiting: "Marca listo para la siguiente ronda."
+  },
   de: {
     getReady: "Gleich geht es los",
     roundOver: "Runde vorbei",
@@ -135,7 +142,7 @@ function readState(input: unknown): RoundScreenState {
   return {
     phase,
     message: typeof state.game?.message === "string" ? state.game.message : null,
-    language: state.room?.language === "en" ? "en" : "de",
+    language: state.room?.language === "es" ? "es" : state.room?.language === "en" ? "en" : "de",
     players,
     entries
   };
