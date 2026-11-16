@@ -102,6 +102,17 @@ class FreeQualityTest {
         assertTrue(!movieBody.has("episodeNumberList"))
     }
 
+    @Test
+    fun v10BodyAsksThePortalForTheRealEpisode() {
+        // El portal resuelve el capítulo por `episodeNumberList`, no por contentId:
+        // con [1] fijo, «Sig. capítulo» y el selector devolvían SIEMPRE el primero.
+        val ep3 = X4KApi.licenseColumnBody("token", "uid", "EP3", "SEASON", 87887, episodeNumber = 3)
+        assertEquals(3, ep3.getJSONArray("episodeNumberList").getInt(0))
+
+        val ep0 = X4KApi.licenseColumnBody("token", "uid", "EPX", "SEASON", 87887, episodeNumber = 0)
+        assertEquals(1, ep0.getJSONArray("episodeNumberList").getInt(0))
+    }
+
     private fun names(array: JSONArray): List<String> {
         val out = ArrayList<String>()
         for (i in 0 until array.length()) out.add(array.getJSONObject(i).getString("n"))

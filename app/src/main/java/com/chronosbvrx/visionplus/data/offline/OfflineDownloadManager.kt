@@ -451,6 +451,7 @@ object OfflineDownloadManager {
                 durationMs = item.durationMs,
                 totalBytes = item.totalBytes,
                 portable = item.portable,
+                episodeNumber = item.episodeIndex + 1,
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)

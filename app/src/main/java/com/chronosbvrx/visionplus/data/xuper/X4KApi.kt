@@ -1421,7 +1421,7 @@ object X4KApi {
         vodPrefetch[cid]?.takeIf { now - it.atMs < PREFETCH_TTL_MS }?.let { return@withContext }
         val cleanSeries = if (seriesId.isNotBlank()) xtvPortalId(seriesId) else ""
         runCatching {
-            val prep = prepareVod(context, cid, "", cleanSeries, fallbackDurationMs)
+            val prep = prepareVod(context, cid, "", cleanSeries, fallbackDurationMs, epNumber)
             if (prep != null) vodPrefetch[cid] = PrefetchedVod(now, prep)
         }
         // Los marcadores de la serie también quedan calientes (caché en disco de 6 h):
@@ -1711,13 +1711,20 @@ object X4KApi {
         return out
     }
 
-    /** Cuerpo del play v10: la columna es la que autoriza la licencia libre en su calidad real. */
+    /**
+     * Cuerpo del play v10: la columna es la que autoriza la licencia libre en su calidad real.
+     *
+     * `episodeNumber` es el número REAL del capítulo dentro de la temporada. El portal
+     * resuelve el episodio por `episodeNumberList` (no por `contentId`): enviar siempre
+     * `[1]` hacía que cualquier capítulo —«Sig.», selector, etc.— devolviera el primero.
+     */
     internal fun licenseColumnBody(
         token: String,
         userId: String,
         contentId: String,
         seriesId: String,
         columnId: Int,
+        episodeNumber: Int = 1,
     ): JSONObject = JSONObject().apply {
         put("userToken", token)
         put("userId", userId)
@@ -1730,7 +1737,7 @@ object X4KApi {
         put("startTime", 0)
         put("authType", if (isSeries) "1" else "")
         if (isSeries) {
-            put("episodeNumberList", JSONArray().put(1))
+            put("episodeNumberList", JSONArray().put(episodeNumber.coerceAtLeast(1)))
         }
     }
 
@@ -1744,9 +1751,11 @@ object X4KApi {
         title: String,
         seriesId: String = "",
         fallbackDurationMs: Long = 0L,
+        episodeNumber: Int = 1,
     ): VodMedia? = withContext(Dispatchers.IO) {
         guarded {
             val prefetchCid = xtvPortalId(contentId)
+            val wantedEpisode = episodeNumber.coerceAtLeast(1)
             val startedAt = android.os.SystemClock.uptimeMillis()
             vodPrefetch.remove(prefetchCid)?.let {
                 if (System.currentTimeMillis() - it.atMs < PREFETCH_TTL_MS) {
@@ -1841,7 +1850,7 @@ object X4KApi {
                 if (isSeriesPlay) sid else cid,
                 brokerColumn,
                 "0",
-                if (isSeriesPlay) intArrayOf(1) else intArrayOf(),
+                if (isSeriesPlay) intArrayOf(wantedEpisode) else intArrayOf(),
             )
             var identity: PlayIdentity
             if (broker != null) {
@@ -1866,7 +1875,7 @@ object X4KApi {
                 put("startTime", 0)
                 put("authType", if (isSeries) "1" else "")
                 if (isSeries) {
-                    put("episodeNumberList", JSONArray().put(1))
+                    put("episodeNumberList", JSONArray().put(wantedEpisode))
                 }
             }
             suspend fun license(type: String, connectMs: Int, readMs: Int): JSONObject? = runCatching {
@@ -1895,7 +1904,7 @@ object X4KApi {
                     suspend fun v10(): JSONObject? = runCatching {
                         post(
                             "/api/portalCore/v10/startPlayVOD",
-                            licenseColumnBody(identity.token, identity.userId, cid, sid, column),
+                            licenseColumnBody(identity.token, identity.userId, cid, sid, column, wantedEpisode),
                             8_000,
                             12_000,
                         )
@@ -2117,10 +2126,10 @@ object X4KApi {
         } else {
             ""
         }
-        var prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs)
+        var prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs, markerEp)
         if (prep == null) {
             kotlinx.coroutines.delay(400)
-            prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs)
+            prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs, markerEp)
         }
         if (prep == null) {
             return@withContext false

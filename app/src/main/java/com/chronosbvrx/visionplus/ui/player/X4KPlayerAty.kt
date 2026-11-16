@@ -2260,9 +2260,9 @@ class X4KPlayerAty : ComponentActivity() {
                 gravity = Gravity.TOP
                 background = GradientDrawable(
                     GradientDrawable.Orientation.LEFT_RIGHT,
-                    intArrayOf(0x00000000, 0xD9000000.toInt()),
-                ).apply { cornerRadius = dp(14).toFloat() }
-                setPadding(dp(14), dp(12), dp(14), dp(12))
+                    intArrayOf(0x00000000, 0xE6000000.toInt()),
+                ).apply { cornerRadius = dp(16).toFloat() }
+                setPadding(dp(18), dp(14), dp(18), dp(14))
             }
             val art = android.widget.ImageView(this).apply {
                 scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
@@ -2271,34 +2271,45 @@ class X4KPlayerAty : ComponentActivity() {
             if (intentPoster.isNotBlank()) {
                 runCatching {
                     val req = coil.request.ImageRequest.Builder(this)
-                        .data(intentPoster).size(240)
+                        .data(intentPoster).size(320)
                         .target(onSuccess = { art.setImageDrawable(it); art.visibility = View.VISIBLE },
                             onError = { art.visibility = View.GONE })
                         .build()
                     coil.Coil.imageLoader(this).enqueue(req)
                 }
             }
-            infoCard.addView(art, LinearLayout.LayoutParams(dp(84), dp(126)).apply { rightMargin = dp(12) })
+            infoCard.addView(art, LinearLayout.LayoutParams(dp(100), dp(150)).apply { rightMargin = dp(14) })
 
             val textCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val head = TextView(this).apply {
                 text = if (epNames.isNotEmpty()) epNames.getOrNull(curEpIndex)?.takeIf { it.isNotBlank() } ?: curTitle else curTitle
-                textSize = 15f
+                textSize = 17f
                 typeface = Typeface.DEFAULT_BOLD
                 setTextColor(Color.WHITE)
                 maxLines = 2
                 ellipsize = TextUtils.TruncateAt.END
             }
             textCol.addView(head)
-            val syn = TextView(this).apply {
+
+            val metaLine = TextView(this).apply {
                 textSize = 12f
-                setTextColor(0xB3FFFFFF.toInt())
-                maxLines = 4
+                setTextColor(0x99FFFFFF.toInt())
+                maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
                 visibility = View.GONE
             }
+            textCol.addView(metaLine)
+
+            val syn = TextView(this).apply {
+                textSize = 13f
+                setTextColor(0xCCFFFFFF.toInt())
+                maxLines = 5
+                ellipsize = TextUtils.TruncateAt.END
+                visibility = View.GONE
+                setPadding(0, dp(6), 0, 0)
+            }
             textCol.addView(syn)
-            infoCard.addView(textCol, LinearLayout.LayoutParams(dp(220), ViewGroup.LayoutParams.WRAP_CONTENT))
+            infoCard.addView(textCol, LinearLayout.LayoutParams(dp(260), ViewGroup.LayoutParams.WRAP_CONTENT))
             overlay.addView(
                 infoCard,
                 FrameLayout.LayoutParams(
@@ -2310,22 +2321,58 @@ class X4KPlayerAty : ComponentActivity() {
                     rightMargin = hPad
                 },
             )
-            // Sinopsis asíncrona (solo series con contexto).
-            if (curSeries.isNotBlank()) {
-                Thread {
+            // Metadatos asíncronos: series (capítulo/sinopsis) y películas (sinopsis/reparto/calificación/país).
+            Thread {
+                // Series: sinopsis del capítulo.
+                if (curSeries.isNotBlank()) {
                     val info = runCatching {
                         kotlinx.coroutines.runBlocking {
                             com.chronosbvrx.visionplus.data.mirror.EpisodeMirror.info(curSeries, curCode)
                         }
                     }.getOrNull()
-                    if (info?.overview?.isNotBlank() == true) {
+                    if (info != null) {
                         runOnUiThread {
-                            syn.text = info.overview
-                            syn.visibility = View.VISIBLE
+                            if (info.title.isNotBlank() && epNames.isEmpty()) head.text = info.title
+                            if (info.overview.isNotBlank()) {
+                                syn.text = info.overview
+                                syn.visibility = View.VISIBLE
+                            }
                         }
                     }
-                }.start()
-            }
+                } else {
+                    // Películas: sinopsis/reparto/calificación/país desde el portal.
+                    val meta = runCatching {
+                        kotlinx.coroutines.runBlocking {
+                            com.chronosbvrx.visionplus.data.xuper.X4KApi.metaFor(this@X4KPlayerAty, curCode)
+                        }
+                    }.getOrNull()
+                    val item = runCatching {
+                        kotlinx.coroutines.runBlocking {
+                            com.chronosbvrx.visionplus.data.xuper.X4KApi.itemInfo(this@X4KPlayerAty, curCode)
+                        }
+                    }.getOrNull()
+                    runOnUiThread {
+                        val synopsisText = item?.optString("description")?.takeIf { it.isNotBlank() }
+                            ?: item?.optString("introduction")?.takeIf { it.isNotBlank() }
+                        if (!synopsisText.isNullOrBlank()) {
+                            syn.text = synopsisText
+                            syn.visibility = View.VISIBLE
+                        }
+                        val cast = meta?.optString("act")?.takeIf { it.isNotBlank() }
+                            ?: item?.optString("actorDisplay")?.takeIf { it.isNotBlank() }
+                        val score = meta?.optString("sc")?.takeIf { it.isNotBlank() }
+                            ?: item?.optString("score")?.takeIf { it.isNotBlank() }
+                        val country = item?.optString("country")?.takeIf { it.isNotBlank() }
+                            ?: item?.optString("area")?.takeIf { it.isNotBlank() }
+                            ?: item?.optString("region")?.takeIf { it.isNotBlank() }
+                        val parts = listOfNotNull(cast, score?.let { "★ $it" }, country).filter { it.isNotBlank() }
+                        if (parts.isNotEmpty()) {
+                            metaLine.text = parts.joinToString("  ·  ")
+                            metaLine.visibility = View.VISIBLE
+                        }
+                    }
+                }
+            }.start()
         }
 
         // Bottom panel: seek arriba y una sola fila de transporte + pills (ancha, compacta).
@@ -3935,7 +3982,8 @@ class X4KPlayerAty : ComponentActivity() {
         handler.postDelayed({ notice.visibility = View.GONE }, 9_000L)
     }
 
-    /** Con marcador de créditos, la tarjeta de «siguiente capítulo» sale al empezar el cierre. */
+    /** Con marcador de créditos, la tarjeta de «siguiente capítulo» sale al empezar el cierre.
+     *  En películas sueltas, las sugerencias salen también al empezar los créditos. */
     private fun maybeShowCreditsCard(pos: Long) {
         if (isInPipNow() || creditsCardShown || !videoIsReady() || scrubbing) return
         if (errorShown || picking || nextOverlay != null || endedShown || resumeOverlay != null) return
@@ -3944,7 +3992,13 @@ class X4KPlayerAty : ComponentActivity() {
         val start = creditsCardStartMs(markers, duration)
             ?: creditsFallbackStartMs(markers, duration)
             ?: return
-        if (pos < start || !hasNextEpisode()) return
+        if (pos < start) return
+        // Película suelta: sugerencias al empezar los créditos (no esperar al final).
+        if (!isSeriesContent(epIds.size, seasonIds.size) && !movieSuggestShown) {
+            showMovieSuggestions()
+            return
+        }
+        if (!hasNextEpisode()) return
         creditsCardShown = true
         if (curSeries.isNotBlank()) {
             UserLibrary.markEpisodeWatched(this, curSeries, curEpIndex + 1)
@@ -4774,12 +4828,12 @@ class X4KPlayerAty : ComponentActivity() {
 
         Thread {
             var prep = kotlinx.coroutines.runBlocking {
-                X4KApi.prepareVod(this@X4KPlayerAty, code, title, series, 0L)
+                X4KApi.prepareVod(this@X4KPlayerAty, code, title, series, 0L, curEpNumber)
             }
             if (prep == null) {
                 Thread.sleep(450)
                 prep = kotlinx.coroutines.runBlocking {
-                    X4KApi.prepareVod(this@X4KPlayerAty, code, title, series, 0L)
+                    X4KApi.prepareVod(this@X4KPlayerAty, code, title, series, 0L, curEpNumber)
                 }
             }
             runOnUiThread {

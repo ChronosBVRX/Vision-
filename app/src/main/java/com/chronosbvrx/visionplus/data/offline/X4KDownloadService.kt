@@ -62,6 +62,7 @@ class X4KDownloadService : Service() {
         const val EXTRA_TOTAL_BYTES = "total_bytes"
         const val EXTRA_ISSUED_AT = "issued_at"
         const val EXTRA_PORTABLE = "portable"
+        const val EXTRA_EPISODE_NUMBER = "episode_number"
 
         const val MIN_VALID_VIDEO_BYTES = MIN_VALID_VAULT_BYTES
         private const val RESOLVE_TIMEOUT_MS = 25_000L
@@ -80,6 +81,7 @@ class X4KDownloadService : Service() {
             durationMs: Long,
             totalBytes: Long,
             portable: Boolean = false,
+            episodeNumber: Int = 1,
         ): Intent = Intent(context, X4KDownloadService::class.java).apply {
             action = ACTION_DOWNLOAD
             putExtra(EXTRA_ID, id)
@@ -91,6 +93,7 @@ class X4KDownloadService : Service() {
             putExtra(EXTRA_DURATION_MS, durationMs)
             putExtra(EXTRA_TOTAL_BYTES, totalBytes)
             putExtra(EXTRA_PORTABLE, portable)
+            putExtra(EXTRA_EPISODE_NUMBER, episodeNumber.coerceAtLeast(1))
             // Marca de emisión: si una pausa llega DESPUÉS de este momento, gana la
             // pausa aunque los intents se procesen en otro orden (carrera cerrada).
             putExtra(EXTRA_ISSUED_AT, System.currentTimeMillis())
@@ -190,6 +193,7 @@ class X4KDownloadService : Service() {
         val vaultPath = intent.getStringExtra(EXTRA_VAULT_PATH).orEmpty()
         val durationMs = intent.getLongExtra(EXTRA_DURATION_MS, 0L)
         val portable = intent.getBooleanExtra(EXTRA_PORTABLE, false)
+        val episodeNumber = intent.getIntExtra(EXTRA_EPISODE_NUMBER, 1).coerceAtLeast(1)
         val fallbackTotal = intent.getLongExtra(EXTRA_TOTAL_BYTES, 0L).takeIf { it > 0L }
             ?: estimateTotalBytes(durationMs, quality)
         val dest = File(vaultPath)
@@ -221,6 +225,7 @@ class X4KDownloadService : Service() {
                     fallbackTotal = fallbackTotal,
                     declaredDurationMs = durationMs,
                     portable = portable,
+                    episodeNumber = episodeNumber,
                     pauseWins = pauseWins,
                 )
             }
@@ -269,6 +274,7 @@ class X4KDownloadService : Service() {
         fallbackTotal: Long,
         declaredDurationMs: Long,
         portable: Boolean,
+        episodeNumber: Int = 1,
         pauseWins: () -> Boolean,
     ) {
         // El motor no acepta un segundo programa con vista nueva en el mismo
@@ -287,14 +293,14 @@ class X4KDownloadService : Service() {
         // ERROR honesto y reintento que un 0% infinito (congelaba la UI en POCO).
         var metaMedia = runCatching {
             withTimeout(60_000L) {
-                X4KApi.prepareVod(app, code, title, seriesId, declaredDurationMs)
+                X4KApi.prepareVod(app, code, title, seriesId, declaredDurationMs, episodeNumber)
             }
         }.getOrNull()
         if (metaMedia == null) {
             delay(450L)
             metaMedia = runCatching {
                 withTimeout(60_000L) {
-                    X4KApi.prepareVod(app, code, title, seriesId, declaredDurationMs)
+                    X4KApi.prepareVod(app, code, title, seriesId, declaredDurationMs, episodeNumber)
                 }
             }.getOrNull()
         }

@@ -377,7 +377,12 @@ fun TitleScreen(
             contentId = target,
             seriesId = if (isSeriesTitle) activeId else "",
             fallbackDurationMs = itemDurationMs,
-            epNumber = if (isSeriesTitle) nextEpisodeIndex + 1 else 1,
+            epNumber = if (isSeriesTitle) {
+                episodeNumbers.getOrNull(nextEpisodeIndex.coerceIn(0, episodes.lastIndex))
+                    ?.takeIf { it > 0 } ?: (nextEpisodeIndex + 1)
+            } else {
+                1
+            },
         )
     }
     val playButtonLabel = when {
