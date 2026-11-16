@@ -255,7 +255,7 @@ export class MinionsTdHostScene extends Phaser.Scene {
     this.setTextIfChanged(this.titleText!, "MinionsTD");
     this.setTextIfChanged(
       this.subtitleText!,
-      `${en ? "Room" : "Raum"} ${roomCode}`
+      `${en ? "Room" : "Sala"} ${roomCode}`
     );
     void phase;
 
@@ -286,7 +286,7 @@ export class MinionsTdHostScene extends Phaser.Scene {
       const en = language === "en";
       this.setTextIfChanged(
         this.subtitleText,
-        `${en ? "Room" : "Raum"} ${roomCode} | Phase ${phase ?? "unknown"} | ${en ? "Waiting for game data" : "Warte auf Spieldaten"}`
+        `${en ? "Room" : "Sala"} ${roomCode} | Phase ${phase ?? "unknown"} | ${en ? "Waiting for game data" : "Esperando datos del juego"}`
       );
       for (const text of this.panelHeaderTexts) {
         this.setTextIfChanged(text, "");

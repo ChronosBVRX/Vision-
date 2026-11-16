@@ -14,7 +14,8 @@ const NARRATED_GAMES = new Set([
   "light-trails",
   "magic-duell",
   "chaos-kommando",
-  "arena-survivor"
+  "arena-survivor",
+  "minions-td"
 ]);
 
 const momentForPhase = (phase: string | null | undefined): "intro" | "playing" | "result" | "scoreboard" | null => {

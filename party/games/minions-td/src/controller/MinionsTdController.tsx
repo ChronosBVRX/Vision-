@@ -175,17 +175,17 @@ function formatPhaseLabel(phase: string | undefined, en: boolean): string {
     case "countdown":
       return "Countdown";
     case "playing":
-      return en ? "Playing" : "Spielen";
+      return en ? "Playing" : "Jugando";
     case "locked":
-      return en ? "Locked" : "Gesperrt";
+      return en ? "Locked" : "Bloqueado";
     case "result":
-      return en ? "Result" : "Ergebnis";
+      return en ? "Result" : "Resultado";
     case "scoreboard":
       return "Scoreboard";
     case "finished":
-      return en ? "Finished" : "Fertig";
+      return en ? "Finished" : "Terminado";
     default:
-      return en ? "Waiting" : "Warten";
+      return en ? "Waiting" : "Esperando";
   }
 }
 
@@ -393,7 +393,7 @@ export function buildMinionsTdControllerModel(
     nextTargetPlayer: nextTargetPlayer ? resolvePlayerView(nextTargetPlayer) : null,
     map: {
       id: gameState?.map.id ?? "unknown",
-      name: gameState?.map.name ?? (en ? "Map" : "Karte"),
+      name: gameState?.map.name ?? (en ? "Map" : "Mapa"),
       cols: gameState?.map.cols ?? 0,
       rows: gameState?.map.rows ?? 0,
       pathCells: gameState?.map.pathCells ?? [],

@@ -83,6 +83,7 @@ STANDARD = [
     "magic-duell",
     "chaos-kommando",
     "arena-survivor",
+    "minions-td",
 ]
 
 GAME_VOICE = {

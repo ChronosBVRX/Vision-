@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para MinionsTD: construye torres y defiende tu carril.",
+      "Se abre MinionsTD. Elige el mapa y prepárate para defender.",
+      "MinionsTD comienza. Torre, esbirros y estrategia.",
+      "La arena se enciende. Construye y defiende tu carril.",
+      "Prepárense: MinionsTD está por empezar.",
+      "MinionsTD: torres, esbirros y defensa por turnos.",
+      "La batalla comienza. Elige tu mapa y defiende.",
+      "MinionsTD arranca. Construye bien o cae.",
+      "Se abre el frente. Torre arriba, esbirros al frente.",
+      "Prepárense para MinionsTD. El último en pie gana."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Construye torres y envía esbirros. Defiende tu carril.",
+      "La partida está en marcha. Torre y ataca.",
+      "Oleada tras oleada. No bajes la guardia.",
+      "Construye bien. El enemigo no espera.",
+      "Envía esbirros y defiende. El carril es tuyo.",
+      "La estrategia es clave. Torre y ataca.",
+      "Construye y mejora. Cada torre cuenta.",
+      "El enemigo avanza. Refuerza tu carril.",
+      "Torre arriba, esbirros al frente. Defiende.",
+      "Sigue construyendo. El carril debe sobrevivir."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Ronda terminada. El último carril en pie gana.",
+      "Fin de la ronda. El mejor estratega se impuso.",
+      "Ronda terminada. Revisa el oro y las vidas.",
+      "Fin de la ronda. El carril mejor defendido gana.",
+      "Ronda terminada. La estrategia marcó la diferencia.",
+      "Fin de la ronda. Ajusta tu defensa.",
+      "Ronda terminada. El ganador dominó el mapa.",
+      "Fin de la ronda. Prepárense para la siguiente.",
+      "Ronda terminada. El oro y las vidas lo decidieron.",
+      "Fin de la ronda. El caos dejó su marca."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Marcador actualizado. El líder sigue en pie.",
+      "Aquí va el marcador. Que tiemble el segundo.",
+      "Marcador listo. El mapa no olvida.",
+      "Marcador actualizado. A ajustar la estrategia.",
+      "Aquí está el marcador. El primero manda.",
+      "Marcador listo. Prepárense para la siguiente ronda.",
+      "Marcador actualizado. Que siga la defensa.",
+      "Aquí va el marcador. El ganador lidera.",
+      "Marcador listo. El mapa se prepara.",
+      "Marcador actualizado. A defender de nuevo."
+    ]
+  }
+]

@@ -59,8 +59,8 @@ const german: Readonly<Record<string, string>> = {
   "Ultimate": "Ultimativ"
 };
 const fields = new Set(["displayName", "description", "role", "targeting", "trait"]);
-export function localizeMinionsTdContent<T>(value: T, language?: "de" | "en"): T {
-  const text = language === "en" ? english : german;
+export function localizeMinionsTdContent<T>(value: T, language?: "de" | "en" | "es"): T {
+  const text = language === "es" ? english : language === "en" ? english : german;
   if (Array.isArray(value)) return value.map(entry => localizeMinionsTdContent(entry, language)) as T;
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key,

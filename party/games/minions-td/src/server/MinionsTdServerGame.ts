@@ -562,7 +562,7 @@ function finishMatch(
   reason: "last_player_standing" | "time_limit"
 ): MinionsTdRuntimeState {
   const en = state.language === "en";
-  const winnerName = winnerPlayer?.name ?? (en ? "Nobody" : "Niemand");
+  const winnerName = winnerPlayer?.name ?? (en ? "Nobody" : "Nadie");
   return transitionRoundState(
     {
       ...state,
@@ -579,8 +579,8 @@ function finishMatch(
     {
       message:
         reason === "time_limit"
-          ? en ? `${winnerName} wins after time runs out.` : `${winnerName} gewinnt nach Zeit.`
-          : en ? `${winnerName} survives the longest.` : `${winnerName} ueberlebt am laengsten.`,
+          ? en ? `${winnerName} wins after time runs out.` : `${winnerName} gana cuando se acaba el tiempo.`
+          : en ? `${winnerName} survives the longest.` : `${winnerName} sobrevive el mayor tiempo.`,
       durationMs: 1_400
     }
   );

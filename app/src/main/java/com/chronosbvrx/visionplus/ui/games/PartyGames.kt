@@ -180,7 +180,7 @@ val PARTY_GAMES: List<PartyGame> = listOf(
         minPlayers = 2,
         maxPlayers = 4,
         duration = "15–20 min",
-        cover = R.drawable.party_default,
+        cover = R.drawable.party_minions_td,
     ),
     PartyGame(
         id = "chaos-kommando",
