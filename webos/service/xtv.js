@@ -94,6 +94,8 @@ const FREE_COLUMN_CODE = "masmobile_free";
 const FREE_COLUMNS_TTL_MS = 12 * 60 * 60 * 1000;
 const FREE_COLUMN_FALLBACK = [87887, 87888];
 const freeColumnsCache = { ids: [], at: 0 };
+const resolveCache = new Map();
+const RESOLVE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function log(...args) {
   console.log("[xtv]", ...args);
@@ -518,6 +520,18 @@ function codecRank(value) {
   return 0;
 }
 
+function hasFree1080(episode) {
+  for (const group of (episode && episode.totalMovieList) || []) {
+    if (!trim(group && group.quality).includes("1080")) continue;
+    for (const track of (group && group.movieList) || []) {
+      for (const license of (track && track.licenseList) || []) {
+        if (trim(license && license.tag) === "free") return true;
+      }
+    }
+  }
+  return false;
+}
+
 function collectTracks(episode) {
   const tracks = [];
   for (const group of (episode && episode.totalMovieList) || []) {
@@ -599,8 +613,8 @@ function loadPlay(contentId, seriesContentId, callback) {
     loadFreeColumns((_, columns) => {
       let index = 0;
       let lastError = null;
-      const finish = (payload, episode, tracks) => {
-        callback(null, { play: payload, episode, tracks });
+      const finish = (payload, episode, tracks, source) => {
+        callback(null, { play: payload, episode, tracks, source });
       };
       const tryV9 = () => {
         call(
@@ -620,7 +634,7 @@ function loadPlay(contentId, seriesContentId, callback) {
             if (!episode) return callback(new Error("el portal no devolvió pistas de vídeo"));
             const tracks = collectTracks(episode);
             if (!tracks.length) return callback(new Error("el portal no devolvió pistas de vídeo"));
-            finish(payload, episode, tracks);
+            finish(payload, episode, tracks, "v9_fallback");
           },
         );
       };
@@ -647,7 +661,7 @@ function loadPlay(contentId, seriesContentId, callback) {
             const episode = payload && payload.episodeList && payload.episodeList[0];
             const tracks = collectTracks(episode);
             if (!episode || !tracks.length) return tryV10();
-            finish(payload, episode, tracks);
+            finish(payload, episode, tracks, "v10_free");
           },
         );
       };
@@ -734,6 +748,39 @@ function resolve(contentId, seriesContentId, options, callback) {
     options = {};
   }
   options = options || {};
+  const key = [
+    trim(contentId),
+    trim(seriesContentId),
+    options.trackIndex || 0,
+    options.quality || "auto",
+  ].join("|");
+  const hit = resolveCache.get(key);
+  if (hit && Date.now() - hit.at <= RESOLVE_CACHE_TTL_MS) {
+    log(
+      "vod resolve:",
+      trim(contentId),
+      `via=${hit.payload.via}`,
+      `resolucion=${hit.payload.quality}`,
+      "motivo=cache",
+    );
+    return callback(null, hit.payload);
+  }
+  resolveCache.delete(key);
+  resolveFresh(contentId, seriesContentId, options, (error, payload) => {
+    if (error || !payload) return callback(error, payload);
+    resolveCache.set(key, { at: Date.now(), payload });
+    log(
+      "vod resolve:",
+      trim(contentId),
+      `via=${payload.via}`,
+      `resolucion=${payload.quality}`,
+      `motivo=${payload.motivo}`,
+    );
+    callback(null, payload);
+  });
+}
+
+function resolveFresh(contentId, seriesContentId, options, callback) {
   loadPlay(contentId, seriesContentId, (error, loaded) => {
     if (error) return callback(error);
     const tracks = loaded.tracks
@@ -755,17 +802,20 @@ function resolve(contentId, seriesContentId, options, callback) {
       const cdn = cdns[0];
       const format = trim(track.videoFormat).toLowerCase() === "ts" ? "ts" : "mp4";
       const streamUrl = `${cdn.bases[0]}/vod/${trim(track.contentId)}_media.${format}`;
+      const summary = trackSummary(track);
       const payload = {
         url: streamUrl,
         mime: format === "ts" ? "video/mp2t" : "video/mp4",
         codec: trim(track.encodeFormat).toUpperCase(),
-        quality: trim(track.quality),
+        quality: trim(track.quality) || (summary.height ? `${summary.height}p` : ""),
+        via: hasFree1080(loaded.episode) ? "free" : "normal",
+        motivo: loaded.source || "v9_fallback",
         duration: durationSeconds(
           track.duration ||
             (loaded.episode && loaded.episode.duration) ||
             (loaded.play && loaded.play.duration),
         ),
-        selectedTrack: trackSummary(track),
+        selectedTrack: summary,
         availableTracks: tracks.map(trackSummary),
         trackIndex: index,
         audio: trim(track.audioInfo),

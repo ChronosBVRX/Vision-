@@ -73,6 +73,40 @@ class X4KApiFreeV10Test {
     }
 
     @Test
+    fun viaIsFreeOnlyWhenThe1080pGroupCarriesAFreeLicense() {
+        val free = JSONObject(
+            """
+            {"episodeList":[{"totalMovieList":[
+              {"quality":"1080p","movieList":[
+                {"contentId":"h264","licenseList":[{"tag":"free","license":"L"}]}
+              ]}
+            ]}]}
+            """.trimIndent(),
+        )
+        val vip = JSONObject(
+            """
+            {"episodeList":[{"totalMovieList":[
+              {"quality":"1080p","movieList":[
+                {"contentId":"h264","licenseList":[{"tag":"vip","license":"L"}]}
+              ]}
+            ]}]}
+            """.trimIndent(),
+        )
+        val no1080 = JSONObject(
+            """
+            {"episodeList":[{"totalMovieList":[
+              {"quality":"480p","movieList":[
+                {"contentId":"h264","licenseList":[{"tag":"free","license":"L"}]}
+              ]}
+            ]}]}
+            """.trimIndent(),
+        )
+        assertTrue(X4KApi.hasFree1080(free))
+        assertTrue(!X4KApi.hasFree1080(vip))
+        assertTrue(!X4KApi.hasFree1080(no1080))
+    }
+
+    @Test
     fun playbackPrefers1080pAndH264WithinSameResolution() {
         val medias = JSONArray()
             .put(media("480-h264", "480p", "h264"))

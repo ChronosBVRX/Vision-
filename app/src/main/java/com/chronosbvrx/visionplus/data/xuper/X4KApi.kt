@@ -1441,8 +1441,18 @@ object X4KApi {
     /** Handshake adelantado desde la ficha (una sola reproducción por entrada). */
     private class PrefetchedVod(val atMs: Long, val media: VodMedia)
 
+    /** Resolución reutilizable por unos minutos; nunca se sirve una entrada vencida. */
+    private class CachedVod(
+        val atMs: Long,
+        val media: VodMedia,
+        val via: String,
+        val motivo: String,
+    )
+
     private val vodPrefetch = java.util.concurrent.ConcurrentHashMap<String, PrefetchedVod>()
+    private val vodCache = java.util.concurrent.ConcurrentHashMap<String, CachedVod>()
     private const val PREFETCH_TTL_MS = 90_000L
+    private const val VOD_CACHE_TTL_MS = 5 * 60 * 1000L
 
     /**
      * Adelanta el handshake de reproducción mientras el usuario mira la ficha: al pulsar
@@ -1507,8 +1517,25 @@ object X4KApi {
         fallbackDurationMs: Long = 0L,
     ): VodMedia? = withContext(Dispatchers.IO) {
         guarded {
-            val prefetchCid = xtvPortalId(contentId)
+            val cid = xtvPortalId(contentId)
+            val prefetchCid = cid
             val startedAt = android.os.SystemClock.uptimeMillis()
+            // Auto-reparado del motor: si PlayerRecovery rotó la carpeta de trabajo tras
+            // fallos silenciosos, renovar la sesión y forzar SLB/params frescas ANTES de
+            // consultar cachés (prefetch/VOD), para que un gen viejo no sirva medios
+            // rancios que ya no son válidos tras la rotación.
+            val healed = PlayerRecovery.consumeGenChange(context) != null
+            if (healed) {
+                runCatching { renewSession(context, force = true) }
+                // El motor legado Xuper, con una sesión rancia, rota contra el mismo portal y
+                // tira la reproducción XTV: se desarma junto con el resto del estado del motor.
+                runCatching { XuperEngine.disable(context) }
+                vodPrefetch.remove(cid)
+                vodCache.remove(cid)
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "PLAYER_HEAL_APPLIED", "sesion+slb frescas",
+                )
+            }
             vodPrefetch.remove(prefetchCid)?.let {
                 if (System.currentTimeMillis() - it.atMs < PREFETCH_TTL_MS) {
                     Log.i(TAG, "play adelantado desde la ficha: $prefetchCid (${it.media.durationMs} ms)")
@@ -1519,20 +1546,17 @@ object X4KApi {
                     return@guarded it.media
                 }
             }
-            // Auto-reparado del motor: si PlayerRecovery rotó la carpeta de trabajo tras
-            // fallos silenciosos, renovar la sesión y forzar SLB/params frescas para que el
-            // arranque limpio no herede nada viejo.
-            val healed = PlayerRecovery.consumeGenChange(context) != null
-            if (healed) {
-                runCatching { renewSession(context, force = true) }
-                // El motor legado Xuper, con una sesión rancia, rota contra el mismo portal y
-                // tira la reproducción XTV: se desarma junto con el resto del estado del motor.
-                runCatching { XuperEngine.disable(context) }
-                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-                    "PLAYER_HEAL_APPLIED", "sesion+slb frescas",
-                )
+            vodCache[cid]?.let { cached ->
+                if (System.currentTimeMillis() - cached.atMs <= VOD_CACHE_TTL_MS) {
+                    Log.i(
+                        TAG,
+                        "vod resolve: cid=$cid via=${cached.via} " +
+                            "resolucion=${resolutionOf(cached.media.mediasJson)} motivo=cache",
+                    )
+                    return@guarded cached.media
+                }
+                vodCache.remove(cid)
             }
-            val cid = xtvPortalId(contentId)
             val sid = xtvPortalId(seriesId)
             // La sesión/SLB y la ficha del título NO dependen entre sí. En una caja de TV cada
             // llamada cuesta 0.2-0.7 s: hacerlas en serie regalaba una ida y vuelta en cada
@@ -1583,6 +1607,8 @@ object X4KApi {
                 durMs = fallbackDurationMs
             }
             var medias: JSONArray? = null
+            var via = "normal"
+            var motivo = "no_media"
             val licenseStart = android.os.SystemClock.uptimeMillis()
             var lastLicenseError: String? = null
             // Salir de la ficha cancela el prefetch de la licencia: eso NO es un fallo de
@@ -1632,6 +1658,8 @@ object X4KApi {
                         val list = collectMedias(d)
                         if (list.length() > 0) {
                             medias = list
+                            motivo = "v10_free"
+                            via = if (hasFree1080(d)) "free" else "normal"
                             Log.i(TAG, "licencia v10 libre: columna=$columnId pistas=${list.length()}")
                             break
                         }
@@ -1672,6 +1700,8 @@ object X4KApi {
                         val list = collectMedias(d)
                         if (list.length() > 0) {
                             medias = list
+                            motivo = "v9_fallback"
+                            via = if (hasFree1080(d)) "free" else "normal"
                             break
                         }
                     }
@@ -1685,16 +1715,22 @@ object X4KApi {
                 if (d != null) {
                     if (durMs <= 0L) durMs = extractDurationMs(d)
                     medias = collectMedias(d).takeIf { it.length() > 0 }
+                    if (medias != null) {
+                        motivo = "v9_fallback"
+                        via = if (hasFree1080(d)) "free" else "normal"
+                    }
                 }
             }
             if (medias == null && !cancelledLicense) {
                 com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
                     "PLAYBACK_LICENSE_FAIL",
-                    "cid=$cid motivo=${lastLicenseError ?: "sin medios"} " +
-                        "ms=${android.os.SystemClock.uptimeMillis() - licenseStart}",
+                    "cid=$cid motivo=${lastLicenseError ?: "sin medios"} via=$via " +
+                        "motivo_tipo=$motivo ms=${android.os.SystemClock.uptimeMillis() - licenseStart}",
                 )
             }
             val m = medias ?: return@guarded null
+            val resolucion = m.optJSONObject(0)?.optString("q").orEmpty()
+            Log.i(TAG, "vod resolve: cid=$cid via=$via resolucion=$resolucion motivo=$motivo")
             val totalMs = android.os.SystemClock.uptimeMillis() - startedAt
             val licenseMs = android.os.SystemClock.uptimeMillis() - licenseStart
             // Solo se reporta lo que se SIENTE lento: el desglose dice cuál de las fases se
@@ -1703,14 +1739,17 @@ object X4KApi {
                 com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
                     "PLAYBACK_PREP",
                     "cached=false slbMs=$slbMs metaMs=$metaMs licenseMs=$licenseMs " +
-                        "totalMs=$totalMs healed=$healed",
+                        "totalMs=$totalMs healed=$healed via=$via " +
+                        "resolucion=$resolucion motivo=$motivo",
                 )
             }
-            VodMedia(
+            val media = VodMedia(
                 mediasJson = m.toString(),
                 durationMs = durMs,
                 subsLangs = item?.optString("subsInfo").orEmpty(),
             )
+            vodCache[cid] = CachedVod(System.currentTimeMillis(), media, via, motivo)
+            media
         }
     }
 
@@ -2043,6 +2082,31 @@ object X4KApi {
                 .thenBy { it.optString("n") },
         )
         return JSONArray().apply { entries.forEach { put(it) } }
+    }
+
+    /** Resolución efectiva de una lista ya ordenada (`q` de la primera pista). */
+    private fun resolutionOf(mediasJson: String): String = runCatching {
+        JSONArray(mediasJson).optJSONObject(0)?.optString("q").orEmpty()
+    }.getOrDefault("")
+
+    /** `free` solo si el grupo 1080p trae al menos una licencia `free`. */
+    internal fun hasFree1080(result: JSONObject): Boolean {
+        val eps = result.optJSONArray("episodeList") ?: return false
+        for (i in 0 until eps.length()) {
+            val groups = eps.optJSONObject(i)?.optJSONArray("totalMovieList") ?: continue
+            for (g in 0 until groups.length()) {
+                val group = groups.optJSONObject(g) ?: continue
+                if (!group.optString("quality").contains("1080")) continue
+                val movies = group.optJSONArray("movieList") ?: continue
+                for (m in 0 until movies.length()) {
+                    val licenses = movies.optJSONObject(m)?.optJSONArray("licenseList") ?: continue
+                    for (l in 0 until licenses.length()) {
+                        if (licenses.optJSONObject(l)?.optString("tag") == "free") return true
+                    }
+                }
+            }
+        }
+        return false
     }
 
     internal fun collectMedias(result: JSONObject): JSONArray {
