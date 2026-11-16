@@ -2,6 +2,7 @@ import { normalizeLanguage, type GamePlayerSetupDefinition } from "@open-party-l
 import { hasActiveRound, ROOM_EXTENSION_WINDOW_MS } from "@open-party-lab/protocol";
 import type {
   AckResult,
+  BotDifficulty,
   ClientToServerEvents,
   InterServerEvents,
   PlayerSetupValue,
@@ -9,6 +10,7 @@ import type {
   SocketData
 } from "@open-party-lab/protocol";
 import { now } from "../../core/time/now.js";
+import { BotManager } from "../../bots/botManager.js";
 import { GameRegistry } from "../../game-engine/gameRegistry.js";
 import { GameRuntime } from "../../game-engine/gameRuntime.js";
 import { StateBroadcaster } from "../../game-engine/stateBroadcaster.js";
@@ -43,6 +45,7 @@ export interface RegisterSocketHandlersDeps {
   gameRuntime: GameRuntime;
   stateBroadcaster: StateBroadcaster;
   roomCleanupService: RoomCleanupService;
+  botManager: BotManager;
   hostedMode: boolean;
 }
 
@@ -89,6 +92,9 @@ function socketText(_en: boolean) {
     leftRoom: "Saliste de la sala.",
     hostLanguageOnly: "Solo el anfitrión puede cambiar el idioma.",
     hostKickOnly: "Solo el anfitrión puede expulsar jugadores.",
+    hostBotsOnly: "Solo el anfitrión puede agregar o quitar bots.",
+    botsLobbyOnly: "Solo puedes cambiar bots cuando no hay una ronda activa.",
+    botNotFound: "Ese jugador no es un bot.",
     kicked: "El anfitrión te sacó de la sala.",
     playerNotFound: "Jugador no encontrado.",
     ownCharacterOnly: "Solo puedes elegir tu propio personaje.",
@@ -137,6 +143,7 @@ export function registerSocketHandlers({
   gameRuntime,
   stateBroadcaster,
   roomCleanupService,
+  botManager,
   hostedMode
 }: RegisterSocketHandlersDeps): void {
   /**
@@ -648,6 +655,9 @@ export function registerSocketHandlers({
 
       // A kicked player must not keep driving the room.
       roomManager.forgetHostControlForPlayer(room, result.player.id);
+      if (result.player.isBot) {
+        botManager.forgetPlayer(room, result.player.id);
+      }
 
       ack({
         ok: true,
@@ -1003,6 +1013,10 @@ export function registerSocketHandlers({
         return;
       }
 
+      // Bots belong to the game they were seated for. A game change starts a
+      // clean table; the host can add them again in one tap.
+      botManager.clearBots(room);
+
       const selectedGame = getSelectedGame(room);
       resetInvalidPlayerSetupSelections(room, selectedGame);
       resetLobbySetupConfirmation(room, selectedGame);
@@ -1011,6 +1025,77 @@ export function registerSocketHandlers({
         return;
       }
 
+      stateBroadcaster.broadcastRoomState(room);
+      stateBroadcaster.broadcastScoreboard(room);
+    });
+
+    on("bot:add", (payload, ack) => {
+      const room = roomManager.getRoom(payload.roomCode);
+
+      if (!room) {
+        ack(ackError("Sala no encontrada."));
+        return;
+      }
+      const text = socketText(room.language === "en");
+
+      if (!canControlRoom(room, socket)) {
+        ack(ackError(text.hostBotsOnly));
+        return;
+      }
+      if (hasActiveRound(room)) {
+        ack(ackError(text.botsLobbyOnly));
+        return;
+      }
+
+      const result = botManager.addBots(
+        room,
+        payload.count ?? 1,
+        (payload.difficulty ?? "hard") as BotDifficulty
+      );
+
+      if (result.error) {
+        ack(ackError(result.error));
+        return;
+      }
+
+      ack({
+        ok: true,
+        data: {
+          room: stateBroadcaster.createRoomSnapshot(room)
+        }
+      });
+      stateBroadcaster.broadcastRoomState(room);
+      stateBroadcaster.broadcastScoreboard(room);
+    });
+
+    on("bot:remove", (payload, ack) => {
+      const room = roomManager.getRoom(payload.roomCode);
+
+      if (!room) {
+        ack(ackError("Sala no encontrada."));
+        return;
+      }
+      const text = socketText(room.language === "en");
+
+      if (!canControlRoom(room, socket)) {
+        ack(ackError(text.hostBotsOnly));
+        return;
+      }
+      if (hasActiveRound(room)) {
+        ack(ackError(text.botsLobbyOnly));
+        return;
+      }
+      if (!botManager.removeBot(room, payload.playerId)) {
+        ack(ackError(text.botNotFound));
+        return;
+      }
+
+      ack({
+        ok: true,
+        data: {
+          room: stateBroadcaster.createRoomSnapshot(room)
+        }
+      });
       stateBroadcaster.broadcastRoomState(room);
       stateBroadcaster.broadcastScoreboard(room);
     });

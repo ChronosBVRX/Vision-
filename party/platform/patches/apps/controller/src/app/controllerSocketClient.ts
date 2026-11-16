@@ -1,4 +1,5 @@
 import type {
+  BotDifficulty,
   ClientToServerEvents,
   GameStateEnvelope,
   PlayerSetupValue,
@@ -725,6 +726,46 @@ export class ControllerSocketClient {
 
       this.updateState({ room: result.data.room, error: null });
     });
+  }
+
+  /** Host action: seat server-driven players for the selected game. */
+  addBot(count: number, difficulty: BotDifficulty): void {
+    if (!this.state.room) {
+      return;
+    }
+
+    this.socket.emit(
+      "bot:add",
+      { roomCode: this.state.room.code, count, difficulty },
+      (result) => {
+        if (!result.ok) {
+          this.updateState({ error: result.error });
+          return;
+        }
+
+        this.updateState({ room: result.data.room, error: null });
+      }
+    );
+  }
+
+  /** Host action: remove a bot seat. */
+  removeBot(playerId: string): void {
+    if (!this.state.room) {
+      return;
+    }
+
+    this.socket.emit(
+      "bot:remove",
+      { roomCode: this.state.room.code, playerId },
+      (result) => {
+        if (!result.ok) {
+          this.updateState({ error: result.error });
+          return;
+        }
+
+        this.updateState({ room: result.data.room, error: null });
+      }
+    );
   }
 
   sendInput(input: unknown): void {

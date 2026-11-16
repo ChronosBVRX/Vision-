@@ -1,4 +1,5 @@
 import { isLobbyFieldVisible, type AvailableGameDto } from "@open-party-lab/protocol";
+import { useState } from "react";
 
 type LobbyField = NonNullable<AvailableGameDto["lobbySetup"]>["fields"][number];
 type SettingsMap = Record<string, string | number | boolean>;
@@ -277,6 +278,7 @@ export function LobbySetupControls({
   onHostAction
 }: LobbySetupControlsProps) {
   const setup = game.lobbySetup;
+  const [activeGroup, setActiveGroup] = useState(0);
 
   if (!setup || setup.fields.length === 0) {
     return null;
@@ -290,73 +292,103 @@ export function LobbySetupControls({
     isLobbyFieldVisible(field, setup.fields, settings)
   );
 
+  const blocks = groupFields(visibleFields);
+  const activeIndex = Math.min(activeGroup, Math.max(0, blocks.length - 1));
+  const activeBlock = blocks[activeIndex];
+
+  const renderField = (field: LobbyField) => {
+    const value = settings[field.settingKey ?? field.id] ?? field.defaultValue;
+
+    if (field.kind === "select") {
+      return (
+        <SelectField
+          key={field.id}
+          game={game}
+          field={field}
+          value={value}
+          disabled={disabled}
+          onHostAction={onHostAction}
+        />
+      );
+    }
+
+    if (field.kind === "toggle") {
+      return (
+        <ToggleField
+          key={field.id}
+          game={game}
+          field={field}
+          value={value}
+          disabled={disabled}
+          onHostAction={onHostAction}
+        />
+      );
+    }
+
+    return (
+      <NumberField
+        key={field.id}
+        game={game}
+        field={field}
+        value={value}
+        disabled={disabled}
+        onHostAction={onHostAction}
+      />
+    );
+  };
+
   return (
-    <div style={{ display: "grid", gap: 14 }}>
+    <div style={{ display: "grid", gap: 12 }}>
       {setup.description ? <p style={hintStyle}>{setup.description}</p> : null}
 
-      {groupFields(visibleFields).map((block) => {
-        const rendered = block.fields.map((field) => {
-          const value = settings[field.settingKey ?? field.id] ?? field.defaultValue;
-
-          if (field.kind === "select") {
+      {blocks.length > 1 ? (
+        <div
+          role="tablist"
+          aria-label="Ajustes del juego"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))",
+            gap: 4,
+            padding: 4,
+            borderRadius: 12,
+            background: "var(--surface-muted)",
+            border: "1px solid var(--line)"
+          }}
+        >
+          {blocks.map((block, index) => {
+            const selected = index === activeIndex;
             return (
-              <SelectField
-                key={field.id}
-                game={game}
-                field={field}
-                value={value}
-                disabled={disabled}
-                onHostAction={onHostAction}
-              />
+              <button
+                key={`${block.title ?? "general"}-${index}`}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setActiveGroup(index)}
+                style={{
+                  minHeight: 38,
+                  borderRadius: 9,
+                  border: selected ? "1px solid var(--accent)" : "1px solid transparent",
+                  background: selected ? "var(--accent-soft)" : "transparent",
+                  color: selected ? "var(--ink)" : "var(--text-muted)",
+                  fontWeight: selected ? 800 : 600,
+                  fontSize: ".72rem",
+                  lineHeight: 1.1,
+                  padding: "0 6px"
+                }}
+              >
+                {block.title ?? "General"}
+              </button>
             );
-          }
+          })}
+        </div>
+      ) : null}
 
-          if (field.kind === "toggle") {
-            return (
-              <ToggleField
-                key={field.id}
-                game={game}
-                field={field}
-                value={value}
-                disabled={disabled}
-                onHostAction={onHostAction}
-              />
-            );
-          }
-
-          return (
-            <NumberField
-              key={field.id}
-              game={game}
-              field={field}
-              value={value}
-              disabled={disabled}
-              onHostAction={onHostAction}
-            />
-          );
-        });
-
-        if (block.title === null) {
-          return rendered;
-        }
-
-        return (
-          <div
-            key={block.title}
-            style={{
-              display: "grid",
-              gap: 6,
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid var(--line)",
-              background: "color-mix(in srgb, var(--surface-muted) 55%, transparent)"
-            }}
-          >
-            <p style={labelStyle}>{block.title}</p>
-            {rendered}
-          </div>
-        );
-      })}
+      {activeBlock ? (
+        <div style={{ display: "grid", gap: 10 }}>
+          {activeBlock.title ? <p style={labelStyle}>{activeBlock.title}</p> : null}
+          {activeBlock.fields.map(renderField)}
+        </div>
+      ) : null}
 
       {game.playerSetup?.kind === "choice" && game.playerSetup.assignment === "balanced-random" ?
         <button type="button" disabled={disabled} style={optionBase} onClick={() => onHostAction(game.id, { type: "shuffle-player-setup" })}>

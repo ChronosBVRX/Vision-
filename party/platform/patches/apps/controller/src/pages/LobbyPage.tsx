@@ -1,4 +1,5 @@
-import type { PlayerSetupValue, PlayerSnapshot, RoomSnapshot } from "@open-party-lab/protocol";
+import { useState } from "react";
+import type { BotDifficulty, PlayerSetupValue, PlayerSnapshot, RoomSnapshot } from "@open-party-lab/protocol";
 import { hasHostControl } from "@open-party-lab/protocol";
 import { resolveGameMaxPlayers, resolveGameMinPlayers } from "@open-party-lab/game-core";
 import { ControllerFrame } from "../controller-ui/layout/ControllerFrame.js";
@@ -26,6 +27,8 @@ interface LobbyPageProps {
   onStartRound: () => void;
   onBackToMenu: () => void;
   onKickPlayer: (playerId: string) => void;
+  onAddBot: (count: number, difficulty: BotDifficulty) => void;
+  onRemoveBot: (playerId: string) => void;
 }
 
 function getPlayerSetupVisual(option: PlayerSetupOption): NonNullable<PlayerSetupOption["visual"]> {
@@ -186,26 +189,23 @@ function renderChoicePlayerSetupChooser(
     playersBySelectionId.set(value, players);
   }
 
+  const currentValue = getPlayerSetupValue(currentPlayer, setup);
+  const selectedOption = typeof currentValue === "string"
+    ? setup.options.find((option) => option.id === currentValue)
+    : undefined;
+
   return (
-    <section style={{ display: "grid", gap: 12 }}>
-      <div
-        style={{
-          display: "grid",
-          gap: 6,
-          padding: "12px 14px",
-          borderRadius: "var(--radius-md)",
-          background: "var(--surface-muted)",
-          color: "var(--text-muted)"
-        }}
-      >
+    <section style={{ display: "grid", gap: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
         <strong style={{ color: "var(--text-main)" }}>{setup.title ?? text.characterChooseTitle}</strong>
-        <span>{setup.description ?? text.characterChooseDescription}</span>
+        <span style={{ color: "var(--text-muted)", fontSize: ".76rem" }}>
+          {setup.options.length} opciones
+        </span>
       </div>
 
-      <div style={{ display: "grid", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
         {setup.options.map((setupOption) => {
           const option = resolvePlayerSetupOptionPortrait(room, setupOption);
-          const currentValue = getPlayerSetupValue(currentPlayer, setup);
           const selectedByCurrentPlayer = currentValue === option.id;
           const selectedPlayers = playersBySelectionId.get(option.id) ?? [];
           const visual = getPlayerSetupVisual(option);
@@ -215,84 +215,85 @@ function renderChoicePlayerSetupChooser(
               key={option.id}
               type="button"
               onClick={() => onSetPlayerSetup(selectionKey, option.id)}
+              aria-pressed={selectedByCurrentPlayer}
               style={{
+                position: "relative",
+                display: "grid",
+                justifyItems: "center",
+                alignContent: "start",
+                gap: 4,
+                minHeight: 116,
+                padding: "8px 4px 6px",
                 border: selectedByCurrentPlayer
                   ? `2px solid ${visual.accentColor}`
                   : "1px solid var(--line)",
-                borderRadius: "var(--radius-md)",
-                background: selectedByCurrentPlayer
-                  ? "var(--accent-soft)"
-                  : "var(--surface)",
-                padding: "14px 16px",
-                color: "var(--text-main)",
-                textAlign: "left"
+                borderRadius: 14,
+                background: selectedByCurrentPlayer ? "var(--accent-soft)" : "var(--surface)",
+                color: "var(--text-main)"
               }}
             >
               <div
                 style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 14,
+                  overflow: "hidden",
                   display: "grid",
-                  gridTemplateColumns: option.portraitPath || option.iconPath ? "72px 1fr" : "1fr",
-                  gap: 12,
-                  alignItems: "start"
+                  placeItems: "center",
+                  border: "1px solid var(--line)",
+                  background: "var(--surface-muted)"
                 }}
               >
-                {option.portraitPath || option.iconPath ? (
-                  <div
-                    style={{
-                      width: 72,
-                      height: 72,
-                      borderRadius: 16,
-                      display: "grid",
-                      placeItems: "center",
-                      border: "1px solid var(--line)",
-                      background: "var(--surface-muted)"
-                    }}
-                  >
-                    {renderPlayerSetupIcon(option, 0, option.portraitPath ? 72 : 34)}
-                  </div>
-                ) : null}
-                <div style={{ display: "grid", gap: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                    <div style={{ display: "grid", gap: 2 }}>
-                      <strong>{option.name}</strong>
-                      {option.title ? (
-                        <span style={{ color: visual.secondaryColor, fontSize: "0.9rem" }}>{option.title}</span>
-                      ) : null}
-                    </div>
-                    {option.archetype ? (
-                      <span
-                        style={{
-                          padding: "4px 10px",
-                          borderRadius: 999,
-                          background: "var(--paper-deep)",
-                          color: "var(--text-muted)",
-                          fontSize: "0.78rem",
-                          textTransform: "uppercase"
-                        }}
-                      >
-                        {option.archetype}
-                      </span>
-                    ) : null}
-                  </div>
-                  {option.description ? (
-                    <p style={{ margin: 0, color: "var(--text-muted)", lineHeight: 1.45 }}>{option.description}</p>
-                  ) : null}
-
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                    <span style={{ color: selectedByCurrentPlayer ? "var(--success)" : "var(--text-muted)" }}>
-                      {selectedByCurrentPlayer ? setup.assignment === "balanced-random" ? setup.title ?? text.yourCharacter : text.yourCharacter : text.select}
-                    </span>
-                    <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-                      {selectedPlayers.length > 0
-                        ? text.chosenBy(selectedPlayers.map((entry) => entry.name).join(", "))
-                        : text.stillFree}
-                    </span>
-                  </div>
-                </div>
+                {renderPlayerSetupIcon(option, 0, option.portraitPath ? 56 : 28)}
               </div>
+              <strong style={{ fontSize: ".82rem", lineHeight: 1.1, textAlign: "center" }}>
+                {option.name}
+              </strong>
+              {option.archetype ? (
+                <span style={{ fontSize: ".62rem", textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-muted)", textAlign: "center" }}>
+                  {option.archetype}
+                </span>
+              ) : null}
+              {selectedPlayers.length > 0 ? (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 4,
+                    right: 7,
+                    fontSize: ".62rem",
+                    color: "var(--text-muted)"
+                  }}
+                  title={text.chosenBy(selectedPlayers.map((entry) => entry.name).join(", "))}
+                >
+                  {selectedPlayers.length}
+                </span>
+              ) : null}
             </button>
           );
         })}
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gap: 3,
+          padding: "10px 12px",
+          borderRadius: 12,
+          background: "var(--surface-muted)",
+          color: "var(--text-muted)"
+        }}
+      >
+        {selectedOption ? (
+          <>
+            <strong style={{ color: "var(--text-main)" }}>
+              {selectedOption.title ?? selectedOption.name}
+            </strong>
+            {selectedOption.description ? <span>{selectedOption.description}</span> : null}
+            <span style={{ fontSize: ".78rem" }}>{text.yourCharacter}</span>
+          </>
+        ) : (
+          <span>{setup.description ?? text.characterChooseDescription}</span>
+        )}
       </div>
     </section>
   );
@@ -460,9 +461,12 @@ export function LobbyPage({
   onHostAction,
   onStartRound,
   onBackToMenu,
-  onKickPlayer
+  onKickPlayer,
+  onAddBot,
+  onRemoveBot
 }: LobbyPageProps) {
   const text = getControllerText(room?.language);
+  const [lobbyTab, setLobbyTab] = useState<"play" | "room">("play");
   const currentPlayer = room?.players.find((entry) => entry.id === player?.id) ?? player;
   const selectedGame =
     room?.availableGames.find((game) => game.id === room.selectedGameId);
@@ -491,14 +495,7 @@ export function LobbyPage({
       footer={error ? <p style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
     >
       <div style={{ display: "grid", gap: 14 }}>
-        {!inControl && currentPlayer && room && <PlayerProfileEditor key={currentPlayer.id} player={currentPlayer} language={room.language} onSave={onSetProfile} />}
-        {!inControl && (
-          <button type="button" onClick={onLeaveRoom} style={leaveRoomButtonStyle}>
-            {text.leaveRoom}
-          </button>
-        )}
-
-        {room ? (
+        {inControl && room ? (
           <HostControlPanel
             room={room}
             player={currentPlayer}
@@ -510,113 +507,145 @@ export function LobbyPage({
             onStartRound={onStartRound}
             onBackToMenu={onBackToMenu}
             onKickPlayer={onKickPlayer}
+            onAddBot={onAddBot}
+            onRemoveBot={onRemoveBot}
           />
-        ) : null}
+        ) : (
+          <>
+            <LobbyTabBar active={lobbyTab} onChange={setLobbyTab} />
 
-        {!inControl && (
-          <button
-          type="button"
-          onClick={() => onSetReady(!(currentPlayer?.isReady ?? false))}
-          disabled={playerSetupSelectionMissing}
-          style={{
-            border: "1px solid color-mix(in srgb, var(--accent-strong) 24%, transparent)",
-            borderRadius: 18,
-            background: currentPlayer?.isReady
-              ? "linear-gradient(160deg, color-mix(in srgb, var(--success) 92%, white), var(--success))"
-              : "linear-gradient(160deg, var(--accent), var(--accent-strong))",
-            color: "var(--on-accent)",
-            padding: "18px 22px",
-            fontWeight: 900,
-            letterSpacing: "0.045em",
-            boxShadow: playerSetupSelectionMissing ? "none" : "0 16px 30px color-mix(in srgb, var(--accent-strong) 28%, transparent)",
-            opacity: playerSetupSelectionMissing ? 0.55 : 1
-          }}
-        >
-          {playerSetupSelectionMissing
-            ? setupBlockedLabel
-            : currentPlayer?.isReady
-              ? text.notReady
-              : text.ready}
-        </button>
-        )}
+            {lobbyTab === "play" ? (
+              <>
+                {!room ? null : (
+                  <button
+                    type="button"
+                    onClick={() => onSetReady(!(currentPlayer?.isReady ?? false))}
+                    disabled={playerSetupSelectionMissing}
+                    style={{
+                      border: "1px solid color-mix(in srgb, var(--accent-strong) 24%, transparent)",
+                      borderRadius: 18,
+                      background: currentPlayer?.isReady
+                        ? "linear-gradient(160deg, color-mix(in srgb, var(--success) 92%, white), var(--success))"
+                        : "linear-gradient(160deg, var(--accent), var(--accent-strong))",
+                      color: "var(--on-accent)",
+                      padding: "18px 22px",
+                      fontWeight: 900,
+                      letterSpacing: "0.045em",
+                      boxShadow: playerSetupSelectionMissing ? "none" : "0 16px 30px color-mix(in srgb, var(--accent-strong) 28%, transparent)",
+                      opacity: playerSetupSelectionMissing ? 0.55 : 1
+                    }}
+                  >
+                    {playerSetupSelectionMissing
+                      ? setupBlockedLabel
+                      : currentPlayer?.isReady
+                        ? text.notReady
+                        : text.ready}
+                  </button>
+                )}
 
-        {!inControl && selectedGame ? (
-          <div
-            className="lobby-game-summary"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "64px minmax(0, 1fr)",
-              gap: 12,
-              alignItems: "center",
-              padding: "12px",
-              borderRadius: 16,
-              border: "1px solid color-mix(in srgb, var(--line-strong) 52%, transparent)",
-              background: "linear-gradient(145deg, color-mix(in srgb, var(--surface-raised) 76%, transparent), color-mix(in srgb, var(--surface-muted) 72%, transparent))",
-              color: "var(--text-muted)",
-              boxShadow: "inset 0 1px 0 color-mix(in srgb, white 58%, transparent), 0 12px 26px color-mix(in srgb, var(--ink) 7%, transparent)"
-            }}
-          >
-            <img
-              src={`/party-covers/${selectedGame.id}.webp`}
-              alt=""
-              width={64}
-              height={64}
-              style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 12, boxShadow: "0 8px 18px color-mix(in srgb, var(--ink) 18%, transparent)" }}
-            />
-            <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
-              <strong style={{ color: "var(--text-main)", fontSize: "1.02rem" }}>{selectedGame.displayName}</strong>
-              <span>
-                {text.players}: {playerCount}/{maximumPlayers} | {text.minRequired(minimumPlayers)}
-              </span>
-              <span>
-                {text.readyCount}: {readyCount}/{playerCount}
-                {enoughPlayers ? "" : ` | ${text.needsMorePlayers}`}
-              </span>
-              {playerSetup ? (
-                <span>
-                  {renderPlayerSetupSummary(playerSetup, currentPlayer, text)}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        {room && selectedGame && playerSetup?.kind === "choice"
-          ? renderChoicePlayerSetupChooser(room, selectedGame, currentPlayer, text, onSetPlayerSetup)
-          : null}
-
-        {selectedGame && playerSetup?.kind === "multi-select"
-          ? renderMultiSelectPlayerSetupChooser(selectedGame, currentPlayer, text, onSetPlayerSetup)
-          : null}
-
-        <div style={{ display: "grid", gap: 10 }}>
-          {(room?.players ?? []).map((entry) => (
-            <div
-              key={entry.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px 14px",
-                borderRadius: 14,
-                border: "1px solid color-mix(in srgb, var(--line) 74%, transparent)",
-                background: "linear-gradient(145deg, color-mix(in srgb, var(--surface-raised) 70%, transparent), color-mix(in srgb, var(--surface-muted) 64%, transparent))"
-              }}
-            >
-              <div style={{ display: "grid", gap: 4 }}>
-                <strong>{entry.avatar && <img src={entry.avatar} alt="" width={30} height={30} style={{ borderRadius: "50%", objectFit: "cover", verticalAlign: "middle", marginRight: 8 }} />}{entry.name}</strong>
-                {hasPlayerSetup && playerSetup ? (
-                  <span style={{ color: "var(--text-muted)", fontSize: "0.86rem" }}>
-                    {renderPlayerSetupPlayerDetail(entry, playerSetup, text)}
-                  </span>
+                {selectedGame ? (
+                  <div
+                    className="lobby-game-summary"
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "64px minmax(0, 1fr)",
+                      gap: 12,
+                      alignItems: "center",
+                      padding: "12px",
+                      borderRadius: 16,
+                      border: "1px solid color-mix(in srgb, var(--line-strong) 52%, transparent)",
+                      background: "linear-gradient(145deg, color-mix(in srgb, var(--surface-raised) 76%, transparent), color-mix(in srgb, var(--surface-muted) 72%, transparent))",
+                      color: "var(--text-muted)",
+                      boxShadow: "inset 0 1px 0 color-mix(in srgb, white 58%, transparent), 0 12px 26px color-mix(in srgb, var(--ink) 7%, transparent)"
+                    }}
+                  >
+                    <img
+                      src={`/party-covers/${selectedGame.id}.webp`}
+                      alt=""
+                      width={64}
+                      height={64}
+                      style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 12, boxShadow: "0 8px 18px color-mix(in srgb, var(--ink) 18%, transparent)" }}
+                    />
+                    <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
+                      <strong style={{ color: "var(--text-main)", fontSize: "1.02rem" }}>{selectedGame.displayName}</strong>
+                      <span>
+                        {text.players}: {playerCount}/{maximumPlayers} | {text.minRequired(minimumPlayers)}
+                      </span>
+                      <span>
+                        {text.readyCount}: {readyCount}/{playerCount}
+                        {enoughPlayers ? "" : ` | ${text.needsMorePlayers}`}
+                      </span>
+                      {playerSetup ? (
+                        <span>
+                          {renderPlayerSetupSummary(playerSetup, currentPlayer, text)}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
                 ) : null}
-              </div>
-              <span style={{ color: entry.connected ? "var(--success)" : "var(--text-muted)" }}>
-                {entry.connected ? (entry.isReady ? text.connectedReady : text.connectedWaiting) : entry.presence}
-              </span>
-            </div>
-          ))}
-        </div>
+
+                {room && selectedGame && playerSetup?.kind === "choice"
+                  ? renderChoicePlayerSetupChooser(room, selectedGame, currentPlayer, text, onSetPlayerSetup)
+                  : null}
+
+                {selectedGame && playerSetup?.kind === "multi-select"
+                  ? renderMultiSelectPlayerSetupChooser(selectedGame, currentPlayer, text, onSetPlayerSetup)
+                  : null}
+              </>
+            ) : (
+              <>
+                {currentPlayer && room ? (
+                  <PlayerProfileEditor
+                    key={currentPlayer.id}
+                    player={currentPlayer}
+                    language={room.language}
+                    onSave={onSetProfile}
+                  />
+                ) : null}
+
+                <button type="button" onClick={onLeaveRoom} style={leaveRoomButtonStyle}>
+                  {text.leaveRoom}
+                </button>
+
+                <div style={{ display: "grid", gap: 10 }}>
+                  <p style={{ margin: "2px 0", color: "var(--text-muted)", fontSize: ".78rem", letterSpacing: "1.4px", textTransform: "uppercase" }}>
+                    {text.players} · {playerCount}/{maximumPlayers}
+                  </p>
+                  {(room?.players ?? []).map((entry) => (
+                    <div
+                      key={entry.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "12px 14px",
+                        borderRadius: 14,
+                        border: "1px solid color-mix(in srgb, var(--line) 74%, transparent)",
+                        background: "linear-gradient(145deg, color-mix(in srgb, var(--surface-raised) 70%, transparent), color-mix(in srgb, var(--surface-muted) 64%, transparent))"
+                      }}
+                    >
+                      <div style={{ display: "grid", gap: 4 }}>
+                        <strong>
+                          {entry.avatar && <img src={entry.avatar} alt="" width={30} height={30} style={{ borderRadius: "50%", objectFit: "cover", verticalAlign: "middle", marginRight: 8 }} />}
+                          {entry.name}
+                          {entry.isBot ? <span style={{ marginLeft: 8, padding: "2px 7px", borderRadius: 999, background: "var(--paper-deep)", color: "var(--text-muted)", fontSize: ".66rem", letterSpacing: "1px" }}>BOT</span> : null}
+                        </strong>
+                        {hasPlayerSetup && playerSetup ? (
+                          <span style={{ color: "var(--text-muted)", fontSize: "0.86rem" }}>
+                            {renderPlayerSetupPlayerDetail(entry, playerSetup, text)}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span style={{ color: entry.connected ? "var(--success)" : "var(--text-muted)" }}>
+                        {entry.connected ? (entry.isReady ? text.connectedReady : text.connectedWaiting) : entry.presence}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
       </div>
     </ControllerFrame>
   );
@@ -631,3 +660,57 @@ const leaveRoomButtonStyle = {
   padding: "10px 16px",
   fontWeight: 700
 } as const;
+
+/** Two-page lobby: play and room. The host gets its own tabbed panel instead. */
+function LobbyTabBar({
+  active,
+  onChange
+}: {
+  active: "play" | "room";
+  onChange: (tab: "play" | "room") => void;
+}) {
+  const tabs: Array<{ id: "play" | "room"; label: string }> = [
+    { id: "play", label: "Jugar" },
+    { id: "room", label: "Sala" }
+  ];
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Lobby"
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 4,
+        padding: 4,
+        borderRadius: 999,
+        background: "var(--surface-muted)",
+        border: "1px solid var(--line)"
+      }}
+    >
+      {tabs.map((tab) => {
+        const selected = active === tab.id;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onChange(tab.id)}
+            style={{
+              minHeight: 44,
+              borderRadius: 999,
+              border: selected ? "1px solid var(--accent)" : "1px solid transparent",
+              background: selected ? "var(--accent-soft)" : "transparent",
+              color: selected ? "var(--ink)" : "var(--text-muted)",
+              fontWeight: selected ? 800 : 600,
+              letterSpacing: "0.02em"
+            }}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}

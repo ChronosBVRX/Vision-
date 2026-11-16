@@ -315,7 +315,9 @@ export function toRoomSnapshot(
           score: player.score,
           joinedAt: player.joinedAt,
           lastSeenAt: player.lastSeenAt,
-          reconnectGraceEndsAt: player.reconnectGraceEndsAt
+          reconnectGraceEndsAt: player.reconnectGraceEndsAt,
+          isBot: player.isBot === true,
+          botDifficulty: player.botDifficulty
         };
       }),
     currentRound: room.currentRound

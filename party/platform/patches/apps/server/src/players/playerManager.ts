@@ -1,5 +1,6 @@
 import {
   canManagePlayerRoster,
+  type BotDifficulty,
   type JoinRoomRequest,
   type PlayerSetupValue,
   type PlayerSnapshot
@@ -89,6 +90,40 @@ export class PlayerManager {
       player,
       resumed: false
     };
+  }
+
+  /**
+   * Seats a server-driven player.
+   *
+   * Bots have no socket and never reconnect: they are born connected so every
+   * game's `connected` filters keep them in play. The caller (BotManager) is
+   * responsible for the game setup choices and readiness.
+   */
+  addBot(
+    room: RoomRecord,
+    options: { name: string; difficulty: BotDifficulty; color?: string }
+  ): PlayerRecord {
+    const player = this.playerStore.add(room, {
+      id: createId("bot"),
+      deviceId: `bot:${room.code}:${createId("seat")}`,
+      name: options.name.trim(),
+      color: options.color ?? this.pickColor(room),
+      selectedCharacterId: null,
+      setupSelectionsByGameId: {},
+      score: 0,
+      isReady: true,
+      connected: true,
+      presence: "online",
+      socketId: null,
+      reconnectToken: `bot:${createId("token")}`,
+      joinedAt: this.getNow(),
+      lastSeenAt: this.getNow(),
+      reconnectGraceEndsAt: null,
+      isBot: true,
+      botDifficulty: options.difficulty
+    });
+
+    return player;
   }
 
   resumePlayer(
@@ -235,7 +270,9 @@ export class PlayerManager {
       score: player.score,
       joinedAt: player.joinedAt,
       lastSeenAt: player.lastSeenAt,
-      reconnectGraceEndsAt: player.reconnectGraceEndsAt
+      reconnectGraceEndsAt: player.reconnectGraceEndsAt,
+      isBot: player.isBot === true,
+      botDifficulty: player.botDifficulty
     };
   }
 

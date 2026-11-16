@@ -1,5 +1,5 @@
 import type { ScoreEntry, SupportedLanguage } from "@open-party-lab/game-core";
-import type { PlayerSetupValue, PublicGamePhase } from "@open-party-lab/protocol";
+import type { BotDifficulty, PlayerSetupValue, PublicGamePhase } from "@open-party-lab/protocol";
 import type { ThemeName } from "@open-party-lab/ui-kit";
 import { MemoryStore } from "../persistence/memoryStore.js";
 
@@ -22,6 +22,9 @@ export interface PlayerRecord {
   joinedAt: number;
   lastSeenAt: number;
   reconnectGraceEndsAt: number | null;
+  /** Server-driven seat: no socket, no reconnection, never host control. */
+  isBot?: boolean;
+  botDifficulty?: BotDifficulty;
 }
 
 export interface RoundRecord {

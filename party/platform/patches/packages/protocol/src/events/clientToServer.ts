@@ -2,7 +2,7 @@ import type { SupportedLanguage } from "@open-party-lab/game-core";
 import type { ThemeName } from "@open-party-lab/ui-kit";
 import type { HostControlDenyReason } from "../dto/hostControl.js";
 import type { RoomSnapshot } from "../dto/room.js";
-import type { PlayerSetupValue, PlayerSnapshot } from "../dto/player.js";
+import type { PlayerSetupValue, PlayerSnapshot, BotDifficulty } from "../dto/player.js";
 
 export interface OkResult<T> {
   ok: true;
@@ -81,6 +81,26 @@ export interface GameInputRequest<TInput = unknown> {
 
 export interface RoundStartRequest {
   roomCode: string;
+}
+
+export interface BotAddRequest {
+  roomCode: string;
+  /** How many bots to seat (default 1). The server clamps to free slots. */
+  count?: number;
+  difficulty?: BotDifficulty;
+}
+
+export interface BotAddSuccess {
+  room: RoomSnapshot;
+}
+
+export interface BotRemoveRequest {
+  roomCode: string;
+  playerId: string;
+}
+
+export interface BotRemoveSuccess {
+  room: RoomSnapshot;
 }
 
 export interface RoundAbortRequest {
@@ -247,6 +267,14 @@ export interface ClientToServerEvents {
   "game:select": (payload: GameSelectRequest) => void;
   "game:host-action": (payload: GameHostActionRequest) => void;
   "game:input": (payload: GameInputRequest) => void;
+  "bot:add": (
+    payload: BotAddRequest,
+    ack: (result: AckResult<BotAddSuccess>) => void
+  ) => void;
+  "bot:remove": (
+    payload: BotRemoveRequest,
+    ack: (result: AckResult<BotRemoveSuccess>) => void
+  ) => void;
   "round:start": (payload: RoundStartRequest) => void;
   "round:abort": (
     payload: RoundAbortRequest,

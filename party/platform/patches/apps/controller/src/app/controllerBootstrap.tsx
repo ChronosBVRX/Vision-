@@ -160,6 +160,8 @@ export function ControllerApp() {
           onStartRound={() => controllerClient.startRound()}
           onBackToMenu={() => controllerClient.returnToGameSelection()}
           onKickPlayer={(playerId) => controllerClient.kickPlayer(playerId)}
+          onAddBot={(count, difficulty) => controllerClient.addBot(count, difficulty)}
+          onRemoveBot={(playerId) => controllerClient.removeBot(playerId)}
         />
       ) : null}
 

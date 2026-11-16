@@ -63,7 +63,7 @@ export class RoomCleanupService {
     if (rooms.length < this.maxRoomCount) return { ok: true };
 
     const evictionCandidate = rooms
-      .filter((room) => ![...room.players.values()].some((player) => player.connected))
+      .filter((room) => ![...room.players.values()].some((player) => player.connected && !player.isBot))
       .sort((left, right) => left.lastActivityAt - right.lastActivityAt)[0];
 
     if (!evictionCandidate) return { ok: false };
@@ -88,7 +88,9 @@ export class RoomCleanupService {
         continue;
       }
 
-      const hasConnectedPlayer = [...room.players.values()].some((player) => player.connected);
+      const hasConnectedPlayer = [...room.players.values()].some(
+        (player) => player.connected && !player.isBot
+      );
 
       if (room.hostSocketId || hasConnectedPlayer || room.lastActivityAt > cutoff) continue;
       this.closeRoom(room, "inactive");
