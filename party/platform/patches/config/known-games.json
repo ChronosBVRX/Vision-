@@ -11,5 +11,10 @@
   { "id": "flatterfluff", "package": "@open-party-lab/game-flatterfluff", "repo": "", "defaultLocalPath": "local-games/flatterfluff", "alternateLocalPaths": [] },
   { "id": "magic-arena", "package": "@open-party-lab/game-magic-arena", "repo": "", "defaultLocalPath": "local-games/magic-arena", "alternateLocalPaths": [] },
   { "id": "card-table", "package": "@open-party-lab/game-card-table", "repo": "", "defaultLocalPath": "local-games/card-table", "alternateLocalPaths": [] },
-  { "id": "dungeon-party", "package": "@open-party-lab/game-dungeon-party", "repo": "", "defaultLocalPath": "local-games/dungeon-party", "alternateLocalPaths": [] }
+  { "id": "dungeon-party", "package": "@open-party-lab/game-dungeon-party", "repo": "", "defaultLocalPath": "local-games/dungeon-party", "alternateLocalPaths": [] },
+  { "id": "magic-duell", "package": "@open-party-lab/game-magic-duell", "repo": "", "defaultLocalPath": "local-games/magic-duell", "alternateLocalPaths": [] },
+  { "id": "arena-survivor", "package": "@open-party-lab/game-arena-survivor", "repo": "", "defaultLocalPath": "local-games/arena-survivor", "alternateLocalPaths": [] },
+  { "id": "minions-td", "package": "@open-party-lab/game-minions-td", "repo": "", "defaultLocalPath": "local-games/minions-td", "alternateLocalPaths": [] },
+  { "id": "chaos-kommando", "package": "@open-party-lab/game-chaos-kommando", "repo": "", "defaultLocalPath": "local-games/chaos-kommando", "alternateLocalPaths": [] },
+  { "id": "light-trails", "package": "@open-party-lab/game-light-trails", "repo": "", "defaultLocalPath": "local-games/light-trails", "alternateLocalPaths": [] }
 ]
