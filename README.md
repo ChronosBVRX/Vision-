@@ -11,7 +11,7 @@
 - **Catálogo Global en la Nube**: Miles de películas, series completas por temporadas, anime y novelas conectados al índice del servidor VPS, con puntuaciones IMDb/TMDB y estrenos curados.
 - **TV en Vivo Premium**: Más de 1,000 canales de televisión organizados automáticamente por categoría y país, con guía EPG interactiva en tiempo real.
 - **Deportes en Directo**: Agenda deportiva en vivo, cruce automático con la guía EPG, filtro de ligas con escudos y logotipos oficiales, y selector de señales por país y operadora.
-- **Juegos de Fiesta (Vision+ Party)**: Hub nativo para TV con D-pad y sala web para teléfonos. Incluye 13 juegos, entre ellos Banterbolt, ¿Le atinaste? Bien. y El Comisionado Merk, con narradora en español mexicano.
+- **Juegos de Fiesta (Vision+ Party)**: Hub nativo para TV con D-pad y sala web para teléfonos. Incluye 18 juegos, entre ellos Banterbolt, ¿Le atinaste?, El Comisionado Merk, Duelo Mágico, Superviviente de Arena, Minions TD, Comando Caos y Estelas de Luz, con narradora en español mexicano.
 - **Buscador Inteligente Universal**: Búsqueda insensible a acentos (`unaccent`), multicriterio por título, director o elenco, con soporte nativo de dictado por voz en Smart TV y móviles.
 - **Motor de Reproducción Nativo**: Reproducción fluida con aceleración por hardware, duraciones exactas en transmisiones HLS, salto de intro/outro y selección de pistas de audio y subtítulos.
 - **Navegación Blindada para Smart TV**: Experiencia nativa con control remoto D-pad, rescate automático de foco ante modales o tecla Atrás, y optimización de memoria para dispositivos modestos (Chromecast, TV Boxes).
@@ -26,18 +26,35 @@ Requisitos: **JDK 17 o superior** y **Android SDK** (API 35/36).
 ./gradlew testNormalDebugUnitTest    # Ejecuta la suite de pruebas unitarias
 ```
 
-- **Firma de release**: se usa la **llave histórica de la app** (`visionplus-historic.keystore`, alias
-  `androiddebugkey`) para que las actualizaciones sigan siendo directas sobre la base instalada; vive en
-  `~/.visionplus` (fuera del repo). Carga las variables antes de compilar:
-  `source ~/.visionplus/load-build-env.sh`. También acepta
+- **Firma de release**: se usa la **llave histórica de la app** (alias `androiddebugkey`) para que las
+  actualizaciones sigan siendo directas sobre la base instalada. `keystore.properties` (ignorado por
+  Git) apunta al keystore con `storeFile`, `storePassword`, `keyAlias` y `keyPassword`; el archivo
+  `tools/publish_ota.ps1` valida la huella SHA-256 histórica y aborta si no coincide. También acepta
   `VISION_KEYSTORE_FILE`, `VISION_KEYSTORE_PASSWORD`, `VISION_KEY_ALIAS` y `VISION_KEY_PASSWORD` como
-  variables de entorno (CI). Sin llave, el release se firma con debug para poder validar R8 sin exponer
-  secretos. **No cambiar la firma**: rompería el update de los usuarios actuales.
+  variables de entorno (CI). La llave **nunca** se sube al repositorio: en otra PC hay que copiarla
+  de forma segura (ver `docs/RETOMAR_EN_OTRA_PC.md`). **No cambiar la firma**: rompería el update de
+  los usuarios actuales.
 - **R8**: el motor X4K (DEX en assets) se carga en runtime; `app/proguard-rules.pro` conserva el
   puente, `okhttp3legacy` y `kotlinx.serialization`. No quitar esas reglas.
 
 - Paquete: `com.chronosbvrx.visionplus`
 - Kotlin + Jetpack Compose (+ Compose for TV), AndroidX Media3 (ExoPlayer), Coil, OkHttp.
+
+## Retomar en otra PC
+
+Un clon limpio más un comando reconstruye Vision+ Party con los 18 juegos, portadas, audio y
+servidor:
+
+```powershell
+git clone https://github.com/ChronosBVRX/Vision-.git
+cd Vision-
+powershell -ExecutionPolicy Bypass -File .\tools\bootstrap_party.ps1
+```
+
+En Linux/macOS/WSL: `./tools/bootstrap_party.sh`.
+
+La guía completa (requisitos, firma histórica, compilación, OTA y despliegue del VPS) está en
+[`docs/RETOMAR_EN_OTRA_PC.md`](docs/RETOMAR_EN_OTRA_PC.md).
 
 ## Arquitectura
 

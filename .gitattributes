@@ -1,0 +1,6 @@
+# Los scripts de shell deben conservar LF para poder ejecutarse en Linux/macOS/WSL.
+*.sh text eol=lf
+# Los scripts de Windows conservan CRLF.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
