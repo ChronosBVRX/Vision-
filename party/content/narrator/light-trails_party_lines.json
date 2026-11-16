@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para Estelas de Luz: gira, sobrevive y no toques ninguna estela.",
+      "Se abre la arena neón. Deja tu rastro y evita chocar a toda costa.",
+      "Estelas de Luz: velocidad, reflejos y cero piedad para los distraídos.",
+      "La arena se enciende. Gira tu estela y sé el último en pie.",
+      "Estelas de Luz comienza. Un solo error y tu rastro te delata.",
+      "Prepárense: la arena neón ya está lista y las estelas arden.",
+      "Estelas de Luz: gira, sobrevive y deja tu huella en la oscuridad.",
+      "La carrera de luz arranca. No toques ninguna estela, ni la tuya.",
+      "Estelas de Luz: reflejos rápidos, decisiones instantáneas.",
+      "La arena neón se ilumina. Gira y sobrevive."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Gira y sobrevive. Cada estela es una trampa mortal.",
+      "Mantén el ritmo: gira a tiempo o choca sin remedio.",
+      "La arena se llena de estelas. No te encierres.",
+      "Sobrevive. Cada curva puede ser la última.",
+      "Gira, gira y gira. La arena no perdona.",
+      "Mantén la calma y gira con precisión.",
+      "Las estelas crecen. Busca el hueco y sobrevive.",
+      "No toques ninguna estela. Ni la tuya.",
+      "Gira con cuidado. El espacio se agota.",
+      "Sobrevive la ronda. Cada segundo cuenta."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Ronda terminada. Solo el más hábil sobrevivió.",
+      "Fin de la ronda. Las estelas no mienten.",
+      "Ronda terminada. El último en pie se lleva la gloria.",
+      "Fin de la ronda. Revisa el marcador y afina tus reflejos.",
+      "Ronda terminada. La arena neón cobró su tributo.",
+      "Fin de la ronda. ¿Quién sobrevivió?",
+      "Ronda terminada. Cada choque dejó huella.",
+      "Fin de la ronda. El último en pie es el ganador.",
+      "Ronda terminada. Prepárense para la siguiente.",
+      "Fin de la ronda. La arena se apaga."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Marcador actualizado. El líder sigue en pie.",
+      "Aquí va el marcador. Que tiemble el primero.",
+      "Marcador listo. La arena neón no olvida.",
+      "Marcador actualizado. A ajustar la estrategia.",
+      "Aquí está el marcador. El primero manda.",
+      "Marcador listo. Preparan la siguiente ronda.",
+      "Marcador actualizado. Que siga la luz.",
+      "Aquí va el marcador. El último en pie lidera.",
+      "Marcador listo. La arena se prepara.",
+      "Marcador actualizado. A sobrevivir de nuevo."
+    ]
+  }
+]

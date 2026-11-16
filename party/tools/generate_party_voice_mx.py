@@ -79,6 +79,7 @@ STANDARD = [
     "magic-arena",
     "card-table",
     "dungeon-party",
+    "light-trails",
 ]
 
 GAME_VOICE = {
