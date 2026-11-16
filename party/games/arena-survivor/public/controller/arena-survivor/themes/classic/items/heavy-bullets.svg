@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="case" x1="15%" y1="10%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="55%" stop-color="#d97706"/>
+      <stop offset="100%" stop-color="#78350f"/>
+    </linearGradient>
+    <linearGradient id="tip" x1="15%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#64748b"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M49 43C49 31 65 31 65 43V116H49Z" fill="url(#case)" stroke="#78350f" stroke-width="4"/>
+    <path d="M49 44C51 29 63 29 65 44L57 28Z" fill="url(#tip)" stroke="#cbd5e1" stroke-width="4"/>
+    <path d="M75 31C75 17 94 17 94 31V118H75Z" fill="url(#case)" stroke="#78350f" stroke-width="4"/>
+    <path d="M75 32C77 15 92 15 94 32L84 15Z" fill="url(#tip)" stroke="#cbd5e1" stroke-width="4"/>
+    <path d="M104 50C104 38 120 38 120 50V118H104Z" fill="url(#case)" stroke="#78350f" stroke-width="4"/>
+    <path d="M104 51C106 36 118 36 120 51L112 35Z" fill="url(#tip)" stroke="#cbd5e1" stroke-width="4"/>
+    <path d="M39 122H129" stroke="#fbbf24" stroke-width="7"/>
+  </g>
+</svg>

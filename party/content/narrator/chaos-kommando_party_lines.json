@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "variants": [
+      "Prepárense para Comando Caos: artillería por turnos, explosiones y terreno destructible.",
+      "Se abre Comando Caos. Seis equipos, arenas de islas y cero piedad.",
+      "Comando Caos comienza. Apunta, carga y dispara con cuidado.",
+      "La arena se enciende. Artillería por turnos y terreno que se destruye.",
+      "Prepárense: Comando Caos está por empezar.",
+      "Comando Caos: ángulo, potencia y explosiones por turnos.",
+      "La batalla comienza. Seis equipos, una arena y mucho caos.",
+      "Comando Caos arranca. Apunta bien o te hundes.",
+      "Se abre el frente. Artillería, minas y cajas de suministros.",
+      "Prepárense para Comando Caos. El terreno no sobrevivirá."
+    ]
+  },
+  {
+    "id": "playing",
+    "variants": [
+      "Apunta, carga y dispara. El viento puede cambiarlo todo.",
+      "El turno es tuyo. Calcula ángulo y potencia.",
+      "Dispara con cuidado. El terreno se destruye.",
+      "Apunta bien. Un error puede hundir a tu equipo.",
+      "Carga y suelta. La explosión hará el resto.",
+      "El viento sopla. Ajusta tu tiro.",
+      "Dispara y observa. El caos continúa.",
+      "Apunta al enemigo. El terreno no es obstáculo.",
+      "Carga con paciencia. La precisión gana.",
+      "Dispara y espera. El humo se disipa."
+    ]
+  },
+  {
+    "id": "result",
+    "variants": [
+      "Ronda terminada. El último equipo en pie gana.",
+      "Fin de la ronda. El terreno quedó destruido.",
+      "Ronda terminada. El mejor artillero se impuso.",
+      "Fin de la ronda. Revisa el daño y los sobrevivientes.",
+      "Ronda terminada. El caos dejó su marca.",
+      "Fin de la ronda. Ajusta tu estrategia.",
+      "Ronda terminada. La precisión marcó la diferencia.",
+      "Fin de la ronda. El ganador dominó la arena.",
+      "Ronda terminada. Prepárense para la siguiente.",
+      "Fin de la ronda. El agua subió para algunos."
+    ]
+  },
+  {
+    "id": "scoreboard",
+    "variants": [
+      "Marcador actualizado. El líder sigue en pie.",
+      "Aquí va el marcador. Que tiemble el segundo.",
+      "Marcador listo. El caos no olvida.",
+      "Marcador actualizado. A ajustar la estrategia.",
+      "Aquí está el marcador. El primero manda.",
+      "Marcador listo. Prepárense para la siguiente ronda.",
+      "Marcador actualizado. Que siga el caos.",
+      "Aquí va el marcador. El ganador lidera.",
+      "Marcador listo. La arena se prepara.",
+      "Marcador actualizado. A disparar de nuevo."
+    ]
+  }
+]

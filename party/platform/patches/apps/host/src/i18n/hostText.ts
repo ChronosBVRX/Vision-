@@ -56,6 +56,8 @@ export interface HostText {
   kick: string;
   kickPlayer: (name: string) => string;
   roomCode: string;
+  roomPrefix: string;
+  scanQr: string;
   join: string;
   lobbyTitle: string;
   lobbyPlayersTitle: string;
@@ -257,4 +259,3 @@ export const hostText: HostText = spanishHostText;
 export function getHostText(language: SupportedLanguage | null | undefined): HostText {
   return hostText;
 }
-PY

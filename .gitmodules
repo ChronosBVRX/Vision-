@@ -1,0 +1,3 @@
+[submodule "party/platform/open-party-lab"]
+	path = party/platform/open-party-lab
+	url = https://github.com/Hartwich/Open-Party-Lab.git

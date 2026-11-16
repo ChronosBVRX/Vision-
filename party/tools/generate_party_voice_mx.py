@@ -79,6 +79,11 @@ STANDARD = [
     "magic-arena",
     "card-table",
     "dungeon-party",
+    "light-trails",
+    "magic-duell",
+    "chaos-kommando",
+    "arena-survivor",
+    "minions-td",
 ]
 
 GAME_VOICE = {

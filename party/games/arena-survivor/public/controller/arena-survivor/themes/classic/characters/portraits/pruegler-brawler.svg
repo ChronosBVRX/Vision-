@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#160b0b"/>
+      <stop offset="100%" stop-color="#07111f"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="36%" r="62%">
+      <stop offset="0%" stop-color="#fca5a5" stop-opacity="0.72"/>
+      <stop offset="100%" stop-color="#59231d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="86" fill="url(#bg)"/>
+  <rect x="40" y="40" width="432" height="432" rx="68" fill="none" stroke="#b84a3a" stroke-width="7"/>
+  <circle cx="256" cy="222" r="165" fill="url(#halo)"/>
+  <ellipse cx="256" cy="415" rx="118" ry="34" fill="#020617" opacity="0.4"/>
+  <ellipse cx="256" cy="258" rx="123" ry="145" fill="#c78e64" stroke="#59231d" stroke-width="9"/>
+  <path d="M143 182C196 152 315 152 370 182L352 220C301 199 211 199 160 220Z" fill="#b84a3a" stroke="#59231d" stroke-width="8"/>
+  <path d="M348 174 397 138 389 197Z" fill="#fca5a5" stroke="#59231d" stroke-width="7"/>
+  <path d="M199 250 233 242" stroke="#1f1410" stroke-width="10" stroke-linecap="round"/>
+  <path d="M279 242 313 250" stroke="#1f1410" stroke-width="10" stroke-linecap="round"/>
+  <path d="M220 323C244 336 270 336 294 323" stroke="#59231d" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="125" cy="292" r="38" fill="#d39a74" stroke="#59231d" stroke-width="9"/>
+  <circle cx="387" cy="292" r="38" fill="#d39a74" stroke="#59231d" stroke-width="9"/>
+  <path d="M105 288H145M367 288H407" stroke="#fca5a5" stroke-width="7" stroke-linecap="round"/>
+</svg>

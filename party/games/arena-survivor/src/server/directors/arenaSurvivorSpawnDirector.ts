@@ -1,0 +1,75 @@
+import type { ArenaSurvivorEnemyDefinition } from "../../protocol.js";
+import {
+  createSeededRandom
+} from "../arenaSurvivorState.js";
+import { arenaSurvivorEnemyDefinitions } from "../definitions/enemyDefinitions.js";
+
+export interface ArenaSurvivorSpawnPick {
+  definition: ArenaSurvivorEnemyDefinition;
+  seed: number;
+}
+
+export interface ArenaSurvivorSpawnPickOptions {
+  preferStrongestUnlocked?: boolean;
+}
+
+export function resolveArenaSurvivorSpawnBurst(
+  waveNumber: number,
+  difficultySpawnBurstBonus = 0
+): number {
+  const tierBonus = Math.max(0, Math.round(difficultySpawnBurstBonus));
+
+  if (waveNumber >= 10) {
+    return 3 + tierBonus;
+  }
+
+  if (waveNumber >= 5) {
+    return 2 + tierBonus;
+  }
+
+  return 1 + tierBonus;
+}
+
+export function pickArenaSurvivorEnemyDefinition(
+  waveNumber: number,
+  seed: number,
+  options?: ArenaSurvivorSpawnPickOptions
+): ArenaSurvivorSpawnPick {
+  const candidates = arenaSurvivorEnemyDefinitions.filter(
+    (definition) =>
+      definition.minWave <= waveNumber &&
+      !(definition.tags as readonly string[]).includes("boss")
+  );
+  const fallback = arenaSurvivorEnemyDefinitions[0];
+
+  if (candidates.length === 0) {
+    return {
+      definition: fallback,
+      seed
+    };
+  }
+
+  const highestUnlockedWave = Math.max(...candidates.map((definition) => definition.minWave));
+  const selectionPool = options?.preferStrongestUnlocked
+    ? candidates.filter((definition) => definition.minWave === highestUnlockedWave)
+    : candidates;
+
+  const weightedCandidates = selectionPool.flatMap((definition) => {
+    const waveBias = Math.max(1, waveNumber - definition.minWave + 1);
+    const roleWeightMultiplier = definition.role === "shooter" ? 0.42 : 1;
+    const weight = Math.max(
+      1,
+      Math.round(definition.spawnWeight * roleWeightMultiplier * (1 + waveBias * 0.15))
+    );
+
+    return Array.from({ length: weight }, () => definition);
+  });
+
+  const random = createSeededRandom(seed);
+  const index = Math.floor(random.value * weightedCandidates.length);
+
+  return {
+    definition: weightedCandidates[index] ?? fallback,
+    seed: random.seed
+  };
+}
