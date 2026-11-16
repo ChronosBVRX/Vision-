@@ -133,6 +133,10 @@ export function HostControlPanel({
     ? room.hostControl.pendingRequest
     : null;
   const remainingSeconds = useHostControlCountdown(room);
+  // Hooks must run before the early return for players without control: the
+  // same component flips between the two states when control is taken.
+  const [section, setSection] = useState<"game" | "settings" | "players">("game");
+  const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>("hard");
 
   if (!inControl) {
     return (
@@ -164,8 +168,6 @@ export function HostControlPanel({
   const selectedGame = room.availableGames.find((game) => game.id === room.selectedGameId);
   const bots = room.players.filter((entry) => entry.isBot);
   const botSupport = selectedGame?.supportsBots === true;
-  const [section, setSection] = useState<"game" | "settings" | "players">("game");
-  const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>("hard");
 
   const startButton = selectedGame ? (
     <button
