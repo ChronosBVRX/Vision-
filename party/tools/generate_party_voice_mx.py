@@ -81,6 +81,7 @@ STANDARD = [
     "dungeon-party",
     "light-trails",
     "magic-duell",
+    "chaos-kommando",
 ]
 
 GAME_VOICE = {

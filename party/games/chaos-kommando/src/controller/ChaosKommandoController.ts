@@ -131,7 +131,7 @@ function buildStats(state: ChaosKommandoState | null, en: boolean, now: number):
   }
 
   return [
-    { label: en ? "Time" : "Zeit", value: state.turn.resolvingShot ? (state.turn.retreatEndsAt !== null && now < state.turn.retreatEndsAt ? formatSeconds(state.turn.retreatEndsAt, now) : "—") : formatSeconds(state.turn.turnEndsAt, now), highlighted: true }
+    { label: en ? "Time" : "Tiempo", value: state.turn.resolvingShot ? (state.turn.retreatEndsAt !== null && now < state.turn.retreatEndsAt ? formatSeconds(state.turn.retreatEndsAt, now) : "—") : formatSeconds(state.turn.turnEndsAt, now), highlighted: true }
   ];
 }
 
@@ -160,12 +160,12 @@ export function buildChaosKommandoControllerModel(
   const resolving = expired || Boolean(gameState?.turn.resolvingShot && !retreating);
   const disabled = !isLocalPlayersTurn || preparing || resolving || !activeMercenary?.alive;
   const fireDisabled = disabled || Boolean(gameState?.turn.hasFired) || (!activeMercenary?.grounded && !gameState?.rope);
-  const status = preparing ? (en ? "Get ready" : "Bereitmachen")
-    : retreating ? (en ? "Retreat!" : "Rueckzug!")
-    : resolving ? (en ? "Resolving consequences" : "Folgen abwarten")
-    : isLocalPlayersTurn ? (en ? "Your turn" : "Dein Zug")
-    : (en ? "Watching" : "Zuschauen");
-  const title = currentPlayer?.name ? (en ? `${currentPlayer.name} Squad` : `${currentPlayer.name} Kommando`) : (en ? "Chaos Squad" : "Chaos-Kommando");
+  const status = preparing ? (en ? "Get ready" : "Prepárate")
+    : retreating ? (en ? "Retreat!" : "¡Retirada!")
+    : resolving ? (en ? "Resolving consequences" : "Resolviendo consecuencias")
+    : isLocalPlayersTurn ? (en ? "Your turn" : "Tu turno")
+    : (en ? "Watching" : "Observando");
+  const title = currentPlayer?.name ? (en ? `${currentPlayer.name} Squad` : `${currentPlayer.name} Comando`) : (en ? "Chaos Squad" : "Comando Caos");
   const subtitle = status;
   const helperText = en
     ? "Hook grips ceilings and overhangs. Hold Pull up; move to swing, jump to launch off. One attack, then 3 seconds to retreat."
@@ -174,8 +174,8 @@ export function buildChaosKommandoControllerModel(
   const fireHint =
     currentWeapon?.description ??
     (fireMode === "instant"
-      ? en ? "Fire immediately. No charging needed." : "Direkt feuern. Kein Aufladen noetig."
-      : en ? "Hold for more power, release to fire." : "Halten = mehr Wumms, loslassen = Feuer.");
+      ? en ? "Fire immediately. No charging needed." : "Dispara de inmediato. Sin carga."
+      : en ? "Hold for more power, release to fire." : "Mantén para más potencia, suelta para disparar.");
 
   return {
     kind: "chaos_kommando_controls",
@@ -200,8 +200,8 @@ export function buildChaosKommandoControllerModel(
     stats: buildStats(gameState, en, now),
     turnOwnerLabel: activeMercenary
       ? `${activeMercenary.playerName} | ${activeMercenary.name}`
-      : en ? "No active mercenary" : "Kein aktiver Soeldner",
-    windLabel: gameState?.wind.label ?? (en ? "Calm wind" : "Wind ruhig"),
+      : en ? "No active mercenary" : "Sin mercenario activo",
+    windLabel: gameState?.wind.label ?? (en ? "Calm wind" : "Viento en calma"),
     fireLabel: currentWeapon?.displayName ?? "FIRE",
     fireHint,
     fireMode,
@@ -210,7 +210,7 @@ export function buildChaosKommandoControllerModel(
       currentPlayer?.mercenaries.map((mercenary) => ({
         id: mercenary.id,
         label: mercenary.name,
-        subtitle: mercenary.alive ? (en ? "Ready" : "Einsatzbereit") : (en ? "Knocked out" : "Ausgeschaltet"),
+        subtitle: mercenary.alive ? (en ? "Ready" : "Listo") : (en ? "Knocked out" : "Fuera de combate"),
         hpLabel: `${Math.max(0, Math.round(mercenary.hp))}/${mercenary.maxHp} HP`,
         iconPath: mercenary.portraitPath,
         teamColor: currentPlayer.color,

@@ -4,8 +4,8 @@ import type { GameManifest } from "@open-party-lab/game-core";
 export const chaosKommandoManifest = {
   id: "chaos-kommando",
   translations: chaosKommandoText,
-  displayName: "Chaos-Kommando",
-  description: "Marshmallow-Runden-Artillerie: geroestete Kommandos, sechs Teams, Inselarenen, Minen, Kisten und komplett zerstoerbares Terrain mit Tunneln.",
+  displayName: "Comando Caos",
+  description: "Artillería por turnos de malvaviscos: seis equipos, arenas de islas, minas, cajas y terreno destructible con túneles.",
   minPlayers: 2,
   maxPlayers: 6,
   hostView: "ChaosKommandoHostScene",

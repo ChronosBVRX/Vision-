@@ -478,6 +478,28 @@ const weaponDefinitions: ChaosKommandoWeaponDefinition[] = [
 const weaponTexts: Partial<
   Record<SupportedLanguage, Partial<Record<ChaosKommandoWeaponId, { displayName: string; description: string }>>>
 > = {
+  es: {
+    "kicher-bazooka": { displayName: 'Bazooka Risueña', description: 'El clásico. Vuela lejos, el viento se suma.' },
+    "regenbogen-rakete": { displayName: 'Cohete Arcoíris', description: 'Arco plano, casi sin viento. Impacta a larga distancia.' },
+    "bohrer-rakete": { displayName: 'Cohete Taladro', description: 'Perfora un túnel largo en el terreno y explota al final.' },
+    "konfetti-schrot": { displayName: 'Escopeta de Confeti', description: 'Dispersión amplia a corta distancia. Poco daño, mucha área.' },
+    "keks-moerser": { displayName: 'Mortero de Galleta', description: 'Arco pronunciado por encima de la cobertura.' },
+    "minigun": { displayName: 'Minigun de Confeti', description: 'Seis disparos seguidos. Débil solo, peligroso en conjunto.' },
+    "plunder-pistole": { displayName: 'Pistola de Botín', description: 'Disparo instantáneo, sin carga. Preciso, poco impacto.' },
+    "splitter-granate": { displayName: 'Granada de Metralla', description: 'Rebota y luego esparce fragmentos. Elige espoleta de 1 a 5 segundos.' },
+    "enten-granate": { displayName: 'Granada Pato', description: 'Parpadea, rebota y luego arma un buen escándalo.' },
+    "heilige-granate": { displayName: 'Granada Sagrada', description: 'Aleluya. La explosión más amplia de todo el arsenal.' },
+    "banane": { displayName: 'Bomba Banana', description: 'Estalla al impacto en cinco mini bananas que rebotan.' },
+    "gummi-huhn": { displayName: 'Pollo de Goma', description: 'Rebota lejos e impredecible. Ignora el viento.' },
+    "seifenblasen-bombe": { displayName: 'Bomba de Burbujas', description: 'Flota con el viento, nube enorme, poco daño por golpe.' },
+    "dynamit": { displayName: 'Dinamita', description: 'Se suelta en el lugar y detona tras cuatro segundos.' },
+    "baseball-schlaeger": { displayName: 'Bate de Béisbol', description: 'Sin cráter, pero un vuelo de ensueño para quien lo recibe.' },
+    "funk-bombenteppich": { displayName: 'Bombardeo Aéreo', description: 'Cinco bombas en línea sobre el objetivo.' },
+    "leucht-salve": { displayName: 'Salva de Bengalas', description: 'Salva ajustada de pequeños incendiarios en un punto.' },
+    "signal-schauer": { displayName: 'Lluvia de Señales', description: 'Dispersión amplia. Golpea mucho, daña poco.' },
+    "pfeifen-sturzflug": { displayName: 'Picado Silbante', description: 'Una bomba pesada directa hacia abajo.' },
+    "seilzug": { displayName: 'Cuerda de Gancho', description: 'Una herramienta, no un arma. Dispara, péndula, trepa.' },
+  },
   en: {
     "kicher-bazooka": { displayName: "Giggler Bazooka", description: "The classic. Flies far, the wind joins in." },
     "regenbogen-rakete": { displayName: "Rainbow Rocket", description: "Flat arc, barely any wind. Hits at long range." },
@@ -515,6 +537,27 @@ function localizeWeaponDefinitions(language: SupportedLanguage): ChaosKommandoWe
 }
 
 const chaosKommandoText = {
+  es: {
+    waitingAction: "Comando Caos espera la siguiente acción.",
+    playerTurn: (playerName: string, mercenaryName: string, weaponName: string) => `${playerName} juega | ${mercenaryName} con ${weaponName}`,
+    wind: (direction: number, strength: number) => `${direction > 0 ? "Viento a la derecha" : "Viento a la izquierda"} | ${Math.round(strength * 10)}`,
+    winner: (name: string) => `¡${name} gana Comando Caos!`,
+    draw: "Todos los equipos se hundieron.",
+    smokeClears: "El humo se disipa. El siguiente equipo juega.",
+    intro: "Comando Caos afloja los seguros.",
+    introLog: "Colorido, exagerado, táctico y muy travieso.",
+    start: "La mecha arde. El primer equipo avanza.",
+    mercenaryForward: (playerName: string, mercenaryName: string) => `${playerName} envía ahora a ${mercenaryName}.`,
+    clockFaster: "El reloj fue más rápido. El siguiente equipo toma el turno.",
+    retreat: "¡Retirada! A cubrirse rápido.",
+    splash: (name: string) => `${name} desaparece con un chapoteo en el agua.`,
+    drowned: (name: string) => `${name} se ahoga. Para siempre.`,
+    mineTriggered: "Una mina pita con maldad...",
+    crateDrop: "¡Cae una caja de suministros!",
+    crateCollected: (name: string, weaponName: string, amount: number) => `${name} atrapa la caja: +${amount}x ${weaponName}.`,
+    crateDestroyed: "La caja de suministros fue destruida.",
+    suddenDeath: "¡MUERTE SÚBITA! El agua sube."
+  },
   de: {
     waitingAction: "Chaos-Kommando wartet auf die naechste Aktion.",
     playerTurn: (playerName: string, mercenaryName: string, weaponName: string) => `${playerName} ist dran | ${mercenaryName} mit ${weaponName}`,
@@ -775,7 +818,7 @@ function createTerrain(playerCount: number, seed: number, language: SupportedLan
   const craters = preset.initialCraters.map((crater) => ({ ...crater, x: crater.x * (5 / 3), y: crater.y * 1.6, r: crater.r * 1.6 }));
   return {
     mapId: preset.id,
-    mapName: language === "en" ? preset.nameEn : preset.name,
+    mapName: language === "es" ? preset.nameEs : language === "en" ? preset.nameEn : preset.name,
     width: terrainWidth,
     height: terrainHeight,
     waterlineY: initialWaterlineY,
@@ -983,7 +1026,7 @@ function createPlayers(
     : [
         {
           id: "chaos-p1",
-          name: language === "en" ? "Player 1" : "Spieler 1",
+          name: language === "en" ? "Player 1" : language === "es" ? "Jugador 1" : "Spieler 1",
           color: "#38bdf8",
           score: 0,
           isReady: true,

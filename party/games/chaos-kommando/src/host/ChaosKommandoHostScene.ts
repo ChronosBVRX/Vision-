@@ -20,8 +20,8 @@ const hostTheme = {
 } as const;
 
 interface HostAppStateLike {
-  room?: { language?: "de" | "en" } | null;
-  preferredLanguage?: "de" | "en";
+  room?: { language?: "de" | "en" | "es" } | null;
+  preferredLanguage?: "de" | "en" | "es";
   game?: {
     state?: unknown;
   } | null;
@@ -36,7 +36,7 @@ export class ChaosKommandoHostScene extends Phaser.Scene {
   private unsubscribe?: () => void;
   private renderState?: ChaosKommandoRenderState;
   private serverNow: () => number = Date.now;
-  private language: "de" | "en" = "de";
+  private language: "de" | "en" | "es" = "de";
   private latestGameState: ChaosKommandoState | null = null;
   private audioRig = new ChaosKommandoAudioRig();
   private headerText?: Phaser.GameObjects.Text;
@@ -263,9 +263,9 @@ export class ChaosKommandoHostScene extends Phaser.Scene {
     const retreating = gameState.turn.resolvingShot && gameState.turn.retreatEndsAt !== null && nowMs < gameState.turn.retreatEndsAt;
     const deadline = retreating ? gameState.turn.retreatEndsAt! : gameState.turn.turnEndsAt;
     const turnSeconds = Math.max(0, Math.ceil((deadline - nowMs) / 1000));
-    const phaseLabel = preparing ? (en ? "Get ready…" : "Bereitmachen…")
-      : retreating ? `${en ? "Retreat" : "Rueckzug"} · ${turnSeconds}s`
-      : gameState.turn.resolvingShot ? (en ? "Resolving consequences…" : "Folgen abwarten…")
+    const phaseLabel = preparing ? (en ? "Get ready…" : "Prepárate…")
+      : retreating ? `${en ? "Retreat" : "Retirada"} · ${turnSeconds}s`
+      : gameState.turn.resolvingShot ? (en ? "Resolving consequences…" : "Resolviendo consecuencias…")
       : `${turnSeconds}s · ${gameState.wind.label}`;
     const headline = gameState.winnerName
       ? gameState.winnerName
