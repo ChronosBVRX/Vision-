@@ -50,6 +50,9 @@ services:
       # `scripts/vip_account.py apply`, no a mano.
       VIP_SN: "${VIP_SN:-2392fe5186d83d73508a2c8c60a26ef6}"
       VIP_USER_ID: "${VIP_USER_ID:-967111326}"
+      VIP_EMAIL: "${VIP_EMAIL:-}"
+      VIP_PASSWORD: "${VIP_PASSWORD:-}"
+      VIP_PASSWORD_HASH: "${VIP_PASSWORD_HASH:-}"
       # TheIntroDB: con cuenta sube el tope de 5,000 a 100,000 consultas/día.
       THEINTRODB_API_KEY: "${THEINTRODB_API_KEY:-}"
       CONFIG_ADMIN_KEY: "${CONFIG_ADMIN_KEY:-}"

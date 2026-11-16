@@ -70,10 +70,35 @@ object Related {
     private fun sameWork(current: Film, other: Film): Boolean {
         if (other.id == current.id) return true
         if (current.tmdbId > 0 && other.tmdbId == current.tmdbId) return true
-        if (current.groupId.isNotBlank() && other.groupId == current.groupId) return true
         val a = normalizeDisplayName(current.title)
         val b = normalizeDisplayName(other.title)
-        return a.isNotBlank() && b.isNotBlank() && a.equals(b, ignoreCase = true)
+        if (a.isNotBlank() && b.isNotBlank() && a.equals(b, ignoreCase = true)) return true
+        // En series, mismo grupo = misma obra (temporadas). En películas se permite
+        // sugerir hermanas de saga (mismo grupo, título distinto).
+        if (current.kind != "movie" && current.groupId.isNotBlank() && other.groupId == current.groupId) return true
+        return false
+    }
+
+    /** Raíz de saga: primeras dos palabras (o hasta separador) del título normalizado. */
+    private fun sagaRoot(title: String): String {
+        val t = normalizeDisplayName(title).lowercase(Locale.ROOT)
+        val base = t.split(Regex("[:\\-–—]")).firstOrNull()?.trim().orEmpty()
+        val words = base.split(Regex("\\s+")).filter { it.isNotBlank() }
+        return words.take(2).joinToString(" ")
+    }
+
+    /** Coincidencia aproximada de títulos (prefijo compartido de al menos 4 letras). */
+    private fun approxTitle(a: String, b: String): Boolean {
+        val na = normalizeDisplayName(a).lowercase(Locale.ROOT)
+        val nb = normalizeDisplayName(b).lowercase(Locale.ROOT)
+        if (na.isBlank() || nb.isBlank()) return false
+        val minLen = minOf(na.length, nb.length)
+        if (minLen < 4) return false
+        var common = 0
+        for (i in 0 until minLen) {
+            if (na[i] == nb[i]) common++ else break
+        }
+        return common >= 4
     }
 
     private fun isCandidate(current: Film, candidate: Film): Boolean {
@@ -118,6 +143,15 @@ object Related {
                 if (candidate.year > 0 && film.year > 0) {
                     score += (10 - abs(candidate.year - film.year)).coerceIn(0, 10)
                 }
+                // Saga: títulos con la misma raíz se priorizan (y el siguiente capítulo más).
+                val sameSaga = film.kind == "movie" && sagaRoot(candidate.title) == sagaRoot(film.title) &&
+                    sagaRoot(film.title).isNotBlank()
+                if (sameSaga) {
+                    score += 200
+                    if (film.year > 0 && candidate.year > film.year) score += 60
+                }
+                // Títulos aproximados (mismo nombre/variante).
+                if (approxTitle(candidate.title, film.title) && !sameSaga) score += 80
                 ranked += candidate to score
             }
         }

@@ -2365,7 +2365,7 @@ class X4KPlayerAty : ComponentActivity() {
                         val country = item?.optString("country")?.takeIf { it.isNotBlank() }
                             ?: item?.optString("area")?.takeIf { it.isNotBlank() }
                             ?: item?.optString("region")?.takeIf { it.isNotBlank() }
-                        val parts = listOfNotNull(cast, score?.let { "★ $it" }, country).filter { it.isNotBlank() }
+                        val parts = listOfNotNull(cast, score?.let { "☆ $it" }, country).filter { it.isNotBlank() }
                         if (parts.isNotEmpty()) {
                             metaLine.text = parts.joinToString("  ·  ")
                             metaLine.visibility = View.VISIBLE

@@ -1,0 +1,13 @@
+# Pegar DENTRO del bloque `visionplusv2.duckdns.org { ... }` del Caddyfile
+# del VPS viejo, ANTES del `handle { reverse_proxy 127.0.0.1:8100 }` final.
+# Caddy reenvía por defecto X-Api-Key y X-Admin-Key.
+#
+# Cambia broker.visionplusv2.duckdns.org por el subdominio real del broker.
+
+handle /v1/play/vip {
+	reverse_proxy https://broker.visionplusv2.duckdns.org
+}
+
+handle /v1/vip/* {
+	reverse_proxy https://broker.visionplusv2.duckdns.org
+}

@@ -18,6 +18,8 @@ un reinicio no tira lo ya firmado.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import logging
 import os
@@ -26,21 +28,37 @@ import threading
 import time
 import urllib.request
 
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad
+
 from portal import APK_VER, APP_ID, HOSTS, SPKG
 from wire import MAGIS_KEY, wire_decrypt, wire_encrypt
 
 log = logging.getLogger("visionplus.vip")
 
 PLAY_PORTAL = "masmobile"
-# Columnas de respaldo cuando la app no manda una (deeplink/arranque en frío):
-# 79715 es la columna principal de películas masmobile, 79716 de series.
-FALLBACK_COLUMNS = (79715, 79716, 76182, 87887, 87888, 87889, 77115)
+# Columnas de respaldo cuando la app no manda una (deeplink/arranque en frío).
+# Las «All» del portal actual autorizan cualquier título de su sección; las Free
+# firman el catálogo abierto. 79716/76182 ya no existen (portal100002): pedirlas
+# abortaba toda la búsqueda y el play caía a 480p.
+FALLBACK_COLUMNS = (77115, 77143, 77177, 87887, 87888, 87889, 79715, 77117)
 SESSION_TTL = 25 * 60.0
+# La cuenta por correo (email + contraseña) dura mucho más que una sesión de
+# dispositivo; no hace falta acuñar cada 25 minutos.
+EMAIL_SESSION_TTL = 6 * 60 * 60.0
 CACHE_TTL = 6 * 60 * 60.0
 REQUEST_TIMEOUT = 18
 
 SN = os.environ.get("VIP_SN", "2392fe5186d83d73508a2c8c60a26ef6").strip()
 USER_ID = os.environ.get("VIP_USER_ID", "967111326").strip()
+# Cuenta por correo (opcional). Se guarda SOLO en el servidor (.env), nunca en
+# el APK. `VIP_PASSWORD_HASH` evita guardar la contraseña en claro: es el
+# `getCombinePasswordMd5` que firma la app (MD5(pwd+salt) + AES-ECB(pwd)).
+VIP_EMAIL = os.environ.get("VIP_EMAIL", "").strip()
+VIP_PASSWORD = os.environ.get("VIP_PASSWORD", "").strip()
+VIP_PASSWORD_HASH = os.environ.get("VIP_PASSWORD_HASH", "").strip()
+LOGIN_SALT = "ntFT65w6itH!lHCPw7D=@qnsFC5adD28"
+LOGIN_AES_KEY = b"ntFT65w6itH!lHCP"
 
 _LOCK = threading.RLock()
 _TOKEN = ""
@@ -132,6 +150,67 @@ def _post(path: str, spec: dict, timeout: int = REQUEST_TIMEOUT) -> dict:
     raise RuntimeError(f"portal sin host disponible: {last}")
 
 
+def _combine_password(password: str) -> str:
+    """`getCombinePasswordMd5` de la app: MD5(pwd+salt) + AES-ECB(pwd) en Base64."""
+    raw = password.encode("utf-8")
+    md5_salt = hashlib.md5(raw + LOGIN_SALT.encode("utf-8")).hexdigest()
+    aes = AES.new(LOGIN_AES_KEY, AES.MODE_ECB)
+    encrypted = aes.encrypt(pad(raw, AES.block_size))
+    return (md5_salt + base64.b64encode(encrypted).decode("ascii")).strip()
+
+
+def _email_login() -> tuple[str, str]:
+    """Inicia sesión con la cuenta de correo del broker (sin SN ni device)."""
+    global _UID, _DAYS, _DAYS_AT, _ENTITLED, _ACCOUNT_EXPIRES, _MINTS, _MISMATCH
+    password = VIP_PASSWORD_HASH or _combine_password(VIP_PASSWORD)
+    payload = _post(
+        "/api/portalCore/v8/login",
+        {
+            "accountType": "2",
+            "userName": VIP_EMAIL,
+            "password": password,
+            "type": "1",
+            "macAddr": "02:00:00:00:00:00",
+            "areaCode": "",
+            "verificationCode": "",
+            "verificationToken": "",
+            "matadata": "",
+            "signdata": "",
+            "userToken": "",
+            "channel": "default",
+            "portalCode": PLAY_PORTAL,
+        },
+    )
+    token = str(payload.get("userToken") or "").strip()
+    user_id = str(payload.get("userId") or "").strip()
+    if not token or not user_id:
+        raise AccountMismatch("login de correo sin userToken/userId")
+    _UID = user_id
+    _MISMATCH = False
+    try:
+        _DAYS = int(payload.get("remainingDays") or 0)
+    except (TypeError, ValueError):
+        _DAYS = 0
+    now = time.time()
+    _DAYS_AT = now
+    expires = 0
+    entitled = False
+    for row in payload.get("authInfoList") or []:
+        if not isinstance(row, dict):
+            continue
+        invalid = _parse_epoch(row.get("invalidTime") or row.get("expireTime"))
+        if invalid > expires:
+            expires = invalid
+        if invalid > now and str(row.get("status") or "1") == "1":
+            entitled = True
+    _ENTITLED = str(payload.get("hasPay") or "") == "1" or _DAYS > 0 or entitled
+    if expires:
+        _ACCOUNT_EXPIRES = expires
+    _MINTS += 1
+    log.info("VIP: login correo user=%s días=%s", user_id, _DAYS)
+    return token, user_id
+
+
 def _mint() -> tuple[str, str]:
     """Acuña una sesión con la cuenta configurada (snToken -> active).
 
@@ -139,6 +218,8 @@ def _mint() -> tuple[str, str]:
     coincide con `VIP_USER_ID` se marca `_MISMATCH` (par mal copiado en `.env`).
     """
     global _UID, _DAYS, _DAYS_AT, _ENTITLED, _MISMATCH, _ACCOUNT_EXPIRES, _MINTS
+    if VIP_EMAIL and (VIP_PASSWORD or VIP_PASSWORD_HASH):
+        return _email_login()
     st = _post(
         "/api/portalCore/v3/snToken",
         {"channel": "default", "macAddr": "02:00:00:00:00:00", "snToken": "", "portalCode": "masnew"},
@@ -181,9 +262,13 @@ def _parse_epoch(raw) -> int:
         value = int(text)
         return value // 1000 if value > 10**11 else value
     try:
-        from datetime import datetime
+        from datetime import datetime, timezone
 
-        return int(datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp())
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            # El portal publica `nowTime`/`invalidTime` en UTC sin sufijo.
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return int(parsed.timestamp())
     except Exception:  # noqa: BLE001 - formato ajeno
         return 0
 
@@ -206,8 +291,11 @@ def _read_entitlement(active: dict, token: str, user_id: str) -> None:
             )
             entries = info.get("authInfoList") or []
         except Exception as exc:  # noqa: BLE001 - el semáforo no bloquea
+            # portal100042 = «SN授权过期»: la cuenta ya no firma. No se debe
+            # dejar `_ENTITLED` en True solo porque `active.hasFreeAuth=1`
+            # (esa bandera sigue viva después del vencimiento).
             log.warning("VIP: getAuthInfo falló: %s", exc)
-            return
+            entries = active.get("authInfoList") or []
     now = time.time()
     expires = 0
     entitled = False
@@ -221,10 +309,19 @@ def _read_entitlement(active: dict, token: str, user_id: str) -> None:
             entitled = True
     _DAYS = max(0, int((expires - now) // 86400)) if expires else None
     _DAYS_AT = now
+    try:
+        remaining = int(info.get("remainingDays") or 0)
+    except (TypeError, ValueError):
+        remaining = 0
+    free_flag = str(info.get("getFreeAuthFlag") or "").strip().lower() in ("yes", "1", "true")
+    # `hasFreeAuth` por sí sola NO significa vigencia: el portal la deja en «1»
+    # después de vencer (visto 2026-11-16: hasFreeAuth=1, remainingDays=0,
+    # getFreeAuthFlag=no). Solo cuenta si la campaña sigue abierta o hay días.
     _ENTITLED = (
         entitled
         or str(info.get("hasPay") or "") == "1"
-        or str(info.get("hasFreeAuth") or "") == "1"
+        or remaining > 0
+        or (free_flag and str(info.get("hasFreeAuth") or "") == "1")
     )
     if expires:
         _ACCOUNT_EXPIRES = expires
@@ -233,7 +330,7 @@ def _read_entitlement(active: dict, token: str, user_id: str) -> None:
 def _session(force: bool = False) -> tuple[str, str]:
     global _TOKEN, _UID, _TOKEN_AT
     with _LOCK:
-        if not force and _TOKEN and time.time() - _TOKEN_AT < SESSION_TTL:
+        if not force and _TOKEN and time.time() - _TOKEN_AT < (EMAIL_SESSION_TTL if VIP_EMAIL else SESSION_TTL):
             return _TOKEN, _UID
         _TOKEN, _UID = _mint()
         _TOKEN_AT = time.time()
@@ -310,6 +407,10 @@ def _play(content_id: str, series_id: str, column_id: int, kind: str, episodes: 
     cached = _CACHE.get(cache_key)
     if cached and now < cached[0]:
         return cached[1]
+    # Cuenta vencida: no se gasta una vuelta al portal por cada título. La app
+    # recibe 409 y cae al flujo libre de inmediato (antes: 502 tras 25 s).
+    if _ENTITLED is False:
+        raise AccountNoDays("cuenta sin días; solo sirven las licencias cacheadas")
 
     last_error: Exception | None = None
     is_series = bool(series_id and series_id != content_id)
@@ -317,7 +418,15 @@ def _play(content_id: str, series_id: str, column_id: int, kind: str, episodes: 
     auth_type = "1" if is_series else ""
     for attempt in (0, 1):
         token, user_id = _session(force=attempt > 0)
-        columns = [column_id] if column_id > 0 else list(FALLBACK_COLUMNS)
+        # La columna que manda la app primero; después las «All» y las Free. Si
+        # la app manda una columna equivocada (mapa incompleto), el título aún
+        # se puede firmar en su repisa real en vez de caer a 480p.
+        columns: list[int] = []
+        if column_id > 0:
+            columns.append(int(column_id))
+        for candidate in FALLBACK_COLUMNS:
+            if candidate not in columns:
+                columns.append(candidate)
         medias: list[dict] = []
         kicked = False
         for column in columns:
@@ -337,12 +446,19 @@ def _play(content_id: str, series_id: str, column_id: int, kind: str, episodes: 
                 spec["columnId"] = int(column)
             try:
                 payload = _post("/api/portalCore/v10/startPlayVOD", spec)
-            except Exception as exc:  # noqa: BLE001 - sesión pateada: reintenta una vez
+            except Exception as exc:  # noqa: BLE001 - portal: se decide por código
                 last_error = exc
-                if "aaa100083" in str(exc) or "aaa100" in str(exc):
+                message = str(exc)
+                if "portal100042" in message:
+                    # SN授权过期: la cuenta ya no firma ni una pista.
+                    raise AccountNoDays(f"cuenta sin autorización (user={user_id})") from exc
+                if "aaa100083" in message or "aaa100028" in message:
                     _drop_session()
                     kicked = True
                     break
+                if "portal100002" in message or "portal100008" in message:
+                    # Columna que ya no existe / título fuera de esa repisa.
+                    continue
                 raise
             medias = best_medias(payload)
             if medias:
@@ -356,7 +472,7 @@ def _play(content_id: str, series_id: str, column_id: int, kind: str, episodes: 
                 raise AccountNoDays(
                     f"cuenta sin días (user={user_id}); quedan {len(_CACHE)} licencias cacheadas"
                 )
-            raise NoLicense(f"título sin licencia firmable (columna={column_id})")
+            raise NoLicense(f"título sin licencia firmable (columnas={columns})")
         expires = _license_expired(medias[0]["l"])
         ttl = CACHE_TTL
         if expires:
@@ -414,7 +530,7 @@ def status() -> dict:
     solo acuña cuando el broker está en frío.
     """
     now = time.time()
-    if _DAYS_AT == 0 or now - _DAYS_AT > 1800:
+    if not VIP_EMAIL and (_DAYS_AT == 0 or now - _DAYS_AT > 1800):
         try:
             token, uid = _session()
             _read_entitlement({}, token, uid)
