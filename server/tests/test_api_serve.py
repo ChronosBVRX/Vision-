@@ -67,6 +67,16 @@ def test_markers_title_sql_prefers_the_exact_ref_and_anime_copy():
     assert "(coalesce(t.kind, '') = 'anime') desc" in sql
 
 
+def test_movie_cache_is_invalidated_when_the_copy_changes():
+    # 128 min teatral vs 180 min extendida: el negativo/marcador no se reutiliza.
+    assert app._duration_mismatch(128, 128 * 60) is False
+    assert app._duration_mismatch(128, 133 * 60) is False  # redondeo tolerado
+    assert app._duration_mismatch(128, 180 * 60) is True
+    # Sin una de las dos duraciones no se puede afirmar nada: no se invalida.
+    assert app._duration_mismatch(0, 180 * 60) is False
+    assert app._duration_mismatch(128, 0) is False
+
+
 def test_film_cleans_series_title():
     assert app.film(_record())["title"] == "Show"
     assert app.film(_record(title="Avatar 2", kind="movie"))["title"] == "Avatar 2"

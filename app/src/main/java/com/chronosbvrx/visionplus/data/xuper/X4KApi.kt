@@ -1449,6 +1449,21 @@ object X4KApi {
                     )
                 }
             }
+        } else {
+            // Película: se deja caliente su marcador de créditos/post-créditos. La
+            // ficha se abre minutos antes de que haga falta, así que al llegar al
+            // final ya está en caché y no hay espera ni botón manual.
+            val len = (fallbackDurationMs / 1000L).toInt().coerceAtLeast(0)
+            runCatching {
+                withTimeoutOrNull(2_500L) {
+                    com.chronosbvrx.visionplus.data.markers.MarkersStore.fetchForPlayer(
+                        context = context,
+                        ref = cid,
+                        ep = 1,
+                        lengthSeconds = len,
+                    )
+                }
+            }
         }
     }
 
@@ -2111,11 +2126,21 @@ object X4KApi {
         // Marcadores de salto: SOLO lo que ya está en caché (memoria/disco). El
         // reproductor pide el resto en segundo plano; el handoff no espera a la red.
         val isSeries = cleanSeriesId.isNotBlank() && (resolvedEpIds.size > 1 || seasonIds.size > 1)
-        val markerRef = if (seriesId.isNotBlank()) seriesId else cleanSeriesId
-        val markerEp = resolvedEpNumbers.getOrNull(resolvedEpIndex)?.takeIf { it > 0 }
-            ?: (resolvedEpIndex + 1)
+        // Película: la ficha de la película es su propia referencia y el episodio es 1.
+        // Series: la temporada manda y el capítulo va 1-based.
+        val markerRef = if (isSeries) {
+            if (seriesId.isNotBlank()) seriesId else cleanSeriesId
+        } else {
+            cid
+        }
+        val markerEp = if (isSeries) {
+            resolvedEpNumbers.getOrNull(resolvedEpIndex)?.takeIf { it > 0 }
+                ?: (resolvedEpIndex + 1)
+        } else {
+            1
+        }
         val markerLengthSec = (fallbackDurationMs / 1000L).toInt().coerceAtLeast(0)
-        val cachedMarkers = if (isSeries && markerRef.isNotBlank()) {
+        val cachedMarkers = if (markerRef.isNotBlank()) {
             runCatching {
                 com.chronosbvrx.visionplus.data.markers.MarkersStore.cachedJson(
                     context = context,
@@ -2153,9 +2178,9 @@ object X4KApi {
             seasonIndex = if (isSeries) seasonIndex else 0,
             resumeMs = resumeMs,
             posterUrl = posterUrl,
-            markersRef = if (isSeries) markerRef else "",
-            markersEp = if (isSeries) markerEp else 0,
-            markersLengthSec = if (isSeries) markerLengthSec else 0,
+            markersRef = markerRef,
+            markersEp = markerEp,
+            markersLengthSec = markerLengthSec,
             markersJson = cachedMarkers,
             entriesJson = prep.entriesJson,
             playParams = prep.playParams,

@@ -55,7 +55,8 @@ class MarkersPlayerWiringTest {
     fun thePortalLaunchShipsCachedMarkersWithoutBlocking() {
         val api = requireSource("src/main/java/com/chronosbvrx/visionplus/data/xuper/X4KApi.kt")
         assertTrue("lee el plan cacheado al lanzar", api.contains("MarkersStore.cachedJson("))
-        assertTrue("manda el ref/ep al reproductor", api.contains("markersRef = if (isSeries)"))
+        assertTrue("manda el ref/ep al reproductor", api.contains("markersRef = markerRef"))
+        assertTrue("las películas también llevan su ficha como ref", api.contains("markerRef = if (isSeries)"))
         assertFalse("el lanzamiento ya no espera al job de marcadores", api.contains("markersJob?.await()"))
     }
 

@@ -333,6 +333,11 @@ create table if not exists skip_markers (
 
 create index if not exists idx_skip_markers_fetched on skip_markers (fetched_at);
 
+-- Duración (min) con la que se resolvió el marcador. Permite invalidar la caché
+-- cuando la copia que se reproduce es otra versión (teatral/extendida) y evita
+-- que un negativo calculado con la duración equivocada dure dos días.
+alter table skip_markers add column if not exists duration_min integer not null default 0;
+
 -- Mapeo TMDB → MyAnimeList para AniSkip (openings/endings de anime).
 -- El dataset Fribb anime-lists da (themoviedb_id.tv, season.tmdb) → mal_id;
 -- el worker lo refresca semanal en `sync/aniskip.py` (idempotente).

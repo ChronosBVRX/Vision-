@@ -494,3 +494,79 @@ def test_theintrodb_uses_the_account_api_key_when_configured(monkeypatch):
                for _, headers in calls)
     # La clave no se filtra a las otras fuentes.
     assert all("introdb.app" not in url for url, _ in calls)
+
+
+# ---------------------------------------------------------------- películas
+
+def test_parse_tidb_movie_picks_the_earliest_credits_block():
+    # Una película puede tener una escena a mitad de créditos: el bloque que abre
+    # «Más como esta» es el PRIMERO, no el más votado (que suele ser el de después).
+    payload = {
+        "credits": [
+            {"start_ms": 7000000, "end_ms": 7300000, "submission_count": 9},
+            {"start_ms": 6600000, "end_ms": 6900000, "submission_count": 1},
+        ],
+    }
+    out = markers.parse_tidb_movie(payload)
+    assert out["credits"]["s"] == 6600000
+    assert out["credits"]["e"] == 6900000
+    assert out["credits"]["src"] == "theintrodb"
+    assert markers.parse_tidb_movie(None) == {}
+    assert markers.parse_tidb_movie({"credits": [{"end_ms": 1}]}) == {}
+
+
+def test_parse_idb_movie_honors_no_outro():
+    payload = {
+        "outro": {"start_ms": 7000000, "end_ms": 7400000, "submission_count": 2},
+        "post_credits": {"start_ms": 7600000, "end_ms": 7700000, "submission_count": 2},
+        "no_outro": True,
+    }
+    out = markers.parse_idb(payload)
+    assert "credits" not in out
+    assert out["postCredits"]["s"] == 7600000
+
+
+def test_sanitize_movie_credits_use_the_tail_not_half_the_file():
+    # 150 min: la ventana es max(900 s, 25 %) = 37.5 min -> los créditos no pueden
+    # empezar antes del minuto 112.5, pero sí a los 120 (créditos largos reales).
+    good = {"credits": {"s": 120 * 60_000, "e": 146 * 60_000, "src": "theintrodb", "votes": 1}}
+    early = {"credits": {"s": 100 * 60_000, "e": 106 * 60_000, "src": "theintrodb", "votes": 1}}
+    assert markers.sanitize(good, duration_min=150, is_movie=True)["credits"]["s"] == 120 * 60_000
+    assert markers.sanitize(early, duration_min=150, is_movie=True) == {}
+
+
+def test_sanitize_movie_post_credits_must_follow_the_credits():
+    credits = {"s": 140 * 60_000, "e": 145 * 60_000, "src": "introdb", "votes": 1}
+    after = {"s": 146 * 60_000, "e": 148 * 60_000, "src": "introdb", "votes": 1}
+    before = {"s": 130 * 60_000, "e": 132 * 60_000, "src": "introdb", "votes": 1}
+    out = markers.sanitize({"credits": credits, "postCredits": after}, 150, is_movie=True)
+    assert out["postCredits"]["s"] == 146 * 60_000
+    out = markers.sanitize({"credits": credits, "postCredits": before}, 150, is_movie=True)
+    assert "postCredits" not in out
+
+
+def test_fetch_global_movie_uses_movie_endpoints_and_no_season(monkeypatch):
+    calls = []
+
+    def fake_get(url, timeout):
+        calls.append(url)
+        if "theintrodb" in url:
+            return {"credits": [{"start_ms": 7000000, "end_ms": 7400000}]}
+        return {
+            "outro": {"start_ms": 7000000, "end_ms": 7400000, "submission_count": 2},
+            "post_credits": {"start_ms": 7600000, "end_ms": 7700000, "submission_count": 2},
+        }
+
+    monkeypatch.setattr(markers, "_get_json", fake_get)
+    out = markers.fetch_global(
+        603692, "tt2911666", season=1, episode=1,
+        episode_length=150 * 60, is_movie=True,
+    )
+    tmdb_call = next(url for url in calls if "theintrodb" in url)
+    imdb_call = next(url for url in calls if "introdb.app" in url)
+    assert "v4/media" in tmdb_call and "tmdb_id=603692" in tmdb_call
+    assert "duration_ms=9000000" in tmdb_call
+    assert "season=" not in tmdb_call and "episode=" not in tmdb_call
+    assert "is_movie=true" in imdb_call and "season=" not in imdb_call
+    assert out["credits"]["s"] == 7000000
+    assert out["postCredits"]["s"] == 7600000

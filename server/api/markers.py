@@ -26,6 +26,11 @@ import urllib.request
 
 TIDB_URL = "https://api.theintrodb.org/v2/media?tmdb_id={tmdb}&season={season}&episode={episode}"
 IDB_URL = "https://api.introdb.app/segments?imdb_id={imdb}&season={season}&episode={episode}"
+# Películas: TheIntroDB v4 direcciona la ficha sin temporada/capítulo y acepta la
+# duración real para elegir la versión (teatral, extendida…). IntroDB.app usa
+# `is_movie=true` y devuelve `outro` (inicio de créditos) + `post_credits`.
+TIDB_MOVIE_URL = "https://api.theintrodb.org/v4/media?tmdb_id={tmdb}"
+IDB_MOVIE_URL = "https://api.introdb.app/segments?imdb_id={imdb}&is_movie=true"
 # Cuenta de TheIntroDB (opcional): con una API key el tope sube de 5,000 a
 # 100,000 peticiones diarias. La clave vive SOLO en el .env del VPS; nunca en el
 # repo. Sin clave se sigue usando el presupuesto anónimo.
@@ -169,6 +174,35 @@ def parse_tidb(payload) -> dict:
     return out
 
 
+def parse_tidb_movie(payload) -> dict:
+    """TheIntroDB v4 (película): bloques de créditos; manda el PRIMERO.
+
+    Una película puede traer varios bloques (una escena a mitad de créditos y más
+    créditos después). Para abrir «Más como esta» solo importa dónde EMPIEZAN los
+    créditos, así que se elige el bloque con el `start_ms` más temprano; su `end_ms`
+    —si existe— marca justo el inicio de la escena a mitad de créditos.
+    """
+    out = {}
+    if not isinstance(payload, dict):
+        return out
+    best = None
+    for item in payload.get("credits") or []:
+        if not isinstance(item, dict):
+            continue
+        seg = _segment(
+            item.get("start_ms"), item.get("end_ms"), SOURCE_TIDB,
+            item.get("submission_count"), item.get("confidence"),
+        )
+        if seg is None or seg["s"] is None:
+            continue
+        if best is None or seg["s"] < best["s"]:
+            best = seg
+    if best is not None:
+        out["credits"] = best
+    # `preview` de TheIntroDB es el avance del próximo capítulo: no es un crédito.
+    return out
+
+
 def parse_idb(payload) -> dict:
     """IntroDB.app: un objeto por segmento; «outro» son los créditos."""
     out = {}
@@ -177,6 +211,10 @@ def parse_idb(payload) -> dict:
     for key, kind in (("intro", "intro"), ("recap", "recap"), ("outro", "credits")):
         item = payload.get(key)
         if not isinstance(item, dict):
+            continue
+        # `no_outro` = la comunidad confirmó que no hay créditos que saltar: no se
+        # inventa un marcador negativo ni se deja que otra fuente lo pise sin datos.
+        if kind == "credits" and payload.get("no_outro") is True:
             continue
         seg = _segment(
             item.get("start_ms"),
@@ -282,12 +320,24 @@ def parse_anime_list(entries) -> dict:
 
 # ---------------------------------------------------------------- saneo y fusión
 
-def sanitize(markers, duration_min: int = 0) -> dict:
+def sanitize(markers, duration_min: int = 0, is_movie: bool = False) -> dict:
     """Descarta segmentos imposibles antes de guardarlos o servirlos."""
     if not markers:
         return {}
     duration_ms = max(0, int(duration_min or 0)) * 60_000
     out = {}
+
+    # Ventana de la cola. Un episodio de 45 min no puede tener «créditos» en el
+    # minuto 5; una película de 3 h sí puede tener 15-20 min de créditos al final.
+    # Episodio = última mitad; película = últimos 900 s o 25 %, el mayor de los dos
+    # (así una película con créditos largos no se descarta por unos minutos).
+    credits_low = CREDITS_FALLBACK_MIN_MS
+    if duration_ms > 0:
+        if is_movie:
+            tail = max(900_000, duration_ms // 4)
+            credits_low = max(CREDITS_FALLBACK_MIN_MS, duration_ms - tail)
+        else:
+            credits_low = max(CREDITS_FALLBACK_MIN_MS, int(duration_ms * CREDITS_FRACTION))
 
     intro = markers.get("intro")
     if intro:
@@ -309,10 +359,7 @@ def sanitize(markers, duration_min: int = 0) -> dict:
     if credits:
         start, end = credits.get("s"), credits.get("e")
         if start is not None:
-            low = CREDITS_FALLBACK_MIN_MS
-            if duration_ms > 0:
-                low = max(low, int(duration_ms * CREDITS_FRACTION))
-            if start >= low and (duration_ms <= 0 or start <= duration_ms + 60_000):
+            if start >= credits_low and (duration_ms <= 0 or start <= duration_ms + 60_000):
                 if end is None or end > start:
                     out["credits"] = credits
 
@@ -320,10 +367,9 @@ def sanitize(markers, duration_min: int = 0) -> dict:
     if post:
         start, end = post.get("s"), post.get("e")
         if start is not None and start > 0:
-            low = CREDITS_FALLBACK_MIN_MS
-            if duration_ms > 0:
-                low = max(low, int(duration_ms * CREDITS_FRACTION))
-            if start >= low and (end is None or end > start):
+            # La escena post-créditos va después de donde empiezan los créditos.
+            after_credits = "credits" not in out or start >= out["credits"]["s"]
+            if start >= credits_low and after_credits and (end is None or end > start):
                 out[POST_KIND] = post
 
     return out
@@ -446,6 +492,7 @@ def fetch_global_status(
     mal_id=None,
     episode_length: int = 0,
     timeout: float = 8.0,
+    is_movie: bool = False,
 ):
     """Como `fetch_global`, pero devuelve `(segmentos, todas_las_fuentes_respondieron)`.
 
@@ -453,6 +500,10 @@ def fetch_global_status(
     diferencia para no congelar una caché negativa de 2 días cuando en realidad fue un
     fallo temporal. Las tres fuentes se consultan EN PARALELO (antes eran secuenciales:
     una fuente lenta retrasaba a las demás y el cliente se quedaba sin marcadores).
+
+    Con `is_movie=True` se consulta la ficha de película: TheIntroDB v4 sin
+    temporada/capítulo (con `duration_ms` para acertar la versión) e IntroDB.app con
+    `is_movie=true`; AniSkip no aplica.
     """
     season = max(1, int(season or 1))
     episode = max(1, int(episode or 1))
@@ -468,7 +519,12 @@ def fetch_global_status(
     futures = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
         if tmdb_id:
-            url = TIDB_URL.format(tmdb=int(tmdb_id), season=season, episode=episode)
+            if is_movie:
+                url = TIDB_MOVIE_URL.format(tmdb=int(tmdb_id))
+                if length > 0:
+                    url += f"&duration_ms={length * 1000}"
+            else:
+                url = TIDB_URL.format(tmdb=int(tmdb_id), season=season, episode=episode)
             if TIDB_API_KEY:
                 auth = {"Authorization": f"Bearer {TIDB_API_KEY}"}
                 futures["tidb"] = pool.submit(_get_json_headers, url, timeout, auth)
@@ -476,9 +532,12 @@ def fetch_global_status(
                 futures["tidb"] = pool.submit(_get_json, url, timeout)
         if imdb_id:
             imdb = urllib.parse.quote(str(imdb_id).strip(), safe="")
-            url = IDB_URL.format(imdb=imdb, season=season, episode=episode)
+            if is_movie:
+                url = IDB_MOVIE_URL.format(imdb=imdb)
+            else:
+                url = IDB_URL.format(imdb=imdb, season=season, episode=episode)
             futures["idb"] = pool.submit(_get_json, url, timeout)
-        if mal > 0:
+        if mal > 0 and not is_movie:
             futures["aniskip"] = pool.submit(_aniskip_json, mal, episode, length, timeout)
 
         payloads = {}
@@ -488,16 +547,20 @@ def fetch_global_status(
             except Exception:  # noqa: BLE001 — una fuente caída no tumba a las demás
                 payloads[name] = None
 
-    tidb = parse_tidb(payloads.get("tidb")) if payloads.get("tidb") else {}
+    tidb_payload = payloads.get("tidb")
+    if tidb_payload:
+        tidb = parse_tidb_movie(tidb_payload) if is_movie else parse_tidb(tidb_payload)
+    else:
+        tidb = {}
     idb = parse_idb(payloads.get("idb")) if payloads.get("idb") else {}
     askip = parse_aniskip(payloads.get("aniskip")) if payloads.get("aniskip") else {}
     all_ok = all(payloads.get(name) is not None for name in futures)
     return merge(tidb, idb, askip), all_ok
 
 
-def fetch_global(tmdb_id=None, imdb_id: str = "", season: int = 1, episode: int = 1, mal_id=None, episode_length: int = 0, timeout: float = 8.0) -> dict:
+def fetch_global(tmdb_id=None, imdb_id: str = "", season: int = 1, episode: int = 1, mal_id=None, episode_length: int = 0, timeout: float = 8.0, is_movie: bool = False) -> dict:
     """Compatibilidad: solo los segmentos fusionados ({} si no hay nada)."""
     segments, _ = fetch_global_status(
-        tmdb_id, imdb_id, season, episode, mal_id, episode_length, timeout,
+        tmdb_id, imdb_id, season, episode, mal_id, episode_length, timeout, is_movie,
     )
     return segments

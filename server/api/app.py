@@ -4229,7 +4229,7 @@ MARKERS_PREWARM_START = float(os.environ.get("MARKERS_PREWARM_START_SECONDS", "2
 # EXACTA del ref que reprodujo la app; después la versión XTV/anime, para que AniSkip
 # no se desactive por una copia duplicada.
 _MARKERS_TITLE_SQL = """
-    select t.id, t.title, t.kind, t.duration_min,
+    select t.id, t.title, t.kind, t.duration_min, t.program_type,
            e.tmdb_id, e.imdb_id, e.match_confidence,
            (select gm.season from group_members gm where gm.title_id = t.id limit 1) as group_season
     from titles t
@@ -4242,6 +4242,36 @@ _MARKERS_TITLE_SQL = """
              t.id
     limit 1
 """
+
+
+def _title_is_movie(kind, program_type) -> bool:
+    """Película de verdad: el portal la marca como `movie` (kids/anime incluidos).
+
+    Un `seriesId` suelto o una temporada no convierten una película en serie; al
+    revés, `programType=movie` manda aunque la fila venga como `kids`.
+    """
+    return (
+        (kind or "").strip().lower() == "movie"
+        or (program_type or "").strip().lower() == "movie"
+    )
+
+
+def _duration_mismatch(stored_min, length_sec) -> bool:
+    """¿La caché se resolvió con otra copia? Solo si ambas duraciones se conocen.
+
+    Las películas tienen versiones teatrales/extendidas con minutos distintos; un
+    marcador (o un negativo) de 128 min no sirve para una copia de 180 min. El
+    margen de 5 min absorbe redondeos del portal sin re-consultar por nada.
+    """
+    try:
+        stored = int(stored_min or 0)
+        seconds = int(length_sec or 0)
+    except (TypeError, ValueError):
+        return False
+    if stored <= 0 or seconds <= 0:
+        return False
+    requested = max(1, seconds // 60)
+    return abs(stored - requested) > 5
 
 
 # Fichas que todavía no tienen el episodio 1 indexado (o cuya copia ya venció).
@@ -4308,14 +4338,16 @@ async def markers_get(
     if not key:
         raise HTTPException(status_code=400, detail="referencia inválida")
     row = await db().fetchrow(
-        "select season, segments, fetched_at from skip_markers where ref = $1 and episode = $2",
+        "select season, segments, fetched_at, duration_min from skip_markers where ref = $1 and episode = $2",
         key, ep,
     )
     if row is not None:
         cached = skip_markers.segments_of(row["segments"])
         age = time.time() - (row["fetched_at"].timestamp() if row["fetched_at"] else 0.0)
         ttl = MARKERS_POS_TTL if cached else MARKERS_NEG_TTL
-        if age < ttl:
+        # Otra versión del archivo (teatral vs extendida) invalida la copia aunque
+        # esté “fresca”: el marcador caería en otro minuto o el negativo ya no aplica.
+        if age < ttl and not _duration_mismatch(row["duration_min"], length):
             background.add_task(_warm_next_markers, key, int(row["season"]), ep, length)
             return skip_markers.payload(key, ep, row["season"], cached)
 
@@ -4329,16 +4361,22 @@ async def _resolve_markers(key: str, ep: int, season: int, row=None, length_sec:
     """Resuelve y cachea los marcadores de (ref, episodio); devuelve (segmentos, temporada)."""
     if row is None:
         row = await db().fetchrow(
-            "select season, segments, fetched_at from skip_markers where ref = $1 and episode = $2",
+            "select season, segments, fetched_at, duration_min from skip_markers where ref = $1 and episode = $2",
             key, ep,
         )
     if row is not None:
         season = int(row["season"]) or season
     found = {}
     all_sources_ok = True
+    duration_min = 0
     title = await db().fetchrow(_MARKERS_TITLE_SQL, key, skip_markers.ref_variants(key))
     if title is not None:
-        if title["group_season"]:
+        is_movie = _title_is_movie(title["kind"], title["program_type"])
+        if is_movie:
+            # La ficha de película no tiene temporada: el endpoint sigue usando
+            # `ep=1` como clave de caché, pero las fuentes se consultan sin season.
+            season = 1
+        elif title["group_season"]:
             season = int(title["group_season"])
         else:
             season = skip_markers.season_from_title(title["title"], title["kind"]) or season
@@ -4348,23 +4386,26 @@ async def _resolve_markers(key: str, ep: int, season: int, row=None, length_sec:
         mal_id = None
         # AniSkip solo para anime (su catálogo es 100% anime): el mal_id sale del
         # mapeo TMDB→MAL que el worker refresca semanal; sin mapeo no se toca esa red.
-        if tmdb_id and (title["kind"] or "") == "anime":
+        if tmdb_id and (title["kind"] or "") == "anime" and not is_movie:
             mal_id = await db().fetchval(
                 "select mal_id from anime_mal_map where tmdb_id = $1 and season = $2",
                 tmdb_id, season,
             )
         duration_min = int(title["duration_min"] or 0)
-        if duration_min <= 0 and length_sec > 0:
+        # En películas manda la duración real del archivo: hay versiones teatrales,
+        # extendidas y doblajes con minutos distintos y el marcador debe caer ahí.
+        if length_sec > 0 and (duration_min <= 0 or is_movie):
             duration_min = max(1, int(length_sec) // 60)
         if tmdb_id or imdb_id or mal_id:
             try:
                 raw, all_sources_ok = await asyncio.to_thread(
                     skip_markers.fetch_global_status, tmdb_id, imdb_id, season, ep,
                     mal_id, length_sec if length_sec > 0 else duration_min * 60,
+                    8.0, is_movie,
                 )
             except Exception:  # noqa: BLE001 — fuente caída: se sirve lo que haya
                 raw, all_sources_ok = {}, False
-            found = skip_markers.sanitize(raw, duration_min)
+            found = skip_markers.sanitize(raw, duration_min, is_movie=is_movie)
 
     # Las marcas del usuario jamás se pierden: mandan sobre lo recién llegado.
     if row is not None:
@@ -4385,12 +4426,16 @@ async def _resolve_markers(key: str, ep: int, season: int, row=None, length_sec:
             stored_at -= max(0, MARKERS_NEG_TTL - MARKERS_ERROR_TTL)
     await db().execute(
         """
-        insert into skip_markers (ref, episode, season, segments, fetched_at)
-        values ($1, $2, $3, $4::jsonb, to_timestamp($5))
+        insert into skip_markers (ref, episode, season, segments, fetched_at, duration_min)
+        values ($1, $2, $3, $4::jsonb, to_timestamp($5), $6)
         on conflict (ref, episode) do update set
-            season = excluded.season, segments = excluded.segments, fetched_at = excluded.fetched_at
+            season = excluded.season, segments = excluded.segments, fetched_at = excluded.fetched_at,
+            duration_min = case
+                when excluded.duration_min > 0 then excluded.duration_min
+                else skip_markers.duration_min
+            end
         """,
-        key, ep, season, json.dumps(found, ensure_ascii=False), stored_at,
+        key, ep, season, json.dumps(found, ensure_ascii=False), stored_at, duration_min,
     )
     return found, season
 
@@ -4398,6 +4443,14 @@ async def _resolve_markers(key: str, ep: int, season: int, row=None, length_sec:
 async def _warm_next_markers(key: str, season: int, ep: int, length_sec: int = 0) -> None:
     """Cascada: deja listos los 2 capítulos siguientes (solo si no están en caché)."""
     try:
+        # Una película no tiene «capítulos siguientes»: su marcador ya quedó servido
+        # y calentar E2/E3 solo gastaría cuota y ensuciaría la caché.
+        row = await db().fetchrow(
+            "select kind, program_type from titles where id = $1 or play_ref = $1 limit 1",
+            key,
+        )
+        if row is not None and _title_is_movie(row["kind"], row["program_type"]):
+            return
         for nxt in (ep + 1, ep + 2):
             if nxt > MARKERS_EPISODE_MAX:
                 break

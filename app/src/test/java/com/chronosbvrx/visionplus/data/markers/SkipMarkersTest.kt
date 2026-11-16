@@ -186,6 +186,16 @@ class SkipMarkersTest {
     }
 
     @Test
+    fun movieCreditsTriggerAtTheirRealStart() {
+        // Película de 125 min con créditos a los 117: el marcador manda y se abre
+        // «Más como esta» justo ahí, no en el último minuto ni en la mitad del film.
+        val movie = EpisodeMarkers(creditsStartMs = 7_020_000L, creditsEndMs = 7_260_000L)
+        assertEquals(7_020_000L, creditsCardStartMs(movie, 7_500_000L))
+        // Un marcador que no cabe en la copia que se está viendo no dispara nada.
+        assertNull(creditsCardStartMs(movie, 60 * 60_000L))
+    }
+
+    @Test
     fun withoutCreditsTheLastMinuteOffersTheNextChapter() {
         val none = EpisodeMarkers()
         assertEquals(44 * 60_000L - 60_000L, creditsFallbackStartMs(none, 44 * 60_000L))

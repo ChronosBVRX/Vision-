@@ -2956,6 +2956,9 @@ class X4KPlayerAty : ComponentActivity() {
         controls = overlay
         if (!liveMode && isSeriesContent(epIds.size, seasonIds.size)) {
             buildIntroPill(root)
+        } else if (!liveMode) {
+            // Película: sin píldora de intro, pero sí el aviso de escena post-créditos.
+            buildPostCreditsNotice(root)
         }
         if (!liveMode) {
             seekBar = seek
@@ -3781,7 +3784,8 @@ class X4KPlayerAty : ComponentActivity() {
                 if (gen != playGen || token != markersFetchGen) return@runOnUiThread
                 if (ref != markEpisodeRef || ep != markEpisodeNumber) return@runOnUiThread
                 applyMarkers(json)
-                prefetchNextMarkers(ref, ep)
+                // Una película no tiene capítulos siguientes: no se calientan E2/E3.
+                if (isSeriesContent(epIds.size, seasonIds.size)) prefetchNextMarkers(ref, ep)
             }
         }.start()
     }
@@ -3857,6 +3861,16 @@ class X4KPlayerAty : ComponentActivity() {
         )
         // Aviso discreto de escena post-créditos: no es botón (no roba foco), se muestra
         // solo unos segundos al entrar a los créditos y se esconde solo.
+        buildPostCreditsNotice(root)
+    }
+
+    /**
+     * Aviso «Hay escena después de los créditos». Vive fuera de la píldora de intro para
+     * que las películas —que no tienen píldora— también lo reciban cuando la base trae
+     * la escena. Sin marcador no se crea ni se muestra.
+     */
+    private fun buildPostCreditsNotice(root: FrameLayout) {
+        if (postCreditsNotice != null) return
         val notice = TextView(this).apply {
             text = "Hay escena después de los créditos"
             textSize = 12f
@@ -3978,26 +3992,36 @@ class X4KPlayerAty : ComponentActivity() {
         if (!validPostCredits(markers, duration)) return
         if (pos < markers.postCreditsStartMs) return
         postCreditsShown = true
+        // La escena post-créditos manda: se retira el modal para no taparla.
+        if (suggestVisible) hideSuggestions()
         notice.visibility = View.VISIBLE
         handler.postDelayed({ notice.visibility = View.GONE }, 9_000L)
     }
 
     /** Con marcador de créditos, la tarjeta de «siguiente capítulo» sale al empezar el cierre.
-     *  En películas sueltas, las sugerencias salen también al empezar los créditos. */
+     *  En películas, las sugerencias salen también al empezar los créditos, pero SOLO
+     *  cuando la base trae el inicio real: sin dato no se adivina ni se pide nada. */
     private fun maybeShowCreditsCard(pos: Long) {
         if (isInPipNow() || creditsCardShown || !videoIsReady() || scrubbing) return
         if (errorShown || picking || nextOverlay != null || endedShown || resumeOverlay != null) return
         val duration = resolveStableTotalDuration(declaredDurationMs, durationMs, pos, liveMode)
         val markers = currentMarkers()
+        // Película suelta: solo con inicio de créditos conocido. El fallback de
+        // «duración - 60 s» tapaba la última escena y no era el momento pedido.
+        if (!isSeriesContent(epIds.size, seasonIds.size)) {
+            if (!markers.hasCredits) return
+            val start = creditsCardStartMs(markers, duration) ?: return
+            if (pos < start) return
+            if (!movieSuggestShown) showMovieSuggestions()
+            // Si un modal abierto (calidad, reanudar…) impidió pintarlo, se reintenta
+            // en el siguiente tic sin marcar el cierre como consumido.
+            if (movieSuggestShown) creditsCardShown = true
+            return
+        }
         val start = creditsCardStartMs(markers, duration)
             ?: creditsFallbackStartMs(markers, duration)
             ?: return
         if (pos < start) return
-        // Película suelta: sugerencias al empezar los créditos (no esperar al final).
-        if (!isSeriesContent(epIds.size, seasonIds.size) && !movieSuggestShown) {
-            showMovieSuggestions()
-            return
-        }
         if (!hasNextEpisode()) return
         creditsCardShown = true
         if (curSeries.isNotBlank()) {
@@ -4391,9 +4415,10 @@ class X4KPlayerAty : ComponentActivity() {
     // ---------------------------------------------------------------- sugerencias al terminar
 
     /**
-     * Al terminar una película, «Más como esta»: títulos del mismo género/estilo.
-     * Se calculan en segundo plano (el intent de una película suelta no lleva el
-     * catálogo) y se pintan en un modal con foco D-pad. Sin resultados no se muestra.
+     * Al empezar los créditos de una película (o al terminar si no hay marcador),
+     * «Más como esta»: títulos del mismo género/estilo. Se calculan en segundo plano
+     * (el intent de una película suelta no lleva el catálogo) y se pintan en un modal
+     * con foco D-pad. Sin resultados no se muestra y no se le pide nada al usuario.
      */
     private fun showMovieSuggestions() {
         if (isInPipNow() || liveMode || suggestVisible || movieSuggestShown) return
@@ -4425,9 +4450,20 @@ class X4KPlayerAty : ComponentActivity() {
                     }
                 }.getOrDefault(emptyList())
                 runOnUiThread {
-                    if (picks.isEmpty() || curCode != code || suggestVisible) return@runOnUiThread
-                    // Si el usuario ya rebobinó y está viendo otra cosa, no lo interrumpas.
-                    if (playerView?.let { X4KTitan.isPlaying(it) } == true) return@runOnUiThread
+                    if (curCode != code || suggestVisible) return@runOnUiThread
+                    if (picks.isEmpty()) {
+                        // Sin resultados ahora: se permite reintentar al final, sin UI.
+                        movieSuggestShown = false
+                        return@runOnUiThread
+                    }
+                    // Si el usuario rebobinó y está viendo otra parte, no lo interrumpas.
+                    // (Al reproducir los créditos la posición sigue dentro de la ventana.)
+                    val creditsAt = currentMarkers().creditsStartMs
+                    if (creditsAt > 0L && X4KTitan.positionMs() < creditsAt - 15_000L) {
+                        creditsCardShown = false
+                        movieSuggestShown = false
+                        return@runOnUiThread
+                    }
                     buildSuggestOverlay(picks)
                 }
             }.start()
@@ -4465,6 +4501,17 @@ class X4KPlayerAty : ComponentActivity() {
             textSize = 11.5f
             setPadding(0, dp(6), 0, dp(8))
         })
+        if (markPostCreditsStartMs > 0L) {
+            // Solo se anuncia cuando la base trae la escena: cero promesas sin dato.
+            card.addView(TextView(this).apply {
+                text = "Hay escena después de los créditos"
+                setTextColor(blueBright)
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(0, 0, 0, dp(6))
+                withIcon(R.drawable.ic_vp_movie, blueBright)
+            })
+        }
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
