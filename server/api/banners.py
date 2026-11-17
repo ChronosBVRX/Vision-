@@ -29,6 +29,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 import calendar_feed
+import lang
 
 log = logging.getLogger("visionplus.banners")
 
@@ -197,7 +198,9 @@ def movie_banner(row: Any, backdrop: str = "", position: int = 0) -> dict:
         "title": title,
         "poster": _text(_row_get(row, "poster_url")),
         "backdrop": backdrop,
-        "synopsis": _text(_row_get(row, "overview")) or _text(_row_get(row, "synopsis")),
+        "synopsis": lang.spanish_only(
+            _text(_row_get(row, "overview")) or _text(_row_get(row, "synopsis"))
+        ),
         "year": year,
         "rating": rating,
         "durationMin": _int(_row_get(row, "duration_min")),

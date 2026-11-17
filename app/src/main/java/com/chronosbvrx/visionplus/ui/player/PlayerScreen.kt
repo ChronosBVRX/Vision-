@@ -276,10 +276,12 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
                         seasonIds = ep.seasonIds, seasonNames = ep.seasonNames, seasonIndex = ep.seasonIndex,
                         resumeMs = ep.resumeMs, posterUrl = film.posterUrl,
                         fallbackDurationMs = fallbackDuration,
+                        synopsis = film.synopsis, cast = film.cast, countries = film.countries,
                     )
                     else com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(
                         context, code, film.title, resumeMs = resumeMs, posterUrl = film.posterUrl,
                         fallbackDurationMs = fallbackDuration,
+                        synopsis = film.synopsis, cast = film.cast, countries = film.countries,
                     )
                 },
                 onDone = onBack,

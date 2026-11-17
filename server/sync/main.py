@@ -267,6 +267,12 @@ async def main() -> None:
                 except Exception:  # noqa: BLE001
                     log.exception("el backfill de traducciones TMDB falló")
                 try:
+                    # Sinopsis española y país para fichas viejas cuyo es-MX venía
+                    # vacío: sin esto la ficha caía al texto inglés del portal.
+                    await tmdb.backfill_overviews(pool)
+                except Exception:  # noqa: BLE001
+                    log.exception("el backfill de sinopsis/país TMDB falló")
+                try:
                     # El agrupador va DESPUÉS del enriquecimiento: un match TMDB recién
                     # hecho («House M.D.» → «House») agrupa en el mismo ciclo.
                     changed += await grouping.group(pool)

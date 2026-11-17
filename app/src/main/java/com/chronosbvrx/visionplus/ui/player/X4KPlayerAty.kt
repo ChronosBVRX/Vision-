@@ -157,6 +157,11 @@ class X4KPlayerAty : ComponentActivity() {
     private var pendingResumeEntry: ResumeEntry? = null
     private var resumeOverlay: View? = null
     private var intentPoster = ""
+    /** Sinopsis ya resuelta por la ficha (TMDB es-MX / traducción española). */
+    private var intentSynopsis = ""
+    /** Reparto y país del servidor (país ya en español). */
+    private var intentCast = ArrayList<String>()
+    private var intentCountries = ArrayList<String>()
     /** Logo del canal en vivo (para el JSON de la red y el arte del reproductor). */
     private var curLogo = ""
     private var lastHistorySave = 0L
@@ -576,6 +581,9 @@ class X4KPlayerAty : ComponentActivity() {
         curEpNumber = epNumbers.getOrNull(curEpIndex)?.takeIf { it > 0 } ?: (curEpIndex + 1)
         resumeMs = intent.getLongExtra("resumeMs", 0L)
         intentPoster = intent.getStringExtra("posterUrl").orEmpty()
+        intentSynopsis = intent.getStringExtra("synopsis").orEmpty()
+        intentCast = intent.getStringArrayListExtra("cast") ?: ArrayList()
+        intentCountries = intent.getStringArrayListExtra("countries") ?: ArrayList()
         curLogo = intent.getStringExtra("logoUrl").orEmpty()
         // Marcadores de salto: viajan por el intent (las prefs no cruzan a `:x4k`) y el
         // modo lo lee cada proceso de su archivo (el ajuste pudo cambiar sin reiniciar).
@@ -2352,19 +2360,33 @@ class X4KPlayerAty : ComponentActivity() {
                         }
                     }.getOrNull()
                     runOnUiThread {
-                        val synopsisText = item?.optString("description")?.takeIf { it.isNotBlank() }
-                            ?: item?.optString("introduction")?.takeIf { it.isNotBlank() }
-                        if (!synopsisText.isNullOrBlank()) {
+                        // La ficha ya resolvió la sinopsis española (TMDB es-MX o su
+                        // traducción); el portal solo rellena si no hay ninguna.
+                        val portalSynopsis = item?.optString("description")?.takeIf { it.isNotBlank() }
+                            ?: item?.optString("introduction")
+                        val synopsisText = com.chronosbvrx.visionplus.data.resolveSynopsis(
+                            intentSynopsis,
+                            portalSynopsis.orEmpty(),
+                        )
+                        if (synopsisText.isNotBlank()) {
                             syn.text = synopsisText
                             syn.visibility = View.VISIBLE
                         }
-                        val cast = meta?.optString("act")?.takeIf { it.isNotBlank() }
+                        val cast = intentCast.take(5).joinToString(" · ").takeIf { it.isNotBlank() }
+                            ?: meta?.optString("act")?.takeIf { it.isNotBlank() }
                             ?: item?.optString("actorDisplay")?.takeIf { it.isNotBlank() }
                         val score = meta?.optString("sc")?.takeIf { it.isNotBlank() }
                             ?: item?.optString("score")?.takeIf { it.isNotBlank() }
-                        val country = item?.optString("country")?.takeIf { it.isNotBlank() }
-                            ?: item?.optString("area")?.takeIf { it.isNotBlank() }
-                            ?: item?.optString("region")?.takeIf { it.isNotBlank() }
+                        // País del servidor (ya en español); si no, el del portal traducido.
+                        val country = if (intentCountries.isNotEmpty()) {
+                            intentCountries.joinToString(" · ")
+                        } else {
+                            listOfNotNull(
+                                item?.optString("country")?.takeIf { it.isNotBlank() },
+                                item?.optString("area")?.takeIf { it.isNotBlank() },
+                                item?.optString("region")?.takeIf { it.isNotBlank() },
+                            ).firstOrNull()?.let { com.chronosbvrx.visionplus.data.spanishCountry(it) }
+                        }
                         val parts = listOfNotNull(cast, score?.let { "☆ $it" }, country).filter { it.isNotBlank() }
                         if (parts.isNotEmpty()) {
                             metaLine.text = parts.joinToString("  ·  ")
@@ -4651,6 +4673,9 @@ class X4KPlayerAty : ComponentActivity() {
                         title = film.title,
                         posterUrl = film.posterUrl,
                         fallbackDurationMs = film.durationMin * 60_000L,
+                        synopsis = film.synopsis,
+                        cast = film.cast,
+                        countries = film.countries,
                     )
                 }
             }.getOrDefault(false)

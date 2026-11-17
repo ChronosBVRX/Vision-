@@ -38,6 +38,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.spanishOnlySynopsis
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.UserLibrary
@@ -133,7 +134,7 @@ fun TvTitleScreen(
             if (film.seasons.isEmpty() && film.durationMin > 0) film.durationMin * 60_000L else 0L,
         )
     }
-    var description by remember(film.id) { mutableStateOf(film.synopsis) }
+    var description by remember(film.id) { mutableStateOf(spanishOnlySynopsis(film.synopsis)) }
     var related by remember(film.id) { mutableStateOf<List<Film>>(emptyList()) }
     var episodePrograms by remember(film.id) { mutableStateOf<List<X4KApi.EpisodeProgram>>(emptyList()) }
     var episodeInfo by remember(film.id, activeId) {
@@ -414,8 +415,9 @@ fun TvTitleScreen(
             val score = scoreLabel(meta?.optString("sc"), film.score)
             val genres = genreLabels(meta?.optString("gen").orEmpty())
             val director = meta?.optString("dir").orEmpty()
-            val cast = meta?.optString("act").orEmpty()
-                .split(',').map { it.trim() }.filter { it.isNotBlank() }
+            val cast = (if (film.cast.isNotEmpty()) film.cast else {
+                meta?.optString("act").orEmpty().split(',').map { it.trim() }
+            }).filter { it.isNotBlank() }
 
             if (isXtv) {
                 Row(
@@ -490,6 +492,16 @@ fun TvTitleScreen(
                 if (cast.isNotEmpty()) {
                     Text(
                         "Con: " + cast.take(5).joinToString(" · "),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = VisionTextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 3.dp),
+                    )
+                }
+                if (film.countries.isNotEmpty()) {
+                    Text(
+                        "País: " + film.countries.joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium,
                         color = VisionTextSecondary,
                         maxLines = 1,

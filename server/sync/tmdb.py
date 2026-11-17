@@ -87,6 +87,50 @@ TRANSLATIONS_LIMIT = 40
 CREDITS_BATCH = int(os.environ.get("TMDB_CREDITS_BATCH", "1500"))
 CREDITS_GAP = float(os.environ.get("TMDB_CREDITS_GAP", "0.12"))
 CREDITS_CAST_LIMIT = 12
+# Sinopsis y país para fichas YA casadas: el es-MX de TMDB viene vacío en estrenos
+# (el portal rellena con inglés). Aquí se busca la traducción española y el país
+# por código ISO, una llamada por título y su propio marcador (`overview_at`).
+OVERVIEW_BATCH = int(os.environ.get("TMDB_OVERVIEW_BATCH", "2000"))
+OVERVIEW_GAP = float(os.environ.get("TMDB_OVERVIEW_GAP", "0.1"))
+
+# Nombres en español por código ISO 3166-1. TMDB puede devolver el nombre en el
+# idioma pedido, pero no siempre lo traduce: el país de la ficha nunca debe salir
+# en inglés. Los que no estén aquí se muestran tal como llegan.
+SPANISH_COUNTRIES = {
+    "US": "Estados Unidos", "GB": "Reino Unido", "FR": "Francia", "ES": "España",
+    "MX": "México", "AR": "Argentina", "CO": "Colombia", "CL": "Chile",
+    "PE": "Perú", "BR": "Brasil", "CA": "Canadá", "AU": "Australia",
+    "DE": "Alemania", "IT": "Italia", "JP": "Japón", "KR": "Corea del Sur",
+    "KP": "Corea del Norte", "CN": "China", "HK": "Hong Kong", "TW": "Taiwán",
+    "IN": "India", "RU": "Rusia", "TR": "Turquía", "SE": "Suecia",
+    "DK": "Dinamarca", "NO": "Noruega", "NL": "Países Bajos", "BE": "Bélgica",
+    "CH": "Suiza", "AT": "Austria", "PL": "Polonia", "PT": "Portugal",
+    "IE": "Irlanda", "NZ": "Nueva Zelanda", "ZA": "Sudáfrica", "EG": "Egipto",
+    "IL": "Israel", "TH": "Tailandia", "ID": "Indonesia", "PH": "Filipinas",
+    "CZ": "República Checa", "SK": "Eslovaquia", "HU": "Hungría",
+    "RO": "Rumania", "GR": "Grecia", "FI": "Finlandia", "IS": "Islandia",
+    "UA": "Ucrania", "NG": "Nigeria", "KE": "Kenia", "MA": "Marruecos",
+    "CU": "Cuba", "DO": "República Dominicana", "PR": "Puerto Rico",
+    "VE": "Venezuela", "EC": "Ecuador", "BO": "Bolivia", "PY": "Paraguay",
+    "UY": "Uruguay", "GT": "Guatemala", "HN": "Honduras", "SV": "El Salvador",
+    "NI": "Nicaragua", "CR": "Costa Rica", "PA": "Panamá",
+    "AE": "Emiratos Árabes Unidos", "SA": "Arabia Saudita", "IR": "Irán",
+    "IQ": "Irak", "PK": "Pakistán", "BD": "Bangladés", "VN": "Vietnam",
+    "MY": "Malasia", "SG": "Singapur", "LK": "Sri Lanka", "NP": "Nepal",
+    "KZ": "Kazajistán", "GE": "Georgia", "AM": "Armenia", "AZ": "Azerbaiyán",
+    "RS": "Serbia", "HR": "Croacia", "SI": "Eslovenia",
+    "BA": "Bosnia y Herzegovina", "BG": "Bulgaria", "LT": "Lituania",
+    "LV": "Letonia", "EE": "Estonia", "BY": "Bielorrusia", "MD": "Moldavia",
+    "AL": "Albania", "MK": "Macedonia del Norte", "MT": "Malta",
+    "LU": "Luxemburgo", "CY": "Chipre", "QA": "Catar", "KW": "Kuwait",
+    "JO": "Jordania", "LB": "Líbano", "SY": "Siria", "AF": "Afganistán",
+    "ET": "Etiopía", "GH": "Ghana", "SN": "Senegal", "CI": "Costa de Marfil",
+    "CM": "Camerún", "TZ": "Tanzania", "UG": "Uganda", "ZW": "Zimbabue",
+    "MZ": "Mozambique", "AO": "Angola", "TN": "Túnez", "DZ": "Argelia",
+    "LY": "Libia", "SU": "Unión Soviética", "YU": "Yugoslavia",
+    "CS": "Checoslovaquia", "DD": "Alemania del Este", "AN": "Antillas Neerlandesas",
+}
+COUNTRY_LIMIT = 4
 
 
 def _norm(text: str) -> str:
@@ -200,6 +244,69 @@ def parse_translations(payload, limit: int = TRANSLATIONS_LIMIT) -> list[str]:
         seen.add(key)
         out.append(name)
         if len(out) >= limit:
+            break
+    return out
+
+
+def parse_spanish_overview(payload) -> str:
+    """Sinopsis en español de las traducciones de TMDB (es-MX manda, luego es-ES…).
+
+    El `overview` de la ficha pedida con `language=es-MX` viene vacío en muchos
+    estrenos, y sin este respaldo la API caía al texto del portal (a menudo en
+    inglés). Solo se aceptan traducciones `es-*`: devolver una sinopsis inglesa
+    rompería la regla de la ficha.
+    """
+    if not isinstance(payload, dict):
+        return ""
+    items = payload.get("translations")
+    if not isinstance(items, list):
+        return ""
+    ranked: list[tuple[int, int, str]] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        language = str(item.get("iso_639_1") or "").strip().lower()
+        if language != "es":
+            continue
+        data = item.get("data")
+        if not isinstance(data, dict):
+            continue
+        overview = str(data.get("overview") or "").strip()
+        if not overview:
+            continue
+        region = str(item.get("iso_3166_1") or "").strip().lower()
+        key = f"{language}-{region}" if region else language
+        priority = TRANSLATION_PRIORITY.get(key, TRANSLATION_PRIORITY.get(language, 999))
+        ranked.append((priority, index, overview))
+    if not ranked:
+        return ""
+    ranked.sort(key=lambda entry: (entry[0], entry[1]))
+    return ranked[0][2]
+
+
+def parse_countries(payload) -> list[str]:
+    """Países de producción en español: `production_countries` (nombre por ISO).
+
+    Se deduplican y se cortan a [COUNTRY_LIMIT]; vacío si TMDB no los trae.
+    """
+    if not isinstance(payload, dict):
+        return []
+    items = payload.get("production_countries")
+    if not isinstance(items, list):
+        items = []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("iso_3166_1") or "").strip().upper()
+        name = SPANISH_COUNTRIES.get(code) or str(item.get("name") or "").strip()
+        key = _norm(name)
+        if not name or not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(name)
+        if len(out) >= COUNTRY_LIMIT:
             break
     return out
 
@@ -502,6 +609,12 @@ def _match(kind: str, title: str, original: str | None, year: int | None) -> tup
     rating = details.get("vote_average")
     popularity, votes = _impact_of(details)
     credits = parse_credits(details, media)
+    # El es-MX de la ficha suele venir vacío en estrenos; las traducciones ya
+    # viajan en la misma llamada y traen la sinopsis española (nunca el portal
+    # en inglés como primera opción).
+    overview = (details.get("overview") or "").strip()
+    if not overview:
+        overview = parse_spanish_overview(details.get("translations"))
     return {
         "tmdb_id": int(tmdb_id),
         "imdb_id": imdb_id,
@@ -509,9 +622,11 @@ def _match(kind: str, title: str, original: str | None, year: int | None) -> tup
         "rating": round(float(rating), 1) if rating else None,
         "year": detail_year,
         "genres": genres,
-        "overview": (details.get("overview") or "").strip(),
+        "overview": overview,
         "vote_count": votes,
         "popularity": popularity,
+        "countries": parse_countries(details),
+        "original_language": str(details.get("original_language") or "").strip().lower(),
         # Nombres para buscar («buscando a nemo» → «Finding Nemo»).
         "original_title": (details.get("original_title") or details.get("original_name") or "").strip(),
         "localized_title": (details.get("title") or details.get("name") or "").strip(),
@@ -551,9 +666,10 @@ async def _store_match(pool, title_id: str, match: dict) -> None:
             insert into enrichment (title_id, imdb_id, tmdb_id, match_confidence, rating, year,
                                     genres, overview, popularity, vote_count, match_algo,
                                     original_title, localized_title, alt_titles,
-                                    translated_titles, director_names, cast_names,
-                                    translations_at, credits_at, aliases_at, updated_at)
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, now(), now(), now(), now())
+                                    translated_titles, director_names, cast_names, countries,
+                                    original_language,
+                                    translations_at, credits_at, aliases_at, overview_at, updated_at)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, now(), now(), now(), now(), now())
             on conflict (title_id) do update set
                 imdb_id = excluded.imdb_id, tmdb_id = excluded.tmdb_id,
                 match_confidence = excluded.match_confidence, rating = excluded.rating,
@@ -566,9 +682,12 @@ async def _store_match(pool, title_id: str, match: dict) -> None:
                 translated_titles = excluded.translated_titles,
                 director_names = excluded.director_names,
                 cast_names = excluded.cast_names,
+                countries = excluded.countries,
+                original_language = excluded.original_language,
                 translations_at = now(),
                 credits_at = now(),
                 aliases_at = now(),
+                overview_at = now(),
                 updated_at = now()
             """,
             title_id, match["imdb_id"], match["tmdb_id"], match["confidence"],
@@ -579,6 +698,8 @@ async def _store_match(pool, title_id: str, match: dict) -> None:
             list(match.get("translated_titles") or []),
             match.get("director_names", "") or "",
             match.get("cast_names", "") or "",
+            list(match.get("countries") or []),
+            match.get("original_language", "") or "",
         )
         # Propaga el impacto a titles para que el índice ordene por popularidad
         # sin joins por fila (estrenos/géneros profesionales).
@@ -801,15 +922,19 @@ async def refresh_popularity(pool) -> int:
             continue
         popularity, votes = _impact_of(details)
         genres = [g.get("name") for g in details.get("genres") or [] if g.get("name")]
+        countries = parse_countries(details)
+        original_language = str(details.get("original_language") or "").strip().lower()
         async with pool.acquire() as conn:
             await conn.execute(
                 """
                 update enrichment
                    set popularity = $2, vote_count = $3, genres = $4,
+                       countries = case when cardinality(countries) = 0 then $5 else countries end,
+                       original_language = case when original_language = '' then $6 else original_language end,
                        popularity_at = now(), updated_at = now()
                  where title_id = $1
                 """,
-                row["title_id"], popularity, votes, genres,
+                row["title_id"], popularity, votes, genres, countries, original_language,
             )
             await conn.execute(
                 "update titles set popularity = $2, vote_count = $3, updated_at = now() where id = $1",
@@ -1012,6 +1137,116 @@ async def backfill_translations(pool, workers: int = 1) -> int:
     return done
 
 
+def _fetch_overview_bundle(tmdb_id: int, kind: str) -> dict | None:
+    """Sinopsis española y países de un id ya casado en TMDB.
+
+    El `overview` es-MX puede venir vacío; se completa con la traducción `es-*`
+    de la MISMA ficha (la llamada ya trae `translations`). El país se resuelve
+    por código ISO para que nunca salga en inglés. None solo si TMDB ya no
+    tiene el id en ninguno de los dos tipos (404).
+    """
+    order = ("tv", "movie") if _media_for(kind) == "tv" else ("movie", "tv")
+    for media in order:
+        try:
+            payload = _get(
+                f"/{media}/{tmdb_id}", language="es-MX",
+                append_to_response="translations", gap=OVERVIEW_GAP,
+            )
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                continue
+            if exc.code == 429:  # límite de la API: se le da aire y se reintenta otro ciclo
+                time.sleep(3.0)
+            raise
+        overview = (payload.get("overview") or "").strip()
+        if not overview:
+            overview = parse_spanish_overview(payload)
+        return {
+            "overview": overview,
+            "countries": parse_countries(payload),
+            "original_language": str(payload.get("original_language") or "").strip().lower(),
+        }
+    return None
+
+
+async def backfill_overviews(pool, workers: int = 1) -> int:
+    """Sinopsis/país/idioma para matches viejos incompletos.
+
+    Sin esta pasada, los estrenos cuyo es-MX viene vacío se quedaban con la
+    descripción inglesa del portal (la ficha las mostraba así), y los títulos
+    infantiles sin `original_language` no se podían separar del anime. Una
+    llamada por título, en olas, con `overview_at` para no repetir. Los títulos
+    de las colecciones infantiles van primero.
+    """
+    if not KEY or OVERVIEW_BATCH <= 0:
+        return 0
+    async with pool.acquire() as conn:
+        pending = await conn.fetch(
+            """
+            select e.title_id, e.tmdb_id, t.kind, t.title
+            from enrichment e
+            join titles t on t.id = e.title_id
+            where e.tmdb_id is not null and coalesce(e.match_confidence, 0) >= 0.5
+              and (
+                  coalesce(e.overview, '') = ''
+                  or (
+                      coalesce(e.original_language, '') = ''
+                      and exists (
+                          select 1 from title_categories tc
+                           where tc.title_id = e.title_id
+                             and tc.category_id in ('xtv-kids-76805', 'xtv-kids-76806')
+                      )
+                  )
+              )
+              and e.overview_at is null
+            order by case when exists (
+                         select 1 from title_categories tc
+                          where tc.title_id = e.title_id
+                            and tc.category_id in ('xtv-kids-76805', 'xtv-kids-76806')
+                     ) then 0 else 1 end,
+                     t.popularity desc nulls last, t.score desc nulls last
+            limit $1
+            """,
+            OVERVIEW_BATCH,
+        )
+    if not pending:
+        return 0
+    done, gone = 0, 0
+    for start in range(0, len(pending), max(1, workers)):
+        wave = pending[start:start + max(1, workers)]
+        results = await asyncio.gather(
+            *(asyncio.to_thread(_fetch_overview_bundle, row["tmdb_id"], row["kind"]) for row in wave),
+            return_exceptions=True,
+        )
+        for row, result in zip(wave, results):
+            if isinstance(result, BaseException):  # noqa: BLE001 - se reintenta otro ciclo
+                log.warning("TMDB sinopsis: %s no se pudo consultar (%s)", row["title"], result)
+                continue
+            async with pool.acquire() as conn:
+                if result is None:
+                    await conn.execute(
+                        "update enrichment set overview_at = now() where title_id = $1",
+                        row["title_id"],
+                    )
+                    gone += 1
+                    continue
+                await conn.execute(
+                    """
+                    update enrichment
+                       set overview = case when coalesce(overview, '') = '' then $2 else overview end,
+                           countries = case when cardinality(countries) = 0 then $3 else countries end,
+                           original_language = case when original_language = '' then $4 else original_language end,
+                           overview_at = now(), updated_at = now()
+                     where title_id = $1
+                    """,
+                    row["title_id"], result["overview"], result["countries"],
+                    result.get("original_language", ""),
+                )
+            done += 1
+    log.info("TMDB sinopsis: %s/%s fichas (ids perdidos en TMDB: %s)", done, len(pending), gone)
+    return done
+
+
 def _fetch_credits_bundle(tmdb_id: int, kind: str) -> dict[str, str] | None:
     """Créditos (director/reparto) de un id ya casado en TMDB.
 
@@ -1132,16 +1367,22 @@ if __name__ == "__main__":
     import asyncpg
 
     async def _cli() -> None:
-        """Catch-up manual: `--aliases`, `--translations` o `--credits` [workers]."""
-        mode = next((m for m in ("--credits", "--translations", "--aliases") if m in sys.argv), "")
+        """Catch-up manual: `--aliases`, `--translations`, `--credits` o `--overviews` [workers]."""
+        mode = next(
+            (m for m in ("--credits", "--translations", "--overviews", "--aliases") if m in sys.argv),
+            "",
+        )
         if not mode:
-            print("uso: python tmdb.py --aliases [workers] | --translations [workers] | --credits [workers]")
+            print("uso: python tmdb.py --aliases [workers] | --translations [workers] | --credits [workers] | --overviews [workers]")
             return
         workers = 1
         idx = sys.argv.index(mode) + 1
         if idx < len(sys.argv) and sys.argv[idx].isdigit():
             workers = max(1, int(sys.argv[idx]))
-        label = {"--credits": "créditos", "--translations": "traducciones"}.get(mode, "alias")
+        label = {
+            "--credits": "créditos", "--translations": "traducciones",
+            "--overviews": "sinopsis/país/idioma",
+        }.get(mode, "alias")
         pool = await asyncpg.create_pool(os.environ["DATABASE_URL"], min_size=1, max_size=2)
         try:
             total = 0
@@ -1150,6 +1391,8 @@ if __name__ == "__main__":
                     n = await backfill_credits(pool, workers=workers)
                 elif mode == "--translations":
                     n = await backfill_translations(pool, workers=workers)
+                elif mode == "--overviews":
+                    n = await backfill_overviews(pool, workers=workers)
                 else:
                     n = await backfill_aliases(pool, workers=workers)
                 total += n

@@ -12,7 +12,7 @@ import org.junit.Test
  */
 class KidsCatalogTest {
 
-    private fun film(id: String, kind: String) = Film(
+    private fun film(id: String, kind: String, language: String = "") = Film(
         id = id,
         title = id,
         year = 2025,
@@ -22,6 +22,7 @@ class KidsCatalogTest {
         videoUrl = "xtv:$id",
         sourceUrl = "test",
         kind = kind,
+        originalLanguage = language,
     )
 
     @Test
@@ -42,7 +43,7 @@ class KidsCatalogTest {
     }
 
     @Test
-    fun `anime never leaks into the kids catalog`() {
+    fun `unknown language trusts the portal kids collection instead of dropping it`() {
         val films = listOf(
             film("1", "kids"),
             film("2", "anime"),
@@ -50,6 +51,19 @@ class KidsCatalogTest {
             film("4", ""),
         )
         val kept = KidsCatalog.keep(films)
-        assertEquals(listOf("1", "3", "4"), kept.map { it.id })
+        assertEquals(listOf("1", "2", "3", "4"), kept.map { it.id })
+    }
+
+    @Test
+    fun `western animation tagged anime stays in kids and japanese does not`() {
+        val films = listOf(
+            film("shrek", "anime", "en"),
+            film("barbie", "anime", "en"),
+            film("dragonball", "anime", "ja"),
+            film("anime-kids-tag", "kids", "ja"),
+            film("paw-patrol", "kids", "en"),
+        )
+        val kept = KidsCatalog.keep(films)
+        assertEquals(listOf("shrek", "barbie", "paw-patrol"), kept.map { it.id })
     }
 }

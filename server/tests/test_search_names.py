@@ -65,6 +65,64 @@ def test_search_text_is_capped_without_losing_the_title():
     assert text.startswith("titulo")
 
 
+# ----- sinopsis y país en español -----
+
+
+def test_spanish_overview_prefers_es_mx_and_never_returns_english():
+    payload = {
+        "translations": [
+            {"iso_639_1": "en", "iso_3166_1": "US", "data": {"overview": "An English plot."}},
+            {"iso_639_1": "es", "iso_3166_1": "ES", "data": {"overview": "Una trama española."}},
+            {"iso_639_1": "es", "iso_3166_1": "MX", "data": {"overview": "Una trama mexicana."}},
+        ]
+    }
+    assert tmdb.parse_spanish_overview(payload) == "Una trama mexicana."
+    assert tmdb.parse_spanish_overview(
+        {"translations": [{"iso_639_1": "en", "data": {"overview": "English only."}}]}
+    ) == ""
+    assert tmdb.parse_spanish_overview(None) == ""
+
+
+def test_countries_are_resolved_to_spanish_from_the_iso_code():
+    payload = {
+        "production_countries": [
+            {"iso_3166_1": "US", "name": "United States of America"},
+            {"iso_3166_1": "GB", "name": "United Kingdom"},
+            {"iso_3166_1": "US", "name": "United States of America"},
+        ]
+    }
+    assert tmdb.parse_countries(payload) == ["Estados Unidos", "Reino Unido"]
+    assert tmdb.parse_countries({"production_countries": []}) == []
+    assert tmdb.parse_countries(None) == []
+
+
+def test_match_uses_the_spanish_translation_when_es_mx_is_empty(monkeypatch):
+    def fake_get(path, **params):
+        if path.startswith("/search/"):
+            return {"results": [{
+                "id": 77, "title": "Frostbite", "release_date": "2026-01-01",
+                "vote_count": 40, "original_title": "Frostbite",
+            }]}
+        return {
+            "id": 77, "title": "Frostbite", "release_date": "2026-01-01",
+            "overview": "",
+            "translations": {"translations": [
+                {"iso_639_1": "en", "data": {"overview": "English plot."}},
+                {"iso_639_1": "es", "iso_3166_1": "MX", "data": {"overview": "Trama en español."}},
+            ]},
+            "production_countries": [{"iso_3166_1": "US", "name": "United States"}],
+            "genres": [{"name": "Suspenso"}],
+            "original_language": "en",
+        }
+
+    monkeypatch.setattr(tmdb, "_get", fake_get)
+    match, had_error = tmdb._match("movie", "Frostbite", None, 2026)
+    assert had_error is False
+    assert match["overview"] == "Trama en español."
+    assert match["countries"] == ["Estados Unidos"]
+    assert match["original_language"] == "en"
+
+
 class _FakeConn:
     def __init__(self, pool):
         self.pool = pool

@@ -20,6 +20,15 @@ object KidsCatalog {
 
     fun isKidsKey(key: String): Boolean = key == "kids" || key.startsWith("kids-")
 
-    /** Quita anime del bloque infantil (regla del producto: anime = solo japonés, aparte). */
-    fun keep(films: List<Film>): List<Film> = films.filter { it.kind != "anime" }
+    /**
+     * Quita anime del bloque infantil (regla del producto: anime = solo japonés).
+     *
+     * El portal etiqueta «Anime» a cualquier animación (Shrek, Barbie, LEGO…) y,
+     * como un título puede vivir en varias secciones, `kind` termina siendo el de
+     * la última pasada. Por eso manda el idioma original de TMDB: solo se descarta
+     * lo que se sabe japonés (`ja`). Mientras una ficha vieja no tenga ese dato, se
+     * respeta la colección infantil curada por el portal en vez de perderla.
+     */
+    fun keep(films: List<Film>): List<Film> =
+        films.filterNot { it.originalLanguage.equals("ja", ignoreCase = true) }
 }

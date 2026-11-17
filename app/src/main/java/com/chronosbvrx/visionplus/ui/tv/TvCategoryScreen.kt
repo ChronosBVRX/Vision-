@@ -148,7 +148,12 @@ fun TvCategoryScreen(
         }
     }
 
-    var selectedCategory by rememberSaveable(section ?: key) { mutableStateOf<String?>(null) }
+    var selectedCategory by rememberSaveable(section ?: key) {
+        // Los submenús infantiles abren directo en la cuadrícula: el feed genérico
+        // repetía «Mejor valoradas» y «Todo» con los mismos títulos y dejaba fuera
+        // el resto del catálogo infantil.
+        mutableStateOf<String?>(if (KidsCatalog.isKidsKey(key)) "Infantil" else null)
+    }
     BackHandler(enabled = selectedCategory != null) {
         selectedCategory = null
     }
@@ -247,8 +252,10 @@ fun TvCategoryScreen(
             minKeep = 6,
         )
     }
-    val categoryChips = remember(loadedDisjoint, films, section) {
-        if (section != null && loadedDisjoint != null) {
+    val categoryChips = remember(loadedDisjoint, films, section, key) {
+        if (KidsCatalog.isKidsKey(key)) {
+            listOf(CHIP_ALL, "Infantil")
+        } else if (section != null && loadedDisjoint != null) {
             val genres = loadedDisjoint.map { it.title.trim() }.filter { it.isNotBlank() }.distinct()
             val list = mutableListOf(CHIP_ALL)
             // Todo el catálogo, no solo los 30 de cada hilera.
@@ -343,6 +350,25 @@ fun TvCategoryScreen(
                         )
                     }
                 }
+            } else if (KidsCatalog.isKidsKey(key)) {
+                // Submenú infantil: una sola hilera con TODO el catálogo infantil. Antes
+                // «Mejor valoradas» y «Todo» repetían los mismos 60 títulos y parecían
+                // las únicas filas disponibles.
+                item(key = "kids-all") {
+                    SectionRow(
+                        label = title,
+                        films = films,
+                        isTopRow = true,
+                        onOpenFilm = onOpenFilm,
+                        onSeeAll = { selectedCategory = "Infantil" },
+                        returnRequester = returnRequester,
+                        returnFilmId = returnFilmId,
+                        entryRequester = rowEntry,
+                        isReturnRow = returnRow == title,
+                        onRowFocus = { returnRow = title },
+                        total = films.size,
+                    )
+                }
             } else {
                 item(key = "top") {
                     SectionRow(
@@ -398,8 +424,8 @@ fun TvCategoryScreen(
             val raw = when {
                 activeCategory == CHIP_CATALOG -> emptyList() // la cuadrícula pide la página 1
                 activeCategory == "Infantil" -> KidsCatalog.keep(kidsServerFilms).ifEmpty {
-                    films.filter { it.kind == "kids" }.ifEmpty {
-                        rows.flatMap { it.films }.filter { it.kind == "kids" }
+                    KidsCatalog.keep(films.filter { it.kind == "kids" }).ifEmpty {
+                        KidsCatalog.keep(rows.flatMap { it.films }.filter { it.kind == "kids" })
                     }
                 }
                 loadedDisjoint != null -> {

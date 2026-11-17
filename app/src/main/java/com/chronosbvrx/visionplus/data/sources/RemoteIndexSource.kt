@@ -7,6 +7,7 @@ import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.HomePersonal
 import com.chronosbvrx.visionplus.data.Popularity
 import com.chronosbvrx.visionplus.data.normalizeDisplayName
+import com.chronosbvrx.visionplus.data.spanishOnlySynopsis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -237,7 +238,7 @@ object RemoteIndexSource {
                     title = normalizeDisplayName(f.optString("title")),
                     year = f.optInt("year"),
                     durationMin = f.optInt("durationMin"),
-                    synopsis = f.optString("synopsis"),
+                    synopsis = spanishOnlySynopsis(f.optString("synopsis")),
                     posterUrl = f.optString("posterUrl"),
                     videoUrl = videoUrl,
                     sourceUrl = f.optString("sourceUrl"),
@@ -249,6 +250,9 @@ object RemoteIndexSource {
                     seasons = parseSeasons(f.optJSONArray("seasons")),
                     kind = f.optString("kind"),
                     genres = parseGenres(f.optJSONArray("genres")),
+                    cast = parseGenres(f.optJSONArray("cast")),
+                    countries = parseGenres(f.optJSONArray("countries")),
+                    originalLanguage = f.optString("originalLanguage"),
                     originalTitle = normalizeDisplayName(f.optString("originalTitle")),
                 )
             }
@@ -491,7 +495,7 @@ object RemoteIndexSource {
             title = normalizeDisplayName(f.optString("title")),
             year = f.optInt("year"),
             durationMin = f.optInt("durationMin"),
-            synopsis = f.optString("synopsis"),
+            synopsis = spanishOnlySynopsis(f.optString("synopsis")),
             posterUrl = f.optString("posterUrl"),
             videoUrl = videoUrl,
             sourceUrl = f.optString("sourceUrl"),
@@ -503,6 +507,9 @@ object RemoteIndexSource {
             seasons = parseSeasons(f.optJSONArray("seasons")),
             kind = f.optString("kind"),
             genres = parseGenres(f.optJSONArray("genres")),
+            cast = parseGenres(f.optJSONArray("cast")),
+            countries = parseGenres(f.optJSONArray("countries")),
+            originalLanguage = f.optString("originalLanguage"),
             originalTitle = normalizeDisplayName(f.optString("originalTitle")),
         )
     }
@@ -645,6 +652,9 @@ object RemoteIndexSource {
                 if (f.tmdbId > 0) put("tmdbId", f.tmdbId)
                 if (f.kind.isNotBlank()) put("kind", f.kind)
                 if (f.genres.isNotEmpty()) put("genres", JSONArray(f.genres))
+                if (f.cast.isNotEmpty()) put("cast", JSONArray(f.cast))
+                if (f.countries.isNotEmpty()) put("countries", JSONArray(f.countries))
+                if (f.originalLanguage.isNotBlank()) put("originalLanguage", f.originalLanguage)
                 if (f.originalTitle.isNotBlank()) put("originalTitle", f.originalTitle)
                 if (f.groupId.isNotBlank()) put("groupId", f.groupId)
                 if (f.seasons.isNotEmpty()) {

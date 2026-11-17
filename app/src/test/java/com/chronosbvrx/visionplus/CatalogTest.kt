@@ -10,6 +10,7 @@ import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import com.chronosbvrx.visionplus.data.resolveSynopsis
 import com.chronosbvrx.visionplus.data.searchFilms
+import com.chronosbvrx.visionplus.data.spanishCountry
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import com.chronosbvrx.visionplus.data.vodLabel
 import com.chronosbvrx.visionplus.data.xuperRows
@@ -110,11 +111,35 @@ class CatalogTest {
                 "Una historia de ciencia ficción sobre la vida y la familia.",
             ),
         )
-        // Ambas en inglés: manda la del índice, sin saltos.
+        // Ambas en inglés: no se muestra texto inglés (mejor sin sinopsis).
         assertEquals(
-            "A science fiction story.",
-            resolveSynopsis("A science fiction story.", "Another English synopsis."),
+            "",
+            resolveSynopsis(
+                "When a controlled avalanche blast goes wrong, Martia and her family are trapped in a crashed cable car.",
+                "Another English synopsis with the words of a plot.",
+            ),
         )
+        // Un nombre con tilde no vuelve española una sinopsis inglesa.
+        assertEquals(
+            "",
+            resolveSynopsis(
+                "In 1992 Chile, nine-year-old Inés bonds with teenage German skier Hanna at a remote mountain hotel. When Hanna mysteriously disappears, Inés is left to discover the truth.",
+                "",
+            ),
+        )
+        // Texto corto/ambiguo que no se reconoce como inglés se conserva.
+        assertEquals("Frostbite", resolveSynopsis("Frostbite", ""))
+    }
+
+    @Test
+    fun countryAlwaysReadsInSpanish() {
+        assertEquals("Estados Unidos", spanishCountry("United States"))
+        assertEquals("Estados Unidos", spanishCountry("USA"))
+        assertEquals("Reino Unido", spanishCountry("United Kingdom"))
+        assertEquals("México", spanishCountry("México"))
+        assertEquals("", spanishCountry("  "))
+        // Lo que no está en el mapa se conserva: mejor un nombre que un hueco.
+        assertEquals("Narnia", spanishCountry("Narnia"))
     }
 
     @Test
@@ -123,7 +148,9 @@ class CatalogTest {
             {"id":"estrenos","title":"Estrenos","kind":"special","total":1,"films":[
               {"id":"xtv:1","title":"Una","year":2026,"durationMin":90,"synopsis":"s",
                "posterUrl":"p","videoUrl":"xtv:1","sourceUrl":"xtv",
-               "genres":["Acción","Aventura"]}
+               "genres":["Acción","Aventura"],
+               "cast":["Ana Torres","Luis Pérez"],"countries":["México","Estados Unidos"],
+               "originalLanguage":"ja"}
             ]},
             {"id":"genero-accion","title":"Acción","kind":"genre","total":0,"films":[]}
         ]}"""
@@ -136,6 +163,9 @@ class CatalogTest {
             listOf("Acción", "Aventura"),
             payload.rows.first().films.single().genres,
         )
+        assertEquals(listOf("Ana Torres", "Luis Pérez"), payload.rows.first().films.single().cast)
+        assertEquals(listOf("México", "Estados Unidos"), payload.rows.first().films.single().countries)
+        assertEquals("ja", payload.rows.first().films.single().originalLanguage)
         assertEquals(1, payload.rows.first().total)
 
         val upToDate = RemoteIndexSource.parseIndex("""{"version":7,"upToDate":true,"categories":[]}""")

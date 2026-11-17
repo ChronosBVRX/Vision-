@@ -33,6 +33,12 @@ data class Film(
     val kind: String = "",
     /** Géneros TMDB/portal («Acción», «Drama»…): alimentan «Relacionadas» y el final. */
     val genres: List<String> = emptyList(),
+    /** Reparto normalizado por TMDB (nombres propios; nunca se traducen). */
+    val cast: List<String> = emptyList(),
+    /** Países de producción ya en español (TMDB por código ISO). */
+    val countries: List<String> = emptyList(),
+    /** Idioma original TMDB (`ja` = anime real): separa la animación japonesa del resto. */
+    val originalLanguage: String = "",
     /**
      * Nombre original del título («también conocida como…»): el servidor lo manda cuando el
      * buscador encontró la ficha por otro nombre («buscando a nemo» → «Finding Nemo»). Vacío
@@ -80,16 +86,25 @@ fun normalizeDisplayName(raw: String): String {
  * el texto cambiaba a media carga y mezclaba dos fuentes.
  */
 internal fun resolveSynopsis(indexSynopsis: String, portalSynopsis: String): String {
-    val index = indexSynopsis.trim()
-    val portal = portalSynopsis.trim()
-    if (index.isBlank()) return portal
-    if (portal.isBlank()) return index
-    // La del índice (TMDB es-MX) manda cuando ya está en español: no se cambia a media
-    // carga. Si la del índice viniera en inglés y la del portal en español, se prefiere
-    // la española (una sola vez) para que la ficha nunca se quede en inglés.
-    if (looksSpanish(index)) return index
-    if (looksSpanish(portal)) return portal
-    return index
+    val index = spanishOnlySynopsis(indexSynopsis)
+    if (index.isNotBlank()) return index
+    return spanishOnlySynopsis(portalSynopsis)
+}
+
+/**
+ * Sinopsis que la app puede mostrar: la española tal cual y la que está
+ * claramente en inglés se descarta. Así una ficha nunca cae al texto inglés del
+ * portal cuando TMDB no tiene traducción: prefiere no mostrar sinopsis.
+ * Lo que no se reconoce como inglés se conserva (puede ser español corto).
+ */
+internal fun spanishOnlySynopsis(text: String): String {
+    val clean = text.trim()
+    if (clean.isBlank()) return ""
+    // El inglés manda cuando hay varias palabras funcionales inglesas: un nombre
+    // con tilde («Inés») no convierte una sinopsis inglesa en española.
+    if (looksEnglish(clean)) return ""
+    if (looksSpanish(clean)) return clean
+    return clean
 }
 
 private val SPANISH_WORDS = setOf(
@@ -97,6 +112,14 @@ private val SPANISH_WORDS = setOf(
     "en", "con", "por", "para", "como", "mas", "pero", "sus", "se", "al", "lo", "es",
     "son", "esta", "estan", "cuando", "donde", "mientras", "tras", "sobre", "entre",
     "desde", "hasta", "sin", "tambien", "todo", "todos", "este", "estos", "estas",
+)
+
+private val ENGLISH_WORDS = setOf(
+    "the", "and", "of", "to", "in", "is", "are", "was", "were", "with", "for",
+    "from", "his", "her", "their", "they", "when", "after", "before", "but",
+    "not", "who", "what", "this", "that", "into", "on", "at", "by", "as", "it",
+    "she", "he", "we", "you", "has", "have", "had", "will", "would", "can",
+    "could", "about", "while", "an", "been", "there", "which", "its", "our",
 )
 
 /** Heurística de idioma para elegir la sinopsis: acentos o palabras funcionales. */
@@ -108,6 +131,78 @@ private fun looksSpanish(text: String): Boolean {
     val hits = words.count { it in SPANISH_WORDS }
     return hits >= 3 || (words.size <= 12 && hits >= 2)
 }
+
+/** Heurística contraria: descarta el texto que es claramente inglés. */
+private fun looksEnglish(text: String): Boolean {
+    val words = text.lowercase(java.util.Locale.ROOT)
+        .split(Regex("[^a-z]+")).filter { it.length >= 2 }
+    if (words.size < 5) return false
+    val hits = words.count { it in ENGLISH_WORDS }
+    return hits >= 3 || (words.size <= 12 && hits >= 2)
+}
+
+/**
+ * País en español para la ficha/reproductor cuando el dato viene del portal
+ * («United States», «USA», «Reino Unido»…). El servidor ya manda los países de
+ * TMDB resueltos por ISO; esto cubre el respaldo del portal. Lo desconocido se
+ * devuelve tal cual (mejor un nombre que un hueco).
+ */
+fun spanishCountry(raw: String): String {
+    val clean = raw.trim()
+    if (clean.isBlank()) return ""
+    val key = clean.lowercase(java.util.Locale.ROOT).replace('.', ' ').replace(Regex("\\s+"), " ").trim()
+    return COUNTRY_ES[key] ?: clean
+}
+
+private val COUNTRY_ES = mapOf(
+    "us" to "Estados Unidos", "usa" to "Estados Unidos",
+    "united states" to "Estados Unidos", "united states of america" to "Estados Unidos",
+    "uk" to "Reino Unido", "united kingdom" to "Reino Unido",
+    "great britain" to "Reino Unido", "england" to "Reino Unido",
+    "france" to "Francia", "spain" to "España", "mexico" to "México",
+    "argentina" to "Argentina", "colombia" to "Colombia", "chile" to "Chile",
+    "peru" to "Perú", "brazil" to "Brasil", "canada" to "Canadá",
+    "australia" to "Australia", "germany" to "Alemania", "deutschland" to "Alemania",
+    "italy" to "Italia", "japan" to "Japón", "south korea" to "Corea del Sur",
+    "korea" to "Corea del Sur", "china" to "China", "hong kong" to "Hong Kong",
+    "taiwan" to "Taiwán", "india" to "India", "russia" to "Rusia",
+    "turkey" to "Turquía", "sweden" to "Suecia", "denmark" to "Dinamarca",
+    "norway" to "Noruega", "netherlands" to "Países Bajos", "holland" to "Países Bajos",
+    "belgium" to "Bélgica", "switzerland" to "Suiza", "austria" to "Austria",
+    "poland" to "Polonia", "portugal" to "Portugal", "ireland" to "Irlanda",
+    "new zealand" to "Nueva Zelanda", "south africa" to "Sudáfrica",
+    "egypt" to "Egipto", "israel" to "Israel", "thailand" to "Tailandia",
+    "indonesia" to "Indonesia", "philippines" to "Filipinas",
+    "czech republic" to "República Checa", "czechia" to "República Checa",
+    "slovakia" to "Eslovaquia", "hungary" to "Hungría", "romania" to "Rumania",
+    "greece" to "Grecia", "finland" to "Finlandia", "iceland" to "Islandia",
+    "ukraine" to "Ucrania", "nigeria" to "Nigeria", "kenya" to "Kenia",
+    "morocco" to "Marruecos", "cuba" to "Cuba",
+    "dominican republic" to "República Dominicana", "puerto rico" to "Puerto Rico",
+    "venezuela" to "Venezuela", "ecuador" to "Ecuador", "bolivia" to "Bolivia",
+    "paraguay" to "Paraguay", "uruguay" to "Uruguay", "guatemala" to "Guatemala",
+    "honduras" to "Honduras", "el salvador" to "El Salvador",
+    "nicaragua" to "Nicaragua", "costa rica" to "Costa Rica", "panama" to "Panamá",
+    "united arab emirates" to "Emiratos Árabes Unidos", "saudi arabia" to "Arabia Saudita",
+    "iran" to "Irán", "iraq" to "Irak", "pakistan" to "Pakistán",
+    "bangladesh" to "Bangladés", "vietnam" to "Vietnam", "malaysia" to "Malasia",
+    "singapore" to "Singapur", "sri lanka" to "Sri Lanka", "nepal" to "Nepal",
+    "kazakhstan" to "Kazajistán", "georgia" to "Georgia", "armenia" to "Armenia",
+    "azerbaijan" to "Azerbaiyán", "serbia" to "Serbia", "croatia" to "Croacia",
+    "slovenia" to "Eslovenia", "bosnia and herzegovina" to "Bosnia y Herzegovina",
+    "bulgaria" to "Bulgaria", "lithuania" to "Lituania", "latvia" to "Letonia",
+    "estonia" to "Estonia", "belarus" to "Bielorrusia", "moldova" to "Moldavia",
+    "albania" to "Albania", "macedonia" to "Macedonia del Norte", "malta" to "Malta",
+    "luxembourg" to "Luxemburgo", "cyprus" to "Chipre", "qatar" to "Catar",
+    "kuwait" to "Kuwait", "jordan" to "Jordania", "lebanon" to "Líbano",
+    "syria" to "Siria", "afghanistan" to "Afganistán", "ethiopia" to "Etiopía",
+    "ghana" to "Ghana", "senegal" to "Senegal", "ivory coast" to "Costa de Marfil",
+    "cameroon" to "Camerún", "tanzania" to "Tanzania", "uganda" to "Uganda",
+    "zimbabwe" to "Zimbabue", "mozambique" to "Mozambique", "angola" to "Angola",
+    "tunisia" to "Túnez", "algeria" to "Argelia", "libya" to "Libia",
+    "soviet union" to "Unión Soviética", "yugoslavia" to "Yugoslavia",
+    "czechoslovakia" to "Checoslovaquia", "east germany" to "Alemania del Este",
+)
 
 /** "1940 · 1 h 32 min": the year and the running time, omitting what is unknown. */
 fun Film.metaLine(): String {

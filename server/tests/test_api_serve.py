@@ -2,6 +2,7 @@
 representante XTV en grupos mixtos."""
 
 import gzip
+import inspect
 import json
 import types
 
@@ -65,6 +66,15 @@ def test_markers_title_sql_prefers_the_exact_ref_and_anime_copy():
     assert "order by" in sql
     assert "t.id = $1 or t.play_ref = $1" in sql
     assert "(coalesce(t.kind, '') = 'anime') desc" in sql
+
+
+def test_kids_categories_exclude_only_known_japanese_animation():
+    assert app.KIDS_CATEGORIES == {"xtv-kids-76805", "xtv-kids-76806"}
+    source = inspect.getsource(app.category)
+    assert "original_language = 'ja'" in source
+    assert "not exists" in source
+    # El filtro no debe tocar categorías que no sean infantiles.
+    assert "kids_filter if kids else ''" in source
 
 
 def test_movie_cache_is_invalidated_when_the_copy_changes():
@@ -398,3 +408,24 @@ async def test_group_maps_serves_one_entry_per_season(monkeypatch):
     assert "magis:5" in member_of and "xtv:5" in member_of
 
 
+
+def test_film_serves_spanish_cast_and_countries():
+    record = _record(kind="movie", cast_list="Ana, Luis")
+    enr = {
+        "rating": 7.4, "year": 2026, "overview": "Sinopsis es-MX",
+        "popularity": 1.0, "vote_count": 10, "tmdb_id": 42,
+        "genres": ["Drama"], "cast_names": "Ana Torres, Luis Pérez",
+        "countries": ["México", "Estados Unidos"], "original_language": "es",
+    }
+    out = app.film(record, enr)
+    assert out["cast"] == ["Ana Torres", "Luis Pérez"]
+    assert out["countries"] == ["México", "Estados Unidos"]
+    assert out["originalLanguage"] == "es"
+
+
+def test_film_falls_back_to_the_portal_cast_when_tmdb_has_none():
+    record = _record(kind="movie", cast_list="Ana, Luis")
+    out = app.film(record, {"rating": 7.0, "year": 2026, "overview": "",
+                            "genres": [], "cast_names": "", "countries": []})
+    assert out["cast"] == ["Ana", "Luis"]
+    assert out["countries"] == []

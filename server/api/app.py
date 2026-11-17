@@ -32,6 +32,7 @@ import rate_limit as api_rate_limit
 import slots as device_slots
 import episodes as episodes_mirror
 import banners as launcher_banners
+import lang
 import calendar_feed as editorial_calendar
 import sports_map
 import sync as device_sync
@@ -52,8 +53,14 @@ SPORTS_TZ = "America/Mexico_City"
 FILM_COLUMNS = """
     t.id, t.title, t.year, t.duration_min, t.synopsis,
     t.poster_url, t.play_ref, t.source, t.score, t.kind,
-    t.popularity, t.vote_count
+    t.popularity, t.vote_count, t.cast_list
 """
+
+# Colecciones infantiles del portal. Se filtran por idioma original de TMDB para
+# que la animación japonesa (Dragon Ball, Pokémon) no se cuele en Kids y, sobre
+# todo, para que la animación occidental etiquetada «Anime» (Shrek, Barbie) no
+# desaparezca de la colección.
+KIDS_CATEGORIES = {"xtv-kids-76805", "xtv-kids-76806"}
 
 pool: asyncpg.Pool | None = None
 
@@ -165,6 +172,9 @@ def film(record: asyncpg.Record, enr=None, season_year: bool = False) -> dict:
     popularity = 0.0
     votes = 0
     genres = []
+    cast: list[str] = []
+    countries: list[str] = []
+    original_language = ""
     try:
         if "popularity" in record.keys():
             popularity = float(record["popularity"] or 0)
@@ -213,6 +223,28 @@ def film(record: asyncpg.Record, enr=None, season_year: bool = False) -> dict:
                 genres = [str(g).strip() for g in enr["genres"] if str(g).strip()]
         except (TypeError, KeyError, AttributeError):
             genres = []
+        try:
+            if "cast_names" in enr.keys() and enr["cast_names"]:
+                cast = [name.strip() for name in str(enr["cast_names"]).split(",") if name.strip()]
+        except (TypeError, KeyError, AttributeError):
+            cast = []
+        try:
+            if "countries" in enr.keys() and enr["countries"] is not None:
+                countries = [str(c).strip() for c in enr["countries"] if str(c).strip()]
+        except (TypeError, KeyError, AttributeError):
+            countries = []
+        try:
+            if "original_language" in enr.keys() and enr["original_language"]:
+                original_language = str(enr["original_language"]).strip().lower()
+        except (TypeError, KeyError, AttributeError):
+            original_language = ""
+    # Sin reparto TMDB, la copia del portal (nombres iguales en cualquier idioma).
+    if not cast:
+        try:
+            raw_cast = str(record["cast_list"] or "")
+            cast = [name.strip() for name in re.split(r"[,;]", raw_cast) if name.strip()][:10]
+        except (TypeError, KeyError, AttributeError):
+            cast = []
     video_url = record["play_ref"]
     source_url = record["source"]
     film_id = record["id"]
@@ -227,7 +259,7 @@ def film(record: asyncpg.Record, enr=None, season_year: bool = False) -> dict:
         "title": title,
         "year": year or 0,
         "durationMin": record["duration_min"] or 0,
-        "synopsis": synopsis or "",
+        "synopsis": lang.spanish_only(synopsis or ""),
         "posterUrl": record["poster_url"] or "",
         "videoUrl": video_url,
         "sourceUrl": source_url,
@@ -237,6 +269,9 @@ def film(record: asyncpg.Record, enr=None, season_year: bool = False) -> dict:
         "tmdbId": tmdb_id,
         "kind": record["kind"] or "",
         "genres": genres,
+        "cast": cast,
+        "countries": countries,
+        "originalLanguage": original_language,
     }
 
 
@@ -245,13 +280,23 @@ async def _enrichment_map(ids) -> dict:
     unique = list(dict.fromkeys(i for i in ids if i))
     if not unique:
         return {}
-    rows = await db().fetch(
-        """select title_id, rating, year, overview, popularity, vote_count, original_title,
-                  tmdb_id, genres
-           from enrichment
-           where title_id = any($1::text[]) and coalesce(match_confidence, 0) >= 0.5""",
-        unique,
-    )
+    sql = """select title_id, rating, year, overview, popularity, vote_count, original_title,
+                    tmdb_id, genres, cast_names, countries, original_language
+             from enrichment
+             where title_id = any($1::text[]) and coalesce(match_confidence, 0) >= 0.5"""
+    try:
+        rows = await db().fetch(sql, unique)
+    except Exception as exc:  # noqa: BLE001 - despliegue: las columnas nuevas pueden faltar
+        message = str(exc).lower()
+        if "countries" not in message and "original_language" not in message:
+            raise
+        rows = await db().fetch(
+            """select title_id, rating, year, overview, popularity, vote_count, original_title,
+                      tmdb_id, genres, cast_names
+               from enrichment
+               where title_id = any($1::text[]) and coalesce(match_confidence, 0) >= 0.5""",
+            unique,
+        )
     return {r["title_id"]: r for r in rows}
 
 
@@ -884,22 +929,57 @@ async def category(
     x_api_key: str | None = Header(default=None),
 ):
     require_key(x_api_key)
-    rows = await db().fetch(
-        f"""
-        select {FILM_COLUMNS}
-        from title_categories tc
-        join titles t on t.id = tc.title_id
-        where tc.category_id = $1
-        order by tc.position, t.title
-        offset $2 limit $3
-        """,
-        category_id,
-        (page - 1) * pageSize,
-        pageSize,
-    )
-    total = await db().fetchval(
-        "select count(*) from title_categories where category_id = $1", category_id
-    )
+    kids = category_id in KIDS_CATEGORIES
+    # Kids: fuera solo lo que TMDB identifica como japonés. Si la columna aún no
+    # existe (API arriba antes que el worker aplique el esquema), se sirve sin
+    # filtro en vez de romper la sección.
+    kids_filter = """
+        and not exists (
+            select 1 from enrichment e
+             where e.title_id = t.id and e.original_language = 'ja'
+        )
+    """
+    try:
+        rows = await db().fetch(
+            f"""
+            select {FILM_COLUMNS}
+            from title_categories tc
+            join titles t on t.id = tc.title_id
+            where tc.category_id = $1
+            {kids_filter if kids else ''}
+            order by tc.position, t.title
+            offset $2 limit $3
+            """,
+            category_id,
+            (page - 1) * pageSize,
+            pageSize,
+        )
+        total = await db().fetchval(
+            f"""select count(*) from title_categories tc
+                join titles t on t.id = tc.title_id
+                where tc.category_id = $1
+                {kids_filter if kids else ''}""",
+            category_id,
+        )
+    except Exception as exc:  # noqa: BLE001 - despliegue con esquema anterior
+        if not kids or "original_language" not in str(exc).lower():
+            raise
+        rows = await db().fetch(
+            f"""
+            select {FILM_COLUMNS}
+            from title_categories tc
+            join titles t on t.id = tc.title_id
+            where tc.category_id = $1
+            order by tc.position, t.title
+            offset $2 limit $3
+            """,
+            category_id,
+            (page - 1) * pageSize,
+            pageSize,
+        )
+        total = await db().fetchval(
+            "select count(*) from title_categories where category_id = $1", category_id
+        )
     enr = await _enrichment_map([r["id"] for r in rows])
     return {
         "id": category_id,

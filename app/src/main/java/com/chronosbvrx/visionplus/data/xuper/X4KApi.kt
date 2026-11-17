@@ -8,6 +8,7 @@ import com.chronosbvrx.visionplus.DeviceKind
 import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.PlaybackHistory
+import com.chronosbvrx.visionplus.data.spanishOnlySynopsis
 import com.chronosbvrx.visionplus.data.mirror.EpisodeMirror
 import com.chronosbvrx.visionplus.data.normalizeDisplayName
 import com.chronosbvrx.visionplus.data.remote.RemoteBridge
@@ -661,7 +662,7 @@ object X4KApi {
                         title = normalizeDisplayName(a.optString("name")),
                         year = portalYear(a),
                         durationMin = 0,
-                        synopsis = a.optString("description"),
+                        synopsis = spanishOnlySynopsis(a.optString("description")),
                         posterUrl = poster,
                         videoUrl = "xtv:$cid",
                         sourceUrl = "visionplus.tv",
@@ -1349,7 +1350,7 @@ object X4KApi {
                     title = normalizeDisplayName(f.optString("t")),
                     year = f.optInt("y", 0),
                     durationMin = 0,
-                    synopsis = f.optString("s"),
+                    synopsis = spanishOnlySynopsis(f.optString("s")),
                     posterUrl = f.optString("p"),
                     videoUrl = f.optString("v"),
                     sourceUrl = "xuper.tv",
@@ -2087,6 +2088,9 @@ object X4KApi {
         resumeMs: Long = 0,
         posterUrl: String = "",
         fallbackDurationMs: Long = 0L,
+        synopsis: String = "",
+        cast: List<String> = emptyList(),
+        countries: List<String> = emptyList(),
     ): Boolean = withContext(Dispatchers.IO) {
         var resolvedEpIds = episodeIds
         var resolvedEpNames = episodeNames
@@ -2187,6 +2191,9 @@ object X4KApi {
             playUserId = prep.playUserId,
             playDevId = prep.playDevId,
             playToken = prep.playToken,
+            synopsis = synopsis,
+            cast = cast,
+            countries = countries,
         )
         true
     }
@@ -2403,6 +2410,9 @@ object X4KApi {
         playUserId: String = "",
         playDevId: String = "",
         playToken: String = "",
+        synopsis: String = "",
+        cast: List<String> = emptyList(),
+        countries: List<String> = emptyList(),
     ) {
         val p = prefs(context)
         // A partir de este instante el motor manda: el trabajo de fondo del catálogo espera.
@@ -2450,6 +2460,9 @@ object X4KApi {
             }
             if (resumeMs > 0) putExtra("resumeMs", resumeMs)
             if (posterUrl.isNotBlank()) putExtra("posterUrl", posterUrl)
+            if (synopsis.isNotBlank()) putExtra("synopsis", synopsis)
+            if (cast.isNotEmpty()) putStringArrayListExtra("cast", ArrayList(cast))
+            if (countries.isNotEmpty()) putStringArrayListExtra("countries", ArrayList(countries))
             if (logoUrl.isNotBlank()) putExtra("logoUrl", logoUrl)
             if (markersRef.isNotBlank()) putExtra("markersRef", markersRef)
             if (markersEp > 0) putExtra("markersEp", markersEp)

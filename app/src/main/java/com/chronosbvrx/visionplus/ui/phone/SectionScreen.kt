@@ -287,9 +287,11 @@ fun SectionScreen(
                                 // El catálogo del portal ya viene separado por tipo. Solo si la
                                 // red falla se cae a las filas locales (y ahí sí se usa seasons).
                                 KidsCatalog.keep(kidsServerFilms).ifEmpty {
-                                    val combined = rowsFinal.flatMap { it.films }
-                                        .filter { it.kind == "kids" }
-                                        .distinctBy { it.id }
+                                    val combined = KidsCatalog.keep(
+                                        rowsFinal.flatMap { it.films }
+                                            .filter { it.kind == "kids" }
+                                            .distinctBy { it.id },
+                                    )
                                     val typed = when (name) {
                                         "movies" -> combined.filter { it.seasons.isEmpty() }
                                         "series" -> combined.filter { it.seasons.isNotEmpty() }

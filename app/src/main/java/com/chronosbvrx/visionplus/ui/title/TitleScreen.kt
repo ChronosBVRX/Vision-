@@ -57,6 +57,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import android.widget.Toast
 import com.chronosbvrx.visionplus.data.Film
+import com.chronosbvrx.visionplus.data.spanishOnlySynopsis
 import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.ResumeEntry
 import com.chronosbvrx.visionplus.data.UserLibrary
@@ -151,7 +152,7 @@ fun TitleScreen(
             if (film.seasons.isEmpty() && film.durationMin > 0) film.durationMin * 60_000L else 0L,
         )
     }
-    var description by remember(film.id) { mutableStateOf(film.synopsis) }
+    var description by remember(film.id) { mutableStateOf(spanishOnlySynopsis(film.synopsis)) }
     var episodePrograms by remember(film.id) { mutableStateOf<List<X4KApi.EpisodeProgram>>(emptyList()) }
     var episodeInfo by remember(film.id, activeId) {
         mutableStateOf<Map<String, EpisodeMirror.EpisodeInfo>>(emptyMap())
@@ -410,7 +411,7 @@ fun TitleScreen(
                 item(key = "actions") {
                     Column(Modifier.padding(horizontal = 16.dp)) {
                         if (isXtv) {
-                            XtvMetadata(meta, languages, qualities, itemLine, film.score)
+                            XtvMetadata(meta, languages, qualities, itemLine, film.score, film.cast, film.countries)
                         } else {
                             film.metaLine().takeIf { it.isNotBlank() }?.let {
                                 Text(it, style = MaterialTheme.typography.bodyMedium, color = VisionTextSecondary)
@@ -1245,12 +1246,15 @@ private fun XtvMetadata(
     qualities: List<String>,
     itemLine: String,
     fallbackScore: Double = 0.0,
+    serverCast: List<String> = emptyList(),
+    countries: List<String> = emptyList(),
 ) {
     val score = scoreLabel(meta?.optString("sc"), fallbackScore)
     val genres = genreLabels(meta?.optString("gen").orEmpty())
     val director = meta?.optString("dir").orEmpty()
-    val cast = meta?.optString("act").orEmpty()
-        .split(',').map { it.trim() }.filter { it.isNotBlank() }
+    val cast = (if (serverCast.isNotEmpty()) serverCast else {
+        meta?.optString("act").orEmpty().split(',').map { it.trim() }
+    }).filter { it.isNotBlank() }
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         if (score.isNotBlank()) {
@@ -1325,6 +1329,14 @@ private fun XtvMetadata(
             color = VisionTextSecondary,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+    if (countries.isNotEmpty()) {
+        Text(
+            "País: " + countries.joinToString(" · "),
+            style = MaterialTheme.typography.bodySmall,
+            color = VisionTextSecondary,
             modifier = Modifier.padding(top = 4.dp),
         )
     }

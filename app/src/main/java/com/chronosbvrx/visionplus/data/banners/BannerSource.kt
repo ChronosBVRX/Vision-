@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.data.banners
 
 import android.content.Context
+import com.chronosbvrx.visionplus.data.spanishOnlySynopsis
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import java.io.File
 import java.net.HttpURLConnection
@@ -179,7 +180,7 @@ internal fun parseHomeBanners(json: String): List<HomeBanner> {
             title = title,
             poster = item.optString("poster"),
             backdrop = item.optString("backdrop"),
-            synopsis = item.optString("synopsis"),
+            synopsis = spanishOnlySynopsis(item.optString("synopsis")),
             year = item.optInt("year"),
             rating = item.optDouble("rating", 0.0),
             durationMin = item.optInt("durationMin"),

@@ -113,6 +113,15 @@ create table if not exists enrichment (
 
 -- Sinopsis es-MX de TMDB (fase 3): la API la prefiere sobre la descripción del portal.
 alter table enrichment add column if not exists overview text not null default '';
+-- País de producción en español (TMDB `production_countries`, nombre por código ISO):
+-- se sirve en la ficha y el reproductor; el portal puede traerlo en inglés.
+alter table enrichment add column if not exists countries text[] not null default '{}';
+-- Idioma original de TMDB (`ja` = anime real). El portal etiqueta «Anime» a
+-- animación occidental (Shrek, Barbie…) y el bloque infantil la perdía; con esto
+-- se separa la animación japonesa de la que solo se animó fuera de Japón.
+alter table enrichment add column if not exists original_language text not null default '';
+-- Marca de la pasada que rellenó sinopsis/país en fichas viejas (una vez por título).
+alter table enrichment add column if not exists overview_at timestamptz;
 -- Señales de impacto TMDB para ponderar el rating (evitan que un oscuro 9.0
 -- tape a un blockbuster 7.7): se sirven al API y ordenan estrenos/géneros.
 alter table enrichment add column if not exists popularity numeric(10,3) not null default 0;
