@@ -38,7 +38,15 @@ Los datos (sesión, caché y perfil) se guardan junto al `.exe` en
 
 Salida: `pc/build/VisionPlusPC-Portable.exe` (~150 MB).
 
-En Windows también se puede construir el mismo `.exe` con:
+En Windows también se puede construir el mismo `.exe` con el script completo
+(copia la app, el motor y FFmpeg antes de empaquetar):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\pc\tools\build-single-exe.ps1 `
+  -Ffmpeg "C:\ruta\ffmpeg.exe"
+```
+
+O manualmente, copiando `app/`, `service/` y `runtime/` a `pc\electron` antes de:
 
 ```powershell
 cd pc\electron

@@ -20,7 +20,14 @@ Desde Linux/macOS:
 Desde Windows:
 
 ```powershell
-cd pc\electron
+powershell -ExecutionPolicy Bypass -File .\pc\tools\build-single-exe.ps1 `
+  -Ffmpeg "C:\ruta\ffmpeg.exe"
+```
+
+También se puede hacer a mano copiando `app/`, `service/` y `runtime/` a esta
+carpeta y ejecutando:
+
+```powershell
 npm install
 npx electron-builder --win portable --x64
 ```
