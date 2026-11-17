@@ -2473,7 +2473,11 @@ GEE_TEAM_ALIASES = {
     "milano": {"milan"},
     "psg": {"paris", "saint", "germain"},
     "paris": {"psg"},
-    "saint": {"psg"},
+    # «Saint» no es sinónimo de PSG: es la abreviatura de «St.» en cualquier
+    # equipo (Saint Kitts / St. Kitts, Saint-Étienne / St. Etienne). PSG ya se
+    # resuelve por «paris» y «germain».
+    "saint": {"st"},
+    "st": {"saint"},
     "germain": {"psg"},
     "munich": {"munchen"},
     "munchen": {"munich"},

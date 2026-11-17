@@ -952,6 +952,20 @@ def test_gee_find_match_matches_by_alias_and_time():
     assert found["home"]["name"] == "Guadalajara"
 
 
+def test_gee_find_match_understands_saint_vs_st_abbreviation():
+    # El CMS escribe «Saint Kitts and Nevis»; ESPN, «St. Kitts and Nevis».
+    event = _gee_event(event="CONCACAF Nations League",
+                       team_a="Saint Kitts and Nevis", team_b="Bonaire")
+    entry = api_app._gee_match_entry(_espn_match(
+        "St. Kitts and Nevis", "Bonaire",
+        home_score=2, away_score=2, status="in", detail="58'",
+        kickoff="2026-10-17T19:00:00+00:00",
+        league="Concacaf Nations League", league_id="concacaf.nations.league"))
+    found = api_app._gee_find_match(event, [entry])
+    assert found is not None
+    assert found["home"]["name"] == "St. Kitts and Nevis"
+
+
 def test_gee_find_match_skips_junk_shared_names():
     # El CMS repite el nombre de la liga cuando no hay equipos reales.
     event = _gee_event(event="Liga Profesional de Fútbol",
