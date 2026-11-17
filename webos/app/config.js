@@ -3,7 +3,7 @@ window.VISION_CONFIG = {
   // En webOS se usa Luna. Si se abre desde `node webos/service/dev-server.js`,
   // la app detecta el origen HTTP y habla con el mismo servidor.
   devServiceUrl: "",
-  version: "0.5.0",
+  version: "0.5.1",
   limitFilms: 24,
   apiBase: "https://visionplusv2.duckdns.org",
 };

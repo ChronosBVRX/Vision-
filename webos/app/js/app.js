@@ -4042,7 +4042,7 @@
       var liveRows = rows.filter(function (row) { return row.alive === true && !row.xtv; });
       if (liveRows.length) {
         var zap = el("div", "gee-pick-hint is-live-hint");
-        zap.textContent = "Con el partido en vivo, cambia de señal desde el reproductor.";
+        zap.textContent = "Si una señal falla, vuelve a este selector y elige otra.";
         list.appendChild(zap);
       }
       appendGeeFavoriteAndClose(list, event);
@@ -4096,6 +4096,10 @@
       };
     });
     rows.forEach(function (row) { list.appendChild(geeRowNode(row, null)); });
+    if (!rows.length) {
+      var none = el("div", "vt-reminder-note", "Sin enlaces disponibles");
+      list.appendChild(none);
+    }
     var close = el("button", "secondary-btn", "Cerrar");
     close.setAttribute("data-focusable", "true");
     close.addEventListener("click", function () { closeSportsDialog(); });

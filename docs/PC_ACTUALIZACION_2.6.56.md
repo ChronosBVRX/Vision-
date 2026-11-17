@@ -4,7 +4,7 @@
 **Alcance:** `pc/` + `webos/` (el `.exe` de PC reutiliza la UI y el motor de webOS).
 **Versión anterior:** PC 0.5.0 / motor webOS 0.3.0, última edición del código el
 2026-11-12, equivalente a la app Android **2.6.28**.
-**Versión nueva:** PC **0.7.0** / motor webOS **0.5.0**, alineada con Android
+**Versión nueva:** PC **0.7.1** / motor webOS **0.5.1**, alineada con Android
 **2.6.56**.
 
 ## 1. Qué se encontró
@@ -91,8 +91,8 @@ EPG detallada. Son módulos de la app Android, no del motor de streaming.
 ### Versiones y documentación
 
 - `webos/app/appinfo.json`, `webos/app/config.js`, `webos/service/package.json`:
-  **0.5.0**.
-- `pc/electron/package.json`: **0.7.0**.
+  **0.5.1**.
+- `pc/electron/package.json`: **0.7.1**.
 - `pc/electron/OTA_NOTES.md`, `pc/README.md`, `webos/README.md`: actualizados.
 
 ## 3. Verificación realizada
@@ -119,10 +119,10 @@ EPG detallada. Son módulos de la app Android, no del motor de streaming.
 
 ## 4. Entrega
 
-- **PC 0.7.0 publicado** en el canal `pc-latest`:
-  `VisionPlusPC-Portable.exe` (137,150,396 bytes, SHA-256
-  `2fa2b42d1a996abf3047cd875934358299f93c86a66e26250753624e3808b747`).
-- Manifiesto `pc-version.json` verificado con `version: 0.7.0` y el mismo SHA.
+- **PC 0.7.1 publicado** en el canal `pc-latest`:
+  `VisionPlusPC-Portable.exe` (137,153,764 bytes, SHA-256
+  `0e63c6594892930a74a41c7407511935771e65bd112fe0823648bf2733e09af8`).
+- Manifiesto `pc-version.json` verificado con `version: 0.7.1` y el mismo SHA.
 
 ## 5. Lo que queda para otra entrega
 

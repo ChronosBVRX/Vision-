@@ -4,7 +4,7 @@ Port de escritorio de Vision+ que reutiliza **la misma interfaz de Smart TV** y
 **el mismo motor** del port de webOS. Añade lo necesario para que funcione en un
 PC Windows sin instalar nada y sin emulador.
 
-> **Actualización 0.7.0 (motor webOS 0.5.0):** paridad de streaming con Vision+
+> **Actualización 0.7.1 (motor webOS 0.5.1):** paridad de streaming con Vision+
 > 2.6.56 y **Deportes en vivo igual que la TV**: Principal/Todas las ligas,
 > deportes, Hoy/Mañana, ligas, bloques En vivo/Pronto/Terminados, escudos y
 > marcador, buscador, favoritos, Canales 24/7 y selector de transmisiones con

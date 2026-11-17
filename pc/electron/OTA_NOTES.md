@@ -1,6 +1,6 @@
-# Vision+ PC 0.7.0 — Actualización OTA
+# Vision+ PC 0.7.1 — Actualización OTA
 
-Actualización del ejecutable portable de Vision+ PC con el motor webOS 0.5.0.
+Actualización del ejecutable portable de Vision+ PC con el motor webOS 0.5.1.
 
 - **Deportes en vivo, igual que la TV**: «Principal / Todas las ligas», chips por deporte, Hoy/Mañana, ligas con logo, bloques En vivo / Comienzan pronto / Terminados, mosaico de escudos y marcador, hero del partido y estrellas de favoritos.
 - **Buscador de partidos** por equipo, liga, deporte o cadena.

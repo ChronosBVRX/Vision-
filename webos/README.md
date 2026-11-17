@@ -4,7 +4,7 @@ Port de Vision+ a LG webOS usando la misma arquitectura que el port de XuperTV:
 una app web (HTML/CSS/JS) + un servicio Luna en Node.js que habla con el API
 del VPS y con el portal XTV, y publica el video por un proxy HTTP local.
 
-> Estado: **port funcional v0.5.0**. Catálogo, búsqueda, ficha con
+> Estado: **port funcional v0.5.1**. Catálogo, búsqueda, ficha con
 > temporadas/capítulos, TV en vivo con EPG, deportes/agenda, VOD/live en 1080p,
 > audio y subtítulos por idioma, calidades, omitir intro, «Seguir viendo» y
 > «Mi lista». Probado en el **webOS TV 26 Simulator** (UI, VOD y TV en vivo)
