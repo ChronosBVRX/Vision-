@@ -2,6 +2,7 @@ package com.chronosbvrx.visionplus.ui.sports
 
 import com.chronosbvrx.visionplus.data.gee.GeeAgenda
 import com.chronosbvrx.visionplus.data.gee.GeeSportsSource
+import com.chronosbvrx.visionplus.data.gee.SportsRelevance
 import com.chronosbvrx.visionplus.home.contract.SportsSchedule
 
 /**
@@ -59,15 +60,19 @@ internal object GeeTiles {
     }
 
     /**
-     * El pie cuando no hay guía de TV: cuántas señales están en pie.
-     * OJO: `alive` mide si el ENLACE responde, NO si el partido está en vivo — por
-     * eso aquí se dice «señal» y jamás «en vivo» (esa palabra es solo para partidos
-     * que de verdad se están jugando; ver [GeeAgenda.playable]).
+     * El pie cuando no hay guía de TV: cuántas señales/canales puede ofrecer el evento.
+     * Cuenta enlaces vivos, ranuras resolubles y canales XTV de la casa. `alive` mide si
+     * el ENLACE responde, NO si el partido está en vivo — por eso aquí se dice «señal»
+     * y jamás «en vivo» (esa palabra es solo para partidos que de verdad se están
+     * jugando; ver [GeeAgenda.playable]).
      */
-    fun streams(event: GeeSportsSource.GeeEvent): String = when {
-        event.alive <= 0 -> "Sin señal por ahora"
-        event.alive == 1 -> "1 señal disponible"
-        else -> "${event.alive} señales disponibles"
+    fun streams(event: GeeSportsSource.GeeEvent): String {
+        val channels = SportsRelevance.availableChannelCount(event)
+        return when {
+            channels <= 0 -> "Sin señal por ahora"
+            channels == 1 -> "1 señal disponible"
+            else -> "$channels señales disponibles"
+        }
     }
 
     /** Letras de respaldo de un escudo que no carga ("Guadalajara" → "GU", "Real Madrid" → "RM"). */

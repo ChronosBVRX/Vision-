@@ -152,20 +152,34 @@ object GeeAgenda {
 
     /**
      * Los tres bloques de la pantalla (los vacíos se omiten): EN VIVO arriba,
-     * COMIENZAN PRONTO después y TERMINADOS al final con su marcador. En vivo y
-     * terminados se ordenan por liga (Liga MX primero) y los próximos por hora.
+     * COMIENZAN PRONTO después y TERMINADOS al final con su marcador.
+     *
+     * El orden es el mismo para todos los deportes: primero lo que tiene canal
+     * reproducible, luego el tier del servidor, después más disponibilidad de
+     * canales y al final la prioridad de liga. Los eventos sin canal NO se borran:
+     * quedan al final, porque «Deportes muestra todos los eventos» y todavía sirven
+     * para ver dónde se transmiten o programar un aviso.
      */
     fun sections(events: List<GeeEvent>, nowMs: Long = currentNow()): List<Section> {
         val grouped = events.groupBy { phaseOf(it, nowMs) }
         val live = (grouped[Phase.Live] ?: emptyList()).sortedWith(
-            compareBy({ leaguePriority(leagueLabel(it)) }, { startMs(it) ?: Long.MAX_VALUE }, { it.name }),
+            SportsRelevance.bestFirst
+                .thenBy { startMs(it) ?: Long.MAX_VALUE }
+                .thenBy { it.name },
         )
         val soon = (grouped[Phase.Soon] ?: emptyList()).sortedWith(
-            compareBy({ startMs(it) ?: Long.MAX_VALUE }, { leaguePriority(leagueLabel(it)) }, { it.name }),
+            SportsRelevance.bestFirst
+                .thenBy { startMs(it) ?: Long.MAX_VALUE }
+                .thenBy { it.name },
         )
+        // En terminados manda la recencia, pero los que no tienen canal quedan
+        // después de los que sí: el marcador viejo no debe tapar lo reproducible.
         val done = (grouped[Phase.Done] ?: emptyList()).sortedWith(
-            compareByDescending<GeeEvent> { startMs(it) ?: 0L }
-                .thenBy { leaguePriority(leagueLabel(it)) }
+            compareBy<GeeEvent> { if (SportsRelevance.hasPlayableChannel(it)) 0 else 1 }
+                .thenByDescending { startMs(it) ?: 0L }
+                .thenBy { SportsRelevance.tier(it) }
+                .thenByDescending { SportsRelevance.channelScore(it) }
+                .thenBy { SportsRelevance.leaguePriority(it) }
                 .thenBy { it.name },
         )
         return buildList {

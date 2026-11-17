@@ -12,6 +12,16 @@ import org.junit.Test
  */
 class GeeAgendaTest {
 
+    private fun link(url: String = "https://example.com/live.m3u8", alive: Boolean = true) =
+        GeeSportsSource.GeeLink(
+            name = "Señal",
+            link = url,
+            headers = emptyMap(),
+            type = "hls",
+            drm = "",
+            alive = alive,
+        )
+
     private fun event(
         id: String,
         name: String,
@@ -23,6 +33,11 @@ class GeeAgendaTest {
         status: String = "",
         scoreHome: Int? = null,
         scoreAway: Int? = null,
+        alive: Int = 1,
+        total: Int = 1,
+        links: List<GeeSportsSource.GeeLink> = listOf(link()),
+        xtv: List<GeeSportsSource.XtvOption> = emptyList(),
+        broadcasts: List<String> = emptyList(),
     ) = GeeSportsSource.GeeEvent(
         id = id,
         category = category,
@@ -33,15 +48,20 @@ class GeeAgendaTest {
         dateIso = dateIso,
         dateText = "",
         time = time,
-        alive = 0,
-        total = 0,
-        links = emptyList(),
+        alive = alive,
+        total = total,
+        links = links,
         leagueLabel = league,
+        broadcasts = broadcasts,
         scoreHome = scoreHome,
         scoreAway = scoreAway,
         live = live,
         status = status,
+        xtv = xtv,
     )
+
+    private fun sectionsOrEmpty(events: List<GeeSportsSource.GeeEvent>, nowMs: Long = 0L) =
+        GeeAgenda.sections(events, nowMs)
 
     @Test
     fun foldStripsAccentsForLeagueComparison() {
@@ -164,6 +184,58 @@ class GeeAgendaTest {
         assertEquals(listOf("l1", "l2"), out[0].events.map { it.id })
         assertEquals(listOf("s1"), out[1].events.map { it.id })
         assertEquals(listOf("d1"), out[2].events.map { it.id })
+    }
+
+    @Test
+    fun liveEventsWithMoreChannelsLeadWithinTheirTier() {
+        val few = event("few", "NBA A", category = "Basketball", league = "NBA", live = true, status = "in", alive = 1)
+        val many = event("many", "NBA B", category = "Basketball", league = "NBA", live = true, status = "in", alive = 4)
+        val out = sectionsOrEmpty(listOf(few, many))
+        assertEquals(listOf("many", "few"), out.first { it.title == "En vivo" }.events.map { it.id })
+    }
+
+    @Test
+    fun liveEventsWithoutChannelsStayAtTheBottomButAreNotHidden() {
+        val noSignal = event(
+            "no", "Liga MX", league = "Liga MX", live = true, status = "in",
+            alive = 0, total = 0, links = emptyList(),
+        )
+        val playable = event("yes", "Liga MX", league = "Liga MX", live = true, status = "in")
+        val out = sectionsOrEmpty(listOf(noSignal, playable))
+        assertEquals(listOf("yes", "no"), out.first { it.title == "En vivo" }.events.map { it.id })
+    }
+
+    @Test
+    fun upcomingWithoutChannelsFallsBehindPlayableEvents() {
+        val noChannelTier1 = event(
+            "no", "Liga MX", league = "Liga MX", status = "pre",
+            alive = 0, total = 0, links = emptyList(),
+        )
+        val playableTier2 = event("yes", "Serie B", league = "Serie B", status = "pre")
+        val out = sectionsOrEmpty(listOf(noChannelTier1, playableTier2))
+        assertEquals(
+            listOf("yes", "no"),
+            out.first { it.title == "Comienzan pronto" }.events.map { it.id },
+        )
+    }
+
+    @Test
+    fun otherSportsUseTheSameRelevanceOrder() {
+        val nba = event("nba", "NBA", category = "Basketball", league = "NBA", live = true, status = "in")
+        val serieB = event("sb", "Serie B", league = "Serie B", live = true, status = "in")
+        val out = sectionsOrEmpty(listOf(serieB, nba))
+        assertEquals(listOf("nba", "sb"), out.first { it.title == "En vivo" }.events.map { it.id })
+    }
+
+    @Test
+    fun finishedEventsWithoutChannelsStayAfterPlayableOnes() {
+        val noSignal = event(
+            "no", "Liga MX", league = "Liga MX", status = "post",
+            alive = 0, total = 0, links = emptyList(),
+        )
+        val playable = event("yes", "Liga MX", league = "Liga MX", status = "post")
+        val out = sectionsOrEmpty(listOf(noSignal, playable))
+        assertEquals(listOf("yes", "no"), out.first { it.title == "Terminados" }.events.map { it.id })
     }
 
     @Test

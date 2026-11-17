@@ -27,6 +27,7 @@ class GeeTilesTest {
         status: String = "",
         scoreHome: Int? = null,
         scoreAway: Int? = null,
+        xtv: List<GeeSportsSource.XtvOption> = emptyList(),
     ) = GeeSportsSource.GeeEvent(
         id = "e_$name",
         category = "Football",
@@ -40,6 +41,7 @@ class GeeTilesTest {
         alive = alive,
         total = 0,
         links = emptyList(),
+        xtv = xtv,
         homeName = homeName,
         awayName = awayName,
         homeLogo = homeLogo,
@@ -107,6 +109,19 @@ class GeeTilesTest {
         assertEquals("Sin señal por ahora", GeeTiles.streams(event(alive = 0)))
         assertEquals("1 señal disponible", GeeTiles.streams(event(alive = 1)))
         assertEquals("3 señales disponibles", GeeTiles.streams(event(alive = 3)))
+        // `alive` puede venir en 0 y el evento seguir teniendo canales de la casa.
+        assertEquals(
+            "2 señales disponibles",
+            GeeTiles.streams(
+                event(
+                    alive = 0,
+                    xtv = listOf(
+                        GeeSportsSource.XtvOption(name = "FOX One", code = "fox-one"),
+                        GeeSportsSource.XtvOption(name = "TUDN", code = "tudn"),
+                    ),
+                ),
+            ),
+        )
     }
 
     @Test
