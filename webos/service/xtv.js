@@ -19,6 +19,7 @@ const http = require("http");
 const https = require("https");
 const path = require("path");
 const urlmod = require("url");
+const api = require("./api");
 
 const KEY_HEX = "dfb6bbe7d737fdf7366ffe35dddfdbe36e3fd1b6f47b5e74";
 const KEY = Buffer.from(KEY_HEX, "hex");
@@ -37,6 +38,24 @@ const CONTENT_TYPE = "application/json;charset=utf-8";
 const UA_CDN = "Ranger/4.9.4-17294ac0";
 const REQUEST_TIMEOUT = 20000;
 const RATE_MS = 260;
+
+/**
+ * Columnas del catálogo (`getNextColumns`). La licencia v10 solo firma en su
+ * calidad real cuando se pide en la columna donde vive el título; sin columna
+ * (v9) el portal entrega 480p. El mapa se cachea 12 h.
+ */
+const COLUMN_CODES = ["masmobile_free", "masmobile_movies", "masmobile_series", "masmobile_kids"];
+const COLUMN_TTL_MS = 12 * 60 * 60 * 1000;
+const COLUMN_RETRY_MS = 10 * 60 * 1000;
+const columnCache = { map: {}, free: [], at: 0, loading: false, waiters: [] };
+
+/** CDN elegido por título: evita sondear en cada play (10 min). */
+const cdnChoiceCache = new Map();
+const CDN_CHOICE_TTL_MS = 10 * 60 * 1000;
+
+/** Canales de vivo ya resueltos (`liveAddressList` trae la licencia). */
+const liveChannelCache = new Map();
+
 
 const HOSTS = (process.env.VISION_XTV_HOSTS || "rhokqi.ryh1gifvn.com,zgmnxa.ryh1gifvn.com")
   .split(",")
@@ -90,6 +109,10 @@ let hostIndex = 0;
 
 function log(...args) {
   console.log("[xtv]", ...args);
+}
+
+function debug(...args) {
+  if (process.env.VISION_DEBUG_PORTAL === "1") log(...args);
 }
 
 function encryptBody(value) {
@@ -327,6 +350,145 @@ function deriveSn(snToken) {
   return crypto.createHash("md5").update(snToken + SNTOKEN_SALT).digest("hex");
 }
 
+/** Acumula filas de `getNextColumns` en el mapa contentId -> columnId. */
+function indexColumns(payload, freeOnly) {
+  const rows = (payload && payload.recommendList) || [];
+  for (const row of rows) {
+    const column = parseInt(row && row.columnId, 10) || 0;
+    if (column <= 0) continue;
+    if (freeOnly && columnCache.free.indexOf(column) < 0) columnCache.free.push(column);
+    for (const asset of (row && row.assetList) || []) {
+      const contentId = trim(asset && asset.contentId);
+      if (contentId) columnCache.map[contentId] = column;
+    }
+  }
+}
+
+/**
+ * Carga (una vez por TTL) las columnas de los catálogos `masmobile_*`.
+ * Se llama al arrancar en segundo plano y, si aún no está, el primer play espera.
+ */
+function loadColumns(callback) {
+  const cb = typeof callback === "function" ? callback : function () {};
+  const hasMap = Object.keys(columnCache.map).length > 0;
+  const age = Date.now() - columnCache.at;
+  if (hasMap && age < COLUMN_TTL_MS) return cb(null);
+  if (!hasMap && age < COLUMN_RETRY_MS) return cb(null);
+  if (columnCache.loading) {
+    columnCache.waiters.push(cb);
+    return;
+  }
+  columnCache.loading = true;
+  columnCache.waiters.push(cb);
+  const finish = () => {
+    columnCache.loading = false;
+    columnCache.at = Date.now();
+    const waiters = columnCache.waiters.splice(0);
+    waiters.forEach((waiter) => {
+      try {
+        waiter(null);
+      } catch (error) {
+        /* noop */
+      }
+    });
+  };
+  ensureSession((sessionError) => {
+    if (sessionError) return finish();
+    let index = 0;
+    const next = () => {
+      if (index >= COLUMN_CODES.length) return finish();
+      const code = COLUMN_CODES[index++];
+      call(
+        "getNextColumns",
+        {
+          portalCode: PORTAL_PLAY,
+          pageNum: 1,
+          pageSize: 100,
+          columnCode: code,
+          version: "",
+        },
+        (error, payload) => {
+          if (!error && payload) indexColumns(payload, code === "masmobile_free");
+          debug(
+            "columnas",
+            code,
+            error ? `error ${error.message}` : `ok map=${Object.keys(columnCache.map).length} free=${columnCache.free.length}`,
+          );
+          next();
+        },
+      );
+    };
+    next();
+  });
+}
+
+function columnFor(contentId, callback) {
+  const cid = trim(contentId);
+  const cached = columnCache.map[cid] || 0;
+  if (cached > 0) return callback(cached);
+  loadColumns(() => callback(columnCache.map[cid] || 0));
+}
+
+function prewarmColumns() {
+  loadColumns(function () {});
+}
+
+/**
+ * Broker FHD del VPS. La cuenta de cortesía vive en el servidor: la app recibe
+ * las pistas ya firmadas y pide el SLB con su propia IP (mismo diseño que
+ * Android). Si falla, el play sigue con la licencia local v10/v9.
+ */
+const BROKER_TTL_MS = 5 * 60 * 1000;
+const BROKER_CACHE_MAX = 80;
+const brokerCache = new Map();
+
+function brokerTrack(media) {
+  const contentId = trim(media && media.n);
+  const license = trim(media && media.l);
+  if (!contentId || !license) return null;
+  return {
+    contentId,
+    quality: trim(media.q),
+    encodeFormat: trim(media.e).toUpperCase(),
+    videoFormat: trim(media.f).toLowerCase(),
+    audioInfo: trim(media.a),
+    licenseList: [{ license }],
+    duration: "",
+  };
+}
+
+function playBroker(contentId, seriesContentId, isSeries, episodeNumber, callback) {
+  if (process.env.VISION_DISABLE_BROKER === "1") {
+    return callback(new Error("broker desactivado"));
+  }
+  const key = `${contentId}|${isSeries ? seriesContentId : ""}|${isSeries ? episodeNumber : 0}`;
+  const hit = brokerCache.get(key);
+  if (hit && hit.exp > Date.now()) return callback(null, hit.value);
+  api
+    .playVip({
+      contentId,
+      seriesContentId: isSeries ? seriesContentId : contentId,
+      columnId: 0,
+      type: "0",
+      episodeNumberList: isSeries ? [episodeNumber] : [],
+    })
+    .then((payload) => {
+      const tracks = ((payload && payload.medias) || []).map(brokerTrack).filter(Boolean);
+      if (!tracks.length) throw new Error("el broker no devolvió pistas");
+      const value = { play: payload, episode: null, tracks, vip: true };
+      const now = Date.now();
+      const expires = Number(payload && payload.expiresAt) * 1000;
+      const exp = Math.max(now + 60_000, Math.min(expires || 0, now + BROKER_TTL_MS));
+      brokerCache.set(key, { exp, value });
+      if (brokerCache.size > BROKER_CACHE_MAX) {
+        brokerCache.delete(brokerCache.keys().next().value);
+      }
+      callback(null, value);
+    })
+    .catch((error) => callback(error));
+}
+
+
 function mintSession(callback) {
   const fingerprint = Object.assign({}, FINGERPRINT_FIXED, {
     androidId: randomHex(8),
@@ -486,6 +648,7 @@ function trackScore(track, preferredQuality) {
   else score += 8;
   if (/10bit|hdr|av1|vp9/.test(codec)) score += 400;
   if (summary.height > 1080) score += 500 + summary.height;
+  else if (summary.height > 0) score -= summary.height;
   if (summary.frameRate > 31) score += 60;
   if (summary.bitrateKbps > 9000) score += 120;
   if (preferredQuality && preferredQuality !== "auto") {
@@ -521,30 +684,153 @@ function subtitleList(episode) {
   return list;
 }
 
-function loadPlay(contentId, seriesContentId, callback) {
+/**
+ * VOD: se piden en paralelo la licencia local v9 (metadatos, subtítulos y
+ * respaldo 480p) y el broker FHD del VPS (1080p/720p ya firmados). Si el broker
+ * responde, mandan sus pistas y del v9 local se toman capítulo/subtítulos.
+ * En series el portal elige el capítulo por `episodeNumberList`.
+ */
+function loadPlay(contentId, seriesContentId, options, callback) {
+  if (typeof options === "function") {
+    callback = options;
+    options = {};
+  }
+  options = options || {};
   if (!trim(contentId)) return callback(new Error("falta contentId"));
   ensureSession((sessionError) => {
     if (sessionError) return callback(sessionError);
-    call(
-      "v9/startPlayVOD",
-      {
+    const cid = trim(contentId);
+    const sid = trim(seriesContentId);
+    const isSeries = sid !== "" && sid !== cid;
+    const episodeNumber = Math.max(1, parseInt(options.episodeNumber, 10) || 1);
+    const makeBody = (type, column) => {
+      const body = {
         portalCode: PORTAL_PLAY,
-        contentId: trim(contentId),
-        seriesContentId: trim(seriesContentId),
+        contentId: cid,
+        seriesContentId: isSeries ? sid : cid,
+        columnId: column || 0,
+        type,
         startTime: 0,
-        type: "1",
-        columnId: 0,
-        authType: "",
-      },
-      (error, payload) => {
-        if (error) return callback(error);
-        const episode = payload && payload.episodeList && payload.episodeList[0];
-        if (!episode) return callback(new Error("el portal no devolvió pistas de vídeo"));
-        const tracks = collectTracks(episode);
-        if (!tracks.length) return callback(new Error("el portal no devolvió pistas de vídeo"));
-        callback(null, { play: payload, episode, tracks });
-      },
-    );
+        authType: isSeries ? "1" : "",
+      };
+      if (isSeries) body.episodeNumberList = [episodeNumber];
+      return body;
+    };
+
+    let localDone = false;
+    let brokerDone = false;
+    let localLoaded = null;
+    let brokerLoaded = null;
+    let replied = false;
+    let waitTimer = null;
+
+    const stopWait = () => {
+      if (waitTimer) {
+        clearTimeout(waitTimer);
+        waitTimer = null;
+      }
+    };
+    const finish = (value) => {
+      if (replied) return;
+      replied = true;
+      stopWait();
+      callback(null, value);
+    };
+    const fail = (message) => {
+      if (replied) return;
+      replied = true;
+      stopWait();
+      callback(new Error(message));
+    };
+    const mergeBroker = () => {
+      if (localLoaded) {
+        brokerLoaded.episode = localLoaded.episode;
+        brokerLoaded.play = Object.assign({}, brokerLoaded.play, {
+          name: (localLoaded.play && localLoaded.play.name) || "",
+        });
+      }
+      finish(brokerLoaded);
+    };
+
+    const fallbackV10 = () => {
+      columnFor(cid, (mapped) => {
+        const columns = [];
+        if (mapped > 0) columns.push(mapped);
+        columnCache.free.slice(0, 4).forEach((column) => {
+          if (columns.indexOf(column) < 0) columns.push(column);
+        });
+        if (!columns.length) {
+          return fail("el portal no devolvió pistas de vídeo");
+        }
+        const tryColumn = (index) => {
+          if (index >= columns.length) {
+            return fail("el portal no devolvió pistas de vídeo");
+          }
+          const column = columns[index];
+          call("v10/startPlayVOD", makeBody("0", column), (error, payload) => {
+            const episode = !error && payload && payload.episodeList && payload.episodeList[0];
+            const tracks = collectTracks(episode);
+            debug(
+              "play v10",
+              `columna=${column}`,
+              error ? `error ${error.message}` : `pistas=${tracks.length}`,
+            );
+            if (!tracks.length) return tryColumn(index + 1);
+            finish({ play: payload, episode, tracks });
+          });
+        };
+        tryColumn(0);
+      });
+    };
+
+    const reply = () => {
+      if (replied) return;
+      if (brokerLoaded) {
+        if (localDone) mergeBroker();
+        return;
+      }
+      if (localDone && brokerDone) {
+        if (localLoaded) return finish(localLoaded);
+        fallbackV10();
+      }
+    };
+
+    call("v9/startPlayVOD", makeBody("2", 0), (error, payload) => {
+      localDone = true;
+      const episode = !error && payload && payload.episodeList && payload.episodeList[0];
+      const tracks = collectTracks(episode);
+      if (tracks.length) localLoaded = { play: payload, episode, tracks };
+      debug("play v9", error ? `error ${error.message}` : `pistas=${tracks.length}`);
+      if (localLoaded && !brokerDone && !replied) {
+        // Si el broker tarda, no se deja al usuario esperando: a los 4 s se
+        // reproduce el respaldo local (480p) con sus subtítulos.
+        stopWait();
+        waitTimer = setTimeout(() => {
+          if (!replied) finish(localLoaded);
+        }, 4000);
+      }
+      reply();
+    });
+
+    playBroker(cid, sid, isSeries, episodeNumber, (error, value) => {
+      brokerDone = true;
+      if (!error && value && value.tracks && value.tracks.length) brokerLoaded = value;
+      debug(
+        "broker",
+        error ? `error ${error.message}` : `pistas=${(value && value.tracks.length) || 0}`,
+      );
+      if (brokerLoaded && !localDone && !replied) {
+        // Metadatos/subtítulos del v9: se esperan 1.5 s como máximo.
+        stopWait();
+        waitTimer = setTimeout(() => {
+          if (!replied) {
+            localDone = true;
+            mergeBroker();
+          }
+        }, 1500);
+      }
+      reply();
+    });
   });
 }
 
@@ -556,9 +842,11 @@ function slbBean() {
     appVer: APK_VERSION,
     lang: "es",
     encMediaSupported: 1,
-    liveCodeList: ["masmobile_live"],
+    liveCodeList: ["masnew_live"],
     appParams: "",
-    reserve1: "02:00:00:00:00:00",
+    // Valor fijo que usa la familia Hydra; con el MAC el portal devolvía
+    // balanceadores que el CDN rechazaba (403).
+    reserve1: "583442714b345572434a4d5769637461545a735936413d3d",
     pipFlag: "0",
   };
 }
@@ -573,20 +861,89 @@ function hasCfl(item) {
   return trim(item && item.sign_type).toLowerCase() === "cfl" || raw.includes("sign_type=cfl");
 }
 
+function cdnSignRank(item) {
+  const raw = trim(item && item.url).toLowerCase();
+  const match = raw.match(/sign_type=([a-z0-9]+)/);
+  const sign = (trim(item && item.sign_type) || (match && match[1]) || "").toLowerCase();
+  if (sign === "cfl") return 0;
+  // Los balanceadores `goog` responden bien al VOD; los `cs` (xauf/schh)
+  // devuelven 403 desde la migración de CDN. Se dejan como último recurso.
+  if (sign === "goog") return 1;
+  if (sign === "cs") return 2;
+  return 3;
+}
+
 function vodCdns(slb) {
   const result = [];
   for (const cdn of (slb && slb.cdn_list) || []) {
     if (!cdn || trim(cdn.tag) !== "vod") continue;
     for (const url of cdn.url_list || []) {
-      if (!url || !hasCfl(url) || trim(url.tag) !== "free") continue;
+      // El portal ya no publica siempre `sign_type=cfl`: ahora también firma
+      // con `cs` y `goog`. Antes el filtro CFL dejaba el VOD sin CDN.
+      if (!url || trim(url.tag) !== "free" || !trim(url.url)) continue;
       const bases = [withScheme(cdn.main_addr)];
       const spare = trim(cdn.spared_addr);
       if (spare && !bases.includes(withScheme(spare))) bases.push(withScheme(spare));
-      result.push({ bases, auth: trim(url.url) });
+      result.push({ bases, auth: trim(url.url), rank: cdnSignRank(url) });
       break;
     }
   }
+  // CFL/IPTV primero, luego CS y GOOG; todas entregan el mismo archivo.
+  result.sort((left, right) => left.rank - right.rank);
   return result;
+}
+
+/** Prueba un CDN con Range 0-0 antes de entregarlo al reproductor. */
+function probeCdnUrl(candidate, callback) {
+  let done = false;
+  const finish = (ok) => {
+    if (done) return;
+    done = true;
+    callback(ok);
+  };
+  let parsed;
+  try {
+    parsed = urlmod.parse(candidate.url);
+  } catch (error) {
+    return finish(false);
+  }
+  const transport = parsed.protocol === "http:" ? http : https;
+  const req = transport.request(
+    {
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === "http:" ? 80 : 443),
+      path: parsed.path,
+      method: "GET",
+      headers: Object.assign({}, candidate.headers, { Range: "bytes=0-0" }),
+      timeout: 4000,
+    },
+    (res) => {
+      res.resume();
+      finish(res.statusCode === 200 || res.statusCode === 206);
+    },
+  );
+  req.on("timeout", () => {
+    req.destroy();
+    finish(false);
+  });
+  req.on("error", () => finish(false));
+  req.end();
+}
+
+/** Devuelve el primer candidato que responda; si ninguno, el primero. */
+function pickCdn(candidates, callback) {
+  if (!candidates.length) return callback(null);
+  const results = new Array(candidates.length).fill(false);
+  let pending = candidates.length;
+  candidates.forEach((candidate, index) => {
+    probeCdnUrl(candidate, (ok) => {
+      results[index] = ok;
+      pending -= 1;
+      if (pending > 0) return;
+      const chosen = candidates[results.indexOf(true)] || candidates[0];
+      callback(chosen);
+    });
+  });
 }
 
 function liveCdns(slb) {
@@ -626,12 +983,27 @@ function resolve(contentId, seriesContentId, options, callback) {
     options = {};
   }
   options = options || {};
-  loadPlay(contentId, seriesContentId, (error, loaded) => {
+  loadPlay(contentId, seriesContentId, options, (error, loaded) => {
     if (error) return callback(error);
-    const tracks = loaded.tracks
+    const ranked = loaded.tracks
       .map((track) => ({ track, score: trackScore(track, options.quality) }))
-      .sort((a, b) => a.score - b.score)
+      .sort((left, right) => {
+        const leftHeight = trackHeight(left.track);
+        const rightHeight = trackHeight(right.track);
+        if (leftHeight !== rightHeight) return rightHeight - leftHeight;
+        return left.score - right.score;
+      })
       .map((entry) => entry.track);
+    // El broker devuelve la misma calidad en H.264 y H.265: el reproductor
+    // solo necesita una pista por resolución (la primera, ya ordenada).
+    const tracks = [];
+    const seenQuality = {};
+    for (const candidate of ranked) {
+      const key = trim(candidate.quality).toLowerCase() || trim(candidate.contentId);
+      if (seenQuality[key]) continue;
+      seenQuality[key] = true;
+      tracks.push(candidate);
+    }
     let index = parseInt(options.trackIndex, 10);
     if (!(index >= 0 && index < tracks.length)) index = 0;
     const track = tracks[index];
@@ -640,45 +1012,105 @@ function resolve(contentId, seriesContentId, options, callback) {
     );
     if (!license) return callback(new Error("el portal no devolvió licencia de reproducción"));
 
-    call("v14/getSlbInfo", slbBean(), (slbError, slb) => {
-      if (slbError) return callback(slbError);
-      const cdns = vodCdns(slb);
-      if (!cdns.length) return callback(new Error("el portal no expuso CDN de vod libre"));
-      const cdn = cdns[0];
-      const format = trim(track.videoFormat).toLowerCase() === "ts" ? "ts" : "mp4";
-      const streamUrl = `${cdn.bases[0]}/vod/${trim(track.contentId)}_media.${format}`;
-      const payload = {
-        url: streamUrl,
-        mime: format === "ts" ? "video/mp2t" : "video/mp4",
-        codec: trim(track.encodeFormat).toUpperCase(),
-        quality: trim(track.quality),
-        duration: durationSeconds(
-          track.duration ||
-            (loaded.episode && loaded.episode.duration) ||
-            (loaded.play && loaded.play.duration),
+    const bean = slbBean();
+    // La licencia del broker es de la cuenta de cortesía: el SLB debe pedirse
+    // en el tenant de reproducción (`masmobile`), como hace Android.
+    if (loaded.vip) bean.portalCode = PORTAL_PLAY;
+    const useSlb = (slb, version) => {
+      debug(
+        `slb vod ${version}`,
+        JSON.stringify(
+          ((slb && slb.cdn_list) || [])
+            .filter((cdn) => trim(cdn.tag) === "vod")
+            .map((cdn) => ({
+              host: cdn.main_addr,
+              spare: cdn.spared_addr,
+              urls: (cdn.url_list || [])
+                .filter((u) => trim(u.tag) === "free")
+                .map((u) => u.url),
+            })),
         ),
-        selectedTrack: trackSummary(track),
-        availableTracks: tracks.map(trackSummary),
-        trackIndex: index,
-        audio: trim(track.audioInfo),
-        headers: {
-          "Content-Auth": cdn.auth,
-          "Content-License": license,
-          "User-Agent": UA_CDN,
-          App: APP_ID,
-          "App-Version": APK_VERSION,
-          Accept: "*/*",
-        },
-        subtitles: subtitleList(loaded.episode),
-        name: text(loaded.play && loaded.play.name),
+      );
+      const cdns = vodCdns(slb);
+      if (!cdns.length) return false;
+      const format = trim(track.videoFormat).toLowerCase() === "ts" ? "ts" : "mp4";
+      const mediaId = trim(track.contentId);
+      const cacheKey = `${mediaId}|${format}`;
+      const headersFor = (auth) => ({
+        "Content-Auth": auth,
+        "Content-License": license,
+        "User-Agent": UA_CDN,
+        App: APP_ID,
+        "App-Version": APK_VERSION,
+        Accept: "*/*",
+      });
+      const finish = (chosen) => {
+        callback(null, {
+          url: chosen.url,
+          mime: format === "ts" ? "video/mp2t" : "video/mp4",
+          codec: trim(track.encodeFormat).toUpperCase(),
+          quality: trim(track.quality),
+          duration: durationSeconds(
+            track.duration ||
+              (loaded.episode && loaded.episode.duration) ||
+              (loaded.play && loaded.play.duration),
+          ),
+          selectedTrack: trackSummary(track),
+          availableTracks: tracks.map(trackSummary),
+          trackIndex: index,
+          audio: trim(track.audioInfo),
+          headers: chosen.headers,
+          subtitles: subtitleList(loaded.episode),
+          name: text(loaded.play && loaded.play.name),
+        });
       };
-      callback(null, payload);
-    });
+      const cachedChoice = cdnChoiceCache.get(cacheKey);
+      if (cachedChoice && cachedChoice.exp > Date.now()) {
+        finish(cachedChoice.value);
+        return true;
+      }
+      const candidates = [];
+      for (const cdn of cdns) {
+        for (const base of cdn.bases) {
+          candidates.push({
+            url: `${base}/vod/${mediaId}_media.${format}`,
+            headers: headersFor(cdn.auth),
+          });
+        }
+      }
+      // Algunos balanceadores `cs` devuelven 403 y otros cierran la conexión:
+      // se prueba el primero que entregue bytes antes de abrir el reproductor.
+      pickCdn(candidates.slice(0, 4), (chosen) => {
+        const value = chosen || candidates[0];
+        if (value) {
+          cdnChoiceCache.set(cacheKey, { exp: Date.now() + CDN_CHOICE_TTL_MS, value });
+        }
+        finish(value);
+      });
+      return true;
+    };
+    const tryVersion = (versions, position) => {
+      if (position >= versions.length) {
+        return callback(new Error("el portal no expuso CDN de vod libre"));
+      }
+      const version = versions[position];
+      call(`${version}/getSlbInfo`, bean, (slbError, slb) => {
+        if (slbError || !useSlb(slb, version)) {
+          tryVersion(versions, position + 1);
+        }
+      });
+    };
+    // v15 es el balanceador vigente; v14 queda como respaldo.
+    tryVersion(["v15", "v14"], 0);
   });
 }
 
-function mediaInfo(contentId, seriesContentId, callback) {
-  loadPlay(contentId, seriesContentId, (error, loaded) => {
+function mediaInfo(contentId, seriesContentId, options, callback) {
+  if (typeof options === "function") {
+    callback = options;
+    options = {};
+  }
+  loadPlay(contentId, seriesContentId, options || {}, (error, loaded) => {
     if (error) return callback(error);
     const track = loaded.tracks[0];
     callback(null, {
@@ -722,12 +1154,38 @@ function liveCatalog(callback) {
               break;
             }
           }
-          channels.push({
+          let address = null;
+          for (const item of (channel.liveAddressList || [])) {
+            if (!item || trim(item.tag) !== "free" || !trim(item.playCode)) continue;
+            if (
+              !address ||
+              (parseInt(item.quality, 10) || 0) >= (parseInt(address.quality, 10) || 0)
+            ) {
+              address = item;
+            }
+          }
+          const entry = {
             code,
             number: parseInt(channel.channelNumber, 10) || 0,
             name: text(channel.name),
             logo,
             group: text(channel.columnName || channel.groupName || channel.categoryName || ""),
+            address: address
+              ? {
+                  playCode: trim(address.playCode),
+                  license: trim(address.license),
+                  quality: trim(address.quality),
+                }
+              : null,
+          };
+          liveChannelCache.set(code, entry);
+          // La licencia se queda en el servicio; la UI solo recibe el canal.
+          channels.push({
+            code: entry.code,
+            number: entry.number,
+            name: entry.name,
+            logo: entry.logo,
+            group: entry.group,
           });
         }
         callback(null, { channels, total: channels.length });
@@ -736,59 +1194,85 @@ function liveCatalog(callback) {
   });
 }
 
+/** Construye el HLS de un canal con la licencia que viene en `getLiveData`. */
+function liveStreamFor(code, address, name, callback) {
+  const playCode = trim(address && address.playCode) || code;
+  const license = trim(address && address.license);
+  if (!license) return callback(new Error("el portal no devolvió licencia para el canal"));
+  const versions = ["v15", "v14"];
+  const lists = [[code], ["masnew_live"], ["masmobile_live"]];
+  const tryPlan = (versionIndex, listIndex) => {
+    if (versionIndex >= versions.length) {
+      return callback(new Error("el portal no expuso CDN de vivo"));
+    }
+    if (listIndex >= lists.length) {
+      return tryPlan(versionIndex + 1, 0);
+    }
+    const bean = slbBean();
+    bean.liveCodeList = lists[listIndex];
+    call(`${versions[versionIndex]}/getSlbInfo`, bean, (error, slb) => {
+      if (error) return tryPlan(versionIndex, listIndex + 1);
+      const cdns = liveCdns(slb);
+      if (!cdns.length) return tryPlan(versionIndex, listIndex + 1);
+      const cdn = cdns[0];
+      const tokenMatch = cdn.authBase.match(/token=([0-9a-fA-F]{32})/);
+      const token = tokenMatch ? tokenMatch[1] : "";
+      const startMoment = Date.now();
+      const sign = signLive(token, startMoment);
+      callback(null, {
+        url: `http://${cdn.host}/live/${playCode}.m3u8`,
+        mime: "application/x-mpegurl",
+        headers: {
+          "Content-Auth": `${cdn.authBase}&sign2_method=sign_o3&instance=0&start_moment=${startMoment}&sign2=${sign}`,
+          "Content-License": license,
+          "User-Agent": UA_CDN,
+          App: APP_ID,
+          "App-Version": APK_VERSION,
+          "X-Buffer": "0",
+          Accept: "*/*",
+        },
+        name: text(name),
+        isLive: true,
+      });
+    });
+  };
+  tryPlan(0, 0);
+}
+
 function resolveLive(channelCode, callback) {
   if (!trim(channelCode)) return callback(new Error("falta channelCode"));
   ensureSession((sessionError) => {
     if (sessionError) return callback(sessionError);
-    call(
-      "v4/startPlayLive",
-      { channelCode: trim(channelCode), columnId: 0, type: "1" },
-      (error, payload) => {
-        if (error) return callback(error);
-        const addresses = (payload && payload.liveAddressList) || [];
-        let address = null;
-        for (const item of addresses) {
-          if (item && item.playCode && item.license) {
-            address = item;
-            break;
+    const code = trim(channelCode);
+    const cached = liveChannelCache.get(code);
+    if (cached && cached.address && cached.address.license) {
+      return liveStreamFor(code, cached.address, cached.name, callback);
+    }
+    // `getLiveData` ya entrega `liveAddressList` con licencia por canal;
+    // `startPlayLive` fue retirado por el portal (`portal100001`).
+    liveCatalog((catalogError) => {
+      const found = !catalogError ? liveChannelCache.get(code) : null;
+      if (found && found.address && found.address.license) {
+        return liveStreamFor(code, found.address, found.name, callback);
+      }
+      call(
+        "v4/startPlayLive",
+        { channelCode: code, columnId: 0, type: "1" },
+        (error, payload) => {
+          if (error) return callback(error);
+          const addresses = (payload && payload.liveAddressList) || [];
+          let address = null;
+          for (const item of addresses) {
+            if (item && item.playCode && item.license) {
+              address = item;
+              break;
+            }
           }
-        }
-        if (!address && addresses[0]) address = addresses[0];
-        if (!address || !address.license) {
-          return callback(new Error("el portal no devolvió licencia para el canal"));
-        }
-        const playCode = address.playCode || trim(channelCode);
-        const license = address.license;
-        const bean = slbBean();
-        bean.liveCodeList = [trim(channelCode)];
-        call("v14/getSlbInfo", bean, (slbError, slb) => {
-          if (slbError) return callback(slbError);
-          const cdns = liveCdns(slb);
-          if (!cdns.length) return callback(new Error("el portal no expuso CDN de vivo"));
-          const cdn = cdns[0];
-          const streamUrl = `http://${cdn.host}/live/${playCode}.m3u8`;
-          const tokenMatch = cdn.authBase.match(/token=([0-9a-fA-F]{32})/);
-          const token = tokenMatch ? tokenMatch[1] : "";
-          const startMoment = Date.now();
-          const sign = signLive(token, startMoment);
-          callback(null, {
-            url: streamUrl,
-            mime: "application/x-mpegurl",
-            headers: {
-              "Content-Auth": `${cdn.authBase}&sign2_method=sign_o3&instance=0&start_moment=${startMoment}&sign2=${sign}`,
-              "Content-License": license,
-              "User-Agent": UA_CDN,
-              App: APP_ID,
-              "App-Version": APK_VERSION,
-              "X-Buffer": "0",
-              Accept: "*/*",
-            },
-            name: text(payload && payload.name),
-            isLive: true,
-          });
-        });
-      },
-    );
+          if (!address) address = addresses[0];
+          liveStreamFor(code, address, payload && payload.name, callback);
+        },
+      );
+    });
   });
 }
 
@@ -847,6 +1331,7 @@ module.exports = {
   ensureSession,
   clearSession,
   session,
+  prewarmColumns,
   constants: {
     HOSTS,
     PORTAL_CODE,

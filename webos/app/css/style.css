@@ -1330,6 +1330,14 @@ button:focus-visible {
   overflow: hidden;
 }
 
+.detail-extra {
+  max-width: 55vw;
+  margin-top: 0.55vh;
+  color: var(--muted);
+  font-size: 0.78vw;
+  line-height: 1.5;
+}
+
 .detail-actions {
   display: flex;
   align-items: center;

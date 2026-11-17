@@ -146,6 +146,7 @@ async function resolve(params) {
     stream = await resolveXtv(contentId, seriesContentId, {
       trackIndex: values.trackIndex,
       quality: values.quality,
+      episodeNumber: values.episodeNumber,
     });
   }
 
@@ -335,7 +336,11 @@ function prewarm() {
   return new Promise((resolve, reject) => {
     xtv.ensureSession((error) => {
       if (error) reject(error);
-      else resolve({ userId: xtv.session.userId, ready: true });
+      else {
+        // Deja listo el mapa de columnas (FHD) antes del primer play.
+        xtv.prewarmColumns();
+        resolve({ userId: xtv.session.userId, ready: true });
+      }
     });
   });
 }

@@ -63,11 +63,18 @@
             </button>
           </div>
         </div>
-        <button class="vt-tab" data-focusable data-nav="movies">Películas</button>
+        <div class="vt-hub">
+          <button class="vt-tab" data-focusable data-nav="movies-hub">Películas</button>
+          <div class="vt-menu" id="menu-movies" hidden>
+            <button class="vt-menu-item" data-focusable data-nav="movies"><svg class="icon"><use href="#i-grid"/></svg><span><b>Películas</b><small>Todo el cine</small></span></button>
+            <button class="vt-menu-item" data-focusable data-nav="kids-movies"><svg class="icon"><use href="#i-star"/></svg><span><b>Películas Infantiles</b><small>Animación para chicos</small></span></button>
+          </div>
+        </div>
         <div class="vt-hub">
           <button class="vt-tab" data-focusable data-nav="series-hub">Series</button>
           <div class="vt-menu" id="menu-series" hidden>
             <button class="vt-menu-item" data-focusable data-nav="series"><svg class="icon"><use href="#i-tv"/></svg><span><b>Series</b><small>Series y novelas</small></span></button>
+            <button class="vt-menu-item" data-focusable data-nav="kids-series"><svg class="icon"><use href="#i-star"/></svg><span><b>Series Infantiles</b><small>Animación para chicos</small></span></button>
             <button class="vt-menu-item" data-focusable data-nav="anime"><svg class="icon"><use href="#i-star"/></svg><span><b>Anime</b><small>Animación japonesa</small></span></button>
             <button class="vt-menu-item" data-focusable data-nav="novelas"><svg class="icon"><use href="#i-list"/></svg><span><b>Novelas</b><small>Telenovelas</small></span></button>
           </div>
@@ -194,6 +201,7 @@
           <h1 class="detail-title" id="detail-title"></h1>
           <div class="detail-meta" id="detail-meta"></div>
           <p class="detail-synopsis" id="detail-synopsis"></p>
+          <div class="detail-extra" id="detail-extra"></div>
           <div class="detail-actions">
             <button class="primary-btn" id="detail-play" data-focusable>
               <svg class="icon"><use href="#i-play"/></svg><span id="detail-play-label">Reproducir</span>

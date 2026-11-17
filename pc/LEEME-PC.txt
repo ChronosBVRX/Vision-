@@ -9,6 +9,14 @@ SI RECIBISTE "VisionPlusPC-Portable.exe"
   Al abrirlo verás una pantalla de carga con barra de progreso
   mientras se prepara el motor y la interfaz.
 
+NOVEDADES 0.6.0
+  - Películas y series en 1080p (FHD) y capítulo correcto en series.
+  - TV en vivo reparada con la licencia nueva del portal.
+  - Menús "Películas Infantiles" y "Series Infantiles".
+  - Fichas con sinopsis, reparto y país en español.
+  - Se corrigió el error de reproducción que cerraba el video
+    al empezar (ECONNRESET).
+
 SI RECIBISTE LA CARPETA "VisionPlusPC"
   Usa las instrucciones de abajo.
 

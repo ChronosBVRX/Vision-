@@ -4,12 +4,12 @@ Port de Vision+ a LG webOS usando la misma arquitectura que el port de XuperTV:
 una app web (HTML/CSS/JS) + un servicio Luna en Node.js que habla con el API
 del VPS y con el portal XTV, y publica el video por un proxy HTTP local.
 
-> Estado: **port funcional v0.3.0**. Catálogo, búsqueda, ficha con
-> temporadas/capítulos, TV en vivo con EPG, deportes/agenda, VOD/live, audio y
-> subtítulos por idioma, calidades, omitir intro, «Seguir viendo» y «Mi lista».
-> Probado en el **webOS TV 26 Simulator** (UI, VOD y TV en vivo) contra el
-> dev-server HTTP; faltan descargas, perfiles, juegos, el servicio Luna real en
-> una TV física y la prueba del IPK por el flujo Key Server/SSH.
+> Estado: **port funcional v0.4.0**. Catálogo, búsqueda, ficha con
+> temporadas/capítulos, TV en vivo con EPG, deportes/agenda, VOD/live en 1080p,
+> audio y subtítulos por idioma, calidades, omitir intro, «Seguir viendo» y
+> «Mi lista». Probado en el **webOS TV 26 Simulator** (UI, VOD y TV en vivo)
+> contra el dev-server HTTP; faltan descargas, perfiles, juegos, el servicio Luna
+> real en una TV física y la prueba del IPK por el flujo Key Server/SSH.
 
 ## Por qué funciona sin el motor nativo
 
@@ -156,8 +156,17 @@ Si el instalador rechaza el paquete sin firmar, empaquétalo con
 - Ficha de película/serie, sinopsis es-MX, nota, géneros, temporadas y capítulos
   con still de TMDB.
 - Reproducción VOD: `resolve` -> proxy local -> `<video>`; seek por Range.
-- TV en vivo: 1,035 canales del VPS, HLS a través del proxy, con «Ahora: …»
-  desde el EPG (`/v1/epg/bulk`).
+- **VOD en 1080p**: la licencia se pide al broker FHD del VPS (la cuenta de
+  cortesía vive en el servidor) y el CDN se elige probando `goog`/`cfl`; los
+  balanceadores `cs` que devuelven 403 se descartan.
+- **Series**: «Sig. capítulo», anterior y selector envían el número real de
+  capítulo (`episodeNumberList`), no siempre el primero.
+- **TV en vivo**: la licencia sale de `liveAddressList` de `getLiveData` (el
+  portal retiró `startPlayLive`); 1,035 canales del VPS con HLS por el proxy.
+- **Infantil**: «Películas Infantiles» y «Series Infantiles» dentro de sus
+  menús, con paginación y sin anime japonés (`originalLanguage == ja`).
+- **Fichas**: sinopsis es-MX, reparto y país de TMDB; aviso de calidad real.
+- TV en vivo con «Ahora: …» desde el EPG (`/v1/epg/bulk`).
 - Deportes: eventos de GeeSports del día y agenda de `/v1/sports`; las señales
   HLS compatibles se reproducen con selector de enlace. Los DASH/DRM se marcan
   como «Sin señal» para webOS.

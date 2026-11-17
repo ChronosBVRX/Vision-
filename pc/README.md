@@ -4,6 +4,12 @@ Port de escritorio de Vision+ que reutiliza **la misma interfaz de Smart TV** y
 **el mismo motor** del port de webOS. Añade lo necesario para que funcione en un
 PC Windows sin instalar nada y sin emulador.
 
+> **Actualización 0.6.0 (motor webOS 0.4.0):** paridad de streaming con Vision+
+> 2.6.56. VOD en 1080p por el broker FHD, capítulo real de serie, relevo entre
+> CDNs, TV en vivo con licencias de `getLiveData`, menús **Películas/Series
+> Infantiles** y fichas con reparto/país en español. También se corrigió el
+> proxy para Node moderno (ECONNRESET al primer byte).
+
 La UI del `.exe` se reconstruyó contra la app real de Smart TV (capturas del
 Chromecast): barra superior global con menús, Inicio, TV en vivo con EPG,
 Deportes con agenda y selector de transmisiones, y OSD del reproductor.

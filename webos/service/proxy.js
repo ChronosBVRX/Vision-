@@ -13,21 +13,21 @@ var http = require("http"),
   server = null,
   port = 0,
   httpAgent = new http.Agent({
-    keepAlive: !0,
+    // Los CDN cierran la conexión tras cada Range; el keep-alive reutilizaba
+    // sockets muertos y el proxy devolvía ECONNRESET al reproductor.
+    keepAlive: false,
     maxSockets: 4,
-    keepAliveMsecs: 15e3,
   }),
   httpsAgent = new https.Agent({
-    keepAlive: !0,
+    keepAlive: false,
     maxSockets: 4,
-    keepAliveMsecs: 15e3,
     rejectUnauthorized: !1,
   }),
   activeToken = null,
   activeUpstreams = [],
   TS_PACKET_BYTES = 188,
   HLS_SEGMENT_SECONDS = 10;
-function destroyConnection(e) {
+function destroyConnection(e, keepResponse) {
   if (e) {
     if (e.up) {
       try {
@@ -47,9 +47,11 @@ function destroyConnection(e) {
     try {
       e.upstream && e.upstream.socket && e.upstream.socket.destroy();
     } catch (e) {}
-    try {
-      e.res && !e.res.finished && e.res.destroy();
-    } catch (e) {}
+    if (!keepResponse) {
+      try {
+        e.res && !e.res.finished && e.res.destroy();
+      } catch (e) {}
+    }
     (e.upstream = null), (e.res = null), (e.req = null);
   }
 }
@@ -305,16 +307,25 @@ function forward(e, t, r, token) {
       t.socket.setNoDelay(!0);
     } catch (e) {}
   var c = { upstream: null, res: t, req: e, up: null };
-  function l() {
+  function l(keepResponse) {
     var e = activeUpstreams.indexOf(c);
-    -1 !== e && activeUpstreams.splice(e, 1), destroyConnection(c);
+    -1 !== e && activeUpstreams.splice(e, 1), destroyConnection(c, keepResponse);
   }
   activeUpstreams.push(c),
-    e.on("close", l),
-    e.on("aborted", l),
-    t.on("close", l),
-    t.on("finish", l),
-    t.on("error", l);
+    // En Node moderno `req.close` se emite al terminar de leer la petición
+    // (no al abortar): cerrar ahí mataba el upstream antes de los bytes.
+    e.on("aborted", function () {
+      l(true);
+    }),
+    t.on("close", function () {
+      l(true);
+    }),
+    t.on("finish", function () {
+      l(true);
+    }),
+    t.on("error", function () {
+      l();
+    });
   var u = (a ? https : http).request(i, function (n) {
     if (((c.up = n), n.socket))
       try {
@@ -355,7 +366,7 @@ function forward(e, t, r, token) {
         l();
       });
       n.on("close", function () {
-        l();
+        l(true);
       });
       n.on("end", function () {
         var body = rewriteHls(Buffer.concat(chunks).toString("utf8"), token, r.url);
@@ -366,7 +377,7 @@ function forward(e, t, r, token) {
         } catch (error) {
           /* noop */
         }
-        l();
+        l(true);
       });
       return;
     }
@@ -377,10 +388,10 @@ function forward(e, t, r, token) {
       l();
     }),
       n.on("close", function () {
-        l();
+        l(true);
       }),
       n.on("end", function () {
-        l();
+        l(true);
       }),
       n.pipe(t);
   });
@@ -403,7 +414,8 @@ function forward(e, t, r, token) {
     }
     l();
   }),
-    u.on("error", function () {
+    u.on("error", function (err) {
+      console.error("[proxy] upstream error:", (r && r.url || "").slice(0, 120), err && err.message);
       if (!t.headersSent)
         try {
           t.writeHead(502, {

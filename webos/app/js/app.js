@@ -1054,6 +1054,17 @@
     if (film.kind) meta.push('<span class="pill">' + escapeHtml(kindLabel(film)) + "</span>");
     $("#detail-meta").innerHTML = meta.join("");
     $("#detail-synopsis").textContent = film.synopsis || "Sin sinopsis disponible.";
+    var cast = Array.isArray(film.cast) && film.cast.length
+      ? film.cast
+      : String(film.actors || "").split(",").map(function (name) {
+        return String(name || "").trim();
+      }).filter(Boolean);
+    var extra = [];
+    if (cast.length) extra.push("Reparto: " + cast.slice(0, 6).join(" · "));
+    if (Array.isArray(film.countries) && film.countries.length) {
+      extra.push("País: " + film.countries.join(" · "));
+    }
+    $("#detail-extra").textContent = extra.join("   ·   ");
     $("#detail-play-label").textContent = isSeries(film) ? "Reproducir T1 E1" : "Reproducir";
     $("#detail-list-label").textContent = state.list[film.id] ? "Quitar de Mi lista" : "Mi lista";
     $("#detail-seasons").innerHTML = "";
@@ -1084,7 +1095,8 @@
       var bits = [];
       if (film.synopsis) bits.push(film.synopsis);
       if (film.director) bits.push("Dirección: " + film.director);
-      if (film.actors) bits.push("Reparto: " + film.actors);
+      if (cast.length) bits.push("Reparto: " + cast.join(", "));
+      if (Array.isArray(film.countries) && film.countries.length) bits.push("País: " + film.countries.join(", "));
       if (film.originalTitle) bits.push("Título original: " + film.originalTitle);
       toast(bits.join(" · ") || "Sin información adicional.");
     };
@@ -1263,6 +1275,8 @@
       params.seriesContentId = String((season && season.titleId) || (film && film.id) || "")
         .replace(/^xtv:/, "")
         .replace(/^magis(?:vod)?:/, "");
+      // El portal elige el capítulo por su número real, no por contentId.
+      params.episodeNumber = Number(episode.number || episode.episodeNumber || 0) || 1;
       params.ref = "xtv:" + episode.contentId;
     } else {
       params.ref = (film && (film.videoUrl || film.id)) || "";
@@ -1423,6 +1437,9 @@
         applyPlayerOptions();
         loadMarkers();
         updateOsd();
+        if (!state.player.isLive && stream.selectedTrack && stream.selectedTrack.quality) {
+          toast("Calidad: " + stream.selectedTrack.quality);
+        }
         setPlayerLoadingTimeout(18000);
       })
       .catch(function (error) {
@@ -2321,6 +2338,7 @@
       total: opts.total || (opts.films || []).length,
       categoryId: opts.categoryId || "",
       empty: opts.empty || "",
+      excludeJapanese: opts.excludeJapanese === true,
       loader: null,
     };
     $("#grid-title").textContent = state.grid.title;
@@ -2347,7 +2365,15 @@
     $("#grid-more").hidden = true;
     return request("category", { id: state.grid.categoryId, page: page, pageSize: state.grid.pageSize }, 30000)
       .then(function (data) {
-        var films = data.films || [];
+        var rawFilms = data.films || [];
+        // Infantil: el portal todavía mezcla anime japonés en sus colecciones.
+        var films = rawFilms.filter(function (film) {
+          return !state.grid.excludeJapanese ||
+            !film ||
+            String(film.originalLanguage || "").toLowerCase() !== "ja";
+        });
+        var pageSize = Number(data.pageSize) || state.grid.pageSize;
+        state.grid.pageSize = pageSize;
         state.grid.total = Number(data.total) || state.grid.total;
         state.grid.page = page;
         if (append) state.grid.items = state.grid.items.concat(films);
@@ -2358,8 +2384,9 @@
             Focus.first("#grid-items .grid-card");
           }, 40);
         }
-        var loaded = state.grid.items.length;
-        $("#grid-more").hidden = !(films.length >= state.grid.pageSize && loaded < state.grid.total);
+        // El «Ver más» depende de las páginas del servidor, no de cuántos
+        // títulos quedaron tras filtrar (Infantil).
+        $("#grid-more").hidden = !(rawFilms.length >= pageSize && page * pageSize < state.grid.total);
         return films;
       })
       .catch(function (error) {
@@ -3786,7 +3813,7 @@
   /* ============================ navegación / teclado ============================ */
 
   function closeTopMenus(except) {
-    ["menu-live", "menu-series", "menu-library"].forEach(function (id) {
+    ["menu-live", "menu-movies", "menu-series", "menu-library"].forEach(function (id) {
       var node = document.getElementById(id);
       if (node && id !== except) node.hidden = true;
     });
@@ -3815,7 +3842,9 @@
     else if (name === "live" || name === "sports") active = "live-hub";
     else if (name === "library" || name === "history") active = "library-hub";
     else if (name === "grid") {
-      if (state.topTab === "series" || state.topTab === "anime" || state.topTab === "novelas") active = "series-hub";
+      if (state.topTab === "kids-movies") active = "movies-hub";
+      else if (state.topTab === "kids-series") active = "series-hub";
+      else if (state.topTab === "series" || state.topTab === "anime" || state.topTab === "novelas") active = "series-hub";
       else if (state.topTab === "library" || state.topTab === "history") active = "library-hub";
       else active = state.topTab || "movies";
     }
@@ -3934,6 +3963,22 @@
       });
   }
 
+  /**
+   * Infantil reproducible (2.6.39+): «Película de Animación» y «Serie de
+   * Animación» se firman bien; `xtv-kids-all` mezclaba títulos sin licencia.
+   * Se filtra el anime japonés por `originalLanguage` (regla del producto).
+   */
+  function openKids(kind) {
+    closeTopMenus();
+    var series = kind === "series";
+    state.topTab = series ? "kids-series" : "kids-movies";
+    openGrid({
+      title: series ? "Series Infantiles" : "Películas Infantiles",
+      categoryId: series ? "xtv-kids-76806" : "xtv-kids-76805",
+      excludeJapanese: true,
+    });
+  }
+
   function openLibrary() {
     closeTopMenus();
     state.topTab = "library";
@@ -3972,6 +4017,8 @@
       setTimeout(function () { Focus.first("#home-hero .primary-btn"); }, 50);
     } else if (nav === "live-hub") {
       showTopMenu("menu-live");
+    } else if (nav === "movies-hub") {
+      showTopMenu("menu-movies");
     } else if (nav === "series-hub") {
       showTopMenu("menu-series");
     } else if (nav === "library-hub") {
@@ -3982,6 +4029,10 @@
       openSports();
     } else if (nav === "movies") {
       openSection("movies", "Películas");
+    } else if (nav === "kids-movies") {
+      openKids("movies");
+    } else if (nav === "kids-series") {
+      openKids("series");
     } else if (nav === "series") {
       openSection("series", "Series");
     } else if (nav === "anime") {
@@ -4076,7 +4127,7 @@
           closeMatchCenter();
           return;
         }
-        var openMenu = ["menu-live", "menu-series", "menu-library", "live-country-menu"].some(function (id) {
+        var openMenu = ["menu-live", "menu-movies", "menu-series", "menu-library", "live-country-menu"].some(function (id) {
           var node = document.getElementById(id);
           return node && !node.hidden;
         });

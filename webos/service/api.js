@@ -211,6 +211,11 @@ function markers(ref, ep, length) {
   return fetchJson("/v1/markers", { ref, ep, len: length || 0 });
 }
 
+/** Licencia FHD firmada por el broker del VPS (la cuenta de cortesía vive allí). */
+function playVip(body) {
+  return postJson("/v1/play/vip", body || {});
+}
+
 function geeEvents(day, days) {
   return fetchJson("/v1/gee38/events", { day: day || "", days: days || 1 });
 }
@@ -243,6 +248,7 @@ module.exports = {
   postJson,
   epgBulk,
   markers,
+  playVip,
   geeEvents,
   geeSports,
   sportsAgenda,
