@@ -151,9 +151,11 @@ async function resolve(params) {
   }
 
   if (
+    RELAY &&
     !stream.isLive &&
     !Number(stream.duration) &&
     !/\.(?:m3u8|mpd)(\?|$)/i.test(stream.url || "") &&
+    !/video\/mp4/i.test(stream.mime || "") &&
     relay.available()
   ) {
     try {

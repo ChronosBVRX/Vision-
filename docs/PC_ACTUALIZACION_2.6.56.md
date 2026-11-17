@@ -4,7 +4,7 @@
 **Alcance:** `pc/` + `webos/` (el `.exe` de PC reutiliza la UI y el motor de webOS).
 **Versión anterior:** PC 0.5.0 / motor webOS 0.3.0, última edición del código el
 2026-11-12, equivalente a la app Android **2.6.28**.
-**Versión nueva:** PC **0.6.0** / motor webOS **0.4.0**, alineada con Android
+**Versión nueva:** PC **0.6.1** / motor webOS **0.4.1**, alineada con Android
 **2.6.56**.
 
 ## 1. Qué se encontró
@@ -51,7 +51,8 @@ EPG detallada. Son módulos de la app Android, no del motor de streaming.
   - Deduplicación de pistas por calidad (H.264/H.265 de la misma resolución).
 - **`api.js`**: nuevo `playVip()`.
 - **`core.js`**: pasa `episodeNumber` al resolver; precarga el mapa de columnas
-  al arrancar.
+  al arrancar y ya no sondea con FFmpeg los MP4 grandes (descargaba ~85 MB antes
+  de abrir; la duración la reporta el reproductor).
 - **`proxy.js`**:
   - Sin keep-alive en los agentes (los CDN cierran el socket tras cada Range).
   - `req.close` ya no se usa para cerrar el upstream (en Node moderno se emite
@@ -73,8 +74,8 @@ EPG detallada. Son módulos de la app Android, no del motor de streaming.
 ### Versiones y documentación
 
 - `webos/app/appinfo.json`, `webos/app/config.js`, `webos/service/package.json`:
-  **0.4.0**.
-- `pc/electron/package.json`: **0.6.0**.
+  **0.4.1**.
+- `pc/electron/package.json`: **0.6.1**.
 - `pc/electron/OTA_NOTES.md`, `pc/README.md`, `webos/README.md`: actualizados.
 
 ## 3. Verificación realizada
@@ -94,13 +95,18 @@ EPG detallada. Son módulos de la app Android, no del motor de streaming.
   **1080p** (`readyState 4`, sin errores de consola) y el OSD muestra
   «Calidad: 1080p».
 
-## 4. Lo que queda para otra entrega
+## 4. Entrega
 
-1. **Publicar el `.exe` 0.6.0** en el canal `pc-latest` (`build-single-exe.sh` +
-   `publish-pc-ota.sh`) y probar la actualización desde la 0.5.0.
-2. **Sugerencias al empezar los créditos** (2.6.54): el motor ya recibe los
+- **PC 0.6.1 publicado** en el canal `pc-latest`:
+  `VisionPlusPC-Portable.exe` (137,143,978 bytes, SHA-256
+  `f9d64d0e8ce34f2719e43450f3b706779f94cf02c299af450aad2df5cc2a142c`).
+- Manifiesto `pc-version.json` verificado con `version: 0.6.1` y el mismo SHA.
+
+## 5. Lo que queda para otra entrega
+
+1. **Sugerencias al empezar los créditos** (2.6.54): el motor ya recibe los
    marcadores, falta el modal de «Más como esta» en la UI web.
-3. **Overlay premium del reproductor** (2.6.47–49): póster y sinopsis en el OSD.
-4. **EPG detallada por canal** y **deportes DASH/DRM** (roadmap original).
-5. **Party, perfiles, descargas y control remoto**: módulos Android que exigirían
+2. **Overlay premium del reproductor** (2.6.47–49): póster y sinopsis en el OSD.
+3. **EPG detallada por canal** y **deportes DASH/DRM** (roadmap original).
+4. **Party, perfiles, descargas y control remoto**: módulos Android que exigirían
    rediseñar su almacenamiento para la web.
