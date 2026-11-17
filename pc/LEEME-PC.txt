@@ -9,7 +9,12 @@ SI RECIBISTE "VisionPlusPC-Portable.exe"
   Al abrirlo verás una pantalla de carga con barra de progreso
   mientras se prepara el motor y la interfaz.
 
-NOVEDADES 0.6.0
+NOVEDADES 0.7.0
+  - Deportes en vivo igual que la TV: Principal/Todas las ligas,
+    deportes, Hoy/Mañana, ligas, bloques En vivo/Pronto/Terminados,
+    escudos, marcador, buscador, favoritos y Canales 24/7.
+  - Selector de transmisiones con senales de GeeSports, respaldo XTV,
+    disponibilidad y recordatorios.
   - Películas y series en 1080p (FHD) y capítulo correcto en series.
   - TV en vivo reparada con la licencia nueva del portal.
   - Menús "Películas Infantiles" y "Series Infantiles".
