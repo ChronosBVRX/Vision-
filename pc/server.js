@@ -201,6 +201,7 @@ const methods = {
   epgBulk: (params) => core.epgBulk(params),
   events: (params) => core.events(params),
   sports: (params) => core.sports(params),
+  geeSports: () => core.geeSports(),
   matchStats: (params) => core.matchStats(params),
   resolveEmbed: (params) => core.resolveEmbed(params),
   markers: (params) => core.markers(params),

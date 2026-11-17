@@ -4,7 +4,7 @@
 **Alcance:** `pc/` + `webos/` (el `.exe` de PC reutiliza la UI y el motor de webOS).
 **Versión anterior:** PC 0.5.0 / motor webOS 0.3.0, última edición del código el
 2026-11-12, equivalente a la app Android **2.6.28**.
-**Versión nueva:** PC **0.6.1** / motor webOS **0.4.1**, alineada con Android
+**Versión nueva:** PC **0.7.0** / motor webOS **0.5.0**, alineada con Android
 **2.6.56**.
 
 ## 1. Qué se encontró
@@ -70,12 +70,29 @@ EPG detallada. Son módulos de la app Android, no del motor de streaming.
 - Ficha: reparto y país (`detail-extra`), con respaldo al reparto del portal.
 - Reproductor: aviso «Calidad: 1080p/720p/480p» al iniciar.
 - `resolveParams`: envía el número real de capítulo.
+- **Deportes en vivo (reescritura con paridad TV)**:
+  - fuente única GeeSports (`/v1/gee38/events` y `/v1/gee38/sports`), sin el
+    cruce difuso con la agenda `/v1/sports` que armaba tarjetas distintas;
+  - scope «Principal / Todas las ligas», chips dinámicos por deporte,
+    Hoy/Mañana, ligas con logo (todas, no solo 12), favoritos y búsqueda local;
+  - bloques **En vivo / Comienzan pronto / Terminados** con el mismo orden y
+    contadores, hero del partido, mosaico de escudos/marcador, estado con
+    minuto/hora y pie de TV/señales;
+  - selector de transmisiones con filas GeeSports, badge
+    Disponible/Caído/Sin verificar, `token_api` que se resuelve al abrir,
+    respaldo XTV, marca de la señal sintonizada y recordatorios;
+  - pestaña **Canales** con los grupos 24/7 de GeeSports, disponibilidad y su
+    propio selector;
+  - al volver del reproductor se reabre el partido con la señal marcada;
+  - refresco de la agenda cada 2 min y reloj cada 30 s.
+- **Servicio**: `geeSports` en `api.js`, `core.js`, `dev-server.js` y
+  `pc/server.js`.
 
 ### Versiones y documentación
 
 - `webos/app/appinfo.json`, `webos/app/config.js`, `webos/service/package.json`:
-  **0.4.1**.
-- `pc/electron/package.json`: **0.6.1**.
+  **0.5.0**.
+- `pc/electron/package.json`: **0.7.0**.
 - `pc/electron/OTA_NOTES.md`, `pc/README.md`, `webos/README.md`: actualizados.
 
 ## 3. Verificación realizada
@@ -94,13 +111,18 @@ EPG detallada. Son módulos de la app Android, no del motor de streaming.
   la ficha muestra sinopsis, reparto y país; «Reproducir» abre el video en
   **1080p** (`readyState 4`, sin errores de consola) y el OSD muestra
   «Calidad: 1080p».
+- **Deportes**: 99 eventos de hoy + 23 de mañana; «Principal» y «Todas las
+  ligas»; búsqueda «mexico» deja `Mexico vs Jamaica`; la pestaña Canales carga
+  33 grupos / 86 canales; un partido en vivo abre el selector con badges
+  Disponible/Caído, reproduce (`readyState 4`) y al volver reabre el mismo
+  selector con la señal «Seleccionada».
 
 ## 4. Entrega
 
-- **PC 0.6.1 publicado** en el canal `pc-latest`:
-  `VisionPlusPC-Portable.exe` (137,143,978 bytes, SHA-256
-  `f9d64d0e8ce34f2719e43450f3b706779f94cf02c299af450aad2df5cc2a142c`).
-- Manifiesto `pc-version.json` verificado con `version: 0.6.1` y el mismo SHA.
+- **PC 0.7.0 publicado** en el canal `pc-latest`:
+  `VisionPlusPC-Portable.exe` (137,150,396 bytes, SHA-256
+  `2fa2b42d1a996abf3047cd875934358299f93c86a66e26250753624e3808b747`).
+- Manifiesto `pc-version.json` verificado con `version: 0.7.0` y el mismo SHA.
 
 ## 5. Lo que queda para otra entrega
 

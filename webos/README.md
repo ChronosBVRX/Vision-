@@ -4,7 +4,7 @@ Port de Vision+ a LG webOS usando la misma arquitectura que el port de XuperTV:
 una app web (HTML/CSS/JS) + un servicio Luna en Node.js que habla con el API
 del VPS y con el portal XTV, y publica el video por un proxy HTTP local.
 
-> Estado: **port funcional v0.4.1**. Catálogo, búsqueda, ficha con
+> Estado: **port funcional v0.5.0**. Catálogo, búsqueda, ficha con
 > temporadas/capítulos, TV en vivo con EPG, deportes/agenda, VOD/live en 1080p,
 > audio y subtítulos por idioma, calidades, omitir intro, «Seguir viendo» y
 > «Mi lista». Probado en el **webOS TV 26 Simulator** (UI, VOD y TV en vivo)
@@ -167,9 +167,18 @@ Si el instalador rechaza el paquete sin firmar, empaquétalo con
   menús, con paginación y sin anime japonés (`originalLanguage == ja`).
 - **Fichas**: sinopsis es-MX, reparto y país de TMDB; aviso de calidad real.
 - TV en vivo con «Ahora: …» desde el EPG (`/v1/epg/bulk`).
-- Deportes: eventos de GeeSports del día y agenda de `/v1/sports`; las señales
-  HLS compatibles se reproducen con selector de enlace. Los DASH/DRM se marcan
-  como «Sin señal» para webOS.
+- **Deportes en vivo (paridad con TV)**: pantalla única sobre GeeSports con
+  «Principal / Todas las ligas», chips por deporte, días Hoy/Mañana, ligas con
+  logo, bloques En vivo / Comienzan pronto / Terminados, mosaico de escudos y
+  marcador, hero del partido destacado, favoritos, búsqueda local y pestaña
+  **Canales 24/7** con sus grupos y disponibilidad.
+- **Selector de transmisiones**: filas propias de GeeSports con badge
+  Disponible/Caído/Sin verificar, `token_api` que se resuelve al abrir, respaldo
+  XTV del servidor, marca de la señal que se está viendo y avisos de «aún no
+  comienza»/«terminado» con recordatorios. Al volver del reproductor, el mismo
+  partido reabre su selector.
+- **Match Center**: el reproductor conserva el HUD y las estadísticas ESPN del
+  partido también cuando se entra desde Deportes.
 - Audio y subtítulos por idioma: el botón Audio cambia de pista con ffmpeg; el
   botón Subtítulos recorre off/es/en.
 - Calidades: si el portal ofrece más de una pista, el botón Calidad re-resuelve

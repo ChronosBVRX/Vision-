@@ -1,6 +1,6 @@
 {
   "name": "visionplus-pc",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Vision+ PC - port portable de Vision+ (Smart TV / webOS) para Windows",
   "main": "main.js",
   "author": "ChronosBVRX",

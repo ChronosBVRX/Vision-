@@ -63,18 +63,27 @@
       favorites: {},
     },
     sports: {
-      tab: "events",
       events: [],
-      agenda: [],
-      matches: [],
+      groups: [],
       loading: false,
-      sport: "principal",
-      day: "today",
+      initialized: false,
+      category: "Football",
+      day: "",
+      showAll: false,
       league: "",
+      favoritesOnly: false,
+      searchQuery: "",
+      channels: false,
+      pickingId: null,
+      playingUrl: "",
       favorites: {},
-      selected: null,
+      reminders: {},
       dialogReturn: null,
+      focusChipKey: "",
       statsCache: {},
+      tickTimer: null,
+      refreshTimer: null,
+      at: 0,
     },
     matchCenter: {
       info: null,
@@ -555,6 +564,10 @@
   function goBack() {
     if ($("#match-center-dialog") && !$("#match-center-dialog").hidden) {
       closeMatchCenter();
+      return;
+    }
+    if (state.screen === "sports" && $("#sports-search-dialog") && !$("#sports-search-dialog").hidden) {
+      closeSportsSearch();
       return;
     }
     if (state.screen === "sports" && !$("#sports-dialog").hidden) {
@@ -1698,9 +1711,26 @@
         Focus.first(".vt-channel-card");
       }, 60);
     } else if (returnScreen === "sports") {
+      var pickedEvent = null;
+      if (state.sports.pickingId) {
+        (state.sports.events || []).some(function (event) {
+          if (event.id === state.sports.pickingId) {
+            pickedEvent = event;
+            return true;
+          }
+          return false;
+        });
+      }
       setTimeout(function () {
-        Focus.first("#sports-content .vt-match-card");
-      }, 60);
+        if (state.screen !== "sports") return;
+        if (pickedEvent) {
+          openSportsDialog(pickedEvent);
+          return;
+        }
+        var focused = $("#sports-content .vt-match-card") ||
+          $("#sports-content .vt-gee-channel");
+        if (focused) Focus.set(focused);
+      }, 80);
     } else {
       setTimeout(function () {
         Focus.first("#home-hero .primary-btn");
@@ -2760,55 +2790,562 @@
     "NBA", "NFL", "MLB", "NHL", "F1", "MotoGP", "UFC",
   ];
 
-  function openSports() {
-    closeTopMenus();
-    showScreen("sports");
-    state.sports.sport = "principal";
-    state.sports.day = "today";
-    state.sports.league = "";
-    state.sports.matches = [];
-    state.sports.events = [];
-    $("#sports-hero").innerHTML = '<div class="hero-loading"><div class="spinner"></div><span>Cargando agenda deportiva</span></div>';
-    $("#sports-content").innerHTML = "";
-    $("#sports-status").textContent = "Cargando deportes…";
-    $("#sports-count").textContent = "";
-    loadSports();
+  /* ============================ deportes (GeeSports) ============================ */
+
+  var GEE_MAIN_LEAGUES = [
+    "Liga MX", "UEFA Champions League", "Premier League", "LaLiga", "Serie A",
+    "Bundesliga", "Ligue 1", "Copa Libertadores", "Copa Sudamericana",
+    "Liga Profesional Argentina", "Brasileirão", "MLS", "Liga de Expansión MX",
+    "Eredivisie", "Primeira Liga", "UEFA Europa League", "Copa del Mundo",
+    "Eurocopa", "Copa América", "Concacaf Nations League", "Copa Oro",
+    "NBA", "NFL", "MLB", "NHL", "Formula 1", "MotoGP", "NASCAR",
+    "UFC", "MMA", "Boxeo",
+  ];
+
+  var GEE_ALIASES = {
+    "champions league": "UEFA Champions League",
+    "uefa champions league": "UEFA Champions League",
+    "uefa champions": "UEFA Champions League",
+    "liga profesional de futbol": "Liga Profesional Argentina",
+    "liga profesional argentina": "Liga Profesional Argentina",
+    "ligapro": "Liga Profesional Argentina",
+    "brasileirao": "Brasileirão",
+    "campeonato brasileiro serie a": "Brasileirão",
+    "primeira liga": "Primeira Liga",
+    "liga portugal betclic": "Primeira Liga",
+    "eredivisie": "Eredivisie",
+    "vriendenloterij eredivisie": "Eredivisie",
+    "liga de expansion mx": "Liga de Expansión MX",
+    "liga de expansion": "Liga de Expansión MX",
+    "major league soccer": "MLS",
+    "mls": "MLS",
+    "fifa world cup": "Copa del Mundo",
+    "copa mundial": "Copa del Mundo",
+    "world cup": "Copa del Mundo",
+    "uefa euro": "Eurocopa",
+    "eurocopa": "Eurocopa",
+    "uefa eurocopa": "Eurocopa",
+    "copa america": "Copa América",
+    "concacaf nations league": "Concacaf Nations League",
+    "concacaf gold cup": "Copa Oro",
+    "copa oro": "Copa Oro",
+    "formula one": "Formula 1",
+    "formula 1": "Formula 1",
+    "f1": "Formula 1",
+    "motogp": "MotoGP",
+    "nascar": "NASCAR",
+    "nba": "NBA",
+    "nfl": "NFL",
+    "mlb": "MLB",
+    "nhl": "NHL",
+    "ufc": "UFC",
+    "mixed martial arts": "MMA",
+    "boxing": "Boxeo",
+    "boxeo": "Boxeo",
+  };
+
+  var GEE_SECONDARY = [
+    " 2", " ii", " b", "women", "femen", "femenil", "u17", "u18", "u19",
+    "u20", "u21", "u23", "youth", "juvenil", "reserve", "reservas",
+    "championship", "segunda", "primera b", "serie b", "2 bundesliga",
+    "ligue 2", "laliga 2", "liga 2", "liga 1 te apuesto", "primera a",
+    "primera division", "segunda division", "a-league", "k league",
+    "j1 league", "j2 league", "allsvenskan", "super lig", "süper lig",
+    "scottish", "russian premier", "kenya premier", "indian super",
+    "canadian premier", "nwsl", "wsl", "liga f", "liga mx femenil",
+  ];
+
+  var GEE_CATEGORY_LABELS = {
+    "football": "Fútbol",
+    "basketball": "Básquet",
+    "american football": "Americano",
+    "motorsport": "Motor",
+    "motorsports": "Motor",
+    "baseball": "Béisbol",
+    "hockey": "Hockey",
+    "tennis": "Tenis",
+    "fighting": "Peleas",
+    "pelea": "Peleas",
+    "peleas": "Peleas",
+    "boxing": "Boxeo",
+    "boxeo": "Boxeo",
+    "mma": "MMA",
+    "rugby": "Rugby",
+    "volleyball": "Voleibol",
+    "handball": "Balonmano",
+    "cricket": "Cricket",
+    "aussie rules": "Aussie rules",
+    "other": "Otros",
+  };
+
+  function geeFold(value) {
+    return String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
   }
 
-  function loadSports() {
-    if (state.sports.loading) return;
-    state.sports.loading = true;
-    Promise.all([
-      request("sports", { days: 8 }, 45000).catch(function () { return { matches: [] }; }),
-      request("events", { day: todayMexico(), days: 2 }, 45000).catch(function () { return { events: [] }; }),
-    ])
-      .then(function (results) {
-        state.sports.matches = (results[0] && results[0].matches) || [];
-        state.sports.events = (results[1] && results[1].events) || [];
-        state.sports.loading = false;
-        renderSportsFilters();
-        renderSports();
-      })
-      .catch(function (error) {
-        state.sports.loading = false;
-        $("#sports-status").textContent = "No se pudieron cargar los deportes: " + error.message;
-      });
+  function geeCanonical(label) {
+    var clean = String(label || "").split(",")[0].trim();
+    if (!clean) return "";
+    var folded = geeFold(clean);
+    if (GEE_ALIASES[folded]) return GEE_ALIASES[folded];
+    for (var i = 0; i < GEE_MAIN_LEAGUES.length; i += 1) {
+      if (geeFold(GEE_MAIN_LEAGUES[i]) === folded) return GEE_MAIN_LEAGUES[i];
+    }
+    return clean;
   }
 
-  function sportsLeagueName(match) {
-    return (match && match.league && match.league.name) || "Deportes";
+  function geePriority(label) {
+    var folded = geeFold(geeCanonical(label));
+    for (var i = 0; i < GEE_MAIN_LEAGUES.length; i += 1) {
+      if (geeFold(GEE_MAIN_LEAGUES[i]) === folded) return i;
+    }
+    return GEE_MAIN_LEAGUES.length + 100;
   }
 
-  function sportsLeagueLogo(match) {
-    return (match && match.league && match.league.logo) || "";
+  function geeIsMain(event) {
+    if (!event) return false;
+    var tier = Number(event.tier);
+    if (tier >= 1 && tier <= 3) return tier === 1;
+    var label = geeLeagueLabel(event);
+    if (label) {
+      for (var i = 0; i < GEE_MAIN_LEAGUES.length; i += 1) {
+        if (geeFold(GEE_MAIN_LEAGUES[i]) === geeFold(label)) return true;
+      }
+    }
+    var category = geeFold(event.category);
+    return !label && [
+      "football", "basketball", "american football", "baseball", "hockey",
+      "motorsports", "motorsport", "tennis", "fighting", "boxing", "mma",
+    ].indexOf(category) >= 0;
   }
 
-  function sportsTeamName(team) {
-    return (team && (team.name || team.short)) || "";
+  function geeStartMs(event) {
+    if (!event || !/^\d{4}-\d{2}-\d{2}$/.test(event.dateIso || "")) return null;
+    var date = event.dateIso.split("-").map(function (part) { return parseInt(part, 10); });
+    var time = /^\d{2}:\d{2}/.test(event.time || "") ? event.time : "00:00:00";
+    var clock = time.split(":").map(function (part) { return parseInt(part, 10); });
+    var ms = Date.UTC(date[0], date[1] - 1, date[2], (clock[0] || 0) + 6, clock[1] || 0, clock[2] || 0);
+    return isFinite(ms) ? ms : null;
   }
 
-  function sportsKickoff(match) {
-    try { return new Date(match.kickoff).getTime(); } catch (error) { return 0; }
+  function geePhase(event, nowMs) {
+    var now = nowMs || Date.now();
+    if (!event) return "soon";
+    if (event.live) return "live";
+    if (String(event.status || "").toLowerCase() === "post") return "done";
+    var start = geeStartMs(event);
+    if (start !== null) {
+      if (now >= start && now < start + 3 * 60 * 60 * 1000) return "live";
+      if (now < start) return "soon";
+      return "done";
+    }
+    return String(event.status || "").toLowerCase() === "in" ? "live" : "soon";
+  }
+
+  function geePlayable(event, nowMs) {
+    return geePhase(event, nowMs) === "live";
+  }
+
+  function geeBlockNote(event, nowMs) {
+    var phase = geePhase(event, nowMs);
+    return phase === "soon"
+      ? "Aún no comienza · podrás verlo cuando el partido esté en vivo."
+      : phase === "done" ? "El partido ya terminó." : "";
+  }
+
+  function geeSections(events, nowMs) {
+    var groups = { live: [], soon: [], done: [] };
+    (events || []).forEach(function (event) {
+      groups[geePhase(event, nowMs)].push(event);
+    });
+    groups.live.sort(function (a, b) {
+      return geePriority(geeLeagueLabel(a)) - geePriority(geeLeagueLabel(b)) ||
+        (geeStartMs(a) || Infinity) - (geeStartMs(b) || Infinity) ||
+        String(a.name).localeCompare(String(b.name));
+    });
+    groups.soon.sort(function (a, b) {
+      return (geeStartMs(a) || Infinity) - (geeStartMs(b) || Infinity) ||
+        geePriority(geeLeagueLabel(a)) - geePriority(geeLeagueLabel(b)) ||
+        String(a.name).localeCompare(String(b.name));
+    });
+    groups.done.sort(function (a, b) {
+      return (geeStartMs(b) || 0) - (geeStartMs(a) || 0) ||
+        geePriority(geeLeagueLabel(a)) - geePriority(geeLeagueLabel(b)) ||
+        String(a.name).localeCompare(String(b.name));
+    });
+    var out = [];
+    if (groups.live.length) out.push({ title: "En vivo", events: groups.live });
+    if (groups.soon.length) out.push({ title: "Comienzan pronto", events: groups.soon });
+    if (groups.done.length) out.push({ title: "Terminados", events: groups.done });
+    return out;
+  }
+
+  function geeTeams(event) {
+    var home = (event && (event.homeName || event.teamA) || "").trim();
+    var away = (event && (event.awayName || event.teamB) || "").trim();
+    var valid = home && away &&
+      home.toLowerCase() !== String(event.name || "").toLowerCase() &&
+      away.toLowerCase() !== String(event.name || "").toLowerCase();
+    return valid ? [home, away] : ["", ""];
+  }
+
+  function geeScore(event) {
+    if (!event || event.scoreHome === null || event.scoreHome === undefined ||
+        event.scoreAway === null || event.scoreAway === undefined) {
+      return "VS";
+    }
+    return event.scoreHome + " - " + event.scoreAway;
+  }
+
+  function geeClock(ms) {
+    if (!ms) return "";
+    var date = new Date(ms - 6 * 60 * 60 * 1000);
+    return String(date.getUTCHours()).padStart(2, "0") + ":" +
+      String(date.getUTCMinutes()).padStart(2, "0");
+  }
+
+  function geeDurationMinutes(category) {
+    var value = geeFold(category);
+    if (value === "football" || value === "soccer" || value === "futbol") return 120;
+    if (value === "american football" || value === "futbol americano") return 195;
+    if (value === "basketball" || value === "basquetbol" || value === "basquet") return 150;
+    if (value === "baseball" || value === "beisbol") return 180;
+    if (value === "hockey" || value === "tennis" || value === "tenis") return 150;
+    if (value === "fighting" || value === "boxing" || value === "mma" ||
+        value === "pelea" || value === "peleas" || value === "boxeo") return 180;
+    if (value === "motorsports" || value === "motorsport" || value === "formula 1" ||
+        value === "formula one" || value === "motogp" || value === "moto gp" ||
+        value === "nascar") return 120;
+    if (value === "rugby") return 120;
+    if (value === "cricket") return 240;
+    return 120;
+  }
+
+  function geeDetailSuffix(detail) {
+    var clean = String(detail || "").trim();
+    if (!clean || clean.toLowerCase() === "in" || clean.toLowerCase() === "en vivo") return "";
+    return " · " + clean;
+  }
+
+  function geeLiveLabel(event) {
+    var start = geeStartMs(event);
+    if (!start) return "EN VIVO" + geeDetailSuffix(event.detail);
+    var end = start + geeDurationMinutes(event.category) * 60 * 1000;
+    return "EN VIVO · " + geeClock(start) + "–" + geeClock(end) + geeDetailSuffix(event.detail);
+  }
+
+  function geeLiveDetail(event) {
+    var start = geeStartMs(event);
+    if (!start) return event.detail || "EN VIVO";
+    return "Empezó " + geeClock(start) + " · Termina ~" +
+      geeClock(start + geeDurationMinutes(event.category) * 60 * 1000) +
+      geeDetailSuffix(event.detail);
+  }
+
+  function geeDayLabel(iso) {
+    var today = todayMexico();
+    if (iso === today) return "Hoy";
+    var tomorrow = sportsDateKey(Date.now() + 86400000);
+    if (iso === tomorrow) return "Mañana";
+    if (!iso) return "";
+    try {
+      return new Intl.DateTimeFormat("es-MX", {
+        weekday: "short", day: "2-digit", month: "short",
+        timeZone: "America/Mexico_City",
+      }).format(new Date(iso + "T12:00:00-06:00"));
+    } catch (error) {
+      return iso;
+    }
+  }
+
+  function geeState(event) {
+    var phase = geePhase(event);
+    if (phase === "live") return geeLiveLabel(event);
+    if (String(event.status || "").toLowerCase() === "post") return "Final";
+    var day = event.dateIso === todayMexico()
+      ? "Hoy"
+      : (event.dateText || event.dateIso || "");
+    var time = String(event.time || "").slice(0, 5);
+    return [day, time].filter(Boolean).join(" ");
+  }
+
+  function geeEventWhen(event) {
+    if (geePhase(event) === "live") return geeLiveDetail(event);
+    var day = event.dateIso === todayMexico()
+      ? "Hoy"
+      : (event.dateText || event.dateIso || "");
+    return [day, String(event.time || "").slice(0, 5)].filter(Boolean).join(" ");
+  }
+
+  function geeStreams(event) {
+    var alive = Number(event && event.alive) || 0;
+    if (alive <= 0) return "Sin señal por ahora";
+    return alive === 1 ? "1 señal disponible" : alive + " señales disponibles";
+  }
+
+  function geeMonogram(name) {
+    var words = String(name || "").trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return "?";
+    var meaningful = words.filter(function (word) { return word.length > 2; });
+    var base = (meaningful.length >= 2 ? meaningful : words).slice(0, 2);
+    var letters = base.map(function (word) { return word.charAt(0).toUpperCase(); }).join("");
+    return (letters.length >= 2 ? letters : String(name).slice(0, 2).toUpperCase()) || "?";
+  }
+
+  function geeCategoryLabel(category) {
+    return GEE_CATEGORY_LABELS[String(category || "").toLowerCase()] || category || "Deportes";
+  }
+
+  function geeCategoryIcon(category) {
+    var value = String(category || "").toLowerCase();
+    if (value === "football") return "i-soccer";
+    if (value === "basketball") return "i-basket";
+    if (value === "american football") return "i-football";
+    if (value === "baseball") return "i-baseball";
+    if (value === "hockey") return "i-hockey";
+    if (value === "motorsport" || value === "motorsports") return "i-motor";
+    if (value === "tennis") return "i-tennis";
+    if (value === "fighting" || value === "pelea" || value === "peleas" ||
+        value === "mma" || value === "boxing" || value === "boxeo") return "i-fight";
+    return "i-trophy";
+  }
+
+  function geeLeagueLabel(event) {
+    return geeCanonical((event && (event.leagueLabel || (event.name || "").split(",")[0])) || "");
+  }
+
+  function geeLeagueNames(events) {
+    var seen = {};
+    var list = [];
+    (events || []).forEach(function (event) {
+      var label = geeLeagueLabel(event);
+      if (!label || seen[label]) return;
+      seen[label] = true;
+      list.push(label);
+    });
+    return list.sort(function (a, b) {
+      return geePriority(a) - geePriority(b) || a.localeCompare(b);
+    });
+  }
+
+  function geeLeagueLogos(events) {
+    var logos = {};
+    (events || []).forEach(function (event) {
+      var label = geeLeagueLabel(event);
+      if (label && event.leagueLogo && !logos[label]) logos[label] = event.leagueLogo;
+    });
+    return logos;
+  }
+
+  function geeMatchesLeague(event, league) {
+    return !league || geeFold(geeLeagueLabel(event)) === geeFold(league);
+  }
+
+  function geeNormalizeLink(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    var parsed = sportsLinkUrl(raw);
+    var tokenApi = String(raw.token_api || raw.tokenApi || "").trim();
+    var alive = raw.alive === true ? true : raw.alive === false ? false : null;
+    var type = String(raw.type || "hls").toLowerCase();
+    return {
+      name: String(raw.name || "").trim(),
+      link: parsed.url || String(raw.link || raw.url || "").trim(),
+      url: parsed.url || String(raw.url || raw.link || "").trim(),
+      headers: parsed.headers || {},
+      type: type,
+      drm: String(raw.drm || ""),
+      alive: alive,
+      tokenApi: tokenApi,
+      resolvable: Boolean(raw.resolvable || tokenApi),
+    };
+  }
+
+  function geeNormalizeXtv(raw) {
+    if (!raw) return null;
+    var code = String(raw.code || "").trim().replace(/^xtvlive:/i, "");
+    var name = String(raw.name || "").trim();
+    if (!code || !name) return null;
+    return {
+      name: name,
+      code: code,
+      note: String(raw.note || "").trim(),
+      recommended: Boolean(raw.recommended),
+    };
+  }
+
+  function geeNormalizeEvent(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    var name = String(raw.event || raw.name || "").trim();
+    if (!name) return null;
+    var links = (raw.links || []).map(geeNormalizeLink).filter(Boolean);
+    var xtv = (raw.xtv || []).map(geeNormalizeXtv).filter(Boolean);
+    var teamA = String(raw.team_a || raw.teamA || "").trim();
+    var teamB = String(raw.team_b || raw.teamB || "").trim();
+    var homeName = String(raw.home_name || raw.homeName || "").trim() || teamA;
+    var awayName = String(raw.away_name || raw.awayName || "").trim() || teamB;
+    var hasTeams = homeName && awayName &&
+      homeName.toLowerCase() !== name.toLowerCase() &&
+      awayName.toLowerCase() !== name.toLowerCase();
+    var score = raw.score && typeof raw.score === "object" ? raw.score : {};
+    var scoreHome = score.home === null || score.home === undefined
+      ? (raw.scoreHome === null || raw.scoreHome === undefined ? null : Number(raw.scoreHome))
+      : Number(score.home);
+    var scoreAway = score.away === null || score.away === undefined
+      ? (raw.scoreAway === null || raw.scoreAway === undefined ? null : Number(raw.scoreAway))
+      : Number(score.away);
+    return {
+      id: String(raw.id || [name, teamA, teamB, raw.date, raw.time].join("|")),
+      category: String(raw.category || "").trim(),
+      name: name,
+      logo: String(raw.logo || "").trim(),
+      teamA: teamA,
+      teamB: teamB,
+      dateIso: String(raw.date_iso || raw.dateIso || "").trim(),
+      dateText: String(raw.date || "").trim(),
+      time: String(raw.time || "").trim(),
+      alive: Number(raw.alive) || 0,
+      total: Number(raw.total) || links.length,
+      links: links,
+      homeName: hasTeams ? homeName : "",
+      awayName: hasTeams ? awayName : "",
+      homeLogo: (hasTeams ? String(raw.home_logo || raw.homeLogo || "").trim() : "") ||
+        (hasTeams ? String(raw.flag_a || raw.flagA || "").trim() : ""),
+      awayLogo: (hasTeams ? String(raw.away_logo || raw.awayLogo || "").trim() : "") ||
+        (hasTeams ? String(raw.flag_b || raw.flagB || "").trim() : ""),
+      leagueLabel: String(raw.league_label || raw.leagueLabel || "").trim(),
+      leagueLogo: String(raw.league_logo || raw.leagueLogo || "").trim(),
+      leagueId: String(raw.league_id || raw.leagueId || "").trim(),
+      broadcasts: Array.isArray(raw.broadcasts)
+        ? raw.broadcasts.map(function (value) { return String(value || "").trim(); }).filter(Boolean)
+        : [],
+      scoreHome: isFinite(scoreHome) ? scoreHome : null,
+      scoreAway: isFinite(scoreAway) ? scoreAway : null,
+      live: Boolean(score.live || raw.live),
+      detail: String(score.detail || raw.detail || "").trim(),
+      status: String(score.status || raw.status || "").trim(),
+      tier: Number(raw.tier) || 0,
+      visible: raw.visible !== false,
+      xtv: xtv,
+    };
+  }
+
+  function geeNormalizeChannel(raw) {
+    if (!raw) return null;
+    var links = (raw.links || []).map(geeNormalizeLink).filter(Boolean);
+    return {
+      name: String(raw.name || "").trim(),
+      logo: String(raw.logo || "").trim(),
+      links: links,
+    };
+  }
+
+  function geeNormalizeGroup(raw) {
+    if (!raw) return null;
+    var name = String(raw.name || "").trim();
+    if (!name) return null;
+    return {
+      id: String(raw.id || raw.cid || name),
+      name: name,
+      logo: String(raw.logo || "").trim(),
+      alive: Number(raw.alive) || 0,
+      total: Number(raw.total) || 0,
+      channels: (raw.channels || []).map(geeNormalizeChannel).filter(Boolean),
+    };
+  }
+
+  function geeEventTitle(event) {
+    var teams = geeTeams(event);
+    return teams[0] && teams[1] ? teams[0] + " vs " + teams[1] : event.name;
+  }
+
+  function geeEventSubtitle(event) {
+    return [geeLeagueLabel(event), geeEventWhen(event), geeScoreLine(event)]
+      .filter(Boolean).join(" · ");
+  }
+
+  function geeScoreLine(event) {
+    var score = event.scoreHome !== null && event.scoreAway !== null
+      ? event.scoreHome + " - " + event.scoreAway : "";
+    return [score, String(event.detail || "").trim()].filter(Boolean).join(" · ");
+  }
+
+  function geeSportInfo(event) {
+    return {
+      title: geeEventTitle(event),
+      league: geeLeagueLabel(event),
+      scoreLine: geeScoreLine(event) || "VS",
+      guide: event.broadcasts || [],
+      homeName: (geeTeams(event)[0] || event.name),
+      awayName: (geeTeams(event)[1] || ""),
+      homeLogo: event.homeLogo || "",
+      awayLogo: event.awayLogo || "",
+      homeScore: event.scoreHome,
+      awayScore: event.scoreAway,
+      dateIso: event.dateIso,
+      leagueId: event.leagueId,
+      eventId: event.id,
+      signalName: "",
+      signalType: "HLS",
+      stats: null,
+      loading: false,
+      hudPage: 0,
+    };
+  }
+
+  function geeTeamKey(name) {
+    var key = geeFold(name);
+    ["club ", "fc ", "cf ", "cd ", "sc ", "ac ", "deportivo "].forEach(function (prefix) {
+      if (key.indexOf(prefix) === 0) key = key.slice(prefix.length);
+    });
+    return key.trim();
+  }
+
+  function geeFavoriteKeys(event) {
+    var teams = geeTeams(event);
+    if (teams[0] && teams[1]) {
+      return [geeTeamKey(teams[0]), geeTeamKey(teams[1])].filter(Boolean);
+    }
+    return [geeFold(event.name)].filter(Boolean);
+  }
+
+  function geeIsFavorite(event) {
+    var favorites = state.sports.favorites || {};
+    return geeFavoriteKeys(event).some(function (key) { return Boolean(favorites[key]); });
+  }
+
+  function geeToggleFavorite(event) {
+    var keys = geeFavoriteKeys(event);
+    if (!keys.length) return;
+    var favorites = state.sports.favorites || {};
+    var active = keys.some(function (key) { return Boolean(favorites[key]); });
+    keys.forEach(function (key) {
+      if (active) delete favorites[key];
+      else favorites[key] = true;
+    });
+    state.sports.favorites = favorites;
+    writeJson("vp_webos_sports_fav", favorites);
+    toast(active ? "Equipo quitado de favoritos." : "Equipo favorito guardado.");
+  }
+
+  function geeSearchMatches(event, query) {
+    var wanted = geeFold(query);
+    if (!wanted) return true;
+    var haystack = geeFold([
+      event.name, event.homeName, event.awayName, event.leagueLabel,
+      event.category, (event.broadcasts || []).join(" "),
+      (event.links || []).map(function (link) { return link.name; }).join(" "),
+    ].join(" "));
+    return wanted.split(/\s+/).filter(Boolean).every(function (word) {
+      return haystack.indexOf(word) >= 0;
+    });
+  }
+
+  function sportsDayLabel(iso) {
+    return geeDayLabel(iso);
   }
 
   function sportsDateKey(ms) {
@@ -2819,367 +3356,750 @@
     } catch (error) { return ""; }
   }
 
+  function sportsTeamName(team) {
+    return (team && (team.name || team.short)) || "";
+  }
+
+  function sportsLeagueName(match) {
+    return (match && match.league && match.league.name) || "Deportes";
+  }
+
+  function sportsLeagueLogo(match) {
+    return (match && match.league && match.league.logo) || "";
+  }
+
+  function sportsKickoff(match) {
+    try { return new Date(match.kickoff).getTime(); } catch (error) { return 0; }
+  }
+
   function sportsTimeLabel(match) {
     var ms = sportsKickoff(match);
     if (!ms) return "";
-    var day = sportsDateKey(ms);
-    var today = todayMexico();
-    var tomorrow = new Date(Date.now() + 86400000);
-    var tomorrowKey = sportsDateKey(tomorrow.getTime());
-    var prefix = day === today ? "Hoy" : day === tomorrowKey ? "Mañana" : "";
-    try {
-      var time = new Intl.DateTimeFormat("es-MX", {
-        hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Mexico_City",
-      }).format(new Date(ms));
-      return (prefix ? prefix + " " : "") + time;
-    } catch (error) { return prefix; }
+    return geeClock(ms);
   }
 
-  function sportsPhase(match) {
-    var status = String((match && match.status) || "").toLowerCase();
-    if (status === "in" || status === "live") return "live";
-    if (status === "post" || status === "final") return "done";
-    var ms = sportsKickoff(match);
-    if (!ms) return "soon";
-    var now = Date.now();
-    if (ms <= now && now < ms + 3 * 60 * 60 * 1000) return "live";
-    if (now >= ms + 3 * 60 * 60 * 1000) return "done";
-    return "soon";
-  }
-
-  function sportsMatchesForFilter() {
-    var day = state.sports.day;
-    var today = todayMexico();
-    var tomorrow = sportsDateKey(Date.now() + 86400000);
-    var list = (state.sports.matches || []).filter(function (match) {
-      var league = sportsLeagueName(match);
-      if (state.sports.sport === "principal") {
-        if (!SPORTS_TOP_LEAGUES.some(function (name) { return league.toLowerCase() === name.toLowerCase(); })) return false;
-      } else if (state.sports.sport === "futbol") {
-        if (sportsPhase(match) === "done" && day === "today") { /* se conserva para la sección terminados */ }
-      } else if (state.sports.sport === "basquet") {
-        if (!/NBA|Basket|Básquet|EuroLeague/i.test(league)) return false;
-      } else if (state.sports.sport === "hockey") {
-        if (!/NHL|Hockey/i.test(league)) return false;
-      } else if (state.sports.sport === "favoritos") {
-        var favorites = state.sports.favorites || {};
-        var home = sportsTeamName(match.home);
-        var away = sportsTeamName(match.away);
-        if (!favorites[home] && !favorites[away]) return false;
-      }
-      if (state.sports.league && league !== state.sports.league) return false;
-      var key = sportsDateKey(sportsKickoff(match));
-      if (day === "today" && key !== today) return false;
-      if (day === "tomorrow" && key !== tomorrow) return false;
-      return true;
+  function sportsCategories() {
+    var counts = {};
+    (state.sports.events || []).forEach(function (event) {
+      if (!event.visible) return;
+      var category = event.category || "";
+      if (!category) return;
+      counts[category] = (counts[category] || 0) + 1;
+    });
+    var list = Object.keys(counts);
+    list.sort(function (a, b) {
+      var footballA = a.toLowerCase() === "football" ? 0 : 1;
+      var footballB = b.toLowerCase() === "football" ? 0 : 1;
+      return footballA - footballB || counts[b] - counts[a] || a.localeCompare(b);
     });
     return list;
   }
 
-  function renderSportsFilters() {
-    var sports = [
-      ["principal", "Principal", "#i-filter"],
-      ["futbol", "Fútbol", "#i-trophy"],
-      ["basquet", "Básquet", "#i-basket"],
-      ["hockey", "Hockey", "#i-hockey"],
-      ["favoritos", "Favoritos", "#i-star"],
-      ["buscar", "Buscar", "#i-search"],
-      ["canales", "Canales", "#i-tv"],
-    ];
-    var holder = $("#sports-tabs");
-    holder.innerHTML = "";
-    sports.forEach(function (entry) {
-      var button = el("button", "vt-sport-pill" + (state.sports.sport === entry[0] ? " is-active" : ""));
-      button.setAttribute("data-focusable", "true");
-      button.innerHTML = '<svg class="icon"><use href="' + entry[2] + '"/></svg><span>' + entry[1] + "</span>";
-      button.addEventListener("click", function () {
-        if (entry[0] === "buscar") { openSearch(); return; }
-        if (entry[0] === "canales") { openLive(); return; }
-        state.sports.sport = entry[0];
-        state.sports.league = "";
-        renderSportsFilters();
-        renderSports();
-      });
-      holder.appendChild(button);
+  function sportsEnsureCategory() {
+    var day = state.sports.day || todayMexico();
+    var dayEvents = (state.sports.events || []).filter(function (event) {
+      return event.visible && event.dateIso === day &&
+        (state.sports.showAll || geeIsMain(event));
     });
+    if (!dayEvents.length) return;
+    var category = state.sports.category;
+    if (category && dayEvents.some(function (event) {
+      return event.category.toLowerCase() === category.toLowerCase();
+    })) {
+      return;
+    }
+    state.sports.category = dayEvents[0].category || "";
+  }
 
-    var days = [["today", "Hoy"], ["tomorrow", "Mañana"], ["all", "Todas"]];
+  function sportsBaseEvents() {
+    var day = state.sports.day || todayMexico();
+    var category = state.sports.category;
+    var favoritesOnly = state.sports.favoritesOnly;
+    var query = state.sports.searchQuery;
+    return (state.sports.events || []).filter(function (event) {
+      if (!event.visible) return false;
+      if (event.dateIso !== day) return false;
+      if (!state.sports.showAll && !geeIsMain(event)) return false;
+      if (category && event.category.toLowerCase() !== category.toLowerCase()) return false;
+      if (favoritesOnly && !geeIsFavorite(event)) return false;
+      if (query && !geeSearchMatches(event, query)) return false;
+      return true;
+    });
+  }
+
+  function sportsShownEvents() {
+    return sportsBaseEvents().filter(function (event) {
+      return geeMatchesLeague(event, state.sports.league);
+    });
+  }
+
+  function sportsChip(key, label, selected, icon, logo, onClick) {
+    var button = el("button", "vt-sport-pill" + (selected ? " is-active" : ""));
+    button.setAttribute("data-focusable", "true");
+    button.setAttribute("data-sports-key", key);
+    button.innerHTML = (logo
+      ? '<img class="sports-chip-logo" src="' + escapeHtml(logo) + '" alt="">'
+      : '<svg class="icon"><use href="#' + icon + '"/></svg>') +
+      "<span>" + escapeHtml(label) + "</span>";
+    button.addEventListener("click", onClick);
+    return button;
+  }
+
+  function renderSportsChrome() {
+    var holder = $("#sports-tabs");
+    if (!holder) return;
+    holder.innerHTML = "";
+    var scopeKey = "scope";
+    holder.appendChild(sportsChip(
+      scopeKey,
+      state.sports.showAll ? "Todas las ligas" : "Principal",
+      !state.sports.showAll,
+      "i-filter",
+      "",
+      function () {
+        state.sports.showAll = !state.sports.showAll;
+        state.sports.focusChipKey = scopeKey;
+        sportsEnsureCategory();
+        renderSportsChrome();
+        renderSports();
+      }
+    ));
+    sportsCategories().forEach(function (category) {
+      var key = "cat:" + category;
+      holder.appendChild(sportsChip(
+        key,
+        geeCategoryLabel(category),
+        !state.sports.channels && state.sports.category === category,
+        geeCategoryIcon(category),
+        "",
+        function () {
+          state.sports.channels = false;
+          state.sports.league = "";
+          state.sports.category = state.sports.category === category ? "" : category;
+          state.sports.focusChipKey = key;
+          renderSportsChrome();
+          renderSports();
+        }
+      ));
+    });
+    holder.appendChild(sportsChip(
+      "favoritos",
+      "Favoritos",
+      state.sports.favoritesOnly,
+      "i-star",
+      "",
+      function () {
+        state.sports.channels = false;
+        state.sports.favoritesOnly = !state.sports.favoritesOnly;
+        state.sports.focusChipKey = "favoritos";
+        renderSportsChrome();
+        renderSports();
+      }
+    ));
+    holder.appendChild(sportsChip(
+      "buscar",
+      "Buscar",
+      Boolean(state.sports.searchQuery),
+      "i-search",
+      "",
+      openSportsSearch
+    ));
+    holder.appendChild(sportsChip(
+      "canales",
+      "Canales",
+      state.sports.channels,
+      "i-tv",
+      "",
+      function () {
+        state.sports.channels = true;
+        state.sports.searchQuery = "";
+        state.sports.focusChipKey = "canales";
+        renderSportsChrome();
+        renderSports();
+      }
+    ));
+
     var dayHolder = $("#sports-days");
     dayHolder.innerHTML = "";
-    days.forEach(function (entry) {
-      var button = el("button", "vt-day-pill" + (state.sports.day === entry[0] ? " is-active" : ""));
+    var days = [todayMexico(), sportsDateKey(Date.now() + 86400000)];
+    days.forEach(function (iso) {
+      var key = "day:" + iso;
+      var button = el("button", "vt-day-pill" + (state.sports.day === iso ? " is-active" : ""));
       button.setAttribute("data-focusable", "true");
-      button.textContent = entry[1];
+      button.setAttribute("data-sports-key", key);
+      button.textContent = sportsDayLabel(iso);
       button.addEventListener("click", function () {
-        state.sports.day = entry[0];
-        renderSportsFilters();
+        state.sports.day = iso;
+        state.sports.league = "";
+        state.sports.focusChipKey = key;
+        sportsEnsureCategory();
+        renderSportsChrome();
         renderSports();
       });
       dayHolder.appendChild(button);
     });
 
-    var leagues = [];
-    (state.sports.matches || []).forEach(function (match) {
-      var league = sportsLeagueName(match);
-      if (league && leagues.indexOf(league) < 0) leagues.push(league);
-    });
-    leagues.sort(function (a, b) {
-      var ai = SPORTS_TOP_LEAGUES.indexOf(a);
-      var bi = SPORTS_TOP_LEAGUES.indexOf(b);
-      if (ai < 0) ai = 99;
-      if (bi < 0) bi = 99;
-      return ai - bi || a.localeCompare(b);
-    });
+    var base = sportsBaseEvents();
+    var leagues = geeLeagueNames(base);
+    var logos = geeLeagueLogos(base);
     var leagueHolder = $("#sports-leagues");
     leagueHolder.innerHTML = "";
-    var allButton = el("button", "vt-league-pill" + (!state.sports.league ? " is-active" : ""));
-    allButton.setAttribute("data-focusable", "true");
-    allButton.textContent = "Todas las ligas";
-    allButton.addEventListener("click", function () {
+    var all = el("button", "vt-league-pill" + (!state.sports.league ? " is-active" : ""));
+    all.setAttribute("data-focusable", "true");
+    all.setAttribute("data-sports-key", "liga:");
+    all.textContent = "Todas";
+    all.addEventListener("click", function () {
       state.sports.league = "";
-      renderSportsFilters();
+      state.sports.focusChipKey = "liga:";
+      renderSportsChrome();
       renderSports();
     });
-    leagueHolder.appendChild(allButton);
-    leagues.slice(0, 12).forEach(function (league) {
+    leagueHolder.appendChild(all);
+    leagues.forEach(function (league) {
+      var key = "liga:" + league;
       var button = el("button", "vt-league-pill" + (state.sports.league === league ? " is-active" : ""));
       button.setAttribute("data-focusable", "true");
-      button.textContent = league;
+      button.setAttribute("data-sports-key", key);
+      button.innerHTML = (logos[league]
+        ? '<img class="sports-chip-logo" src="' + escapeHtml(logos[league]) + '" alt="">'
+        : "") + "<span>" + escapeHtml(league) + "</span>";
       button.addEventListener("click", function () {
-        state.sports.league = league;
-        renderSportsFilters();
+        state.sports.league = state.sports.league === league ? "" : league;
+        state.sports.focusChipKey = key;
+        renderSportsChrome();
         renderSports();
       });
       leagueHolder.appendChild(button);
     });
   }
 
-  function renderSports() {
-    var matches = sportsMatchesForFilter();
-    var live = matches.filter(function (m) { return sportsPhase(m) === "live"; });
-    var soon = matches.filter(function (m) { return sportsPhase(m) === "soon"; });
-    var done = matches.filter(function (m) { return sportsPhase(m) === "done"; });
-    var heroMatch = live[0] || soon[0] || done[0] || null;
-    renderSportsHero(heroMatch);
-    var holder = $("#sports-content");
-    holder.innerHTML = "";
-    var total = matches.length;
-    $("#sports-status").textContent = "";
-    $("#sports-count").textContent = "";
+  function sportsCrest(logo, fallback, name) {
+    var source = logo || fallback;
+    if (source) return '<img class="sh-crest" loading="lazy" src="' + escapeHtml(source) + '" alt="">';
+    return '<span class="sh-crest sh-monogram">' + escapeHtml(geeMonogram(name)) + "</span>";
+  }
 
-    function group(label, list) {
-      if (!list.length) return;
-      var head = el("div", "vt-sports-group");
-      head.innerHTML = "<span>" + escapeHtml(label) + "</span><b>" + list.length + "</b>";
-      holder.appendChild(head);
-      list.slice(0, 30).forEach(function (match) { holder.appendChild(buildMatchCard(match)); });
+  function renderSportsHero(event) {
+    var hero = $("#sports-hero");
+    if (!hero) return;
+    if (!event || state.sports.channels) {
+      hero.hidden = true;
+      hero.innerHTML = "";
+      return;
     }
-    group("EN VIVO", live);
-    group("COMIENZAN PRONTO", soon);
-    group("TERMINADOS", done);
+    hero.hidden = false;
+    var phase = geePhase(event);
+    var live = phase === "live";
+    var teams = geeTeams(event);
+    var tvLine = (event.broadcasts || []).slice(0, 3).join(" · ");
+    var badge = live ? "EN VIVO" : phase === "done" ? "FINAL" : "PRÓXIMO";
+    var detail = live ? geeLiveDetail(event) : geeEventWhen(event);
+    var score = geeScore(event);
+    hero.innerHTML =
+      '<div class="sh-league-art">' + (event.leagueLogo
+        ? '<img src="' + escapeHtml(event.leagueLogo) + '" alt="">' : "") + "</div>" +
+      '<div class="sh-top"><span class="' + (live ? "sh-live" : "sh-next") + '">' + badge + "</span>" +
+      "<span>" + escapeHtml(geeLeagueLabel(event)) + '</span><span class="sh-time">' +
+      escapeHtml(detail) + "</span></div>" +
+      '<div class="sh-title">' + escapeHtml(geeEventTitle(event)) + "</div>" +
+      '<div class="sh-tv">' + escapeHtml(tvLine ? "TV: " + tvLine : geeStreams(event)) + "</div>" +
+      (teams[0] && teams[1]
+        ? '<div class="sh-score">' + sportsCrest(event.homeLogo, event.logo, teams[0]) +
+          "<b>" + escapeHtml(score) + "</b>" +
+          sportsCrest(event.awayLogo, event.logo, teams[1]) + "</div>"
+        : event.logo
+          ? '<div class="sh-score sh-single"><img class="sh-crest" src="' + escapeHtml(event.logo) + '" alt=""></div>'
+          : "");
+    hero.onclick = function () {
+      state.sports.pickingId = event.id;
+      openSportsDialog(event);
+    };
+    hero.style.cursor = "pointer";
+  }
 
-    if (!total) {
-      holder.innerHTML = '<div class="vt-sports-empty">No hay eventos para este filtro.</div>';
+  function geeTeamRow(name, logo, fallback, score, live) {
+    var source = logo || fallback;
+    return '<div class="mc-team">' +
+      (source
+        ? '<img loading="lazy" src="' + escapeHtml(source) + '" alt="">'
+        : '<span class="mc-badge">' + escapeHtml(geeMonogram(name)) + "</span>") +
+      "<span>" + escapeHtml(name) + '</span><span class="mc-score' +
+      (live ? " is-live" : "") + '">' + escapeHtml(score === null || score === undefined ? "-" : String(score)) +
+      "</span></div>";
+  }
+
+  function renderGeeCard(event) {
+    var card = el("button", "vt-match-card");
+    card.setAttribute("data-focusable", "true");
+    card.setAttribute("data-event-id", event.id);
+    var phase = geePhase(event);
+    var live = phase === "live";
+    var teams = geeTeams(event);
+    var favorite = geeIsFavorite(event);
+    var tvLine = (event.broadcasts || []).slice(0, 2).join(" · ");
+    var stateLabel = live ? geeLiveLabel(event) : String(event.status || "").toLowerCase() === "post"
+      ? "Final" : geeState(event);
+    var stateClass = live ? " is-live" : String(event.status || "").toLowerCase() === "post"
+      ? " is-done" : " is-soon";
+    var body = teams[0] && teams[1]
+      ? geeTeamRow(teams[0], event.homeLogo, event.logo, event.scoreHome, live) +
+        geeTeamRow(teams[1], event.awayLogo, event.logo, event.scoreAway, live)
+      : '<div class="mc-single">' +
+        (event.logo ? '<img loading="lazy" src="' + escapeHtml(event.logo) + '" alt="">' : "") +
+        "<span>" + escapeHtml(event.name) + "</span></div>";
+    var footer = tvLine
+      ? '<div class="mc-tv">TV: ' + escapeHtml(tvLine) + "</div>"
+      : '<div class="mc-tv">' + escapeHtml(geeStreams(event)) + "</div>";
+    var livePill = geePlayable(event) && event.alive > 0
+      ? '<span class="mc-live-pill">' + event.alive + " en vivo</span>"
+      : tvLine && event.alive === 0 ? '<span class="mc-no-signal">Sin señal</span>' : "";
+    card.innerHTML =
+      '<div class="mc-top"><div class="mc-league">' +
+      '<svg class="icon mc-sport"><use href="#' + geeCategoryIcon(event.category) + '"/></svg>' +
+      (event.leagueLogo
+        ? '<img loading="lazy" src="' + escapeHtml(event.leagueLogo) + '" alt="">'
+        : "") +
+      "<span>" + escapeHtml(geeLeagueLabel(event)) + "</span></div>" +
+      '<span class="mc-state' + stateClass + '">' + escapeHtml(stateLabel) + "</span>" +
+      (favorite ? '<span class="mc-fav">★</span>' : "") + "</div>" +
+      body +
+      '<div class="mc-footer">' + footer + livePill + "</div>";
+    card.addEventListener("click", function () {
+      state.sports.pickingId = event.id;
+      openSportsDialog(event);
+    });
+    return card;
+  }
+
+  function renderSports() {
+    if (state.sports.channels) {
+      renderGeeChannels();
+      return;
+    }
+    var hero = $("#sports-hero");
+    if (hero) hero.hidden = false;
+    var holder = $("#sports-content");
+    holder.classList.remove("is-channels");
+    var shown = sportsShownEvents();
+    var sections = geeSections(shown);
+    var featured = sections.length && sections[0].title === "En vivo"
+      ? sections[0].events[0]
+      : sections.length && sections[0].title === "Comienzan pronto"
+        ? sections[0].events[0] : null;
+    if (shown.length >= 3 && featured) renderSportsHero(featured);
+    else renderSportsHero(null);
+    holder.innerHTML = "";
+    var previousFocus = Focus.current && Focus.current.dataset
+      ? Focus.current.dataset.eventId : "";
+    var previousChip = Focus.current && Focus.current.dataset
+      ? Focus.current.dataset.sportsKey : "";
+    var focusChip = state.sports.focusChipKey;
+    state.sports.focusChipKey = "";
+    $("#sports-status").textContent = state.sports.loading ? "Actualizando deportes…" : "";
+    $("#sports-count").textContent = shown.length
+      ? shown.length + (shown.length === 1 ? " evento" : " eventos") : "";
+    if (!shown.length) {
+      var message = state.sports.favoritesOnly && !Object.keys(state.sports.favorites || {}).length
+        ? "Abre un partido y marca «Favorito» para seguirlo aquí."
+        : state.sports.favoritesOnly
+          ? "No hay partidos de tus equipos favoritos en este día."
+          : state.sports.searchQuery
+            ? 'No hay partidos que coincidan con "' + state.sports.searchQuery + '".'
+            : "No hay eventos de este deporte en este momento.";
+      holder.innerHTML = '<div class="vt-sports-empty">' + escapeHtml(message) + "</div>";
+    } else {
+      sections.forEach(function (section) {
+        var head = el("div", "vt-sports-group" + (section.title === "En vivo" ? " is-live" : ""));
+        head.innerHTML = (section.title === "En vivo" ? "<i></i>" : "") +
+          "<span>" + escapeHtml(section.title.toUpperCase()) + "</span><b>" +
+          section.events.length + "</b>";
+        holder.appendChild(head);
+        section.events.forEach(function (event) {
+          holder.appendChild(renderGeeCard(event));
+        });
+      });
     }
     setTimeout(function () {
+      if ($("#sports-search-dialog") && !$("#sports-search-dialog").hidden) return;
+      if (focusChip) {
+        var chip = document.querySelector('[data-sports-key="' + focusChip.replace(/"/g, '\\"') + '"]');
+        if (chip) { Focus.set(chip); return; }
+      }
+      if (previousChip) {
+        var previousChipNode = document.querySelector('[data-sports-key="' + previousChip.replace(/"/g, '\\"') + '"]');
+        if (previousChipNode) { Focus.set(previousChipNode); return; }
+      }
+      if (previousFocus) {
+        var previous = document.querySelector('.vt-match-card[data-event-id="' + previousFocus.replace(/"/g, '\\"') + '"]');
+        if (previous) { Focus.set(previous); return; }
+      }
       var first = $("#sports-content .vt-match-card");
       if (first) Focus.set(first);
     }, 40);
   }
 
-  function renderSportsHero(match) {
+  function renderGeeChannels() {
     var hero = $("#sports-hero");
-    if (!match) {
-      hero.innerHTML = '<div class="hero-loading"><span>Sin eventos en la agenda.</span></div>';
+    if (hero) { hero.hidden = true; hero.innerHTML = ""; }
+    var holder = $("#sports-content");
+    holder.classList.add("is-channels");
+    holder.innerHTML = "";
+    var groups = state.sports.groups || [];
+    $("#sports-status").textContent = state.sports.loading ? "Actualizando canales…" : "";
+    var total = 0;
+    groups.forEach(function (group) { total += group.channels.length; });
+    $("#sports-count").textContent = total ? total + " canales" : "";
+    if (!groups.length) {
+      holder.innerHTML = '<div class="vt-sports-empty">No se pudo cargar el catálogo de canales deportivos.</div>';
       return;
     }
-    var phase = sportsPhase(match);
-    var status = phase === "live" ? "EN VIVO" : phase === "done" ? "FINAL" : "PRÓXIMO";
-    var home = match.home || {};
-    var away = match.away || {};
-    var channels = (match.broadcasts && match.broadcasts.length ? match.broadcasts : match.channels) || [];
-    hero.innerHTML =
-      '<div class="sh-top"><span class="' + (phase === "live" ? "sh-live" : "sh-next") + '">' + status + "</span>" +
-      '<span>' + escapeHtml(sportsLeagueName(match)) + '</span><span class="sh-time">' + escapeHtml(sportsTimeLabel(match)) + "</span></div>" +
-      '<div class="sh-title">' + escapeHtml(sportsTeamName(home) + " vs " + sportsTeamName(away)) + "</div>" +
-      '<div class="sh-tv">TV: ' + escapeHtml(channels.slice(0, 4).join(" · ") || "Sin señal por ahora") + "</div>" +
-      '<div class="sh-actions"><button data-focusable id="sports-hero-play">Ver partido</button><button class="secondary" data-focusable id="sports-hero-agenda">Agenda</button></div>' +
-      '<div class="sh-teams">' +
-      '<div class="sh-team">' + (home.logo ? '<img src="' + escapeHtml(home.logo) + '" alt="">' : '<div class="mc-badge">' + escapeHtml((sportsTeamName(home) || "?").slice(0, 2)) + "</div>") + "<span>" + escapeHtml(sportsTeamName(home)) + "</span></div>" +
-      '<div class="sh-vs">VS</div>' +
-      '<div class="sh-team">' + (away.logo ? '<img src="' + escapeHtml(away.logo) + '" alt="">' : '<div class="mc-badge">' + escapeHtml((sportsTeamName(away) || "?").slice(0, 2)) + "</div>") + "<span>" + escapeHtml(sportsTeamName(away)) + "</span></div>" +
-      "</div>";
-    var play = $("#sports-hero-play");
-    if (play) play.addEventListener("click", function () { openSportsDialog(match); });
-    var agenda = $("#sports-hero-agenda");
-    if (agenda) agenda.addEventListener("click", function () {
-      state.sports.day = "all";
-      renderSportsFilters();
-      renderSports();
-      Focus.first("#sports-content .vt-match-card");
+    groups.forEach(function (group) {
+      var head = el("div", "vt-gee-group-head");
+      head.innerHTML = (group.logo
+        ? '<img loading="lazy" src="' + escapeHtml(group.logo) + '" alt="">' : "") +
+        "<span>" + escapeHtml(group.name) + "</span><b>" +
+        group.alive + "/" + group.total + " disponibles</b>";
+      holder.appendChild(head);
+      if (!group.channels.length) {
+        var empty = el("div", "vt-gee-channel-empty");
+        empty.textContent = "Sin canales en este grupo.";
+        holder.appendChild(empty);
+        return;
+      }
+      group.channels.forEach(function (channel) {
+        var row = el("button", "vt-gee-channel");
+        row.setAttribute("data-focusable", "true");
+        var alive = channel.links.filter(function (link) { return link.alive === true; }).length;
+        row.innerHTML = (channel.logo
+          ? '<img loading="lazy" src="' + escapeHtml(channel.logo) + '" alt="">' : "") +
+          "<span>" + escapeHtml(channel.name) + "</span>" +
+          '<em class="' + (alive ? "is-live" : "") + '">' +
+          (alive ? alive + " disponibles" : channel.links.length + " enlaces") + "</em>" +
+          '<svg class="icon"><use href="#i-play"/></svg>';
+        row.addEventListener("click", function () {
+          if (channel.links.length === 1) {
+            playGeeLink(channel.links[0], channel.name, null);
+          } else {
+            openGeeChannelDialog(channel, group.name);
+          }
+        });
+        holder.appendChild(row);
+      });
+    });
+    setTimeout(function () {
+      var first = $("#sports-content .vt-gee-channel");
+      if (first) Focus.set(first);
+    }, 40);
+  }
+
+  function openSportsSearch() {
+    var dialog = $("#sports-search-dialog");
+    var input = $("#sports-search-input");
+    if (!dialog || !input) return;
+    state.sports.channels = false;
+    state.sports.focusChipKey = "buscar";
+    renderSportsChrome();
+    renderSports();
+    input.value = state.sports.searchQuery || "";
+    dialog.hidden = false;
+    setTimeout(function () {
+      Focus.set(input);
+      try { input.focus(); input.setSelectionRange(input.value.length, input.value.length); } catch (error) {}
+    }, 40);
+  }
+
+  function closeSportsSearch() {
+    var dialog = $("#sports-search-dialog");
+    if (!dialog || dialog.hidden) return;
+    dialog.hidden = true;
+    state.sports.focusChipKey = "buscar";
+    renderSportsChrome();
+    renderSports();
+  }
+
+  function geePickerRows(event) {
+    var rows = [];
+    var seen = {};
+    (event.links || []).forEach(function (link) {
+      if (!link.name && !link.link && !link.tokenApi) return;
+      var url = String(link.link || link.url || "").split("|")[0].trim();
+      var key = String(link.name || "").toLowerCase() + "|" + (url || "embed:" + link.tokenApi);
+      if (seen[key]) return;
+      seen[key] = true;
+      var playable = Boolean(url || link.tokenApi);
+      var typeLabel = link.type === "dash"
+        ? (link.drm ? "DASH · ClearKey" : "DASH")
+        : link.type === "hls" ? "HLS" : (link.type || "HLS").toUpperCase();
+      if (!url && link.tokenApi) typeLabel = "Se prepara al abrir";
+      else if (!playable) typeLabel = "Sin señal";
+      rows.push({
+        title: link.name || event.name,
+        url: url,
+        headers: link.headers || {},
+        type: link.type,
+        drm: link.drm,
+        alive: url ? link.alive : null,
+        tokenApi: link.tokenApi,
+        playable: playable,
+        typeLabel: typeLabel,
+        playing: Boolean(url && state.sports.playingUrl === url),
+        note: "",
+        xtv: false,
+      });
+    });
+    rows.sort(function (a, b) {
+      var rank = function (row) {
+        if (!row.playable) return 3;
+        if (row.alive === true) return 0;
+        if (row.alive === null) return 1;
+        return 2;
+      };
+      return rank(a) - rank(b);
+    });
+    return rows.slice(0, 32);
+  }
+
+  function geeXtvRows(event) {
+    var out = [];
+    var seen = {};
+    (event.xtv || []).forEach(function (option) {
+      var url = "xtvlive:" + option.code;
+      if (seen[url]) return;
+      seen[url] = true;
+      out.push({
+        title: option.name,
+        url: url,
+        headers: {},
+        type: "xtv",
+        drm: "",
+        alive: true,
+        tokenApi: "",
+        playable: true,
+        typeLabel: "En tu TV",
+        playing: state.sports.playingUrl === url,
+        note: option.recommended
+          ? ("Recomendado · " + (option.note || "")).replace(/\s*·\s*$/, "")
+          : option.note,
+        xtv: true,
+      });
+    });
+    return out;
+  }
+
+  function geeSignalBadge(row) {
+    if (!row.playable) return '<span class="gee-badge is-off">Sin señal</span>';
+    if (row.tokenApi && !row.url) return '<span class="gee-badge is-ready">Lista para abrir</span>';
+    if (row.alive === true) return '<span class="gee-badge is-ok">Disponible</span>';
+    if (row.alive === false) return '<span class="gee-badge is-off">Caído</span>';
+    return '<span class="gee-badge is-idle">Sin verificar</span>';
+  }
+
+  function geeRowNode(row, info) {
+    var node = el("button", "link-row gee-link-row" + (row.xtv ? " is-xtv" : ""));
+    node.setAttribute("data-focusable", "true");
+    node.innerHTML =
+      '<span class="gee-link-main"><b>' + escapeHtml(row.title) + "</b>" +
+      "<small>" + escapeHtml(row.typeLabel) + "</small>" +
+      (row.note ? "<em>" + escapeHtml(row.note) + "</em>" : "") +
+      (!row.playable ? '<em class="is-muted">La fuente aún no publica su señal</em>' : "") +
+      "</span>" +
+      (row.playing ? '<span class="gee-playing">Seleccionada</span>' : "") +
+      geeSignalBadge(row);
+    node.addEventListener("click", function () {
+      if (!row.playable) return;
+      if (row.type === "xtv") {
+        playGeeXtv(row, info);
+      } else if (!row.url && row.tokenApi) {
+        if (node.dataset.busy === "1") return;
+        node.dataset.busy = "1";
+        node.classList.add("is-loading");
+        request("resolveEmbed", { tokenApi: row.tokenApi }, 45000)
+          .then(function (resolved) {
+            if (!resolved || !resolved.url) throw new Error("La fuente no publicó la señal.");
+            playGeeLink({
+              name: row.title, link: resolved.url, url: resolved.url,
+              headers: Object.assign({}, row.headers, resolved.headers || {}),
+              type: "hls", drm: row.drm, alive: true, tokenApi: "", resolvable: false,
+            }, row.title, info);
+          })
+          .catch(function (error) {
+            node.dataset.busy = "";
+            node.classList.remove("is-loading");
+            toast("No se pudo resolver esa señal: " + error.message);
+          });
+      } else {
+        playGeeLink({
+          name: row.title, link: row.url, url: row.url, headers: row.headers,
+          type: row.type, drm: row.drm, alive: row.alive, tokenApi: "", resolvable: false,
+        }, row.title, info);
+      }
+    });
+    return node;
+  }
+
+  function playGeeLink(link, title, info) {
+    var parsed = sportsLinkUrl(link);
+    if (!parsed.url) {
+      toast("Esta señal aún no publica dirección.");
+      return;
+    }
+    state.sports.playingUrl = parsed.url;
+    if (info) {
+      info.signalName = title || "Señal";
+      info.signalType = String(link.type || "HLS").toUpperCase();
+    }
+    closeSportsDialog(false, true);
+    playExternal(title || "Deportes en vivo", parsed.url, parsed.headers || {}, info || null, link.drm || "");
+  }
+
+  function playGeeXtv(row, info) {
+    var code = String(row.url || "").replace(/^xtvlive:/, "");
+    if (!code) return;
+    state.sports.playingUrl = "xtvlive:" + code;
+    if (info) {
+      info.signalName = row.title;
+      info.signalType = "XTV";
+    }
+    closeSportsDialog(false, true);
+    playLive({
+      id: "sport:" + Date.now(),
+      title: row.title,
+      videoUrl: "xtvlive:" + code,
+      kind: "live",
+      sport: info || null,
+      durationMin: 0,
     });
   }
 
-  function buildMatchCard(match) {
-    var card = el("button", "vt-match-card");
-    card.setAttribute("data-focusable", "true");
-    var home = match.home || {};
-    var away = match.away || {};
-    var phase = sportsPhase(match);
-    var leagueLogo = sportsLeagueLogo(match);
-    var channels = (match.broadcasts && match.broadcasts.length ? match.broadcasts : match.channels) || [];
-    var scoreHome = home.score === null || home.score === undefined ? "-" : home.score;
-    var scoreAway = away.score === null || away.score === undefined ? "-" : away.score;
-    var score = phase === "live" || phase === "done" ? scoreHome + " - " + scoreAway : "-";
-    function teamRow(team, score) {
-      var name = sportsTeamName(team);
-      var logo = team.logo ? '<img loading="lazy" src="' + escapeHtml(team.logo) + '" alt="">' : '<span class="mc-badge">' + escapeHtml((name || "?").slice(0, 2).toUpperCase()) + "</span>";
-      return '<div class="mc-team">' + logo + "<span>" + escapeHtml(name) + '</span><span class="mc-score">' + escapeHtml(score) + "</span></div>";
-    }
-    card.innerHTML =
-      '<div class="mc-top"><div class="mc-league">' +
-      (leagueLogo ? '<img loading="lazy" src="' + escapeHtml(leagueLogo) + '" alt="">' : "") +
-      "<span>" + escapeHtml(sportsLeagueName(match)) + "</span></div>" +
-      '<span class="mc-time">' + escapeHtml(sportsTimeLabel(match)) + "</span></div>" +
-      teamRow(home, scoreHome) + teamRow(away, scoreAway) +
-      '<div class="mc-tv">TV: ' + escapeHtml(channels.slice(0, 3).join(" · ") || "Sin señal por ahora") + "</div>" +
-      (phase === "live" ? '<div class="mc-ready">EN VIVO</div>' : "");
-    card.addEventListener("click", function () { openSportsDialog(match); });
-    return card;
-  }
-
-  function findEventForMatch(match) {
-    var home = liveNorm(sportsTeamName(match.home));
-    var away = liveNorm(sportsTeamName(match.away));
-    if (!home || !away) return null;
-    var candidates = state.sports.events || [];
-    for (var i = 0; i < candidates.length; i += 1) {
-      var event = candidates[i];
-      var text = liveNorm((event.team_a || "") + " " + (event.team_b || "") + " " + (event.home_name || "") + " " + (event.away_name || "") + " " + (event.event || ""));
-      if (text.indexOf(home) >= 0 && text.indexOf(away) >= 0) return event;
-      if (text.indexOf(away) >= 0 && text.indexOf(home) >= 0) return event;
-    }
-    return null;
-  }
-
-  function openSportsDialog(match) {
+  function openSportsDialog(event) {
+    if (!event) return;
+    state.sports.pickingId = event.id;
     state.sports.dialogReturn = Focus.current;
     var dialog = $("#sports-dialog");
     var list = $("#sports-dialog-list");
-    var phase = sportsPhase(match);
-    var event = findEventForMatch(match);
-    var info = buildSportInfo(match, event);
-    var links = ((event && event.links) || []).filter(function (link) {
-      return link && (link.name || link.url || link.link || link.token_api);
-    });
-    var channels = (match.broadcasts && match.broadcasts.length ? match.broadcasts : match.channels) || [];
-    if ((!channels || !channels.length) && event && event.broadcasts) channels = event.broadcasts;
-    info.guide = channels;
-    $("#sports-dialog-title").textContent = sportsTeamName(match.home) + " vs " + sportsTeamName(match.away);
-    var sub = sportsLeagueName(match) + " · " + sportsTimeLabel(match) + (info.scoreLine && info.scoreLine !== "VS" ? " · " + info.scoreLine : "");
+    var phase = geePhase(event);
+    var playable = phase === "live";
+    var info = geeSportInfo(event);
+    var rows = geePickerRows(event).concat(geeXtvRows(event));
+    $("#sports-dialog-title").textContent = geeEventTitle(event);
+    var sub = [geeLeagueLabel(event), geeEventWhen(event), geeScoreLine(event)]
+      .filter(Boolean).join(" · ");
     list.innerHTML = '<div class="dialog-sub">' + escapeHtml(sub) + "</div>";
 
-    if (phase === "live" || phase === "done") {
-      var statsButton = el("button", "link-row match-stats-row");
-      statsButton.setAttribute("data-focusable", "true");
-      statsButton.innerHTML = '<span class="match-stats-icon">▥</span><span class="match-stats-copy"><b>Estadísticas del partido</b><small>Match Center · resumen, cifras, goles y alineaciones</small></span><span class="link-type">Abrir</span>';
-      statsButton.addEventListener("click", function () { openMatchCenter(info, 1, state.sports.dialogReturn); });
-      list.appendChild(statsButton);
-    }
-
-    if (phase !== "live" && phase !== "done") {
+    if (!playable) {
       var note = el("div", "vt-reminder-note");
-      note.textContent = "Aún no comienza · podrás verlo cuando el partido esté en vivo.";
+      note.textContent = geeBlockNote(event);
       list.appendChild(note);
-      var reminder = el("div", "vt-reminder-note");
-      reminder.textContent = "Avisarme antes:";
-      list.appendChild(reminder);
-      var pills = el("div", "vt-reminder-pills");
-      [10, 30, 60].forEach(function (mins) {
-        var b = el("button", "", mins + " min");
-        b.setAttribute("data-focusable", "true");
-        b.addEventListener("click", function () { toast("Aviso programado " + mins + " min antes."); });
-        pills.appendChild(b);
-      });
-      list.appendChild(pills);
-      if (channels.length) {
-        var tv = el("div", "vt-reminder-note");
-        tv.textContent = "TV: " + channels.join(" · ");
-        list.appendChild(tv);
-      }
-      var fav = el("button", "secondary-btn", "Favorito");
-      fav.setAttribute("data-focusable", "true");
-      fav.addEventListener("click", function () {
-        var key = sportsTeamName(match.home);
-        state.sports.favorites[key] = !state.sports.favorites[key];
-        toast(state.sports.favorites[key] ? "Equipo favorito guardado." : "Equipo quitado de favoritos.");
-        writeJson("vp_webos_sports_fav", state.sports.favorites);
-      });
-      list.appendChild(fav);
-    } else if (links.length) {
-      var available = el("div", "vt-reminder-note", "Transmisiones disponibles:");
-      list.appendChild(available);
-      links.slice(0, 40).forEach(function (link) {
-        var row = el("button", "link-row");
-        row.setAttribute("data-focusable", "true");
-        var parsed = sportsLinkUrl(link);
-        var alive = link.alive === true ? "Disponible" : link.alive === false ? "Caído" : "Sin verificar";
-        var type = String(link.type || "HLS").toUpperCase();
-        if (link.drm) type += " · ClearKey";
-        if (!parsed.url && link.token_api) type = "Se resuelve al tocar";
-        else if (!parsed.url) type = "Sin señal";
-        row.innerHTML = '<span class="link-name">' + escapeHtml(link.name || "Señal") + "</span>" +
-          '<span class="link-type">' + escapeHtml(type + " · " + (parsed.url ? alive : "Declarada")) + "</span>";
-        row.addEventListener("click", function () {
-          if (row.dataset.busy === "1") return;
-          function start(url, headers, drmKey) {
-            if (!url) { toast("Esta señal aún no publica dirección."); return; }
-            info.signalName = link.name || "Señal";
-            info.signalType = type;
-            closeSportsDialog(false);
-            playExternal(
-              sportsTeamName(match.home) + " vs " + sportsTeamName(match.away),
-              url,
-              headers || {},
-              info,
-              drmKey || ""
-            );
-          }
-          if (parsed.url) {
-            start(parsed.url, parsed.headers, link.drm || "");
-            return;
-          }
-          if (!link.token_api) {
-            toast("Esta señal aún no publica dirección. Prueba otra fuente.");
-            return;
-          }
-          row.dataset.busy = "1";
-          row.classList.add("is-loading");
-          row.querySelector(".link-type").textContent = "Resolviendo…";
-          request("resolveEmbed", { tokenApi: link.token_api }, 45000)
-            .then(function (resolved) {
-              if (!resolved || !resolved.url) throw new Error("La fuente no publicó la señal.");
-              var merged = Object.assign({}, parsed.headers, resolved.headers || {});
-              start(resolved.url, merged, link.drm || "");
-            })
-            .catch(function (error) {
-              row.dataset.busy = "";
-              row.classList.remove("is-loading");
-              row.querySelector(".link-type").textContent = type + " · Sin respuesta";
-              toast("No se pudo resolver esa señal: " + error.message);
-            });
+      if (phase === "soon") {
+        var active = sportsReminderActive(event);
+        var reminderLabel = el("div", "vt-reminder-note");
+        reminderLabel.textContent = "Avisarme antes:";
+        list.appendChild(reminderLabel);
+        var pills = el("div", "vt-reminder-pills");
+        [10, 30, 60].forEach(function (minutes) {
+          var button = el("button", "", minutes + " min");
+          button.setAttribute("data-focusable", "true");
+          button.addEventListener("click", function () {
+            sportsScheduleReminder(event, minutes);
+            openSportsDialog(event);
+          });
+          pills.appendChild(button);
         });
-        list.appendChild(row);
-      });
-    } else {
-      var none = el("div", "vt-reminder-note", "Sin señal por ahora. Canales que lo transmiten:");
+        if (active) {
+          var clear = el("button", "", "Quitar");
+          clear.setAttribute("data-focusable", "true");
+          clear.addEventListener("click", function () {
+            sportsClearReminder(event);
+            openSportsDialog(event);
+          });
+          pills.appendChild(clear);
+        }
+        list.appendChild(pills);
+      }
+      var tv = (event.broadcasts || []).slice(0, 4).join(" · ");
+      if (tv) {
+        var tvLine = el("div", "vt-reminder-note");
+        tvLine.textContent = "TV: " + tv;
+        list.appendChild(tvLine);
+      }
+      appendGeeFavoriteAndClose(list, event);
+    } else if (!rows.length) {
+      var none = el("div", "vt-reminder-note");
+      none.textContent = "Sin enlaces disponibles";
       list.appendChild(none);
-      channels.slice(0, 8).forEach(function (channel) {
-        var row = el("div", "link-row static");
-        row.innerHTML = '<span class="link-name">' + escapeHtml(channel) + '</span><span class="link-type">Sin señal</span>';
-        list.appendChild(row);
-      });
+      appendGeeFavoriteAndClose(list, event);
+    } else {
+      var label = el("div", "vt-reminder-note");
+      label.textContent = "Transmisiones disponibles:";
+      list.appendChild(label);
+      var xtvOnly = rows.every(function (row) { return row.xtv; });
+      var hint = el("div", "gee-pick-hint");
+      hint.textContent = xtvOnly
+        ? "GeeSports no publicó una señal utilizable; opciones de la casa como respaldo."
+        : "Usa el mando para elegir una señal.";
+      list.appendChild(hint);
+      rows.forEach(function (row) { list.appendChild(geeRowNode(row, info)); });
+      var liveRows = rows.filter(function (row) { return row.alive === true && !row.xtv; });
+      if (liveRows.length) {
+        var zap = el("div", "gee-pick-hint is-live-hint");
+        zap.textContent = "Con el partido en vivo, cambia de señal desde el reproductor.";
+        list.appendChild(zap);
+      }
+      appendGeeFavoriteAndClose(list, event);
     }
+    dialog.hidden = false;
+    setTimeout(function () {
+      var first = $("#sports-dialog-list [data-focusable]") || $("#sports-dialog-close");
+      if (first) Focus.set(first);
+    }, 30);
+  }
+
+  function appendGeeFavoriteAndClose(list, event) {
+    var footer = el("div", "gee-pick-footer");
+    if (event) {
+      var favorite = el("button", "secondary-btn", geeIsFavorite(event) ? "Quitar favorito" : "Favorito");
+      favorite.setAttribute("data-focusable", "true");
+      favorite.addEventListener("click", function () {
+        geeToggleFavorite(event);
+        openSportsDialog(event);
+      });
+      footer.appendChild(favorite);
+    }
+    var close = el("button", "secondary-btn", "Cerrar");
+    close.setAttribute("data-focusable", "true");
+    close.addEventListener("click", function () { closeSportsDialog(); });
+    footer.appendChild(close);
+    list.appendChild(footer);
+  }
+
+  function openGeeChannelDialog(channel, groupName) {
+    state.sports.dialogReturn = Focus.current;
+    var dialog = $("#sports-dialog");
+    var list = $("#sports-dialog-list");
+    $("#sports-dialog-title").textContent = channel.name;
+    list.innerHTML = '<div class="dialog-sub">' + escapeHtml(groupName || "Deportes en vivo") + "</div>";
+    var rows = (channel.links || []).map(function (link) {
+      return {
+        title: link.name || channel.name,
+        url: link.link || link.url,
+        headers: link.headers || {},
+        type: link.type,
+        drm: link.drm,
+        alive: link.alive,
+        tokenApi: link.tokenApi,
+        playable: Boolean(link.link || link.url || link.tokenApi),
+        typeLabel: link.tokenApi && !link.link ? "Se prepara al abrir" :
+          link.type === "dash" ? (link.drm ? "DASH · ClearKey" : "DASH") : "HLS",
+        playing: state.sports.playingUrl === (link.link || link.url),
+        note: "",
+        xtv: false,
+      };
+    });
+    rows.forEach(function (row) { list.appendChild(geeRowNode(row, null)); });
+    var close = el("button", "secondary-btn", "Cerrar");
+    close.setAttribute("data-focusable", "true");
+    close.addEventListener("click", function () { closeSportsDialog(); });
+    list.appendChild(close);
     dialog.hidden = false;
     setTimeout(function () {
       var first = $("#sports-dialog-list [data-focusable]");
@@ -3187,10 +4107,155 @@
     }, 30);
   }
 
-  function closeSportsDialog(restoreFocus) {
+  function sportsReminderKey(event) {
+    return "match:" + event.id;
+  }
+
+  function sportsReminders() {
+    return state.sports.reminders || {};
+  }
+
+  function sportsReminderActive(event) {
+    return Boolean(sportsReminders()[sportsReminderKey(event)]);
+  }
+
+  function sportsScheduleReminder(event, minutes) {
+    var start = geeStartMs(event);
+    if (!start) return;
+    var at = start - minutes * 60 * 1000;
+    if (at <= Date.now() + 30 * 1000) {
+      toast("Ya no da tiempo para ese aviso.");
+      return;
+    }
+    var reminders = sportsReminders();
+    reminders[sportsReminderKey(event)] = {
+      at: at,
+      title: geeEventTitle(event),
+      body: "Comienza en " + minutes + " min · " + geeLeagueLabel(event),
+    };
+    state.sports.reminders = reminders;
+    writeJson("vp_webos_sports_reminders", reminders);
+    notifySports("Aviso programado", "Te avisaremos " + minutes + " min antes.");
+  }
+
+  function sportsClearReminder(event) {
+    var reminders = sportsReminders();
+    delete reminders[sportsReminderKey(event)];
+    state.sports.reminders = reminders;
+    writeJson("vp_webos_sports_reminders", reminders);
+    toast("Aviso quitado.");
+  }
+
+  function notifySports(title, body) {
+    try {
+      if (window.Notification && Notification.permission === "granted") {
+        new Notification(title, { body: body, silent: false });
+      } else if (window.Notification && Notification.permission !== "denied") {
+        Notification.requestPermission();
+      }
+    } catch (error) { /* la tele no tiene notificaciones del sistema */ }
+    toast(title + " · " + body);
+  }
+
+  function sportsCheckReminders() {
+    var reminders = sportsReminders();
+    var now = Date.now();
+    var changed = false;
+    Object.keys(reminders).forEach(function (key) {
+      var reminder = reminders[key];
+      if (!reminder || !reminder.at || reminder.at > now) return;
+      delete reminders[key];
+      changed = true;
+      notifySports("Deportes en vivo", reminder.title + " · " + reminder.body);
+    });
+    if (changed) {
+      state.sports.reminders = reminders;
+      writeJson("vp_webos_sports_reminders", reminders);
+    }
+  }
+
+  function sportsStartTimers() {
+    if (!state.sports.tickTimer) {
+      state.sports.tickTimer = setInterval(function () {
+        sportsCheckReminders();
+        if (state.screen !== "sports") return;
+        if ($("#sports-dialog") && !$("#sports-dialog").hidden) return;
+        if (state.sports.channels) return;
+        renderSports();
+      }, 30000);
+    }
+    if (!state.sports.refreshTimer) {
+      state.sports.refreshTimer = setInterval(function () {
+        if (state.screen !== "sports") return;
+        if ($("#sports-dialog") && !$("#sports-dialog").hidden) return;
+        loadSports(true);
+      }, 120000);
+    }
+  }
+
+  function openSports() {
+    closeTopMenus();
+    showScreen("sports");
+    if (!state.sports.initialized) {
+      state.sports.day = todayMexico();
+      state.sports.category = "Football";
+      state.sports.showAll = false;
+      state.sports.league = "";
+      state.sports.channels = false;
+      state.sports.favoritesOnly = false;
+      state.sports.searchQuery = "";
+      state.sports.initialized = true;
+    }
+    state.sports.channels = false;
+    $("#sports-hero").hidden = false;
+    $("#sports-hero").innerHTML = '<div class="hero-loading"><div class="spinner"></div><span>Cargando agenda deportiva</span></div>';
+    $("#sports-content").innerHTML = "";
+    $("#sports-status").textContent = "Cargando deportes…";
+    $("#sports-count").textContent = "";
+    renderSportsChrome();
+    if ((state.sports.events || []).length) renderSports();
+    loadSports(true);
+    sportsStartTimers();
+  }
+
+  function loadSports(force) {
+    if (state.sports.loading) return;
+    state.sports.loading = true;
+    $("#sports-status").textContent = "Actualizando deportes…";
+    Promise.all([
+      request("events", { day: todayMexico(), days: 2 }, 45000).catch(function () { return null; }),
+      request("geeSports", {}, 45000).catch(function () { return null; }),
+    ])
+      .then(function (results) {
+        var eventPayload = results[0];
+        var groupPayload = results[1];
+        if (eventPayload && Array.isArray(eventPayload.events)) {
+          state.sports.events = eventPayload.events.map(geeNormalizeEvent).filter(Boolean);
+        }
+        if (groupPayload && Array.isArray(groupPayload.groups)) {
+          state.sports.groups = groupPayload.groups.map(geeNormalizeGroup).filter(Boolean);
+        }
+        state.sports.at = Date.now();
+        state.sports.loading = false;
+        sportsEnsureCategory();
+        renderSportsChrome();
+        renderSports();
+      })
+      .catch(function (error) {
+        state.sports.loading = false;
+        $("#sports-status").textContent = "No se pudieron cargar los deportes: " + error.message;
+      });
+  }
+
+
+  function closeSportsDialog(restoreFocus, keepSelection) {
     var dialog = $("#sports-dialog");
     if (!dialog || dialog.hidden) return;
     dialog.hidden = true;
+    if (!keepSelection) {
+      state.sports.pickingId = null;
+      state.sports.playingUrl = "";
+    }
     if (restoreFocus !== false && state.sports.dialogReturn && document.contains(state.sports.dialogReturn)) {
       setTimeout(function () { Focus.set(state.sports.dialogReturn); }, 30);
     }
@@ -4100,6 +5165,34 @@
       filterLive();
     });
     $("#sports-dialog-close").addEventListener("click", function () { closeSportsDialog(); });
+    var sportsSearchInput = $("#sports-search-input");
+    if (sportsSearchInput) {
+      sportsSearchInput.addEventListener("input", function () {
+        state.sports.searchQuery = this.value || "";
+        state.sports.focusChipKey = "buscar";
+        renderSportsChrome();
+        renderSports();
+        setTimeout(function () {
+          Focus.set(sportsSearchInput);
+          try { sportsSearchInput.focus(); } catch (error) {}
+        }, 30);
+      });
+    }
+    var sportsSearchClear = $("#sports-search-clear");
+    if (sportsSearchClear) sportsSearchClear.addEventListener("click", function () {
+      state.sports.searchQuery = "";
+      if (sportsSearchInput) sportsSearchInput.value = "";
+      state.sports.focusChipKey = "buscar";
+      renderSportsChrome();
+      renderSports();
+      if (sportsSearchInput) Focus.set(sportsSearchInput);
+    });
+    var sportsSearchClose = $("#sports-search-close");
+    if (sportsSearchClose) sportsSearchClose.addEventListener("click", closeSportsSearch);
+    var sportsSearchDialog = $("#sports-search-dialog");
+    if (sportsSearchDialog) sportsSearchDialog.addEventListener("click", function (event) {
+      if (event.target === sportsSearchDialog) closeSportsSearch();
+    });
     $("#match-center-close").addEventListener("click", function () { closeMatchCenter(); });
     $("#osd-stats").addEventListener("click", function () {
       if (state.player.sport) openMatchCenter(state.player.sport, 1);
@@ -4386,6 +5479,7 @@
     state.list = readJson("vp_webos_list", {});
     state.live.favorites = readJson("vp_webos_live_fav", {});
     state.sports.favorites = readJson("vp_webos_sports_fav", {});
+    state.sports.reminders = readJson("vp_webos_sports_reminders", {});
     bindNavigation();
     bindKeys();
     bindSettings();

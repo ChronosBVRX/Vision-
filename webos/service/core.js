@@ -280,6 +280,10 @@ async function sports(params) {
   return api.sportsAgenda((params && params.days) || 2);
 }
 
+async function geeSports() {
+  return api.geeSports();
+}
+
 async function matchStats(params) {
   const stats = await sportsStats.load(params || {});
   return { stats: stats || null };
@@ -384,6 +388,7 @@ module.exports = {
   epgBulk,
   events,
   sports,
+  geeSports,
   matchStats,
   resolveEmbed,
   markers,

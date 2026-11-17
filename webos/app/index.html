@@ -39,6 +39,13 @@
     <symbol id="i-hockey" viewBox="0 0 24 24"><path d="M3 4h2v12.5c0 2 1.6 3.5 3.5 3.5H21v2H8.5C5.5 22 3 19.5 3 16.5zm5 0h2v10h-2zm4 0h2v10h-2zm4 0h2v10h-2z"/></symbol>
     <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16v2H4zm3 6h10v2H7zm3 6h4v2h-4z"/></symbol>
     <symbol id="i-user-circle" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 4a3 3 0 1 1 0 6 3 3 0 0 1 0-6m0 13a8 8 0 0 1-5.3-2c.3-1.7 3-2.7 5.3-2.7s5 1 5.3 2.7A8 8 0 0 1 12 19"/></symbol>
+<symbol id="i-soccer" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="m12 7 3.4 2.5-1.3 4h-4.2l-1.3-4z"/><path d="M12 3v4M5 8l2.7 2.5M3 15l3.7-1M21 15l-3.7-1M9 18l-.5 3M15 18l.5 3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+<symbol id="i-football" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 12h8M10 9.5v5M12 9v6M14 9.5v5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+<symbol id="i-baseball" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 5c4 3 4 11 0 14M18 5c-4 3-4 11 0 14" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+<symbol id="i-tennis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 8c4 1 7 4 8 8M20 16c-4-1-7-4-8-8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+<symbol id="i-motor" viewBox="0 0 24 24"><path d="M5 4h9l4 4-2 2-4-4H7v10h7l4 4h-13z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 4h5v5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+<symbol id="i-fight" viewBox="0 0 24 24"><path d="M7 11V6a2 2 0 0 1 4 0v4h1V5a2 2 0 0 1 4 0v5h1V7a2 2 0 0 1 4 0v8a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6z" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+<symbol id="i-sports" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3v18M3 12h18" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
 
   </svg>
 
@@ -236,6 +243,19 @@
           <div class="dialog-title" id="sports-dialog-title"></div>
           <div class="dialog-list" id="sports-dialog-list"></div>
           <button class="secondary-btn" id="sports-dialog-close" data-focusable>Cerrar</button>
+        </div>
+      </div>
+
+      <div class="dialog sports-search-dialog" id="sports-search-dialog" hidden>
+        <div class="dialog-card vt-sports-dialog">
+          <div class="dialog-title">Buscar partido</div>
+          <div class="dialog-sub">Equipo, liga o canal</div>
+          <input class="sports-search-input" id="sports-search-input" data-focusable
+                 type="text" placeholder="Escribe para filtrar" autocomplete="off" spellcheck="false">
+          <div class="sports-search-actions">
+            <button class="secondary-btn" id="sports-search-clear" data-focusable>Limpiar</button>
+            <button class="secondary-btn" id="sports-search-close" data-focusable>Cerrar</button>
+          </div>
         </div>
       </div>
 
