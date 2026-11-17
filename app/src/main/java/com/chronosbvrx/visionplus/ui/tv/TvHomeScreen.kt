@@ -17,6 +17,7 @@ import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -60,6 +61,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -73,6 +76,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -1183,166 +1188,276 @@ private fun HeroBillboard(
     if (featured == null) return
     val event = featured.event
     if (landing != null) RescueAnchor(landing)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 48.dp, vertical = 20.dp)
-            // El hero cambia de película a partido y de una a dos líneas: reservar un
-            // mínimo evita que el LazyColumn se reancle y mueva la fila enfocada.
-            .heightIn(min = 300.dp),
-    ) {
-        // Badge superior sutil: vidrio oscuro con borde fino cian (o rojo si el
-        // partido está en vivo), texto pequeño en mayúsculas y tracking amplio.
-        val liveBadge = event?.live == true
-        val badgeBackground = if (liveBadge) Color(0x26EF4444) else Color(0x2638BDF8)
-        val badgeBorder = if (liveBadge) Color(0x4DEF4444) else Color(0x4D38BDF8)
-        val badgeInk = if (liveBadge) Color(0xFFFCA5A5) else Color(0xFF67E8F9)
-        val badgeText = if (event != null) {
-            featured.eyebrow.ifBlank { "DEPORTES · EN VIVO" }
-        } else {
-            listOf(featured.eyebrow, featured.badge)
-                .filter { it.isNotBlank() }
-                .distinct()
-                .joinToString(" · ")
-                .ifBlank { "TENDENCIA DE HOY" }
-        }
-        Box(
+
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val full = maxWidth >= 1200.dp
+        val horizontal = 48.dp
+        val available = (maxWidth - horizontal * 2).coerceAtLeast(0.dp)
+        val textWidth = tvHeroTextWidthDp(available.value, full).dp
+        val minHeight = if (full) 320.dp else 288.dp
+        val titleSize = if (full) 36.sp else 28.sp
+        val titleLine = if (full) 44.sp else 34.sp
+
+        Column(
             modifier = Modifier
-                .background(badgeBackground, shape = RoundedCornerShape(50))
-                .border(1.dp, badgeBorder, RoundedCornerShape(50))
-                .padding(horizontal = 11.dp, vertical = 5.dp),
+                .fillMaxWidth()
+                // El hero cambia de película a partido y de una a dos líneas: reservar un
+                // mínimo evita que el LazyColumn se reancle y mueva la fila enfocada.
+                .heightIn(min = minHeight)
+                // Scrim LOCAL detrás del texto. No toca el degradado global (que conserva
+                // el color del arte a la derecha y lo valida TvHeroWiringTest).
+                .drawBehind {
+                    val scrimWidth = (horizontal + textWidth + 72.dp).toPx()
+                        .coerceAtMost(size.width)
+                    if (scrimWidth <= 0f) return@drawBehind
+                    val solidEnd = ((horizontal + textWidth).toPx() / scrimWidth)
+                        .coerceIn(0f, 1f)
+                    // 0.90 de negro sobre un banner blanco deja ~#1A1A1A: VisionTextSecondary
+                    // rinde ~7:1 (>4.5:1) y el blanco del título mucho más. El degradado se
+                    // apaga recién después del borde derecho del texto.
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            0f to Color.Black.copy(alpha = 0.94f),
+                            solidEnd to Color.Black.copy(alpha = 0.90f),
+                            1f to Color.Transparent,
+                            endX = scrimWidth,
+                        ),
+                        size = Size(scrimWidth, size.height),
+                    )
+                }
+                .padding(horizontal = horizontal, vertical = 20.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Icon(
-                    if (event != null) Icons.Default.SportsSoccer else VisionIcons.WeeklyTrending,
-                    contentDescription = null,
-                    tint = badgeInk,
-                    modifier = Modifier.size(12.dp),
-                )
+            // Una sola columna para badge/título/metadatos/sinopsis: mismo borde derecho,
+            // sin las tres fracciones distintas que se pisaban entre sí.
+            Column(Modifier.width(textWidth)) {
+                // Badge superior sutil: vidrio oscuro con borde fino cian (o rojo si el
+                // partido está en vivo), texto pequeño en mayúsculas y tracking amplio.
+                val liveBadge = event?.live == true
+                val badgeBackground = if (liveBadge) Color(0x26EF4444) else Color(0x2638BDF8)
+                val badgeBorder = if (liveBadge) Color(0x4DEF4444) else Color(0x4D38BDF8)
+                val badgeInk = if (liveBadge) Color(0xFFFCA5A5) else Color(0xFF67E8F9)
+                // En Compact/Narrow el eyebrow de campaña manda; el «DESTACADO HOY» (o
+                // «TENDENCIA DE HOY») genérico solo añade ruido y ancho. Un badge con
+                // información real —«EN VIVO», «PRÓXIMO», «NUEVO»— se conserva.
+                val genericBadge = featured.badge.equals("DESTACADO HOY", ignoreCase = true) ||
+                    featured.badge.equals("TENDENCIA DE HOY", ignoreCase = true)
+                val badgeText = when {
+                    event != null -> featured.eyebrow.ifBlank { "DEPORTES · EN VIVO" }
+                    !full && featured.eyebrow.isNotBlank() && genericBadge -> featured.eyebrow
+                    else -> listOf(featured.eyebrow, featured.badge)
+                        .filter { it.isNotBlank() }
+                        .distinct()
+                        .joinToString(" · ")
+                        .ifBlank { "TENDENCIA DE HOY" }
+                }
+                Box(
+                    modifier = Modifier
+                        .background(badgeBackground, shape = RoundedCornerShape(50))
+                        .border(1.dp, badgeBorder, RoundedCornerShape(50))
+                        .padding(horizontal = 11.dp, vertical = 5.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            if (event != null) Icons.Default.SportsSoccer else VisionIcons.WeeklyTrending,
+                            contentDescription = null,
+                            tint = badgeInk,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            text = badgeText.uppercase(),
+                            style = TextStyle(
+                                color = badgeInk,
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 1.8.sp,
+                            ),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (liveBadge) {
+                            Box(Modifier.size(5.dp).clip(CircleShape).background(Color(0xFFFCA5A5)))
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                // Título: 28 sp en Compact/Narrow y 36 sp en Full, siempre 2 líneas.
                 Text(
-                    text = badgeText.uppercase(),
-                    style = TextStyle(
-                        color = badgeInk,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.8.sp,
-                    ),
+                    text = featured.title,
+                    style = MaterialTheme.typography.displaySmall,
+                    color = Color.White,
+                    fontSize = titleSize,
+                    lineHeight = titleLine,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                if (liveBadge) {
-                    Box(Modifier.size(5.dp).clip(CircleShape).background(Color(0xFFFCA5A5)))
+
+                // Metadatos (Año, Calificación, Género / Temporadas o liga y estado)
+                if (featured.meta.isNotBlank()) {
+                    Text(
+                        text = featured.meta,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 14.sp,
+                        lineHeight = 18.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 6.dp).fillMaxWidth(),
+                    )
+                }
+
+                if (event != null) {
+                    TvSportsScoreboard(event, full = full)
+                } else if (featured.subtitle.isNotBlank()) {
+                    Text(
+                        text = featured.subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = VisionTextSecondary,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 6.dp).fillMaxWidth(),
+                    )
                 }
             }
-        }
 
-        Spacer(Modifier.height(10.dp))
-
-        // Título estilizado en blanco limpio
-        Text(
-            text = featured.title,
-            style = MaterialTheme.typography.displaySmall,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth(0.58f),
-        )
-
-        // Metadatos (Año, Calificación, Género / Temporadas o liga y estado)
-        if (featured.meta.isNotBlank()) {
-            Text(
-                text = featured.meta,
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White.copy(alpha = 0.85f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 6.dp).fillMaxWidth(0.58f),
-            )
-        }
-
-        if (event != null) {
-            TvSportsScoreboard(event)
-        } else if (featured.subtitle.isNotBlank()) {
-            Text(
-                text = featured.subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = VisionTextSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 6.dp).fillMaxWidth(0.55f),
-            )
-        }
-
-        // Botones de acción directa con foco de control remoto
-        val isHeroTarget = returnFilmId != null && currentFilm?.id == returnFilmId
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.padding(top = 16.dp),
-        ) {
-            if (event != null) {
-                TvCompactAction(
-                    label = if (event.live) "Ver en vivo" else "Ver partido",
-                    icon = Icons.Default.SportsSoccer,
-                    primary = true,
-                    height = 44.dp,
-                    modifier = if (landing != null) Modifier.landingFocus(landing) else Modifier,
-                    onClick = { onOpenSports(event) },
-                    onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
-                )
-                TvCompactAction(
-                    label = "Agenda",
-                    icon = Icons.Default.Info,
-                    height = 44.dp,
-                    soft = true,
-                    onClick = onOpenSportsHub,
-                    onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
-                )
-            } else {
-                TvCompactAction(
-                    label = "Reproducir",
-                    icon = VisionIcons.Play,
-                    primary = true,
-                    height = 44.dp,
-                    modifier = when {
-                        isHeroTarget && returnRequester != null -> Modifier.focusRequester(returnRequester)
-                        landing != null -> Modifier.landingFocus(landing)
-                        else -> Modifier
-                    },
-                    onClick = { currentFilm?.let(onOpenFilm) },
-                    onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
-                )
-                TvCompactAction(
-                    label = "Detalles",
-                    icon = Icons.Default.Info,
-                    height = 44.dp,
-                    soft = true,
-                    onClick = { currentFilm?.let(onOpenFilm) },
-                    onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
-                )
-                TvCompactAction(
-                    label = if (inFavorites) "En Favoritos" else "Favorito",
-                    icon = if (inFavorites) VisionIcons.Favorite else VisionIcons.FavoriteBorder,
-                    height = 44.dp,
-                    soft = true,
-                    onClick = onToggleFavorite,
-                    onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
-                )
+            // Botones de acción directa con foco de control remoto. «Favorito» conserva la
+            // función completa: en Compact/Narrow es un icono de 44 dp con contentDescription.
+            val isHeroTarget = returnFilmId != null && currentFilm?.id == returnFilmId
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.padding(top = 16.dp),
+            ) {
+                if (event != null) {
+                    TvCompactAction(
+                        label = if (event.live) "Ver en vivo" else "Ver partido",
+                        icon = Icons.Default.SportsSoccer,
+                        primary = true,
+                        height = 44.dp,
+                        modifier = if (landing != null) Modifier.landingFocus(landing) else Modifier,
+                        onClick = { onOpenSports(event) },
+                        onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
+                    )
+                    TvCompactAction(
+                        label = "Agenda",
+                        icon = Icons.Default.Info,
+                        height = 44.dp,
+                        soft = true,
+                        onClick = onOpenSportsHub,
+                        onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
+                    )
+                } else {
+                    TvCompactAction(
+                        label = "Reproducir",
+                        icon = VisionIcons.Play,
+                        primary = true,
+                        height = 44.dp,
+                        modifier = when {
+                            isHeroTarget && returnRequester != null -> Modifier.focusRequester(returnRequester)
+                            landing != null -> Modifier.landingFocus(landing)
+                            else -> Modifier
+                        },
+                        onClick = { currentFilm?.let(onOpenFilm) },
+                        onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
+                    )
+                    TvCompactAction(
+                        label = "Detalles",
+                        icon = Icons.Default.Info,
+                        height = 44.dp,
+                        soft = true,
+                        onClick = { currentFilm?.let(onOpenFilm) },
+                        onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
+                    )
+                    if (full) {
+                        TvCompactAction(
+                            label = if (inFavorites) "En Favoritos" else "Favorito",
+                            icon = if (inFavorites) VisionIcons.Favorite else VisionIcons.FavoriteBorder,
+                            height = 44.dp,
+                            soft = true,
+                            onClick = onToggleFavorite,
+                            onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
+                        )
+                    } else {
+                        HeroFavoriteAction(
+                            inFavorites = inFavorites,
+                            onClick = onToggleFavorite,
+                            onHeroActionFocus = onHeroActionFocus,
+                        )
+                    }
+                }
             }
         }
     }
 }
 
+/** «Favorito» icon-only del Hero en Compact/Narrow: misma acción y mismo aviso de foco. */
 @Composable
-private fun TvSportsScoreboard(event: GeeSportsSource.GeeEvent) {
-    Row(
-        modifier = Modifier.padding(top = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
+private fun HeroFavoriteAction(
+    inFavorites: Boolean,
+    onClick: () -> Unit,
+    onHeroActionFocus: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .size(44.dp)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onHeroActionFocus()
+            }
+            .semantics { contentDescription = if (inFavorites) "En favoritos" else "Favorito" },
+        shape = ClickableSurfaceDefaults.shape(CircleShape),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color(0x1AFFFFFF),
+            focusedContainerColor = Color.White.copy(alpha = 0.22f),
+            pressedContainerColor = Color.White.copy(alpha = 0.30f),
+            contentColor = Color.White,
+            focusedContentColor = Color.White,
+            pressedContentColor = Color.White,
+        ),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = CircleShape),
+        ),
     ) {
-        TvTeamSide(event.homeName, event.homeLogo, alignEnd = true)
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(
+                if (inFavorites) VisionIcons.Favorite else VisionIcons.FavoriteBorder,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TvSportsScoreboard(event: GeeSportsSource.GeeEvent, full: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (full) 18.dp else 10.dp),
+    ) {
+        TvTeamSide(
+            name = event.homeName,
+            logo = event.homeLogo,
+            alignEnd = true,
+            full = full,
+            modifier = Modifier.weight(1f),
+        )
+        Column(
+            modifier = Modifier.weight(if (full) 0.7f else 0.6f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             val score = when {
                 event.scoreHome != null && event.scoreAway != null -> "${event.scoreHome}  ${event.scoreAway}"
                 event.scoreHome != null -> "${event.scoreHome}  -"
@@ -1353,40 +1468,73 @@ private fun TvSportsScoreboard(event: GeeSportsSource.GeeEvent) {
                 text = score,
                 style = MaterialTheme.typography.displaySmall,
                 color = Color.White,
+                fontSize = if (full) 36.sp else 28.sp,
+                lineHeight = if (full) 44.sp else 34.sp,
                 fontWeight = FontWeight.Black,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = event.detail.ifBlank { if (event.live) SportsSchedule.liveDetail(GeeAgenda.startMs(event).takeIf { it != null && it > 0L }, event.category, event.detail) else event.time.take(5) },
+                text = event.detail.ifBlank {
+                    if (event.live) {
+                        SportsSchedule.liveDetail(
+                            GeeAgenda.startMs(event).takeIf { it != null && it > 0L },
+                            event.category,
+                            event.detail,
+                        )
+                    } else {
+                        event.time.take(5)
+                    }
+                },
                 style = MaterialTheme.typography.titleSmall,
                 color = if (event.live) Color(0xFFFF8A8D) else VisionTextSecondary,
+                fontSize = if (full) 14.sp else 13.sp,
+                lineHeight = if (full) 18.sp else 17.sp,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        TvTeamSide(event.awayName, event.awayLogo, alignEnd = false)
+        TvTeamSide(
+            name = event.awayName,
+            logo = event.awayLogo,
+            alignEnd = false,
+            full = full,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
 @Composable
-private fun TvTeamSide(name: String, logo: String, alignEnd: Boolean) {
+private fun TvTeamSide(
+    name: String,
+    logo: String,
+    alignEnd: Boolean,
+    full: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val logoSize = if (full) 44.dp else 40.dp
     Row(
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (alignEnd) {
             Text(
                 text = name,
-                color = Color.White,
                 style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                fontSize = if (full) 14.sp else 13.sp,
+                lineHeight = if (full) 18.sp else 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.End,
-                modifier = Modifier.width(110.dp),
+                modifier = Modifier.weight(1f),
             )
         }
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(logoSize)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color.White.copy(alpha = 0.08f)),
             contentAlignment = Alignment.Center,
@@ -1403,7 +1551,7 @@ private fun TvTeamSide(name: String, logo: String, alignEnd: Boolean) {
                     text = name.trim().split(' ').filter { it.isNotBlank() }.take(2)
                         .joinToString("") { it.take(1).uppercase() }.ifBlank { "VS" },
                     color = Color.White.copy(alpha = 0.55f),
-                    style = MaterialTheme.typography.titleSmall,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -1411,12 +1559,14 @@ private fun TvTeamSide(name: String, logo: String, alignEnd: Boolean) {
         if (!alignEnd) {
             Text(
                 text = name,
-                color = Color.White,
                 style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                fontSize = if (full) 14.sp else 13.sp,
+                lineHeight = if (full) 18.sp else 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.width(110.dp),
+                modifier = Modifier.weight(1f),
             )
         }
     }

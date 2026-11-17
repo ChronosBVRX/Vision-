@@ -12,6 +12,21 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
+/** Ancho máximo del bloque de texto del Hero en Compact/Narrow y en Full. */
+internal const val TV_HERO_TEXT_MAX_COMPACT_DP = 440f
+internal const val TV_HERO_TEXT_MAX_FULL_DP = 560f
+
+/**
+ * Ancho del bloque de texto del Hero: 46 % del ancho disponible en Compact/Narrow y
+ * 50 % en Full, con tope de 440/560 dp. [availableWidthDp] es el ancho del Hero ya
+ * descontados los 48 dp de padding de cada lado.
+ */
+internal fun tvHeroTextWidthDp(availableWidthDp: Float, full: Boolean): Float {
+    val fraction = if (full) 0.50f else 0.46f
+    val cap = if (full) TV_HERO_TEXT_MAX_FULL_DP else TV_HERO_TEXT_MAX_COMPACT_DP
+    return (availableWidthDp.coerceAtLeast(0f) * fraction).coerceAtMost(cap)
+}
+
 /**
  * Una diapositiva del billboard de Vision TV. Reúne la foto diaria del VPS (películas
  * con backdrop de TMDB) y los partidos de GeeSports (marcador en vivo).
