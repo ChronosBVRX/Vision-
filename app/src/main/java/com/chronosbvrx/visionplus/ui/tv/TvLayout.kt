@@ -55,8 +55,12 @@ internal fun tvRowMetrics(screenHeightDp: Int): TvRowMetrics {
     )
 }
 
-/** Las medidas de fila de esta pantalla, recalculadas solo si cambia la altura disponible. */
-internal const val TV_TOP_BAR_DP = 62
+/**
+ * Alto de referencia de la barra (variante Compact). El alto real lo decide
+ * [tvTopBarPlan] (64/60/56 dp); esta constante solo se usa para calcular el espacio
+ * aproximado de las filas del Inicio.
+ */
+internal const val TV_TOP_BAR_DP = 60
 
 @Composable
 internal fun rememberTvRowMetrics(): TvRowMetrics {

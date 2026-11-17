@@ -7,16 +7,22 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
@@ -39,10 +45,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +68,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,6 +88,7 @@ import com.chronosbvrx.visionplus.ui.theme.VisionBlueBright
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Las pestañas del shell de la tele (el mismo lenguaje que Vision+ Home, con las de la app). */
 internal enum class TvTopTab(val label: String, val description: String, val target: Route) {
@@ -144,9 +156,26 @@ internal val TV_TOP_ENTRIES: List<TvTopEntry> = listOf(
 internal fun liveHubSelected(active: TvTopTab?): Boolean =
     active == TvTopTab.LIVE || active == TvTopTab.SPORTS
 
+/** Los cuatro menús desplegables de la barra. Solo puede haber uno abierto. */
+private enum class TvTopHub { LIVE, MOVIES, SERIES, LIBRARY }
+
+/**
+ * Ancla de un hub: guarda su `FocusRequester` y si de verdad tiene el foco. La restauración
+ * verifica el aterrizaje (no basta con que `requestFocus` no lance) y reintenta mientras el
+ * popup termina de cerrarse.
+ */
+private class HubAnchor {
+    val requester = FocusRequester()
+    var focused by mutableStateOf(false)
+}
+
 /**
  * La barra superior de la tele: marca, pestañas, hora de CDMX, perfil, buscador y ajustes.
  * Es la misma idea que la de Vision+ Home, con las secciones de la app (sin Apps ni sistema).
+ *
+ * La variante sale de [tvTopBarPlan]: Full conserva reloj, nombre de perfil y etiquetas;
+ * Compact/Narrow los colapsan (avatar e iconos) para que las 6 pestañas conserven su ancho.
+ * Nunca se ocultan pestañas primarias en 960 dp: la tira se desplaza con auto-scroll a la activa.
  */
 @OptIn(
     androidx.compose.foundation.ExperimentalFoundationApi::class,
@@ -183,225 +212,407 @@ internal fun TvTopBar(
     val profile = profileName ?: storedProfile?.name ?: "Principal"
     val avatar = if (profileName != null) profileAvatar else storedProfile?.avatar.orEmpty()
     val clock = rememberTopClock()
-    var liveMenuOpen by remember { mutableStateOf(false) }
-    var moviesMenuOpen by remember { mutableStateOf(false) }
-    var seriesMenuOpen by remember { mutableStateOf(false) }
-    var libraryMenuOpen by remember { mutableStateOf(false) }
-    val liveHubFocus = remember { FocusRequester() }
-    val moviesHubFocus = remember { FocusRequester() }
-    val seriesHubFocus = remember { FocusRequester() }
-    val libraryHubFocus = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    var openHub by remember { mutableStateOf<TvTopHub?>(null) }
+    var barFocused by remember { mutableStateOf(false) }
+    val tabListState = rememberLazyListState()
+    val anyHubOpen = openHub != null
+    val activeIndex = remember(active) { tvTopEntryIndex(active) }
+
+    // Un hub es una ventana de foco propia: mientras vive, el rescate de la pantalla de fondo
+    // no debe pelear por el foco. El contador se libera al desmontar el popup.
+    DisposableEffect(anyHubOpen) {
+        if (anyHubOpen) FocusRescue.dialogsOpen++
+        onDispose { if (anyHubOpen) FocusRescue.dialogsOpen-- }
+    }
+
     // Al cambiar de sección el menú no puede quedarse abierto encima de la pantalla nueva.
     LaunchedEffect(active) {
-        if (active != TvTopTab.LIVE && active != TvTopTab.SPORTS) liveMenuOpen = false
-        if (active != TvTopTab.MOVIES) moviesMenuOpen = false
-        if (active != TvTopTab.SERIES) seriesMenuOpen = false
-        if (active != TvTopTab.LIBRARY && active != null) libraryMenuOpen = false
+        val hub = openHub ?: return@LaunchedEffect
+        val stillOpen = when (hub) {
+            TvTopHub.LIVE -> liveHubSelected(active)
+            TvTopHub.MOVIES -> active == TvTopTab.MOVIES
+            TvTopHub.SERIES -> active == TvTopTab.SERIES
+            TvTopHub.LIBRARY -> active == TvTopTab.LIBRARY
+        }
+        if (!stillOpen) openHub = null
     }
-    Row(
+
+    /**
+     * Cierra un hub y devuelve el foco a su píldora. No basta con `requestFocus`: el popup
+     * tarda unos cuadros en soltar su ventana, así que se verifica el aterrizaje y se reintenta.
+     */
+    fun dismissHub(anchor: HubAnchor, useLanding: Boolean, close: () -> Unit) {
+        close()
+        scope.launch {
+            repeat(20) {
+                val landingFocused = useLanding && landing?.focused == true
+                if (anchor.focused || landingFocused) return@launch
+                runCatching { anchor.requester.requestFocus() }
+                if (useLanding) landing?.request()
+                delay(50)
+            }
+        }
+    }
+
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(62.dp)
             .background(Color.Black.copy(alpha = 0.55f))
             // Grupo de foco: `hasFocus` es true mientras cualquier control de la barra tenga el
             // foco. Lo usa el Atrás de TvApp para saber si ya está «arriba» y puede salir.
             .focusGroup()
-            .onFocusChanged { onFocusChanged(it.hasFocus) }
-            .padding(horizontal = 40.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .onFocusChanged {
+                barFocused = it.hasFocus
+                onFocusChanged(it.hasFocus)
+            },
     ) {
-        // Marca
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Vision",
-                color = Color.White,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = (-0.4).sp,
-            )
-            Text("+", color = VisionBlueBright, fontSize = 19.sp, fontWeight = FontWeight.Black)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "TV",
-                color = VisionTextSecondary,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.2.sp,
+        val systemFontScale = LocalDensity.current.fontScale
+        val plan = remember(maxWidth, systemFontScale, profile.trim().length, updatesBadge > 0) {
+            tvTopBarPlan(
+                widthDp = maxWidth.value,
+                fontScale = systemFontScale,
+                profileNameLength = profile.trim().length,
+                hasBadge = updatesBadge > 0,
             )
         }
-        Spacer(Modifier.width(20.dp))
-        LazyRow(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            items(TV_TOP_ENTRIES) { entry ->
-                val entryActive = when (entry) {
-                    is TvTopEntry.Tab -> entry.tab == active
-                    TvTopEntry.LiveHub -> liveHubSelected(active)
-                    TvTopEntry.MoviesHub -> active == TvTopTab.MOVIES
-                    TvTopEntry.SeriesHub -> active == TvTopTab.SERIES
-                    TvTopEntry.LibraryHub -> active == TvTopTab.LIBRARY
-                }
-                // Dónde aterriza el Atrás: la pestaña de la sección actual. En las pantallas sin
-                // pestaña propia (Ajustes, Buscar, Categorías) la primera, que siempre existe.
-                val lands = landing != null &&
-                    (if (active == null) entry == TV_TOP_ENTRIES.first() else entryActive)
-                when (entry) {
-                    is TvTopEntry.Tab -> TopTabPill(
-                        label = entry.tab.label,
-                        description = entry.tab.description,
-                        selected = entry.tab == active,
-                        onClick = { onTab(entry.tab) },
-                        modifier = if (lands) Modifier.landingFocus(landing!!) else Modifier,
-                    )
-                    TvTopEntry.MoviesHub -> Box {
-                        TopTabPill(
-                            label = "Películas",
-                            description = "Películas e infantil",
-                            selected = active == TvTopTab.MOVIES,
-                            onClick = { moviesMenuOpen = true },
-                            modifier = Modifier
-                                .focusRequester(moviesHubFocus)
-                                .then(if (lands) Modifier.landingFocus(landing!!) else Modifier),
-                        )
-                        if (moviesMenuOpen) {
-                            val density = LocalDensity.current
-                            val below = with(density) { 46.dp.roundToPx() }
-                            Popup(
-                                alignment = Alignment.TopStart,
-                                offset = IntOffset(0, below),
-                                onDismissRequest = { moviesMenuOpen = false },
-                                properties = PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true),
-                            ) {
-                                MoviesHubPanel(
-                                    active = active,
-                                    onPick = { route -> moviesMenuOpen = false; onRoute(route) },
-                                    onDismiss = { moviesMenuOpen = false },
-                                )
-                            }
-                        }
-                    }
-                    TvTopEntry.LiveHub -> Box {
-                        TopTabPill(
-                            label = "En vivo",
-                            description = "TV en vivo y Deportes",
-                            selected = liveHubSelected(active),
-                            onClick = { liveMenuOpen = true },
-                            modifier = Modifier
-                                .focusRequester(liveHubFocus)
-                                .then(if (lands) Modifier.landingFocus(landing!!) else Modifier),
-                        )
-                        if (liveMenuOpen) {
-                            val density = LocalDensity.current
-                            val below = with(density) { 46.dp.roundToPx() }
-                            Popup(
-                                alignment = Alignment.TopStart,
-                                offset = IntOffset(0, below),
-                                onDismissRequest = {
-                                    liveMenuOpen = false
-                                    runCatching { liveHubFocus.requestFocus() }
-                                },
-                                properties = PopupProperties(
-                                    focusable = true,
-                                    dismissOnBackPress = true,
-                                    dismissOnClickOutside = true,
-                                ),
-                            ) {
-                                LiveHubPanel(
-                                    active = active,
-                                    onPick = { tab ->
-                                        liveMenuOpen = false
-                                        onTab(tab)
-                                    },
-                                    onDismiss = { liveMenuOpen = false },
-                                )
-                            }
-                        }
-                    }
-                    TvTopEntry.SeriesHub -> Box {
-                        TopTabPill(
-                            label = "Series",
-                            description = "Series, anime y novelas",
-                            selected = active == TvTopTab.SERIES,
-                            onClick = { seriesMenuOpen = true },
-                            modifier = Modifier
-                                .focusRequester(seriesHubFocus)
-                                .then(if (lands) Modifier.landingFocus(landing!!) else Modifier),
-                        )
-                        if (seriesMenuOpen) {
-                            val density = LocalDensity.current
-                            val below = with(density) { 46.dp.roundToPx() }
-                            Popup(
-                                alignment = Alignment.TopStart,
-                                offset = IntOffset(0, below),
-                                onDismissRequest = { seriesMenuOpen = false },
-                                properties = PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true),
-                            ) {
-                                SeriesHubPanel(
-                                    active = active,
-                                    onPick = { route -> seriesMenuOpen = false; onRoute(route) },
-                                    onDismiss = { seriesMenuOpen = false },
-                                )
-                            }
-                        }
-                    }
-                    TvTopEntry.LibraryHub -> Box {
-                        TopTabPill(
-                            label = "Mi lista",
-                            description = "Mi lista y descargas",
-                            selected = active == TvTopTab.LIBRARY,
-                            onClick = { libraryMenuOpen = true },
-                            modifier = Modifier
-                                .focusRequester(libraryHubFocus)
-                                .then(if (lands) Modifier.landingFocus(landing!!) else Modifier),
-                        )
-                        if (libraryMenuOpen) {
-                            val density = LocalDensity.current
-                            val below = with(density) { 46.dp.roundToPx() }
-                            Popup(
-                                alignment = Alignment.TopStart,
-                                offset = IntOffset(0, below),
-                                onDismissRequest = { libraryMenuOpen = false },
-                                properties = PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true),
-                            ) {
-                                LibraryHubPanel(
-                                    active = active,
-                                    onPick = { route -> libraryMenuOpen = false; onRoute(route) },
-                                    onDismiss = { libraryMenuOpen = false },
-                                )
-                            }
-                        }
-                    }
-                }
+        val baseDensity = LocalDensity.current
+        val barDensity = remember(baseDensity.density, plan.fontScale) {
+            Density(baseDensity.density, plan.fontScale)
+        }
+
+        // La LazyRow solo compone lo visible. Cuando el mando está en el contenido, la tira
+        // vuelve a la pestaña activa para que el Atrás siempre encuentre compuesto su destino.
+        // Con un hub abierto no se mueve: el popup está anclado a esa píldora.
+        LaunchedEffect(activeIndex, barFocused, plan) {
+            // `anyHubOpen` se consulta pero no es clave: al cerrar un hub no queremos mover
+            // la tira antes de que termine la restauración de foco (bailaría la píldora).
+            if (!barFocused && !anyHubOpen) {
+                runCatching { tabListState.scrollToItem(activeIndex) }
             }
         }
-        Spacer(Modifier.width(12.dp))
-        Text(
-            clock,
-            color = VisionTextSecondary,
-            fontSize = 13.sp,
-            letterSpacing = 0.8.sp,
-        )
-        Spacer(Modifier.width(8.dp))
-        if (onNotifications != null) {
-            TopBarIcon(
-                icon = Icons.Default.Notifications,
-                label = "Notificaciones",
-                onClick = onNotifications,
-                badge = updatesBadge,
-            )
-            Spacer(Modifier.width(6.dp))
+
+        CompositionLocalProvider(
+            LocalTvTopBarPlan provides plan,
+            LocalDensity provides barDensity,
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(plan.height)
+                    .padding(horizontal = plan.horizontalPadding),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Marca: «TV» es decorativo y se cae primero en Compact/Narrow.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Vision",
+                        color = Color.White,
+                        fontSize = 19.sp,
+                        lineHeight = 24.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = (-0.4).sp,
+                        maxLines = 1,
+                    )
+                    Text(
+                        "+",
+                        color = VisionBlueBright,
+                        fontSize = 19.sp,
+                        lineHeight = 24.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                    )
+                    if (plan.brand == TvTopBarBrandMode.FULL) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "TV",
+                            color = VisionTextSecondary,
+                            fontSize = 9.sp,
+                            lineHeight = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.2.sp,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(if (plan.brand == TvTopBarBrandMode.FULL) 20.dp else 16.dp))
+
+                Box(Modifier.weight(1f)) {
+                    LazyRow(
+                        state = tabListState,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(plan.tabSpacing),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        items(TV_TOP_ENTRIES, key = { tvTopEntryKey(it) }) { entry ->
+                            val entryActive = tvTopEntryActive(entry, active)
+                            // Dónde aterriza el Atrás: la pestaña de la sección actual. En las
+                            // pantallas sin pestaña propia (Ajustes, Buscar, Categorías) la primera.
+                            val lands = landing != null &&
+                                (if (active == null) entry == TV_TOP_ENTRIES.first() else entryActive)
+                            when (entry) {
+                                is TvTopEntry.Tab -> TopTabPill(
+                                    label = entry.tab.label,
+                                    description = entry.tab.description,
+                                    selected = entry.tab == active,
+                                    onClick = { onTab(entry.tab) },
+                                    modifier = if (lands) Modifier.landingFocus(landing!!) else Modifier,
+                                )
+
+                                TvTopEntry.MoviesHub -> {
+                                    val anchor = remember(entry) { HubAnchor() }
+                                    Box {
+                                        TopTabPill(
+                                            label = "Películas",
+                                            description = "Películas e infantil",
+                                            selected = active == TvTopTab.MOVIES,
+                                            onClick = { openHub = TvTopHub.MOVIES },
+                                            modifier = Modifier
+                                                .focusRequester(anchor.requester)
+                                                .onFocusChanged { anchor.focused = it.isFocused }
+                                                .then(if (lands) Modifier.landingFocus(landing!!) else Modifier),
+                                        )
+                                        if (openHub == TvTopHub.MOVIES) {
+                                            val density = LocalDensity.current
+                                            val below = with(density) { (plan.controlHeight + 6.dp).roundToPx() }
+                                            Popup(
+                                                alignment = Alignment.TopStart,
+                                                offset = IntOffset(0, below),
+                                                onDismissRequest = {
+                                                    dismissHub(anchor, lands) { openHub = null }
+                                                },
+                                                properties = PopupProperties(
+                                                    focusable = true,
+                                                    dismissOnBackPress = true,
+                                                    dismissOnClickOutside = true,
+                                                ),
+                                            ) {
+                                                MoviesHubPanel(
+                                                    active = active,
+                                                    onPick = { route ->
+                                                        openHub = null
+                                                        onRoute(route)
+                                                    },
+                                                    onDismiss = {
+                                                        dismissHub(anchor, lands) { openHub = null }
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                TvTopEntry.LiveHub -> {
+                                    val anchor = remember(entry) { HubAnchor() }
+                                    Box {
+                                        TopTabPill(
+                                            label = "En vivo",
+                                            description = "TV en vivo y Deportes",
+                                            selected = liveHubSelected(active),
+                                            onClick = { openHub = TvTopHub.LIVE },
+                                            modifier = Modifier
+                                                .focusRequester(anchor.requester)
+                                                .onFocusChanged { anchor.focused = it.isFocused }
+                                                .then(if (lands) Modifier.landingFocus(landing!!) else Modifier),
+                                        )
+                                        if (openHub == TvTopHub.LIVE) {
+                                            val density = LocalDensity.current
+                                            val below = with(density) { (plan.controlHeight + 6.dp).roundToPx() }
+                                            Popup(
+                                                alignment = Alignment.TopStart,
+                                                offset = IntOffset(0, below),
+                                                onDismissRequest = {
+                                                    dismissHub(anchor, lands) { openHub = null }
+                                                },
+                                                properties = PopupProperties(
+                                                    focusable = true,
+                                                    dismissOnBackPress = true,
+                                                    dismissOnClickOutside = true,
+                                                ),
+                                            ) {
+                                                LiveHubPanel(
+                                                    active = active,
+                                                    onPick = { tab ->
+                                                        openHub = null
+                                                        onTab(tab)
+                                                    },
+                                                    onDismiss = {
+                                                        dismissHub(anchor, lands) { openHub = null }
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                TvTopEntry.SeriesHub -> {
+                                    val anchor = remember(entry) { HubAnchor() }
+                                    Box {
+                                        TopTabPill(
+                                            label = "Series",
+                                            description = "Series, anime y novelas",
+                                            selected = active == TvTopTab.SERIES,
+                                            onClick = { openHub = TvTopHub.SERIES },
+                                            modifier = Modifier
+                                                .focusRequester(anchor.requester)
+                                                .onFocusChanged { anchor.focused = it.isFocused }
+                                                .then(if (lands) Modifier.landingFocus(landing!!) else Modifier),
+                                        )
+                                        if (openHub == TvTopHub.SERIES) {
+                                            val density = LocalDensity.current
+                                            val below = with(density) { (plan.controlHeight + 6.dp).roundToPx() }
+                                            Popup(
+                                                alignment = Alignment.TopStart,
+                                                offset = IntOffset(0, below),
+                                                onDismissRequest = {
+                                                    dismissHub(anchor, lands) { openHub = null }
+                                                },
+                                                properties = PopupProperties(
+                                                    focusable = true,
+                                                    dismissOnBackPress = true,
+                                                    dismissOnClickOutside = true,
+                                                ),
+                                            ) {
+                                                SeriesHubPanel(
+                                                    active = active,
+                                                    onPick = { route ->
+                                                        openHub = null
+                                                        onRoute(route)
+                                                    },
+                                                    onDismiss = {
+                                                        dismissHub(anchor, lands) { openHub = null }
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                TvTopEntry.LibraryHub -> {
+                                    val anchor = remember(entry) { HubAnchor() }
+                                    Box {
+                                        TopTabPill(
+                                            label = "Mi lista",
+                                            description = "Mi lista y descargas",
+                                            selected = active == TvTopTab.LIBRARY,
+                                            onClick = { openHub = TvTopHub.LIBRARY },
+                                            modifier = Modifier
+                                                .focusRequester(anchor.requester)
+                                                .onFocusChanged { anchor.focused = it.isFocused }
+                                                .then(if (lands) Modifier.landingFocus(landing!!) else Modifier),
+                                        )
+                                        if (openHub == TvTopHub.LIBRARY) {
+                                            val density = LocalDensity.current
+                                            val below = with(density) { (plan.controlHeight + 6.dp).roundToPx() }
+                                            Popup(
+                                                alignment = Alignment.TopStart,
+                                                offset = IntOffset(0, below),
+                                                onDismissRequest = {
+                                                    dismissHub(anchor, lands) { openHub = null }
+                                                },
+                                                properties = PopupProperties(
+                                                    focusable = true,
+                                                    dismissOnBackPress = true,
+                                                    dismissOnClickOutside = true,
+                                                ),
+                                            ) {
+                                                LibraryHubPanel(
+                                                    active = active,
+                                                    onPick = { route ->
+                                                        openHub = null
+                                                        onRoute(route)
+                                                    },
+                                                    onDismiss = {
+                                                        dismissHub(anchor, lands) { openHub = null }
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // El degradado solo aparece cuando de verdad hay más pestañas a ese lado.
+                    val canScrollBack = tabListState.firstVisibleItemIndex > 0 ||
+                        tabListState.firstVisibleItemScrollOffset > 0
+                    val lastVisible = tabListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
+                        ?: TV_TOP_ENTRIES.lastIndex
+                    val canScrollForward = lastVisible < TV_TOP_ENTRIES.lastIndex
+                    if (canScrollBack) {
+                        Box(
+                            Modifier
+                                .align(Alignment.CenterStart)
+                                .fillMaxHeight()
+                                .width(16.dp)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(Color.Black.copy(alpha = 0.9f), Color.Transparent),
+                                    ),
+                                ),
+                        )
+                    }
+                    if (canScrollForward) {
+                        Box(
+                            Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .width(16.dp)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f)),
+                                    ),
+                                ),
+                        )
+                    }
+                }
+
+                if (plan.showClock) {
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        clock,
+                        color = VisionTextSecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 16.sp,
+                        letterSpacing = 0.8.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.widthIn(max = 72.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                } else {
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        Modifier
+                            .width(1.dp)
+                            .height(24.dp)
+                            .background(Color.White.copy(alpha = 0.12f)),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+
+                if (onNotifications != null) {
+                    TopBarIcon(
+                        icon = Icons.Default.Notifications,
+                        label = "Notificaciones",
+                        onClick = onNotifications,
+                        badge = updatesBadge,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                if (onReload != null) {
+                    TopBarIcon(Icons.Default.Refresh, "Recargar", onReload)
+                    Spacer(Modifier.width(8.dp))
+                }
+                ProfileChip(profile, avatar, onProfile)
+                Spacer(Modifier.width(6.dp))
+                TvSearchPill(onSearch)
+                Spacer(Modifier.width(4.dp))
+                TopBarIcon(Icons.Default.Settings, "Ajustes", onSettings)
+            }
         }
-        if (onReload != null) {
-            TopBarIcon(Icons.Default.Refresh, "Recargar", onReload)
-            Spacer(Modifier.width(8.dp))
-        }
-        ProfileChip(profile, avatar, onProfile)
-        Spacer(Modifier.width(6.dp))
-        TvSearchPill(onSearch)
-        Spacer(Modifier.width(4.dp))
-        TopBarIcon(Icons.Default.Settings, "Ajustes", onSettings)
     }
 }
 
@@ -414,6 +625,7 @@ private fun TopTabPill(
     modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
+    val plan = LocalTvTopBarPlan.current
     val background = when {
         focused && selected -> VisionBlue.copy(alpha = 0.32f)
         focused -> Color.White.copy(alpha = 0.14f)
@@ -423,10 +635,11 @@ private fun TopTabPill(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(50))
+            .heightIn(min = plan.controlHeight)
             .background(background)
             .then(
                 if (focused) {
-                    Modifier.border(1.dp, Color.White.copy(alpha = 0.75f), RoundedCornerShape(50))
+                    Modifier.border(2.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(50))
                 } else {
                     Modifier
                 },
@@ -434,15 +647,18 @@ private fun TopTabPill(
             .onFocusChanged { focused = it.isFocused }
             .semantics { contentDescription = description }
             .clickable(onClick = onClick)
-            .padding(horizontal = 11.dp, vertical = 6.dp),
+            .padding(horizontal = plan.tabPadding),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
             color = if (selected || focused) Color.White else VisionTextSecondary,
             style = MaterialTheme.typography.titleMedium,
             fontSize = 13.sp,
+            lineHeight = 18.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -453,17 +669,16 @@ private fun MoviesHubPanel(
     onPick: (Route) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { delay(60); runCatching { first.requestFocus() } }
+    val first = rememberDialogFocus()
     Column(
-        Modifier.width(256.dp).dismissOnBack(onDismiss)
+        Modifier.width(256.dp).modalFocusTrap().dismissOnBack(onDismiss)
             .clip(RoundedCornerShape(14.dp))
             .background(Color(0xF20B1220))
             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(14.dp))
             .padding(6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        RouteHubOption("Películas", "Catálogo de películas", Icons.Default.Movie, active == TvTopTab.MOVIES, first) { onPick(Route.Section("movies", "Películas")) }
+        RouteHubOption("Películas", "Catálogo de películas", Icons.Default.Movie, active == TvTopTab.MOVIES, Modifier.dialogFocus(first)) { onPick(Route.Section("movies", "Películas")) }
         RouteHubOption("Películas Infantiles", "Películas para chicos y familia", Icons.Default.ChildCare, false) { onPick(Route.Category("kids-movies", "Películas Infantiles")) }
     }
 }
@@ -474,17 +689,16 @@ private fun SeriesHubPanel(
     onPick: (Route) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { delay(60); runCatching { first.requestFocus() } }
+    val first = rememberDialogFocus()
     Column(
-        Modifier.width(256.dp).dismissOnBack(onDismiss)
+        Modifier.width(256.dp).modalFocusTrap().dismissOnBack(onDismiss)
             .clip(RoundedCornerShape(14.dp))
             .background(Color(0xF20B1220))
             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(14.dp))
             .padding(6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        RouteHubOption("Series", "Series de televisión", Icons.Default.Tv, active == TvTopTab.SERIES, first) { onPick(Route.Section("series", "Series")) }
+        RouteHubOption("Series", "Series de televisión", Icons.Default.Tv, active == TvTopTab.SERIES, Modifier.dialogFocus(first)) { onPick(Route.Section("series", "Series")) }
         RouteHubOption("Anime", "Animación japonesa", Icons.Default.Animation, false) { onPick(Route.Section("anime", "Anime")) }
         RouteHubOption("Novelas", "Telenovelas y dramas", Icons.Default.AutoStories, false) { onPick(Route.Section("novelas", "Novelas")) }
         RouteHubOption("Series Infantiles", "Dibujos animados y para chicos", Icons.Default.ChildCare, false) { onPick(Route.Category("kids-series", "Series Infantiles")) }
@@ -497,17 +711,16 @@ private fun LibraryHubPanel(
     onPick: (Route) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { delay(60); runCatching { first.requestFocus() } }
+    val first = rememberDialogFocus()
     Column(
-        Modifier.width(246.dp).dismissOnBack(onDismiss)
+        Modifier.width(246.dp).modalFocusTrap().dismissOnBack(onDismiss)
             .clip(RoundedCornerShape(14.dp))
             .background(Color(0xF20B1220))
             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(14.dp))
             .padding(6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        RouteHubOption("Mi lista", "Favoritos y ver más tarde", Icons.Default.Bookmark, active == TvTopTab.LIBRARY, first) { onPick(Route.Library) }
+        RouteHubOption("Mi lista", "Favoritos y ver más tarde", Icons.Default.Bookmark, active == TvTopTab.LIBRARY, Modifier.dialogFocus(first)) { onPick(Route.Library) }
         RouteHubOption("Descargas", "Contenido sin conexión", Icons.Default.Download, false) { onPick(Route.Downloads) }
     }
 }
@@ -518,14 +731,14 @@ private fun RouteHubOption(
     detail: String,
     icon: ImageVector,
     selected: Boolean,
-    focusRequester: FocusRequester? = null,
+    focusModifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth()
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .then(focusModifier)
             .onFocusChanged { focused = it.isFocused },
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
         colors = ClickableSurfaceDefaults.colors(
@@ -544,8 +757,23 @@ private fun RouteHubOption(
             Icon(icon, contentDescription = null, tint = if (focused || selected) Color.White else VisionTextSecondary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(9.dp))
             Column(Modifier.weight(1f)) {
-                Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(detail, color = VisionTextSecondary, fontSize = 10.sp)
+                Text(
+                    label,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    lineHeight = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    detail,
+                    color = VisionTextSecondary,
+                    fontSize = 10.sp,
+                    lineHeight = 13.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -557,17 +785,11 @@ private fun LiveHubPanel(
     onPick: (TvTopTab) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val firstOption = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        delay(60)
-        repeat(4) {
-            if (runCatching { firstOption.requestFocus() }.isSuccess) return@LaunchedEffect
-            delay(60)
-        }
-    }
+    val firstOption = rememberDialogFocus()
     Column(
         Modifier
             .width(246.dp)
+            .modalFocusTrap()
             .dismissOnBack(onDismiss)
             .clip(RoundedCornerShape(14.dp))
             .background(Color(0xF20B1220))
@@ -580,7 +802,7 @@ private fun LiveHubPanel(
             detail = "Canales y guía",
             icon = Icons.Default.LiveTv,
             selected = active == TvTopTab.LIVE,
-            focusRequester = firstOption,
+            focusModifier = Modifier.dialogFocus(firstOption),
             onClick = { onPick(TvTopTab.LIVE) },
         )
         LiveHubOption(
@@ -599,7 +821,7 @@ private fun LiveHubOption(
     detail: String,
     icon: ImageVector,
     selected: Boolean,
-    focusRequester: FocusRequester? = null,
+    focusModifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -607,7 +829,7 @@ private fun LiveHubOption(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .then(focusModifier)
             .onFocusChanged { focused = it.isFocused },
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
         colors = ClickableSurfaceDefaults.colors(
@@ -629,8 +851,23 @@ private fun LiveHubOption(
         ) {
             Icon(icon, contentDescription = null, tint = if (selected || focused) Color.White else VisionTextSecondary, modifier = Modifier.size(20.dp))
             Column(Modifier.weight(1f)) {
-                Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                Text(detail, color = VisionTextSecondary, fontSize = 11.sp, maxLines = 1)
+                Text(
+                    label,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    lineHeight = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    detail,
+                    color = VisionTextSecondary,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             if (selected) {
                 Icon(Icons.Default.Check, contentDescription = "Sección actual", tint = VisionBlueBright, modifier = Modifier.size(18.dp))
@@ -642,9 +879,21 @@ private fun LiveHubOption(
 @Composable
 private fun ProfileChip(name: String, avatar: String, onClick: () -> Unit) {
     val label = name.trim().ifBlank { "Principal" }
+    val plan = LocalTvTopBarPlan.current
+    val showName = plan.profile == TvTopBarProfileMode.NAME
     // El chip abre «Perfiles» (como en Netflix): elegir quién eres desde cualquier pantalla.
+    // En Compact/Narrow es solo avatar: el nombre completo vive en Full y en el selector.
     Surface(
         onClick = onClick,
+        modifier = Modifier
+            .heightIn(min = plan.controlHeight)
+            .then(
+                if (showName) {
+                    Modifier
+                } else {
+                    Modifier.semantics { contentDescription = "Perfil: $label" }
+                },
+            ),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.White.copy(alpha = 0.07f),
@@ -659,27 +908,39 @@ private fun ProfileChip(name: String, avatar: String, onClick: () -> Unit) {
         ),
     ) {
         Row(
-            modifier = Modifier.padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+            modifier = Modifier
+                .heightIn(min = plan.controlHeight)
+                .padding(start = 4.dp, end = if (showName) 10.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (showName) 7.dp else 0.dp),
         ) {
-            ProfileAvatar(name = label, size = 22.dp, avatar = avatar)
-            Text(
-                label,
-                color = Color.White,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            ProfileAvatar(name = label, size = if (showName) 22.dp else 26.dp, avatar = avatar)
+            if (showName) {
+                Text(
+                    label,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = plan.profileLabelMaxWidth),
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun TvSearchPill(onSearch: () -> Unit) {
-    // Píldora «Buscar» en vez de una lupa pelada: es la acción principal de la barra.
+    val plan = LocalTvTopBarPlan.current
+    if (plan.search == TvTopBarSearchMode.ICON) {
+        // En Compact/Narrow la lupa es la misma acción, sin etiqueta: gana ancho para las pestañas.
+        TopBarIcon(Icons.Default.Search, "Buscar", onSearch)
+        return
+    }
+    // Píldora «Buscar» en Full: la acción principal de la barra, con su etiqueta.
     Surface(
         onClick = onSearch,
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
@@ -696,7 +957,9 @@ private fun TvSearchPill(onSearch: () -> Unit) {
         ),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+            modifier = Modifier
+                .heightIn(min = plan.controlHeight)
+                .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
@@ -706,7 +969,7 @@ private fun TvSearchPill(onSearch: () -> Unit) {
                 tint = Color.White,
                 modifier = Modifier.size(15.dp),
             )
-            Text("Buscar", color = Color.White, fontSize = 12.sp, maxLines = 1)
+            Text("Buscar", color = Color.White, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1)
         }
     }
 }
@@ -717,14 +980,16 @@ private fun TopBarIcon(
     label: String,
     onClick: () -> Unit,
     badge: Int = 0,
+    size: Dp = LocalTvTopBarPlan.current.iconButtonSize,
 ) {
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .size(size)
             .clip(RoundedCornerShape(50))
             .background(if (focused) Color.White.copy(alpha = 0.20f) else Color.Transparent)
-            .then(if (focused) Modifier.border(1.dp, Color.White, RoundedCornerShape(50)) else Modifier)
+            .then(if (focused) Modifier.border(2.dp, Color.White, RoundedCornerShape(50)) else Modifier)
+            .semantics { contentDescription = if (badge > 0) "$label, $badge" else label }
             .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -734,14 +999,19 @@ private fun TopBarIcon(
             BadgedBox(
                 badge = {
                     Badge(containerColor = VisionBlue, contentColor = Color.White) {
-                        Text("$badge", fontSize = 9.sp)
+                        Text(
+                            if (badge > 9) "9+" else "$badge",
+                            fontSize = 9.sp,
+                            lineHeight = 11.sp,
+                            maxLines = 1,
+                        )
                     }
                 },
             ) {
-                Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
+                Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
             }
         } else {
-            Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
         }
     }
 }
