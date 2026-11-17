@@ -66,10 +66,13 @@ class HomeCatalogWiringTest {
     fun sectionScreensDoNotRepeatACardAcrossGenres() {
         val phone = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/phone/SectionScreen.kt")
         val tv = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/tv/TvCategoryScreen.kt")
+        val curation = requireSource("src/main/java/com/chronosbvrx/visionplus/data/SectionCuration.kt")
         assertTrue("móvil deduplica entre filas", phone.contains("Popularity.disjointRows"))
         assertTrue("TV deduplica entre filas", tv.contains("Popularity.disjointRows"))
-        // «Recomendado para ti» tampoco repite lo que ya salió en los géneros.
-        assertTrue("TV no repite en el recomendado", tv.contains("Popularity.withoutRepeats("))
+        // La curaduría de submenús tampoco repite una tarjeta entre Top 10, estrenos,
+        // tendencias, mejor valoradas y géneros.
+        assertTrue("submenús no repiten entre filas", curation.contains("Popularity.withoutRepeats("))
+        assertTrue("submenús limpian los géneros", curation.contains("Popularity.disjointRows"))
         // Las filas curadas del servidor conservan su orden (lo que las hace vivir).
         assertTrue("móvil respeta estrenos/tendencias", phone.contains("row.id.endsWith(\"-estrenos\")"))
     }

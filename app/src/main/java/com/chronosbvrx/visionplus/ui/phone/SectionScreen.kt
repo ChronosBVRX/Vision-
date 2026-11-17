@@ -61,6 +61,7 @@ import com.chronosbvrx.visionplus.data.CatalogRow
 import com.chronosbvrx.visionplus.data.Film
 import com.chronosbvrx.visionplus.data.KidsCatalog
 import com.chronosbvrx.visionplus.data.Popularity
+import com.chronosbvrx.visionplus.data.SectionCuration
 import com.chronosbvrx.visionplus.data.SectionPaging
 import com.chronosbvrx.visionplus.data.metaLine
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
@@ -99,36 +100,63 @@ fun SectionScreen(
     onBack: () -> Unit,
     onOpenFilm: (Film) -> Unit,
     initialCategory: String? = null,
+    kidsOnly: Boolean = false,
 ) {
     val context = LocalContext.current
-    var rows by remember(name) {
-        mutableStateOf(RemoteIndexSource.cachedSection(context, name))
+    var rows by remember(name, kidsOnly) {
+        mutableStateOf(
+            if (kidsOnly) emptyList() else RemoteIndexSource.cachedSection(context, name),
+        )
     }
-    var kidsServerFilms by remember(name) { mutableStateOf<List<Film>>(emptyList()) }
-    LaunchedEffect(name) {
-        val fresh = RemoteIndexSource.section(context, name)
-        if (fresh.isNotEmpty() || rows == null) {
-            rows = fresh
+    var kidsServerFilms by remember(name, kidsOnly) { mutableStateOf<List<Film>>(emptyList()) }
+    var kidsLoading by remember(name, kidsOnly) { mutableStateOf(kidsOnly) }
+    var onAirIds by remember(name, kidsOnly) { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(name, kidsOnly) {
+        if (!kidsOnly) {
+            val fresh = RemoteIndexSource.section(context, name)
+            if (fresh.isNotEmpty() || rows == null) {
+                rows = fresh
+            }
         }
         // Infantil reproducible: «Película de Animación» / «Serie de Animación» se firman
         // bien; `xtv-kids-all` mezcla títulos sin licencia y dejaba fichas sin play.
-        if (name in listOf("movies", "series", "kids")) {
-            val cats = when (name) {
-                "kids" -> listOf(KidsCatalog.MOVIES, KidsCatalog.SERIES)
-                "series" -> listOf(KidsCatalog.SERIES)
-                else -> listOf(KidsCatalog.MOVIES)
+        if (name in listOf("movies", "series", "kids") || kidsOnly) {
+            try {
+                val cats = when (name) {
+                    "kids" -> listOf(KidsCatalog.MOVIES, KidsCatalog.SERIES)
+                    "series" -> listOf(KidsCatalog.SERIES)
+                    else -> listOf(KidsCatalog.MOVIES)
+                }
+                val acc = ArrayList<Film>()
+                cats.forEach { cat ->
+                    runCatching {
+                        RemoteIndexSource.categoryPage(context, cat, 1, 120)
+                    }.getOrNull()?.films?.let { acc += it }
+                }
+                if (acc.isNotEmpty()) kidsServerFilms = acc.distinctBy { it.id }
+            } finally {
+                kidsLoading = false
             }
-            val acc = ArrayList<Film>()
-            cats.forEach { cat ->
-                runCatching {
-                    RemoteIndexSource.categoryPage(context, cat, 1, 60)
-                }.getOrNull()?.films?.let { acc += it }
-            }
-            if (acc.isNotEmpty()) kidsServerFilms = acc.distinctBy { it.id }
+        } else {
+            kidsLoading = false
+        }
+        // «En emisión»: la agenda TVMaze ya viene casada por titleId. Solo se pide
+        // para catálogos de series; en Películas no aplica.
+        if (name in listOf("series", "anime", "novelas", "kids") ||
+            (kidsOnly && name == "series")
+        ) {
+            onAirIds = runCatching {
+                RemoteIndexSource.schedule(7)
+            }.getOrDefault(emptyList())
+                .mapNotNull { airing -> airing.titleId.takeIf { it.isNotBlank() } }
+                .distinct()
         }
     }
 
-    var selectedCategory by rememberSaveable(name, initialCategory) { mutableStateOf<String?>(initialCategory) }
+    var selectedCategory by rememberSaveable(name, initialCategory, kidsOnly) {
+        // Los submenús infantiles ahora abren el feed clasificado, no la cuadrícula plana.
+        mutableStateOf(if (kidsOnly) null else initialCategory)
+    }
 
     // Al estar filtrando por categoría, 'Atrás' regresa primero a "Todo / Destacados".
     BackHandler(enabled = selectedCategory != null) {
@@ -141,6 +169,35 @@ fun SectionScreen(
     // servidor ya indexa un género primario por título; esto cubre la caché vieja
     // y a los servidores anteriores.
     val displayRows = remember(loaded) { loaded?.let { Popularity.disjointRows(it) } }
+
+    // El catálogo infantil del portal no siempre separa por temporadas: se usa el tipo
+    // cuando hay suficientes títulos y se cae al pool completo si la ficha viene incompleta.
+    val kidsPool = remember(kidsServerFilms, name) {
+        val base = KidsCatalog.keep(kidsServerFilms)
+        val typed = when (name) {
+            "movies" -> base.filter { it.seasons.isEmpty() }
+            "series" -> base.filter { it.seasons.isNotEmpty() }
+            else -> base
+        }
+        typed.takeIf { it.size >= 4 } ?: base
+    }
+    val pool = remember(loaded, kidsPool, kidsOnly) {
+        if (kidsOnly) {
+            kidsPool
+        } else {
+            loaded.orEmpty().flatMap { it.films }.distinctBy { it.id }
+        }
+    }
+    val feedRows = remember(pool, displayRows, onAirIds, name, kidsOnly) {
+        SectionCuration.build(
+            key = if (kidsOnly) "kids-$name" else name,
+            title = title,
+            pool = pool,
+            serverRows = if (kidsOnly) emptyList() else displayRows.orEmpty(),
+            onAirIds = onAirIds,
+            kidsOnly = kidsOnly,
+        )
+    }
     val isTablet = isLandscapeTablet()
     val gridColumns = if (isTablet) 5 else 3
 
@@ -190,40 +247,28 @@ fun SectionScreen(
             }
         }
 
+        val feedLoading = if (kidsOnly) kidsLoading && pool.isEmpty() else loaded == null
         when {
-            loaded == null -> {
+            feedLoading -> {
                 GhostRow()
                 GhostRow()
                 GhostRow()
             }
-            loaded.isEmpty() -> {
+            feedRows.isEmpty() -> {
                 EmptyState(
                     title = "Sin contenido todavía",
                     subtitle = "Revisa tu conexión e intenta de nuevo.",
                 )
             }
             else -> {
-                val rowsFinal = displayRows.orEmpty()
-                    .filterNot { it.title.contains("Recomendado para ti", ignoreCase = true) }
-                    .sortedBy {
-                        when {
-                            it.id.endsWith("-estrenos") -> 0
-                            it.id.contains("nueva", ignoreCase = true) ||
-                                it.title.contains("nueva", ignoreCase = true) -> 1
-                            else -> 2
-                        }
-                    }
                 // Selector horizontal de categorías (Chips / Pills)
-                val categoryChips = remember(rowsFinal, name) {
-                    val genres = rowsFinal.map { it.title.trim() }.filter { it.isNotBlank() }.distinct()
+                val categoryChips = remember(feedRows, name, kidsOnly) {
                     val list = mutableListOf(CHIP_ALL)
                     // Acceso directo a TODO el catálogo (no solo a los 30 de cada hilera).
-                    if (name in listOf("movies", "series", "anime")) list.add(CHIP_CATALOG)
-                    list.addAll(genres)
-                    if (name in listOf("movies", "series") && "Infantil" !in list) {
-                        list.add("Infantil")
-                    }
-                    list
+                    if (!kidsOnly && name in listOf("movies", "series", "anime")) list.add(CHIP_CATALOG)
+                    list.addAll(feedRows.map { it.title.trim() }.filter { it.isNotBlank() })
+                    if (!kidsOnly && name in listOf("movies", "series")) list.add("Infantil")
+                    list.distinct()
                 }
 
                 LazyRow(
@@ -254,13 +299,12 @@ fun SectionScreen(
                         ),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        itemsIndexed(rowsFinal, key = { _, row -> row.id }, contentType = { _, _ -> "row" }) { index, row ->
-                            // Las filas curadas del servidor (estrenos/tendencias) conservan
-                            // SU orden (es lo que las hace cambiar); los géneros se rankean
-                            // por impacto como antes.
+                        itemsIndexed(feedRows, key = { _, row -> row.id }, contentType = { _, _ -> "row" }) { index, row ->
+                            // Estrenos, Top 10, Tendencias y En emisión ya vienen ordenados
+                            // por SectionCuration; los géneros del servidor se rankean aquí.
                             val ranked = remember(row.films, row.id) {
                                 if (row.id.endsWith("-estrenos") || row.id == "estrenos" ||
-                                    row.id == "tendencias"
+                                    SectionCuration.isDerivedRow(row)
                                 ) {
                                     row.films
                                 } else {
@@ -277,54 +321,52 @@ fun SectionScreen(
                     }
                 } else {
                     // Modo 2: Vista de Catálogo Completo en Cuadrícula (Grid paginada)
-                    val categoryRow = remember(rowsFinal, activeCategory) {
-                        rowsFinal.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
+                    val categoryRow = remember(feedRows, activeCategory) {
+                        feedRows.firstOrNull { it.title.equals(activeCategory, ignoreCase = true) }
                     }
-                    val films = remember(categoryRow, rowsFinal, activeCategory, kidsServerFilms) {
-                        val raw = when {
+                    val isKidsChip = activeCategory.equals("Infantil", ignoreCase = true)
+                    val isKidsAll = categoryRow != null && SectionCuration.isAllRow(categoryRow)
+                    val films = remember(categoryRow, activeCategory, isKidsChip, kidsPool) {
+                        when {
                             activeCategory == CHIP_CATALOG -> emptyList() // la cuadrícula pide la página 1
-                            activeCategory.equals("Infantil", ignoreCase = true) -> {
-                                // El catálogo del portal ya viene separado por tipo. Solo si la
-                                // red falla se cae a las filas locales (y ahí sí se usa seasons).
-                                KidsCatalog.keep(kidsServerFilms).ifEmpty {
-                                    val combined = KidsCatalog.keep(
-                                        rowsFinal.flatMap { it.films }
-                                            .filter { it.kind == "kids" }
-                                            .distinctBy { it.id },
-                                    )
-                                    val typed = when (name) {
-                                        "movies" -> combined.filter { it.seasons.isEmpty() }
-                                        "series" -> combined.filter { it.seasons.isNotEmpty() }
-                                        else -> combined
-                                    }
-                                    typed.ifEmpty { combined }
-                                }
-                            }
+                            isKidsChip -> Popularity.reorderRow(kidsPool)
                             categoryRow != null -> categoryRow.films
-                            else -> rowsFinal.flatMap { it.films }
-                                .filter { it.synopsis.contains(activeCategory, ignoreCase = true) }
-                                .distinctBy { it.id }
+                            else -> emptyList()
                         }
-                        Popularity.reorderRow(raw)
                     }
-
+                    val kidsPagingCategory = when (name) {
+                        "series" -> KidsCatalog.SERIES
+                        "movies", "kids" -> KidsCatalog.MOVIES
+                        else -> ""
+                    }
+                    val categoryId = when {
+                        activeCategory == CHIP_CATALOG -> "xtv-$name-all"
+                        isKidsChip || isKidsAll -> kidsPagingCategory
+                        categoryRow != null && SectionCuration.isServerRow(categoryRow) -> categoryRow.id
+                        else -> ""
+                    }
                     CategoryGridFeed(
                         categoryName = activeCategory,
                         films = films,
-                        categoryId = if (activeCategory == CHIP_CATALOG) "xtv-$name-all" else (categoryRow?.id ?: ""),
-                        section = name,
-                        kidsCategoryId = when (name) {
-                            "series" -> KidsCatalog.SERIES
-                            "movies", "kids" -> KidsCatalog.MOVIES
-                            else -> ""
-                        },
+                        categoryId = categoryId,
+                        // Las filas derivadas no tienen categoría de servidor: sin sección
+                        // no hay fallback a «xtv-…-all» y se muestra solo lo ya calculado.
+                        section = null,
+                        kidsCategoryId = if (isKidsChip) kidsPagingCategory else "",
                         initialTotal = when {
                             activeCategory == CHIP_CATALOG -> 0
-                            activeCategory.equals("Infantil", ignoreCase = true) -> 700
-                            else -> categoryRow?.total ?: films.size
+                            isKidsChip || isKidsAll -> maxOf(kidsPool.size, 700)
+                            categoryRow != null -> categoryRow.total
+                            else -> films.size
                         },
                         columns = gridColumns,
                         contentPadding = contentPadding,
+                        showRank = categoryRow != null && SectionCuration.isTopTen(categoryRow),
+                        specialBadge = if (categoryRow != null && SectionCuration.isOnAir(categoryRow)) {
+                            "EN EMISIÓN"
+                        } else {
+                            null
+                        },
                         onClearFilter = { selectedCategory = null },
                         onOpenFilm = onOpenFilm,
                     )
@@ -350,6 +392,7 @@ private fun CuratedSectionModule(
     val isTopRow = row.title.contains("top 10", ignoreCase = true) ||
         row.title.contains("más vistas", ignoreCase = true) ||
         (rowIndex == 0 && (row.title.contains("tendencia", ignoreCase = true) || row.title.contains("destacad", ignoreCase = true)))
+    val onAir = SectionCuration.isOnAir(row)
 
     Column(Modifier.padding(top = 16.dp)) {
         // Encabezado de Sección: Título a la izquierda, enlace "Ver todo →" a la derecha
@@ -404,7 +447,7 @@ private fun CuratedSectionModule(
                     imageUrl = film.posterUrl,
                     meta = film.metaLine().ifBlank { null },
                     score = film.score,
-                    badge = if (film.year >= 2025) "NUEVO" else null,
+                    badge = if (onAir) "EN EMISIÓN" else if (film.year >= 2025) "NUEVO" else null,
                     rank = rank,
                     modifier = Modifier.width(132.dp),
                     onLongClick = rememberPosterLongClick(film),
@@ -479,6 +522,8 @@ private fun CategoryGridFeed(
     initialTotal: Int,
     columns: Int,
     contentPadding: PaddingValues,
+    showRank: Boolean = false,
+    specialBadge: String? = null,
     onClearFilter: () -> Unit,
     onOpenFilm: (Film) -> Unit,
 ) {
@@ -488,7 +533,8 @@ private fun CategoryGridFeed(
     val batch = remember { SectionPaging.batch(lowEnd) }
     val cap = remember { SectionPaging.cap(lowEnd) }
 
-    val isKidsCategory = categoryName.equals("Infantil", ignoreCase = true)
+    val isKidsCategory = categoryName.equals("Infantil", ignoreCase = true) ||
+        categoryName.contains("infantil", ignoreCase = true)
     // Categoría que se pagina. «Catálogo completo» llega con su id ya resuelto.
     val targetCatId = remember(categoryName, categoryId, section, isKidsCategory, kidsCategoryId) {
         when {
@@ -527,7 +573,10 @@ private fun CategoryGridFeed(
         seedLoading = false
     }
 
-    val base = remember(seed, films) { seed.ifEmpty { films } }
+    // La hilera ya trae un lote curado (30–120 títulos): se conserva al llegar la
+    // página 1 y solo se le suman los que falten. Antes la página 1 reemplazaba el
+    // lote y la cuadrícula parecía perder títulos al abrirla.
+    val base = remember(seed, films) { (films + seed).distinctBy { it.id } }
     var extra by remember(categoryName, targetCatId) { mutableStateOf<List<Film>>(emptyList()) }
     var page by remember(categoryName, targetCatId) { mutableIntStateOf(1) }
     var loadingMore by remember(categoryName, targetCatId) { mutableStateOf(false) }
@@ -675,16 +724,18 @@ private fun CategoryGridFeed(
             modifier = Modifier.fillMaxSize(),
         ) {
             items(
-                items = displayedFilms,
-                key = { it.id },
+                count = displayedFilms.size,
+                key = { index -> displayedFilms[index].id },
                 contentType = { "film_card" },
-            ) { film ->
+            ) { index ->
+                val film = displayedFilms[index]
                 PosterCard(
                     title = film.title,
                     imageUrl = film.posterUrl,
                     meta = film.metaLine().ifBlank { null },
                     score = film.score,
-                    badge = if (film.year >= 2025) "NUEVO" else null,
+                    badge = specialBadge ?: if (film.year >= 2025) "NUEVO" else null,
+                    rank = if (showRank && index in 0..9) index + 1 else null,
                     onLongClick = rememberPosterLongClick(film),
                     onClick = { onOpenFilm(film) },
                 )

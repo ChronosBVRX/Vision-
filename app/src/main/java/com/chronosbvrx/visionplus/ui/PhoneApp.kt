@@ -532,8 +532,9 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
                             onBack = { nav.pop() },
                             onOpenFilm = { nav.push(Route.Title(it)) },
                         )
-                        // Submenús (Películas/Series Infantiles): abren su sección con el
-                        // filtro «Infantil» ya puesto.
+                        // Submenús (Películas/Series Infantiles): abren el feed clasificado
+                        // de infantiles (Top 10, estrenos, tendencias, géneros…), no la
+                        // cuadrícula plana con el filtro «Infantil».
                         is Route.Category -> SectionScreen(
                             name = when (current.key) {
                                 "kids-movies" -> "movies"
@@ -542,7 +543,7 @@ fun PhoneApp(catalog: XuperCatalog, nav: Navigator, onExitToLauncher: () -> Unit
                             },
                             title = current.title,
                             contentPadding = padding,
-                            initialCategory = if (current.key.startsWith("kids")) "Infantil" else null,
+                            kidsOnly = current.key.startsWith("kids"),
                             onBack = { nav.pop() },
                             onOpenFilm = { nav.push(Route.Title(it)) },
                         )

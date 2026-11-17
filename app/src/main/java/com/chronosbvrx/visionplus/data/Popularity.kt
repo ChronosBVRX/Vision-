@@ -183,15 +183,55 @@ object Popularity {
         return popPoints + ratingPoints + recency
     }
 
+    /** ¿La ficha trae alguna señal real de calidad o impacto? */
+    internal fun hasSignal(film: Film): Boolean =
+        film.score > 0.0 || film.popularity > 0.0 || film.voteCount > 0
+
     /**
      * Tendencias: lo más popular con alguna señal (rating, popularidad o votos),
      * ordenado por impacto. El relleno sin ninguna señal no entra.
      */
     internal fun topTrending(films: List<Film>, limit: Int = 10, yearNow: Int = nowYear()): List<Film> =
         films
-            .filter { it.videoUrl.isNotBlank() && (it.score > 0.0 || it.popularity > 0.0 || it.voteCount > 0) }
+            .filter { it.videoUrl.isNotBlank() && hasSignal(it) }
             .sortedByDescending { rankScore(it, yearNow) }
             .let(::dedupe)
+            .take(limit)
+
+    /**
+     * Top 10 de una sección: primero lo que tiene señal real y, si el catálogo es
+     * chico, completa con el resto por año. Deduplica temporadas/doblajes por obra.
+     * Se usa en los submenús (Películas, Series, Anime, Novelas e Infantiles).
+     */
+    internal fun topTen(films: List<Film>, limit: Int = 10, yearNow: Int = nowYear()): List<Film> {
+        val ranked = dedupe(films.filter { it.videoUrl.isNotBlank() })
+        val withSignal = ranked.filter { hasSignal(it) }
+            .sortedByDescending { rankScore(it, yearNow) }
+        val rest = ranked.filterNot { hasSignal(it) }
+            .sortedWith(compareByDescending<Film> { it.year }.thenByDescending { it.title })
+        return (withSignal + rest).take(limit)
+    }
+
+    /**
+     * «Mejor valoradas»: manda el rating, pero pesa la confianza de los votos.
+     * Un 9.5 con 3 votos no le gana a un 8.2 con 20 000.
+     */
+    internal fun bestRated(films: List<Film>, limit: Int = 15): List<Film> =
+        dedupe(films.filter { it.videoUrl.isNotBlank() && it.score > 0.0 })
+            .sortedWith(
+                compareByDescending<Film> {
+                    val votes = it.voteCount.coerceAtLeast(0)
+                    val confidence = when {
+                        votes > 0 -> votes / (votes + 100.0)
+                        it.popularity > 0.0 -> 0.7
+                        else -> 0.5
+                    }
+                    it.score * confidence
+                }
+                    .thenByDescending { it.voteCount }
+                    .thenByDescending { it.popularity }
+                    .thenByDescending { it.year },
+            )
             .take(limit)
 
     /**
