@@ -71,6 +71,7 @@ import com.chronosbvrx.visionplus.ui.player.episodeRowLabel
 import com.chronosbvrx.visionplus.ui.player.episodeSelectorLabel
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.ui.EpisodePlay
+import com.chronosbvrx.visionplus.ui.episodeIndexOrZero
 import com.chronosbvrx.visionplus.ui.resumeEpisodePlay
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import kotlinx.coroutines.launch
@@ -369,7 +370,7 @@ fun TitleScreen(
     LaunchedEffect(activeId, isSeriesTitle, episodes, nextEpisodeIndex, itemDurationMs) {
         if (!isXtv) return@LaunchedEffect
         val target = if (isSeriesTitle && episodes.size > 1) {
-            episodes.getOrNull(nextEpisodeIndex.coerceIn(0, episodes.lastIndex))
+            episodes.getOrNull(episodeIndexOrZero(nextEpisodeIndex, episodes.size))
         } else {
             film.videoUrl.substringAfter(':').takeIf { it.isNotBlank() }
         } ?: return@LaunchedEffect
@@ -379,7 +380,8 @@ fun TitleScreen(
             seriesId = if (isSeriesTitle) activeId else "",
             fallbackDurationMs = itemDurationMs,
             epNumber = if (isSeriesTitle) {
-                episodeNumbers.getOrNull(nextEpisodeIndex.coerceIn(0, episodes.lastIndex))
+                // Sin capítulos cargados todavía no hay rango que acotar: se pide C1.
+                episodeNumbers.getOrNull(episodeIndexOrZero(nextEpisodeIndex, episodes.size))
                     ?.takeIf { it > 0 } ?: (nextEpisodeIndex + 1)
             } else {
                 1
@@ -633,7 +635,7 @@ fun TitleScreen(
                                             // Las series descargan el capítulo objetivo (mismo que Reproducir),
                                             // no la ficha: sin esto siempre intentaba el seriesId y fallaba.
                                             if (isSeriesTitle && episodes.isNotEmpty()) {
-                                                onDownloadEpisode(nextEpisodeIndex.coerceIn(0, episodes.lastIndex))
+                                                onDownloadEpisode(episodeIndexOrZero(nextEpisodeIndex, episodes.size))
                                             } else {
                                                 try {
                                                     OfflineDownloadManager.enqueueDownload(context, film, null)

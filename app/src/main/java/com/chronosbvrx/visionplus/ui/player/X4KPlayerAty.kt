@@ -6111,7 +6111,7 @@ class X4KPlayerAty : ComponentActivity() {
                     openEpisodePicker()
                     true
                 }
-                setSelection(curEpIndex.coerceIn(0, epIds.size - 1))
+                setSelection(curEpIndex.coerceIn(0, (epIds.size - 1).coerceAtLeast(0)))
             }
             listView.id = View.generateViewId()
             if (seasonViews.isNotEmpty()) {
@@ -6149,7 +6149,7 @@ class X4KPlayerAty : ComponentActivity() {
                 setPadding(0, dp(6), 0, dp(1))
             })
             listView.post {
-                listView.setSelection(curEpIndex.coerceIn(0, epIds.size - 1))
+                listView.setSelection(curEpIndex.coerceIn(0, (epIds.size - 1).coerceAtLeast(0)))
                 listView.requestFocus()
             }
         }
