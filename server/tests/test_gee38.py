@@ -1318,6 +1318,9 @@ def test_gee_league_filters_by_id_and_name():
     assert not api_app._gee_league_allowed_event({"event": "Liga de Expansión MX"})
     assert api_app._gee_league_allowed_match({"league": {"id": "uefa.champions"}})
     assert not api_app._gee_league_allowed_match({"league": {"id": "ita.2"}})
+    # Ligas secundarias que igual se sincronizan: su agenda debe cruzar el score.
+    for league_id in ("concacaf.nations.league", "uefa.nations", "fifa.friendly", "col.1"):
+        assert api_app._gee_league_allowed_match({"league": {"id": league_id}}), league_id
     assert api_app._gee_norm_league("Liga MX, Apertura") == "liga mx"
     assert api_app._gee_league_allowed_event({"event": "Liga MX, Apertura"})
     assert api_app._gee_league_allowed_event({"event": "Campeonato Brasileiro Série A"})
@@ -1354,6 +1357,40 @@ async def test_gee38_events_limits_sports_and_leagues(monkeypatch):
     ids = [event["id"] for event in out["events"]]
     assert "event:mx" in ids and "event:nba" in ids
     assert "event:rugby" not in ids and "event:laliga2" not in ids
+
+
+@pytest.mark.anyio
+async def test_gee38_concacaf_live_score_reaches_the_card(monkeypatch):
+    """Concacaf/Nations/friendlies estaban fuera de la allowlist de agenda:
+    /v1/sports traía el 2-0 en vivo, pero la tarjeta de Gee salía sin score."""
+    today = date.today().isoformat()
+    raw = json.dumps({
+        "id": "event:concacaf",
+        "category": "Football",
+        "event": "CONCACAF Nations League",
+        "team_a": "Belize",
+        "team_b": "Sint Maarten",
+        "date_iso": today,
+        "time": "13:00:00",
+        "links": [],
+    })
+    fake = _FakePool(rows=[{"payload": raw}])
+    monkeypatch.setattr(api_app, "pool", fake)
+    espn = _espn_match(
+        "Belize", "Sint Maarten", home_score=2, away_score=0,
+        status="in", detail="61'", kickoff=f"{today}T19:00:00+00:00",
+        league="Concacaf Nations League", league_id="concacaf.nations.league",
+    )
+    entries = [api_app._gee_match_entry(espn)]
+
+    async def fake_window(events):
+        return entries
+
+    monkeypatch.setattr(api_app, "_gee_window_matches", fake_window)
+    out = await api_app.gee38_events(category=None, day=None, days=0, x_api_key="test-key")
+    card = next(event for event in out["events"] if event["id"] == "espn:m1")
+    assert card["score"]["home"] == 2 and card["score"]["away"] == 0
+    assert card["score"]["live"] is True and card["score"]["detail"] == "61'"
 
 
 @pytest.mark.anyio

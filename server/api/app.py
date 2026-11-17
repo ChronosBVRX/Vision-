@@ -2883,6 +2883,16 @@ GEE_LEAGUE_IDS = {
     "arg.1", "bra.1", "usa.1", "fifa.world",
 }
 
+# Ligas que el worker de ESPN sincroniza y cuya agenda SÍ debe cruzar el marcador
+# en vivo. No todas son Tier 1 (amistosos, Nations League o Colombia no lo son),
+# pero si el partido está en `sports_matches` su score debe llegar a la tarjeta.
+# Antes esta lista era la misma que GEE_LEAGUE_IDS y Concacaf/Nations/friendlies
+# se quedaban sin marcador aunque `/v1/sports` sí lo tuviera.
+GEE_AGENDA_LEAGUE_IDS = GEE_LEAGUE_IDS | {
+    "col.1", "fifa.friendly", "uefa.nations",
+    "concacaf.nations.league", "concacaf.gold",
+}
+
 # Nombres (normalizados) que se aceptan cuando el evento no se cruzó con la agenda.
 GEE_LEAGUE_NAMES = {
     "liga mx", "uefa champions league", "champions league",
@@ -2991,7 +3001,7 @@ def _gee_league_allowed_match(match: dict) -> bool:
     league_id = (league.get("id") or "") or ""
     if "/" in league_id:
         return league_id in GEE_MULTISPORT_LEAGUE_IDS
-    return league_id in GEE_LEAGUE_IDS
+    return league_id in GEE_AGENDA_LEAGUE_IDS
 
 
 def _gee_league_allowed_event(event: dict) -> bool:
