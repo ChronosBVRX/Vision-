@@ -1,5 +1,51 @@
 # Migración de distribución — 2026-11-04
 
+## Unificación de OTA en 2.6.58 (2026-11-19)
+
+- Decisión del dueño: **una sola versión en todos los canales** para evitar mezclas de manifiestos.
+- **2.6.58 / vc554** publicada en los cuatro puntos de actualización:
+  - `ChronosBVRX/Vision-` → `v2.6.58` (estable) y `beta` (pre-release).
+  - `ChronosBVRX/Vision-Releases` → `v2.6.58` (estable / `latest`) y `beta` (pre-release).
+- Mismo `VisionPlus.apk` (125.742.916 B, SHA-256 `524a12cf…`), mismo `VisionPlusHome.apk`
+  (3.504.168 B, SHA-256 `d453572e…`) y mismo `version.json` (`2.6.58` / `vc554`) en todos.
+  Firma histórica `9593cb0d…` verificada en el build.
+- Config remota: `ota_paused=false`, **`min_version_code=554`**, `migration_version_code=554` y
+  mensaje de unificación. El forzado gana sobre la pausa y alcanza a todas las versiones por
+  debajo de vc554 (incluidas 2.6.53 y 2.6.57), que convergen a 2.6.58.
+- Nota operativa: los flags se cachean 6 h y se recargan al arrancar la app; en una TV que no vea
+  el aviso hay que reiniciar el proceso (o la TV) para que lea `min_version_code=554`.
+
+## Puente final del canal anterior (2026-11-18)
+
+- Se publicó **2.6.58/vc554** en `ChronosBVRX/Vision-` con el tag **`v2.6.58`**, como release
+  estable: es el nuevo `/releases/latest` del canal anterior (sustituye a 2.6.29/vc522).
+- Assets: `VisionPlus.apk` 125.742.916 B, `VisionPlusHome.apk` 3.504.168 B y `version.json`
+  (`{"version":"2.6.58","versionCode":554}`). Firma histórica `9593cb0d…` verificada en ambos APK.
+- La build está compilada del árbol que apunta **exclusivamente** a `ChronosBVRX/Vision-Releases`:
+  al instalarla, cualquier equipo que aún recibía OTA del canal anterior queda migrado al canal
+  oficial sin perder perfiles, favoritos, historial ni descargas.
+- **Canal nuevo intacto:** `Vision-Releases` sigue con `/releases/latest` = `v2.6.57` (vc553) y
+  el tag `beta` en `2.6.0-beta6` (vc491). No se borraron ni reemplazaron assets ahí.
+- Verificado sin autenticación: `/releases/latest` de los dos repos responde 200; el
+  `version.json` del canal anterior declara 2.6.58/vc554 y el del canal nuevo 2.6.57/vc553.
+- El repo anterior sigue público y **no archivado** (`git push` verificado 2026-11-16); cierre
+  definitivo previsto para el **2026-11-19 23:59:59 -06**.
+
+### Desbloqueo de la OTA (2026-11-18)
+
+- Se encontró `ota_paused=true` en `remote_config`: con `min_version_code=522`, los equipos en
+  vc522 o superior no veían ninguna oferta (`updateOffer`: `paused` sin `forced` = sin aviso),
+  aunque ya existiera 2.6.58/vc554. Los equipos por debajo de 522 sí seguían recibiendo el forzado.
+- El canario no podía rearmarlo por sí solo: faltaban `canary_paused_version` / `canary_paused_at`,
+  así que `ota_paused` se quedaba `true` indefinidamente.
+- Corregido en vivo: `POST /v1/config` con `{"ota_paused":false, "migration_message":"Instala
+  Vision+ 2.6.58 del canal anterior…"}`. Verificado `ota_paused=false`, config `version=1795052644`.
+- `min_version_code` se dejó en **522** a propósito: subirlo a 554 forzaría también a los equipos
+  del canal nuevo en 2.6.57 (vc553) a reinstalar esa misma versión, sin que exista una 2.6.58 en
+  `Vision-Releases`. La actualización de esos equipos sigue siendo normal cuando se publique ahí.
+- Los flags se refrescan al arrancar la app (y cada 6 h): en la TV afectada basta con salir y
+  volver a abrir Vision+ y pulsar «Buscar actualizaciones».
+
 ## Cierre del repositorio anterior
 
 - **2026-11-04:** `ChronosBVRX/Vision-` pasó a **privado** por indicación del usuario.

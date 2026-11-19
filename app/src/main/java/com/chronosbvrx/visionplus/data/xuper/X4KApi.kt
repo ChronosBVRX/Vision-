@@ -11,6 +11,7 @@ import com.chronosbvrx.visionplus.data.PlaybackHistory
 import com.chronosbvrx.visionplus.data.spanishOnlySynopsis
 import com.chronosbvrx.visionplus.data.mirror.EpisodeMirror
 import com.chronosbvrx.visionplus.data.normalizeDisplayName
+import com.chronosbvrx.visionplus.data.playback.StreamRanker
 import com.chronosbvrx.visionplus.data.remote.RemoteBridge
 import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import kotlinx.coroutines.CancellationException
@@ -1704,26 +1705,30 @@ object X4KApi {
     }
 
     /** Altura declarada de una calidad; sirve para ordenar y para forzar la mejor pista. */
-    internal fun qualityRank(raw: String): Int {
-        val q = raw.trim().lowercase()
-        return when {
-            q.contains("2160") || q.contains("4k") || q.contains("uhd") -> 2160
-            q.contains("1080") || q.contains("fhd") -> 1080
-            q.contains("720") || q.contains("hd") -> 720
-            q.contains("480") || q.contains("sd") -> 480
-            q.contains("360") -> 360
-            else -> 0
-        }
-    }
+    internal fun qualityRank(raw: String): Int = StreamRanker.tier(raw)
 
-    /** Deja al frente la mejor calidad: el motor arranca con la PRIMERA media de la lista. */
+    /**
+     * Deja al frente la mejor pista: el motor arranca con la PRIMERA media de la lista.
+     *
+     * Primero manda la resolución (4K → 1080p → 720p…); dentro de la misma resolución
+     * decide [StreamRanker]: audio latino por encima de original/castellano y H.264
+     * antes que AV1 (que muchas cajas no decodifican). Los empates conservan el orden
+     * del portal, así que un título con una sola pista no cambia de comportamiento.
+     */
     internal fun sortMediasBestFirst(medias: JSONArray): JSONArray {
         if (medias.length() < 2) return medias
-        val sorted = ArrayList<JSONObject>()
+        val sorted = ArrayList<JSONObject>(medias.length())
         for (i in 0 until medias.length()) medias.optJSONObject(i)?.let { sorted.add(it) }
-        sorted.sortByDescending { qualityRank(it.optString("q")) }
+        val ranked = StreamRanker.rank(sorted) { media ->
+            StreamRanker.Facts(
+                quality = media.optString("q"),
+                audio = media.optString("a"),
+                encodeFormat = media.optString("e"),
+                videoFormat = media.optString("f"),
+            )
+        }
         val out = JSONArray()
-        sorted.forEach { out.put(it) }
+        ranked.forEach { out.put(it) }
         return out
     }
 
@@ -1798,6 +1803,17 @@ object X4KApi {
             }
             val cid = xtvPortalId(contentId)
             val sid = xtvPortalId(seriesId)
+            // La duración se resuelve ANTES de la ficha: si el historial del motor ya la
+            // conoce (o el catálogo la declaró), pedirla al portal no aporta nada al play y
+            // cuesta 0.2-2.7 s en el camino crítico. En el reporte del 2026-11-17 ese viaje
+            // era el 88 % del arranque (PLAYBACK_PREP metaMs=2684 de totalMs=3049): el
+            // usuario veía 3 s de spinner por un dato que ya tenía en disco.
+            // En series la ficha se descarta por diseño (trae la duración de la temporada),
+            // así que tampoco se paga.
+            val knownDurMs = if (sid.isNotBlank()) 0L else {
+                val hist = PlaybackHistory.get(context, cid)?.durationMs ?: 0L
+                if (hist > 60_000L) hist else fallbackDurationMs.coerceAtLeast(0L)
+            }
             // La sesión/SLB y la ficha del título NO dependen entre sí. En una caja de TV cada
             // llamada cuesta 0.2-0.7 s: hacerlas en serie regalaba una ida y vuelta en cada
             // reproducción. Se lanzan juntas y se esperan antes de pedir la licencia (el
@@ -1812,9 +1828,10 @@ object X4KApi {
                     slbMs = android.os.SystemClock.uptimeMillis() - t
                 }
                 // La ficha editorial solo se pide si aún no sabemos la duración: en cajas
-                // lentas cada llamada cuesta 0.2-0.7 s y el reproductor la recupera en
-                // segundo plano para el rótulo. Con duración conocida, directo a la licencia.
-                val meta = if (fallbackDurationMs <= 0L) async {
+                // lentas cada llamada cuesta 0.2-0.7 s (y hasta 2.7 s) y el reproductor la
+                // recupera en segundo plano para el rótulo. Con duración conocida, directo
+                // a la licencia.
+                val meta = if (sid.isBlank() && knownDurMs <= 0L) async {
                     val t = android.os.SystemClock.uptimeMillis()
                     // The editorial card carries the true running time; a flaky network gets a second try.
                     val first = itemInfo(context, cid)
@@ -1835,17 +1852,9 @@ object X4KApi {
             // motor reporta la duración real del archivo y esa manda. Para películas sí se
             // aprovecha la ficha del portal.
             var durMs = if (sid.isBlank()) extractDurationMs(item) else 0L
-            if (durMs <= 0L && sid.isBlank()) {
-                val hist = PlaybackHistory.get(context, cid)
-                if (hist != null && hist.durationMs > 60_000L) {
-                    durMs = hist.durationMs
-                }
-            }
-            // Si el portal no la reporta, aplicar la duración declarada en catálogo (Film.durationMin).
-            // Solo en películas: la de una serie es la del contenedor, no la del capítulo.
-            if (durMs <= 0L && fallbackDurationMs > 0L && sid.isBlank()) {
-                durMs = fallbackDurationMs
-            }
+            // Sin dato del portal queda la duración ya resuelta arriba (historial del motor
+            // o, en su defecto, la declarada en el catálogo). Misma precedencia de siempre.
+            if (durMs <= 0L && sid.isBlank()) durMs = knownDurMs
             var medias: JSONArray? = null
             val licenseStart = android.os.SystemClock.uptimeMillis()
             var lastLicenseError: String? = null
@@ -2091,6 +2100,9 @@ object X4KApi {
         synopsis: String = "",
         cast: List<String> = emptyList(),
         countries: List<String> = emptyList(),
+        genres: List<String> = emptyList(),
+        kind: String = "",
+        originalLanguage: String = "",
     ): Boolean = withContext(Dispatchers.IO) {
         var resolvedEpIds = episodeIds
         var resolvedEpNames = episodeNames
@@ -2194,6 +2206,9 @@ object X4KApi {
             synopsis = synopsis,
             cast = cast,
             countries = countries,
+            genres = genres,
+            kind = kind,
+            originalLanguage = originalLanguage,
         )
         true
     }
@@ -2413,6 +2428,9 @@ object X4KApi {
         synopsis: String = "",
         cast: List<String> = emptyList(),
         countries: List<String> = emptyList(),
+        genres: List<String> = emptyList(),
+        kind: String = "",
+        originalLanguage: String = "",
     ) {
         val p = prefs(context)
         // A partir de este instante el motor manda: el trabajo de fondo del catálogo espera.
@@ -2463,6 +2481,11 @@ object X4KApi {
             if (synopsis.isNotBlank()) putExtra("synopsis", synopsis)
             if (cast.isNotEmpty()) putStringArrayListExtra("cast", ArrayList(cast))
             if (countries.isNotEmpty()) putStringArrayListExtra("countries", ArrayList(countries))
+            // El reproductor vive en otro proceso: sin estos extras «Más como esta»
+            // se quedaba sin género y rellenaba con lo más popular de todo el catálogo.
+            if (genres.isNotEmpty()) putStringArrayListExtra("genres", ArrayList(genres))
+            if (kind.isNotBlank()) putExtra("kind", kind)
+            if (originalLanguage.isNotBlank()) putExtra("originalLanguage", originalLanguage)
             if (logoUrl.isNotBlank()) putExtra("logoUrl", logoUrl)
             if (markersRef.isNotBlank()) putExtra("markersRef", markersRef)
             if (markersEp > 0) putExtra("markersEp", markersEp)

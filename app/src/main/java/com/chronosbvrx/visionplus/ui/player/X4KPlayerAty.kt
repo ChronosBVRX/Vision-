@@ -136,10 +136,16 @@ class X4KPlayerAty : ComponentActivity() {
     private var seekNavView: SeekBar? = null
     private var playPauseNavView: View? = null
     private var curMedias = ArrayList<X4KTitan.MediaSpec>()
+    /** Índice dentro de [curMedias] de la pista que el motor está intentando ahora. */
+    private var mediaCursor = 0
+    /** Respaldo automático de calidad: presupuesto por reproducción (no endless ping-pong). */
+    private var autoDowngrades = 0
     private var currentMediaName = ""
     private var curQuality = ""
     private var introView: View? = null
     private var pendingPlay: (() -> Unit)? = null
+    /** Hay un poller armado; evita duplicarlo al cambiar de pista. */
+    private var pollerAlive = false
     private var contentRoot: FrameLayout? = null
     private var introSkip: View? = null
     private var errorRetry: View? = null
@@ -169,6 +175,10 @@ class X4KPlayerAty : ComponentActivity() {
     // Continuidad de series ("siguiente capítulo" sin salir): solo VOD con contexto de episodios.
     private var curCode = ""
     private var curTitle = ""
+    /** Género y tipo reales de la ficha: alimentan «Más como esta» sin adivinar. */
+    private var curGenres = emptyList<String>()
+    private var curKind = ""
+    private var curOriginalLanguage = ""
     private var curSeries = ""
     private var curEpIndex = 0
     private var curEpNumber = 0
@@ -457,6 +467,9 @@ class X4KPlayerAty : ComponentActivity() {
         val title = if (liveMode) X4KApi.displayChannelName(code, rawTitle) else rawTitle
         curCode = code
         curTitle = title
+        curGenres = intent.getStringArrayListExtra("genres").orEmpty().filter { it.isNotBlank() }
+        curKind = intent.getStringExtra("kind").orEmpty()
+        curOriginalLanguage = intent.getStringExtra("originalLanguage").orEmpty()
         if (liveMode) {
             liveGroupTitle = intent.getStringExtra("channelGroup").orEmpty()
             val codes = intent.getStringArrayListExtra("channelCodes")
@@ -820,6 +833,9 @@ class X4KPlayerAty : ComponentActivity() {
         curCode = ""
         curTitle = ""
         curBaseTitle = ""
+        curGenres = emptyList()
+        curKind = ""
+        curOriginalLanguage = ""
         curSeries = ""
         curEpIndex = 0
         curSeasonIndex = 0
@@ -829,6 +845,8 @@ class X4KPlayerAty : ComponentActivity() {
         seasonIds = ArrayList()
         seasonNames = ArrayList()
         curMedias = ArrayList()
+        mediaCursor = 0
+        autoDowngrades = 0
         currentMediaName = ""
         curQuality = ""
         curAspect = 0
@@ -1292,14 +1310,16 @@ class X4KPlayerAty : ComponentActivity() {
             aspect
         }
         // La «Calidad preferida» manda desde el PRIMER cuadro: `X4KTitan.play` arranca con la
-        // primera media de la lista, así que la elegida se coloca al frente (antes solo se
-        // pintaba la etiqueta y el motor seguía en la calidad del portal).
-        val orderedMedias = orderMediasByQuality(
-            medias,
+        // primera media de la lista. El resto de la cadena baja de resolución si esa pista
+        // falla, en vez de saltar a un 4K que el equipo no puede sostener.
+        val orderedMedias = playbackChain(
+            rankMedias(medias),
             { it.quality },
             com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality,
         )
         curMedias = ArrayList(orderedMedias)
+        mediaCursor = 0
+        autoDowngrades = 0
         val initialMedia = orderedMedias.firstOrNull()
         currentMediaName = initialMedia?.name.orEmpty()
         curQuality = initialMedia?.quality.orEmpty()
@@ -1370,7 +1390,10 @@ class X4KPlayerAty : ComponentActivity() {
                     listOf(200L, 700L, 1500L, 3000L, 5000L).forEach { delay ->
                         handler.postDelayed({ playerView?.let { X4KTitan.setAspect(it, curAspect) } }, delay)
                     }
-                    handler.post(poller)
+                    if (!pollerAlive) {
+                        pollerAlive = true
+                        handler.post(poller)
+                    }
                     scheduleImageEnhancement()
                     // Red de seguridad del primer render: si este play se adelantó al attach
                     // (motor precalentado → montaje en `onCreate`), el contenedor puede haber
@@ -1386,6 +1409,9 @@ class X4KPlayerAty : ComponentActivity() {
                     // (proceso :x4k recién levantado): un segundo intento evita el error visible.
                     Log.w(TAG, "play devolvió false; reintentando…")
                     handler.postDelayed({ attemptPlay(retriesLeft - 1) }, 900L)
+                } else if (tryNextMedia("motor-no-arranca")) {
+                    // El motor rechazó esta pista: la cadena prueba la siguiente antes de rendirse.
+                    Log.w(TAG, "play devolvió false; se intenta la siguiente pista")
                 } else {
                     Log.e(TAG, "play devolvió false")
                     showError("motor-no-arranca")
@@ -1492,7 +1518,7 @@ class X4KPlayerAty : ComponentActivity() {
         com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
             "PLAYER_RENDER_REATTACH", "modo=${if (liveMode) "live" else "vod"}",
         )
-        X4KTitan.play(v, if (liveMode) "live" else "vod", curCode, curTitle, curMedias)
+        X4KTitan.play(v, if (liveMode) "live" else "vod", curCode, curTitle, if (liveMode) curMedias else activeMedias())
         scheduleImageEnhancement()
     }
 
@@ -2150,7 +2176,7 @@ class X4KPlayerAty : ComponentActivity() {
         startedAtMs = System.currentTimeMillis()
         handler.postDelayed({
             if (isFinishing || isDestroyed || firstFrame) return@postDelayed
-            val ok = X4KTitan.play(v, if (liveMode) "live" else "vod", curCode, curTitle, curMedias)
+            val ok = X4KTitan.play(v, if (liveMode) "live" else "vod", curCode, curTitle, if (liveMode) curMedias else activeMedias())
             Log.i(TAG, "re-arranque interno #$softRestarts ok=$ok")
             if (ok) scheduleImageEnhancement()
         }, 700L)
@@ -2158,6 +2184,98 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** Gracia antes de tocar el motor: un cuadro que entra no se mata. */
     private val SOFT_RESTART_GRACE_MS = 1_500L
+
+    /**
+     * Respaldo automático de calidad (solo VOD): si la pista actual no arranca, prueba la
+     * siguiente de [curMedias] —primero los espejos de la misma resolución y después la
+     * inferior— en el MISMO reproductor. El usuario no sale a la ficha ni pierde el botón
+     * Atrás; solo ve «Cambiando a 720p…».
+     *
+     * Presupuesto corto ([MAX_AUTO_DOWNGRADES]) para no encadenar esperas eternas: al
+     * agotarse, sale la tarjeta de error de siempre. El vivo no entra aquí: su failover lo
+     * gobierna PlayerScreen (zapping y señales del evento).
+     */
+    /**
+     * Mismo criterio que [X4KApi.sortMediasBestFirst], pero aplicado a las pistas que
+     * llegan ya armadas por el broker (`vip.py`): resolución → audio latino → códec.
+     * Así el orden no depende de quién firmó la licencia.
+     */
+    private fun rankMedias(medias: List<X4KTitan.MediaSpec>): List<X4KTitan.MediaSpec> =
+        com.chronosbvrx.visionplus.data.playback.StreamRanker.rank(medias) { media ->
+            com.chronosbvrx.visionplus.data.playback.StreamRanker.Facts(
+                quality = media.quality,
+                audio = media.audio,
+                encodeFormat = media.encodeFormat,
+                videoFormat = media.videoFormat,
+            )
+        }
+
+    /** Pistas que todavía valen: la actual y el resto de la cadena de respaldo. */
+    private fun activeMedias(): List<X4KTitan.MediaSpec> {
+        if (curMedias.isEmpty()) return curMedias
+        val from = mediaCursor.coerceIn(0, curMedias.lastIndex)
+        return if (from == 0) curMedias else curMedias.subList(from, curMedias.size)
+    }
+
+    private fun tryNextMedia(reason: String): Boolean {
+        if (liveMode || isFinishing || isDestroyed) return false
+        if (autoDowngrades >= MAX_AUTO_DOWNGRADES) return false
+        val v = playerView ?: return false
+        val nextIndex = mediaCursor + 1
+        if (nextIndex >= curMedias.size) return false
+        val previous = curMedias.getOrNull(mediaCursor)
+        val next = curMedias[nextIndex]
+        mediaCursor = nextIndex
+        autoDowngrades++
+        currentMediaName = next.name
+        curQuality = next.quality
+        qualityBtn?.text = formatQualityShort(curQuality)
+        applyOptionPillVisibility()
+        val sameTier = X4KApi.qualityRank(next.quality) == X4KApi.qualityRank(previous?.quality.orEmpty())
+        Toast.makeText(
+            this,
+            if (sameTier) "Probando otro servidor…" else "Cambiando a ${formatQualityShort(next.quality)}…",
+            Toast.LENGTH_SHORT,
+        ).show()
+        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+            "PLAYER_DOWNGRADE",
+            "motivo=$reason de=${previous?.quality}/${previous?.name} " +
+                "a=${next.quality}/${next.name} intento=$autoDowngrades modo=vod",
+        )
+        Log.w(TAG, "respaldo de calidad #$autoDowngrades ($reason): ${previous?.quality} -> ${next.quality}")
+        // La espera vuelve a mandar: el error anterior ya no aplica a esta pista.
+        errorShown = false
+        firstFrame = false
+        softRestarts = 0
+        liveSignalSeen = false
+        loadingFading = false
+        loadingOverlay?.alpha = 1f
+        loadingOverlay?.visibility = View.VISIBLE
+        errorOverlay?.visibility = View.GONE
+        startedAtMs = System.currentTimeMillis()
+        playRequestedAtMs = startedAtMs
+        runCatching { X4KTitan.stop(v) }
+        val rest = ArrayList(activeMedias())
+        val started = runCatching { X4KTitan.play(v, "vod", curCode, curTitle, rest) }.getOrDefault(false)
+        // Un solo poller: el que ya estaba armado no debe duplicarse con el nuevo play.
+        if (!pollerAlive) {
+            pollerAlive = true
+            handler.post(poller)
+        }
+        if (started) {
+            scheduleImageEnhancement()
+        } else {
+            handler.postDelayed({
+                if (!firstFrame && !errorShown && isPlayerActive) {
+                    if (!tryNextMedia("motor-no-arranca")) showError("motor-no-arranca")
+                }
+            }, 700L)
+        }
+        return true
+    }
+
+    /** Tope de respaldos automáticos por reproducción (evita cadenas de espera eternas). */
+    private val MAX_AUTO_DOWNGRADES = 3
 
     private fun showError(stage: String = "") {
         // En el cuadro flotante no cabe la tarjeta de error ni tiene sentido dejar un
@@ -3692,6 +3810,9 @@ class X4KPlayerAty : ComponentActivity() {
     private fun switchQuality(target: X4KTitan.MediaSpec) {
         val v = playerView ?: return
         val curPos = X4KTitan.positionMs().coerceAtLeast(0L)
+        // El usuario eligió esta pista: la cadena de respaldo continúa desde aquí.
+        mediaCursor = curMedias.indexOfFirst { it.name == target.name }.coerceAtLeast(0)
+        autoDowngrades = 0
         currentMediaName = target.name
         curQuality = target.quality
         qualityBtn?.text = formatQualityShort(target.quality)
@@ -3701,12 +3822,10 @@ class X4KPlayerAty : ComponentActivity() {
         val switched = X4KTitan.setMedia(v, target.name)
         if (switched) scheduleImageEnhancement()
         if (!switched) {
-            // 2. Fallback sin fricción: reordenar la lista de medias y reiniciar con seek transparente
-            val reordered = ArrayList<X4KTitan.MediaSpec>()
-            reordered.add(target)
-            reordered.addAll(curMedias.filter { it.name != target.name })
-            curMedias = reordered
-            X4KTitan.play(v, "vod", curCode, curTitle, reordered)
+            // 2. Fallback sin fricción: reiniciar desde la pista elegida y buscar la posición.
+            // No se reordena la lista: el resto de la cadena conserva el respaldo por calidad.
+            val rest = ArrayList(curMedias.subList(mediaCursor, curMedias.size))
+            X4KTitan.play(v, "vod", curCode, curTitle, rest)
             scheduleImageEnhancement()
             noteAppSeek()
             if (curPos > 0L) {
@@ -4450,8 +4569,15 @@ class X4KPlayerAty : ComponentActivity() {
         val title = curTitle
         if (code.isBlank() || title.isBlank()) return
         movieSuggestShown = true
-        val genre = runCatching { X4KApi.metaFor(this, code)?.optString("gen").orEmpty() }
+        // El género viaja desde la ficha en el intent (`:x4k` no comparte la copia en
+        // memoria del catálogo). Los tags del portal quedan como respaldo.
+        val portalGenres = runCatching { X4KApi.metaFor(this, code)?.optString("gen").orEmpty() }
             .getOrDefault("")
+            .split(',', '/', '|')
+            .map { it.trim() }
+        val genres = (curGenres + portalGenres)
+            .filter { it.isNotBlank() }
+            .distinct()
         val xtvRef = if (code.startsWith("xtv:")) code else "xtv:$code"
         val current = Film(
             id = xtvRef,
@@ -4462,13 +4588,16 @@ class X4KPlayerAty : ComponentActivity() {
             posterUrl = intentPoster,
             videoUrl = xtvRef,
             sourceUrl = "xtv",
-            kind = "movie",
+            kind = curKind.ifBlank { "movie" },
+            genres = genres,
+            originalLanguage = curOriginalLanguage,
         )
+        val hint = genres.joinToString(", ")
         handler.postDelayed({
             Thread {
                 val picks = runCatching {
                     kotlinx.coroutines.runBlocking {
-                        Related.forFilm(this@X4KPlayerAty, current, genre, limit = 8)
+                        Related.forFilm(this@X4KPlayerAty, current, hint, limit = 8)
                     }
                 }.getOrDefault(emptyList())
                 runOnUiThread {
@@ -4676,6 +4805,9 @@ class X4KPlayerAty : ComponentActivity() {
                         synopsis = film.synopsis,
                         cast = film.cast,
                         countries = film.countries,
+                        genres = film.genres,
+                        kind = film.kind,
+                        originalLanguage = film.originalLanguage,
                     )
                 }
             }.getOrDefault(false)
@@ -4913,38 +5045,37 @@ class X4KPlayerAty : ComponentActivity() {
                     showError("sin-medios")
                     return@runOnUiThread
                 }
-                var medias = runCatching { parseMedias(prep.mediasJson) }.getOrDefault(ArrayList())
-                medias = ArrayList(
-                    orderMediasByQuality(
-                        medias,
+                fun chainFor(json: String): ArrayList<X4KTitan.MediaSpec> = ArrayList(
+                    playbackChain(
+                        rankMedias(runCatching { parseMedias(json) }.getOrDefault(ArrayList())),
                         { it.quality },
                         com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality,
                     ),
                 )
+                var medias = chainFor(prep.mediasJson)
+                curMedias = ArrayList(medias)
+                mediaCursor = 0
+                autoDowngrades = 0
                 var played = medias.isNotEmpty() && X4KTitan.play(v, "vod", code, title, medias)
                 if (played) scheduleImageEnhancement()
                 if (!played) {
                     // Segundo intento si el primer cuadro falló
-                    medias = ArrayList(
-                        orderMediasByQuality(
-                            runCatching { parseMedias(prep.mediasJson) }.getOrDefault(ArrayList()),
-                            { it.quality },
-                            com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality,
-                        ),
-                    )
+                    medias = chainFor(prep.mediasJson)
+                    curMedias = ArrayList(medias)
+                    mediaCursor = 0
                     played = medias.isNotEmpty() && X4KTitan.play(v, "vod", code, title, medias)
                     if (played) scheduleImageEnhancement()
                 }
-                if (!played) {
+                if (!played && !tryNextMedia("motor-no-arranca")) {
                     showError("motor-no-arranca")
                     return@runOnUiThread
                 }
-                curMedias = ArrayList(medias)
-                val chosenMedia = medias.firstOrNull()
+                // Si el respaldo ya arrancó otra pista, el cursor manda; si no, la primera.
+                val chosenMedia = curMedias.getOrNull(mediaCursor)
                 currentMediaName = chosenMedia?.name.orEmpty()
                 curQuality = chosenMedia?.quality.orEmpty()
                 qualityBtn?.text = formatQualityShort(curQuality)
-                declaredLanguages = medias.first().audio
+                declaredLanguages = chosenMedia?.audio.orEmpty()
                     .split(',').map { it.trim() }.filter { it.isNotBlank() }
                 val firstLanguage = declaredLanguages.firstOrNull { isLanguageValue(it) }
                 curAudioCode = languageCodeFor(firstLanguage.orEmpty())
@@ -6429,7 +6560,10 @@ class X4KPlayerAty : ComponentActivity() {
             // Sin reproducción viva (salida normal o estacionado al fondo) el sondeo no tiene
             // nada que hacer: ni re-arranques internos ni errores en una pantalla que ya no se
             // ve. El próximo play lo vuelve a lanzar desde cero.
-            if (!isPlayerActive) return
+            if (!isPlayerActive) {
+                pollerAlive = false
+                return
+            }
             val v = playerView
             if (v != null) {
                 val pos = com.chronosbvrx.visionplus.data.xuper.X4KTitan.positionMs().coerceAtLeast(0L)
@@ -6498,32 +6632,39 @@ class X4KPlayerAty : ComponentActivity() {
                     com.chronosbvrx.visionplus.data.xuper.X4KTitan.durationMs(v)
                 }.getOrDefault(-1L) <= 0L
                 val stallLimit = when {
+                    // Tras un respaldo de calidad no se regala otra espera larga: si la pista
+                    // nueva no da cuadro pronto, se pasa a la siguiente.
+                    autoDowngrades > 0 && engineHasNoData -> 8_000L
+                    autoDowngrades > 0 -> 14_000L
                     engineHasNoData && softRestarts == 0 -> 10_000L
                     engineHasNoData -> 15_000L
                     softRestarts == 0 -> 25_000L
                     else -> 35_000L
                 }
                 if (stalled && !errorShown && stalledFor > stallLimit) {
-                    if (softRestarts == 0) {
-                        softRestartPlayback()
-                    } else {
-                        // Auto-reparado de cajas atascadas: el motor arrancó pero jamás
-                        // pintó cuadro. Tras dos fallos seguidos se rota el motor a una
-                        // generación nueva; el proceso principal aplicará sesión/SLB
-                        // frescas al siguiente intento y el arranque limpio dejará de
-                        // heredar el estado envenenado.
-                        val racha = com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.noteFailure(this@X4KPlayerAty)
-                        if (com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.shouldHeal(racha)) {
-                            val gen = com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.bumpEngineGen(this@X4KPlayerAty)
-                            // El proceso residente corre con la generación vieja ya booteada: a la
-                            // salida se cierra y se reinicia para estrenar la carpeta nueva.
-                            hardResetNext = true
-                            com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-                                "PLAYER_SELF_HEAL", "gen=$gen racha=$racha modo=${if (liveMode) "live" else "vod"}",
-                            )
-                            Log.w(TAG, "motor atascado: rotado a generación $gen (racha=$racha)")
+                    when {
+                        softRestarts == 0 && autoDowngrades == 0 -> softRestartPlayback()
+                        // Antes de rendirse, baja de pista en el mismo reproductor.
+                        tryNextMedia("sin-primer-cuadro") -> Unit
+                        else -> {
+                            // Auto-reparado de cajas atascadas: el motor arrancó pero jamás
+                            // pintó cuadro. Tras dos fallos seguidos se rota el motor a una
+                            // generación nueva; el proceso principal aplicará sesión/SLB
+                            // frescas al siguiente intento y el arranque limpio dejará de
+                            // heredar el estado envenenado.
+                            val racha = com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.noteFailure(this@X4KPlayerAty)
+                            if (com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.shouldHeal(racha)) {
+                                val gen = com.chronosbvrx.visionplus.data.xuper.PlayerRecovery.bumpEngineGen(this@X4KPlayerAty)
+                                // El proceso residente corre con la generación vieja ya booteada: a la
+                                // salida se cierra y se reinicia para estrenar la carpeta nueva.
+                                hardResetNext = true
+                                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                                    "PLAYER_SELF_HEAL", "gen=$gen racha=$racha modo=${if (liveMode) "live" else "vod"}",
+                                )
+                                Log.w(TAG, "motor atascado: rotado a generación $gen (racha=$racha)")
+                            }
+                            showError("sin-primer-cuadro")
                         }
-                        showError("sin-primer-cuadro")
                     }
                 }
                 // Salto de contenido (cuadros que nunca se mostraron): la posición avanza más

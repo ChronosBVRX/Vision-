@@ -57,11 +57,38 @@ class PlaybackSpeedWiringTest {
         assertTrue("falta el bloque paralelo", prepare.contains("coroutineScope {"))
         assertTrue("falta el async del SLB", prepare.contains("ensureEngineData"))
         assertTrue("el SLB debe ir en async", prepare.contains("val slb = async"))
-        assertTrue("la ficha debe ir en async", prepare.contains("val meta = if (fallbackDurationMs <= 0L) async"))
+        assertTrue("la ficha debe ir en async", prepare.contains("val meta = if (sid.isBlank() && knownDurMs <= 0L) async"))
         // Y el desglose para saber qué fase se come el tiempo.
         assertTrue("sin telemetría de la preparación", prepare.contains("PLAYBACK_PREP"))
         assertTrue(prepare.contains("slbMs="))
         assertTrue(prepare.contains("licenseMs="))
+    }
+
+    @Test
+    fun theTitleCardIsNotPaidWhenTheDurationIsAlreadyKnown() {
+        val api = source("data/xuper/X4KApi.kt")
+        val prepare = between(api, "suspend fun prepareVod(", "suspend fun playVod(")
+        // El historial del motor se consulta ANTES de la ficha: en el reporte del 2026-11-17
+        // ese viaje era el 88 % de un arranque de 3 s (metaMs=2684 de totalMs=3049) y el
+        // dato ya estaba en disco.
+        val beforeFicha = prepare.substringBefore("coroutineScope {")
+        assertTrue(
+            "no se mira el historial antes de la ficha",
+            beforeFicha.contains("PlaybackHistory.get(context, cid)"),
+        )
+        assertTrue(
+            "la duración conocida no se usa para saltar la ficha",
+            prepare.contains("val meta = if (sid.isBlank() && knownDurMs <= 0L) async"),
+        )
+        // Misma precedencia de siempre: ficha del portal → historial → catálogo.
+        assertTrue(
+            "se perdió la duración de la ficha",
+            prepare.contains("var durMs = if (sid.isBlank()) extractDurationMs(item) else 0L"),
+        )
+        assertTrue(
+            "la duración ya resuelta no se aplica",
+            prepare.contains("if (durMs <= 0L && sid.isBlank()) durMs = knownDurMs"),
+        )
     }
 
     @Test

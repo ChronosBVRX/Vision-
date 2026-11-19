@@ -201,7 +201,16 @@ private object LiveArtwork {
 }
 
 @Composable
-fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: EpisodePlay? = null, resumeMs: Long = 0) {
+fun PlayerScreen(
+    film: Film,
+    isTv: Boolean,
+    onBack: () -> Unit,
+    episode: EpisodePlay? = null,
+    resumeMs: Long = 0,
+    onExternalFatal: (() -> Unit)? = null,
+    /** Evita reentrar a la fuente externa tras un fallback. */
+    skipExternal: Boolean = false,
+) {
     // Al abrir una película alimenta las recomendaciones del inicio.
     val libraryContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(film.id) { com.chronosbvrx.visionplus.data.UserLibrary.recordPlay(libraryContext, film) }
@@ -209,7 +218,7 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
     // del motor nativo XTV (X4K Titan en proceso :x4k). Normalizamos directamente a `xtv:<contentId>`.
     if (film.videoUrl.startsWith("magisvod:")) {
         val cid = film.videoUrl.removePrefix("magisvod:")
-        PlayerScreen(film.copy(id = "xtv:$cid", videoUrl = "xtv:$cid"), isTv, onBack, episode, resumeMs)
+        PlayerScreen(film.copy(id = "xtv:$cid", videoUrl = "xtv:$cid"), isTv, onBack, episode, resumeMs, onExternalFatal)
         return
     }
     // Un título descargado (`vault:<id>`): puede venir como film (`Downloads` abre la ficha
@@ -254,11 +263,38 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
     // XTV también entra aquí aunque la ficha de la serie traiga otra URL base: así TODO el
     // VOD de Xuper usa el mismo reproductor, con sus idiomas y subtítulos reales.
     val xtvEpisode = episode?.code?.startsWith("xtv:") == true
+    // Fuente 4K externa cacheada para una película: se intenta primero y, si el
+    // servidor no responde, se entra al VOD nativo en el mismo minuto.
+    val external4k = remember(film.id) {
+        if (!skipExternal && film.videoUrl.startsWith("xtv:") && episode == null && film.kind == "movie") {
+            com.chronosbvrx.visionplus.data.external.External4KRepository.fresh(libraryContext, film.id)
+        } else {
+            null
+        }
+    }
+    if (external4k != null) {
+        External4KPlayback(film, external4k, isTv, onBack, resumeMs)
+        return
+    }
     if (film.videoUrl.startsWith("xtv:") || film.videoUrl.startsWith("xtvlive:") || xtvEpisode) {
         // El motor nativo solo puede con una cosa a la vez y la descarga lo ocupa entero:
         // con una descarga activa se ofrece pausarla antes de abrir (nunca se cruzan).
         EngineDownloadGate(isTv = isTv, onCancel = onBack) {
             val context = androidx.compose.ui.platform.LocalContext.current
+            // «Más como esta» corre en `:x4k`, lejos del catálogo en memoria: el género
+            // viaja en el intent. Los tags del portal cubren las repisas sin `genres`.
+            val portalGenres = remember(film.id) {
+                runCatching {
+                    com.chronosbvrx.visionplus.data.xuper.X4KApi.metaFor(context, film.id)
+                        ?.optString("gen").orEmpty()
+                }.getOrDefault("")
+                    .split(',', '/', '|')
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+            }
+            val launchGenres = remember(film.genres, portalGenres) {
+                (film.genres + portalGenres).distinct()
+            }
             val live = film.videoUrl.startsWith("xtvlive:")
             val code = film.videoUrl.substringAfter(':')
             // El capítulo llega con su contexto: el handoff ("Abriendo…") sale al instante y el
@@ -277,11 +313,15 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
                         resumeMs = ep.resumeMs, posterUrl = film.posterUrl,
                         fallbackDurationMs = fallbackDuration,
                         synopsis = film.synopsis, cast = film.cast, countries = film.countries,
+                        genres = launchGenres, kind = film.kind,
+                        originalLanguage = film.originalLanguage,
                     )
                     else com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(
                         context, code, film.title, resumeMs = resumeMs, posterUrl = film.posterUrl,
                         fallbackDurationMs = fallbackDuration,
                         synopsis = film.synopsis, cast = film.cast, countries = film.countries,
+                        genres = launchGenres, kind = film.kind,
+                        originalLanguage = film.originalLanguage,
                     )
                 },
                 onDone = onBack,
@@ -318,7 +358,57 @@ fun PlayerScreen(film: Film, isTv: Boolean, onBack: () -> Unit, episode: Episode
         posterUrl = film.posterUrl,
         synopsis = film.synopsis,
         episodeTitle = episode?.episodeNames?.getOrNull(episode.episodeIndex),
+        onExternalFatal = onExternalFatal,
     )
+}
+
+/**
+ * Intenta la fuente 4K externa y, si se agota, cae a Xuper en el mismo minuto.
+ * El aviso es informativo: la tarjeta de error no se queda encima del fallback.
+ */
+@Composable
+private fun External4KPlayback(
+    film: Film,
+    source: com.chronosbvrx.visionplus.data.external.FourKSource,
+    isTv: Boolean,
+    onBack: () -> Unit,
+    resumeMs: Long,
+) {
+    val context = LocalContext.current
+    var fallback by remember(film.id) { mutableStateOf(false) }
+    var resumeAt by remember(film.id) { mutableLongStateOf(resumeMs) }
+    if (!fallback) {
+        LaunchedEffect(film.id) {
+            android.widget.Toast.makeText(context, "4K · ${source.label}", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        PlayerScreen(
+            film = film.copy(videoUrl = source.url),
+            isTv = isTv,
+            onBack = onBack,
+            resumeMs = resumeMs,
+            onExternalFatal = {
+                resumeAt = com.chronosbvrx.visionplus.data.PlaybackHistory.get(context, source.url)?.positionMs
+                    ?: com.chronosbvrx.visionplus.data.PlaybackHistory.get(context, film.id)?.positionMs
+                    ?: resumeAt
+                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                    "EXTERNAL_4K_FALLBACK",
+                    "id=${film.id} proveedor=${source.provider} lan=${source.lan}",
+                )
+                fallback = true
+            },
+        )
+    } else {
+        LaunchedEffect(Unit) {
+            android.widget.Toast.makeText(context, "Máxima calidad nativa", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        PlayerScreen(
+            film = film,
+            isTv = isTv,
+            onBack = onBack,
+            resumeMs = resumeAt,
+            skipExternal = true,
+        )
+    }
 }
 
 /** The player for a live channel: no seek bar, no pre-roll, headers from the playlist when it gave any. */
@@ -508,6 +598,8 @@ private fun PlayerCore(
     posterUrl: String = "",
     synopsis: String = "",
     episodeTitle: String? = null,
+    /** Fuente externa agotada: la ficha toma el control para caer a Xuper. */
+    onExternalFatal: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -871,6 +963,8 @@ private fun PlayerCore(
             return
         }
         error = if (isLive) "No se pudo reproducir este canal." else "No se pudo reproducir este video."
+        // Una fuente externa agotada no muestra la tarjeta: el wrapper cambia a Xuper.
+        if (!isLive) onExternalFatal?.invoke()
         buffering = false
         // Marca el canal como fallido (degradado, no oculto) para priorizarlo menos en listas.
         if (isLive) {

@@ -1,9 +1,11 @@
 package com.chronosbvrx.visionplus.ui.sports
 
+import android.content.res.Configuration
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,10 +53,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
@@ -70,6 +75,7 @@ import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 private val LiveRed = Color(0xFFD32F2F)
 
@@ -188,6 +194,18 @@ fun SportsScreen(
         liveCount > 0 -> "${filtered.size} eventos · $liveCount en vivo"
         else -> "${filtered.size} eventos"
     }
+    val config = LocalConfiguration.current
+    val layout = remember(
+        config.screenHeightDp,
+        config.smallestScreenWidthDp,
+        config.orientation,
+    ) {
+        sportsLayout(
+            heightDp = config.screenHeightDp,
+            smallestWidthDp = config.smallestScreenWidthDp,
+            isLandscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE,
+        )
+    }
 
     Column(
         Modifier
@@ -197,34 +215,59 @@ fun SportsScreen(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(
+                    horizontal = layout.horizontalPadding.dp,
+                    vertical = layout.headerVerticalPadding.dp,
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
                     "Deportes en vivo",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontSize = layout.titleSize.sp,
+                        lineHeight = (layout.titleSize * 1.25f).sp,
+                    ),
                     color = Color.White,
                 )
-                Text(countText, style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+                Text(
+                    countText,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = layout.subtitleSize.sp,
+                        lineHeight = (layout.subtitleSize * 1.35f).sp,
+                    ),
+                    color = VisionTextSecondary,
+                )
             }
-            IconButton(onClick = {
-                searchOpen = !searchOpen
-                if (!searchOpen) {
-                    gee.clearSearch()
-                } else {
-                    channels = false
-                    DeportesReturn.channels = false
-                }
-            }) {
+            IconButton(
+                onClick = {
+                    searchOpen = !searchOpen
+                    if (!searchOpen) {
+                        gee.clearSearch()
+                    } else {
+                        channels = false
+                        DeportesReturn.channels = false
+                    }
+                },
+                modifier = Modifier.size((48f * layout.cardScale).coerceAtLeast(48f).dp),
+            ) {
                 Icon(
                     if (searchOpen) Icons.Default.Close else Icons.Default.Search,
                     contentDescription = if (searchOpen) "Cerrar búsqueda" else "Buscar partido",
                     tint = Color.White,
+                    modifier = Modifier.size((24f * layout.cardScale).coerceAtLeast(24f).dp),
                 )
             }
-            IconButton(onClick = { gee.refresh(force = true) }) {
-                Icon(Icons.Default.Refresh, contentDescription = "Actualizar", tint = Color.White)
+            IconButton(
+                onClick = { gee.refresh(force = true) },
+                modifier = Modifier.size((48f * layout.cardScale).coerceAtLeast(48f).dp),
+            ) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = "Actualizar",
+                    tint = Color.White,
+                    modifier = Modifier.size((24f * layout.cardScale).coerceAtLeast(24f).dp),
+                )
             }
         }
         if (searchOpen) {
@@ -255,17 +298,19 @@ fun SportsScreen(
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                    .padding(horizontal = layout.horizontalPadding.dp, vertical = 2.dp),
             )
         }
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(layout.chipGap.dp),
+            contentPadding = PaddingValues(horizontal = layout.horizontalPadding.dp),
             modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
         ) {
             item(key = "scope") {
-                FilterChip(
+                GeeFilterChip(
+                    label = if (gee.showAll) "Todas" else "Principal",
                     selected = !gee.showAll,
+                    layout = layout,
                     onClick = {
                         channels = false
                         DeportesReturn.channels = false
@@ -273,19 +318,13 @@ fun SportsScreen(
                         DeportesReturn.league = null
                         gee.toggleShowAll()
                     },
-                    label = { Text(if (gee.showAll) "Todas" else "Principal") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = VisionBlue,
-                        selectedLabelColor = Color.White,
-                        containerColor = VisionSurface,
-                        labelColor = VisionTextSecondary,
-                    ),
-                    border = null,
                 )
             }
             items(gee.categories, key = { it }) { category ->
-                FilterChip(
+                GeeFilterChip(
+                    label = geeCategoryLabel(category),
                     selected = !channels && gee.selectedCategory == category,
+                    layout = layout,
                     onClick = {
                         channels = false
                         DeportesReturn.channels = false
@@ -293,51 +332,31 @@ fun SportsScreen(
                         DeportesReturn.league = null
                         gee.selectCategory(category)
                     },
-                    label = { Text(geeCategoryLabel(category)) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = VisionBlue,
-                        selectedLabelColor = Color.White,
-                        containerColor = VisionSurface,
-                        labelColor = VisionTextSecondary,
-                    ),
-                    border = null,
                 )
             }
             item(key = "favoritos") {
-                FilterChip(
+                GeeFilterChip(
+                    label = "Favoritos",
                     selected = gee.favoritesOnly,
+                    layout = layout,
                     onClick = {
                         channels = false
                         DeportesReturn.channels = false
                         gee.toggleFavoritesOnly()
                     },
-                    label = { Text("Favoritos") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = VisionBlue,
-                        selectedLabelColor = Color.White,
-                        containerColor = VisionSurface,
-                        labelColor = VisionTextSecondary,
-                    ),
-                    border = null,
                 )
             }
             item(key = "canales") {
-                FilterChip(
+                GeeFilterChip(
+                    label = "Canales",
                     selected = channels,
+                    layout = layout,
                     onClick = {
                         channels = true
                         DeportesReturn.channels = true
                         searchOpen = false
                         gee.clearSearch()
                     },
-                    label = { Text("Canales") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = VisionBlue,
-                        selectedLabelColor = Color.White,
-                        containerColor = VisionSurface,
-                        labelColor = VisionTextSecondary,
-                    ),
-                    border = null,
                 )
             }
         }
@@ -346,80 +365,67 @@ fun SportsScreen(
                 state = gee,
                 onPlay = onPlay,
                 bottomPadding = contentPadding.calculateBottomPadding(),
+                horizontalPadding = layout.horizontalPadding.dp,
+                scale = layout.cardScale,
             )
         } else {
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(layout.chipGap.dp),
+                contentPadding = PaddingValues(horizontal = layout.horizontalPadding.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = layout.chipRowGap.dp),
             ) {
                 items(days, key = { it }) { date ->
-                    FilterChip(
+                    GeeFilterChip(
+                        label = SportsSource.dayLabel(date),
                         selected = gee.selectedDay == date,
+                        layout = layout,
                         onClick = { gee.pickDay(date) },
-                        label = { Text(SportsSource.dayLabel(date)) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = VisionBlue,
-                            selectedLabelColor = Color.White,
-                            containerColor = VisionSurface,
-                            labelColor = VisionTextSecondary,
-                        ),
-                        border = null,
                     )
                 }
             }
             if (leagues.isNotEmpty()) {
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(layout.chipGap.dp),
+                    contentPadding = PaddingValues(horizontal = layout.horizontalPadding.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = layout.chipRowGap.dp),
                 ) {
                     item(key = "liga_all") {
-                        FilterChip(
+                        GeeFilterChip(
+                            label = "Todas",
                             selected = activeLeague == null,
+                            layout = layout,
                             onClick = {
                                 league = null
                                 DeportesReturn.league = null
                             },
-                            label = { Text("Todas") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = VisionBlue,
-                                selectedLabelColor = Color.White,
-                                containerColor = VisionSurface,
-                                labelColor = VisionTextSecondary,
-                            ),
-                            border = null,
                         )
                     }
                     items(leagues, key = { "liga_$it" }) { name ->
-                        FilterChip(
+                        GeeFilterChip(
+                            label = name,
                             selected = activeLeague == name,
+                            layout = layout,
                             onClick = {
                                 league = if (activeLeague == name) null else name
                                 DeportesReturn.league = league
                             },
-                            label = { Text(name, maxLines = 1) },
-                            leadingIcon = leagueLogos[name]?.let { logo ->
+                            leading = leagueLogos[name]?.let { logo ->
                                 {
                                     AsyncImage(
                                         model = ImageRequest.Builder(LocalContext.current)
                                             .data(logo)
-                                            .size(28, 28)
+                                            .size(
+                                                (28f * layout.cardScale).roundToInt(),
+                                                (28f * layout.cardScale).roundToInt(),
+                                            )
                                             .crossfade(false)
                                             .build(),
                                         contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
+                                        modifier = Modifier.size(layout.chipIconSize.dp),
                                         contentScale = ContentScale.Fit,
                                     )
                                 }
                             },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = VisionBlue,
-                                selectedLabelColor = Color.White,
-                                containerColor = VisionSurface,
-                                labelColor = VisionTextSecondary,
-                            ),
-                            border = null,
                         )
                     }
                 }
@@ -441,32 +447,36 @@ fun SportsScreen(
                     EmptyState("Sin eventos", subtitle = subtitle)
                 }
                 else -> {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 150.dp),
-                        contentPadding = PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = 4.dp,
-                            bottom = contentPadding.calculateBottomPadding() + 24.dp,
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        sections.forEach { section ->
-                            item(key = "sec_${section.title}", span = { GridItemSpan(maxLineSpan) }) {
-                                GeeSectionHeader(section.title, section.events.size)
-                            }
-                            gridItems(section.events, key = { it.id }) { event ->
-                                GeeEventTile(
-                                    event = event,
-                                    nowMs = now,
-                                    favorite = gee.isFavorite(event),
-                                ) {
-                                    // Abrir el menú de otro partido ya no es «volver a lo que veías».
-                                    DeportesReturn.forgetWatching()
-                                    DeportesReturn.pickingId = event.id
-                                    pickingId = event.id
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val columns = sportsGridColumns(maxWidth.value, layout)
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(columns),
+                            contentPadding = PaddingValues(
+                                start = layout.horizontalPadding.dp,
+                                end = layout.horizontalPadding.dp,
+                                top = layout.gridTopPadding.dp,
+                                bottom = contentPadding.calculateBottomPadding() + 24.dp,
+                            ),
+                            horizontalArrangement = Arrangement.spacedBy(layout.gridGap.dp),
+                            verticalArrangement = Arrangement.spacedBy(layout.gridGap.dp),
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            sections.forEach { section ->
+                                item(key = "sec_${section.title}", span = { GridItemSpan(maxLineSpan) }) {
+                                    GeeSectionHeader(section.title, section.events.size, layout)
+                                }
+                                gridItems(section.events, key = { it.id }) { event ->
+                                    GeeEventTile(
+                                        event = event,
+                                        nowMs = now,
+                                        favorite = gee.isFavorite(event),
+                                        layout = layout,
+                                    ) {
+                                        // Abrir el menú de otro partido ya no es «volver a lo que veías».
+                                        DeportesReturn.forgetWatching()
+                                        DeportesReturn.pickingId = event.id
+                                        pickingId = event.id
+                                    }
                                 }
                             }
                         }
@@ -558,71 +568,130 @@ internal fun geeScoreLine(event: GeeSportsSource.GeeEvent): String {
 }
 
 @Composable
-private fun GeeSectionHeader(title: String, count: Int) {
+private fun GeeFilterChip(
+    label: String,
+    selected: Boolean,
+    layout: SportsLayout,
+    onClick: () -> Unit,
+    leading: (@Composable () -> Unit)? = null,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = {
+            Text(
+                label,
+                fontSize = layout.chipTextSize.sp,
+                lineHeight = (layout.chipTextSize * 1.3f).sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        leadingIcon = leading,
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = VisionBlue,
+            selectedLabelColor = Color.White,
+            containerColor = VisionSurface,
+            labelColor = VisionTextSecondary,
+        ),
+        border = null,
+        modifier = Modifier.heightIn(min = layout.chipHeight.dp),
+    )
+}
+
+@Composable
+private fun GeeSectionHeader(title: String, count: Int, layout: SportsLayout) {
     Row(
-        Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
+        Modifier.fillMaxWidth().padding(top = layout.sectionTopPadding.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (title == "En vivo") {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(LiveRed))
-            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier
+                    .size((8f * layout.cardScale).dp)
+                    .clip(CircleShape)
+                    .background(LiveRed),
+            )
+            Spacer(Modifier.width((8f * layout.cardScale).dp))
         }
         Text(
             title,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontSize = layout.sectionTitleSize.sp,
+                lineHeight = (layout.sectionTitleSize * 1.25f).sp,
+            ),
             color = if (title == "En vivo") Color.White else VisionTextSecondary,
             modifier = Modifier.weight(1f),
         )
-        Text("$count", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+        Text(
+            "$count",
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = layout.subtitleSize.sp,
+                lineHeight = (layout.subtitleSize * 1.35f).sp,
+            ),
+            color = VisionTextSecondary,
+        )
     }
 }
 
 /**
  * La tarjeta-mosaico de un partido: escudos grandes, marcador real y estado.
  * Mismo ADN visual que la de Smart TV (misma lógica pura en [GeeTiles]).
+ *
+ * La liga y la píldora de estado van en dos filas: en una tarjeta de 160-240 dp
+ * no caben juntas, y antes la píldora se comía el nombre de la liga y el alto
+ * fijo recortaba el pie. Así las tres cosas se leen y la tarjeta no se estira.
  */
 @Composable
 private fun GeeEventTile(
     event: GeeSportsSource.GeeEvent,
     nowMs: Long,
     favorite: Boolean,
+    layout: SportsLayout,
     onClick: () -> Unit,
 ) {
     val (home, away) = GeeTiles.teams(event)
     val hasTeams = home.isNotBlank()
+    val s = layout.cardScale
+    val leagueStyle = MaterialTheme.typography.labelSmall.scaled(11f, 13f, s)
+    val eventStyle = MaterialTheme.typography.labelLarge.scaled(14f, 17f, s)
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(layout.cardRadius.dp),
         color = VisionSurface,
-        modifier = Modifier.fillMaxWidth().height(126.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = layout.cardHeight.dp),
     ) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = layout.cardPaddingH.dp, vertical = layout.cardPaddingV.dp),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     geeSportIcon(event.category),
                     contentDescription = null,
                     tint = VisionBlueBright,
-                    modifier = Modifier.size(13.dp),
+                    modifier = Modifier.size((13f * s).dp),
                 )
-                Spacer(Modifier.width(5.dp))
+                Spacer(Modifier.width((5f * s).dp))
                 val headerLogo = event.leagueLogo.ifBlank { event.logo }
                 if (headerLogo.isNotBlank()) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(headerLogo)
-                            .size(32, 32)
+                            .size((32f * s).roundToInt(), (32f * s).roundToInt())
                             .crossfade(false)
                             .build(),
                         contentDescription = null,
-                        modifier = Modifier.size(13.dp),
+                        modifier = Modifier.size((13f * s).dp),
                         contentScale = ContentScale.Fit,
                     )
-                    Spacer(Modifier.width(5.dp))
+                    Spacer(Modifier.width((5f * s).dp))
                 }
                 Text(
                     GeeAgenda.leagueLabel(event),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = leagueStyle,
                     color = VisionTextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -633,38 +702,39 @@ private fun GeeEventTile(
                         Icons.Default.Star,
                         contentDescription = "Favorito",
                         tint = Color(0xFFFFC107),
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size((14f * s).dp),
                     )
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width((4f * s).dp))
                 }
-                GeeStateBadge(event, compact = true, nowMs = nowMs)
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height((4f * s).dp))
+            GeeStateBadge(event = event, nowMs = nowMs, scale = s)
+            Spacer(Modifier.height((6f * s).dp))
             if (hasTeams) {
-                GeeTileTeamLine(event.homeLogo, event.logo, home, event.scoreHome, event.live)
-                Spacer(Modifier.height(6.dp))
-                GeeTileTeamLine(event.awayLogo, event.logo, away, event.scoreAway, event.live)
+                GeeTileTeamLine(event.homeLogo, event.logo, home, event.scoreHome, event.live, s)
+                Spacer(Modifier.height((4f * s).dp))
+                GeeTileTeamLine(event.awayLogo, event.logo, away, event.scoreAway, event.live, s)
             } else {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (event.logo.isNotBlank()) {
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
                                 .data(event.logo)
-                                .size(56, 56)
+                                .size((56f * s).roundToInt(), (56f * s).roundToInt())
                                 .crossfade(false)
                                 .build(),
                             contentDescription = null,
-                            modifier = Modifier.size(28.dp),
+                            modifier = Modifier.size((28f * s).dp),
                             contentScale = ContentScale.Fit,
                         )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width((8f * s).dp))
                     }
                     Text(
                         event.name,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = eventStyle,
                         color = Color.White,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -672,52 +742,62 @@ private fun GeeEventTile(
                     )
                 }
             }
-            Spacer(Modifier.height(7.dp))
-            GeeTileFooter(event, nowMs)
+            Spacer(Modifier.height((6f * s).dp))
+            GeeTileFooter(event, nowMs, s)
         }
     }
 }
 
 @Composable
-private fun GeeTileTeamLine(logo: String, fallbackLogo: String = "", name: String, score: Int?, live: Boolean) {
+private fun GeeTileTeamLine(
+    logo: String,
+    fallbackLogo: String = "",
+    name: String,
+    score: Int?,
+    live: Boolean,
+    scale: Float,
+) {
     val effectiveLogo = logo.ifBlank { fallbackLogo }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(22.dp).clip(CircleShape).background(VisionSurfaceHigh),
+            Modifier
+                .size((22f * scale).dp)
+                .clip(CircleShape)
+                .background(VisionSurfaceHigh),
             contentAlignment = Alignment.Center,
         ) {
             if (effectiveLogo.isNotBlank()) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(effectiveLogo)
-                        .size(44, 44)
+                        .size((44f * scale).roundToInt(), (44f * scale).roundToInt())
                         .crossfade(false)
                         .build(),
                     contentDescription = null,
-                    modifier = Modifier.fillMaxSize().padding(2.dp),
+                    modifier = Modifier.fillMaxSize().padding((2f * scale).dp),
                     contentScale = ContentScale.Fit,
                 )
             } else {
                 Text(
                     GeeTiles.monogram(name),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.scaled(10f, 12f, scale),
                     color = VisionTextSecondary,
                 )
             }
         }
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width((8f * scale).dp))
         Text(
             name,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelMedium.scaled(12f, 14f, scale),
             color = Color.White,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width((6f * scale).dp))
         Text(
             score?.toString() ?: "-",
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleMedium.scaled(16f, 18f, scale),
             fontWeight = FontWeight.Bold,
             color = if (live) VisionBlueBright else Color.White,
         )
@@ -726,12 +806,13 @@ private fun GeeTileTeamLine(logo: String, fallbackLogo: String = "", name: Strin
 
 /** El pie: la guía de TV («TV: …») o cuántas señales hay. La píldora roja es SOLO para partidos en vivo. */
 @Composable
-private fun GeeTileFooter(event: GeeSportsSource.GeeEvent, nowMs: Long) {
+private fun GeeTileFooter(event: GeeSportsSource.GeeEvent, nowMs: Long, scale: Float) {
+    val footerStyle = MaterialTheme.typography.labelSmall.scaled(11f, 13f, scale)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         val tvLine = event.broadcasts.take(2).joinToString(" · ")
         Text(
             if (tvLine.isNotBlank()) "TV: $tvLine" else GeeTiles.streams(event),
-            style = MaterialTheme.typography.labelSmall,
+            style = footerStyle,
             color = if (tvLine.isBlank() && event.alive > 0) VisionBlueBright else VisionTextSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -740,13 +821,16 @@ private fun GeeTileFooter(event: GeeSportsSource.GeeEvent, nowMs: Long) {
         // «en vivo» nunca en un partido que aún no comienza o ya terminó: `alive`
         // solo dice si el enlace responde, no que se esté jugando.
         if (GeeAgenda.playable(event, nowMs) && event.alive > 0) {
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width((6f * scale).dp))
             Surface(color = LiveRed, shape = RoundedCornerShape(50)) {
                 Text(
                     "${event.alive} en vivo",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = footerStyle,
                     color = Color.White,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                    modifier = Modifier.padding(
+                        horizontal = (6f * scale).dp,
+                        vertical = (1f * scale).dp,
+                    ),
                 )
             }
         }
@@ -755,28 +839,41 @@ private fun GeeTileFooter(event: GeeSportsSource.GeeEvent, nowMs: Long) {
 
 /** EN VIVO con minuto, Final, o la hora con el día (Hoy/mañana/fecha). */
 @Composable
-private fun GeeStateBadge(event: GeeSportsSource.GeeEvent, compact: Boolean = false, nowMs: Long = GeeAgenda.currentNow()) {
+private fun GeeStateBadge(
+    event: GeeSportsSource.GeeEvent,
+    nowMs: Long,
+    scale: Float,
+) {
+    val badgeStyle = MaterialTheme.typography.labelSmall.scaled(11f, 13f, scale)
     when {
-        event.live || GeeAgenda.phaseOf(event, nowMs) == GeeAgenda.Phase.Live -> Surface(color = LiveRed, shape = RoundedCornerShape(50)) {
+        event.live || GeeAgenda.phaseOf(event, nowMs) == GeeAgenda.Phase.Live -> Surface(
+            color = LiveRed,
+            shape = RoundedCornerShape(50),
+        ) {
             Text(
                 GeeTiles.liveLabel(event),
-                style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge,
+                style = badgeStyle,
                 color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(
-                    horizontal = if (compact) 7.dp else 10.dp,
-                    vertical = if (compact) 2.dp else 4.dp,
+                    horizontal = (7f * scale).dp,
+                    vertical = (2f * scale).dp,
                 ),
             )
         }
         event.status == "post" -> Text(
             "Final",
-            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge,
+            style = badgeStyle,
             color = VisionTextSecondary,
+            maxLines = 1,
         )
         else -> Text(
             GeeTiles.state(event, SportsSource.todayIso()),
-            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.titleSmall,
+            style = badgeStyle,
             color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

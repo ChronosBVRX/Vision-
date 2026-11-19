@@ -21,6 +21,7 @@ class RelatedTest {
         popularity: Double = 0.0,
         score: Double = 0.0,
         videoUrl: String = "xtv:$id",
+        genres: List<String> = emptyList(),
     ) = Film(
         id = id,
         title = title,
@@ -35,6 +36,7 @@ class RelatedTest {
         tmdbId = tmdbId,
         groupId = groupId,
         kind = kind,
+        genres = genres,
     )
 
     private fun row(title: String, vararg films: Film) =
@@ -103,8 +105,32 @@ class RelatedTest {
         assertEquals("anime", Related.sectionFor(film("4", "D", kind = "anime")))
         assertEquals("movies", Related.sectionFor(film("5", "E", kind = "kids")))
         assertEquals(
+            "animación occidental mal etiquetada «anime»",
+            "movies",
+            Related.sectionFor(film("7", "G", kind = "anime").copy(originalLanguage = "en")),
+        )
+        assertEquals(
+            "anime japonés de verdad",
+            "anime",
+            Related.sectionFor(film("8", "H", kind = "anime").copy(originalLanguage = "ja")),
+        )
+        assertEquals(
             "series",
             Related.sectionFor(film("6", "F", kind = "", videoUrl = "xtv:6").copy(seasons = listOf(SeasonRef(1, "xtv:6", "xtv:6")))),
+        )
+    }
+
+    @Test
+    fun genreHintMergesPortalTagsWithAnySeparator() {
+        val current = film("1", "Actual", genres = listOf("Animación"))
+        assertEquals(
+            "la pista conserva los tags; el cruce los normaliza después",
+            "Animación, Family, Comedy",
+            Related.genreHint(current, "Family / Comedy"),
+        )
+        assertEquals(
+            "Animación, Kids, Adventure",
+            Related.genreHint(current, "Kids|Adventure"),
         )
     }
 
@@ -140,6 +166,81 @@ class RelatedTest {
         assertEquals("Drama", Related.inferGenreHint(current, rows))
         val picked = Related.pickRelated(current, rows, Related.inferGenreHint(current, rows), limit = 10)
         assertEquals("2", picked.first().id)
+    }
+
+    @Test
+    fun englishGenresMatchTheSpanishRowsAndNeverMixHorror() {
+        val current = film("1", "Monsters, Inc.", kind = "kids")
+        val animation = (2..8).map {
+            film(
+                "a$it", "Animada $it", popularity = it.toDouble(),
+                genres = listOf("Animación", "Familia"),
+            )
+        }
+        val horror = film("20", "Terror", popularity = 999.0, genres = listOf("Terror"))
+        val rows = listOf(
+            row("Animación", *animation.toTypedArray()),
+            row("Terror", horror),
+        )
+
+        val picked = Related.pickRelated(
+            current, rows, genreHint = "Animation, Family, Comedy", limit = 8,
+        )
+
+        assertEquals("solo las de animación", animation.map { it.id }.toSet(), picked.map { it.id }.toSet())
+        assertFalse("jamás terror tras una infantil", picked.any { it.id == "20" })
+    }
+
+    @Test
+    fun neverFillsWithAnotherGenreWhenTheKnownGenreRunsOut() {
+        val current = film("1", "Actual", genres = listOf("Documental"))
+        val documentary = film("2", "Documental dos", genres = listOf("Documental"))
+        val horror = film("3", "Terror", popularity = 99.0, genres = listOf("Terror"))
+        val rows = listOf(row("Documental", documentary), row("Terror", horror))
+
+        val picked = Related.pickRelated(current, rows, genreHint = "Documental", limit = 10)
+
+        assertEquals("mejor una sola que una de otro género", listOf("2"), picked.map { it.id })
+    }
+
+    @Test
+    fun aKidsSeedWithoutGenreStillCannotGetHorror() {
+        val current = film("1", "Infantil", kind = "kids")
+        val kid = film("2", "Animada", kind = "kids", popularity = 1.0, genres = listOf("Familia"))
+        val horror = film("3", "Terror", popularity = 999.0, genres = listOf("Terror"))
+        val rows = listOf(row("Terror", horror), row("Animación", kid))
+
+        val picked = Related.pickRelated(current, rows, genreHint = "", limit = 10)
+
+        assertEquals("solo lo infantil", listOf("2"), picked.map { it.id })
+    }
+
+    @Test
+    fun thePrimaryGenreGoesFirstEvenIfAnotherIsMorePopular() {
+        val current = film("1", "Actual", genres = listOf("Animación", "Comedia"))
+        val comedy = film("2", "Comedia", popularity = 999.0, genres = listOf("Comedia"))
+        val animation = film("3", "Animada", popularity = 1.0, genres = listOf("Animación"))
+        val rows = listOf(row("Animación", animation), row("Comedia", comedy))
+
+        val picked = Related.pickRelated(current, rows, genreHint = "", limit = 10)
+
+        assertEquals("manda el género primario", "3", picked.first().id)
+    }
+
+    @Test
+    fun inferGenreHintUsesTheCatalogGenresBeforeTheRowName() {
+        val current = film("1", "Monstros S.A.", kind = "kids")
+        val catalog = film(
+            "1", "Monstros S.A.", kind = "kids",
+            genres = listOf("Animación", "Familia", "Comedia"),
+        )
+        val rows = listOf(row("Aventuras", catalog))
+
+        assertEquals(
+            "los géneros de la ficha son más precisos que la hilera",
+            "Animación, Familia, Comedia",
+            Related.inferGenreHint(current, rows),
+        )
     }
 
     @Test

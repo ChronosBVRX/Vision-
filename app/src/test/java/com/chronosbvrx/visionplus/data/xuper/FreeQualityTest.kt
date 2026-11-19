@@ -84,6 +84,35 @@ class FreeQualityTest {
     }
 
     @Test
+    fun audioAndCodecBreakTiesInsideTheSameQuality() {
+        val medias = JSONArray().apply {
+            put(JSONObject().apply {
+                put("n", "av1-original")
+                put("l", "license")
+                put("q", "1080p")
+                put("a", "Inglés")
+                put("e", "AV1")
+            })
+            put(JSONObject().apply {
+                put("n", "h264-latino")
+                put("l", "license")
+                put("q", "1080p")
+                put("a", "Español Latino")
+                put("e", "H.264")
+            })
+            put(JSONObject().apply {
+                put("n", "hevc-original")
+                put("l", "license")
+                put("q", "1080p")
+                put("a", "Inglés")
+                put("e", "HEVC")
+            })
+        }
+        val ordered = X4KApi.sortMediasBestFirst(medias)
+        assertEquals(listOf("h264-latino", "hevc-original", "av1-original"), names(ordered))
+    }
+
+    @Test
     fun v10BodyCarriesTheFreeColumnAndThePlayTenant() {
         val body = X4KApi.licenseColumnBody("token", "uid", "cid", "sid", 87887)
         assertEquals("masmobile", body.getString("portalCode"))

@@ -87,6 +87,9 @@
 -keep class * extends java.security.Provider { *; }
 
 
+# --- Fuentes 4K externas: WorkManager instancia el Worker por nombre ---
+-keep class com.chronosbvrx.visionplus.data.external.External4KWorker { <init>(...); }
+
 # --- Visión+ Play: escáner QR del teléfono (JourneyApps/ZXing) ---
 # La CaptureActivity y los decodificadores se resuelven por nombre desde el manifest y el
 # runtime; sin keep, R8 puede dejar el escáner en blanco en el release.

@@ -19,6 +19,7 @@ class TitleRelatedWiringTest {
     fun theMobileTitleLoadsAndPaintsRelatedTitles() {
         val title = source("ui/title/TitleScreen.kt")
         assertTrue("carga relacionadas", title.contains("Related.forFilm("))
+        assertTrue("suma los tags del portal", title.contains("Related.genreHint("))
         assertTrue("pinta la hilera", title.contains("RelatedSection(related, onOpenFilm)"))
         assertTrue("abre la ficha elegida", title.contains("onOpenFilm: (Film) -> Unit"))
     }
@@ -27,6 +28,7 @@ class TitleRelatedWiringTest {
     fun theTvTitleLoadsAndPaintsRelatedTitles() {
         val tv = source("ui/tv/TvTitleScreen.kt")
         assertTrue("carga relacionadas", tv.contains("Related.forFilm("))
+        assertTrue("suma los tags del portal", tv.contains("Related.genreHint("))
         assertTrue("pinta la hilera", tv.contains("TvRelatedSection(related, onOpenFilm)"))
         assertTrue("abre la ficha elegida", tv.contains("onOpenFilm: (Film) -> Unit"))
         assertTrue("el contenido ahora se puede desplazar", tv.contains("heightIn(min = minHeight)"))
@@ -53,6 +55,21 @@ class TitleRelatedWiringTest {
         assertTrue("pide las relacionadas", player.contains("Related.forFilm("))
         assertTrue("el modal entra en el bloqueo de foco", player.contains("|| suggestVisible"))
         assertTrue("se cierra con Atrás", player.contains("if (suggestVisible) {"))
+    }
+
+    @Test
+    fun theMovieGenreTravelsToThePlayerSoSuggestionsDoNotGuess() {
+        val api = source("data/xuper/X4KApi.kt")
+        assertTrue("el intent lleva los géneros", api.contains("putStringArrayListExtra(\"genres\""))
+        assertTrue("el intent lleva el tipo", api.contains("putExtra(\"kind\", kind)"))
+
+        val screen = source("ui/player/PlayerScreen.kt")
+        assertTrue("la ficha móvil manda el género real", screen.contains("genres = launchGenres, kind = film.kind"))
+
+        val player = source("ui/player/X4KPlayerAty.kt")
+        assertTrue("el reproductor lee los géneros", player.contains("intent.getStringArrayListExtra(\"genres\")"))
+        assertTrue("arma la semilla con su género", player.contains("kind = curKind.ifBlank"))
+        assertTrue("las sugerencias usan ese género", player.contains("Related.forFilm(this@X4KPlayerAty, current, hint"))
     }
 
     @Test

@@ -381,6 +381,9 @@ def best_medias(payload: dict) -> list[dict]:
                     continue
                 codec = str(media.get("encodeFormat") or "")
                 # h265 primero (mejor bitrate), h264 como respaldo para equipos viejos.
+                # El cliente 2.6.60+ reordena estas pistas con StreamRanker (audio latino,
+                # H.264 antes que AV1); se conserva este orden para no cambiar el arranque
+                # de los builds anteriores que no traen ranker.
                 codec_rank = 1 if codec == "h265" else 0
                 rows.append(
                     (

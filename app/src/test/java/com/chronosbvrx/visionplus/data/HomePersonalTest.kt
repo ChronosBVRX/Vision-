@@ -101,7 +101,7 @@ class HomePersonalTest {
             "la del mismo género va primero",
             out?.films?.firstOrNull()?.id in related.map { it.id },
         )
-        assertEquals("la comedia queda al final", "9", out?.films?.lastOrNull()?.id)
+        assertFalse("no se cuela otro género para rellenar", out?.films?.any { it.id == "9" } == true)
         assertFalse("la semilla no se repite", out?.films?.any { it.id == "1" } == true)
         assertTrue("hay tarjetas suficientes", (out?.films?.size ?: 0) >= HomePersonal.MIN_CARDS)
     }

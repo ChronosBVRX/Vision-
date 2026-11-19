@@ -253,9 +253,18 @@ object Diagnostics {
     /**
      * Huella estable para agrupar: tipo + código + primeras líneas del stack sin
      * números de línea (así el mismo error agrupa aunque el código se mueva).
+     *
+     * Las anomalías llevan MEDIDAS en el detalle (`totalMs=3049`, `metaMs=2684`,
+     * `firstFrameMs=3969`…). Si se hashean tal cual, cada arranque lento crea una huella
+     * nueva: el bot manda «anomalía nueva» por cada valor distinto y nunca puede decir
+     * «van 14 veces en 3 equipos». Es el mismo ruido que ya se corrigió en los ANR
+     * (`MAIN_BLOCKED_51s`, `52s`…). Los números se sustituyen por `#`; las claves y los
+     * valores de texto (`cached=false`, `live=true`, `motivo=Timeout`) siguen separando
+     * causas distintas.
      */
     internal fun fingerprint(kind: String, code: String, detail: String): String {
-        val frames = detail.lineSequence()
+        val stable = if (kind == "anomaly") stableDetail(detail) else detail
+        val frames = stable.lineSequence()
             .map { it.substringBefore("(").trim() }
             .filter { it.isNotBlank() }
             .take(6)
@@ -264,6 +273,13 @@ object Diagnostics {
         val digest = MessageDigest.getInstance("SHA-256").digest(base.toByteArray())
         return digest.take(8).joinToString("") { "%02x".format(it) }
     }
+
+    /** Detalle sin medidas: `slbMs=3` y `slbMs=90` son la MISMA causa. */
+    internal fun stableDetail(detail: String): String =
+        NUMERIC_VALUE.replace(detail) { match -> match.groupValues[1] + "#" }
+
+    /** `=3049`, `= 3049` y `=-1` (valor numérico tras una clave). */
+    private val NUMERIC_VALUE = Regex("""(=\s*)-?\d[\d.,]*""")
 
     private fun enqueue(
         report: JSONObject?,

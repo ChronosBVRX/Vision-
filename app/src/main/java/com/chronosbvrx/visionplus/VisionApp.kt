@@ -41,6 +41,8 @@ class VisionApp : Application(), ImageLoaderFactory {
             com.chronosbvrx.visionplus.data.kids.KidsMode.init(this)
             // Configuración remota (Fase 2): kill-switches que el servidor puede activar sin OTA.
             com.chronosbvrx.visionplus.data.config.RemoteConfig.init(this)
+            // Fuentes 4K externas: revisión periódica de las fichas ya abiertas.
+            runCatching { com.chronosbvrx.visionplus.data.external.External4KWorker.ensure(this) }
             // El puente de progreso offline solo vive en el proceso principal: el `:x4k` emite,
             // el principal escucha. Registrarlo en `:x4k` duplicaría eventos.
             runCatching {

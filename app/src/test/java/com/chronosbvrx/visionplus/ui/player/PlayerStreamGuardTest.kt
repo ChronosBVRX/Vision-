@@ -107,10 +107,16 @@ class PlayerStreamGuardTest {
     fun theNativePlayerStartsOnTheOrderedQualityAndReportsContentJumps() {
         val player = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
         // El arranque (mountUi) y el cambio de capítulo (playEpisode, con su reintento) usan la
-        // lista ordenada por la calidad preferida.
-        val ordering = Regex("orderMediasByQuality\\(").findAll(player).count()
-        assertTrue("el reproductor ordena las medias por calidad ($ordering)", ordering >= 3)
+        // cadena: calidad preferida primero y, si falla, la inferior antes que un 4K.
+        val ordering = Regex("playbackChain\\(").findAll(player).count()
+        assertTrue("el reproductor arma la cadena de calidad ($ordering)", ordering >= 2)
         assertTrue("el play de arranque usa la lista ordenada", player.contains("X4KTitan.play(v, mode, code, title, orderedMedias)"))
+        // El respaldo automático no puede quedarse en el error: prueba la siguiente pista.
+        assertTrue("el reproductor baja de pista antes de rendirse", player.contains("tryNextMedia("))
+        assertTrue("telemetría del respaldo", player.contains("\"PLAYER_DOWNGRADE\""))
+        // El ranker también se aplica a las pistas que llegan armadas por el broker.
+        assertTrue("el reproductor rankea las pistas del broker", player.contains("rankMedias("))
+        assertTrue("el motor recibe la cadena ya ordenada", player.contains("playbackChain("))
         // El salto de contenido se detecta y se reporta.
         assertTrue("telemetría del salto", player.contains("\"PLAYER_FRAME_SKIP\""))
         assertTrue("detector puro", player.contains("positionSkipExcessMs("))

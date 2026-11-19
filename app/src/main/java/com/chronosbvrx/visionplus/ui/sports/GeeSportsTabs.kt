@@ -59,6 +59,7 @@ import com.chronosbvrx.visionplus.ui.theme.VisionSuccess
 import com.chronosbvrx.visionplus.ui.theme.VisionSurface
 import com.chronosbvrx.visionplus.ui.theme.VisionSurfaceHigh
 import com.chronosbvrx.visionplus.ui.theme.VisionTextSecondary
+import kotlin.math.roundToInt
 
 /** "Football" → "Fútbol" (y los demás deportes tal cual). */
 internal fun geeCategoryLabel(category: String): String = when (category.lowercase()) {
@@ -152,6 +153,8 @@ fun GeeChannelsTab(
     state: GeeSportsState,
     onPlay: (LiveChannel) -> Unit,
     bottomPadding: Dp,
+    horizontalPadding: Dp = 16.dp,
+    scale: Float = 1f,
 ) {
     var pickingChannel by remember { mutableStateOf<GeeSportsSource.GeeChannel?>(null) }
     var pickingGroup by remember { mutableStateOf("") }
@@ -162,17 +165,22 @@ fun GeeChannelsTab(
         }
         state.groups.isEmpty() -> EmptyState("Sin canales", subtitle = "No se pudo cargar el catálogo de canales deportivos.")
         else -> LazyColumn(
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = bottomPadding + 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(
+                start = horizontalPadding,
+                end = horizontalPadding,
+                top = (4f * scale).dp,
+                bottom = bottomPadding + 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy((8f * scale).dp),
             modifier = Modifier.fillMaxSize(),
         ) {
             state.groups.forEach { group ->
-                item(key = "g_${group.id}") { GeeGroupHeader(group) }
+                item(key = "g_${group.id}") { GeeGroupHeader(group, scale) }
                 items(
                     group.channels,
                     key = { "c_${group.id}_${it.name}_${it.links.firstOrNull()?.link?.hashCode() ?: 0}" },
                 ) { channel ->
-                    GeeChannelRow(channel) {
+                    GeeChannelRow(channel, scale) {
                         if (channel.links.size == 1) {
                             onPlay(GeeSportsSource.toChannel(channel.links.first(), channel.name, "Deportes en vivo"))
                         } else {
@@ -200,74 +208,102 @@ fun GeeChannelsTab(
 }
 
 @Composable
-private fun GeeGroupHeader(group: GeeSportsSource.GeeGroup) {
+private fun GeeGroupHeader(group: GeeSportsSource.GeeGroup, scale: Float) {
     Row(
-        Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
+        Modifier.fillMaxWidth().padding(top = (10f * scale).dp, bottom = (2f * scale).dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (group.logo.isNotBlank()) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(group.logo)
-                    .size(48, 48)
+                    .size((48f * scale).roundToInt(), (48f * scale).roundToInt())
                     .crossfade(false)
                     .build(),
                 contentDescription = null,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size((20f * scale).dp),
                 contentScale = ContentScale.Fit,
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width((8f * scale).dp))
         }
-        Text(group.name, style = MaterialTheme.typography.titleMedium, color = Color.White, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("${group.alive}/${group.total} disponibles", style = MaterialTheme.typography.bodySmall, color = VisionTextSecondary)
+        Text(
+            group.name,
+            style = MaterialTheme.typography.titleMedium.scaled(16f, 19f, scale),
+            color = Color.White,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            "${group.alive}/${group.total} disponibles",
+            style = MaterialTheme.typography.bodySmall.scaled(12f, 14f, scale),
+            color = VisionTextSecondary,
+        )
     }
 }
 
 @Composable
-private fun GeeChannelRow(channel: GeeSportsSource.GeeChannel, onClick: () -> Unit) {
+private fun GeeChannelRow(channel: GeeSportsSource.GeeChannel, scale: Float, onClick: () -> Unit) {
     val alive = channel.links.count { it.alive == true }
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape((12f * scale).dp),
         color = VisionSurfaceHigh.copy(alpha = 0.55f),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.padding(horizontal = (14f * scale).dp, vertical = (11f * scale).dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             if (channel.logo.isNotBlank()) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(channel.logo)
-                        .size(56, 56)
+                        .size((56f * scale).roundToInt(), (56f * scale).roundToInt())
                         .crossfade(false)
                         .build(),
                     contentDescription = null,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size((22f * scale).dp),
                     contentScale = ContentScale.Fit,
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width((8f * scale).dp))
             }
             Text(
                 channel.name,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyLarge.scaled(15f, 18f, scale),
                 color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width((8f * scale).dp))
             if (alive > 0) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(VisionSuccess))
-                Spacer(Modifier.width(5.dp))
-                Text("$alive disponibles", style = MaterialTheme.typography.labelLarge, color = Color.White)
+                Box(
+                    Modifier
+                        .size((7f * scale).dp)
+                        .clip(CircleShape)
+                        .background(VisionSuccess),
+                )
+                Spacer(Modifier.width((5f * scale).dp))
+                Text(
+                    "$alive disponibles",
+                    style = MaterialTheme.typography.labelLarge.scaled(14f, 17f, scale),
+                    color = Color.White,
+                )
             } else {
                 Text(
                     "${channel.links.size} enlaces",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.scaled(12f, 14f, scale),
                     color = VisionTextSecondary,
                 )
             }
-            Spacer(Modifier.width(4.dp))
-            Icon(Icons.Default.PlayArrow, contentDescription = "Ver", tint = VisionBlue, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width((4f * scale).dp))
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = "Ver",
+                tint = VisionBlue,
+                modifier = Modifier.size((20f * scale).dp),
+            )
         }
     }
 }

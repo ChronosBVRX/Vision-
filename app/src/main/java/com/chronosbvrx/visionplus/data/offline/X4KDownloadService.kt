@@ -11,6 +11,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.chronosbvrx.visionplus.R
+import com.chronosbvrx.visionplus.data.playback.StreamRanker
 import com.chronosbvrx.visionplus.data.xuper.X4KApi
 import com.chronosbvrx.visionplus.data.xuper.X4KTitan
 import com.chronosbvrx.visionplus.ui.player.X4KPlayerAty
@@ -334,6 +335,16 @@ class X4KDownloadService : Service() {
         if (mediaSpecs.isEmpty()) {
             throw IllegalStateException("No se pudo establecer enlace con el servidor de descarga")
         }
+        // La descarga también respeta el criterio de reproducción: mejor resolución,
+        // audio latino y un códec que el equipo pueda decodificar sin tirones.
+        val rankedSpecs = StreamRanker.rank(mediaSpecs) { media ->
+            StreamRanker.Facts(
+                quality = media.quality,
+                audio = media.audio,
+                encodeFormat = media.encodeFormat,
+                videoFormat = media.videoFormat,
+            )
+        }
 
         // Vía del reproductor a nivel facade: x(0, code, program) — la misma llamada
         // que ed.e.A() hace al abrir. Sin vista, sin Surface, sin audio.
@@ -343,7 +354,7 @@ class X4KDownloadService : Service() {
             if (pauseWins()) {
                 false
             } else {
-                resolveWithHeadlessEngine(app, code, title, mediaSpecs).also { ok ->
+                resolveWithHeadlessEngine(app, code, title, rankedSpecs).also { ok ->
                     if (ok) activeCodes[id] = code
                 }
             }

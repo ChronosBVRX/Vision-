@@ -110,12 +110,21 @@ fun TvTitleScreen(
     val landing = rememberLandingFocus()
     val context = LocalContext.current
     val isXtv = film.videoUrl.startsWith("xtv:")
+    var has4k by remember(film.id) {
+        mutableStateOf(com.chronosbvrx.visionplus.data.external.External4KRepository.hasFresh(context, film.id))
+    }
+    LaunchedEffect(film.id) {
+        if (isXtv && film.kind == "movie") {
+            com.chronosbvrx.visionplus.data.external.External4KRepository.refreshIfStale(context, film)
+            has4k = com.chronosbvrx.visionplus.data.external.External4KRepository.hasFresh(context, film.id)
+        }
+    }
     val meta = remember(film.id) { if (isXtv) X4KApi.metaFor(context, film.id) else null }
     val genreHint = remember(film.id) {
-        (film.genres + meta?.optString("gen").orEmpty().split(',').map { it.trim() })
-            .filter { it.isNotBlank() }
-            .distinct()
-            .joinToString(", ")
+        com.chronosbvrx.visionplus.data.Related.genreHint(
+            film,
+            meta?.optString("gen").orEmpty(),
+        )
     }
 
     var backdrop by remember(film.id) { mutableStateOf(film.posterUrl) }
@@ -445,6 +454,14 @@ fun TvTitleScreen(
                                 Text(score, color = Color.Black, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                             }
                         }
+                    }
+                    if (has4k) {
+                        Text(
+                            "4K DISPONIBLE",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = VisionBlueBright,
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
                     if (qualities.isNotEmpty()) {
                         Text(
