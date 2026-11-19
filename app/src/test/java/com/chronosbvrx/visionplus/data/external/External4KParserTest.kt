@@ -40,6 +40,54 @@ class External4KParserTest {
     }
 
     @Test
+    fun spanishAudioWinsOverASmallerOriginalFile() {
+        val original = JSONObject().apply {
+            put("name", "4KHDHub 4K")
+            put("description", "[5.00 GB] 2160p WEB-DL Hindi + English")
+            put("url", "https://cdn.example/hindi.mkv")
+            put("behaviorHints", JSONObject().put("videoSize", 5_000_000_000L))
+        }
+        val latino = JSONObject().apply {
+            put("name", "4KHDHub 4K")
+            put("description", "[12.00 GB] 2160p WEB-DL Latino")
+            put("url", "https://cdn.example/latino.mkv")
+            put("behaviorHints", JSONObject().put("videoSize", 12_000_000_000L))
+        }
+        val out = External4KParser.parseStreams(payload(original, latino), now, 6 * 60 * 60 * 1000L)
+        assertEquals("https://cdn.example/latino.mkv", out[0].url)
+        assertEquals("Latino", out[0].language)
+    }
+
+    @Test
+    fun spanishAndLatamLabelsAreDetectedAndHindiIsNotSpanish() {
+        val out = External4KParser.parseStreams(
+            payload(
+                stream("[A]\nEspañol", "2160p", "https://cdn.example/es.mkv"),
+                stream("[B]\nLATAM", "2160p", "https://cdn.example/latam.mkv"),
+                stream("[C]\nHindi + English", "2160p", "https://cdn.example/hindi.mkv"),
+            ),
+            now,
+            6 * 60 * 60 * 1000L,
+        )
+        val byUrl = out.associateBy { it.url }
+        assertEquals("Castellano", byUrl["https://cdn.example/es.mkv"]?.language)
+        assertEquals("Latino", byUrl["https://cdn.example/latam.mkv"]?.language)
+        assertEquals("Original", byUrl["https://cdn.example/hindi.mkv"]?.language)
+    }
+
+    @Test
+    fun theServerLanguageFieldIsHonored() {
+        val stream = JSONObject().apply {
+            put("name", "4KHDHub 4K")
+            put("title", "2160p")
+            put("language", "Latino")
+            put("url", "https://cdn.example/latino.mkv")
+        }
+        val out = External4KParser.parseStreams(payload(stream), now, 6 * 60 * 60 * 1000L)
+        assertEquals("Latino", out[0].language)
+    }
+
+    @Test
     fun aPublicHdHubR2StreamIsAcceptedAndTheSmallerOneWins() {
         val big = JSONObject().apply {
             put("name", "4KHDHub 4K")

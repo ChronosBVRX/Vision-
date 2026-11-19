@@ -18,6 +18,12 @@ internal object External4KParser {
     private val IS_4K = Regex("""(?i)(?:\b2160p?\b|\b4k\b|\buhd\b)""")
     private val CAM = Regex("""(?i)(?:\bcam\b|telesync|\bts\b|hdcam)""")
     private val PRIVATE_HOST = Regex("""(?i)^https?://(?:192\.168\.|10\.|172\.(?:1[6-9]|2\d|3[01])\.)""")
+    /** Pista de audio latino: «Latino», «LATAM», «Dual Lat», «es-MX» o «es-419». */
+    private val LATINO_HINT = Regex(
+        """(?i)(?:\blatino\b|\blatina\b|\blatam\b|\bdual[ ._-]?lat\b|\bes[- ]?419\b|\bes[- ]?mx\b)""",
+    )
+    /** Español genérico o castellano; nunca debe confundirse con subtítulos en inglés. */
+    private val SPANISH_HINT = Regex("""(?i)(?:\bcastellano\b|\bespa[nñ]ol\b|\bspanish\b|\besp\b)""")
 
     private val PROVIDER = Regex("""^\[([^\]]*)]""", RegexOption.MULTILINE)
 
@@ -70,9 +76,12 @@ internal object External4KParser {
             // Un 4K CAM sigue siendo peor que un 1080p limpio; se descarta.
             if (CAM.containsMatchIn(qualityBlob) && !qualityBlob.contains("2160p", ignoreCase = true)) continue
             val provider = providerOf(stream.optString("name"), stream.optString("title"))
+            val declared = stream.optString("language").trim()
             val language = when {
-                blob.contains("latino", ignoreCase = true) -> "Latino"
-                blob.contains("castellano", ignoreCase = true) -> "Castellano"
+                declared.equals("Latino", ignoreCase = true) -> "Latino"
+                declared.equals("Castellano", ignoreCase = true) -> "Castellano"
+                LATINO_HINT.containsMatchIn(blob) -> "Latino"
+                SPANISH_HINT.containsMatchIn(blob) -> "Castellano"
                 else -> "Original"
             }
             val expiry = urlExpiryMs(url, nowMs)?.let { minOf(it, nowMs + ttlMs) } ?: (nowMs + ttlMs)

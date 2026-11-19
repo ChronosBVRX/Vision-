@@ -10,6 +10,8 @@ import asyncio
 import difflib
 import gzip
 import hmac
+import urllib.parse
+import urllib.request
 import html
 import json
 import logging
@@ -1712,6 +1714,179 @@ async def launcher_banners_endpoint(
         background,
         tmdb_key=os.environ.get("TMDB_API_KEY", "").strip(),
     )
+
+
+# --- 4K público (HdHub) --------------------------------------------------------
+# El addon limita por IP. El VPS resuelve la lista y la app reproduce directo el
+# R2 firmado: así el teléfono no depende de su propia cuota con el addon.
+HDHUB_4K = (
+    "https://hdhub.thevolecitor.qzz.io/"
+    "eyJ0b3Jib3giOiJ1bnNldCIsInF1YWxpdGllcyI6IjIxNjBwLDEwODBwLDcyMHAiLCJzb3J0IjoiZGVzYyJ9"
+)
+_EXTERNAL_4K_TTL = 10 * 60
+_EXTERNAL_4K_CACHE: dict[str, tuple[float, dict]] = {}
+_TMDB_KEY = os.environ.get("TMDB_API_KEY", "").strip()
+_IMDB_CACHE: dict[str, tuple[float, str]] = {}
+_4K_LATINO_HINT = re.compile(r"(?i)(?:\blatino\b|\blatina\b|\blatam\b|\bdual[ ._-]?lat\b|\bes[- ]?419\b|\bes[- ]?mx\b)")
+_4K_SPANISH_HINT = re.compile(r"(?i)(?:\bcastellano\b|\bespa[nñ]ol\b|\bspanish\b|\besp\b)")
+
+
+def _four_k_language(blob: str) -> str:
+    if _4K_LATINO_HINT.search(blob):
+        return "Latino"
+    if _4K_SPANISH_HINT.search(blob):
+        return "Castellano"
+    return ""
+
+
+def _tmdb_json(path: str, params: dict) -> dict:
+    query = urllib.parse.urlencode(params)
+    headers = {"User-Agent": "Vision+/Server", "Accept": "application/json"}
+    if _TMDB_KEY.startswith("eyJ"):
+        headers["Authorization"] = f"Bearer {_TMDB_KEY}"
+    else:
+        query += f"&api_key={urllib.parse.quote(_TMDB_KEY)}"
+    request = urllib.request.Request(
+        f"https://api.themoviedb.org/3{path}?{query}",
+        headers=headers,
+    )
+    with urllib.request.urlopen(request, timeout=12) as response:
+        return json.loads(response.read().decode("utf-8", "ignore"))
+
+
+def _normalized(value: str) -> str:
+    value = unicodedata.normalize("NFD", value or "")
+    value = "".join(char for char in value if unicodedata.category(char) != "Mn")
+    return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+
+def _resolve_imdb(imdb: str, tmdb: int, title: str, original: str, year: int) -> str:
+    imdb = imdb.strip()
+    if re.fullmatch(r"tt\d{7,10}", imdb):
+        return imdb
+    cache_key = f"{tmdb}|{_normalized(original or title)}|{year}"
+    cached = _IMDB_CACHE.get(cache_key)
+    if cached and time.time() < cached[0]:
+        return cached[1]
+    resolved = ""
+    if _TMDB_KEY:
+        try:
+            tmdb_id = tmdb
+            if tmdb_id <= 0:
+                for query in (original, title):
+                    if not query.strip():
+                        continue
+                    data = _tmdb_json("/search/movie", {
+                        "query": query,
+                        "language": "es-MX",
+                        "include_adult": "false",
+                        **({"year": year} if year > 0 else {}),
+                    })
+                    results = data.get("results") or []
+                    if results:
+                        tmdb_id = int(results[0].get("id") or 0)
+                        break
+            if tmdb_id > 0:
+                external = _tmdb_json(f"/movie/{tmdb_id}/external_ids", {})
+                candidate = str(external.get("imdb_id") or "").strip()
+                if re.fullmatch(r"tt\d{7,10}", candidate):
+                    resolved = candidate
+        except Exception as exc:  # noqa: BLE001
+            log.warning("tmdb imdb %s: %s", title, exc)
+    if not resolved:
+        # Último recurso: Cinemeta, igual que la app, pero desde la IP del VPS.
+        try:
+            query = urllib.parse.quote(original or title)
+            request = urllib.request.Request(
+                f"https://v3-cinemeta.strem.io/catalog/movie/top/search={query}.json",
+                headers={"User-Agent": "Vision+/Server"},
+            )
+            with urllib.request.urlopen(request, timeout=12) as response:
+                metas = json.loads(response.read().decode("utf-8", "ignore")).get("metas") or []
+            wanted = _normalized(original or title)
+            for meta in metas:
+                candidate = str(meta.get("imdb_id") or "").strip()
+                if not re.fullmatch(r"tt\d{7,10}", candidate):
+                    continue
+                if _normalized(str(meta.get("name") or "")) == wanted:
+                    resolved = candidate
+                    break
+            if not resolved and metas:
+                candidate = str(metas[0].get("imdb_id") or "").strip()
+                if re.fullmatch(r"tt\d{7,10}", candidate):
+                    resolved = candidate
+        except Exception as exc:  # noqa: BLE001
+            log.warning("cinemeta imdb %s: %s", title, exc)
+    if resolved:
+        _IMDB_CACHE[cache_key] = (time.time() + 6 * 60 * 60, resolved)
+        if len(_IMDB_CACHE) > 500:
+            _IMDB_CACHE.clear()
+    return resolved
+
+
+def _fetch_hdhub_4k(imdb: str) -> dict:
+    request = urllib.request.Request(
+        f"{HDHUB_4K}/stream/movie/{imdb}.json",
+        headers={"User-Agent": "Vision+/Server", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        payload = json.loads(response.read().decode("utf-8", "ignore"))
+    streams: list[dict] = []
+    for raw in payload.get("streams") or []:
+        if not isinstance(raw, dict):
+            continue
+        url = str(raw.get("url") or "")
+        if not url.startswith("http"):
+            continue
+        blob = f"{raw.get('name', '')} {raw.get('title', '')} {raw.get('description', '')}"
+        # El nombre del proveedor lleva «4K» siempre; la calidad real está en 2160p.
+        if "2160" not in blob.lower():
+            continue
+        hints = raw.get("behaviorHints") or {}
+        streams.append({
+            "name": str(raw.get("name") or "4KHDHub 4K"),
+            "description": str(raw.get("description") or ""),
+            "url": url,
+            "language": _four_k_language(blob),
+            "behaviorHints": {"videoSize": int(hints.get("videoSize") or 0)},
+        })
+    # El español va primero; dentro de cada idioma, el archivo más ligero.
+    streams.sort(key=lambda item: (
+        0 if item["language"] in ("Latino", "Castellano") else 1,
+        item["behaviorHints"]["videoSize"] or 2**63,
+    ))
+    return {"streams": streams[:6], "cacheMaxAge": _EXTERNAL_4K_TTL}
+
+
+@app.get("/v1/4k")
+async def external_4k(
+    imdb: str = "",
+    tmdb: int = 0,
+    title: str = "",
+    original: str = "",
+    year: int = 0,
+    x_api_key: str | None = Header(default=None),
+):
+    """Lista 4K pública para un título, resuelta desde el VPS (sin cuota del móvil)."""
+    require_key(x_api_key)
+    title = title.strip()[:160]
+    original = original.strip()[:160]
+    resolved = await asyncio.to_thread(_resolve_imdb, imdb, int(tmdb or 0), title, original, int(year or 0))
+    if not resolved:
+        raise HTTPException(status_code=404, detail="título sin IMDb")
+    now = time.time()
+    cached = _EXTERNAL_4K_CACHE.get(resolved)
+    if cached and now < cached[0]:
+        return cached[1]
+    try:
+        result = await asyncio.wait_for(asyncio.to_thread(_fetch_hdhub_4k, resolved), timeout=18)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("4k %s: %s", resolved, exc)
+        raise HTTPException(status_code=502, detail="sin fuentes 4K") from exc
+    _EXTERNAL_4K_CACHE[resolved] = (now + _EXTERNAL_4K_TTL, result)
+    if len(_EXTERNAL_4K_CACHE) > 500:
+        _EXTERNAL_4K_CACHE.clear()
+    return result
 
 
 @app.post("/v1/play/vip")

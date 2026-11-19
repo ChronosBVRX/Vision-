@@ -133,7 +133,7 @@ fun TitleScreen(
         mutableStateOf(com.chronosbvrx.visionplus.data.external.External4KRepository.hasFresh(context, film.id))
     }
     LaunchedEffect(film.id) {
-        if (isXtv && film.kind == "movie") {
+        if (isXtv && (film.kind.isBlank() || film.kind == "movie")) {
             com.chronosbvrx.visionplus.data.external.External4KRepository.refreshIfStale(context, film)
             has4k = com.chronosbvrx.visionplus.data.external.External4KRepository.hasFresh(context, film.id)
         }
@@ -423,13 +423,18 @@ fun TitleScreen(
                     Column(Modifier.padding(horizontal = 16.dp)) {
                         if (isXtv) {
                             if (has4k) {
-                                Text(
-                                    "4K disponible",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = VisionBlueBright,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(bottom = 4.dp),
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.padding(bottom = 6.dp),
+                                ) {
+                                    com.chronosbvrx.visionplus.ui.components.FourKBadge()
+                                    Text(
+                                        "Disponible en 4K",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = VisionTextSecondary,
+                                    )
+                                }
                             }
                             XtvMetadata(meta, languages, qualities, itemLine, film.score, film.cast, film.countries)
                         } else {

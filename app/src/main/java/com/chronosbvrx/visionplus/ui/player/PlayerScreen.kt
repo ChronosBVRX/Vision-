@@ -265,8 +265,16 @@ fun PlayerScreen(
     val xtvEpisode = episode?.code?.startsWith("xtv:") == true
     // Fuente 4K externa cacheada para una película: se intenta primero y, si el
     // servidor no responde, se entra al VOD nativo en el mismo minuto.
+    // La ficha de una película entrega un `EpisodePlay` sintético con el contentId
+    // del propio film (no es un capítulo): ese caso también cuenta como película.
+    val moviePlay = episode == null || (
+        film.seasons.isEmpty() &&
+            (episode.code == film.videoUrl.substringAfter(':') || episode.code == film.videoUrl)
+        )
     val external4k = remember(film.id) {
-        if (!skipExternal && film.videoUrl.startsWith("xtv:") && episode == null && film.kind == "movie") {
+        if (!skipExternal && film.videoUrl.startsWith("xtv:") && moviePlay &&
+            (film.kind.isBlank() || film.kind == "movie")
+        ) {
             com.chronosbvrx.visionplus.data.external.External4KRepository.fresh(libraryContext, film.id)
         } else {
             null
@@ -711,6 +719,12 @@ private fun PlayerCore(
         loadControl?.let { builder.setLoadControl(it) }
         builder.build()
             .apply {
+                // La app es en español: con varias pistas de audio se elige español
+                // (latino o castellano) y, si el archivo no lo trae, el original inglés.
+                // Así un 4K hindi/inglés nunca arranca en hindi.
+                trackSelectionParameters = trackSelectionParameters.buildUpon()
+                    .setPreferredAudioLanguages("es", "spa", "en", "eng")
+                    .build()
                 setMediaItem(if (startWithIntro) introMediaItem() else mediaItemFor(url, isLive, drmType))
                 prepare()
                 playWhenReady = true

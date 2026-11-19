@@ -23,7 +23,7 @@ internal object External4KStore {
      * una caché con solo el 4K LAN de Kronos taparía a HdHub durante 6 h tras la
      * actualización.
      */
-    private const val SCHEMA = 2
+    private const val SCHEMA = 3
 
     fun fresh(context: Context, titleId: String): List<FourKSource> {
         val now = System.currentTimeMillis()

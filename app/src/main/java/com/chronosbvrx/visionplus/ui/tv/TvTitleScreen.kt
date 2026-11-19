@@ -114,7 +114,7 @@ fun TvTitleScreen(
         mutableStateOf(com.chronosbvrx.visionplus.data.external.External4KRepository.hasFresh(context, film.id))
     }
     LaunchedEffect(film.id) {
-        if (isXtv && film.kind == "movie") {
+        if (isXtv && (film.kind.isBlank() || film.kind == "movie")) {
             com.chronosbvrx.visionplus.data.external.External4KRepository.refreshIfStale(context, film)
             has4k = com.chronosbvrx.visionplus.data.external.External4KRepository.hasFresh(context, film.id)
         }
@@ -456,12 +456,18 @@ fun TvTitleScreen(
                         }
                     }
                     if (has4k) {
-                        Text(
-                            "4K DISPONIBLE",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = VisionBlueBright,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(bottom = 2.dp),
+                        ) {
+                            com.chronosbvrx.visionplus.ui.components.FourKBadge()
+                            Text(
+                                "Disponible en 4K",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White.copy(alpha = 0.75f),
+                            )
+                        }
                     }
                     if (qualities.isNotEmpty()) {
                         Text(

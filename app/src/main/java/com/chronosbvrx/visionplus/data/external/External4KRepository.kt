@@ -50,16 +50,47 @@ internal object External4KRepository {
 
     suspend fun refreshNow(context: Context, film: Film): List<FourKSource> = withContext(Dispatchers.IO) {
         if (!supports(film)) return@withContext emptyList()
+        Log.i(TAG, "refresh id=${film.id} kind=${film.kind} tmdb=${film.tmdbId} title=${film.title}")
         if (!inFlight.add(film.id)) return@withContext External4KStore.fresh(context, film.id)
         External4KStore.putFilm(context, film)
         try {
-            val imdb = resolveImdb(context, film)
-            if (imdb.isNullOrBlank()) {
+            val knownImdb = External4KStore.imdb(context, film.id)
+                .takeIf { it.startsWith("tt") }
+                .orEmpty()
+            val now = System.currentTimeMillis()
+            val verified = ArrayList<FourKSource>(4)
+            // El VPS resuelve el IMDb (TMDB) y HdHub con su IP: el addon limita por IP
+            // y el móvil no debe depender de su propia cuota.
+            val query = buildString {
+                append(com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.BASE_URL)
+                append("/v1/4k?")
+                if (knownImdb.isNotBlank()) append("imdb=").append(knownImdb).append('&')
+                append("tmdb=").append(film.tmdbId).append('&')
+                append("title=").append(URLEncoder.encode(film.title, "UTF-8")).append('&')
+                append("original=").append(URLEncoder.encode(film.originalTitle, "UTF-8")).append('&')
+                append("year=").append(film.year)
+            }
+            val vps = getText(
+                query,
+                timeoutMs = 22_000,
+                headers = mapOf(
+                    "X-Api-Key" to com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.API_KEY,
+                ),
+            )
+            if (vps != null) {
+                for (candidate in External4KParser.parseStreams(vps, now, TTL_MS).take(6)) {
+                    if (candidate.lan || (!candidate.isHls || isReally4k(candidate.url)) && isReachable(candidate.url)) {
+                        verified += candidate
+                        if (verified.size >= 3) break
+                    }
+                }
+            }
+            val imdb = knownImdb.ifBlank { resolveImdb(context, film) }
+            if (verified.isEmpty() && imdb.isNullOrBlank()) {
+                Log.i(TAG, "sin IMDb para ${film.id} (${film.title})")
                 External4KStore.put(context, film.id, emptyList())
                 return@withContext emptyList()
             }
-            val now = System.currentTimeMillis()
-            val verified = ArrayList<FourKSource>(4)
             for (base in PROVIDERS) {
                 if (verified.size >= 2) break
                 val body = getText("$base/stream/movie/$imdb.json") ?: continue
@@ -77,6 +108,7 @@ internal object External4KRepository {
                 }
             }
             val final = verified.take(3)
+            Log.i(TAG, "4K ${film.id}: ${final.size} fuentes (${final.count { it.lan }} LAN)")
             External4KStore.put(context, film.id, final)
             if (final.isNotEmpty()) {
                 com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
@@ -95,7 +127,7 @@ internal object External4KRepository {
     }
 
     private fun supports(film: Film): Boolean =
-        film.id.startsWith("xtv:") && film.kind == "movie"
+        film.id.startsWith("xtv:") && (film.kind.isBlank() || film.kind == "movie")
 
     private suspend fun resolveImdb(context: Context, film: Film): String? {
         External4KStore.imdb(context, film.id).takeIf { it.startsWith("tt") }?.let { return it }
@@ -140,13 +172,18 @@ internal object External4KRepository {
         External4KParser.maxHeightFromMaster(text) >= 2000
     }.getOrDefault(false)
 
-    private fun getText(url: String, timeoutMs: Int = 8_000): String? = runCatching {
+    private fun getText(
+        url: String,
+        timeoutMs: Int = 8_000,
+        headers: Map<String, String> = emptyMap(),
+    ): String? = runCatching {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = timeoutMs
             readTimeout = timeoutMs
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", UA)
             setRequestProperty("Accept", "application/json, application/vnd.apple.mpegurl, */*")
+            headers.forEach { (key, value) -> setRequestProperty(key, value) }
         }
         try {
             if (conn.responseCode !in 200..299) return null
