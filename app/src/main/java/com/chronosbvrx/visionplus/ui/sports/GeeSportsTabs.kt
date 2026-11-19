@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chronosbvrx.visionplus.data.LiveChannel
@@ -379,14 +381,27 @@ internal fun GeeLinkPickDialog(
         }
         onPlay(picked)
     }
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        // El ancho de plataforma deja el selector en ~280-310 dp: con dos píldoras
+        // («Seleccionada» y «Disponible») el nombre del canal se queda sin espacio y
+        // se apila letra por letra. Se toma el 92 % de la ventana, con techo de 560 dp.
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
         BackHandler(onBack = onDismiss)
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = VisionSurface,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).dismissOnBack(onDismiss),
-        ) {
-            Column(Modifier.padding(20.dp)) {
+        // Con `usePlatformDefaultWidth = false` el diálogo usa toda la ventana; este
+        // Box lo deja centrado en pantallas grandes igual que en el teléfono.
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = VisionSurface,
+                modifier = Modifier
+                    .widthIn(max = 560.dp)
+                    .fillMaxWidth(0.92f)
+                    .padding(horizontal = 4.dp)
+                    .dismissOnBack(onDismiss),
+            ) {
+                Column(Modifier.padding(20.dp)) {
                 Text(
                     title,
                     style = MaterialTheme.typography.titleMedium,
@@ -506,6 +521,8 @@ internal fun GeeLinkPickDialog(
                                             row.typeLabel,
                                             style = MaterialTheme.typography.bodySmall,
                                             color = if (row.type == "xtv") VisionBlueBright else VisionTextSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                         )
                                         if (row.note.isNotBlank()) {
                                             Text(
@@ -529,16 +546,20 @@ internal fun GeeLinkPickDialog(
                                             )
                                         }
                                     }
-                                    if (row.playing) {
-                                        Spacer(Modifier.width(8.dp))
-                                        GeePlayingBadge()
-                                    }
                                     Spacer(Modifier.width(8.dp))
-                                    GeeAliveBadge(
-                                        row.alive,
-                                        playable = row.playable,
-                                        resolvable = row.link.isBlank() && row.tokenApi.isNotBlank(),
-                                    )
+                                    // Las píldoras van apiladas: en horizontal se comían
+                                    // el ancho del nombre y lo partían letra por letra.
+                                    Column(
+                                        horizontalAlignment = Alignment.End,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        if (row.playing) GeePlayingBadge()
+                                        GeeAliveBadge(
+                                            row.alive,
+                                            playable = row.playable,
+                                            resolvable = row.link.isBlank() && row.tokenApi.isNotBlank(),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -567,9 +588,10 @@ internal fun GeeLinkPickDialog(
                     }
                     TextButton(onClick = onDismiss) { Text("Cerrar") }
                 }
-            }
-        }
-    }
+                } // Column
+            } // Surface
+        } // Box
+    } // Dialog
 
     resolving?.let { row ->
         GeeEmbedResolveDialog(

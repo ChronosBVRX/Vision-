@@ -64,6 +64,7 @@ internal object External4KStore {
                         put("language", s.language)
                         put("filename", s.filename)
                         put("lan", s.lan)
+                        put("sizeBytes", s.sizeBytes)
                         put("checkedAt", s.checkedAt)
                         put("expiresAt", s.expiresAt)
                     })
@@ -135,6 +136,7 @@ internal object External4KStore {
                 language = o.optString("language"),
                 filename = o.optString("filename"),
                 lan = o.optBoolean("lan"),
+                sizeBytes = o.optLong("sizeBytes"),
                 checkedAt = o.optLong("checkedAt"),
                 expiresAt = expires,
             )

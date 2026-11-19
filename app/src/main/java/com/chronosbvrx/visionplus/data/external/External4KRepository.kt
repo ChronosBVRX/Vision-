@@ -23,6 +23,10 @@ internal object External4KRepository {
     private const val TAG = "External4K"
     private const val BASE = "https://addons.4rever.cc"
     private const val TOKEN = "kronos_master"
+    /** HTTP directo y público (R2 firmado). Es la vía que funciona fuera de una LAN. */
+    private const val HDHUB =
+        "https://hdhub.thevolecitor.qzz.io/eyJ0b3Jib3giOiJ1bnNldCIsInF1YWxpdGllcyI6IjIxNjBwLDEwODBwLDcyMHAiLCJzb3J0IjoiZGVzYyJ9"
+    private val PROVIDERS = listOf(HDHUB, "$BASE/u/$TOKEN")
     private const val TTL_MS = 6 * 60 * 60 * 1000L
     private const val CINEMETA = "https://v3-cinemeta.strem.io"
     private const val UA = "Vision+/Android External4K"
@@ -54,15 +58,23 @@ internal object External4KRepository {
                 External4KStore.put(context, film.id, emptyList())
                 return@withContext emptyList()
             }
-            val body = getText("$BASE/u/$TOKEN/stream/movie/$imdb.json") ?: run {
-                External4KStore.put(context, film.id, emptyList())
-                return@withContext emptyList()
-            }
             val now = System.currentTimeMillis()
-            val candidates = External4KParser.parseStreams(body, now, TTL_MS)
-            val verified = ArrayList<FourKSource>(candidates.size)
-            for (candidate in candidates.take(4)) {
-                if (!candidate.isHls || isReally4k(candidate.url)) verified += candidate
+            val verified = ArrayList<FourKSource>(4)
+            for (base in PROVIDERS) {
+                if (verified.size >= 2) break
+                val body = getText("$base/stream/movie/$imdb.json") ?: continue
+                val candidates = External4KParser.parseStreams(body, now, TTL_MS)
+                for (candidate in candidates.take(4)) {
+                    if (verified.any { it.url == candidate.url }) continue
+                    // Público: se comprueba que responda. HLS además debe declarar 2160p.
+                    val usable = if (candidate.lan) {
+                        true
+                    } else {
+                        (!candidate.isHls || isReally4k(candidate.url)) && isReachable(candidate.url)
+                    }
+                    if (usable) verified += candidate
+                    if (verified.size >= 3) break
+                }
             }
             val final = verified.take(3)
             External4KStore.put(context, film.id, final)
@@ -97,6 +109,31 @@ internal object External4KRepository {
         }
         return null
     }
+
+    /**
+     * Comprueba que el CDN responda. R2 a veces rechaza HEAD en URLs firmadas, así
+     * que se reintenta con un GET de 1 KB (el mismo método que usará el player).
+     */
+    private fun isReachable(url: String): Boolean =
+        probe(url, "HEAD") || probe(url, "GET")
+
+    private fun probe(url: String, method: String): Boolean = runCatching {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = method
+            connectTimeout = 5_000
+            readTimeout = 5_000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", UA)
+            if (method == "GET") setRequestProperty("Range", "bytes=0-1024")
+        }
+        try {
+            val ok = conn.responseCode in 200..299
+            if (ok) runCatching { conn.inputStream?.close() }
+            ok
+        } finally {
+            conn.disconnect()
+        }
+    }.getOrDefault(false)
 
     private fun isReally4k(url: String): Boolean = runCatching {
         val text = getText(url, 6_000) ?: return false

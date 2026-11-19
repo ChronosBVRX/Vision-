@@ -13,6 +13,7 @@ internal data class FourKSource(
     val language: String,
     val filename: String = "",
     val lan: Boolean = false,
+    val sizeBytes: Long = 0L,
     val checkedAt: Long = 0L,
     val expiresAt: Long = 0L,
 ) {

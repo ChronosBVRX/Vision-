@@ -40,6 +40,38 @@ class External4KParserTest {
     }
 
     @Test
+    fun aPublicHdHubR2StreamIsAcceptedAndTheSmallerOneWins() {
+        val big = JSONObject().apply {
+            put("name", "4KHDHub 4K")
+            put("description", "[84.47 GB] 2160p UHD REMUX HDR")
+            put("url", "https://r2.example/big.mkv?X-Amz-Expires=18000")
+            put("behaviorHints", JSONObject().put("videoSize", 90_000_000_000L))
+        }
+        val small = JSONObject().apply {
+            put("name", "4KHDHub 4K")
+            put("description", "[27.74 GB] 2160p WEB-DL HDR")
+            put("url", "https://r2.example/small.mkv?X-Amz-Expires=18000")
+            put("behaviorHints", JSONObject().put("videoSize", 27_000_000_000L))
+        }
+        val out = External4KParser.parseStreams(payload(small, big), now, 6 * 60 * 60 * 1000L)
+        assertEquals(2, out.size)
+        assertEquals("4KHDHub", out[0].provider)
+        assertEquals("https://r2.example/small.mkv?X-Amz-Expires=18000", out[0].url)
+        assertEquals(now + 18_000_000L, out[0].expiresAt)
+        assertFalse(out[0].lan)
+    }
+
+    @Test
+    fun aHdHub1080pIsNotMistakenFor4kByTheProviderName() {
+        val stream = JSONObject().apply {
+            put("name", "4KHDHub 1080p")
+            put("description", "[3.5 GB] 1080p WEB-DL")
+            put("url", "https://r2.example/normal.mkv?X-Amz-Expires=18000")
+        }
+        assertEquals(0, External4KParser.parseStreams(payload(stream), now, 1000L).size)
+    }
+
+    @Test
     fun a1080pMp4IsDiscarded() {
         val json = payload(
             stream("[? VIMEUS]\nLatino FHD", "HLS Directo", "https://cdn.example/master.m3u8", "Peli.1080p.mkv"),

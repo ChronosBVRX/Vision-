@@ -56,14 +56,19 @@ internal object External4KParser {
             if (!seen.add(url)) continue
             val hints = stream.optJSONObject("behaviorHints")
             val filename = hints?.optString("filename").orEmpty()
-            val blob = "${stream.optString("name")} ${stream.optString("title")} $filename"
+            val sizeBytes = hints?.optLong("videoSize", 0L) ?: 0L
+            val blob = "${stream.optString("name")} ${stream.optString("title")} " +
+                "${stream.optString("description")} $filename"
             // Un HLS sin etiqueta puede ser 4K en su manifiesto: va a la lista de
             // respaldo y el repositorio lo comprueba. Un MP4 1080p no interesa.
             val hls = url.substringBefore('?').endsWith(".m3u8", ignoreCase = true)
-            val labeled = IS_4K.containsMatchIn(blob)
+            // «4KHDHub» lleva 4K en el nombre del proveedor: no debe marcar como 4K
+            // una pista 1080p. Se quita antes de buscar la calidad real.
+            val qualityBlob = blob.replace("4khdhub", "", ignoreCase = true)
+            val labeled = IS_4K.containsMatchIn(qualityBlob)
             if (!labeled && !hls) continue
             // Un 4K CAM sigue siendo peor que un 1080p limpio; se descarta.
-            if (CAM.containsMatchIn(blob) && !blob.contains("2160p", ignoreCase = true)) continue
+            if (CAM.containsMatchIn(qualityBlob) && !qualityBlob.contains("2160p", ignoreCase = true)) continue
             val provider = providerOf(stream.optString("name"), stream.optString("title"))
             val language = when {
                 blob.contains("latino", ignoreCase = true) -> "Latino"
@@ -77,6 +82,7 @@ internal object External4KParser {
                 language = language,
                 filename = filename,
                 lan = PRIVATE_HOST.containsMatchIn(url),
+                sizeBytes = sizeBytes,
                 checkedAt = nowMs,
                 expiresAt = expiry,
             )
@@ -84,16 +90,21 @@ internal object External4KParser {
             if (explicit.size >= 6) break
         }
         val out = explicit + fallback
-        // Primero las que funcionan fuera de su red; dentro, latino antes que castellano.
+        // Primero las que funcionan fuera de su red; dentro, latino antes que castellano
+        // y, a igualdad, el archivo más ligero (un REMUX de 85 GB tarda más en arrancar).
         return out.sortedWith(
             compareBy<FourKSource> { it.lan }
-                .thenBy { if (it.language == "Latino") 0 else if (it.language == "Castellano") 1 else 2 },
+                .thenBy { if (it.language == "Latino") 0 else if (it.language == "Castellano") 1 else 2 }
+                .thenBy { if (it.sizeBytes > 0L) it.sizeBytes else Long.MAX_VALUE },
         ).take(4)
     }
 
     /** Nombre del proveedor: primera línea del `name` sin corchetes ni emojis. */
     fun providerOf(name: String, title: String): String {
         val cleanName = name.lineSequence().firstOrNull().orEmpty()
+        if (cleanName.contains("4kHDHub", ignoreCase = true) || title.contains("4KHDHub", ignoreCase = true)) {
+            return "4KHDHub"
+        }
         PROVIDER.find(cleanName)?.groupValues?.getOrNull(1)
             ?.replace(Regex("""[^A-Za-z0-9 ._-]"""), "")
             ?.trim()
@@ -128,6 +139,10 @@ internal object External4KParser {
      * día llega como epoch, se respeta tal cual.
      */
     private fun urlExpiryMs(url: String, nowMs: Long): Long? {
+        // URLs firmadas de R2 (HdHub): X-Amz-Expires son segundos desde ahora.
+        Regex("""[?&]X-Amz-Expires=(\d+)""").find(url)?.groupValues?.getOrNull(1)?.toLongOrNull()
+            ?.takeIf { it > 0L }
+            ?.let { return nowMs + it * 1000L }
         val e = Regex("""[?&]e=(\d+)""").find(url)?.groupValues?.getOrNull(1)?.toLongOrNull() ?: return null
         if (e <= 0L) return null
         return if (e >= 1_000_000_000_000L) e else nowMs + e * 1000L
