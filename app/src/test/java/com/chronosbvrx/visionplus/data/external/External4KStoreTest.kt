@@ -43,6 +43,16 @@ class External4KStoreTest {
     }
 
     @Test
+    fun anOldEntryWithoutSchemaIsIgnoredSoTheNewProviderIsQueried() {
+        val now = System.currentTimeMillis()
+        context.filesDir.resolve("external_4k.json").writeText(
+            """{"titles":{"xtv:9":{"at":$now,"sources":[{"url":"http://192.168.1.101:7015/x.mkv","provider":"LAN","language":"Latino","expiresAt":${now + 60_000}}]}}}""",
+        )
+        assertFalse(External4KStore.fresh(context, "xtv:9").isNotEmpty())
+        assertFalse(External4KStore.checkedRecently(context, "xtv:9"))
+    }
+
+    @Test
     fun imdbIsCachedPerTitle() {
         External4KStore.putImdb(context, "xtv:3", "tt0133093")
         assertEquals("tt0133093", External4KStore.imdb(context, "xtv:3"))

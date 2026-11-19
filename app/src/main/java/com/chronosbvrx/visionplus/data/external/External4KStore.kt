@@ -18,18 +18,24 @@ internal object External4KStore {
     private const val FRESH_MS = 6 * 60 * 60 * 1000L
     private const val NEGATIVE_MS = 45 * 60 * 1000L
     private const val MAX_TITLES = 600
+    /**
+     * Sube cuando cambian los proveedores. Las entradas viejas se ignoran: si no,
+     * una caché con solo el 4K LAN de Kronos taparía a HdHub durante 6 h tras la
+     * actualización.
+     */
+    private const val SCHEMA = 2
 
     fun fresh(context: Context, titleId: String): List<FourKSource> {
         val now = System.currentTimeMillis()
-        return read(context).optJSONObject("titles")?.optJSONObject(titleId)
-            ?.optJSONArray("sources")
-            ?.let { parseSources(it, now) }
-            .orEmpty()
+        val entry = read(context).optJSONObject("titles")?.optJSONObject(titleId) ?: return emptyList()
+        if (entry.optInt("v", 0) != SCHEMA) return emptyList()
+        return entry.optJSONArray("sources")?.let { parseSources(it, now) }.orEmpty()
     }
 
     fun checkedRecently(context: Context, titleId: String): Boolean {
         val now = System.currentTimeMillis()
         val entry = read(context).optJSONObject("titles")?.optJSONObject(titleId) ?: return false
+        if (entry.optInt("v", 0) != SCHEMA) return false
         val at = entry.optLong("at", 0L)
         val negativeAt = entry.optLong("negativeAt", 0L)
         return when {
@@ -54,6 +60,7 @@ internal object External4KStore {
         update(context) { root ->
             val titles = root.getOrPutObject("titles")
             val entry = titles.optJSONObject(titleId) ?: JSONObject()
+            entry.put("v", SCHEMA)
             entry.put("at", now)
             entry.put("negativeAt", if (sources.isEmpty()) now else 0L)
             entry.put("sources", JSONArray().apply {
