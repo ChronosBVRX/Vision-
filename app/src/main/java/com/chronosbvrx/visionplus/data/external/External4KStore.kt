@@ -55,6 +55,13 @@ internal object External4KStore {
         }
     }
 
+    /** Borra un IMDb viejo cuando el portal reasigno el codigo a otra ficha. */
+    fun clearImdb(context: Context, titleId: String) {
+        update(context) { root ->
+            root.optJSONObject("imdb")?.remove(titleId)
+        }
+    }
+
     fun put(context: Context, titleId: String, sources: List<FourKSource>) {
         val now = System.currentTimeMillis()
         update(context) { root ->

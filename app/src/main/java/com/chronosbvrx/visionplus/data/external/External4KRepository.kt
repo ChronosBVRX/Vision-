@@ -40,8 +40,12 @@ internal object External4KRepository {
         External4KStore.fresh(context, titleId).firstOrNull()
 
     /** La fuente 4K real (2160p) en cach??: las calidades bajas no encienden el badge. */
-    fun fresh4k(context: Context, titleId: String): FourKSource? =
-        External4KStore.fresh(context, titleId).firstOrNull { it.height >= 2000 }
+    fun fresh4k(context: Context, titleId: String): FourKSource? {
+        val all = External4KStore.fresh(context, titleId).filter { it.height >= 2000 }
+        // El CDN (R2) abre mas rapido que los hosts de archivos; si no hay, se usa el resto.
+        return all.firstOrNull { !it.url.contains("pixeldrain", ignoreCase = true) }
+            ?: all.firstOrNull()
+    }
 
     fun hasFresh(context: Context, titleId: String): Boolean = fresh4k(context, titleId) != null
 
@@ -60,35 +64,48 @@ internal object External4KRepository {
         if (!inFlight.add(film.id)) return@withContext External4KStore.fresh(context, film.id)
         External4KStore.putFilm(context, film)
         try {
-            val knownImdb = External4KStore.imdb(context, film.id)
+            var knownImdb = External4KStore.imdb(context, film.id)
                 .takeIf { it.startsWith("tt") }
                 .orEmpty()
             val now = System.currentTimeMillis()
             val verified = ArrayList<FourKSource>(4)
             // El VPS resuelve el IMDb (TMDB) y HdHub con su IP: el addon limita por IP
-            // y el móvil no debe depender de su propia cuota.
-            val query = buildString {
+            // y el movil no debe depender de su propia cuota.
+            fun queryFor(imdb: String): String = buildString {
                 append(com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.BASE_URL)
                 append("/v1/4k?")
-                if (knownImdb.isNotBlank()) append("imdb=").append(knownImdb).append('&')
+                if (imdb.isNotBlank()) append("imdb=").append(imdb).append('&')
                 append("tmdb=").append(film.tmdbId).append('&')
                 append("title=").append(URLEncoder.encode(film.title, "UTF-8")).append('&')
                 append("original=").append(URLEncoder.encode(film.originalTitle, "UTF-8")).append('&')
                 append("year=").append(film.year)
             }
-            val vps = getText(
-                query,
-                timeoutMs = 22_000,
-                headers = mapOf(
-                    "X-Api-Key" to com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.API_KEY,
-                ),
-            )
-            if (vps != null) {
-                for (candidate in External4KParser.parseStreams(vps, now, TTL_MS).take(6)) {
-                    if (candidate.lan || (!candidate.isHls || isReally4k(candidate.url)) && isReachable(candidate.url)) {
-                        verified += candidate.verified4k()
-                        if (verified.size >= 3) break
-                    }
+            fun fetchCandidates(imdb: String): List<FourKSource> {
+                val body = getText(
+                    queryFor(imdb),
+                    timeoutMs = 22_000,
+                    headers = mapOf(
+                        "X-Api-Key" to com.chronosbvrx.visionplus.data.sources.RemoteIndexSource.API_KEY,
+                    ),
+                ) ?: return emptyList()
+                return External4KParser.parseStreams(body, now, TTL_MS)
+            }
+            var candidates = fetchCandidates(knownImdb)
+            if (candidates.isEmpty() && knownImdb.isNotBlank()) {
+                // Un IMDb guardado de una ficha anterior (el portal reusa codigos) hace
+                // que el VPS devuelva 0. Se reintenta por TMDB/titulo y se limpia el viejo.
+                Log.i(TAG, "4K: IMDb $knownImdb sin fuentes; reintento por tmdb/titulo")
+                candidates = fetchCandidates("")
+                if (candidates.isNotEmpty()) {
+                    External4KStore.clearImdb(context, film.id)
+                    knownImdb = ""
+                }
+            }
+            Log.i(TAG, "4K VPS: ${candidates.size} candidatos")
+            for (candidate in candidates.take(6)) {
+                if (isUsable(candidate)) {
+                    verified += candidate.verified4k()
+                    if (verified.size >= 3) break
                 }
             }
             val imdb = knownImdb.ifBlank { resolveImdb(context, film) }
@@ -103,13 +120,7 @@ internal object External4KRepository {
                 val candidates = External4KParser.parseStreams(body, now, TTL_MS)
                 for (candidate in candidates.take(4)) {
                     if (verified.any { it.url == candidate.url }) continue
-                    // Público: se comprueba que responda. HLS además debe declarar 2160p.
-                    val usable = if (candidate.lan) {
-                        true
-                    } else {
-                        (!candidate.isHls || isReally4k(candidate.url)) && isReachable(candidate.url)
-                    }
-                    if (usable) verified += candidate.verified4k()
+                    if (isUsable(candidate)) verified += candidate.verified4k()
                     if (verified.size >= 3) break
                 }
             }
@@ -182,6 +193,22 @@ internal object External4KRepository {
         qualities
     }
 
+    /**
+     * Un candidato sirve si es LAN o si responde desde esta caja. Un HLS ademas tiene
+     * que declarar 2160p en su manifiesto. Se registra el motivo para diagnosticar TVs
+     * que no alcanzan ciertos CDN.
+     */
+    private fun isUsable(candidate: FourKSource): Boolean {
+        if (candidate.lan) {
+            Log.i(TAG, "4K candidato LAN ${candidate.provider} ${candidate.height}p usable=true")
+            return true
+        }
+        val hlsOk = !candidate.isHls || isReally4k(candidate.url)
+        val reachable = hlsOk && isReachable(candidate.url)
+        Log.i(TAG, "4K candidato ${candidate.provider} ${candidate.height}p hls=${candidate.isHls} hlsOk=$hlsOk reachable=$reachable url=${candidate.url.take(90)}")
+        return hlsOk && reachable
+    }
+
     private fun FourKSource.verified4k(): FourKSource =
         if (height >= 2000) this else copy(height = 2160)
 
@@ -202,13 +229,18 @@ internal object External4KRepository {
             if (method == "GET") setRequestProperty("Range", "bytes=0-1024")
         }
         try {
-            val ok = conn.responseCode in 200..299
+            val code = conn.responseCode
+            Log.i(TAG, "probe $method ${url.take(80)} -> $code")
+            val ok = code in 200..299
             if (ok) runCatching { conn.inputStream?.close() }
             ok
         } finally {
             conn.disconnect()
         }
-    }.getOrDefault(false)
+    }.getOrElse { e ->
+        Log.i(TAG, "probe $method ${url.take(80)} -> ${e.javaClass.simpleName}: ${e.message}")
+        false
+    }
 
     private fun isReally4k(url: String): Boolean = runCatching {
         val text = getText(url, 6_000) ?: return false

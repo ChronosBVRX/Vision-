@@ -38,7 +38,7 @@ class External4KWiringTest {
         val aty = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
         assertTrue(aty.contains("externalAudioOptions"))
         assertTrue(aty.contains("externalSubtitleOptions"))
-        assertTrue(aty.contains("4K disponible"))
+        assertTrue(aty.contains("disponible en 4K en su idioma original"))
         assertTrue(aty.contains("fourKPoller"))
         assertTrue(aty.contains("External4KStore"))
         val api = source("app/src/main/java/com/chronosbvrx/visionplus/data/xuper/X4KApi.kt")
@@ -87,7 +87,7 @@ class External4KWiringTest {
         assertTrue("el español se activa solo si el audio no es español", aty.contains("maybeAutoExternalSubs()"))
         assertTrue("el chip 4K es aparte de la píldora de calidad", aty.contains("buildFourKBadge(root)"))
         assertTrue("el chip es sutil (borde fino)", aty.contains("setStroke(dp(1), 0xFF4C9BFF.toInt())"))
-        assertTrue("se muestra 4K original cuando no hay español", aty.contains("4K \\u00b7 ORIGINAL"))
+        assertTrue("el aviso dice idioma original", aty.contains("disponible en 4K en su idioma original"))
     }
 
     @Test
@@ -126,7 +126,7 @@ class External4KWiringTest {
         assertTrue("el poller arranca tras el primer cuadro", aty.contains("handler.postDelayed(fourKPoller, 4_000L)"))
         assertTrue("hay resolvedor diferido", aty.contains("scheduleExternal4kResolve()"))
         assertTrue("el resolvedor corre en segundo plano", aty.contains("refreshNow(applicationContext, film)"))
-        assertTrue("el chip espera unos segundos de reproducci?n", aty.contains("System.currentTimeMillis() - firstFrameAtMs >= 4_000L"))
+        assertTrue("el chip espera unos segundos de reproducci?n", aty.contains("System.currentTimeMillis() - firstFrameAtMs < 4_000L"))
     }
 
     @Test

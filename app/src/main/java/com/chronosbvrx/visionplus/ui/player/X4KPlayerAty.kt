@@ -147,7 +147,8 @@ class X4KPlayerAty : ComponentActivity() {
     private var externalSubsAuto = false
     private var externalCurAudioLabel = ""
     private var externalCurrentUrl = ""
-    private var fourKNotified = false
+    /** El aviso 4K se muestra una sola vez por reproduccion y se va solo. */
+    private var fourKNoticeShown = false
     /** Índice dentro de [curMedias] de la pista que el motor está intentando ahora. */
     private var mediaCursor = 0
     /** Respaldo automático de calidad: presupuesto por reproducción (no endless ping-pong). */
@@ -478,7 +479,7 @@ class X4KPlayerAty : ComponentActivity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
         applyImmersiveMode()
         playGen += 1
-        fourKNotified = false
+        fourKNoticeShown = false
         externalCurrentUrl = ""
         externalUserAudio = false
         externalUserSubs = false
@@ -2309,6 +2310,7 @@ class X4KPlayerAty : ComponentActivity() {
             externalCurAudioLabel = ""
         }
         runCatching { playerView?.let { X4KTitan.stop(it) } }
+        hideFourKNotice()
         externalActive = true
         externalEnded = false
         playerView?.visibility = View.GONE
@@ -2324,7 +2326,25 @@ class X4KPlayerAty : ComponentActivity() {
             root.addView(this, 0, layoutParams)
         }.also { externalView = it }
         view.visibility = View.VISIBLE
-        val player = externalPlayer ?: androidx.media3.exoplayer.ExoPlayer.Builder(this).build().also { created ->
+        val player = externalPlayer ?: run {
+            // El decodificador HEVC por software de esta tele no soporta Main10 4K.
+            // Se prioriza el decodificador de hardware (Realtek) para los archivos 4K.
+            val selector = androidx.media3.exoplayer.mediacodec.MediaCodecSelector { mime, secure, tunneling ->
+                val infos = androidx.media3.exoplayer.mediacodec.MediaCodecUtil
+                    .getDecoderInfos(mime, secure, tunneling)
+                if (mime == androidx.media3.common.MimeTypes.VIDEO_H265) {
+                    infos.sortedByDescending { !it.name.startsWith("OMX.google.") }
+                } else {
+                    infos
+                }
+            }
+            val renderers = androidx.media3.exoplayer.DefaultRenderersFactory(this)
+                .setMediaCodecSelector(selector)
+                .setEnableDecoderFallback(true)
+            androidx.media3.exoplayer.ExoPlayer.Builder(this)
+                .setRenderersFactory(renderers)
+                .build()
+        }.also { created ->
             externalPlayer = created
             view.player = created
             created.addListener(object : androidx.media3.common.Player.Listener {
@@ -2512,6 +2532,40 @@ class X4KPlayerAty : ComponentActivity() {
             audio == "ingl?s" || audio == "english" || audio == "en"
     }
 
+    /**
+     * Aviso 4K: aparece unos segundos despues del primer cuadro, dice si la pelicula
+     * esta en su idioma original y se desvanece. No es un chip permanente.
+     */
+    private fun maybeShowFourKNotice() {
+        if (fourKNoticeShown) return
+        val tv = fourKBadge ?: return
+        if (liveMode || externalActive) return
+        if (curMedias.none { isExternal4k(it) }) return
+        if (!firstFrame || firstFrameAtMs <= 0L) return
+        if (System.currentTimeMillis() - firstFrameAtMs < 4_000L) return
+        fourKNoticeShown = true
+        tv.text = if (fourKOnlyOriginal()) {
+            "Esta pel\u00edcula est\u00e1 disponible en 4K en su idioma original"
+        } else {
+            "Esta pel\u00edcula est\u00e1 disponible en 4K"
+        }
+        tv.visibility = View.VISIBLE
+        tv.alpha = 0f
+        tv.animate().alpha(1f).setDuration(350L).start()
+        handler.postDelayed({
+            tv.animate().alpha(0f).setDuration(450L).withEndAction {
+                tv.visibility = View.GONE
+                tv.alpha = 1f
+            }.start()
+        }, 5_000L)
+    }
+
+    private fun hideFourKNotice() {
+        fourKBadge?.animate()?.cancel()
+        fourKBadge?.visibility = View.GONE
+        fourKBadge?.alpha = 1f
+    }
+
     /** Chip HDR/Dolby-like: fondo oscuro, borde azul fino, texto peque?o. */
     private fun fourKAvailableBackground(): GradientDrawable = GradientDrawable().apply {
         setColor(0xB3000000.toInt())
@@ -2521,14 +2575,7 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** La p?ldora de calidad mantiene la calidad actual; el 4K va en un chip aparte. */
     private fun refreshQualityPill() {
-        val fourK = curMedias.firstOrNull { isExternal4k(it) }
-        val badgeReady = firstFrame && firstFrameAtMs > 0L &&
-            System.currentTimeMillis() - firstFrameAtMs >= 4_000L
-        val showBadge = fourK != null && !externalActive && !liveMode && badgeReady
-        fourKBadge?.apply {
-            visibility = if (showBadge) View.VISIBLE else View.GONE
-            text = if (fourKOnlyOriginal()) "4K \u00b7 ORIGINAL" else "4K"
-        }
+        maybeShowFourKNotice()
         val q = qualityBtn ?: return
         if (liveMode) {
             q.visibility = View.GONE
@@ -2538,19 +2585,6 @@ class X4KPlayerAty : ComponentActivity() {
         q.background = pillBackground()
         val qualities = distinctQualityChoices(curMedias, { it.quality }, { it.name }).size
         q.visibility = if (shouldShowQualityPicker(qualities)) View.VISIBLE else View.GONE
-    }
-
-    private fun maybeNotify4k() {
-        if (fourKNotified) return
-        if (curMedias.none { isExternal4k(it) }) return
-        val current = curMedias.getOrNull(mediaCursor.coerceIn(0, curMedias.lastIndex))
-        if (current != null && isExternal4k(current)) return
-        fourKNotified = true
-        Toast.makeText(
-            this,
-            if (fourKOnlyOriginal()) "4K disponible en idioma original" else "4K disponible",
-            Toast.LENGTH_LONG,
-        ).show()
     }
 
     /** Mientras el 1080p ya corre, busca el 4K que dej? el resolvedor en segundo plano. */
@@ -2563,9 +2597,13 @@ class X4KPlayerAty : ComponentActivity() {
                 return
             }
             val source = runCatching {
-                com.chronosbvrx.visionplus.data.external.External4KStore
+                val all = com.chronosbvrx.visionplus.data.external.External4KStore
                     .fresh(this@X4KPlayerAty, "xtv:$curCode")
-                    .firstOrNull { it.height >= 2000 }
+                    .filter { it.height >= 2000 }
+                // Los CDN (R2) suelen abrir mas rapido que los hosts de archivos; si
+                // falla, el resto de la lista sigue disponible para reintentar.
+                all.firstOrNull { !it.url.contains("pixeldrain", ignoreCase = true) }
+                    ?: all.firstOrNull()
             }.getOrNull()
             if (source != null) {
                 val spec = X4KTitan.MediaSpec(
@@ -2577,7 +2615,6 @@ class X4KPlayerAty : ComponentActivity() {
                 if (curMedias.none { isExternal4k(it) }) {
                     curMedias.add(spec)
                     refreshQualityPill()
-                    maybeNotify4k()
                 }
                 return
             }
@@ -2689,15 +2726,18 @@ class X4KPlayerAty : ComponentActivity() {
     private fun buildFourKBadge(root: FrameLayout) {
         val tv = TextView(this).apply {
             text = "4K"
-            textSize = 9f
-            letterSpacing = 0.06f
+            textSize = if (isTv) 13f else 11f
+            gravity = Gravity.CENTER
             setTextColor(0xFF9CC9FF.toInt())
-            setPadding(dp(6), dp(2), dp(6), dp(2))
+            setPadding(dp(if (isTv) 12 else 8), dp(if (isTv) 7 else 4), dp(if (isTv) 12 else 8), dp(if (isTv) 7 else 4))
             background = fourKAvailableBackground()
             visibility = View.GONE
             isClickable = true
             isFocusable = false
-            setOnClickListener { if (!isModalActive) showQualityPicker() }
+            setOnClickListener {
+                hideFourKNotice()
+                if (!isModalActive) showQualityPicker()
+            }
         }
         val lp = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -4439,11 +4479,6 @@ class X4KPlayerAty : ComponentActivity() {
             return
         }
 
-        if (curMedias.any { isExternal4k(it) }) {
-            fourKNotified = false
-            maybeNotify4k()
-        }
-
         // 1. Intento directo con el método nativo ed.e.setMedia(mediaCode)
         val switched = X4KTitan.setMedia(v, target.name)
         if (switched) scheduleImageEnhancement()
@@ -5891,7 +5926,7 @@ class X4KPlayerAty : ComponentActivity() {
             // pinta su chip, para que su red no compita con el arranque del 1080p.
             handler.removeCallbacks(fourKPoller)
             handler.postDelayed(fourKPoller, 4_000L)
-            handler.postDelayed({ refreshQualityPill(); maybeNotify4k() }, 4_000L)
+            handler.postDelayed({ refreshQualityPill() }, 4_000L)
             scheduleExternal4kResolve()
         }
         // Cuánto se sintió desde el toque hasta el primer cuadro, y cuánto fue motor: en una
@@ -7257,8 +7292,11 @@ class X4KPlayerAty : ComponentActivity() {
                     pollerAlive = false
                     return
                 }
+                // Un archivo 4K directo (8-9 GB) tarda mas en abrir que el 1080p nativo:
+                // se le da la misma ventana larga antes de devolver al catalogo.
+                val externalFirstFrameLimit = if (lowEndDevice) 60_000L else 45_000L
                 if (!firstFrame && !externalEnded &&
-                    System.currentTimeMillis() - startedAtMs > 15_000L
+                    System.currentTimeMillis() - startedAtMs > externalFirstFrameLimit
                 ) {
                     externalEnded = true
                     stopExternal()
