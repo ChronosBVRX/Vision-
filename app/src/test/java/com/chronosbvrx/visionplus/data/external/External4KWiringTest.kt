@@ -1,6 +1,7 @@
 package com.chronosbvrx.visionplus.data.external
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -73,6 +74,10 @@ class External4KWiringTest {
         assertTrue("el 4K solo se agrega al selector", aty.contains("if (external4k != null) curMedias.add(external4k)"))
         assertTrue("el respaldo automático salta el 4K", aty.contains("while (nextIndex < curMedias.size && isExternal4k(curMedias[nextIndex]))"))
         assertTrue("el motor nunca recibe el 4K como pista", aty.contains("specs.filterNot { isExternal4k(it) }"))
+        assertTrue("el 4K viaja en un extra, no en el cat?logo", aty.contains("intent.getStringExtra(\"external4kUrl\")"))
+        val api = source("app/src/main/java/com/chronosbvrx/visionplus/data/xuper/X4KApi.kt")
+        assertFalse("el cat?logo no antepone el 4K", api.contains("mediasJson = withExternal4k"))
+        assertTrue("la API manda el 4K aparte", api.contains("putExtra(\"external4kUrl\""))
     }
 
     @Test
