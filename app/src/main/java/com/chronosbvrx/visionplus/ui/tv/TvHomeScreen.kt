@@ -227,6 +227,8 @@ fun TvHomeScreen(
     onGoRoute: (Route) -> Unit = {},
     /** El regreso a una ficha vale una sola vez: se limpia al restaurar o al salir por un hub. */
     onClearReturn: () -> Unit = {},
+    onLandingReady: (FocusRequester) -> Unit = {},
+    topBarUpTarget: FocusRequester? = null,
 ) {
     val context = LocalContext.current
     val reduced = LocalReducedEffects.current
@@ -298,6 +300,7 @@ fun TvHomeScreen(
 
     val landing = rememberLandingFocus(if (railReturn.isEmpty()) Unit else null)
     val returnRequester = remember { FocusRequester() }
+    LaunchedEffect(landing) { onLandingReady(landing.requester) }
     // Primera tarjeta de cada fila compuesta: el rescate del regreso enfoca algo visible
     // aunque la tarjeta exacta ya no exista o su fila esté fuera de pantalla.
     val rowEntry = remember { FocusRequester() }
@@ -763,8 +766,6 @@ fun TvHomeScreen(
                                     currentFilm = currentFilm,
                                     inFavorites = inFavorites,
                                     landing = landing,
-                                    returnRequester = returnRequester,
-                                    returnFilmId = returnFilmId,
                                     onOpenFilm = onOpenFilm,
                                     onToggleFavorite = {
                                         currentFilm?.let { f ->
@@ -786,6 +787,7 @@ fun TvHomeScreen(
                                         heroActionTick++
                                     },
                                     downRequester = rowEntry,
+                                    upTarget = topBarUpTarget,
                                 )
                             }
 
@@ -1241,14 +1243,13 @@ private fun HeroBillboard(
     currentFilm: Film?,
     inFavorites: Boolean,
     landing: LandingFocus?,
-    returnRequester: FocusRequester? = null,
-    returnFilmId: String? = null,
     onOpenFilm: (Film) -> Unit,
     onToggleFavorite: () -> Unit,
     onOpenSports: (GeeSportsSource.GeeEvent) -> Unit = {},
     onOpenSportsHub: () -> Unit = {},
     onHeroActionFocus: () -> Unit = {},
     downRequester: FocusRequester? = null,
+    upTarget: FocusRequester? = null,
 ) {
     if (featured == null) return
     val event = featured.event
@@ -1377,12 +1378,11 @@ private fun HeroBillboard(
 
             // Botones de acción directa con foco de control remoto. «Favorito» conserva la
             // función completa: en Compact/Narrow es un icono de 44 dp con contentDescription.
-            val isHeroTarget = returnFilmId != null && currentFilm?.id == returnFilmId
             Row(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.padding(top = 16.dp).then(
-                    if (downRequester != null) Modifier.softFocusDown(downRequester) else Modifier,
-                ),
+                modifier = Modifier.padding(top = 16.dp)
+                    .then(if (downRequester != null) Modifier.softFocusDown(downRequester) else Modifier)
+                    .then(if (upTarget != null) Modifier.softFocusUp(upTarget) else Modifier),
             ) {
                 if (event != null) {
                     TvCompactAction(
@@ -1408,11 +1408,7 @@ private fun HeroBillboard(
                         icon = VisionIcons.Play,
                         primary = true,
                         height = 44.dp,
-                        modifier = when {
-                            isHeroTarget && returnRequester != null -> Modifier.focusRequester(returnRequester)
-                            landing != null -> Modifier.landingFocus(landing)
-                            else -> Modifier
-                        },
+                        modifier = if (landing != null) Modifier.landingFocus(landing) else Modifier,
                         onClick = { currentFilm?.let(onOpenFilm) },
                         onFocusChanged = { focused -> if (focused) onHeroActionFocus() },
                     )

@@ -272,9 +272,9 @@ class PlaybackSpeedWiringTest {
         assertTrue("falta la detección de «sin datos»", player.contains("val engineHasNoData = !liveMode && !engineSignal"))
         assertTrue(
             "no se reintenta rápido",
-            player.contains("engineHasNoData && softRestarts == 0 -> 10_000L"),
+            player.contains("val engineHasNoData = !liveMode && !engineSignal && declaredDurationMs <= 0L"),
         )
-        assertTrue("sin tope corto en reintentos", player.contains("engineHasNoData -> 15_000L"))
+        assertTrue("sin tope corto en reintentos", player.contains("engineHasNoData -> 20_000L"))
         // Con datos sí se respeta la ventana larga (buffering legítimo).
         assertTrue(player.contains("val bufferingLimit = if (lowEndDevice) 60_000L else 45_000L"))
         assertTrue(player.contains("else -> bufferingLimit"))

@@ -2136,6 +2136,9 @@ object X4KApi {
         countries: List<String> = emptyList(),
         genres: List<String> = emptyList(),
         kind: String = "",
+        year: Int = 0,
+        tmdbId: Int = 0,
+        originalTitle: String = "",
         originalLanguage: String = "",
         external4kUrl: String = "",
         external4kLanguage: String = "",
@@ -2250,6 +2253,9 @@ object X4KApi {
             countries = countries,
             genres = genres,
             kind = kind,
+            year = year,
+            tmdbId = tmdbId,
+            originalTitle = originalTitle,
             originalLanguage = originalLanguage,
         )
         true
@@ -2472,6 +2478,9 @@ object X4KApi {
         countries: List<String> = emptyList(),
         genres: List<String> = emptyList(),
         kind: String = "",
+        year: Int = 0,
+        tmdbId: Int = 0,
+        originalTitle: String = "",
         originalLanguage: String = "",
     ) {
         val p = prefs(context)
@@ -2527,6 +2536,9 @@ object X4KApi {
             // se quedaba sin género y rellenaba con lo más popular de todo el catálogo.
             if (genres.isNotEmpty()) putStringArrayListExtra("genres", ArrayList(genres))
             if (kind.isNotBlank()) putExtra("kind", kind)
+            if (year > 0) putExtra("year", year)
+            if (tmdbId > 0) putExtra("tmdbId", tmdbId)
+            if (originalTitle.isNotBlank()) putExtra("originalTitle", originalTitle)
             if (originalLanguage.isNotBlank()) putExtra("originalLanguage", originalLanguage)
             if (logoUrl.isNotBlank()) putExtra("logoUrl", logoUrl)
             if (markersRef.isNotBlank()) putExtra("markersRef", markersRef)

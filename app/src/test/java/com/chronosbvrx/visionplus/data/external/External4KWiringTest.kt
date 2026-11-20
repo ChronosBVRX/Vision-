@@ -45,10 +45,12 @@ class External4KWiringTest {
         assertTrue(api.contains("external4kLanguage"))
         val worker = source("app/src/main/java/com/chronosbvrx/visionplus/data/external/External4KWorker.kt")
         assertTrue(worker.contains("fun refreshSoon"))
-        // El 4K se adelanta en la ficha, no al pulsar Play (su red compet?a con el arranque).
+        // El 4K NO se resuelve en la ficha: espera a que la pel?cula ya est? reproduciendo
+        // para que su red no choque con el arranque del 1080p.
         val title = source("app/src/main/java/com/chronosbvrx/visionplus/ui/tv/TvTitleScreen.kt")
-        assertTrue("la ficha adelanta el 4K", title.contains("refreshIfStale"))
-        assertTrue("la ficha adelanta el handshake del Play", title.contains("prewarmVod"))
+        assertTrue("la ficha ya no resuelve 4K", !title.contains("refreshIfStale"))
+        assertTrue("la ficha mantiene el badge informativo", title.contains("FourKBadge("))
+        assertTrue("la ficha conserva el handshake del Play", title.contains("prewarmVod"))
     }
 
     @Test
@@ -102,13 +104,13 @@ class External4KWiringTest {
     }
 
     @Test
-    fun bothTitleSheetsRefreshAndShowTheBrandedBadge() {
+    fun bothTitleSheetsShowTheBrandedBadgeWithoutResolvingBeforePlay() {
         for (path in listOf(
             "app/src/main/java/com/chronosbvrx/visionplus/ui/title/TitleScreen.kt",
             "app/src/main/java/com/chronosbvrx/visionplus/ui/tv/TvTitleScreen.kt",
         )) {
             val src = source(path)
-            assertTrue("$path refresca", src.contains("External4KRepository.refreshIfStale"))
+            assertTrue("$path ya no resuelve antes del play", !src.contains("refreshIfStale"))
             assertTrue("$path muestra el badge", src.contains("FourKBadge("))
             assertTrue("$path solo enciende el badge con 2160p", src.contains("fresh4k(context, film.id)"))
         }
@@ -118,18 +120,30 @@ class External4KWiringTest {
     }
 
     @Test
+    fun the4kResolverAndBadgeWaitForPlaybackToStart() {
+        val aty = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
+        assertTrue("no se busca 4K durante la carga", !aty.contains("handler.postDelayed(fourKPoller, 2_000L)"))
+        assertTrue("el poller arranca tras el primer cuadro", aty.contains("handler.postDelayed(fourKPoller, 4_000L)"))
+        assertTrue("hay resolvedor diferido", aty.contains("scheduleExternal4kResolve()"))
+        assertTrue("el resolvedor corre en segundo plano", aty.contains("refreshNow(applicationContext, film)"))
+        assertTrue("el chip espera unos segundos de reproducci?n", aty.contains("System.currentTimeMillis() - firstFrameAtMs >= 4_000L"))
+    }
+
+    @Test
     fun aDeepLinkedFilmWithoutKindStillShowsAndPlaysTheExternalSource() {
+        // Las fichas ya no resuelven: solo leen la cache, asi que aceptan cualquier kind.
         for (path in listOf(
             "app/src/main/java/com/chronosbvrx/visionplus/ui/title/TitleScreen.kt",
             "app/src/main/java/com/chronosbvrx/visionplus/ui/tv/TvTitleScreen.kt",
-            "app/src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt",
         )) {
             val src = source(path)
-            assertTrue(
-                "$path debe aceptar kind vacío (deep links del launcher)",
-                src.contains("kind.isBlank() || ") && src.contains("kind == \"movie\""),
-            )
+            assertTrue("$path lee la cache sin filtrar kind", src.contains("fresh4k(context, film.id)"))
         }
+        val player = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
+        assertTrue(
+            "el reproductor debe aceptar kind vacio (deep links del launcher)",
+            player.contains("kind.isBlank() || ") && player.contains("kind == \"movie\""),
+        )
     }
 
     @Test

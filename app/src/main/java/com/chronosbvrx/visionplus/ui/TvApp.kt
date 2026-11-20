@@ -103,6 +103,7 @@ fun TvApp(
     // en `BackToTopGuard`.
     val backToTop = remember { com.chronosbvrx.visionplus.ui.BackToTopGuard() }
     val topBarLanding = remember { com.chronosbvrx.visionplus.ui.tv.LandingFocus() }
+    var homeLanding by remember { mutableStateOf<androidx.compose.ui.focus.FocusRequester?>(null) }
     var topBarFocused by remember { mutableStateOf(false) }
     val hasTopBar = com.chronosbvrx.visionplus.ui.tv.tvTopBarVisible(route)
     val atRoot = nav.stack.size <= 1
@@ -175,6 +176,8 @@ fun TvApp(
                 onChannelPick = { liveReturn = it },
                 onExitToLauncher = onExitToLauncher,
                 topBarLanding = topBarLanding,
+                homeLanding = homeLanding,
+                onHomeLanding = { homeLanding = it },
                 onTopBarFocusChanged = { topBarFocused = it },
                 profileRevision = profileRevision,
             )
@@ -196,6 +199,8 @@ private fun TvRoute(
     onChannelPick: (String) -> Unit = {},
     onExitToLauncher: () -> Unit = {},
     topBarLanding: LandingFocus? = null,
+    homeLanding: androidx.compose.ui.focus.FocusRequester? = null,
+    onHomeLanding: (androidx.compose.ui.focus.FocusRequester) -> Unit = {},
     onTopBarFocusChanged: (Boolean) -> Unit = {},
     profileRevision: Int = 0,
 ) {
@@ -338,6 +343,7 @@ private fun TvRoute(
                 onNotifications = { showPluginUpdates = true },
                 onReload = { scope.launch { catalog.load() } },
                 landing = topBarLanding,
+                downTarget = homeLanding,
                 onFocusChanged = onTopBarFocusChanged,
             )
         }
@@ -369,6 +375,8 @@ private fun TvRoute(
                 nav.push(resumeRoute(it))
             },
             onGoRoute = { guardedGo(it, viaTab = false) },
+            onLandingReady = onHomeLanding,
+            topBarUpTarget = topBarLanding?.requester,
             // El «regreso vale una sola vez» del onDone queda APAGADO a propósito: el foco
             // transitorio de una tarjeta reciclada cuenta como «usuario» y limpiar ahí rompe
             // el regreso con contenido tardío (homeBackRestoresSameCardAfterLateContent lo

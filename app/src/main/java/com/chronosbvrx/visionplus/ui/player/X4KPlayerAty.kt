@@ -177,6 +177,9 @@ class X4KPlayerAty : ComponentActivity() {
     private var intentPoster = ""
     /** Sinopsis ya resuelta por la ficha (TMDB es-MX / traducción española). */
     private var intentSynopsis = ""
+    private var intentYear = 0
+    private var intentTmdbId = 0
+    private var intentOriginalTitle = ""
     /** Reparto y país del servidor (país ya en español). */
     private var intentCast = ArrayList<String>()
     private var intentCountries = ArrayList<String>()
@@ -319,6 +322,10 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** The portal's own running time: authoritative for the bar's total. */
     private var declaredDurationMs: Long = 0L
+    /** Momento del primer cuadro: el chip 4K y el resolvedor esperan a que haya imagen. */
+    private var firstFrameAtMs = 0L
+    /** El cruce 4K se pide una sola vez por reproduccion, despues del primer cuadro. */
+    private var externalResolveKicked = false
 
     /** Tele lenta (<=2.2 GB o pocos n?cleos): ventana de primer cuadro m?s larga. */
     private val lowEndDevice: Boolean by lazy {
@@ -619,6 +626,9 @@ class X4KPlayerAty : ComponentActivity() {
         resumeMs = intent.getLongExtra("resumeMs", 0L)
         intentPoster = intent.getStringExtra("posterUrl").orEmpty()
         intentSynopsis = intent.getStringExtra("synopsis").orEmpty()
+        intentYear = intent.getIntExtra("year", 0)
+        intentTmdbId = intent.getIntExtra("tmdbId", 0)
+        intentOriginalTitle = intent.getStringExtra("originalTitle").orEmpty()
         intentCast = intent.getStringArrayListExtra("cast") ?: ArrayList()
         intentCountries = intent.getStringArrayListExtra("countries") ?: ArrayList()
         curLogo = intent.getStringExtra("logoUrl").orEmpty()
@@ -850,6 +860,8 @@ class X4KPlayerAty : ComponentActivity() {
         seekHoldUntilMs = 0L
         durationMs = -1L
         declaredDurationMs = 0L
+        firstFrameAtMs = 0L
+        externalResolveKicked = false
         declaredLanguages = emptyList()
         curAudioCode = ""
         lastHistorySave = 0L
@@ -1396,10 +1408,7 @@ class X4KPlayerAty : ComponentActivity() {
         buildError(root)
         wireGestures(root)
         if (!liveMode && code.isNotBlank()) loadSubs(code)
-        if (!liveMode) {
-            handler.removeCallbacks(fourKPoller)
-            handler.postDelayed(fourKPoller, 2_000L)
-        }
+        // El 4K espera al primer cuadro: nada de resolver ni pintar el chip durante la carga.
 
         // While the pre-roll plays, it owns the screen: everything else stays out of its way.
         if (introView != null) {
@@ -2513,7 +2522,9 @@ class X4KPlayerAty : ComponentActivity() {
     /** La p?ldora de calidad mantiene la calidad actual; el 4K va en un chip aparte. */
     private fun refreshQualityPill() {
         val fourK = curMedias.firstOrNull { isExternal4k(it) }
-        val showBadge = fourK != null && !externalActive && !liveMode
+        val badgeReady = firstFrame && firstFrameAtMs > 0L &&
+            System.currentTimeMillis() - firstFrameAtMs >= 4_000L
+        val showBadge = fourK != null && !externalActive && !liveMode && badgeReady
         fourKBadge?.apply {
             visibility = if (showBadge) View.VISIBLE else View.GONE
             text = if (fourKOnlyOriginal()) "4K \u00b7 ORIGINAL" else "4K"
@@ -5816,8 +5827,73 @@ class X4KPlayerAty : ComponentActivity() {
         saveHistory(immediate = true, forceFinished = atCredits)
     }
 
+    /**
+     * Cruce 4K despues de que la pelicula ya arranco: se le da margen al 1080p para que su
+     * red no choque con el arranque. El resultado se guarda en la cache compartida y el
+     * poller lo recoge para el selector manual y el chip.
+     */
+    private fun scheduleExternal4kResolve() {
+        if (externalResolveKicked) return
+        if (curCode.isBlank() || curKind == "series" || curSeries.isNotBlank() || epIds.size > 1) return
+        externalResolveKicked = true
+        // Copia el contexto en el hilo principal: si entra otro play antes de los 6 s,
+        // el resolvedor no debe mezclar el titulo viejo con el nuevo.
+        val titleId = "xtv:$curCode"
+        val baseTitle = curBaseTitle.ifBlank { curTitle }
+        val knownYear = intentYear
+        val knownTmdb = intentTmdbId
+        val knownOriginal = intentOriginalTitle
+        val knownDuration = declaredDurationMs
+        val knownSynopsis = intentSynopsis
+        val knownPoster = intentPoster
+        handler.postDelayed({
+            if (isFinishing || isDestroyed) return@postDelayed
+            Thread {
+                // Si la ficha ya guardo sus metadatos, el cruce por titulo/anio encuentra
+                // el 4K aunque el play venga del launcher sin tmdb.
+                val known = runCatching {
+                    com.chronosbvrx.visionplus.data.external.External4KStore
+                        .filmsForRefresh(applicationContext, limit = 100)
+                        .firstOrNull { it.id == titleId }
+                }.getOrNull()
+                val film = Film(
+                    id = titleId,
+                    title = baseTitle.ifBlank { known?.title.orEmpty() },
+                    year = knownYear.takeIf { it > 0 } ?: known?.year ?: 0,
+                    durationMin = if (knownDuration > 0L) (knownDuration / 60_000L).toInt() else 0,
+                    synopsis = knownSynopsis,
+                    posterUrl = knownPoster,
+                    videoUrl = titleId,
+                    sourceUrl = "xtv",
+                    tmdbId = knownTmdb.takeIf { it > 0 } ?: known?.tmdbId ?: 0,
+                    originalTitle = knownOriginal.ifBlank { known?.originalTitle.orEmpty() },
+                    kind = "movie",
+                )
+                // Si ya hay un 4K fresco en cache no se gasta otra ronda de red.
+                val repo = com.chronosbvrx.visionplus.data.external.External4KRepository
+                if (repo.hasFresh(applicationContext, titleId)) return@Thread
+                android.util.Log.i(TAG, "4K resolver: inicio tras primer cuadro (id=$titleId)")
+                val found = runCatching {
+                    kotlinx.coroutines.runBlocking {
+                        repo.refreshNow(applicationContext, film)
+                    }
+                }.getOrDefault(emptyList())
+                android.util.Log.i(TAG, "4K resolver: ${found.size} fuentes")
+            }.start()
+        }, 6_000L)
+    }
+
     /** Al primer cuadro: reanuda lo pedido desde Inicio, o pregunta si quedó a medias. */
     private fun onFirstFrame() {
+        firstFrameAtMs = System.currentTimeMillis()
+        if (!liveMode) {
+            // A partir de aqui la pelicula ya se ve: recien entonces se busca el 4K y se
+            // pinta su chip, para que su red no compita con el arranque del 1080p.
+            handler.removeCallbacks(fourKPoller)
+            handler.postDelayed(fourKPoller, 4_000L)
+            handler.postDelayed({ refreshQualityPill(); maybeNotify4k() }, 4_000L)
+            scheduleExternal4kResolve()
+        }
         // Cuánto se sintió desde el toque hasta el primer cuadro, y cuánto fue motor: en una
         // caja de TV es el dato que dice si el costo está en el portal, en el arranque del
         // motor o en la señal. Solo se reporta lo lento (>3 s) para no llenar la telemetría.
@@ -5839,7 +5915,6 @@ class X4KPlayerAty : ComponentActivity() {
         publishRemoteState(force = true)
         updatePipParams()
         if (liveMode) return
-        maybeNotify4k()
         // El motor ya expone sus pistas reales: la píldora de audio se queda solo si hay
         // más de una (y los subtítulos, si el servicio los dio).
         applyOptionPillVisibility()
@@ -7281,9 +7356,13 @@ class X4KPlayerAty : ComponentActivity() {
                 // duración (dur=-1), no está buffereando, está atascado y un re-arranque lo
                 // rescata. Medido en una TCL: el primer intento pasó 26.9 s con pos=-1 dur=-1
                 // playing=false y el reintento pintó en 3 s. Se reintenta a los 10 s.
-                val engineHasNoData = !liveMode && !engineSignal && runCatching {
-                    com.chronosbvrx.visionplus.data.xuper.X4KTitan.durationMs(v)
-                }.getOrDefault(-1L) <= 0L
+                // En TV Android 9 el motor tarda en reportar dur/pos aunque la pel?cula
+                // ya se est? cargando. Si el t?tulo trae duraci?n conocida NO es "sin
+                // datos": es buffering y merece la ventana larga (no matar a los 10 s).
+                val engineHasNoData = !liveMode && !engineSignal && declaredDurationMs <= 0L &&
+                    runCatching {
+                        com.chronosbvrx.visionplus.data.xuper.X4KTitan.durationMs(v)
+                    }.getOrDefault(-1L) <= 0L
                 // En una tele lenta/red lenta el primer cuadro puede tardar m? que el
                 // portal (medido: 40 s). Si el motor YA tiene duraci?n est? buffereando:
                 // no se mata el buffer con un re-arranque a los 25 s. Se le da la ventana
@@ -7296,8 +7375,8 @@ class X4KPlayerAty : ComponentActivity() {
                     // nueva no da cuadro pronto, se pasa a la siguiente.
                     autoDowngrades > 0 && engineHasNoData -> 8_000L
                     autoDowngrades > 0 -> 20_000L
-                    engineHasNoData && softRestarts == 0 -> 10_000L
-                    engineHasNoData -> 15_000L
+                    engineHasNoData && softRestarts == 0 -> 20_000L
+                    engineHasNoData -> 20_000L
                     else -> bufferingLimit
                 }
                 if (stalled && !errorShown && stalledFor > stallLimit) {

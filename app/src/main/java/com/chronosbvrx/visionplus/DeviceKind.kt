@@ -22,6 +22,8 @@ object DeviceKind {
         if (uiMode?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION) return true
         val pm = context.packageManager
         if (pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK) || pm.hasSystemFeature("amazon.hardware.fire_tv")) return true
+        if (pm.hasSystemFeature("android.hardware.type.television")) return true
+        if (android.os.Build.MODEL.contains("beyondtv", ignoreCase = true)) return true
         // No touchscreen: a remote-driven box running tablet firmware.
         if (!pm.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)) return true
         return context.resources.configuration.touchscreen == Configuration.TOUCHSCREEN_NOTOUCH

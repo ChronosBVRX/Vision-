@@ -180,7 +180,9 @@ internal object External4KStore {
     private fun write(context: Context, root: JSONObject) {
         runCatching {
             val file = File(context.filesDir, FILE)
-            val tmp = File(context.filesDir, "$FILE.tmp")
+            // Nombre unico por proceso: el reproductor vive en :x4k y no debe pisar
+            // el temporal del proceso principal mientras resuelve en paralelo.
+            val tmp = File(context.filesDir, "$FILE.${android.os.Process.myPid()}.tmp")
             tmp.writeText(root.toString())
             if (!tmp.renameTo(file)) {
                 file.writeText(root.toString())

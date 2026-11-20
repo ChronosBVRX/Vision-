@@ -132,18 +132,15 @@ fun TitleScreen(
     val cached4k = remember(film.id) {
         com.chronosbvrx.visionplus.data.external.External4KRepository.fresh4k(context, film.id)
     }
-    var has4k by remember(film.id) { mutableStateOf(cached4k != null) }
-    var fourKOriginal by remember(film.id) { mutableStateOf(cached4k?.language == "Original") }
-    LaunchedEffect(film.id) {
+    val has4k = cached4k != null
+    val fourKOriginal = cached4k?.language == "Original"
+    // Guarda los metadatos de la ficha (sin red): el reproductor los usa para cruzar
+    // el 4K despues del primer cuadro, incluso si el play viene del launcher.
+    LaunchedEffect(film.id, isXtv) {
         if (isXtv && (film.kind.isBlank() || film.kind == "movie")) {
-            // Primero el handshake del Play (prewarmVod); el cruce 4K va despu?s para
-            // no quitarle red al arranque en una tele lenta.
-            kotlinx.coroutines.delay(1_500L)
-            com.chronosbvrx.visionplus.data.external.External4KRepository.refreshIfStale(context, film)
-            val fresh = com.chronosbvrx.visionplus.data.external.External4KRepository
-                .fresh4k(context, film.id)
-            has4k = fresh != null
-            fourKOriginal = fresh?.language == "Original"
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.chronosbvrx.visionplus.data.external.External4KStore.putFilm(context, film)
+            }
         }
     }
     val meta = remember(film.id) { if (isXtv) X4KApi.metaFor(context, film.id) else null }

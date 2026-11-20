@@ -58,6 +58,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -201,6 +206,7 @@ internal fun TvTopBar(
      * la pestaña de la sección actual (o a la primera si la barra no tiene pestaña activa).
      */
     landing: LandingFocus? = null,
+    downTarget: FocusRequester? = null,
     /** Avisa si el mando está dentro de la barra (así el Atrás de ahí ya sí sale). */
     onFocusChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -262,6 +268,14 @@ internal fun TvTopBar(
             // Grupo de foco: `hasFocus` es true mientras cualquier control de la barra tenga el
             // foco. Lo usa el Atrás de TvApp para saber si ya está «arriba» y puede salir.
             .focusGroup()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
+                    if (downTarget != null && requestFocusSafely(downTarget)) {
+                        return@onPreviewKeyEvent true
+                    }
+                }
+                false
+            }
             .onFocusChanged {
                 barFocused = it.hasFocus
                 onFocusChanged(it.hasFocus)
