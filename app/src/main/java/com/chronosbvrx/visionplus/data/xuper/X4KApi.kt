@@ -2082,6 +2082,30 @@ object X4KApi {
      * X4K player (its own process). Series may carry their episode/season context so the player
      * can offer "next" without leaving.
      */
+    /**
+     * A?ade la pista 4K externa al frente de las medias del portal. El reproductor nativo
+     * la trata como una calidad m?s: el motor la reproduce por su ruta de URL directa.
+     */
+    private fun withExternal4k(mediasJson: String, url: String, language: String): String {
+        if (url.isBlank()) return mediasJson
+        return runCatching {
+            val source = JSONArray(mediasJson)
+            val out = JSONArray()
+            out.put(JSONObject().apply {
+                put("n", "4K Vision+")
+                put("l", url)
+                put("a", language.ifBlank { "Original" })
+                put("q", "2160p")
+                put("e", "")
+                put("f", "")
+            })
+            for (i in 0 until source.length()) {
+                source.optJSONObject(i)?.let { out.put(it) }
+            }
+            out.toString()
+        }.getOrDefault(mediasJson)
+    }
+
     suspend fun playVod(
         context: Context,
         contentId: String,
@@ -2103,6 +2127,8 @@ object X4KApi {
         genres: List<String> = emptyList(),
         kind: String = "",
         originalLanguage: String = "",
+        external4kUrl: String = "",
+        external4kLanguage: String = "",
     ): Boolean = withContext(Dispatchers.IO) {
         var resolvedEpIds = episodeIds
         var resolvedEpNames = episodeNames
@@ -2181,7 +2207,7 @@ object X4KApi {
             mode = "vod",
             code = cid,
             title = title,
-            mediasJson = prep.mediasJson,
+            mediasJson = withExternal4k(prep.mediasJson, external4kUrl, external4kLanguage),
             durationMs = finalDuration,
             subsLangs = prep.subsLangs,
             seriesId = if (isSeries) cleanSeriesId else "",

@@ -88,6 +88,22 @@ class External4KParserTest {
     }
 
     @Test
+    fun hlsFallbackQualitiesKeepLatinoAndDrop4kOrMp4() {
+        val json = payload(
+            stream("[? VIMEUS]\nLatino FHD", "HLS Directo\nLatino", "https://cdn.example/1080.m3u8"),
+            stream("[? HACKSTORE]\nLatino 720P", "HLS Directo\nLatino", "https://cdn.example/720.m3u8"),
+            stream("[? UNLIMPLAY]\nCastellano 480p", "HLS Directo\nCastellano", "https://cdn.example/480.m3u8"),
+            stream("[? VIMEUS]\nLatino 4K", "HLS Directo\nLatino", "https://cdn.example/4k.m3u8"),
+            stream("[? VIMEUS]\nLatino HD", "MP4 Directo", "https://cdn.example/peli.mp4"),
+        )
+        val out = External4KParser.parseHlsQualities(json, now, 6 * 60 * 60 * 1000L)
+        assertEquals(listOf(1080, 720, 480), out.map { it.height })
+        assertEquals("Latino", out[0].language)
+        assertEquals("Latino", out[1].language)
+        assertEquals("Castellano", out[2].language)
+    }
+
+    @Test
     fun aPublicHdHubR2StreamIsAcceptedAndTheSmallerOneWins() {
         val big = JSONObject().apply {
             put("name", "4KHDHub 4K")

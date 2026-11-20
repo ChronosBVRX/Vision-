@@ -26,9 +26,57 @@ class External4KWiringTest {
     }
 
     @Test
+    fun thePlayerTurnsOnSpanishSubtitlesWhenTheAudioIsNotSpanish() {
+        val player = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
+        assertTrue(player.contains("autoSelectSpanishSubtitles"))
+        assertTrue(player.contains("isSpanishLanguage"))
+        assertTrue(player.contains("setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)"))
+    }
+
+    @Test
+    fun theNative4kKeepsTheLanguageAndSubtitlePickersAndTheAvailableBadge() {
+        val aty = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
+        assertTrue(aty.contains("externalAudioOptions"))
+        assertTrue(aty.contains("externalSubtitleOptions"))
+        assertTrue(aty.contains("4K disponible"))
+        assertTrue(aty.contains("fourKPoller"))
+        assertTrue(aty.contains("External4KStore"))
+        val api = source("app/src/main/java/com/chronosbvrx/visionplus/data/xuper/X4KApi.kt")
+        assertTrue(api.contains("external4kLanguage"))
+        val worker = source("app/src/main/java/com/chronosbvrx/visionplus/data/external/External4KWorker.kt")
+        assertTrue(worker.contains("fun refreshSoon"))
+        val screen = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
+        assertTrue(screen.contains("refreshSoon"))
+    }
+
+    @Test
     fun thePlayerPrefersSpanishAudioThenEnglish() {
         val player = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
         assertTrue(player.contains("setPreferredAudioLanguages(\"es\", \"spa\", \"en\", \"eng\")"))
+    }
+
+    @Test
+    fun theNativePlayerOpensTheExternal4kAsAUrlQuality() {
+        val aty = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
+        assertTrue(aty.contains("isExternal4k"))
+        assertTrue(aty.contains("startSpecs(v, orderedMedias, code, title)"))
+        assertTrue(aty.contains("startExternal(external)"))
+        assertTrue(aty.contains("4K externo en reproductor nativo"))
+        assertTrue(aty.contains("androidx.media3.exoplayer.ExoPlayer"))
+        assertTrue(aty.contains("if (isExternal4k(target))"))
+    }
+
+    @Test
+    fun the4kPlayerOffersLowerQualitiesInTheSamePlayer() {
+        val player = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
+        assertTrue(player.contains("External4KRepository.lowerQualities"))
+        assertTrue(player.contains("externalQualities = qualities"))
+        assertTrue(player.contains("\"EXTERNAL_4K_QUALITY\""))
+        val dialogs = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerDialogs.kt")
+        assertTrue(dialogs.contains("onPickExternalQuality"))
+        assertTrue(dialogs.contains("Calidad nativa (Xuper)"))
+        val parser = source("app/src/main/java/com/chronosbvrx/visionplus/data/external/External4KParser.kt")
+        assertTrue(parser.contains("fun parseHlsQualities"))
     }
 
     @Test

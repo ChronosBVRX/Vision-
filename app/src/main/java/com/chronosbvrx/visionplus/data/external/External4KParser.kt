@@ -76,14 +76,7 @@ internal object External4KParser {
             // Un 4K CAM sigue siendo peor que un 1080p limpio; se descarta.
             if (CAM.containsMatchIn(qualityBlob) && !qualityBlob.contains("2160p", ignoreCase = true)) continue
             val provider = providerOf(stream.optString("name"), stream.optString("title"))
-            val declared = stream.optString("language").trim()
-            val language = when {
-                declared.equals("Latino", ignoreCase = true) -> "Latino"
-                declared.equals("Castellano", ignoreCase = true) -> "Castellano"
-                LATINO_HINT.containsMatchIn(blob) -> "Latino"
-                SPANISH_HINT.containsMatchIn(blob) -> "Castellano"
-                else -> "Original"
-            }
+            val language = languageOf(stream, blob)
             val expiry = urlExpiryMs(url, nowMs)?.let { minOf(it, nowMs + ttlMs) } ?: (nowMs + ttlMs)
             val source = FourKSource(
                 url = url,
@@ -94,6 +87,7 @@ internal object External4KParser {
                 sizeBytes = sizeBytes,
                 checkedAt = nowMs,
                 expiresAt = expiry,
+                height = heightOf(qualityBlob),
             )
             if (labeled) explicit += source else fallback += source
             if (explicit.size >= 6) break
@@ -106,6 +100,61 @@ internal object External4KParser {
                 .thenBy { if (it.language == "Latino") 0 else if (it.language == "Castellano") 1 else 2 }
                 .thenBy { if (it.sizeBytes > 0L) it.sizeBytes else Long.MAX_VALUE },
         ).take(4)
+    }
+
+    /**
+     * Respaldos HLS 1080p/720p/480p del mismo addon. El 4K de R2 no siempre arranca;
+     * estas pistas latinas permiten bajar de calidad sin salir del reproductor.
+     */
+    fun parseHlsQualities(json: String, nowMs: Long, ttlMs: Long): List<FourKSource> {
+        val streams = runCatching { JSONObject(json).optJSONArray("streams") }.getOrNull() ?: return emptyList()
+        val out = LinkedHashMap<String, FourKSource>()
+        for (i in 0 until streams.length()) {
+            val stream = streams.optJSONObject(i) ?: continue
+            val url = stream.optString("url").trim()
+            if (!url.startsWith("http")) continue
+            if (!url.substringBefore('?').endsWith(".m3u8", ignoreCase = true)) continue
+            val blob = "${stream.optString("name")} ${stream.optString("title")} ${stream.optString("description")}"
+            val qualityBlob = blob.replace("4khdhub", "", ignoreCase = true)
+            val height = heightOf(qualityBlob)
+            if (height !in 480..1080) continue
+            out[url] = FourKSource(
+                url = url,
+                provider = providerOf(stream.optString("name"), stream.optString("title")),
+                language = languageOf(stream, blob),
+                lan = PRIVATE_HOST.containsMatchIn(url),
+                checkedAt = nowMs,
+                expiresAt = urlExpiryMs(url, nowMs)?.let { minOf(it, nowMs + ttlMs) } ?: (nowMs + ttlMs),
+                height = height,
+            )
+        }
+        return out.values.sortedWith(
+            compareByDescending<FourKSource> { it.height }
+                .thenBy { if (it.language == "Latino") 0 else if (it.language == "Castellano") 1 else 2 }
+                .thenBy { it.provider },
+        ).take(4)
+    }
+
+    private fun languageOf(stream: JSONObject, blob: String): String {
+        val declared = stream.optString("language").trim()
+        return when {
+            declared.equals("Latino", ignoreCase = true) -> "Latino"
+            declared.equals("Castellano", ignoreCase = true) -> "Castellano"
+            LATINO_HINT.containsMatchIn(blob) -> "Latino"
+            SPANISH_HINT.containsMatchIn(blob) -> "Castellano"
+            else -> "Original"
+        }
+    }
+
+    private fun heightOf(text: String): Int {
+        val q = text.lowercase(Locale.ROOT)
+        return when {
+            q.contains("2160") || q.contains("4k") || q.contains("uhd") -> 2160
+            q.contains("1080") || q.contains("fhd") || q.contains("full hd") -> 1080
+            q.contains("720") -> 720
+            q.contains("480") -> 480
+            else -> 0
+        }
     }
 
     /** Nombre del proveedor: primera línea del `name` sin corchetes ni emojis. */

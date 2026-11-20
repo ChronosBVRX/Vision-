@@ -100,6 +100,14 @@ internal fun videoQualityKey(height: Int): String = when {
  * secciones sin opciones no se dibujan: nada de menús de una sola entrada ni de relleno.
  */
 @Stable
+internal data class PlayerQualityChoice(
+    val label: String,
+    val url: String,
+    val height: Int,
+    val selected: Boolean,
+)
+
+@Stable
 internal class PlayerMenuState {
     var quality by mutableStateOf("Auto")
     var audioChoices by mutableStateOf<List<PlayerTrackChoice>>(emptyList())
@@ -107,11 +115,20 @@ internal class PlayerMenuState {
     var videoHeights by mutableStateOf<List<Int>>(emptyList())
     var selectedAudioKey by mutableStateOf<String?>(null)
     var selectedSubtitleKey by mutableStateOf<String?>(null)
+    /** Idioma de la pista de audio elegida (para decidir los subtítulos en español). */
+    var selectedAudioLanguage by mutableStateOf("")
+    /** Calidades externas (4K + respaldos HLS) cuando el player reproduce una fuente 4K. */
+    var externalQualities by mutableStateOf<List<PlayerQualityChoice>>(emptyList())
+    /** Ofrece volver al reproductor nativo de Xuper (calidad nativa). */
+    var nativeQualityOffered by mutableStateOf(false)
 
     /** Con un solo idioma no hay nada que elegir en audio: la sección/píldora no existe. */
     val hasAudioChoices: Boolean get() = audioChoices.size > 1
     val hasSubtitleChoices: Boolean get() = subtitleChoices.isNotEmpty()
-    val hasQualityChoices: Boolean get() = videoHeights.size > 1
+    val hasQualityChoices: Boolean
+        get() = nativeQualityOffered ||
+            externalQualities.size > 1 ||
+            (externalQualities.isEmpty() && videoHeights.size > 1)
 
     /** ¿Vale la pena abrir el menú? Si no hay nada real, el botón se oculta. */
     val hasAnyChoices: Boolean get() = hasAudioChoices || hasSubtitleChoices || hasQualityChoices
@@ -133,6 +150,8 @@ internal fun AudioAndSubtitlesDialog(
     onPickAudio: (PlayerTrackChoice) -> Unit,
     onPickSubtitle: (PlayerTrackChoice?) -> Unit,
     onDismiss: () -> Unit,
+    onPickExternalQuality: ((PlayerQualityChoice) -> Unit)? = null,
+    onUseNativeQuality: (() -> Unit)? = null,
 ) {
     val first = rememberDialogLanding()
     val firstIsQuality = state.hasQualityChoices
@@ -148,10 +167,29 @@ internal fun AudioAndSubtitlesDialog(
                 .heightIn(max = 430.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            if (state.hasQualityChoices) {
+            if (state.externalQualities.isNotEmpty() || state.nativeQualityOffered) {
+                MenuSectionTitle("Calidad de video", first = true)
+                var firstOption = true
+                state.externalQualities.forEach { choice ->
+                    MenuOption(
+                        choice.label,
+                        modifier = if (firstOption) first else Modifier,
+                        selected = choice.selected,
+                        icon = Icons.Default.Tune,
+                    ) { onPickExternalQuality?.invoke(choice) }
+                    firstOption = false
+                }
+                if (state.nativeQualityOffered) {
+                    MenuOption(
+                        "Calidad nativa (Xuper)",
+                        modifier = if (firstOption) first else Modifier,
+                        icon = Icons.Default.Tune,
+                    ) { onUseNativeQuality?.invoke() }
+                }
+            } else if (state.hasQualityChoices) {
                 MenuSectionTitle("Calidad de video", first = true)
                 MenuOption(
-                    "Auto (la mejor según la red)",
+                    "Auto (la mejor seg?n la red)",
                     modifier = if (firstIsQuality) first else Modifier,
                     selected = state.quality == "Auto",
                     icon = Icons.Default.Tune,

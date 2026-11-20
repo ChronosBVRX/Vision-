@@ -110,7 +110,7 @@ class PlayerStreamGuardTest {
         // cadena: calidad preferida primero y, si falla, la inferior antes que un 4K.
         val ordering = Regex("playbackChain\\(").findAll(player).count()
         assertTrue("el reproductor arma la cadena de calidad ($ordering)", ordering >= 2)
-        assertTrue("el play de arranque usa la lista ordenada", player.contains("X4KTitan.play(v, mode, code, title, orderedMedias)"))
+        assertTrue("el play de arranque usa la lista ordenada", player.contains("startSpecs(v, orderedMedias, code, title)"))
         // El respaldo automático no puede quedarse en el error: prueba la siguiente pista.
         assertTrue("el reproductor baja de pista antes de rendirse", player.contains("tryNextMedia("))
         assertTrue("telemetría del respaldo", player.contains("\"PLAYER_DOWNGRADE\""))

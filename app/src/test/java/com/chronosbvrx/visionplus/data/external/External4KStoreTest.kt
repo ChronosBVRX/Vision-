@@ -53,6 +53,17 @@ class External4KStoreTest {
     }
 
     @Test
+    fun theStoreKeepsTheHeightOfEachQuality() {
+        val now = System.currentTimeMillis()
+        External4KStore.put(context, "xtv:height", listOf(
+            FourKSource("https://a.mkv", "A", "Latino", expiresAt = now + 60_000, height = 2160),
+            FourKSource("https://b.m3u8", "B", "Latino", expiresAt = now + 60_000, height = 1080),
+        ))
+        val fresh = External4KStore.fresh(context, "xtv:height")
+        assertEquals(listOf(2160, 1080), fresh.map { it.height })
+    }
+
+    @Test
     fun imdbIsCachedPerTitle() {
         External4KStore.putImdb(context, "xtv:3", "tt0133093")
         assertEquals("tt0133093", External4KStore.imdb(context, "xtv:3"))

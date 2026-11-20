@@ -108,7 +108,7 @@ class X4KPlayerAty : ComponentActivity() {
             val target = previewSeekMs
             previewSeekMs = -1L
             scrubbing = false
-            playerView?.let { com.chronosbvrx.visionplus.data.xuper.X4KTitan.seekTo(it, target) }
+            playerSeekTo(target)
             holdSeekBarAt(target)
             noteAppSeek()
         }
@@ -136,6 +136,17 @@ class X4KPlayerAty : ComponentActivity() {
     private var seekNavView: SeekBar? = null
     private var playPauseNavView: View? = null
     private var curMedias = ArrayList<X4KTitan.MediaSpec>()
+    /** 4K externo: ExoPlayer dentro del MISMO Activity/UI del reproductor nativo. */
+    private var externalPlayer: androidx.media3.exoplayer.ExoPlayer? = null
+    private var externalView: androidx.media3.ui.PlayerView? = null
+    private var externalActive = false
+    private var externalEnded = false
+    private var externalUserAudio = false
+    private var externalUserSubs = false
+    private var externalSubsAuto = false
+    private var externalCurAudioLabel = ""
+    private var externalCurrentUrl = ""
+    private var fourKNotified = false
     /** Índice dentro de [curMedias] de la pista que el motor está intentando ahora. */
     private var mediaCursor = 0
     /** Respaldo automático de calidad: presupuesto por reproducción (no endless ping-pong). */
@@ -454,8 +465,15 @@ class X4KPlayerAty : ComponentActivity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
         applyImmersiveMode()
         playGen += 1
+        fourKNotified = false
+        externalCurrentUrl = ""
+        externalUserAudio = false
+        externalUserSubs = false
+        externalSubsAuto = false
+        externalCurAudioLabel = ""
         resetForNewPlay()
         if (playerView != null) teardownPlaySurfaces()
+        stopExternal()
 
         val mode = intent.getStringExtra("mode") ?: "vod"
         val code = intent.getStringExtra("code").orEmpty()
@@ -891,7 +909,7 @@ class X4KPlayerAty : ComponentActivity() {
         val root = root()
         val keep = playerView
         for (i in root.childCount - 1 downTo 0) {
-            if (root.getChildAt(i) !== keep) root.removeViewAt(i)
+            if (root.getChildAt(i) !== keep && root.getChildAt(i) !== externalView) root.removeViewAt(i)
         }
         controls = null
         loadingOverlay = null
@@ -1177,10 +1195,10 @@ class X4KPlayerAty : ComponentActivity() {
     private fun applyRemoteSeek(positionMs: Long) {
         if (liveMode) return
         val v = playerView ?: return
-        val current = X4KTitan.positionMs().coerceAtLeast(0L)
+        val current = playerPosMs()
         val total = resolveStableTotalDuration(declaredDurationMs, durationMs, current, liveMode)
         val target = if (total > 0L) positionMs.coerceIn(0L, total) else positionMs.coerceAtLeast(0L)
-        X4KTitan.seekTo(v, target)
+        playerSeekTo(target)
         holdSeekBarAt(target)
         noteAppSeek()
         showControlsBriefly()
@@ -1364,6 +1382,10 @@ class X4KPlayerAty : ComponentActivity() {
         buildError(root)
         wireGestures(root)
         if (!liveMode && code.isNotBlank()) loadSubs(code)
+        if (!liveMode) {
+            handler.removeCallbacks(fourKPoller)
+            handler.postDelayed(fourKPoller, 2_000L)
+        }
 
         // While the pre-roll plays, it owns the screen: everything else stays out of its way.
         if (introView != null) {
@@ -1376,7 +1398,7 @@ class X4KPlayerAty : ComponentActivity() {
         val startPlayback: () -> Unit = {
             fun attemptPlay(retriesLeft: Int) {
                 startedAtMs = System.currentTimeMillis()
-                if (X4KTitan.play(v, mode, code, title, orderedMedias)) {
+                if (startSpecs(v, orderedMedias, code, title)) {
                     if (!liveMode) {
                         // El cuadro entra con un fundido: pre-roll → película se sienten una sola secuencia.
                         v.alpha = 0f
@@ -1518,7 +1540,7 @@ class X4KPlayerAty : ComponentActivity() {
         com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
             "PLAYER_RENDER_REATTACH", "modo=${if (liveMode) "live" else "vod"}",
         )
-        X4KTitan.play(v, if (liveMode) "live" else "vod", curCode, curTitle, if (liveMode) curMedias else activeMedias())
+        startSpecs(v, if (liveMode) curMedias else activeMedias())
         scheduleImageEnhancement()
     }
 
@@ -2176,7 +2198,7 @@ class X4KPlayerAty : ComponentActivity() {
         startedAtMs = System.currentTimeMillis()
         handler.postDelayed({
             if (isFinishing || isDestroyed || firstFrame) return@postDelayed
-            val ok = X4KTitan.play(v, if (liveMode) "live" else "vod", curCode, curTitle, if (liveMode) curMedias else activeMedias())
+            val ok = startSpecs(v, if (liveMode) curMedias else activeMedias())
             Log.i(TAG, "re-arranque interno #$softRestarts ok=$ok")
             if (ok) scheduleImageEnhancement()
         }, 700L)
@@ -2217,6 +2239,271 @@ class X4KPlayerAty : ComponentActivity() {
         return if (from == 0) curMedias else curMedias.subList(from, curMedias.size)
     }
 
+    /** La pista externa que agreg? [X4KApi.withExternal4k]; el motor la abre como URL directa. */
+    private fun isExternal4k(spec: X4KTitan.MediaSpec): Boolean = spec.name == "4K Vision+"
+
+    /**
+     * Arranca una lista de pistas en el mismo motor: si la primera es el 4K externo, usa la
+     * ruta de URL directa (modo live del motor) sin cambiar la interfaz VOD de la Activity.
+     */
+    private fun startSpecs(
+        v: View,
+        specs: List<X4KTitan.MediaSpec>,
+        code: String = curCode,
+        title: String = curTitle,
+    ): Boolean {
+        val external = specs.firstOrNull { isExternal4k(it) }
+        return if (external != null && !liveMode) {
+            startExternal(external)
+        } else {
+            stopExternal()
+            X4KTitan.play(v, if (liveMode) "live" else "vod", code, title, specs)
+        }
+    }
+
+    /** Crea/reutiliza la vista y el reproductor ExoPlayer para el 4K externo. */
+    private fun startExternal(spec: X4KTitan.MediaSpec): Boolean {
+        val root = contentRoot ?: return false
+        val url = spec.license
+        if (url.isBlank()) return false
+        handler.removeCallbacks(fourKPoller)
+        if (url != externalCurrentUrl) {
+            externalCurrentUrl = url
+            externalUserAudio = false
+            externalUserSubs = false
+            externalSubsAuto = false
+            externalCurAudioLabel = ""
+        }
+        runCatching { playerView?.let { X4KTitan.stop(it) } }
+        externalActive = true
+        externalEnded = false
+        playerView?.visibility = View.GONE
+        val view = externalView ?: androidx.media3.ui.PlayerView(this).apply {
+            useController = false
+            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+            setBackgroundColor(Color.BLACK)
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER,
+            )
+            root.addView(this, 0, layoutParams)
+        }.also { externalView = it }
+        view.visibility = View.VISIBLE
+        val player = externalPlayer ?: androidx.media3.exoplayer.ExoPlayer.Builder(this).build().also { created ->
+            externalPlayer = created
+            view.player = created
+            created.addListener(object : androidx.media3.common.Player.Listener {
+                override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                    if (!externalActive) return
+                    autoSelectSpanishAudioAndSubs(created)
+                    applyOptionPillVisibility()
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (externalActive && playbackState == androidx.media3.common.Player.STATE_ENDED && !externalEnded) {
+                        externalEnded = true
+                        runOnUiThread { onEpisodeEnded() }
+                    }
+                }
+
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    if (!externalActive) return
+                    runOnUiThread {
+                        if (!tryNextMedia("4k-error")) showError("4k-error")
+                    }
+                }
+            })
+        }
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setPreferredAudioLanguages("es", "spa", "en", "eng")
+            .build()
+        player.setMediaItem(androidx.media3.common.MediaItem.fromUri(url))
+        player.prepare()
+        player.playWhenReady = true
+        firstFrame = false
+        errorShown = false
+        errorOverlay?.visibility = View.GONE
+        loadingOverlay?.visibility = View.VISIBLE
+        loadingOverlay?.alpha = 1f
+        loadingFading = false
+        startedAtMs = System.currentTimeMillis()
+        if (resumeMs > 0L && !resumeApplied) {
+            val at = resumeMs
+            resumeApplied = true
+            resumeAsked = true
+            resumeMs = 0L
+            player.seekTo(at)
+        }
+        if (!pollerAlive) {
+            pollerAlive = true
+            handler.post(poller)
+        }
+        applyOptionPillVisibility()
+        Log.i(TAG, "4K externo en reproductor nativo: ${spec.quality} ${url.take(60)}")
+        return true
+    }
+
+    private fun stopExternal() {
+        externalActive = false
+        externalEnded = false
+        runCatching { externalPlayer?.pause() }
+        runCatching { externalPlayer?.stop() }
+        externalView?.visibility = View.GONE
+        playerView?.visibility = View.VISIBLE
+        if (!liveMode) handler.postDelayed(fourKPoller, 500L)
+    }
+
+    private fun isSpanishExternal(raw: String): Boolean {
+        val value = raw.trim().lowercase()
+        if (value == "es" || value == "spa" || value.startsWith("es-") || value.startsWith("es_")) return true
+        val plain = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+            .replace(Regex("""\p{M}+"""), "")
+        return plain.contains("espanol") || plain.contains("latino") || plain.contains("spanish")
+    }
+
+    /** Audio espa?ol si existe; si el 4K no lo trae, subt?tulos en espa?ol. */
+    private fun autoSelectSpanishAudioAndSubs(player: androidx.media3.exoplayer.ExoPlayer) {
+        if (externalUserSubs) return
+        val groups = player.currentTracks.groups
+        var audioLang = ""
+        for (group in groups) {
+            if (group.type != androidx.media3.common.C.TRACK_TYPE_AUDIO) continue
+            for (i in 0 until group.length) {
+                if (group.isSelected && group.isTrackSelected(i)) {
+                    audioLang = group.getTrackFormat(i).language.orEmpty()
+                }
+            }
+        }
+        if (isSpanishExternal(audioLang)) {
+            if (externalSubsAuto) {
+                val builder = player.trackSelectionParameters.buildUpon()
+                builder.clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
+                builder.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                player.trackSelectionParameters = builder.build()
+                externalSubsAuto = false
+                subsBtn?.text = "Subt?tulos"
+            }
+            return
+        }
+        if (externalSubsAuto) return
+        for (group in groups) {
+            if (group.type != androidx.media3.common.C.TRACK_TYPE_TEXT) continue
+            for (i in 0 until group.length) {
+                if (!group.isTrackSupported(i)) continue
+                val format = group.getTrackFormat(i)
+                if (!isSpanishExternal(format.language.orEmpty()) &&
+                    !isSpanishExternal(format.label.orEmpty())
+                ) continue
+                val builder = player.trackSelectionParameters.buildUpon()
+                builder.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                builder.setOverrideForType(
+                    androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, i),
+                )
+                player.trackSelectionParameters = builder.build()
+                externalSubsAuto = true
+                subsBtn?.text = "Subt?tulos"
+                return
+            }
+        }
+    }
+
+    private fun playerPosMs(): Long =
+        if (externalActive) externalPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        else runCatching { X4KTitan.positionMs() }.getOrDefault(0L).coerceAtLeast(0L)
+
+    private fun playerDurMs(v: View): Long =
+        if (externalActive) externalPlayer?.duration?.takeIf { it > 0L } ?: 0L
+        else runCatching { X4KTitan.durationMs(v) }.getOrDefault(0L)
+
+    private fun playerIsPlaying(v: View): Boolean =
+        if (externalActive) externalPlayer?.isPlaying == true else X4KTitan.isPlaying(v)
+
+    private fun playerSeekTo(ms: Long) {
+        if (externalActive) {
+            externalPlayer?.seekTo(ms)
+        } else {
+            playerView?.let { X4KTitan.seekTo(it, ms) }
+        }
+    }
+
+    private fun fourKOnlyOriginal(): Boolean {
+        val spec = curMedias.firstOrNull { isExternal4k(it) } ?: return false
+        val audio = spec.audio.trim().lowercase()
+        return audio.isBlank() || audio == "original" || audio == "ingles" ||
+            audio == "ingl?s" || audio == "english" || audio == "en"
+    }
+
+    private fun fourKAvailableBackground(): GradientDrawable = GradientDrawable(
+        GradientDrawable.Orientation.TL_BR,
+        intArrayOf(0xFF4C9BFF.toInt(), 0xFF2D7DF6.toInt(), 0xFF1E5BD6.toInt()),
+    ).apply { cornerRadius = dp(22).toFloat() }
+
+    /** La p?ldora de calidad es el badge: azul Vision+ y ?4K disponible? cuando toca. */
+    private fun refreshQualityPill() {
+        val q = qualityBtn ?: return
+        if (liveMode) {
+            q.visibility = View.GONE
+            return
+        }
+        val fourK = curMedias.firstOrNull { isExternal4k(it) }
+        if (fourK != null && !externalActive) {
+            q.text = if (fourKOnlyOriginal()) "4K disponible \u00b7 original" else "4K disponible"
+            q.background = fourKAvailableBackground()
+            q.visibility = View.VISIBLE
+            return
+        }
+        q.text = formatQualityShort(curQuality)
+        q.background = pillBackground()
+        val qualities = distinctQualityChoices(curMedias, { it.quality }, { it.name }).size
+        q.visibility = if (shouldShowQualityPicker(qualities)) View.VISIBLE else View.GONE
+    }
+
+    private fun maybeNotify4k() {
+        if (fourKNotified) return
+        if (curMedias.none { isExternal4k(it) }) return
+        val current = curMedias.getOrNull(mediaCursor.coerceIn(0, curMedias.lastIndex))
+        if (current != null && isExternal4k(current)) return
+        fourKNotified = true
+        Toast.makeText(
+            this,
+            if (fourKOnlyOriginal()) "4K disponible en idioma original" else "4K disponible",
+            Toast.LENGTH_LONG,
+        ).show()
+    }
+
+    /** Mientras el 1080p ya corre, busca el 4K que dej? el resolvedor en segundo plano. */
+    private val fourKPoller = object : Runnable {
+        override fun run() {
+            if (!isPlayerActive || liveMode || externalActive) return
+            if (curSeries.isNotBlank() || epIds.size > 1 || curKind == "series") return
+            if (curMedias.any { isExternal4k(it) }) {
+                refreshQualityPill()
+                return
+            }
+            val source = runCatching {
+                com.chronosbvrx.visionplus.data.external.External4KStore
+                    .fresh(this@X4KPlayerAty, "xtv:$curCode")
+                    .firstOrNull { it.height >= 2000 }
+            }.getOrNull()
+            if (source != null) {
+                val spec = X4KTitan.MediaSpec(
+                    name = "4K Vision+",
+                    license = source.url,
+                    audio = source.language,
+                    quality = "2160p",
+                )
+                if (curMedias.none { isExternal4k(it) }) {
+                    curMedias.add(spec)
+                    refreshQualityPill()
+                    maybeNotify4k()
+                }
+                return
+            }
+            handler.postDelayed(this, 4_000L)
+        }
+    }
+
     private fun tryNextMedia(reason: String): Boolean {
         if (liveMode || isFinishing || isDestroyed) return false
         if (autoDowngrades >= MAX_AUTO_DOWNGRADES) return false
@@ -2229,7 +2516,7 @@ class X4KPlayerAty : ComponentActivity() {
         autoDowngrades++
         currentMediaName = next.name
         curQuality = next.quality
-        qualityBtn?.text = formatQualityShort(curQuality)
+        refreshQualityPill()
         applyOptionPillVisibility()
         val sameTier = X4KApi.qualityRank(next.quality) == X4KApi.qualityRank(previous?.quality.orEmpty())
         Toast.makeText(
@@ -2256,7 +2543,7 @@ class X4KPlayerAty : ComponentActivity() {
         playRequestedAtMs = startedAtMs
         runCatching { X4KTitan.stop(v) }
         val rest = ArrayList(activeMedias())
-        val started = runCatching { X4KTitan.play(v, "vod", curCode, curTitle, rest) }.getOrDefault(false)
+        val started = runCatching { startSpecs(v, rest) }.getOrDefault(false)
         // Un solo poller: el que ya estaba armado no debe duplicarse con el nuevo play.
         if (!pollerAlive) {
             pollerAlive = true
@@ -2571,7 +2858,7 @@ class X4KPlayerAty : ComponentActivity() {
                     // motor (antes un toque mandaba el video al segundo 0).
                     if (total > 0 && sb != null) {
                         val targetMs = (sb.progress.toLong() * total) / 1000L
-                        playerView?.let { com.chronosbvrx.visionplus.data.xuper.X4KTitan.seekTo(it, targetMs) }
+                        playerSeekTo(targetMs)
                         holdSeekBarAt(targetMs)
                         noteAppSeek()
                     }
@@ -3118,6 +3405,20 @@ class X4KPlayerAty : ComponentActivity() {
      */
     private fun applyOptionPillVisibility() {
         if (playerView == null) return
+        if (externalActive) {
+            imageBtn?.visibility = View.GONE
+            audioBtn?.visibility = View.VISIBLE
+            subsBtn?.visibility = View.VISIBLE
+            val player = externalPlayer
+            val audio = externalCurAudioLabel.ifBlank {
+                player?.let { externalCurrentAudioLabel(it) }.orEmpty()
+            }
+            audioBtn?.text = "Idioma: " + audio.ifBlank { "Original" }
+            subsBtn?.text = "Subt?tulos"
+            refreshQualityPill()
+            rewireOptionPillFocus()
+            return
+        }
         imageBtn?.visibility = View.VISIBLE
         if (liveMode) {
             audioBtn?.visibility = View.GONE
@@ -3141,8 +3442,7 @@ class X4KPlayerAty : ComponentActivity() {
         if (!hasSubtitleChoices) {
             subsBtn?.text = if (subsLoaded) "Sin subtítulos" else "Subtítulos"
         }
-        val qualities = distinctQualityChoices(curMedias, { it.quality }, { it.name }).size
-        qualityBtn?.visibility = if (shouldShowQualityPicker(qualities)) View.VISIBLE else View.GONE
+        refreshQualityPill()
         // Si el foco estaba en una píldora que acaba de ocultarse (p. ej. la lista de
         // subtítulos llegó vacía con los controles abiertos), vuelve al play/pausa.
         val focused = currentFocus
@@ -3264,7 +3564,123 @@ class X4KPlayerAty : ComponentActivity() {
     )
 
     /** Audio: pistas del motor o idiomas declarados por el portal (el motor sí sabe elegirlas). */
+    private fun externalTrackLabel(format: androidx.media3.common.Format, ordinal: Int): String {
+        val label = format.label?.trim().orEmpty()
+        if (label.isNotBlank()) return label
+        val lang = format.language?.trim().orEmpty()
+        if (lang.isNotBlank()) return languageLabel(lang, "Pista ${ordinal + 1}")
+        return "Pista ${ordinal + 1}"
+    }
+
+    private fun externalHasSelectedText(player: androidx.media3.exoplayer.ExoPlayer): Boolean {
+        for (group in player.currentTracks.groups) {
+            if (group.type != androidx.media3.common.C.TRACK_TYPE_TEXT) continue
+            for (i in 0 until group.length) {
+                if (group.isSelected && group.isTrackSelected(i)) return true
+            }
+        }
+        return false
+    }
+
+    private fun externalCurrentAudioLabel(player: androidx.media3.exoplayer.ExoPlayer): String {
+        var ordinal = 0
+        for (group in player.currentTracks.groups) {
+            if (group.type != androidx.media3.common.C.TRACK_TYPE_AUDIO) continue
+            for (i in 0 until group.length) {
+                if (!group.isTrackSupported(i)) continue
+                if (group.isSelected && group.isTrackSelected(i)) {
+                    return externalTrackLabel(group.getTrackFormat(i), ordinal)
+                }
+                ordinal++
+            }
+        }
+        return ""
+    }
+
+    /** Audio del 4K: pistas reales de ExoPlayer, con selecci?n manual. */
+    private fun externalAudioOptions(options: MutableList<PickerOption>) {
+        val player = externalPlayer ?: return
+        var ordinal = 0
+        var added = false
+        for (group in player.currentTracks.groups) {
+            if (group.type != androidx.media3.common.C.TRACK_TYPE_AUDIO) continue
+            for (i in 0 until group.length) {
+                if (!group.isTrackSupported(i)) continue
+                val format = group.getTrackFormat(i)
+                val label = externalTrackLabel(format, ordinal++)
+                val selected = group.isSelected && group.isTrackSelected(i)
+                added = true
+                options += PickerOption(label, R.drawable.ic_vp_volume_up, selected) {
+                    val builder = player.trackSelectionParameters.buildUpon()
+                    builder.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, false)
+                    builder.setOverrideForType(
+                        androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, i),
+                    )
+                    player.trackSelectionParameters = builder.build()
+                    externalUserAudio = true
+                    externalCurAudioLabel = label
+                    audioBtn?.text = "Idioma: $label"
+                    if (isSpanishExternal(format.language.orEmpty()) && externalSubsAuto && !externalUserSubs) {
+                        val text = player.trackSelectionParameters.buildUpon()
+                        text.clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
+                        text.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                        player.trackSelectionParameters = text.build()
+                        externalSubsAuto = false
+                        subsBtn?.text = "Subt?tulos"
+                    }
+                }
+            }
+        }
+        if (!added) options += PickerOption("Sin audio alternativo", R.drawable.ic_vp_info) {}
+    }
+
+    /** Subt?tulos del 4K: pistas reales del archivo, con ?Desactivados?. */
+    private fun externalSubtitleOptions(options: MutableList<PickerOption>) {
+        val player = externalPlayer ?: return
+        options += PickerOption(
+            "Desactivados",
+            R.drawable.ic_vp_close,
+            selected = !externalHasSelectedText(player),
+        ) {
+            val builder = player.trackSelectionParameters.buildUpon()
+            builder.clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
+            builder.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+            player.trackSelectionParameters = builder.build()
+            externalUserSubs = true
+            externalSubsAuto = false
+            subsBtn?.text = "Subt?tulos"
+        }
+        var ordinal = 0
+        var added = false
+        for (group in player.currentTracks.groups) {
+            if (group.type != androidx.media3.common.C.TRACK_TYPE_TEXT) continue
+            for (i in 0 until group.length) {
+                if (!group.isTrackSupported(i)) continue
+                val format = group.getTrackFormat(i)
+                val label = externalTrackLabel(format, ordinal++)
+                val selected = group.isSelected && group.isTrackSelected(i)
+                added = true
+                options += PickerOption(label, R.drawable.ic_vp_subtitles, selected) {
+                    val builder = player.trackSelectionParameters.buildUpon()
+                    builder.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                    builder.setOverrideForType(
+                        androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, i),
+                    )
+                    player.trackSelectionParameters = builder.build()
+                    externalUserSubs = true
+                    externalSubsAuto = false
+                    subsBtn?.text = "Subt?tulos"
+                }
+            }
+        }
+        if (!added) options += PickerOption("Sin subt?tulos disponibles", R.drawable.ic_vp_info) {}
+    }
+
     private fun audioOptions(options: MutableList<PickerOption>) {
+        if (externalActive) {
+            externalAudioOptions(options)
+            return
+        }
         val v = playerView ?: return
         val engineTracks = X4KTitan.tracks().filter { it.first == "audio" }
         if (engineTracks.size > 1) {
@@ -3306,6 +3722,10 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** Subtítulos: la lista del servicio del proveedor para ESTE programa, con «Desactivados». */
     private fun subtitleOptions(options: MutableList<PickerOption>) {
+        if (externalActive) {
+            externalSubtitleOptions(options)
+            return
+        }
         val settings = com.chronosbvrx.visionplus.ui.settings.VisionSettings
         val langs = orderSubsForPicker(distinctLanguages(subsEntries), subsCurrent?.langKey.orEmpty())
         options += PickerOption(
@@ -3787,7 +4207,7 @@ class X4KPlayerAty : ComponentActivity() {
                     val isCurrent = (spec.name == currentMediaName) ||
                         (spec.quality == curQuality && currentMediaName.isBlank())
                     MenuTile(
-                        label = formatQualityShort(spec.quality),
+                        label = formatQualityShort(spec.quality) + if (isExternal4k(spec) && fourKOnlyOriginal()) " \u00b7 original" else "",
                         iconRes = R.drawable.ic_vp_quality,
                         selected = isCurrent,
                     ) {
@@ -3809,14 +4229,38 @@ class X4KPlayerAty : ComponentActivity() {
 
     private fun switchQuality(target: X4KTitan.MediaSpec) {
         val v = playerView ?: return
-        val curPos = X4KTitan.positionMs().coerceAtLeast(0L)
+        val curPos = playerPosMs()
         // El usuario eligió esta pista: la cadena de respaldo continúa desde aquí.
         mediaCursor = curMedias.indexOfFirst { it.name == target.name }.coerceAtLeast(0)
         autoDowngrades = 0
         currentMediaName = target.name
         curQuality = target.quality
-        qualityBtn?.text = formatQualityShort(target.quality)
+        refreshQualityPill()
         Toast.makeText(this, "Cambiando a ${formatQualityShort(target.quality)}…", Toast.LENGTH_SHORT).show()
+
+        if (isExternal4k(target)) {
+            runCatching { X4KTitan.stop(v) }
+            val started = startSpecs(v, listOf(target))
+            if (!pollerAlive) {
+                pollerAlive = true
+                handler.post(poller)
+            }
+            if (started) {
+                scheduleImageEnhancement()
+                noteAppSeek()
+                if (curPos > 0L) {
+                    handler.postDelayed({ playerSeekTo(curPos) }, 350L)
+                }
+            } else {
+                handler.postDelayed({ tryNextMedia("4k-no-arranca") }, 700L)
+            }
+            return
+        }
+
+        if (curMedias.any { isExternal4k(it) }) {
+            fourKNotified = false
+            maybeNotify4k()
+        }
 
         // 1. Intento directo con el método nativo ed.e.setMedia(mediaCode)
         val switched = X4KTitan.setMedia(v, target.name)
@@ -3825,11 +4269,11 @@ class X4KPlayerAty : ComponentActivity() {
             // 2. Fallback sin fricción: reiniciar desde la pista elegida y buscar la posición.
             // No se reordena la lista: el resto de la cadena conserva el respaldo por calidad.
             val rest = ArrayList(curMedias.subList(mediaCursor, curMedias.size))
-            X4KTitan.play(v, "vod", curCode, curTitle, rest)
+            startSpecs(v, rest)
             scheduleImageEnhancement()
             noteAppSeek()
             if (curPos > 0L) {
-                handler.postDelayed({ playerView?.let { X4KTitan.seekTo(it, curPos) } }, 250L)
+                handler.postDelayed({ playerSeekTo(curPos) }, 250L)
             }
         }
     }
@@ -5056,14 +5500,14 @@ class X4KPlayerAty : ComponentActivity() {
                 curMedias = ArrayList(medias)
                 mediaCursor = 0
                 autoDowngrades = 0
-                var played = medias.isNotEmpty() && X4KTitan.play(v, "vod", code, title, medias)
+                var played = medias.isNotEmpty() && startSpecs(v, medias, code, title)
                 if (played) scheduleImageEnhancement()
                 if (!played) {
                     // Segundo intento si el primer cuadro falló
                     medias = chainFor(prep.mediasJson)
                     curMedias = ArrayList(medias)
                     mediaCursor = 0
-                    played = medias.isNotEmpty() && X4KTitan.play(v, "vod", code, title, medias)
+                    played = medias.isNotEmpty() && startSpecs(v, medias, code, title)
                     if (played) scheduleImageEnhancement()
                 }
                 if (!played && !tryNextMedia("motor-no-arranca")) {
@@ -5074,7 +5518,7 @@ class X4KPlayerAty : ComponentActivity() {
                 val chosenMedia = curMedias.getOrNull(mediaCursor)
                 currentMediaName = chosenMedia?.name.orEmpty()
                 curQuality = chosenMedia?.quality.orEmpty()
-                qualityBtn?.text = formatQualityShort(curQuality)
+                refreshQualityPill()
                 declaredLanguages = chosenMedia?.audio.orEmpty()
                     .split(',').map { it.trim() }.filter { it.isNotBlank() }
                 val firstLanguage = declaredLanguages.firstOrNull { isLanguageValue(it) }
@@ -5137,7 +5581,7 @@ class X4KPlayerAty : ComponentActivity() {
         val key = curCode
         if (key.isBlank()) return
         val total = if (declaredDurationMs > 0) declaredDurationMs else durationMs
-        val rawPos = X4KTitan.positionMs().coerceAtLeast(0L)
+        val rawPos = playerPosMs()
         // Al llegar a los créditos/terminar no siempre el motor reporta el último ms:
         // se guarda como terminado con la duración conocida para que «Historial» lo
         // muestre como Visto, en vez de borrar el recuerdo. El marcador de créditos manda:
@@ -5224,6 +5668,7 @@ class X4KPlayerAty : ComponentActivity() {
         publishRemoteState(force = true)
         updatePipParams()
         if (liveMode) return
+        maybeNotify4k()
         // El motor ya expone sus pistas reales: la píldora de audio se queda solo si hay
         // más de una (y los subtítulos, si el servicio los dio).
         applyOptionPillVisibility()
@@ -5233,7 +5678,7 @@ class X4KPlayerAty : ComponentActivity() {
             resumeApplied = true
             resumeAsked = true
             resumeMs = 0
-            playerView?.let { X4KTitan.seekTo(it, at) }
+            playerSeekTo(at)
             noteAppSeek()
             Toast.makeText(this, "Continuando en " + formatResume(at), Toast.LENGTH_SHORT).show()
             return
@@ -5243,7 +5688,7 @@ class X4KPlayerAty : ComponentActivity() {
             resumeAsked = true
             val entry = PlaybackHistory.get(this, curCode)
             if (entry != null && shouldKeep(entry.positionMs, entry.durationMs)) {
-                playerView?.let { X4KTitan.seekTo(it, entry.positionMs) }
+                playerSeekTo(entry.positionMs)
                 noteAppSeek()
                 Toast.makeText(this, "Continuando en " + formatResume(entry.positionMs), Toast.LENGTH_SHORT).show()
             }
@@ -5264,7 +5709,7 @@ class X4KPlayerAty : ComponentActivity() {
                 if (com.chronosbvrx.visionplus.ui.settings.VisionSettings.autoResume) {
                     resumeMs = entry.positionMs
                     resumeApplied = true
-                    playerView?.let { X4KTitan.seekTo(it, entry.positionMs) }
+                    playerSeekTo(entry.positionMs)
                     noteAppSeek()
                     Toast.makeText(this, "Continuando en " + formatResume(entry.positionMs), Toast.LENGTH_SHORT).show()
                 } else {
@@ -5372,20 +5817,16 @@ class X4KPlayerAty : ComponentActivity() {
     private fun acceptResume() {
         val entry = pendingResumeEntry
         hideResumeDialog()
-        playerView?.let {
-            if (entry != null) X4KTitan.seekTo(it, entry.positionMs)
-            X4KTitan.resume(it)
-        }
+        playerSeekTo(entry?.positionMs ?: 0L)
+        if (externalActive) externalPlayer?.play() else playerView?.let { X4KTitan.resume(it) }
         noteAppSeek()
         scheduleHide()
     }
 
     private fun restartResume() {
         hideResumeDialog()
-        playerView?.let {
-            X4KTitan.seekTo(it, 0)
-            X4KTitan.resume(it)
-        }
+        playerSeekTo(0L)
+        if (externalActive) externalPlayer?.play() else playerView?.let { X4KTitan.resume(it) }
         noteAppSeek()
         scheduleHide()
     }
@@ -6505,11 +6946,11 @@ class X4KPlayerAty : ComponentActivity() {
 
     private fun togglePlay() {
         val v = playerView ?: return
-        if (X4KTitan.isPlaying(v)) {
-            X4KTitan.pause(v)
+        if (playerIsPlaying(v)) {
+            if (externalActive) externalPlayer?.pause() else X4KTitan.pause(v)
             saveHistory()
         } else {
-            X4KTitan.resume(v)
+            if (externalActive) externalPlayer?.play() else X4KTitan.resume(v)
         }
         handler.postDelayed({
             refreshPlayIcon()
@@ -6520,7 +6961,7 @@ class X4KPlayerAty : ComponentActivity() {
     }
 
     private fun refreshPlayIcon() {
-        val playing = playerView?.let { X4KTitan.isPlaying(it) } ?: false
+        val playing = playerView?.let { playerIsPlaying(it) } ?: false
         renderPlayIcon(playing)
     }
 
@@ -6562,6 +7003,47 @@ class X4KPlayerAty : ComponentActivity() {
             // ve. El próximo play lo vuelve a lanzar desde cero.
             if (!isPlayerActive) {
                 pollerAlive = false
+                return
+            }
+            if (externalActive) {
+                val p = externalPlayer
+                if (p == null) {
+                    pollerAlive = false
+                    return
+                }
+                if (!firstFrame && !externalEnded &&
+                    System.currentTimeMillis() - startedAtMs > 15_000L
+                ) {
+                    externalEnded = true
+                    stopExternal()
+                    if (!tryNextMedia("4k-sin-cuadro")) showError("4k-sin-cuadro")
+                    return
+                }
+                val pos = p.currentPosition.coerceAtLeast(0L)
+                val dur = p.duration.takeIf { it > 0L } ?: declaredDurationMs
+                val total = resolveStableTotalDuration(declaredDurationMs, dur, pos, false)
+                if (p.playbackState == androidx.media3.common.Player.STATE_READY && !firstFrame) {
+                    firstFrame = true
+                    errorShown = false
+                    errorOverlay?.visibility = View.GONE
+                    loadingFading = true
+                    loadingOverlay?.animate()?.alpha(0f)?.setDuration(300L)
+                        ?.withEndAction {
+                            loadingOverlay?.visibility = View.GONE
+                            loadingOverlay?.alpha = 1f
+                            loadingFading = false
+                        }?.start()
+                    if (controlsVisible) scheduleHide()
+                    onFirstFrame()
+                }
+                if (!scrubbing && !seekBarHoldActive(pos) && total > 0L) {
+                    val target = ((pos * 1000) / total).toInt().coerceIn(0, 1000)
+                    if (seekBar?.progress != target) seekBar?.progress = target
+                }
+                if (!scrubbing) timeNow?.text = fmt(pos)
+                timeTotal?.text = if (total > 0L) fmt(total) else "--:--"
+                refreshPlayIcon(p.isPlaying)
+                handler.postDelayed(this, 250L)
                 return
             }
             val v = playerView
@@ -6726,7 +7208,7 @@ class X4KPlayerAty : ComponentActivity() {
         val currentPos = X4KTitan.positionMs().coerceAtLeast(0L)
         val total = resolveStableTotalDuration(declaredDurationMs, durationMs, currentPos, liveMode)
         val targetPos = if (total > 0) (currentPos + deltaMs).coerceIn(0L, total) else (currentPos + deltaMs).coerceAtLeast(0L)
-        X4KTitan.seekTo(v, targetPos)
+        playerSeekTo(targetPos)
         holdSeekBarAt(targetPos)
         noteAppSeek()
         scheduleHide()
@@ -7220,6 +7702,9 @@ class X4KPlayerAty : ComponentActivity() {
         // Con commit: el proceso se mata al salir y el apply podría no alcanzar a escribir.
         saveHistory(immediate = true)
         handler.removeCallbacksAndMessages(null)
+        runCatching { externalPlayer?.release() }
+        externalPlayer = null
+        externalView = null
         playerView?.let { X4KTitan.stop(it) }
         super.onDestroy()
         // The engine refuses a second, different program inside one process (the provider's app

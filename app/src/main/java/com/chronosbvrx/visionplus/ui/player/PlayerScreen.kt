@@ -72,6 +72,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -210,10 +211,25 @@ fun PlayerScreen(
     onExternalFatal: (() -> Unit)? = null,
     /** Evita reentrar a la fuente externa tras un fallback. */
     skipExternal: Boolean = false,
+    /** Calidades externas (4K + respaldos HLS) para el selector del reproductor. */
+    externalQualities: List<com.chronosbvrx.visionplus.data.external.FourKSource> = emptyList(),
+    currentQualityUrl: String = "",
+    onPickQuality: ((com.chronosbvrx.visionplus.data.external.FourKSource, Long) -> Unit)? = null,
+    onUseNativeQuality: ((Long) -> Unit)? = null,
 ) {
     // Al abrir una película alimenta las recomendaciones del inicio.
     val libraryContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(film.id) { com.chronosbvrx.visionplus.data.UserLibrary.recordPlay(libraryContext, film) }
+    // El 4K sigue resolvi?ndose en segundo plano aunque el Play ya haya abierto el
+    // 1080p: el reproductor nativo consulta el cach? y muestra el badge cuando llega.
+    LaunchedEffect(film.id) {
+        if (film.videoUrl.startsWith("xtv:") &&
+            (film.kind.isBlank() || film.kind == "movie") &&
+            !com.chronosbvrx.visionplus.data.external.External4KRepository.hasFresh(libraryContext, film.id)
+        ) {
+            com.chronosbvrx.visionplus.data.external.External4KWorker.refreshSoon(libraryContext, film)
+        }
+    }
     // A portal film (`magisvod:<contentId>`): en Vision+, el catálogo masnew reproduce a través
     // del motor nativo XTV (X4K Titan en proceso :x4k). Normalizamos directamente a `xtv:<contentId>`.
     if (film.videoUrl.startsWith("magisvod:")) {
@@ -280,10 +296,8 @@ fun PlayerScreen(
             null
         }
     }
-    if (external4k != null) {
-        External4KPlayback(film, external4k, isTv, onBack, resumeMs)
-        return
-    }
+    // La fuente 4K viaja al reproductor nativo como una calidad m?s: la pista 4K usa
+    // la ruta de URL directa del motor y el resto sigue siendo el VOD del portal.
     if (film.videoUrl.startsWith("xtv:") || film.videoUrl.startsWith("xtvlive:") || xtvEpisode) {
         // El motor nativo solo puede con una cosa a la vez y la descarga lo ocupa entero:
         // con una descarga activa se ofrece pausarla antes de abrir (nunca se cruzan).
@@ -323,6 +337,8 @@ fun PlayerScreen(
                         synopsis = film.synopsis, cast = film.cast, countries = film.countries,
                         genres = launchGenres, kind = film.kind,
                         originalLanguage = film.originalLanguage,
+                        external4kUrl = external4k?.url.orEmpty(),
+                        external4kLanguage = external4k?.language.orEmpty(),
                     )
                     else com.chronosbvrx.visionplus.data.xuper.X4KApi.playVod(
                         context, code, film.title, resumeMs = resumeMs, posterUrl = film.posterUrl,
@@ -330,6 +346,8 @@ fun PlayerScreen(
                         synopsis = film.synopsis, cast = film.cast, countries = film.countries,
                         genres = launchGenres, kind = film.kind,
                         originalLanguage = film.originalLanguage,
+                        external4kUrl = external4k?.url.orEmpty(),
+                        external4kLanguage = external4k?.language.orEmpty(),
                     )
                 },
                 onDone = onBack,
@@ -367,6 +385,10 @@ fun PlayerScreen(
         synopsis = film.synopsis,
         episodeTitle = episode?.episodeNames?.getOrNull(episode.episodeIndex),
         onExternalFatal = onExternalFatal,
+        externalQualities = externalQualities,
+        currentQualityUrl = currentQualityUrl,
+        onPickQuality = onPickQuality,
+        onUseNativeQuality = onUseNativeQuality,
     )
 }
 
@@ -374,6 +396,25 @@ fun PlayerScreen(
  * Intenta la fuente 4K externa y, si se agota, cae a Xuper en el mismo minuto.
  * El aviso es informativo: la tarjeta de error no se queda encima del fallback.
  */
+private fun qualityChoiceLabel(source: com.chronosbvrx.visionplus.data.external.FourKSource): String {
+    val quality = when {
+        source.height >= 2000 -> "4K Ultra HD"
+        source.height >= 1080 -> "1080p FHD"
+        source.height >= 720 -> "720p HD"
+        source.height >= 480 -> "480p SD"
+        else -> "Calidad externa"
+    }
+    val language = when (source.language) {
+        "Latino", "Castellano" -> source.language
+        else -> ""
+    }
+    return listOfNotNull(
+        quality,
+        source.provider.takeIf { it.isNotBlank() },
+        language.takeIf { it.isNotBlank() },
+    ).distinct().joinToString(" · ")
+}
+
 @Composable
 private fun External4KPlayback(
     film: Film,
@@ -384,30 +425,70 @@ private fun External4KPlayback(
 ) {
     val context = LocalContext.current
     var fallback by remember(film.id) { mutableStateOf(false) }
+    var current by remember(film.id) { mutableStateOf(source) }
     var resumeAt by remember(film.id) { mutableLongStateOf(resumeMs) }
+    var lower by remember(film.id) {
+        mutableStateOf<List<com.chronosbvrx.visionplus.data.external.FourKSource>>(emptyList())
+    }
+    LaunchedEffect(film.id) {
+        lower = com.chronosbvrx.visionplus.data.external.External4KRepository.lowerQualities(context, film)
+        android.widget.Toast.makeText(context, "4K ? ${source.label}", android.widget.Toast.LENGTH_SHORT).show()
+    }
+    val qualities = remember(source, current, lower) {
+        (listOf(source, current) + lower).distinctBy { it.url }.sortedByDescending { it.height }
+    }
     if (!fallback) {
-        LaunchedEffect(film.id) {
-            android.widget.Toast.makeText(context, "4K · ${source.label}", android.widget.Toast.LENGTH_SHORT).show()
+        key(current.url) {
+            PlayerScreen(
+                film = film.copy(videoUrl = current.url),
+                isTv = isTv,
+                onBack = onBack,
+                resumeMs = resumeAt,
+                externalQualities = qualities,
+                currentQualityUrl = current.url,
+                onPickQuality = { picked, position ->
+                    if (picked.url != current.url) {
+                        resumeAt = position
+                        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                            "EXTERNAL_4K_QUALITY",
+                            "id=${film.id} de=${current.height} a=${picked.height}",
+                        )
+                        current = picked
+                    }
+                },
+                onUseNativeQuality = { position ->
+                    resumeAt = position
+                    com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                        "EXTERNAL_4K_NATIVE",
+                        "id=${film.id} motivo=manual desde=${current.height}",
+                    )
+                    fallback = true
+                },
+                onExternalFatal = {
+                    val pos = com.chronosbvrx.visionplus.data.PlaybackHistory.get(context, current.url)?.positionMs
+                        ?: com.chronosbvrx.visionplus.data.PlaybackHistory.get(context, film.id)?.positionMs
+                        ?: resumeAt
+                    val next = qualities.firstOrNull { it.height in 1 until current.height }
+                    resumeAt = pos
+                    if (next != null) {
+                        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                            "EXTERNAL_4K_FALLBACK",
+                            "id=${film.id} de=${current.height} a=${next.height}",
+                        )
+                        current = next
+                    } else {
+                        com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
+                            "EXTERNAL_4K_FALLBACK",
+                            "id=${film.id} a=nativa proveedor=${current.provider}",
+                        )
+                        fallback = true
+                    }
+                },
+            )
         }
-        PlayerScreen(
-            film = film.copy(videoUrl = source.url),
-            isTv = isTv,
-            onBack = onBack,
-            resumeMs = resumeMs,
-            onExternalFatal = {
-                resumeAt = com.chronosbvrx.visionplus.data.PlaybackHistory.get(context, source.url)?.positionMs
-                    ?: com.chronosbvrx.visionplus.data.PlaybackHistory.get(context, film.id)?.positionMs
-                    ?: resumeAt
-                com.chronosbvrx.visionplus.data.diag.Diagnostics.anomaly(
-                    "EXTERNAL_4K_FALLBACK",
-                    "id=${film.id} proveedor=${source.provider} lan=${source.lan}",
-                )
-                fallback = true
-            },
-        )
     } else {
         LaunchedEffect(Unit) {
-            android.widget.Toast.makeText(context, "Máxima calidad nativa", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, "Calidad nativa", android.widget.Toast.LENGTH_SHORT).show()
         }
         PlayerScreen(
             film = film,
@@ -608,6 +689,10 @@ private fun PlayerCore(
     episodeTitle: String? = null,
     /** Fuente externa agotada: la ficha toma el control para caer a Xuper. */
     onExternalFatal: (() -> Unit)? = null,
+    externalQualities: List<com.chronosbvrx.visionplus.data.external.FourKSource> = emptyList(),
+    currentQualityUrl: String = "",
+    onPickQuality: ((com.chronosbvrx.visionplus.data.external.FourKSource, Long) -> Unit)? = null,
+    onUseNativeQuality: ((Long) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -752,10 +837,25 @@ private fun PlayerCore(
     val controls = rememberControlsState()
     AutoHideEffect(controls, playing)
     val menu = rememberPlayerMenuState()
+    LaunchedEffect(externalQualities, currentQualityUrl, onUseNativeQuality) {
+        menu.externalQualities = externalQualities.map { source ->
+            PlayerQualityChoice(
+                label = qualityChoiceLabel(source),
+                url = source.url,
+                height = source.height,
+                selected = source.url == currentQualityUrl,
+            )
+        }
+        menu.nativeQualityOffered = onUseNativeQuality != null
+    }
     // En VOD el botón de audio/subtítulos está siempre: si el título no trae opciones, el
     // menú lo explica. Así la barra es igual en todas las películas y series.
     val showTracksButton = !isLive && !introPlaying
     var showTracks by remember { mutableStateOf(false) }
+    // Subtítulos: si el 4K no trae audio latino, se activan los subs en español una vez.
+    // Una elección manual del usuario manda y no se vuelve a tocar.
+    var subsUserChosen by remember { mutableStateOf(false) }
+    var subsAutoSelected by remember { mutableStateOf(false) }
     var showAspect by remember { mutableStateOf(false) }
     var aspectMode by remember { mutableIntStateOf(com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultAspect) }
     var skipUsed by remember { mutableStateOf(false) }
@@ -1035,11 +1135,63 @@ private fun PlayerCore(
      * único idioma no hay sección de audio; sin pistas de texto, no hay sección de subtítulos;
      * con una sola resolución, no hay selector de calidad (ni botón que abra nada vacío).
      */
+    /** «es», «spa», «es-MX», «Español», «Latino»… */
+    fun isSpanishLanguage(raw: String): Boolean {
+        val value = raw.trim().lowercase()
+        if (value == "es" || value == "spa" || value.startsWith("es-") || value.startsWith("es_")) return true
+        val plain = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+            .replace(Regex("""\p{M}+"""), "")
+        return plain.contains("espanol") || plain.contains("latino") || plain.contains("spanish")
+    }
+
+    /**
+     * Si el 4K no trae audio en español, activa los subtítulos en español una sola vez.
+     * Al cambiar a una pista de audio española se apagan solos; una elección manual del
+     * usuario (audio o subtítulos) manda sobre esta regla.
+     */
+    fun autoSelectSpanishSubtitles(audioLang: String) {
+        if (subsUserChosen) return
+        if (audioLang.isBlank() && menu.selectedAudioKey == null) return
+        if (isSpanishLanguage(audioLang)) {
+            if (subsAutoSelected) {
+                val builder = player.trackSelectionParameters.buildUpon()
+                builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                player.trackSelectionParameters = builder.build()
+                menu.selectedSubtitleKey = null
+                subsAutoSelected = false
+            }
+            return
+        }
+        if (subsAutoSelected) return
+        val groups = player.currentTracks.groups
+        groups.forEachIndexed { groupIndex, group ->
+            if (group.type != C.TRACK_TYPE_TEXT) return@forEachIndexed
+            for (i in 0 until group.length) {
+                if (!group.isTrackSupported(i)) continue
+                val format = group.getTrackFormat(i)
+                if (!isSpanishLanguage(format.language.orEmpty()) &&
+                    !isSpanishLanguage(format.label.orEmpty())
+                ) {
+                    continue
+                }
+                val builder = player.trackSelectionParameters.buildUpon()
+                builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, i))
+                player.trackSelectionParameters = builder.build()
+                menu.selectedSubtitleKey = "$groupIndex:$i"
+                subsAutoSelected = true
+                return
+            }
+        }
+    }
+
     fun refreshTrackChoices(tracks: Tracks) {
         val audio = ArrayList<PlayerTrackChoice>()
         val subs = ArrayList<PlayerTrackChoice>()
         val heights = LinkedHashSet<Int>()
         var currentAudio: String? = null
+        var currentAudioLang = ""
         var currentSubtitle: String? = null
         tracks.groups.forEachIndexed { groupIndex, group ->
             when (group.type) {
@@ -1047,7 +1199,10 @@ private fun PlayerCore(
                     if (!group.isTrackSupported(i)) continue
                     val key = "$groupIndex:$i"
                     audio += PlayerTrackChoice(key, trackLabel(group.getTrackFormat(i), audio.size))
-                    if (group.isSelected && group.isTrackSelected(i)) currentAudio = key
+                    if (group.isSelected && group.isTrackSelected(i)) {
+                        currentAudio = key
+                        currentAudioLang = group.getTrackFormat(i).language.orEmpty()
+                    }
                 }
                 C.TRACK_TYPE_TEXT -> for (i in 0 until group.length) {
                     if (!group.isTrackSupported(i)) continue
@@ -1071,6 +1226,8 @@ private fun PlayerCore(
             else -> null
         }
         menu.selectedSubtitleKey = currentSubtitle
+        menu.selectedAudioLanguage = currentAudioLang
+        autoSelectSpanishSubtitles(currentAudioLang)
         // Si Ajustes prefiere una resolución que este título no tiene, no se deja el filtro
         // sin pista (video en negro): se cae a Auto, que es lo honesto.
         if (menu.quality != "Auto" && menu.videoHeights.none { videoQualityKey(it) == menu.quality }) {
@@ -1092,6 +1249,8 @@ private fun PlayerCore(
     }
 
     fun applySubtitleChoice(choice: PlayerTrackChoice?) {
+        subsUserChosen = true
+        subsAutoSelected = false
         val builder = player.trackSelectionParameters.buildUpon()
         if (choice == null) {
             builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
@@ -2541,6 +2700,20 @@ private fun PlayerCore(
             onPickAudio = { applyAudioChoice(it) },
             onPickSubtitle = { applySubtitleChoice(it) },
             onDismiss = { showTracks = false },
+            onPickExternalQuality = onPickQuality?.let { pick ->
+                { choice ->
+                    externalQualities.firstOrNull { it.url == choice.url }?.let { source ->
+                        pick(source, player.currentPosition)
+                    }
+                    showTracks = false
+                }
+            },
+            onUseNativeQuality = onUseNativeQuality?.let { callback ->
+                {
+                    showTracks = false
+                    callback(player.currentPosition)
+                }
+            },
         )
     }
     if (showZapList && !inPip) {

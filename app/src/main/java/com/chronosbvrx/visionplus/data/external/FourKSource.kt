@@ -7,7 +7,7 @@ package com.chronosbvrx.visionplus.data.external
  * IP privada: solo sirven si el equipo está en esa red, así que el reproductor
  * debe caer a la calidad nativa si no responden.
  */
-internal data class FourKSource(
+data class FourKSource(
     val url: String,
     val provider: String,
     val language: String,
@@ -16,6 +16,8 @@ internal data class FourKSource(
     val sizeBytes: Long = 0L,
     val checkedAt: Long = 0L,
     val expiresAt: Long = 0L,
+    /** Altura real de la pista: 2160 para 4K, 1080/720/480 para los respaldos. */
+    val height: Int = 0,
 ) {
     val label: String
         get() = when {

@@ -51,7 +51,7 @@ class LiveRenderAttachTest {
         assertTrue("el play programa la comprobación del render", player.contains("ensureRenderViewAttached(it)"))
         val helper = player.substringAfter("private fun ensureRenderViewAttached(")
             .substringBefore("private val RENDER_CHECK_MS")
-        assertTrue("re-emite el mismo play", helper.contains("X4KTitan.play(v,"))
+        assertTrue("re-emite el mismo play", helper.contains("startSpecs(v,"))
         assertTrue("solo una vez por reproducción", helper.contains("renderReattach"))
         assertTrue("se anota en diagnóstico", helper.contains("PLAYER_RENDER_REATTACH"))
         assertTrue("la decisión es la función pura", helper.contains("shouldReattachRender("))

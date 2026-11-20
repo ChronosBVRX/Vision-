@@ -32,12 +32,15 @@ internal object External4KRepository {
     private const val UA = "Vision+/Android External4K"
 
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
+    private val lowerCache = ConcurrentHashMap<String, Pair<Long, List<FourKSource>>>()
+    private const val LOWER_TTL_MS = 30 * 60 * 1000L
 
     /** Fuente fresca en caché, sin tocar la red. */
     fun fresh(context: Context, titleId: String): FourKSource? =
         External4KStore.fresh(context, titleId).firstOrNull()
 
-    fun hasFresh(context: Context, titleId: String): Boolean = fresh(context, titleId) != null
+    fun hasFresh(context: Context, titleId: String): Boolean =
+        External4KStore.fresh(context, titleId).any { it.height >= 2000 }
 
     /** Uso desde la ficha: refresca solo si la entrada venció. */
     suspend fun refreshIfStale(context: Context, film: Film): List<FourKSource> {
@@ -80,7 +83,7 @@ internal object External4KRepository {
             if (vps != null) {
                 for (candidate in External4KParser.parseStreams(vps, now, TTL_MS).take(6)) {
                     if (candidate.lan || (!candidate.isHls || isReally4k(candidate.url)) && isReachable(candidate.url)) {
-                        verified += candidate
+                        verified += candidate.verified4k()
                         if (verified.size >= 3) break
                     }
                 }
@@ -103,7 +106,7 @@ internal object External4KRepository {
                     } else {
                         (!candidate.isHls || isReally4k(candidate.url)) && isReachable(candidate.url)
                     }
-                    if (usable) verified += candidate
+                    if (usable) verified += candidate.verified4k()
                     if (verified.size >= 3) break
                 }
             }
@@ -143,17 +146,54 @@ internal object External4KRepository {
     }
 
     /**
+     * Respaldos HLS 1080p/720p/480p del addon de Kronos (audio latino). Se piden en
+     * segundo plano al abrir el 4K para que el menú de calidad tenga a dónde bajar
+     * si la carga se traba. Caché de 30 min por ficha.
+     */
+    suspend fun lowerQualities(context: Context, film: Film): List<FourKSource> = withContext(Dispatchers.IO) {
+        if (!supports(film)) return@withContext emptyList()
+        val now = System.currentTimeMillis()
+        lowerCache[film.id]?.let { (at, cached) ->
+            if (now - at < LOWER_TTL_MS) return@withContext cached
+        }
+        val imdb = External4KStore.imdb(context, film.id)
+            .takeIf { it.startsWith("tt") }
+            ?: resolveImdb(context, film)
+            ?: return@withContext emptyList()
+        val body = getText("$BASE/stream/movie/$imdb.json", timeoutMs = 10_000)
+            ?: return@withContext emptyList()
+        val qualities = External4KParser.parseHlsQualities(body, now, TTL_MS)
+            .mapNotNull { source ->
+                // La etiqueta del addon (FHD/720P) no siempre coincide con el master:
+                // se lee el manifiesto y se usa la altura REAL de sus renditiones.
+                val master = getText(source.url, 5_000) ?: return@mapNotNull null
+                val height = External4KParser.maxHeightFromMaster(master)
+                    .takeIf { it in 480..1080 } ?: source.height
+                source.copy(height = height)
+            }
+            .filter { it.height in 480..1080 }
+            .distinctBy { it.height }
+            .take(3)
+        Log.i(TAG, "respaldos ${film.id}: ${qualities.joinToString { "${it.height}p/${it.provider}" }}")
+        lowerCache[film.id] = now to qualities
+        qualities
+    }
+
+    private fun FourKSource.verified4k(): FourKSource =
+        if (height >= 2000) this else copy(height = 2160)
+
+    /**
      * Comprueba que el CDN responda. R2 a veces rechaza HEAD en URLs firmadas, así
      * que se reintenta con un GET de 1 KB (el mismo método que usará el player).
      */
-    private fun isReachable(url: String): Boolean =
-        probe(url, "HEAD") || probe(url, "GET")
+    private fun isReachable(url: String, timeoutMs: Int = 5_000): Boolean =
+        probe(url, "HEAD", timeoutMs) || probe(url, "GET", timeoutMs)
 
-    private fun probe(url: String, method: String): Boolean = runCatching {
+    private fun probe(url: String, method: String, timeoutMs: Int = 5_000): Boolean = runCatching {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = method
-            connectTimeout = 5_000
-            readTimeout = 5_000
+            connectTimeout = timeoutMs
+            readTimeout = timeoutMs
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", UA)
             if (method == "GET") setRequestProperty("Range", "bytes=0-1024")
