@@ -67,6 +67,25 @@ class External4KWiringTest {
     }
 
     @Test
+    fun theNativePlayerAlwaysStartsOnTheBestNativeQualityAndKeeps4kManual() {
+        val aty = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
+        assertTrue("el 4K se separa de la lista inicial", aty.contains("val nativeMedias = medias.filterNot { isExternal4k(it) }"))
+        assertTrue("el 4K solo se agrega al selector", aty.contains("if (external4k != null) curMedias.add(external4k)"))
+        assertTrue("el respaldo automático salta el 4K", aty.contains("while (nextIndex < curMedias.size && isExternal4k(curMedias[nextIndex]))"))
+        assertTrue("el motor nunca recibe el 4K como pista", aty.contains("specs.filterNot { isExternal4k(it) }"))
+    }
+
+    @Test
+    fun the4kUsesTheCatalogSubtitleApiAndASeparateSubtleBadge() {
+        val aty = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
+        assertTrue("hay pistas de la nube en el selector", aty.contains("\\u00b7 nube"))
+        assertTrue("el español se activa solo si el audio no es español", aty.contains("maybeAutoExternalSubs()"))
+        assertTrue("el chip 4K es aparte de la píldora de calidad", aty.contains("buildFourKBadge(root)"))
+        assertTrue("el chip es sutil (borde fino)", aty.contains("setStroke(dp(1), 0xFF4C9BFF.toInt())"))
+        assertTrue("se muestra 4K original cuando no hay español", aty.contains("4K \\u00b7 ORIGINAL"))
+    }
+
+    @Test
     fun the4kPlayerOffersLowerQualitiesInTheSamePlayer() {
         val player = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
         assertTrue(player.contains("External4KRepository.lowerQualities"))
@@ -88,6 +107,7 @@ class External4KWiringTest {
             val src = source(path)
             assertTrue("$path refresca", src.contains("External4KRepository.refreshIfStale"))
             assertTrue("$path muestra el badge", src.contains("FourKBadge("))
+            assertTrue("$path solo enciende el badge con 2160p", src.contains("fresh4k(context, film.id)"))
         }
         val badge = source("app/src/main/java/com/chronosbvrx/visionplus/ui/components/FourKBadge.kt")
         assertTrue(badge.contains("VisionBlue"))

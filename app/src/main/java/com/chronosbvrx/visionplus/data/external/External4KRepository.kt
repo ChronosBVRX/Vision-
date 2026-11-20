@@ -39,8 +39,11 @@ internal object External4KRepository {
     fun fresh(context: Context, titleId: String): FourKSource? =
         External4KStore.fresh(context, titleId).firstOrNull()
 
-    fun hasFresh(context: Context, titleId: String): Boolean =
-        External4KStore.fresh(context, titleId).any { it.height >= 2000 }
+    /** La fuente 4K real (2160p) en cach??: las calidades bajas no encienden el badge. */
+    fun fresh4k(context: Context, titleId: String): FourKSource? =
+        External4KStore.fresh(context, titleId).firstOrNull { it.height >= 2000 }
+
+    fun hasFresh(context: Context, titleId: String): Boolean = fresh4k(context, titleId) != null
 
     /** Uso desde la ficha: refresca solo si la entrada venció. */
     suspend fun refreshIfStale(context: Context, film: Film): List<FourKSource> {

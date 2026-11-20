@@ -74,7 +74,9 @@ class TvHeroWiringTest {
         val screen = source("ui/tv/TvHomeScreen.kt")
         assertFalse("el Inicio no puede desaturar el arte", screen.contains("setToSaturation"))
         assertTrue("zoom suave para no perder nitidez", screen.contains("private const val HERO_SCALE = 1.04f"))
-        assertTrue("la cortina deja ver color a la derecha", screen.contains("0.40f to VisionBlack.copy(alpha = 0.66f)"))
+        assertTrue("la cortina cubre todo el alto y deja ver color a la derecha", screen.contains("0.46f to VisionBlack.copy(alpha = 0.84f)"))
+        assertTrue("el velo termina transparente al borde derecho", screen.contains("1f to Color.Transparent"))
+        assertFalse("no queda un scrim rectangular dentro del hero", screen.contains("Scrim LOCAL"))
         val server = file("server/api/banners.py")
         assertTrue("el banner usa el máster de TMDB", server.contains("t/p/original"))
     }

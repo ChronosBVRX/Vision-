@@ -61,8 +61,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -74,6 +72,11 @@ import com.chronosbvrx.visionplus.ui.icons.homeRowIcon
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -309,32 +312,21 @@ fun TvHomeScreen(
     // flecha Abajo no encuentra ninguna tarjeta a la que saltar (la siguiente fila aún no existe)
     // y el mando se queda atorado ahí. Al enfocar una tarjeta se deja asomado un «pico» de la
     // fila siguiente: con ella compuesta, Abajo entra y el foco nunca se pierde.
-    val nextRowPeekPx = with(androidx.compose.ui.platform.LocalDensity.current) { 132.dp.toPx() }
-    suspend fun revealNextRowPeek(rowIndex: Int) {
+    val nextRowPeekPx = with(androidx.compose.ui.platform.LocalDensity.current) { 160.dp.toPx() }
+    suspend fun revealNextRowPeek(rowIndex: Int, down: Boolean) {
         if (rowIndex < 0) return
         val info = rowsListState.layoutInfo
         val item = info.visibleItemsInfo.firstOrNull { it.index == rowIndex } ?: return
-        val below = (item.offset + item.size + nextRowPeekPx) - info.viewportEndOffset
-        if (below > 2f) {
-            runCatching { rowsListState.animateScrollBy(below) }
-            return
+        if (down) {
+            val below = (item.offset + item.size + nextRowPeekPx) - info.viewportEndOffset
+            if (below > 2f) runCatching { rowsListState.animateScrollBy(below) }
+        } else {
+            val firstVisible = info.visibleItemsInfo.firstOrNull()?.index ?: 0
+            val above = info.viewportStartOffset - (item.offset - nextRowPeekPx)
+            if (above > 2f && firstVisible > 0) {
+                runCatching { rowsListState.animateScrollBy(-above) }
+            }
         }
-        // Simétrico: si la fila es la primera visible (el héroe/hubs ya no están compuestos),
-        // se deja asomar el borde de la fila anterior para que «arriba» también tenga destino.
-        val firstVisible = info.visibleItemsInfo.firstOrNull()?.index ?: 0
-        val above = info.viewportStartOffset - (item.offset - nextRowPeekPx)
-        if (above > 2f && firstVisible > 0) {
-            runCatching { rowsListState.animateScrollBy(-above) }
-        }
-    }
-
-    // Único dueño del peek: se dispara al CAMBIAR DE FILA, no en cada tarjeta. La
-    // corrutina anterior se cancela si el usuario baja rápido, así no se encadenan
-    // animaciones relativas con posiciones ya viejas.
-    LaunchedEffect(focusedRow) {
-        if (focusedRow < 0) return@LaunchedEffect
-        delay(24)
-        revealNextRowPeek(focusedRow)
     }
 
     // Al enfocar una acción del hero (volver arriba con el mando), la lista se ancla al
@@ -564,6 +556,57 @@ fun TvHomeScreen(
             showNoRows = noCatalogMessage != null,
         )
     }
+    // ?Arriba? desde la primera fila regresa al hero aunque el banner est? reciclado:
+    // primero se pide el foco; si el hero no est? compuesto, la lista vuelve al tope y
+    // el foco se pide en cuanto el banner existe otra vez.
+    val backToHero: () -> Boolean = {
+        if (featured == null) {
+            false
+        } else {
+            if (landing.attached) {
+                landing.request()
+            } else {
+                homeScope.launch {
+                    rowsListState.scrollToItem(0)
+                    delay(90)
+                    landing.request()
+                }
+            }
+            true
+        }
+    }
+
+    // Primera fila con tarjetas: el hero baja a su primera tarjeta y, al volver a ella,
+    // la lista regresa al tope para que el banner vuelva a existir.
+    val firstContentIndex = remember(homeSlots) {
+        homeSlots.indexOfFirst {
+            it is HomeRowSlot.Continue || it is HomeRowSlot.Top10 ||
+                it is HomeRowSlot.Premieres || it is HomeRowSlot.Trending ||
+                it is HomeRowSlot.Because || it is HomeRowSlot.FollowWeek ||
+                it is HomeRowSlot.Kind || it is HomeRowSlot.Other
+        }
+    }
+    val firstContentKey = remember(homeSlots, firstContentIndex) {
+        homeSlots.getOrNull(firstContentIndex)?.key
+    }
+    // Distingue bajar de subir: al volver arriba el scroll no puede empujar la pantalla
+    // hacia abajo (era lo que dejaba el foco clavado en la fila).
+    var lastPeekedRow by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(focusedRow) {
+        if (focusedRow < 0) {
+            lastPeekedRow = -1
+            return@LaunchedEffect
+        }
+        val down = focusedRow >= lastPeekedRow
+        lastPeekedRow = focusedRow
+        delay(24)
+        if (!down && focusedRow == firstContentIndex) {
+            runCatching { rowsListState.scrollToItem(0) }
+            return@LaunchedEffect
+        }
+        revealNextRowPeek(focusedRow, down)
+    }
+
     val returnRowIndex = remember(homeSlots, returnFilmId, returnPending) {
         homeRowIndexOf(homeSlots, if (returnPending) returnFilmId else null)
     }
@@ -613,7 +656,12 @@ fun TvHomeScreen(
         // Fondo cinemático inmersivo con drift y degradado suave.
         // El arte vive dentro de un contenedor recortado: el zoom y el drift nunca
         // pueden invadir la barra superior ni las filas de abajo.
-        Crossfade(targetState = featured, animationSpec = backdropFadeSpec(reduced), label = "bg") { f ->
+        Crossfade(
+            targetState = featured,
+            animationSpec = backdropFadeSpec(reduced),
+            label = "bg",
+            modifier = Modifier.fillMaxSize(),
+        ) { f ->
             if (f?.event != null) {
                 TvSportsHeroBackdrop(event = f.event)
             } else {
@@ -642,9 +690,12 @@ fun TvHomeScreen(
         Box(
             Modifier.fillMaxSize().background(
                 Brush.horizontalGradient(
-                    0f to VisionBlack.copy(alpha = 0.92f),
-                    0.40f to VisionBlack.copy(alpha = 0.66f),
-                    0.68f to VisionBlack.copy(alpha = 0.26f),
+                    0f to VisionBlack.copy(alpha = 0.96f),
+                    0.30f to VisionBlack.copy(alpha = 0.90f),
+                    0.46f to VisionBlack.copy(alpha = 0.84f),
+                    0.56f to VisionBlack.copy(alpha = 0.70f),
+                    0.70f to VisionBlack.copy(alpha = 0.30f),
+                    0.84f to VisionBlack.copy(alpha = 0.08f),
                     1f to Color.Transparent,
                 ),
             ),
@@ -729,7 +780,12 @@ fun TvHomeScreen(
                                         DeportesReturn.pickingId = null
                                         onGoRoute(Route.Sports)
                                     },
-                                    onHeroActionFocus = { heroActionTick++ },
+                                    onHeroActionFocus = {
+                                        focusedRow = -1
+                                        lastPeekedRow = -1
+                                        heroActionTick++
+                                    },
+                                    downRequester = rowEntry,
                                 )
                             }
 
@@ -768,7 +824,8 @@ fun TvHomeScreen(
                             isTop10 = true,
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
-                            entryRequester = rowEntry,
+                            entryRequester = if (slot.key == firstContentKey) rowEntry else null,
+                            upToHero = if (slot.key == firstContentKey) backToHero else null,
                             onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
@@ -783,7 +840,8 @@ fun TvHomeScreen(
                             icon = VisionIcons.Novelties,
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
-                            entryRequester = rowEntry,
+                            entryRequester = if (slot.key == firstContentKey) rowEntry else null,
+                            upToHero = if (slot.key == firstContentKey) backToHero else null,
                             onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
@@ -797,7 +855,8 @@ fun TvHomeScreen(
                             icon = VisionIcons.WeeklyTrending,
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
-                            entryRequester = rowEntry,
+                            entryRequester = if (slot.key == firstContentKey) rowEntry else null,
+                            upToHero = if (slot.key == firstContentKey) backToHero else null,
                             onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
@@ -809,7 +868,8 @@ fun TvHomeScreen(
                             cards = continueCards,
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
-                            entryRequester = rowEntry,
+                            entryRequester = if (slot.key == firstContentKey) rowEntry else null,
+                            upToHero = if (slot.key == firstContentKey) backToHero else null,
                             onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                             onResume = onResume,
@@ -824,7 +884,8 @@ fun TvHomeScreen(
                             icon = VisionIcons.ContinueWatching,
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
-                            entryRequester = rowEntry,
+                            entryRequester = if (slot.key == firstContentKey) rowEntry else null,
+                            upToHero = if (slot.key == firstContentKey) backToHero else null,
                             onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
@@ -838,7 +899,8 @@ fun TvHomeScreen(
                             icon = VisionIcons.Following,
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
-                            entryRequester = rowEntry,
+                            entryRequester = if (slot.key == firstContentKey) rowEntry else null,
+                            upToHero = if (slot.key == firstContentKey) backToHero else null,
                             onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
@@ -853,7 +915,8 @@ fun TvHomeScreen(
                             icon = homeRowIcon(slot.row.id),
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
-                            entryRequester = rowEntry,
+                            entryRequester = if (slot.key == firstContentKey) rowEntry else null,
+                            upToHero = if (slot.key == firstContentKey) backToHero else null,
                             onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
@@ -867,7 +930,8 @@ fun TvHomeScreen(
                             films = limitedFilms,
                             returnRequester = returnRequester,
                             returnFilmId = returnFilmId,
-                            entryRequester = rowEntry,
+                            entryRequester = if (slot.key == firstContentKey) rowEntry else null,
+                            upToHero = if (slot.key == firstContentKey) backToHero else null,
                             onFocusFilm = { focusFilm = it; focusedRow = slotIndex },
                             onOpenFilm = onOpenFilm,
                         )
@@ -1184,6 +1248,7 @@ private fun HeroBillboard(
     onOpenSports: (GeeSportsSource.GeeEvent) -> Unit = {},
     onOpenSportsHub: () -> Unit = {},
     onHeroActionFocus: () -> Unit = {},
+    downRequester: FocusRequester? = null,
 ) {
     if (featured == null) return
     val event = featured.event
@@ -1204,27 +1269,7 @@ private fun HeroBillboard(
                 // El hero cambia de película a partido y de una a dos líneas: reservar un
                 // mínimo evita que el LazyColumn se reancle y mueva la fila enfocada.
                 .heightIn(min = minHeight)
-                // Scrim LOCAL detrás del texto. No toca el degradado global (que conserva
-                // el color del arte a la derecha y lo valida TvHeroWiringTest).
-                .drawBehind {
-                    val scrimWidth = (horizontal + textWidth + 72.dp).toPx()
-                        .coerceAtMost(size.width)
-                    if (scrimWidth <= 0f) return@drawBehind
-                    val solidEnd = ((horizontal + textWidth).toPx() / scrimWidth)
-                        .coerceIn(0f, 1f)
-                    // 0.90 de negro sobre un banner blanco deja ~#1A1A1A: VisionTextSecondary
-                    // rinde ~7:1 (>4.5:1) y el blanco del título mucho más. El degradado se
-                    // apaga recién después del borde derecho del texto.
-                    drawRect(
-                        brush = Brush.horizontalGradient(
-                            0f to Color.Black.copy(alpha = 0.94f),
-                            solidEnd to Color.Black.copy(alpha = 0.90f),
-                            1f to Color.Transparent,
-                            endX = scrimWidth,
-                        ),
-                        size = Size(scrimWidth, size.height),
-                    )
-                }
+                // El velo vive en la capa de fondo a pantalla completa.
                 .padding(horizontal = horizontal, vertical = 20.dp),
         ) {
             // Una sola columna para badge/título/metadatos/sinopsis: mismo borde derecho,
@@ -1335,7 +1380,9 @@ private fun HeroBillboard(
             val isHeroTarget = returnFilmId != null && currentFilm?.id == returnFilmId
             Row(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.padding(top = 16.dp),
+                modifier = Modifier.padding(top = 16.dp).then(
+                    if (downRequester != null) Modifier.softFocusDown(downRequester) else Modifier,
+                ),
             ) {
                 if (event != null) {
                     TvCompactAction(
@@ -1626,6 +1673,7 @@ internal fun HomePosterRow(
     returnRequester: FocusRequester? = null,
     returnFilmId: String? = null,
     entryRequester: FocusRequester? = null,
+    upToHero: (() -> Boolean)? = null,
     onFocusFilm: (Film) -> Unit,
     onOpenFilm: (Film) -> Unit,
 ) {
@@ -1644,7 +1692,13 @@ internal fun HomePosterRow(
     }
     LaunchedEffect(returnIndex, safeFilms) { rowState.revealReturnIndex(returnIndex) }
 
-    Column(modifier = Modifier.padding(top = metrics.topPadding)) {
+    Column(
+        modifier = Modifier.padding(top = metrics.topPadding).then(
+            if (upToHero != null) Modifier.onPreviewKeyEvent { event ->
+                event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp && upToHero()
+            } else Modifier,
+        ),
+    ) {
         val rowIcon = icon ?: if (isTop10) VisionIcons.WeeklyTrending else null
         TvRowLabel(title, metrics.labelHeight, icon = rowIcon)
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
@@ -1707,6 +1761,7 @@ private fun HomeAiringRow(
     returnRequester: FocusRequester? = null,
     returnFilmId: String? = null,
     entryRequester: FocusRequester? = null,
+    upToHero: (() -> Boolean)? = null,
     onFocusFilm: (Film) -> Unit,
     onOpenFilm: (Film) -> Unit,
 ) {
@@ -1717,7 +1772,13 @@ private fun HomeAiringRow(
         if (returnFilmId == null) -1 else cards.indexOfFirst { it.film.id == returnFilmId }
     }
     LaunchedEffect(returnIndex, cards) { rowState.revealReturnIndex(returnIndex) }
-    Column(modifier = Modifier.padding(top = metrics.topPadding)) {
+    Column(
+        modifier = Modifier.padding(top = metrics.topPadding).then(
+            if (upToHero != null) Modifier.onPreviewKeyEvent { event ->
+                event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp && upToHero()
+            } else Modifier,
+        ),
+    ) {
         TvRowLabel(title, metrics.labelHeight, icon = icon)
         CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
             LazyRow(
@@ -1780,6 +1841,7 @@ private fun ContinueRow(
     returnRequester: FocusRequester? = null,
     returnFilmId: String? = null,
     entryRequester: FocusRequester? = null,
+    upToHero: (() -> Boolean)? = null,
     onFocusFilm: (Film) -> Unit,
     onOpenFilm: (Film) -> Unit,
     onResume: (ResumeCard) -> Unit,
@@ -1798,7 +1860,13 @@ private fun ContinueRow(
     }
     LaunchedEffect(returnIndex, cards) { rowState.revealReturnIndex(returnIndex) }
     val metrics = rememberTvRowMetrics()
-    Column(modifier = Modifier.padding(top = metrics.topPadding)) {
+    Column(
+        modifier = Modifier.padding(top = metrics.topPadding).then(
+            if (upToHero != null) Modifier.onPreviewKeyEvent { event ->
+                event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp && upToHero()
+            } else Modifier,
+        ),
+    ) {
         TvRowLabel("Seguir viendo", metrics.labelHeight, icon = VisionIcons.ContinueWatching)
         Text(
             "Mantén OK en una tarjeta para opciones",

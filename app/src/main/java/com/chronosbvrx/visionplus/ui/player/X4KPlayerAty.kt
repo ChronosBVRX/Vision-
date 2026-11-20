@@ -125,6 +125,7 @@ class X4KPlayerAty : ComponentActivity() {
     private var audioBtn: TextView? = null
     private var subsBtn: TextView? = null
     private var qualityBtn: TextView? = null
+    private var fourKBadge: TextView? = null
     private var imageBtn: TextView? = null
     /** Último resultado de la mejora de imagen: evita repetir el mismo log en cada layout. */
     private var lastImageApplyResult: String = ""
@@ -940,6 +941,7 @@ class X4KPlayerAty : ComponentActivity() {
         audioBtn = null
         subsBtn = null
         qualityBtn = null
+        fourKBadge = null
         imageBtn = null
         lastImageApplyResult = ""
         optionPillChain.clear()
@@ -1330,12 +1332,17 @@ class X4KPlayerAty : ComponentActivity() {
         // La «Calidad preferida» manda desde el PRIMER cuadro: `X4KTitan.play` arranca con la
         // primera media de la lista. El resto de la cadena baja de resolución si esa pista
         // falla, en vez de saltar a un 4K que el equipo no puede sostener.
+        // El cat?logo siempre arranca en su m?xima calidad nativa (1080p). El 4K
+        // externo se agrega SOLO a la lista del selector: nunca se auto-selecciona.
+        val external4k = medias.firstOrNull { isExternal4k(it) }
+        val nativeMedias = medias.filterNot { isExternal4k(it) }
         val orderedMedias = playbackChain(
-            rankMedias(medias),
+            rankMedias(nativeMedias),
             { it.quality },
             com.chronosbvrx.visionplus.ui.settings.VisionSettings.defaultQuality,
         )
         curMedias = ArrayList(orderedMedias)
+        if (external4k != null) curMedias.add(external4k)
         mediaCursor = 0
         autoDowngrades = 0
         val initialMedia = orderedMedias.firstOrNull()
@@ -1378,6 +1385,8 @@ class X4KPlayerAty : ComponentActivity() {
         )
 
         buildControls(root, title)
+        buildFourKBadge(root)
+        refreshQualityPill()
         buildLoading(root, title)
         buildError(root)
         wireGestures(root)
@@ -2252,12 +2261,19 @@ class X4KPlayerAty : ComponentActivity() {
         code: String = curCode,
         title: String = curTitle,
     ): Boolean {
-        val external = specs.firstOrNull { isExternal4k(it) }
+        val external = specs.firstOrNull()?.takeIf { isExternal4k(it) }
         return if (external != null && !liveMode) {
             startExternal(external)
         } else {
             stopExternal()
-            X4KTitan.play(v, if (liveMode) "live" else "vod", code, title, specs)
+            // El 4K nunca viaja al motor como pista de respaldo: es una opci?n manual.
+            X4KTitan.play(
+                v,
+                if (liveMode) "live" else "vod",
+                code,
+                title,
+                specs.filterNot { isExternal4k(it) },
+            )
         }
     }
 
@@ -2351,6 +2367,7 @@ class X4KPlayerAty : ComponentActivity() {
         runCatching { externalPlayer?.stop() }
         externalView?.visibility = View.GONE
         playerView?.visibility = View.VISIBLE
+        applyOptionPillVisibility()
         if (!liveMode) handler.postDelayed(fourKPoller, 500L)
     }
 
@@ -2362,7 +2379,7 @@ class X4KPlayerAty : ComponentActivity() {
         return plain.contains("espanol") || plain.contains("latino") || plain.contains("spanish")
     }
 
-    /** Audio espa?ol si existe; si el 4K no lo trae, subt?tulos en espa?ol. */
+    /** Audio espa?ol si existe; si el 4K no lo trae, subt\u00edtulos en espa?ol. */
     private fun autoSelectSpanishAudioAndSubs(player: androidx.media3.exoplayer.ExoPlayer) {
         if (externalUserSubs) return
         val groups = player.currentTracks.groups
@@ -2382,11 +2399,22 @@ class X4KPlayerAty : ComponentActivity() {
                 builder.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
                 player.trackSelectionParameters = builder.build()
                 externalSubsAuto = false
-                subsBtn?.text = "Subt?tulos"
+                subsBtn?.text = "Subt\u00edtulos"
             }
             return
         }
         if (externalSubsAuto) return
+        if (subsLoaded) {
+            val spanish = subsEntries.firstOrNull {
+                isSpanishExternal(it.language) || isSpanishExternal(it.langKey)
+            }
+            if (spanish != null) {
+                externalSubsAuto = true
+                disableExternalTextTracks()
+                activateSubs(curCode, spanish)
+                return
+            }
+        }
         for (group in groups) {
             if (group.type != androidx.media3.common.C.TRACK_TYPE_TEXT) continue
             for (i in 0 until group.length) {
@@ -2402,7 +2430,7 @@ class X4KPlayerAty : ComponentActivity() {
                 )
                 player.trackSelectionParameters = builder.build()
                 externalSubsAuto = true
-                subsBtn?.text = "Subt?tulos"
+                subsBtn?.text = "Subt\u00edtulos"
                 return
             }
         }
@@ -2427,6 +2455,27 @@ class X4KPlayerAty : ComponentActivity() {
         }
     }
 
+    private fun disableExternalTextTracks() {
+        val player = externalPlayer ?: return
+        val builder = player.trackSelectionParameters.buildUpon()
+        builder.clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
+        builder.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+        player.trackSelectionParameters = builder.build()
+    }
+
+    private fun externalCurrentAudioLanguage(player: androidx.media3.exoplayer.ExoPlayer): String {
+        for (group in player.currentTracks.groups) {
+            if (group.type != androidx.media3.common.C.TRACK_TYPE_AUDIO) continue
+            for (i in 0 until group.length) {
+                if (group.isSelected && group.isTrackSelected(i)) {
+                    val format = group.getTrackFormat(i)
+                    return format.language?.orEmpty().orEmpty().ifBlank { format.label.orEmpty() }
+                }
+            }
+        }
+        return ""
+    }
+
     private fun fourKOnlyOriginal(): Boolean {
         val spec = curMedias.firstOrNull { isExternal4k(it) } ?: return false
         val audio = spec.audio.trim().lowercase()
@@ -2434,23 +2483,24 @@ class X4KPlayerAty : ComponentActivity() {
             audio == "ingl?s" || audio == "english" || audio == "en"
     }
 
-    private fun fourKAvailableBackground(): GradientDrawable = GradientDrawable(
-        GradientDrawable.Orientation.TL_BR,
-        intArrayOf(0xFF4C9BFF.toInt(), 0xFF2D7DF6.toInt(), 0xFF1E5BD6.toInt()),
-    ).apply { cornerRadius = dp(22).toFloat() }
+    /** Chip HDR/Dolby-like: fondo oscuro, borde azul fino, texto peque?o. */
+    private fun fourKAvailableBackground(): GradientDrawable = GradientDrawable().apply {
+        setColor(0xB3000000.toInt())
+        setStroke(dp(1), 0xFF4C9BFF.toInt())
+        cornerRadius = dp(4).toFloat()
+    }
 
-    /** La p?ldora de calidad es el badge: azul Vision+ y ?4K disponible? cuando toca. */
+    /** La p?ldora de calidad mantiene la calidad actual; el 4K va en un chip aparte. */
     private fun refreshQualityPill() {
+        val fourK = curMedias.firstOrNull { isExternal4k(it) }
+        val showBadge = fourK != null && !externalActive && !liveMode
+        fourKBadge?.apply {
+            visibility = if (showBadge) View.VISIBLE else View.GONE
+            text = if (fourKOnlyOriginal()) "4K \u00b7 ORIGINAL" else "4K"
+        }
         val q = qualityBtn ?: return
         if (liveMode) {
             q.visibility = View.GONE
-            return
-        }
-        val fourK = curMedias.firstOrNull { isExternal4k(it) }
-        if (fourK != null && !externalActive) {
-            q.text = if (fourKOnlyOriginal()) "4K disponible \u00b7 original" else "4K disponible"
-            q.background = fourKAvailableBackground()
-            q.visibility = View.VISIBLE
             return
         }
         q.text = formatQualityShort(curQuality)
@@ -2508,7 +2558,9 @@ class X4KPlayerAty : ComponentActivity() {
         if (liveMode || isFinishing || isDestroyed) return false
         if (autoDowngrades >= MAX_AUTO_DOWNGRADES) return false
         val v = playerView ?: return false
-        val nextIndex = mediaCursor + 1
+        var nextIndex = mediaCursor + 1
+        // El 4K externo es una opci?n manual: el respaldo autom?tico nunca salta a ?l.
+        while (nextIndex < curMedias.size && isExternal4k(curMedias[nextIndex])) nextIndex++
         if (nextIndex >= curMedias.size) return false
         val previous = curMedias.getOrNull(mediaCursor)
         val next = curMedias[nextIndex]
@@ -2591,6 +2643,31 @@ class X4KPlayerAty : ComponentActivity() {
     private fun statusBarHeight(): Int {
         val id = resources.getIdentifier("status_bar_height", "dimen", "android")
         return if (id > 0) resources.getDimensionPixelSize(id) else dp(28)
+    }
+
+    private fun buildFourKBadge(root: FrameLayout) {
+        val tv = TextView(this).apply {
+            text = "4K"
+            textSize = 9f
+            letterSpacing = 0.06f
+            setTextColor(0xFF9CC9FF.toInt())
+            setPadding(dp(6), dp(2), dp(6), dp(2))
+            background = fourKAvailableBackground()
+            visibility = View.GONE
+            isClickable = true
+            isFocusable = false
+            setOnClickListener { if (!isModalActive) showQualityPicker() }
+        }
+        val lp = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.END,
+        ).apply {
+            topMargin = dp(if (isTv) 18 else 10)
+            rightMargin = dp(if (isTv) 24 else 12)
+        }
+        root.addView(tv, lp)
+        fourKBadge = tv
     }
 
     private fun buildControls(root: FrameLayout, title: String) {
@@ -3414,7 +3491,10 @@ class X4KPlayerAty : ComponentActivity() {
                 player?.let { externalCurrentAudioLabel(it) }.orEmpty()
             }
             audioBtn?.text = "Idioma: " + audio.ifBlank { "Original" }
-            subsBtn?.text = "Subt?tulos"
+            val providerSubs = subsCurrent?.let {
+                languageName(it.language).ifBlank { it.language }.takeIf { name -> name.isNotBlank() }
+            }
+            subsBtn?.text = if (providerSubs != null) "\u25A1 $providerSubs" else "Subt\u00edtulos"
             refreshQualityPill()
             rewireOptionPillFocus()
             return
@@ -3626,7 +3706,7 @@ class X4KPlayerAty : ComponentActivity() {
                         text.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
                         player.trackSelectionParameters = text.build()
                         externalSubsAuto = false
-                        subsBtn?.text = "Subt?tulos"
+                        subsBtn?.text = "Subt\u00edtulos"
                     }
                 }
             }
@@ -3634,33 +3714,32 @@ class X4KPlayerAty : ComponentActivity() {
         if (!added) options += PickerOption("Sin audio alternativo", R.drawable.ic_vp_info) {}
     }
 
-    /** Subt?tulos del 4K: pistas reales del archivo, con ?Desactivados?. */
+    /** Subt\u00edtulos del 4K: pistas reales del archivo, con ?Desactivados?. */
+    /** Subt\u00edtulos del 4K: pistas del archivo + la API del cat?logo. */
     private fun externalSubtitleOptions(options: MutableList<PickerOption>) {
         val player = externalPlayer ?: return
         options += PickerOption(
             "Desactivados",
             R.drawable.ic_vp_close,
-            selected = !externalHasSelectedText(player),
+            selected = !externalHasSelectedText(player) && subsCurrent == null,
         ) {
-            val builder = player.trackSelectionParameters.buildUpon()
-            builder.clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
-            builder.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
-            player.trackSelectionParameters = builder.build()
+            disableExternalTextTracks()
+            disableSubs()
             externalUserSubs = true
             externalSubsAuto = false
-            subsBtn?.text = "Subt?tulos"
         }
         var ordinal = 0
-        var added = false
+        var embedded = false
         for (group in player.currentTracks.groups) {
             if (group.type != androidx.media3.common.C.TRACK_TYPE_TEXT) continue
             for (i in 0 until group.length) {
                 if (!group.isTrackSupported(i)) continue
                 val format = group.getTrackFormat(i)
                 val label = externalTrackLabel(format, ordinal++)
-                val selected = group.isSelected && group.isTrackSelected(i)
-                added = true
+                val selected = group.isSelected && group.isTrackSelected(i) && subsCurrent == null
+                embedded = true
                 options += PickerOption(label, R.drawable.ic_vp_subtitles, selected) {
+                    disableSubs(save = false)
                     val builder = player.trackSelectionParameters.buildUpon()
                     builder.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
                     builder.setOverrideForType(
@@ -3669,11 +3748,34 @@ class X4KPlayerAty : ComponentActivity() {
                     player.trackSelectionParameters = builder.build()
                     externalUserSubs = true
                     externalSubsAuto = false
-                    subsBtn?.text = "Subt?tulos"
                 }
             }
         }
-        if (!added) options += PickerOption("Sin subt?tulos disponibles", R.drawable.ic_vp_info) {}
+        if (!embedded) options += PickerOption("Sin subt\u00edtulos en el archivo", R.drawable.ic_vp_info) {}
+        if (subsLoaded) {
+            val provider = orderSubsForPicker(distinctLanguages(subsEntries), subsCurrent?.langKey.orEmpty())
+            provider.forEach { entry ->
+                val name = languageName(entry.language).ifBlank { entry.language.trim().uppercase() }
+                    .ifBlank { "Pista" }
+                options += PickerOption(
+                    "$name \u00b7 nube",
+                    R.drawable.ic_vp_subtitles,
+                    selected = subsCurrent?.langKey == entry.langKey,
+                ) {
+                    disableExternalTextTracks()
+                    externalUserSubs = true
+                    externalSubsAuto = false
+                    activateSubs(curCode, entry)
+                }
+            }
+            if (provider.isEmpty()) {
+                options += PickerOption("Sin subt\u00edtulos del servicio", R.drawable.ic_vp_info) {}
+            }
+        } else {
+            subsPickerWaiting = true
+            options += PickerOption("Buscando subt\u00edtulos\u2026", R.drawable.ic_vp_info) {}
+            if (curCode.isNotBlank()) loadSubs(curCode, force = true)
+        }
     }
 
     private fun audioOptions(options: MutableList<PickerOption>) {
@@ -3980,11 +4082,25 @@ class X4KPlayerAty : ComponentActivity() {
                     showLanguagePicker(forSubtitle = true)
                 }
                 maybeRestoreSubs(cid)
+                maybeAutoExternalSubs()
             }
         }.start()
     }
 
     /** La elección guardada del título (o de su serie) se reaplica al abrir el capítulo. */
+    /** Si el 4K no tiene audio espa?ol, usa la pista espa?ola del servicio del cat?logo. */
+    private fun maybeAutoExternalSubs() {
+        if (!externalActive || externalUserSubs || externalSubsAuto || subsCurrent != null) return
+        val player = externalPlayer ?: return
+        if (isSpanishExternal(externalCurrentAudioLanguage(player))) return
+        val spanish = subsEntries.firstOrNull {
+            isSpanishExternal(it.language) || isSpanishExternal(it.langKey)
+        } ?: return
+        externalSubsAuto = true
+        disableExternalTextTracks()
+        activateSubs(curCode, spanish)
+    }
+
     private fun maybeRestoreSubs(cid: String) {
         if (subsCurrent != null) return
         val saved = SubsStore.selection(this, cid, curSeries)
@@ -3997,6 +4113,7 @@ class X4KPlayerAty : ComponentActivity() {
     /** Descarga (o reusa) el SRT elegido, lo parsea y enciende el overlay. */
     private fun activateSubs(cid: String, entry: SubEntry) {
         if (cid.isBlank()) return
+        if (externalActive) disableExternalTextTracks()
         val label = languageName(entry.language).ifBlank { entry.language.trim().uppercase() }
             .ifBlank { "Subtítulos" }
         subsBtn?.text = "\u25A1 $label\u2026"
@@ -4061,7 +4178,7 @@ class X4KPlayerAty : ComponentActivity() {
         if (subsCues.isEmpty()) return null
         val offset = com.chronosbvrx.visionplus.ui.settings.VisionSettings.subOffsetMsOf(this)
         val pos = com.chronosbvrx.visionplus.data.subs.lookupWithOffset(
-            X4KTitan.positionMs().coerceAtLeast(0L), offset,
+            playerPosMs(), offset,
         )
         val cue = cueAt(subsCues, pos)
         if (cue == null) {
@@ -4253,6 +4370,30 @@ class X4KPlayerAty : ComponentActivity() {
                 }
             } else {
                 handler.postDelayed({ tryNextMedia("4k-no-arranca") }, 700L)
+            }
+            return
+        }
+
+        // Vuelta 4K -> calidad del portal: el motor estaba detenido y el ExoPlayer
+        // segu?a arriba. Se apaga el 4K y se arranca SIEMPRE el motor nativo; no se
+        // usa `setMedia` porque la vista del motor ya no es la activa.
+        if (externalActive) {
+            stopExternal()
+            val rest = ArrayList(curMedias.subList(mediaCursor, curMedias.size))
+            val started = runCatching { startSpecs(v, rest) }.getOrDefault(false)
+            refreshQualityPill()
+            if (!pollerAlive) {
+                pollerAlive = true
+                handler.post(poller)
+            }
+            if (started) {
+                scheduleImageEnhancement()
+                noteAppSeek()
+                if (curPos > 0L) {
+                    handler.postDelayed({ playerSeekTo(curPos) }, 300L)
+                }
+            } else {
+                handler.postDelayed({ tryNextMedia("vuelta-nativa") }, 700L)
             }
             return
         }

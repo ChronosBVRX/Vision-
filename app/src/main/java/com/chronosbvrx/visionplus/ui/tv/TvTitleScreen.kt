@@ -110,13 +110,18 @@ fun TvTitleScreen(
     val landing = rememberLandingFocus()
     val context = LocalContext.current
     val isXtv = film.videoUrl.startsWith("xtv:")
-    var has4k by remember(film.id) {
-        mutableStateOf(com.chronosbvrx.visionplus.data.external.External4KRepository.hasFresh(context, film.id))
+    val cached4k = remember(film.id) {
+        com.chronosbvrx.visionplus.data.external.External4KRepository.fresh4k(context, film.id)
     }
+    var has4k by remember(film.id) { mutableStateOf(cached4k != null) }
+    var fourKOriginal by remember(film.id) { mutableStateOf(cached4k?.language == "Original") }
     LaunchedEffect(film.id) {
         if (isXtv && (film.kind.isBlank() || film.kind == "movie")) {
             com.chronosbvrx.visionplus.data.external.External4KRepository.refreshIfStale(context, film)
-            has4k = com.chronosbvrx.visionplus.data.external.External4KRepository.hasFresh(context, film.id)
+            val fresh = com.chronosbvrx.visionplus.data.external.External4KRepository
+                .fresh4k(context, film.id)
+            has4k = fresh != null
+            fourKOriginal = fresh?.language == "Original"
         }
     }
     val meta = remember(film.id) { if (isXtv) X4KApi.metaFor(context, film.id) else null }
@@ -461,9 +466,9 @@ fun TvTitleScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.padding(bottom = 2.dp),
                         ) {
-                            com.chronosbvrx.visionplus.ui.components.FourKBadge()
+                            com.chronosbvrx.visionplus.ui.components.FourKBadge(compact = true)
                             Text(
-                                "Disponible en 4K",
+                                if (fourKOriginal) "Disponible en 4K \u00b7 idioma original" else "Disponible en 4K",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = Color.White.copy(alpha = 0.75f),
                             )

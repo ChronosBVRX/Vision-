@@ -291,7 +291,7 @@ fun PlayerScreen(
         if (!skipExternal && film.videoUrl.startsWith("xtv:") && moviePlay &&
             (film.kind.isBlank() || film.kind == "movie")
         ) {
-            com.chronosbvrx.visionplus.data.external.External4KRepository.fresh(libraryContext, film.id)
+            com.chronosbvrx.visionplus.data.external.External4KRepository.fresh4k(libraryContext, film.id)
         } else {
             null
         }
