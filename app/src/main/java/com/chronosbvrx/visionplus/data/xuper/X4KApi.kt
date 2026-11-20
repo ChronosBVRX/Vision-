@@ -2082,6 +2082,30 @@ object X4KApi {
      * X4K player (its own process). Series may carry their episode/season context so the player
      * can offer "next" without leaving.
      */
+    /**
+     * A?ade la pista 4K externa al frente de las medias del portal. El reproductor nativo
+     * la trata como una calidad m?s: el motor la reproduce por su ruta de URL directa.
+     */
+    private fun withExternal4k(mediasJson: String, url: String, language: String): String {
+        if (url.isBlank()) return mediasJson
+        return runCatching {
+            val source = JSONArray(mediasJson)
+            val out = JSONArray()
+            out.put(JSONObject().apply {
+                put("n", "4K Vision+")
+                put("l", url)
+                put("a", language.ifBlank { "Original" })
+                put("q", "2160p")
+                put("e", "")
+                put("f", "")
+            })
+            for (i in 0 until source.length()) {
+                source.optJSONObject(i)?.let { out.put(it) }
+            }
+            out.toString()
+        }.getOrDefault(mediasJson)
+    }
+
     suspend fun playVod(
         context: Context,
         contentId: String,
@@ -2183,11 +2207,7 @@ object X4KApi {
             mode = "vod",
             code = cid,
             title = title,
-            // El cat?logo viaja SOLO con sus pistas nativas. El 4K va aparte y el
-            // reproductor lo agrega al selector despu?s de arrancar en 1080p.
-            mediasJson = prep.mediasJson,
-            external4kUrl = external4kUrl,
-            external4kLanguage = external4kLanguage,
+            mediasJson = withExternal4k(prep.mediasJson, external4kUrl, external4kLanguage),
             durationMs = finalDuration,
             subsLangs = prep.subsLangs,
             seriesId = if (isSeries) cleanSeriesId else "",
@@ -2407,8 +2427,6 @@ object X4KApi {
         code: String,
         title: String,
         mediasJson: String,
-        external4kUrl: String = "",
-        external4kLanguage: String = "",
         durationMs: Long = 0L,
         subsLangs: String = "",
         seriesId: String = "",
@@ -2466,10 +2484,6 @@ object X4KApi {
             putExtra("code", code)
             putExtra("title", title)
             putExtra("mediasB64", b64(mediasJson))
-            if (external4kUrl.isNotBlank()) {
-                putExtra("external4kUrl", external4kUrl)
-                putExtra("external4kLanguage", external4kLanguage)
-            }
             if (durationMs > 0) putExtra("durationMs", durationMs)
             if (subsLangs.isNotBlank()) putExtra("subsLangs", subsLangs)
             if (entries.isNotBlank()) putExtra("entriesB64", b64(entries))
@@ -2518,7 +2532,11 @@ object X4KApi {
         }
         // Aviso discreto con la calidad REAL que se va a usar (la mejor disponible).
         runCatching {
-            val q = org.json.JSONArray(mediasJson).optJSONObject(0)?.optString("q").orEmpty()
+            val arr = org.json.JSONArray(mediasJson)
+            val q = (0 until arr.length()).asSequence()
+                .mapNotNull { arr.optJSONObject(it) }
+                .firstOrNull { !it.optString("q").contains("2160") }
+                ?.optString("q").orEmpty()
             if (q.isNotBlank()) {
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                     android.widget.Toast.makeText(

@@ -550,10 +550,6 @@ class X4KPlayerAty : ComponentActivity() {
         val mediasJson = intent.getStringExtra("mediasB64")?.let {
             runCatching { String(android.util.Base64.decode(it, android.util.Base64.DEFAULT)) }.getOrNull()
         } ?: intent.getStringExtra("medias").orEmpty()
-        // El 4K viaja fuera del cat?logo: el motor arranca en 1080p y esta pista queda
-        // solo como opci?n manual del selector (con su badge sutil).
-        val external4kUrl = intent.getStringExtra("external4kUrl").orEmpty()
-        val external4kLanguage = intent.getStringExtra("external4kLanguage").orEmpty()
         val entriesJson = intent.getStringExtra("entriesB64")?.let {
             runCatching { String(android.util.Base64.decode(it, android.util.Base64.DEFAULT)) }.getOrNull()
         }
@@ -693,7 +689,7 @@ class X4KPlayerAty : ComponentActivity() {
         // Si el motor :x4k ya fue precalentado por X4KWarmupReceiver, montamos la superficie de video de inmediato en 0 ms.
         if (X4KTitan.isConfigured(resolvedEntries, resolvedParams, playUserId, playDevId)) {
             Log.i(TAG, "motor :x4k ya precalentado; montando UI en 0 ms")
-            mountUi(root(), mode, code, title, aspect, medias, external4kUrl, external4kLanguage)
+            mountUi(root(), mode, code, title, aspect, medias)
         } else {
             val gen = playGen
             Thread {
@@ -710,7 +706,7 @@ class X4KPlayerAty : ComponentActivity() {
                     Log.i(TAG, "ensureConfigured=$ok")
                     runOnUiThread {
                         if (gen != playGen) return@runOnUiThread
-                        mountUi(root(), mode, code, title, aspect, medias, external4kUrl, external4kLanguage)
+                        mountUi(root(), mode, code, title, aspect, medias)
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "falló: ${e.message}", e)
@@ -1287,8 +1283,6 @@ class X4KPlayerAty : ComponentActivity() {
         title: String,
         aspect: Int,
         medias: List<X4KTitan.MediaSpec>,
-        external4kUrl: String = "",
-        external4kLanguage: String = "",
     ) {
         // «Camino B»: la vista del motor es residente — se crea UNA sola vez por proceso y
         // las reproducciones siguientes reutilizan la MISMA (el motor solo admite un
@@ -1341,14 +1335,6 @@ class X4KPlayerAty : ComponentActivity() {
         // El cat?logo siempre arranca en su m?xima calidad nativa (1080p). El 4K
         // externo se agrega SOLO a la lista del selector: nunca se auto-selecciona.
         val external4k = medias.firstOrNull { isExternal4k(it) }
-            ?: external4kUrl.takeIf { it.isNotBlank() }?.let { url ->
-                X4KTitan.MediaSpec(
-                    name = "4K Vision+",
-                    license = url,
-                    audio = external4kLanguage,
-                    quality = "2160p",
-                )
-            }
         val nativeMedias = medias.filterNot { isExternal4k(it) }
         val orderedMedias = playbackChain(
             rankMedias(nativeMedias),
@@ -2342,7 +2328,6 @@ class X4KPlayerAty : ComponentActivity() {
                     Log.w(TAG, "4K externo fall?: ${error.errorCodeName}")
                     runOnUiThread { fallbackFromExternal("4k-error") }
                 }
-
             })
         }
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
