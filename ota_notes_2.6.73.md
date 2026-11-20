@@ -16,8 +16,8 @@
 
 - Chip sutil **«4K» / «4K · ORIGINAL»** cuando hay una fuente disponible.
 - El 4K aparece solo como opción en **Calidad**: 1080p · 720p · 480p · 4K.
-- Audio y subtítulos del 4K con la API de subtítulos del catálogo; si no hay audio
-  español, se activan los subtítulos españoles y el chip lo indica.
+- Audio y subtítulos del 4K con la misma API de subtítulos del catálogo; si no hay
+  audio español, se activan los subtítulos españoles y el chip lo indica.
 
 ## Inicio de la tele
 
@@ -25,15 +25,9 @@
 - Degradado del hero a pantalla completa, sin el rectángulo a media altura.
 - El hero vuelve completo al subir y el foco inicial sigue en «Reproducir».
 
-## Fuentes
-
-- Catálogo y reproducción nativa: **Xuper**.
-- Fuentes 4K: **HdHub** (principal) y **Kronos** (respaldo).
-- Subtítulos: API de subtítulos de **Xuper**.
-
 ## Notas
 
 - Publicado **solo** en el canal `beta`; la estable sigue en 2.6.67.
 - Si el catálogo no abre después de esta actualización, el problema está en la
-  sesión/proveedor o en la red de la tele; reinicia la app y la sesión, y si sigue,
-  envía el diagnóstico para revisar el portal.
+  sesión o en la red de la tele; reinicia la app y la sesión, y si sigue, envía el
+  diagnóstico para revisar la conexión.
