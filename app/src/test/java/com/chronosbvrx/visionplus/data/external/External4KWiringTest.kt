@@ -166,6 +166,24 @@ class External4KWiringTest {
         assertTrue(worker.contains("6, TimeUnit.HOURS"))
     }
 
+    @Test
+    fun the4kFailureFallsBackTo1080WithoutTouchingLiveOrTheAppShell() {
+        val aty = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
+        assertTrue("el fallo bloquea el 4K de la ficha", aty.contains("FourKGuard.block"))
+        assertTrue("vuelve al 1080p en el mismo reproductor", aty.contains("fallbackFromExternal"))
+        assertTrue("hay aviso visible de fallo", aty.contains("showFourKFailureBanner"))
+        assertTrue("el aviso dice que puede verlo en alta definici?n", aty.contains("El 4K fall"))
+        assertTrue("la recuperaci?n arranca sin 4K", aty.contains("skipExternal4k"))
+        assertTrue("el vivo no entra a la ruta 4K", aty.contains("if (liveMode) return"))
+
+        val guard = source("app/src/main/java/com/chronosbvrx/visionplus/data/external/FourKGuard.kt")
+        assertTrue("bloquea el 4K tras fallar", guard.contains("fun block("))
+        assertTrue("la ficha consulta el bloqueo", guard.contains("fun isBlocked("))
+        // Sin auto-relanzamiento global: no debe haber una recuperaci?n que pise el vivo.
+        val main = source("app/src/main/java/com/chronosbvrx/visionplus/MainActivity.kt")
+        assertTrue("la app no relanza sola el 4K", !main.contains("recoverFourKIfNeeded"))
+    }
+
     private fun source(rel: String): String {
         val found = listOf(File(rel), File("../$rel"), File("Vision-/$rel")).firstOrNull { it.exists() }
         assertNotNull("fuente no encontrada: $rel", found)

@@ -132,7 +132,8 @@ fun TitleScreen(
     val cached4k = remember(film.id) {
         com.chronosbvrx.visionplus.data.external.External4KRepository.fresh4k(context, film.id)
     }
-    val has4k = cached4k != null
+    val has4k = cached4k != null &&
+        !com.chronosbvrx.visionplus.data.external.FourKGuard.isBlocked(context, film.id)
     val fourKOriginal = cached4k?.language == "Original"
     // Guarda los metadatos de la ficha (sin red): el reproductor los usa para cruzar
     // el 4K despues del primer cuadro, incluso si el play viene del launcher.

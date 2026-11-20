@@ -126,6 +126,14 @@ class X4KPlayerAty : ComponentActivity() {
     private var subsBtn: TextView? = null
     private var qualityBtn: TextView? = null
     private var fourKBadge: TextView? = null
+    /** Aviso grande cuando el 4K falla y la pelicula sigue en 1080p. */
+    private var fourKFailureBanner: TextView? = null
+    /** Evita que un fallo del 4K dispare dos veces el mismo regreso al 1080p. */
+    private var fallbackInProgress = false
+    /** El play actual pidio no ofrecer 4K (recuperacion tras un fallo). */
+    private var skipExternal4k = false
+    /** Ultimo minuto del 1080p antes de saltar al 4K, para volver a el. */
+    private var lastNativePosMs = 0L
     private var imageBtn: TextView? = null
     /** Último resultado de la mejora de imagen: evita repetir el mismo log en cada layout. */
     private var lastImageApplyResult: String = ""
@@ -863,6 +871,9 @@ class X4KPlayerAty : ComponentActivity() {
         declaredDurationMs = 0L
         firstFrameAtMs = 0L
         externalResolveKicked = false
+        fallbackInProgress = false
+        skipExternal4k = false
+        lastNativePosMs = 0L
         declaredLanguages = emptyList()
         curAudioCode = ""
         lastHistorySave = 0L
@@ -960,6 +971,7 @@ class X4KPlayerAty : ComponentActivity() {
         subsBtn = null
         qualityBtn = null
         fourKBadge = null
+        fourKFailureBanner = null
         imageBtn = null
         lastImageApplyResult = ""
         optionPillChain.clear()
@@ -1352,7 +1364,10 @@ class X4KPlayerAty : ComponentActivity() {
         // falla, en vez de saltar a un 4K que el equipo no puede sostener.
         // El cat?logo siempre arranca en su m?xima calidad nativa (1080p). El 4K
         // externo se agrega SOLO a la lista del selector: nunca se auto-selecciona.
-        val external4k = medias.firstOrNull { isExternal4k(it) }
+        val blocked4k = com.chronosbvrx.visionplus.data.external.FourKGuard
+            .isBlocked(this@X4KPlayerAty, "xtv:$code")
+        skipExternal4k = intent.getBooleanExtra("skip4k", false) || blocked4k
+        val external4k = if (skipExternal4k) null else medias.firstOrNull { isExternal4k(it) }
         val nativeMedias = medias.filterNot { isExternal4k(it) }
         val orderedMedias = playbackChain(
             rankMedias(nativeMedias),
@@ -1407,6 +1422,11 @@ class X4KPlayerAty : ComponentActivity() {
         refreshQualityPill()
         buildLoading(root, title)
         buildError(root)
+        // Va despues de la espera/error para que el aviso quede por encima.
+        buildFourKFailureBanner(root)
+        if (blocked4k || intent.getBooleanExtra("fourk_failed", false)) {
+            handler.postDelayed({ showFourKFailureBanner() }, 1_500L)
+        }
         wireGestures(root)
         if (!liveMode && code.isNotBlank()) loadSubs(code)
         // El 4K espera al primer cuadro: nada de resolver ni pintar el chip durante la carga.
@@ -2298,6 +2318,19 @@ class X4KPlayerAty : ComponentActivity() {
 
     /** Crea/reutiliza la vista y el reproductor ExoPlayer para el 4K externo. */
     private fun startExternal(spec: X4KTitan.MediaSpec): Boolean {
+        if (liveMode) return false
+        // Marca previa: si el decodificador tumba el proceso, el proximo play ya
+        // encuentra el 4K bloqueado y arranca en 1080p. Un 4K exitoso la borra.
+        com.chronosbvrx.visionplus.data.external.FourKGuard.block(this@X4KPlayerAty, "xtv:$curCode")
+        val ok = runCatching { startExternalUnsafe(spec) }.getOrElse { failure ->
+            Log.e(TAG, "4K no pudo abrir: ${failure.message}", failure)
+            false
+        }
+        if (!ok) resetExternalAfterFailure()
+        return ok
+    }
+
+    private fun startExternalUnsafe(spec: X4KTitan.MediaSpec): Boolean {
         val root = contentRoot ?: return false
         val url = spec.license
         if (url.isBlank()) return false
@@ -2397,16 +2430,68 @@ class X4KPlayerAty : ComponentActivity() {
         return true
     }
 
-    /** Si el 4K falla (c?dec, red o URL vencida) vuelve al 1080p nativo sin matar el play. */
+    /** Suelta el reproductor externo y deja la vista nativa lista para el 1080p. */
+    private fun resetExternalAfterFailure() {
+        externalActive = false
+        externalEnded = false
+        runCatching { externalPlayer?.stop() }
+        runCatching { externalPlayer?.release() }
+        externalPlayer = null
+        runCatching { externalView?.player = null }
+        externalView?.visibility = View.GONE
+        playerView?.visibility = View.VISIBLE
+        applyOptionPillVisibility()
+    }
+
+    /**
+     * Si el 4K falla (c?dec, red, URL vencida o proceso muerto) vuelve al 1080p nativo
+     * sin matar el play. Bloquea el 4K de esta ficha un rato y avisa en pantalla.
+     */
     private fun fallbackFromExternal(reason: String) {
-        val native = curMedias.firstOrNull { !isExternal4k(it) } ?: return
-        Log.i(TAG, "4K no disponible ($reason); vuelvo a ${native.quality}")
-        Toast.makeText(
-            this,
-            "4K no disponible; volviendo a ${formatQualityShort(native.quality)}",
-            Toast.LENGTH_SHORT,
-        ).show()
-        switchQuality(native)
+        if (liveMode) return
+        if (fallbackInProgress) return
+        fallbackInProgress = true
+        val native = curMedias.firstOrNull { !isExternal4k(it) }
+        Log.i(TAG, "4K no disponible ($reason); vuelvo a ${native?.quality ?: "1080p"}")
+        com.chronosbvrx.visionplus.data.external.FourKGuard.block(this@X4KPlayerAty, "xtv:$curCode")
+        resetExternalAfterFailure()
+        curMedias.removeAll { isExternal4k(it) }
+        showFourKFailureBanner()
+        val v = playerView
+        if (v == null || native == null) {
+            fallbackInProgress = false
+            showError("4k-sin-1080")
+            return
+        }
+        mediaCursor = 0
+        currentMediaName = native.name
+        curQuality = native.quality
+        // Deja que el decodificador del 4K termine de soltarse antes de devolver el
+        // motor nativo a 1080p. En la TV vieja el arranque inmediato se quedaba en 00:00.
+        handler.postDelayed({
+            if (isFinishing || isDestroyed) {
+                fallbackInProgress = false
+                return@postDelayed
+            }
+            val rest = ArrayList(curMedias)
+            val started = runCatching { startSpecs(v, rest) }.getOrDefault(false) ||
+                runCatching { startSpecs(v, listOf(native)) }.getOrDefault(false)
+            if (started) {
+                scheduleImageEnhancement()
+                noteAppSeek()
+                if (lastNativePosMs > 0L) {
+                    handler.postDelayed({ playerSeekTo(lastNativePosMs) }, 500L)
+                }
+                if (!pollerAlive) {
+                    pollerAlive = true
+                    handler.post(poller)
+                }
+                refreshQualityPill()
+            } else {
+                showError("4k-fallback")
+            }
+            handler.postDelayed({ fallbackInProgress = false }, 2_000L)
+        }, 1_500L)
     }
 
     private fun stopExternal() {
@@ -2591,6 +2676,10 @@ class X4KPlayerAty : ComponentActivity() {
     private val fourKPoller = object : Runnable {
         override fun run() {
             if (!isPlayerActive || liveMode || externalActive) return
+            if (skipExternal4k) return
+            if (com.chronosbvrx.visionplus.data.external.FourKGuard
+                    .isBlocked(this@X4KPlayerAty, "xtv:$curCode")
+            ) return
             if (curSeries.isNotBlank() || epIds.size > 1 || curKind == "series") return
             if (curMedias.any { isExternal4k(it) }) {
                 refreshQualityPill()
@@ -2749,6 +2838,64 @@ class X4KPlayerAty : ComponentActivity() {
         }
         root.addView(tv, lp)
         fourKBadge = tv
+    }
+
+    /** Aviso grande y legible cuando el 4K falla: la pelicula sigue en 1080p. */
+    private fun buildFourKFailureBanner(root: FrameLayout) {
+        val tv = TextView(this).apply {
+            text = "El 4K fall\u00f3, pero puedes verlo\nen alta definici\u00f3n (1080p)."
+            textSize = if (isTv) 15f else 13f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(
+                dp(if (isTv) 20 else 14),
+                dp(if (isTv) 12 else 9),
+                dp(if (isTv) 20 else 14),
+                dp(if (isTv) 12 else 9),
+            )
+            background = GradientDrawable().apply {
+                setColor(0xE6161A22.toInt())
+                setStroke(dp(2), 0xFFFFB020.toInt())
+                cornerRadius = dp(10).toFloat()
+            }
+            visibility = View.GONE
+            isClickable = true
+            setOnClickListener { hideFourKFailureBanner() }
+        }
+        val lp = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.CENTER_HORIZONTAL,
+        ).apply {
+            topMargin = dp(if (isTv) 28 else 16)
+        }
+        root.addView(tv, lp)
+        fourKFailureBanner = tv
+    }
+
+    private val hideFourKFailureRunnable = Runnable {
+        val tv = fourKFailureBanner ?: return@Runnable
+        tv.animate().alpha(0f).setDuration(400L).withEndAction {
+            tv.visibility = View.GONE
+            tv.alpha = 1f
+        }.start()
+    }
+
+    private fun showFourKFailureBanner() {
+        hideFourKNotice()
+        val tv = fourKFailureBanner ?: return
+        handler.removeCallbacks(hideFourKFailureRunnable)
+        tv.visibility = View.VISIBLE
+        tv.alpha = 0f
+        tv.animate().alpha(1f).setDuration(250L).start()
+        handler.postDelayed(hideFourKFailureRunnable, 8_000L)
+    }
+
+    private fun hideFourKFailureBanner() {
+        handler.removeCallbacks(hideFourKFailureRunnable)
+        fourKFailureBanner?.animate()?.cancel()
+        fourKFailureBanner?.visibility = View.GONE
+        fourKFailureBanner?.alpha = 1f
     }
 
     private fun buildControls(root: FrameLayout, title: String) {
@@ -4437,6 +4584,7 @@ class X4KPlayerAty : ComponentActivity() {
         Toast.makeText(this, "Cambiando a ${formatQualityShort(target.quality)}…", Toast.LENGTH_SHORT).show()
 
         if (isExternal4k(target)) {
+            lastNativePosMs = curPos
             runCatching { X4KTitan.stop(v) }
             val started = startSpecs(v, listOf(target))
             if (!pollerAlive) {
@@ -5869,6 +6017,10 @@ class X4KPlayerAty : ComponentActivity() {
      */
     private fun scheduleExternal4kResolve() {
         if (externalResolveKicked) return
+        if (skipExternal4k) return
+        if (com.chronosbvrx.visionplus.data.external.FourKGuard
+                .isBlocked(this@X4KPlayerAty, "xtv:$curCode")
+        ) return
         if (curCode.isBlank() || curKind == "series" || curSeries.isNotBlank() || epIds.size > 1) return
         externalResolveKicked = true
         // Copia el contexto en el hilo principal: si entra otro play antes de los 6 s,
@@ -7299,8 +7451,7 @@ class X4KPlayerAty : ComponentActivity() {
                     System.currentTimeMillis() - startedAtMs > externalFirstFrameLimit
                 ) {
                     externalEnded = true
-                    stopExternal()
-                    if (!tryNextMedia("4k-sin-cuadro")) showError("4k-sin-cuadro")
+                    fallbackFromExternal("4k-sin-cuadro")
                     return
                 }
                 val pos = p.currentPosition.coerceAtLeast(0L)
@@ -7308,6 +7459,7 @@ class X4KPlayerAty : ComponentActivity() {
                 val total = resolveStableTotalDuration(declaredDurationMs, dur, pos, false)
                 if (p.playbackState == androidx.media3.common.Player.STATE_READY && !firstFrame) {
                     firstFrame = true
+                    com.chronosbvrx.visionplus.data.external.FourKGuard.clearBlock(this@X4KPlayerAty, "xtv:$curCode")
                     errorShown = false
                     errorOverlay?.visibility = View.GONE
                     loadingFading = true
