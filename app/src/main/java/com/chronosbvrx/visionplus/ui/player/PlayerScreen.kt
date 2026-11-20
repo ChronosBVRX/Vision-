@@ -220,16 +220,9 @@ fun PlayerScreen(
     // Al abrir una película alimenta las recomendaciones del inicio.
     val libraryContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(film.id) { com.chronosbvrx.visionplus.data.UserLibrary.recordPlay(libraryContext, film) }
-    // El 4K sigue resolvi?ndose en segundo plano aunque el Play ya haya abierto el
-    // 1080p: el reproductor nativo consulta el cach? y muestra el badge cuando llega.
-    LaunchedEffect(film.id) {
-        if (film.videoUrl.startsWith("xtv:") &&
-            (film.kind.isBlank() || film.kind == "movie") &&
-            !com.chronosbvrx.visionplus.data.external.External4KRepository.hasFresh(libraryContext, film.id)
-        ) {
-            com.chronosbvrx.visionplus.data.external.External4KWorker.refreshSoon(libraryContext, film)
-        }
-    }
+    // El 4K NO se resuelve al pulsar Play: su red compet?a con el arranque del 1080p
+    // en teles lentas. La ficha lo adelanta (refreshIfStale) y el reproductor lee el
+    // cach?; el badge aparece cuando ya est? listo, sin tocar el arranque.
     // A portal film (`magisvod:<contentId>`): en Vision+, el catálogo masnew reproduce a través
     // del motor nativo XTV (X4K Titan en proceso :x4k). Normalizamos directamente a `xtv:<contentId>`.
     if (film.videoUrl.startsWith("magisvod:")) {

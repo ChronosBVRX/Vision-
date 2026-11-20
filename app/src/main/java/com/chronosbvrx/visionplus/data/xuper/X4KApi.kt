@@ -17,10 +17,12 @@ import com.chronosbvrx.visionplus.data.sources.RemoteIndexSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
@@ -1401,7 +1403,12 @@ object X4KApi {
     private class PrefetchedVod(val atMs: Long, val media: VodMedia)
 
     private val vodPrefetch = java.util.concurrent.ConcurrentHashMap<String, PrefetchedVod>()
-    private const val PREFETCH_TTL_MS = 90_000L
+    /** Handshake en curso: el Play espera el mismo trabajo en vez de pedir dos veces al portal. */
+    private val vodPrewarmInFlight =
+        java.util.concurrent.ConcurrentHashMap<String, CompletableDeferred<VodMedia?>>()
+    /** El precalentado sobrevive a la navegaci?n ficha ? reproductor. */
+    private val prewarmScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private const val PREFETCH_TTL_MS = 300_000L
 
     /**
      * Adelanta el handshake de reproducción mientras el usuario mira la ficha: al pulsar
@@ -1416,65 +1423,68 @@ object X4KApi {
         seriesId: String = "",
         fallbackDurationMs: Long = 0L,
         epNumber: Int = 1,
-    ): Unit = withContext(Dispatchers.IO) {
+    ) {
         val cid = xtvPortalId(contentId)
-        if (cid.isBlank()) return@withContext
+        if (cid.isBlank()) return
         val now = System.currentTimeMillis()
-        vodPrefetch[cid]?.takeIf { now - it.atMs < PREFETCH_TTL_MS }?.let { return@withContext }
+        vodPrefetch[cid]?.takeIf { now - it.atMs < PREFETCH_TTL_MS }?.let { return }
+        if (vodPrewarmInFlight.containsKey(cid)) return
+        val deferred = CompletableDeferred<VodMedia?>()
+        if (vodPrewarmInFlight.putIfAbsent(cid, deferred) != null) return
         val cleanSeries = if (seriesId.isNotBlank()) xtvPortalId(seriesId) else ""
-        runCatching {
-            val prep = prepareVod(context, cid, "", cleanSeries, fallbackDurationMs, epNumber)
-            if (prep != null) vodPrefetch[cid] = PrefetchedVod(now, prep)
-        }
-        // Los marcadores de la serie también quedan calientes (caché en disco de 6 h):
-        // el capítulo actual para arrancar al instante y los dos siguientes para la
-        // maratón. Si la red tarda, el reproductor los pide por su cuenta.
-        if (cleanSeries.isNotBlank()) {
-            val len = (fallbackDurationMs / 1000L).toInt().coerceAtLeast(0)
-            runCatching {
-                withTimeoutOrNull(2_500L) {
-                    com.chronosbvrx.visionplus.data.markers.MarkersStore.fetchForPlayer(
-                        context = context,
-                        ref = cleanSeries,
-                        ep = epNumber.coerceAtLeast(1),
-                        lengthSeconds = len,
-                    )
+        prewarmScope.launch {
+            try {
+                val prep = runCatching {
+                    prepareVod(context, cid, "", cleanSeries, fallbackDurationMs, epNumber)
+                }.getOrNull()
+                if (prep != null) {
+                    vodPrefetch[cid] = PrefetchedVod(System.currentTimeMillis(), prep)
                 }
-            }
-            runCatching {
-                withTimeoutOrNull(4_000L) {
-                    com.chronosbvrx.visionplus.data.markers.MarkersStore.prefetch(
-                        context = context,
-                        ref = cleanSeries,
-                        episodes = (epNumber + 1)..(epNumber + 2),
-                        lengthSeconds = len,
-                    )
+                // El Play ya puede arrancar con la licencia; los marcadores siguen aparte.
+                deferred.complete(prep)
+                if (cleanSeries.isNotBlank()) {
+                    val len = (fallbackDurationMs / 1000L).toInt().coerceAtLeast(0)
+                    runCatching {
+                        withTimeoutOrNull(2_500L) {
+                            com.chronosbvrx.visionplus.data.markers.MarkersStore.fetchForPlayer(
+                                context = context,
+                                ref = cleanSeries,
+                                ep = epNumber.coerceAtLeast(1),
+                                lengthSeconds = len,
+                            )
+                        }
+                    }
+                    runCatching {
+                        withTimeoutOrNull(4_000L) {
+                            com.chronosbvrx.visionplus.data.markers.MarkersStore.prefetch(
+                                context = context,
+                                ref = cleanSeries,
+                                episodes = (epNumber + 1)..(epNumber + 2),
+                                lengthSeconds = len,
+                            )
+                        }
+                    }
+                } else {
+                    val len = (fallbackDurationMs / 1000L).toInt().coerceAtLeast(0)
+                    runCatching {
+                        withTimeoutOrNull(2_500L) {
+                            com.chronosbvrx.visionplus.data.markers.MarkersStore.fetchForPlayer(
+                                context = context,
+                                ref = cid,
+                                ep = 1,
+                                lengthSeconds = len,
+                            )
+                        }
+                    }
                 }
-            }
-        } else {
-            // Película: se deja caliente su marcador de créditos/post-créditos. La
-            // ficha se abre minutos antes de que haga falta, así que al llegar al
-            // final ya está en caché y no hay espera ni botón manual.
-            val len = (fallbackDurationMs / 1000L).toInt().coerceAtLeast(0)
-            runCatching {
-                withTimeoutOrNull(2_500L) {
-                    com.chronosbvrx.visionplus.data.markers.MarkersStore.fetchForPlayer(
-                        context = context,
-                        ref = cid,
-                        ep = 1,
-                        lengthSeconds = len,
-                    )
-                }
+            } catch (_: Throwable) {
+                deferred.complete(null)
+            } finally {
+                vodPrewarmInFlight.remove(cid, deferred)
             }
         }
     }
 
-    /**
-     * Columnas del catálogo Free (`masmobile_free`). El portal firma la licencia libre dentro de
-     * la columna donde vive el título: pedirla sin columna (v9) devuelve solo 480p; con la columna
-     * correcta (v10) entrega 1080p/720p/480p. Se cachean 12 h porque cambian poco y cada play no
-     * debe pagar la consulta.
-     */
     private suspend fun freeColumns(context: Context): List<Int> = withContext(Dispatchers.IO) {
         val p = prefs(context)
         val cached = p.getString(K_FREE_COLS, "").orEmpty()
@@ -2192,6 +2202,12 @@ object X4KApi {
             }.getOrDefault("")
         } else {
             ""
+        }
+        // Si la ficha ya est? haciendo el handshake, el Play espera ESE trabajo en vez
+        // de lanzar un segundo portal (en una caja lenta duplicaba la espera).
+        val prefetchCid = xtvPortalId(cid)
+        vodPrewarmInFlight[prefetchCid]?.let { inFlight ->
+            withTimeoutOrNull(60_000L) { inFlight.await() }
         }
         var prep = prepareVod(context, cid, title, cleanSeriesId, fallbackDurationMs, markerEp)
         if (prep == null) {

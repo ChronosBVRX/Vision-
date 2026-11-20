@@ -1415,8 +1415,12 @@ class X4KPlayerAty : ComponentActivity() {
                 if (startSpecs(v, orderedMedias, code, title)) {
                     if (!liveMode) {
                         // El cuadro entra con un fundido: pre-roll → película se sienten una sola secuencia.
-                        v.alpha = 0f
-                        v.animate().alpha(1f).setStartDelay(250).setDuration(650).start()
+                        if (lowEndDevice) {
+                            v.alpha = 1f
+                        } else {
+                            v.alpha = 0f
+                            v.animate().alpha(1f).setStartDelay(250).setDuration(650).start()
+                        }
                     } else {
                         v.alpha = 1f
                     }

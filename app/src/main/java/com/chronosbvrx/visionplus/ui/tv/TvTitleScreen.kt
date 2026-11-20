@@ -117,6 +117,9 @@ fun TvTitleScreen(
     var fourKOriginal by remember(film.id) { mutableStateOf(cached4k?.language == "Original") }
     LaunchedEffect(film.id) {
         if (isXtv && (film.kind.isBlank() || film.kind == "movie")) {
+            // Primero el handshake del Play (prewarmVod); el cruce 4K va despu?s para
+            // no quitarle red al arranque en una tele lenta.
+            kotlinx.coroutines.delay(1_500L)
             com.chronosbvrx.visionplus.data.external.External4KRepository.refreshIfStale(context, film)
             val fresh = com.chronosbvrx.visionplus.data.external.External4KRepository
                 .fresh4k(context, film.id)

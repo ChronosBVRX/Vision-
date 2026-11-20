@@ -45,8 +45,10 @@ class External4KWiringTest {
         assertTrue(api.contains("external4kLanguage"))
         val worker = source("app/src/main/java/com/chronosbvrx/visionplus/data/external/External4KWorker.kt")
         assertTrue(worker.contains("fun refreshSoon"))
-        val screen = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
-        assertTrue(screen.contains("refreshSoon"))
+        // El 4K se adelanta en la ficha, no al pulsar Play (su red compet?a con el arranque).
+        val title = source("app/src/main/java/com/chronosbvrx/visionplus/ui/tv/TvTitleScreen.kt")
+        assertTrue("la ficha adelanta el 4K", title.contains("refreshIfStale"))
+        assertTrue("la ficha adelanta el handshake del Play", title.contains("prewarmVod"))
     }
 
     @Test
