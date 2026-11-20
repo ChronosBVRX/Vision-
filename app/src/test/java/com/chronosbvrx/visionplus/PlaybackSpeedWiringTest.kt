@@ -276,6 +276,9 @@ class PlaybackSpeedWiringTest {
         )
         assertTrue("sin tope corto en reintentos", player.contains("engineHasNoData -> 15_000L"))
         // Con datos sí se respeta la ventana larga (buffering legítimo).
-        assertTrue(player.contains("softRestarts == 0 -> 25_000L"))
+        assertTrue(player.contains("val bufferingLimit = if (lowEndDevice) 60_000L else 45_000L"))
+        assertTrue(player.contains("else -> bufferingLimit"))
+        assertTrue(player.contains("engineHasNoData && softRestarts == 0 && autoDowngrades == 0 -> softRestartPlayback()"))
+        assertTrue(player.contains("skipSameTier = reason == \"sin-primer-cuadro\""))
     }
 }

@@ -71,7 +71,8 @@ class External4KWiringTest {
         val aty = source("app/src/main/java/com/chronosbvrx/visionplus/ui/player/X4KPlayerAty.kt")
         assertTrue("el 4K se separa de la lista inicial", aty.contains("val nativeMedias = medias.filterNot { isExternal4k(it) }"))
         assertTrue("el 4K solo se agrega al selector", aty.contains("if (external4k != null) curMedias.add(external4k)"))
-        assertTrue("el respaldo automático salta el 4K", aty.contains("while (nextIndex < curMedias.size && isExternal4k(curMedias[nextIndex]))"))
+        assertTrue("el respaldo automático salta el 4K", aty.contains("val skipExternal = isExternal4k(candidate)"))
+        assertTrue("el respaldo por falta de primer cuadro baja de resolución", aty.contains("val skipSameTier = reason == \"sin-primer-cuadro\""))
         assertTrue("el motor nunca recibe el 4K como pista", aty.contains("specs.filterNot { isExternal4k(it) }"))
     }
 

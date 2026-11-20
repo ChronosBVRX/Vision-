@@ -320,6 +320,11 @@ class X4KPlayerAty : ComponentActivity() {
     /** The portal's own running time: authoritative for the bar's total. */
     private var declaredDurationMs: Long = 0L
 
+    /** Tele lenta (<=2.2 GB o pocos n?cleos): ventana de primer cuadro m?s larga. */
+    private val lowEndDevice: Boolean by lazy {
+        com.chronosbvrx.visionplus.DevicePerformance.isLowEndDevice(this)
+    }
+
     private var firstFrame = false
     private var startedAtMs = 0L
     /** Toque del usuario: NO se reinicia en un re-arranque interno (métrica honesta). */
@@ -669,7 +674,7 @@ class X4KPlayerAty : ComponentActivity() {
         // The brand pre-roll belongs to films; live TV opens straight on the signal.
         // En Smart TV o dispositivos modestos (Chromecast, Fire TV, Amlogic) se omite el VideoView
         // de la intro para evitar que dos decodificadores de hardware compitan antes de reproducir.
-        val skipIntroForPerformance = com.chronosbvrx.visionplus.DevicePerformance.isLowEndDevice(this)
+        val skipIntroForPerformance = com.chronosbvrx.visionplus.DevicePerformance.isLowEndDevice(this@X4KPlayerAty)
         if (!liveMode && !skipIntroForPerformance) showIntro(root())
 
         val medias = runCatching { parseMedias(mediasJson) }.getOrDefault(ArrayList())
@@ -2569,11 +2574,21 @@ class X4KPlayerAty : ComponentActivity() {
         if (liveMode || isFinishing || isDestroyed) return false
         if (autoDowngrades >= MAX_AUTO_DOWNGRADES) return false
         val v = playerView ?: return false
+        val previous = curMedias.getOrNull(mediaCursor)
+        val currentRank = X4KApi.qualityRank(previous?.quality.orEmpty())
         var nextIndex = mediaCursor + 1
         // El 4K externo es una opci?n manual: el respaldo autom?tico nunca salta a ?l.
-        while (nextIndex < curMedias.size && isExternal4k(curMedias[nextIndex])) nextIndex++
+        // Si el 1080p no dio ni un cuadro, no se prueba otro 1080p del mismo CDN:
+        // se baja a la siguiente resoluci?n (720p/480p).
+        while (nextIndex < curMedias.size) {
+            val candidate = curMedias[nextIndex]
+            val skipExternal = isExternal4k(candidate)
+            val skipSameTier = reason == "sin-primer-cuadro" &&
+                X4KApi.qualityRank(candidate.quality) >= currentRank
+            if (!skipExternal && !skipSameTier) break
+            nextIndex++
+        }
         if (nextIndex >= curMedias.size) return false
-        val previous = curMedias.getOrNull(mediaCursor)
         val next = curMedias[nextIndex]
         mediaCursor = nextIndex
         autoDowngrades++
@@ -7265,19 +7280,27 @@ class X4KPlayerAty : ComponentActivity() {
                 val engineHasNoData = !liveMode && !engineSignal && runCatching {
                     com.chronosbvrx.visionplus.data.xuper.X4KTitan.durationMs(v)
                 }.getOrDefault(-1L) <= 0L
+                // En una tele lenta/red lenta el primer cuadro puede tardar m? que el
+                // portal (medido: 40 s). Si el motor YA tiene duraci?n est? buffereando:
+                // no se mata el buffer con un re-arranque a los 25 s. Se le da la ventana
+                // larga y, si a?n as?, se baja de calidad (720p/480p).
+                val bufferingLimit = if (lowEndDevice) 60_000L else 45_000L
                 val stallLimit = when {
+                    liveMode && softRestarts == 0 -> 25_000L
+                    liveMode -> 35_000L
                     // Tras un respaldo de calidad no se regala otra espera larga: si la pista
                     // nueva no da cuadro pronto, se pasa a la siguiente.
                     autoDowngrades > 0 && engineHasNoData -> 8_000L
-                    autoDowngrades > 0 -> 14_000L
+                    autoDowngrades > 0 -> 20_000L
                     engineHasNoData && softRestarts == 0 -> 10_000L
                     engineHasNoData -> 15_000L
-                    softRestarts == 0 -> 25_000L
-                    else -> 35_000L
+                    else -> bufferingLimit
                 }
                 if (stalled && !errorShown && stalledFor > stallLimit) {
                     when {
-                        softRestarts == 0 && autoDowngrades == 0 -> softRestartPlayback()
+                        // Solo el motor sin NADA de datos se re-arranca r?pido (TCL).
+                        // Si ya hay duraci?n, est? buffereando: se baja de pista.
+                        engineHasNoData && softRestarts == 0 && autoDowngrades == 0 -> softRestartPlayback()
                         // Antes de rendirse, baja de pista en el mismo reproductor.
                         tryNextMedia("sin-primer-cuadro") -> Unit
                         else -> {
