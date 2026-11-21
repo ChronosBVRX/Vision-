@@ -9,18 +9,15 @@ SI RECIBISTE "VisionPlusPC-Portable.exe"
   Al abrirlo verás una pantalla de carga con barra de progreso
   mientras se prepara el motor y la interfaz.
 
-NOVEDADES 0.8.2
-  - Agenda deportiva: se resuelven los enlaces HLS/DASH directos y las
-    paginas que publican el manifiesto en su HTML.
-  - Las paginas que solo funcionan en su reproductor web se rechazan
-    con un mensaje claro, sin dejar la app esperando ni congelada.
-  - Se descartan anuncios, intros y segmentos sueltos para evitar el
-    bucle de audio raro.
-  - El relay en vivo usa timestamps limpios y el video no queda en bucle.
-  - Los logs ya no bloquean el proceso cuando el lanzador cierra la
-    consola; el diagnostico queda en VisionPlusPC-data\server.log.
-  - Incluye el instalador OTA con reintentos de la 0.8.1, el 4K manual
-    y los selectores de calidad, audio, subtitulos e imagen.
+NOVEDADES 0.8.3
+  - Se retiraron los nombres de fuentes y proveedores de la interfaz,
+    las fichas, el centro de partido y los ajustes.
+  - Las calidades se muestran solo por resolucion, idioma y tamano;
+    la opcion nativa se llama "Calidad nativa".
+  - Se mantiene la agenda deportiva estable, el instalador OTA con
+    reintentos, el 4K manual y los selectores de calidad, audio,
+    subtitulos e imagen.
+  - Se mantienen TV en vivo, Deportes, catalogo, favoritos y ajustes.
 
 SI RECIBISTE LA CARPETA "VisionPlusPC"
   Usa las instrucciones de abajo.
@@ -54,7 +51,7 @@ QUE INCLUYE
   - La misma interfaz de Smart TV de Vision+: Inicio, TV en vivo,
     Deportes, Buscar, Catálogo, Ajustes, ficha, temporadas/capítulos
     y reproductor.
-  - El mismo catálogo del VPS y la misma resolución del portal XTV
+  - El mismo catálogo del servicio y la misma resolución del portal
     que usa el port de webOS.
   - Proxy local y FFmpeg para que Chrome/Edge reproduzcan el catálogo
     aunque el título venga en MPEG-TS o HEVC (se convierte a H.264).

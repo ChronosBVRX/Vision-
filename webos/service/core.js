@@ -143,7 +143,7 @@ function detailXtv(contentId) {
   });
 }
 
-/** Tipo de archivo de una URL externa (los 4K de HdHub llegan como MKV). */
+/** Tipo de archivo de una URL externa (las fuentes 4K llegan como MKV). */
 function mimeForUrl(url) {
   var raw = String(url || "");
   try {
@@ -175,17 +175,15 @@ function fourKLanguage(blob) {
   return "Original";
 }
 
-function fourKProvider(name, blob) {
-  const text = String(name || "").trim();
-  if (/4khdhub/i.test(text) || /4khdhub/i.test(blob)) return "4KHDHub";
-  const bracket = /^\[([^\]]+)]/.exec(text);
-  const candidate = (bracket ? bracket[1] : text.split(/\r?\n/)[0] || "4K").trim();
-  return candidate.replace(/[^\w .-]/g, "").trim().slice(0, 32) || "4K";
+function fourKProvider() {
+  // La interfaz no muestra el nombre del proveedor: solo la calidad y el idioma.
+  return "4K externo";
 }
 
 /**
- * Normaliza las fuentes 4K del VPS. Solo se aceptan pistas que declaren
- * 2160p; el nombre «4KHDHub» se descuenta antes de buscar la calidad real.
+ * Normaliza las fuentes 4K del servicio. Solo se aceptan pistas que declaren
+ * 2160p en el título/descripción (el nombre del proveedor no cuenta como
+ * calidad).
  */
 function fourKSources(payload) {
   const streams = Array.isArray(payload && payload.streams) ? payload.streams : [];
@@ -196,12 +194,13 @@ function fourKSources(payload) {
     if (!raw || typeof raw !== "object") continue;
     const url = String(raw.url || "").trim();
     if (!/^https?:\/\//i.test(url) || seen.has(url)) continue;
-    const blob = `${raw.name || ""} ${raw.title || ""} ${raw.description || ""}`;
-    const qualityBlob = blob.replace(/4khdhub/ig, "");
-    if (!/(?:\b2160p?\b|\b4k\b|\buhd\b)/i.test(qualityBlob)) continue;
+    const hints = raw.behaviorHints || {};
+    const filename = String(hints.filename || "");
+    const blob = `${raw.title || ""} ${raw.description || ""} ${filename}`;
+    // El servicio ya entrega únicamente fuentes 2160p; no se usa el nombre del
+    // proveedor para decidir la calidad (ese nombre contiene «4K» siempre).
     seen.add(url);
     const isHls = /\.m3u8(?:\?|$)/i.test(url);
-    const hints = raw.behaviorHints || {};
     const size = Number(hints.videoSize) || 0;
     const declared = String(raw.language || "").trim();
     const language =
@@ -219,7 +218,7 @@ function fourKSources(payload) {
     })();
     out.push({
       url,
-      provider: fourKProvider(raw.name, blob),
+      provider: fourKProvider(),
       language,
       label: language === "Original" ? "4K · Original" : `4K · ${language}`,
       height: 2160,

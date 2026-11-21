@@ -5,7 +5,7 @@
  *
  * La app web llama `luna://com.chronosbvrx.visionplus.webos.service` con
  * `method` y `parameters`. El servicio habla con el API de Vision+ y con el
- * portal XTV, y publica el stream por un proxy HTTP local para que el
+ * portal del catálogo, y publica el stream por un proxy HTTP local para que el
  * elemento <video> pueda reproducirlo con las cabeceras del CDN.
  */
 

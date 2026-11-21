@@ -1072,7 +1072,7 @@
     };
     $("#detail-score").textContent = scoreOf(film) || "";
     $("#detail-score").hidden = !scoreOf(film);
-    $("#detail-kicker").textContent = kindLabel(film) + (film.tmdbId ? " · TMDB" : "");
+    $("#detail-kicker").textContent = kindLabel(film);
     $("#detail-title").textContent = film.title || "";
     var meta = [];
     if (film.year) meta.push('<span>' + escapeHtml(film.year) + "</span>");
@@ -1604,7 +1604,7 @@
     if (bitrate > 0) {
       bits.push(bitrate >= 1000 ? (bitrate / 1000).toFixed(1) + " Mbps" : Math.round(bitrate) + " kbps");
     }
-    return bits.join(" · ") || "Xuper";
+    return bits.join(" · ") || "Calidad nativa";
   }
 
   function subtitleTrackLabel(track) {
@@ -2320,11 +2320,10 @@
 
   function fourKSourceDetail(source) {
     var bits = [];
-    if (source.provider) bits.push(source.provider);
     var size = Number(source.sizeBytes) || 0;
     if (size > 0) bits.push((size / (1024 * 1024 * 1024)).toFixed(1) + " GB");
     bits.push(source.language && source.language !== "Original" ? source.language : "Idioma original");
-    return bits.join(" · ");
+    return bits.join(" · ") || "Señal 4K";
   }
 
   function renderPlayerOptions() {
@@ -2386,7 +2385,7 @@
         if (player.fourKActive) {
           addPlayerMenuRow({
             label: "Calidad nativa · " + qualityTrackLabel(tracks[player.nativeTrackIndex] || tracks[0] || {}),
-            detail: "Xuper · la misma película, en tu calidad de siempre",
+            detail: "Calidad nativa · la misma película, en tu calidad de siempre",
             selected: false,
             section: "quality",
             onSelect: function () { chooseNativeQuality(Number(player.nativeTrackIndex) || 0); },
@@ -2722,7 +2721,7 @@
     video.load();
     $("#player-loading").hidden = false;
     $("#player-loading-text").textContent = explicitAudio === null
-      ? "Abriendo 4K · " + (source.provider || "ULTRA HD")
+      ? "Abriendo 4K · ULTRA HD"
       : "Cambiando el audio del 4K";
     $("#player-message").classList.remove("show");
     $("#subtitle-overlay").textContent = "";
@@ -3602,7 +3601,7 @@
     "NBA", "NFL", "MLB", "NHL", "F1", "MotoGP", "UFC",
   ];
 
-  /* ============================ deportes (GeeSports) ============================ */
+  /* ============================ deportes ============================ */
 
   var GEE_MAIN_LEAGUES = [
     "Liga MX", "UEFA Champions League", "Premier League", "LaLiga", "Serie A",
@@ -4770,7 +4769,7 @@
     state.sports.playingUrl = "xtvlive:" + code;
     if (info) {
       info.signalName = row.title;
-      info.signalType = "XTV";
+      info.signalType = "En vivo";
     }
     closeSportsDialog(false, true);
     playLive({
@@ -4847,7 +4846,7 @@
       var xtvOnly = rows.every(function (row) { return row.xtv; });
       var hint = el("div", "gee-pick-hint");
       hint.textContent = xtvOnly
-        ? "GeeSports no publicó una señal utilizable; opciones de la casa como respaldo."
+        ? "No hay una señal del evento disponible en este momento."
         : "Usa el mando para elegir una señal.";
       list.appendChild(hint);
       rows.forEach(function (row) { list.appendChild(geeRowNode(row, info)); });
@@ -5364,7 +5363,7 @@
     $("#mcd-body").innerHTML = info.loading && !stats
       ? '<div class="mcd-empty">Cargando estadísticas del partido…</div>'
       : (info.error && !stats ? '<div class="mcd-empty">' + escapeHtml(info.error) + "</div>" : matchStatsBody(stats, page, false));
-    $("#mcd-source").textContent = info.signalName ? "Señal: " + info.signalName : "Datos: ESPN · GeeSports";
+    $("#mcd-source").textContent = info.signalName ? "Señal: " + info.signalName : "Datos del partido";
   }
 
   function openMatchCenter(info, page, returnFocus) {
@@ -6307,7 +6306,7 @@
     setCopyText("#set-update-title", "Versión de Vision+ para LG");
     setCopyText("#set-update-help", "Las actualizaciones de Vision+ para LG se instalan desde la app del teléfono.");
     setCopyText("#set-data-help", "La sesión y la caché viven en el almacenamiento de la app en la TV.");
-    setCopyText("#about-line", "Catálogo VPS, resolución directa del portal XTV y proxy local. Reproductor nativo webOS.");
+    setCopyText("#about-line", "Catálogo del servicio, resolución directa del portal y proxy local. Reproductor nativo webOS.");
     setCopyText("#about-version", VERSION);
     var checkUpdate = $("#set-check-update");
     if (checkUpdate) checkUpdate.hidden = true;

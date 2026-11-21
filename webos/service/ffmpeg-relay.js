@@ -257,13 +257,13 @@ function buildArgs(e, r, t) {
     o.ua && n.push("-user_agent", o.ua);
     o.rest && n.push("-headers", o.rest);
     if (e.drmKey) {
-      // GeeSports entrega ClearKey como `KID:KEY`; FFmpeg espera `KID=KEY`.
+      // Las señales en vivo entregan ClearKey como `KID:KEY`; FFmpeg espera `KID=KEY`.
       n.push("-cenc_decryption_keys", String(e.drmKey).trim().replace(/:/g, "="));
     }
   }
   if (e.isLive) {
     // Chrome/Edge no reproducen HLS nativo. El relay entrega un MP4 fragmentado
-    // H.264/AAC en vivo, igual que el port de XuperTV para Windows.
+    // H.264/AAC en vivo, igual que el reproductor de escritorio.
     n.push(
       "-fflags",
       "+genpts",
@@ -306,7 +306,7 @@ function buildArgs(e, r, t) {
     n.push("-c:v", "copy");
     e.hevc && n.push("-tag:v", "hvc1");
   } else if (PC && e.hevc) {
-    // En PC sin HEVC se transcodifica a H.264 (mismo criterio que XuperTV PC).
+    // En PC sin HEVC se transcodifica a H.264 (mismo criterio del reproductor de escritorio).
     n.push(
       "-c:v",
       "libx264",

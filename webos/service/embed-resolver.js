@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Resuelve los enlaces `token_api` de GeeSports.
+ * Resuelve los enlaces `token_api` de la agenda deportiva.
  *
  * La fuente no publica la URL del canal: entrega una página/endpoint que arranca
  * su reproductor y recién ahí escribe la dirección del HLS/DASH. El resolver
@@ -72,15 +72,6 @@ function cleanHeaders(input) {
 
 function mergeHeaders(base, extra) {
   return Object.assign({}, base || {}, cleanHeaders(extra));
-}
-
-function safeUrl(raw) {
-  try {
-    const parsed = new URL(String(raw || ""));
-    return parsed.host + parsed.pathname;
-  } catch (error) {
-    return String(raw || "").slice(0, 120);
-  }
 }
 
 function requestText(target, headers, timeout, redirectsLeft) {
@@ -256,15 +247,15 @@ function resolve(tokenApi) {
   if (isMediaUrl(config.api) && !isAdLikeUrl(config.api)) {
     const direct = { url: config.api, headers };
     cache.set(config.api, { at: Date.now(), value: direct });
-    console.log("[embed] directo", safeUrl(config.api));
+    console.log("[embed] directo");
     return Promise.resolve(direct);
   }
-  console.log("[embed] inicio", safeUrl(config.api));
+  console.log("[embed] inicio");
   return resolveViaHttp(config, headers)
     .catch(function () { return ""; })
     .then((media) => {
       if (media) {
-        console.log("[embed] http", safeUrl(media));
+        console.log("[embed] http");
         return { url: media, headers };
       }
       throw new Error("Esta señal se prepara en el reproductor web de la fuente y no está disponible en PC. Prueba otra señal.");

@@ -72,11 +72,11 @@ ventana principal hasta llegar al 100 %.
 - Al abrir una transmisión de Deportes, el reproductor muestra el **Match Center**
   estilo FIFA con marcador, escudos, estadísticas, goles/tarjetas y alineaciones.
 - El botón **Partido** del OSD abre la tarjeta completa.
-- Las estadísticas salen de ESPN (`matchStats`) y se cargan aparte, sin bloquear
-  el video.
-- Los enlaces `token_api` de GeeSports se resuelven con una ventana Electron
-  oculta (páginas que solo publican el HLS cuando arranca su player). Los enlaces
-  DASH con ClearKey pasan por FFmpeg con `-cenc_decryption_keys`.
+- Las estadísticas del partido se cargan aparte, sin bloquear el video.
+- Los enlaces de la agenda con manifiesto HLS/DASH se resuelven en el servidor
+  local. Las páginas que solo publican la señal dentro de su reproductor web se
+  rechazan con un mensaje claro, sin dejar la app esperando.
+- Los enlaces DASH con ClearKey pasan por FFmpeg con `-cenc_decryption_keys`.
 
 ## Pantalla completa
 

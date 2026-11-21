@@ -4,12 +4,11 @@ Port de escritorio de Vision+ que reutiliza **la misma interfaz de Smart TV** y
 **el mismo motor** del port de webOS. Añade lo necesario para que funcione en un
 PC Windows sin instalar nada y sin emulador.
 
-> **Actualización 0.8.2 (motor webOS 0.5.2):** agenda deportiva más estable
-> (enlaces HLS/DASH directos y páginas con manifiesto; las páginas que solo
-> viven en su reproductor web se rechazan sin congelar la app), sin segmentos
-> ni anuncios sueltos que parecían un bucle de audio, y relay en vivo con
-> timestamps limpios. Incluye el instalador OTA con reintentos de la 0.8.1,
-> el **4K manual** y los selectores de calidad, audio, subtítulos e imagen.
+> **Actualización 0.8.3 (motor webOS 0.5.2):** se retiraron los nombres de
+> fuentes y proveedores de la interfaz, las fichas, el centro de partido y los
+> ajustes. Las calidades se muestran solo por resolución, idioma y tamaño.
+> Incluye la agenda deportiva estable, el instalador OTA con reintentos, el
+> **4K manual** y los selectores de calidad, audio, subtítulos e imagen.
 > Mantiene Deportes en vivo, VOD 1080p, capítulo real de serie y fichas en español.
 
 La UI del `.exe` se reconstruyó contra la app real de Smart TV (capturas del
@@ -17,7 +16,7 @@ Chromecast): barra superior global con menús, Inicio, TV en vivo con EPG,
 Deportes con agenda y selector de transmisiones, y OSD del reproductor.
 Comparativas en `docs/screenshots/pc_reference_*.png` y `pc_current_*.png`.
 
-> Análisis del port de XuperTV PC y decisiones: `docs/PC_PORT_XUPER_ANALISIS.md`.
+> Decisiones internas del port de PC: revisar la documentación de arquitectura.
 >
 > **Importante para git:** este port reutiliza `webos/`. En el árbol actual
 > `webos/` todavía no está trackeado (`?? webos/`), así que hay que incluirlo
@@ -169,7 +168,7 @@ pc/
 
 ## Notas
 
-- No se copia nada del catálogo ni de la UI de XuperTV.
+- No se copia nada del catálogo ni de la UI de otros reproductores.
 - El lanzador no mata todos los `node.exe` del sistema: solo el PID registrado
   en `data/port.json`.
 - Node.js se distribuye bajo MIT y FFmpeg bajo LGPL/GPL según el build; el

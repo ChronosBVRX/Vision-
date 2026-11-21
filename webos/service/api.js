@@ -217,8 +217,8 @@ function playVip(body) {
 }
 
 /**
- * Fuentes 4K públicas del VPS (HdHub resuelto con la IP del servidor).
- * El VPS acepta IMDb o, si falta, resuelve por TMDB/título/año.
+ * Fuentes 4K públicas del servicio (resueltas con la IP del servidor).
+ * El servicio acepta IMDb o, si falta, resuelve por título/año.
  */
 function external4k(params) {
   const values = params || {};
