@@ -4,6 +4,11 @@
 > **tests automáticos** (rápidos, bloquean el merge) + **checklist manual**
 > (TV + móvil antes de publicar OTA) + **regla de oro** (cada fix trae su test).
 
+> **Estado 2.6.81 (2026-11-20):** las reglas que no se pueden romper están en
+> `docs/INVARIANTES_REGRESION.md`. Baseline: **1,373 tests, 2 fallas ambientales**.
+> El reproductor de Deportes ya no muestra ni usa canales de la casa; el 4K no se
+> auto-selecciona y su resolvedor/aviso esperan al primer cuadro.
+
 ## 1. Tests automáticos (corren en CI y en local)
 
 | Qué | Dónde | Qué cubre |
@@ -24,6 +29,30 @@
 | Vision+ Home (launcher propio) | `home-contract/src/test` (16), `launcher/src/test` (23), `data/homefeed/HomeFeedStoreTest.kt`, `ui/HomeFeedWiringTest.kt` | JSON v1 del feed (round-trip, versión desconocida, basura, ítems rotos, sports con marcador 0), deep links (`watch/live/title/open/sports`), métricas por altura de pantalla (3 filas en 540 dp), orden de apps (favoritas/recientes), pestañas sin mezclar cine y series, feed nunca vacío en equipo nuevo, canales HD/FHD colapsados y México primero, permiso `signature` + provider de solo lectura, manifiesto con los hosts y los dos APK compartiendo `:home-contract` |
 | Vision+ Home: buscador y Deportes | `launcher/.../LauncherSearchTest.kt`, `EventsAgendaTest.kt`, `HomeFeedWiringTest` (app) | la lupa consulta al provider (`/search`), pinta los resultados en el launcher y abre la ficha; teclado de mando + voz; agenda por deporte/día/liga (Fútbol y Liga MX primero, días ordenados, agenda vencida fuera); el evento abre `open/sports?event=` en Vision+ |
 | Servidor (sync/api) | `server/tests/` (pytest, sin red ni DB) | marcas de temporada, unión por kind/doblaje, aridad de tuplas vs TITLE_SQL, limpieza al servir, preferencia XTV/TMDB |
+
+### Guardias nuevas (2.6.78–2.6.81)
+
+| Guardián | Qué protege |
+|---|---|
+| `External4KWiringTest` | 4K manual, resolvedor y aviso después del primer cuadro, `FourKGuard` (bloqueo de 5 minutos, aviso, regreso a 1080p), sin auto-relanzamiento global, vivo fuera de la ruta 4K. |
+| `LiveSportsPlayerUiTest` | La agenda usa solo las señales del evento; sin `xtvPickRows`, sin `event.xtv`, sin `house`, sin `requestFallback`/`PLAYER_FAILOVER_XTV`; si no hay señal, error. |
+| `PlaybackSpeedWiringTest` | Espera 45/60 s con duración conocida, 20 s sin datos, respaldo a 720p/480p. |
+| `BackToTopTest` | La barra superior TV conserva `focusGroup()` y el cableado del Atrás. |
+
+**Regresiones que ya ocurrieron y no deben volver:**
+
+1. **4K antes de tiempo** (2.6.74–2.6.77): el resolvedor y el chip competían con el
+   arranque del 1080p. Ahora el resolvedor corre ≈6 s después del primer cuadro y el
+   aviso ≈4 s después; el chip es temporal.
+2. **4K reiniciando el buffer** (2.6.74): el motor se reiniciaba a los 11.7 s. Ahora
+   espera 45/60 s si hay duración y solo reintenta a los 20 s sin datos.
+3. **Auto-relanzamiento global** (2.6.78): `MainActivity` podía abrir una película
+   encima del vivo. Se retiró en 2.6.79; no reintroducir `recoverFourKIfNeeded`.
+4. **4K sin escudo** (2.6.78–2.6.80): un fallo del decodificador dejaba el reproductor
+   en negro. Ahora hay aviso, regreso a 1080p y una marca previa en disco de 5 minutos.
+5. **Canales de la casa en Deportes** (hasta 2.6.80): el selector mezclaba
+   `xtvPickRows(event.xtv)` y el reproductor podía abrir un canal de la casa. Se
+   quitaron en 2.6.81; la agenda solo usa las señales del evento.
 
 Comando local (Windows, PowerShell, desde la raíz del repo):
 
@@ -67,6 +96,10 @@ Sin esto, el CI avisa pero no bloquea.
 
 ## 3. Checklist manual pre-OTA (5–10 min)
 
+> **TV del dueño:** el agente no usa ADB sobre la TV física; valida en
+> emulador/JVM. La TV se reserva para el usuario.
+
+
 Los unit tests no ven video, foco real ni red del portal. Antes de cada release:
 
 - [ ] **Móvil**: Home (hero+filas) → Ficha (score/reparto/duración) → Reproductor VOD → atrás sin rebote.
@@ -86,6 +119,8 @@ Los unit tests no ven video, foco real ni red del portal. Antes de cada release:
 - Test rojo de `SportsSourceTest` → cambió el JSON de `/v1/sports` o el orden.
 - Test rojo de `RemoteIndexTest` → cambió `/v1/index` o `/v1/section`.
 - Test rojo de `TvFocusTest` → una pantalla TV perdió el foco inicial o el D-pad.
+- Test rojo de `LiveSportsPlayerUiTest` → se reintrodujeron canales de la casa o un fallback XTV en Deportes.
+- Test rojo de `External4KWiringTest` → cambió el timing/escudo del 4K o el vivo entró a la ruta 4K.
 - Test rojo de `WatchNextPlanTest`/`LauncherWatchNextSyncTest` → cambió el espejo del historial al canal
   Watch Next del launcher (tipos, posición, reconciliación) o el `intent_uri` del deep link.
 - Fallo solo en dispositivo (sesión `aaa100083`, EPG vacía, sin internet) → ver

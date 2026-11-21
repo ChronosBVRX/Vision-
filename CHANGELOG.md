@@ -1,5 +1,35 @@
 # Changelog
 
+> **Nota:** desde 2.6.20 el detalle por versión vive en `ota_notes_*.md`; este
+> changelog conserva los hitos.
+
+## 2.6.81 — Deportes: solo señales del evento
+- Se quitan los canales XTV de la casa del selector, del zapping y del respaldo del reproductor.
+- La agenda usa únicamente las señales del evento (`geePickRows`); si no hay señal, muestra error.
+- Se mantiene el blindaje 4K y el vivo aislado.
+
+## 2.6.80 — 4K: marca previa de seguridad
+- Antes de abrir el 4K se bloquea esa ficha 5 minutos en disco; un 4K exitoso borra la marca.
+- Si el decodificador tumba el proceso, la próxima reproducción entra en 1080p.
+- El fallo 4K muestra aviso y vuelve al 1080p sin cerrar la app; sin auto-relanzamiento global.
+
+## 2.6.79 — Vivo aislado del 4K
+- Se retira el auto-relanzamiento global que podía abrir una película encima del vivo.
+- El modo vivo no entra a la ruta 4K; el blindaje 4K sigue dentro del reproductor.
+
+## 2.6.78 — Blindaje del 4K
+- Si el 4K falla, aviso visible y regreso al 1080p; la ficha oculta el 4K 5 minutos.
+- La recuperación automática de esta versión se retiró en 2.6.79.
+
+## 2.6.77 — Aviso 4K temporal
+- El aviso dice «Esta película está disponible en 4K en su idioma original», dura unos segundos y se va.
+- El 4K se resuelve después del primer cuadro; se prefiere el CDN y se reintenta sin un IMDb viejo.
+- Los subtítulos del catálogo entran cuando el audio es original.
+
+## 2.6.76 — 4K después del primer cuadro
+- El reproductor espera 45/60 s si hay duración y solo reintenta a los 20 s sin datos.
+- El resolvedor y el aviso 4K esperan a que la película ya se vea; el arranque sigue en 1080p.
+
 ## 2.6.19 — Reingreso a salas y TV sin caché vieja
 
 - Corregido el reingreso con un código nuevo: recarga real del controlador y descarte de la sesión anterior.

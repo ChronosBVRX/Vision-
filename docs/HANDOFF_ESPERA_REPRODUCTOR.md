@@ -1,5 +1,11 @@
 # HANDOFF — Espera del reproductor (loading card) + trampa de regex ICU
 
+> **Actualización 2.6.81 (2026-11-20):** este documento describe la pantalla de espera
+> histórica. El reproductor actual arranca en 1080p, el 4K es manual, resuelve/avisa
+> después del primer cuadro y tiene blindaje (aviso + 1080p + bloqueo de 5 minutos).
+> La agenda deportiva usa solo las señales del evento. Reglas:
+> `docs/INVARIANTES_REGRESION.md`.
+
 > Sesión del 2026-10-14 (misma fecha del trabajo de subtítulos). Este documento es para el
 > agente/sesión que sigue trabajando en los **subtítulos del proveedor** (`data/subs/`), que
 > toca los mismos archivos que este cambio. **No borres ni renombres nada de aquí sin leer

@@ -1,5 +1,9 @@
 # Handoff maestro — Vision+ (para el agente que toma el proyecto)
 
+> **Actualizado 2026-11-20:** la beta actual es **2.6.81 (vc577)**; la estable sigue
+> en **2.6.67**. La sección 2 ("Estado actual") es histórica (2.5.177). Reglas
+> vigentes del reproductor y Deportes: `docs/INVARIANTES_REGRESION.md`.
+
 **Fecha:** 2026-10-27. **Estado:** producto en producción, con usuarios reales.
 **Este documento es el punto de entrada.** Léelo antes que nada; después sigue el orden de §12.
 
@@ -128,6 +132,11 @@ cómo añadir una pantalla sin romper el mando.
 7. **Sin emojis, sin marcas del proveedor.** El usuario final nunca ve «Xuper», «Magis» ni «Titan».
 8. **La TV es el equipo modesto de referencia.** TCL Android 9, 2 GB, índice de 5.8 MB que tarda
    12.4 s en parsear: por eso la TV pide 24 títulos por fila y no 100.
+
+9. **Reproductor 4K/vivo y Deportes (2.6.81):** 1080p primero; 4K manual con aviso y
+   resolvedor después del primer cuadro; fallo 4K = aviso + 1080p + bloqueo de 5 minutos
+   (sin auto-relanzamiento global); vivo aislado. Deportes usa solo las señales del
+   evento, sin canales XTV de la casa. Ver `docs/INVARIANTES_REGRESION.md`.
 
 ---
 

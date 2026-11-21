@@ -1,5 +1,8 @@
 # «Ahora en la tele» — control remoto con estado y progreso
 
+> **Actualización 2.6.81:** el control remoto sigue cubriendo los dos
+> reproductores. Reglas del 4K/vivo/Deportes: `docs/INVARIANTES_REGRESION.md`.
+
 Implementado sobre el control remoto LAN existente (`docs/PLAN_CONTROL_REMOTO.md`), sin VPS,
 sin puertos nuevos y sin servicios de terceros.
 

@@ -64,6 +64,8 @@ dirección siguen como «Sin señal».
   respaldo aunque su caché sea vieja. Los escudos de ESPN mandan cuando existen.
 - Un evento con `link_names` siempre devuelve una fila por nombre, aunque falte URL.
 - La UI no muestra el nombre de la fuente; las no disponibles dicen «Sin señal».
+- La app no muestra ni usa canales XTV de la casa en el selector, zapping ni
+  respaldo: solo las señales del evento. Si no hay señal, error (2.6.81).
 - La app pide eventos frescos al abrir Deportes y al volver del reproductor.
 
 ## Consumo medido (para que nadie lo confunda con una saturación)

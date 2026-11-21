@@ -98,8 +98,10 @@ Nunca subas `debug.keystore`, `*.jks`, `*.keystore` ni `keystore.properties`.
 Fallos conocidos y ambientales de la suite (no los introduce este proyecto):
 
 - `EncryptedVaultDataSourcePortableTest > streamsAndSeeksPortableContainer` (runtime nativo de Robolectric).
-- `LiveSportsPlayerUiTest > thePlayerFallsBackToTheHouseChannelByItselfWhenEverythingElseGivesUp`.
-- `TvProfilesRenameTest > theTvProfilesScreenIsDarkGlassWithoutFakeActionBars`.
+- `TvProfilesRenameTest > theTvProfilesScreenIsDarkGlassWithoutFakeActionBars` (colores viejos del diálogo).
+
+`LiveSportsPlayerUiTest` ya pasa: guarda que Deportes no muestre canales de la casa. No uses ADB
+sobre la TV del dueño; valida en emulador/JVM. Reglas: `docs/INVARIANTES_REGRESION.md`.
 
 ## 6. Publicar una OTA
 

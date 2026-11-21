@@ -1,5 +1,9 @@
 # Análisis: gee-sports.apk (`com.geesports.live`) — fuente alternativa de deportes para el apartado de Fútbol
 
+> **Actualización 2.6.81:** el campo `xtv` de la casa y el respaldo XTV ya no se
+> muestran en la app. Este análisis describe el backend/plan; la UI de Deportes
+> usa solo `geePickRows(event.links)` y muestra error si no hay señal.
+
 **Fecha**: 2026-10-16 · **APK**: `C:\Users\Axel Rosete\Downloads\gee-sports.apk` (6.3 MB, SHA-256 `914A0329…B8B7`)
 **Decompilado**: `Temp/opencode/gee_src` (jadx) + `Temp/opencode/gee_apktool` (apktool/smali).
 **Estado**: análisis completo + auditoría de vida real hecha; integración **pendiente de decisión del usuario** (ver «Plan»).

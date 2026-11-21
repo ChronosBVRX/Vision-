@@ -92,6 +92,12 @@ cuando importa, comprueban el **cableado** leyendo el fuente (patrón `WiringTes
    vive en `files/active_profile` y se lee en cada acceso, porque `:x4k` también escribe.
    Ajustes, descargas, modo niños y emparejamiento son del equipo.
 
+9. **Reproductor y Deportes (2.6.81):** el VOD arranca en 1080p; el 4K es manual,
+   se resuelve después del primer cuadro y, si falla, muestra aviso, vuelve al 1080p y
+   bloquea esa ficha 5 minutos. El vivo no entra a la ruta 4K. La agenda deportiva usa
+   solo las señales del evento: no muestra ni abre canales XTV de la casa. Reglas:
+   `docs/INVARIANTES_REGRESION.md`.
+
 ## 4. Calidad medible
 
 - **Suite**: `:app:testNormalDebugUnitTest` (Android, Robolectric/Compose) +

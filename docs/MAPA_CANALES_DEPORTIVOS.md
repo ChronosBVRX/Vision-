@@ -1,5 +1,8 @@
 # Mapa de canales deportivos XTV + cruce con la agenda ESPN
 
+> **2.6.81:** este mapa describe la parrilla/backend. La app ya no muestra ni usa
+> canales XTV de la casa en Deportes; solo usa las señales del evento.
+
 Mapa propio de las **263 señales deportivas/deportivas-generalistas** de la
 parrilla XTV (de 1,035 canales), con país, marca, feed y dueño. Es una **segunda
 opción** junto a la agenda de GeeSports: no la reemplaza ni la modifica.
@@ -164,22 +167,16 @@ python3 tools/build_sports_map.py parrilla.tsv server/api/sports_channels.json
 El generador no toca GeeSports ni la base: solo clasifica nombres/códigos y
 escribe el JSON que sirve `/v1/sports/channels`.
 
-## Segunda opción en la app: «En tu TV»
+## Canales XTV de la casa: fuera de la app (2.6.81)
 
-Desde la 2.5.232 el selector de un partido muestra primero los canales XTV
-propios y debajo, sin modificarlas, las señales de GeeSports. El servidor añade
-un campo **aditivo** `xtv` a `/v1/gee38/events`; la app no pide nada nuevo.
+Hasta 2.6.80 el selector mostraba primero los canales XTV propios. Desde 2.6.81
+Vision+ usa únicamente las señales del evento (`geePickRows`): no llama a
+`xtvPickRows`, no pasa `event.xtv` y el reproductor no abre un canal de la casa
+como respaldo. Si el evento no tiene una señal disponible, se muestra el error.
 
-- **Recomendación solo con confirmación**: Fox One se confirma con el calendario
-  público de Fox One y FOX básico con el EPG FOXCAL (AYM es el espejo). Si no
-  hay confirmación, se muestra la posibilidad con nota «sin confirmación de
-  EPG», sin marcarla como recomendada.
-- **Fox One** = FOX+ (eventos); **AYM** = FOX básico, no FOX+; **Fox Sports
-  Lauman/Star** nunca se cruzan con los derechos del Fox nuevo; **FOX | Tubi**
-  no tiene espejo XTV y no se inventa.
-- **OTT fuera**: Prime Video, Paramount+, etc. no se ofrecen como canal XTV.
-- La agenda y los enlaces de GeeSports no se tocaron: la segunda opción es
-  independiente.
+El servidor puede seguir calculando el campo aditivo `xtv` y la confirmación de
+Fox One/FOX básico para otros clientes o analítica; la app no lo pinta ni lo usa
+en Deportes. OTT (Prime Video, Paramount+, etc.) tampoco se ofrece como canal.
 
 ### Fuentes de confirmación
 
