@@ -100,6 +100,7 @@ register("episodes", async (payload) => {
 register("resolve", (payload) => core.resolve(payload));
 register("resolveLive", (payload) => core.resolveLive(payload));
 register("mediaInfo", (payload) => core.mediaInfo(payload));
+register("external4k", (payload) => core.external4k(payload));
 register("prewarm", () => core.prewarm());
 register("abortMedia", () => core.abortMedia());
 register("resetSession", () => core.resetSession());

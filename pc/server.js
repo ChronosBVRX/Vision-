@@ -209,6 +209,7 @@ const methods = {
   resolve: (params) => core.resolve(params),
   resolveLive: (params) => core.resolveLive(params),
   mediaInfo: (params) => core.mediaInfo(params),
+  external4k: (params) => core.external4k(params),
   prewarm: () => core.prewarm(),
   abortMedia: () => core.abortMedia(),
   resetSession: () => core.resetSession(),

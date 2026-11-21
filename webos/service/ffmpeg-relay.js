@@ -118,6 +118,9 @@ function register(e, r) {
       headers: e.headers || {},
       audio: r.audio || 0,
       hevc: !!r.hevc,
+      copyVideo: !!r.copyVideo,
+      audioAac: !!r.audioAac,
+      preferAudioLang: !!r.preferAudioLang,
       drmKey: e.drmKey || r.drmKey || "",
       isLive: false,
     }),
@@ -185,6 +188,58 @@ function probeDuration(e) {
   });
 }
 
+/**
+ * Lee duración y pistas de audio de una fuente externa (4K). El selector de
+ * audio del reproductor usa los índices reales del contenedor; `?` en el
+ * selector de idioma de FFmpeg no funciona, así que se elige aquí.
+ */
+function probeMedia(e) {
+  return new Promise(function (resolve) {
+    var args = ["-hide_banner", "-nostdin"];
+    var parts = splitHeaders(e.headers || {});
+    if (/^https?:\/\//i.test(e.url || "")) {
+      parts.ua && args.push("-user_agent", parts.ua);
+      parts.rest && args.push("-headers", parts.rest);
+      if (e.drmKey) args.push("-cenc_decryption_keys", String(e.drmKey).trim().replace(/:/g, "="));
+    }
+    args.push("-i", e.url);
+    var child;
+    try {
+      child = spawn(FFMPEG, args, { stdio: ["ignore", "ignore", "pipe"] });
+    } catch (error) {
+      resolve({ duration: 0, audio: [] });
+      return;
+    }
+    var stderr = "";
+    var done = false;
+    var timer = setTimeout(function () { finish(); }, 9000);
+    function finish() {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try { child.kill("SIGKILL"); } catch (ignored) { /* noop */ }
+      var duration = 0;
+      var d = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i.exec(stderr);
+      if (d) duration = Number(d[1]) * 3600 + Number(d[2]) * 60 + Number(d[3]);
+      var audio = [];
+      var re = /Stream #0:(\d+)(?:\[[^\]]+\])?(?:\(([^)]+)\))?: Audio: ([^,\n]+)/g;
+      var match;
+      while ((match = re.exec(stderr))) {
+        audio.push({
+          index: audio.length,
+          stream: Number(match[1]),
+          lang: String(match[2] || "").toLowerCase(),
+          codec: String(match[3] || "").trim(),
+        });
+      }
+      resolve({ duration: duration > 0 ? duration : 0, audio: audio });
+    }
+    child.stderr.on("data", function (chunk) { stderr += String(chunk); });
+    child.on("error", finish);
+    child.on("close", finish);
+  });
+}
+
 function buildArgs(e, r, t) {
   var o = splitHeaders(e.headers),
     n = [
@@ -239,10 +294,15 @@ function buildArgs(e, r, t) {
     return n;
   }
   r > 0 && n.push("-ss", String(r));
-  n.push("-i", e.url, "-map", "0:v:0", "-map", "0:a:" + t + "?");
-  if (PC && e.hevc) {
-    // En PC no se puede asumir que Windows tenga el códec HEVC instalado:
-    // se transcodifica a H.264 (mismo criterio que XuperTV PC).
+  n.push("-i", e.url, "-map", "0:v:0");
+  // El servicio ya eligió la pista (español, inglés o la manual del usuario).
+  n.push("-map", "0:a:" + t + "?");
+  if (e.copyVideo) {
+    // En un PC con decodificador HEVC se copia el 4K tal cual (sin recodificar).
+    n.push("-c:v", "copy");
+    e.hevc && n.push("-tag:v", "hvc1");
+  } else if (PC && e.hevc) {
+    // En PC sin HEVC se transcodifica a H.264 (mismo criterio que XuperTV PC).
     n.push(
       "-c:v",
       "libx264",
@@ -259,11 +319,16 @@ function buildArgs(e, r, t) {
     n.push("-c:v", "copy");
     e.hevc && n.push("-tag:v", "hvc1");
   }
-  n.push("-c:a", "copy");
-  if (
+  if (e.audioAac) {
+    // DTS/TrueHD/DD no se reproducen en Chromium: el 4K entrega AAC estéreo.
+    n.push("-c:a", "aac", "-b:a", "192k", "-ac", "2");
+  } else {
+    n.push("-c:a", "copy");
+  }
+  if (!e.audioAac && (
     /mp2t/i.test(e.mime || "") ||
     /\.ts(\?|$)/i.test(e.url || "")
-  ) {
+  )) {
     n.push("-bsf:a", "aac_adtstoasc");
   }
   n.push(
@@ -316,6 +381,9 @@ function resolveForFfmpeg(e, r) {
           headers: s,
           audio: e.audio,
           hevc: e.hevc,
+          copyVideo: e.copyVideo,
+          audioAac: e.audioAac,
+          preferAudioLang: e.preferAudioLang,
           drmKey: e.drmKey,
           isLive: e.isLive,
         });
@@ -416,6 +484,7 @@ server.on("error", function (e) {
     registerLive: registerLive,
     stop: stopCurrent,
     probeDuration: probeDuration,
+    probeMedia: probeMedia,
     availableFast: function () {
       return resolveBinary();
     },

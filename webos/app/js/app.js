@@ -105,10 +105,12 @@
       subtitleCues: [],
       subtitleIndex: -1,
       subtitleEnabled: true,
+      subtitleExplicit: false,
       availableTracks: [],
       trackIndex: 0,
       audioTracks: [],
       audioIndex: 0,
+      audioExplicit: false,
       markers: null,
       introSkipped: false,
       pendingSeek: 0,
@@ -124,8 +126,23 @@
       osdTimer: null,
       lastSave: 0,
       returnScreen: "home",
+      // 4K manual: se resuelve después del primer cuadro y nunca arranca solo.
+      fourKSources: [],
+      fourKActive: false,
+      fourKSource: null,
+      fourKLookupStarted: false,
+      fourKLookupTimer: null,
+      fourKConfirmed: false,
+      fourKStallTimer: null,
+      fourKFailureNotice: "",
+      fourKAudioOptions: [],
+      fourKAudioIndex: 0,
+      nativeTrackIndex: 0,
+      nativeAudioIndex: 0,
+      nativeForceRelay: false,
+      optionsSection: "",
     },
-    settings: { render: "direct", quality: "auto", subs: "es", skipIntro: "auto" },
+    settings: { render: "direct", quality: "auto", subs: "es", skipIntro: "auto", aspect: "original", imagePreset: "off" },
     topTab: "",
     progress: {},
     list: {},
@@ -606,14 +623,14 @@
     }
   }
 
-  function toast(message) {
+  function toast(message, duration) {
     var node = $("#toast");
     node.textContent = message;
     node.classList.add("show");
     clearTimeout(toast.timer);
     toast.timer = setTimeout(function () {
       node.classList.remove("show");
-    }, 3200);
+    }, Number(duration) || 3200);
   }
 
   function showFullscreenHint() {
@@ -1330,10 +1347,12 @@
     state.player.subtitleCues = [];
     state.player.subtitleIndex = -1;
     state.player.subtitleEnabled = state.settings.subs !== "off";
+    state.player.subtitleExplicit = false;
     state.player.availableTracks = [];
     state.player.trackIndex = 0;
     state.player.audioTracks = [];
     state.player.audioIndex = 0;
+    state.player.audioExplicit = false;
     state.player.markers = null;
     state.player.introSkipped = false;
     state.player.pendingSeek = 0;
@@ -1346,11 +1365,29 @@
     state.player.retryHint = false;
     state.player.scrubRatio = null;
     state.player.lastSave = 0;
+    state.player.fourKSources = [];
+    state.player.fourKActive = false;
+    state.player.fourKSource = null;
+    state.player.fourKLookupStarted = false;
+    state.player.fourKConfirmed = false;
+    state.player.fourKFailureNotice = "";
+    state.player.fourKAudioOptions = [];
+    state.player.fourKAudioIndex = 0;
+    state.player.nativeTrackIndex = 0;
+    state.player.nativeAudioIndex = 0;
+    state.player.nativeForceRelay = false;
+    state.player.optionsSection = "";
+    clearTimeout(state.player.fourKLookupTimer);
+    clearTimeout(state.player.fourKStallTimer);
+    clearTimeout(state.player.loadingTimer);
     if (state.screen !== "player") state.player.returnScreen = state.screen;
     state.player.forceRelay = RELAY_TEST || state.settings.render === "smooth";
+    $("#player-options-dialog").hidden = true;
     $("#osd-audio").hidden = true;
     $("#osd-quality").hidden = true;
     $("#osd-subs-label").textContent = "Sin subtítulos";
+    applyAspectToVideo(state.settings.aspect || "original");
+    applyImagePresetToVideo(state.settings.imagePreset || "off");
 
     var episodeTitle = episode
       ? cleanEpisodeTitle(episode.title || episode.name, episode.number, film && film.title)
@@ -1418,12 +1455,23 @@
         state.player.trackIndex = Number(stream.trackIndex) || 0;
         state.player.audioTracks = stream.audioTracks || [];
         if (state.player.audioTracks.length) {
-          if (state.player.forceRelay && !state.player.audioIndex) {
-            var spanish = state.player.audioTracks.indexOf("spa");
-            if (spanish < 0) spanish = state.player.audioTracks.indexOf("es");
-            if (spanish >= 0) state.player.audioIndex = spanish;
+          if (state.player.audioExplicit) {
+            if (!(state.player.audioIndex >= 0 && state.player.audioIndex < state.player.audioTracks.length)) {
+              state.player.audioIndex = 0;
+            }
+          } else {
+            state.player.audioIndex = 0;
+            if (state.player.forceRelay) {
+              var spanish = state.player.audioTracks.indexOf("spa");
+              if (spanish < 0) spanish = state.player.audioTracks.indexOf("es");
+              if (spanish >= 0) state.player.audioIndex = spanish;
+            }
           }
-          if (!state.player.forceRelay) state.player.audioIndex = 0;
+        }
+        if (!state.player.fourKActive) {
+          state.player.nativeTrackIndex = state.player.trackIndex;
+          state.player.nativeAudioIndex = state.player.audioIndex;
+          state.player.nativeForceRelay = Boolean(state.player.forceRelay);
         }
         state.player.subtitles = stream.subtitles || [];
         state.player.subtitleTracks = stream.subtitles || [];
@@ -1513,28 +1561,99 @@
     if (/^(spa|es|esp)/.test(value)) return "Español";
     if (/^(eng|en)/.test(value)) return "Inglés";
     if (/^(por|pt)/.test(value)) return "Portugués";
+    if (/^(hin|hi)/.test(value)) return "Hindi";
+    if (/^(fra|fre|fr)/.test(value)) return "Francés";
+    if (/^(deu|ger|de)/.test(value)) return "Alemán";
+    if (/^(ita|it)/.test(value)) return "Italiano";
+    if (/^(jpn|ja)/.test(value)) return "Japonés";
+    if (/^(kor|ko)/.test(value)) return "Coreano";
+    if (/^(zho|chi|zh)/.test(value)) return "Chino";
+    if (/^(tam)/.test(value)) return "Tamil";
+    if (/^(tel)/.test(value)) return "Telugu";
+    if (/^(mal)/.test(value)) return "Malayalam";
+    if (/^(kan)/.test(value)) return "Kannada";
+    if (/^(ben)/.test(value)) return "Bengalí";
+    if (/^(mar)/.test(value)) return "Maratí";
+    if (/^(guj)/.test(value)) return "Gujarati";
+    if (/^(pan)/.test(value)) return "Punjabi";
+    if (/^(urd)/.test(value)) return "Urdu";
+    if (/^(rus)/.test(value)) return "Ruso";
+    if (/^(ara)/.test(value)) return "Árabe";
+    if (/^(tur)/.test(value)) return "Turco";
+    if (/^(tha)/.test(value)) return "Tailandés";
+    if (/^(vie)/.test(value)) return "Vietnamita";
+    if (/^(ind)/.test(value)) return "Indonesio";
     return value ? value.toUpperCase() : "Audio";
+  }
+
+  function qualityTrackLabel(track) {
+    var height = Number(track && track.height) || 0;
+    if (height >= 2000) return "4K";
+    if (height > 0) return height + "p";
+    return String((track && track.quality) || "Nativa");
+  }
+
+  function qualityTrackDetail(track) {
+    var bits = [];
+    var codec = String((track && track.codec) || "").trim();
+    if (codec) bits.push(codec.toUpperCase());
+    var quality = String((track && track.quality) || "").trim();
+    if (quality && quality.toLowerCase() !== qualityTrackLabel(track).toLowerCase()) bits.push(quality);
+    var bitrate = Number(track && track.bitrateKbps) || 0;
+    if (bitrate > 0) {
+      bits.push(bitrate >= 1000 ? (bitrate / 1000).toFixed(1) + " Mbps" : Math.round(bitrate) + " kbps");
+    }
+    return bits.join(" · ") || "Xuper";
+  }
+
+  function subtitleTrackLabel(track) {
+    if (!track) return "";
+    var language = languageLabel(track.lang);
+    return language === "Audio" ? "Subtítulos" : language;
+  }
+
+  function activeSubtitleTrack() {
+    var player = state.player;
+    if (!player.subtitleEnabled || player.subtitleIndex < 0) return null;
+    return (player.subtitleTracks || [])[player.subtitleIndex] || null;
+  }
+
+  function activeFourKAudio() {
+    var player = state.player;
+    var list = player.fourKAudioOptions || [];
+    for (var i = 0; i < list.length; i += 1) {
+      if (Number(list[i].index) === Number(player.fourKAudioIndex)) return list[i];
+    }
+    return list[0] || null;
   }
 
   function applyPlayerOptions() {
     var player = state.player;
     var tracks = player.availableTracks || [];
     var audio = player.audioTracks || [];
-    if (!player.isLive && tracks.length > 1) {
+    var hasFourK = (player.fourKSources || []).length > 0;
+    if (!player.isLive && (tracks.length > 1 || hasFourK || player.fourKActive)) {
       $("#osd-quality").hidden = false;
       var current = tracks[player.trackIndex] || tracks[0] || {};
-      $("#osd-quality-label").textContent = "Calidad: " + (current.quality || current.height || "Auto");
+      $("#osd-quality-label").textContent = "Calidad: " + (player.fourKActive ? "4K" : qualityTrackLabel(current));
     } else {
       $("#osd-quality").hidden = true;
     }
-    if (!player.isLive && audio.length >= 1 && state.serviceInfo && state.serviceInfo.relayAvailable) {
+    if (!player.isLive && player.fourKActive) {
       $("#osd-audio").hidden = false;
-      $("#osd-audio-label").textContent = languageLabel(audio[player.audioIndex] || audio[0]);
+      var fourKAudio = activeFourKAudio();
+      $("#osd-audio-label").textContent = "Audio: " + (fourKAudio ? languageLabel(fourKAudio.lang) : "4K");
+    } else if (!player.isLive && audio.length >= 1 && state.serviceInfo && state.serviceInfo.relayAvailable) {
+      $("#osd-audio").hidden = false;
+      $("#osd-audio-label").textContent = "Audio: " + languageLabel(audio[player.audioIndex] || audio[0]);
     } else {
       $("#osd-audio").hidden = true;
     }
-    if (player.subtitleTracks.length) {
-      $("#osd-subs-label").textContent = "Subtítulos";
+    var subtitle = activeSubtitleTrack();
+    if (subtitle) {
+      $("#osd-subs-label").textContent = "Subtítulos: " + subtitleTrackLabel(subtitle);
+    } else if (player.subtitleTracks.length) {
+      $("#osd-subs-label").textContent = "Sin subtítulos";
     } else {
       $("#osd-subs-label").textContent = "Sin subtítulos";
     }
@@ -1648,6 +1767,10 @@
     clearTimeout(state.player.loadingTimer);
     state.player.loadingTimer = setTimeout(function () {
       if ($("#player-loading").hidden) return;
+      if (state.player.fourKActive) {
+        fallbackFromFourK("El 4K tardó demasiado en cargar. Volvemos a la calidad nativa (1080p).");
+        return;
+      }
       if (!state.player.isLive && !state.player.retrying && state.serviceInfo && state.serviceInfo.relayAvailable) {
         retrySmooth();
       } else {
@@ -1688,6 +1811,9 @@
     }
     clearTimeout(state.player.loadingTimer);
     clearTimeout(state.player.osdTimer);
+    clearTimeout(state.player.fourKLookupTimer);
+    clearTimeout(state.player.fourKStallTimer);
+    $("#player-options-dialog").hidden = true;
     $("#subtitle-overlay").textContent = "";
     $("#player-message").classList.remove("show");
     var returnScreen = state.player.returnScreen || "home";
@@ -1879,12 +2005,13 @@
   function showOsd() {
     var screen = $("#screen-player");
     screen.classList.add("show-osd");
-    if (!Focus.current || !Focus.current.closest("#screen-player")) {
+    if (!playerOptionsOpen() && (!Focus.current || !Focus.current.closest("#screen-player"))) {
       Focus.set($("#osd-toggle"));
     }
     clearTimeout(state.player.osdTimer);
     state.player.osdTimer = setTimeout(function () {
       if (!$("#screen-player").classList.contains("show-osd")) return;
+      if (playerOptionsOpen()) return;
       hideOsd();
     }, 6500);
     updateOsd();
@@ -1910,13 +2037,79 @@
     showOsd();
   }
 
-  function toggleImageMode() {
+  function imagePresets() {
+    return [
+      { key: "cine", label: "Cine", detail: "Negros más profundos, contraste suave y color cálido", filter: "contrast(1.08) saturate(0.96) brightness(0.98) sepia(0.08)" },
+      { key: "nitido", label: "Nítido", detail: "Más definición y detalle para fuentes suaves", filter: "contrast(1.12) saturate(1.06) brightness(1.02)" },
+      { key: "night", label: "Noche", detail: "Más contraste para escenas oscuras", filter: "brightness(1.1) contrast(1.18) saturate(1.04)" },
+      { key: "vivid", label: "Vivo", detail: "Más saturación y luminosidad", filter: "saturate(1.35) brightness(1.05) contrast(1.04)" },
+      { key: "calido", label: "Cálido", detail: "Tono más cálido, ideal para piel y exteriores", filter: "sepia(0.18) saturate(1.15) hue-rotate(-8deg) brightness(1.03)" },
+      { key: "frio", label: "Frío", detail: "Tono más neutro y frío para ciencia ficción", filter: "hue-rotate(12deg) saturate(1.05) contrast(1.04)" },
+      { key: "off", label: "Original", detail: "Sin procesado de imagen", filter: "" },
+    ];
+  }
+
+  function imagePresetOf(key) {
+    var presets = imagePresets();
+    for (var i = 0; i < presets.length; i += 1) {
+      if (presets[i].key === key) return presets[i];
+    }
+    return presets[presets.length - 1];
+  }
+
+  function applyImagePresetToVideo(key) {
     var video = $("#player-video");
     if (!video) return;
-    var fill = video.classList.toggle("fill-screen");
-    video.style.objectFit = fill ? "cover" : "contain";
-    var label = $("#osd-image-label");
-    if (label) label.textContent = fill ? "Imagen: Rellenar" : "Imagen: Original";
+    var preset = imagePresetOf(key);
+    video.style.filter = preset.filter || "";
+    $("#osd-image-label").textContent = "Imagen: " + preset.label;
+  }
+
+  function chooseImagePreset(key) {
+    state.settings.imagePreset = imagePresetOf(key).key;
+    writeJson("vp_webos_settings", state.settings);
+    applyImagePresetToVideo(state.settings.imagePreset);
+    closePlayerOptions();
+    showOsd();
+    toast("Imagen: " + imagePresetOf(state.settings.imagePreset).label);
+  }
+
+  function aspectLabel(mode) {
+    if (mode === "fill") return "Rellenar";
+    if (mode === "16:9") return "16:9";
+    if (mode === "4:3") return "4:3";
+    return "Original";
+  }
+
+  function applyAspectToVideo(mode) {
+    var video = $("#player-video");
+    if (!video) return;
+    var value = mode === "fill" || mode === "16:9" || mode === "4:3" ? mode : "original";
+    video.classList.toggle("aspect-fill", value === "fill");
+    video.classList.toggle("aspect-16-9", value === "16:9");
+    video.classList.toggle("aspect-4-3", value === "4:3");
+    video.classList.remove("fill-screen");
+    video.style.objectFit = value === "fill" ? "cover" : value === "original" ? "contain" : "";
+    video.style.width = "";
+    video.style.left = "";
+  }
+
+  function chooseAspect(mode) {
+    state.settings.aspect = mode;
+    writeJson("vp_webos_settings", state.settings);
+    applyAspectToVideo(mode);
+    closePlayerOptions();
+    showOsd();
+    toast("Proporción: " + aspectLabel(mode));
+  }
+
+  function imageModes() {
+    return [
+      { key: "original", label: "Original", detail: "Respeta la proporción y ajusta a la pantalla" },
+      { key: "fill", label: "Rellenar", detail: "Llena la pantalla recortando los bordes" },
+      { key: "16:9", label: "16:9", detail: "Estira el video a una pantalla panorámica" },
+      { key: "4:3", label: "4:3", detail: "Formato cuadrado con franjas a los lados" },
+    ];
   }
 
   function seekBy(delta) {
@@ -2070,6 +2263,606 @@
     showOsd();
   }
 
+  /* ================= reproductor: menú, 4K manual y proporción ================= */
+
+  function playerOptionsOpen() {
+    var dialog = $("#player-options-dialog");
+    return Boolean(dialog && !dialog.hidden);
+  }
+
+  function playerOptionsTrigger(section) {
+    if (section === "audio") return $("#osd-audio");
+    if (section === "subs") return $("#osd-subs");
+    if (section === "image") return $("#osd-image");
+    if (section === "quality" && !$("#osd-quality").hidden) return $("#osd-quality");
+    return $("#osd-toggle");
+  }
+
+  function addPlayerMenuTitle(text) {
+    var node = el("div", "player-option-head");
+    node.textContent = text;
+    $("#player-options-list").appendChild(node);
+  }
+
+  function addPlayerMenuNote(text) {
+    var node = el("div", "player-option-note");
+    node.textContent = text;
+    $("#player-options-list").appendChild(node);
+  }
+
+  function addPlayerMenuRow(options) {
+    var values = options || {};
+    var row = document.createElement("button");
+    row.setAttribute("type", "button");
+    row.className = "player-option-row" + (values.selected ? " is-selected" : "");
+    row.setAttribute("data-focusable", "true");
+    if (values.section) row.setAttribute("data-option-section", values.section);
+    var check = document.createElement("span");
+    check.className = "player-option-check";
+    if (values.selected) check.innerHTML = '<svg class="icon"><use href="#i-check"/></svg>';
+    var copy = document.createElement("span");
+    copy.className = "player-option-copy";
+    var title = document.createElement("b");
+    title.textContent = values.label || "";
+    copy.appendChild(title);
+    if (values.detail) {
+      var detail = document.createElement("span");
+      detail.textContent = values.detail;
+      copy.appendChild(detail);
+    }
+    row.appendChild(check);
+    row.appendChild(copy);
+    if (typeof values.onSelect === "function") row.addEventListener("click", values.onSelect);
+    $("#player-options-list").appendChild(row);
+    return row;
+  }
+
+  function fourKSourceDetail(source) {
+    var bits = [];
+    if (source.provider) bits.push(source.provider);
+    var size = Number(source.sizeBytes) || 0;
+    if (size > 0) bits.push((size / (1024 * 1024 * 1024)).toFixed(1) + " GB");
+    bits.push(source.language && source.language !== "Original" ? source.language : "Idioma original");
+    return bits.join(" · ");
+  }
+
+  function renderPlayerOptions() {
+    var holder = $("#player-options-list");
+    if (!holder) return;
+    holder.innerHTML = "";
+    var player = state.player;
+    var section = player.optionsSection || "quality";
+    if (section === "image") {
+      $("#player-options-title").textContent = "Imagen y pantalla";
+      $("#player-options-sub").textContent = "Color, detalle y encuadre.";
+      addPlayerMenuTitle("Mejora de imagen");
+      var currentPreset = state.settings.imagePreset || "off";
+      imagePresets().forEach(function (preset) {
+        addPlayerMenuRow({
+          label: preset.label,
+          detail: preset.detail,
+          selected: currentPreset === preset.key,
+          section: "image",
+          onSelect: function () { chooseImagePreset(preset.key); },
+        });
+      });
+      addPlayerMenuTitle("Proporción");
+      var currentAspect = state.settings.aspect || "original";
+      imageModes().forEach(function (mode) {
+        addPlayerMenuRow({
+          label: mode.label,
+          detail: mode.detail,
+          selected: currentAspect === mode.key,
+          section: "image",
+          onSelect: function () { chooseAspect(mode.key); },
+        });
+      });
+      return;
+    }
+
+    $("#player-options-title").textContent = "Audio, subtítulos y calidad";
+    $("#player-options-sub").textContent = "Solo aparecen las pistas reales de esta transmisión.";
+
+    var tracks = player.availableTracks || [];
+    var audio = player.audioTracks || [];
+    var subtitles = player.subtitleTracks || [];
+    var hasFourK = player.fourKActive || (player.fourKSources || []).length > 0;
+    var anyQuality = false;
+
+    if (!player.isLive) {
+      addPlayerMenuTitle("Calidad de video");
+      if (hasFourK) {
+        (player.fourKSources || []).forEach(function (source) {
+          addPlayerMenuRow({
+            label: source.label || "4K · ULTRA HD",
+            detail: fourKSourceDetail(source),
+            selected: Boolean(player.fourKActive && player.fourKSource && player.fourKSource.url === source.url),
+            section: "quality",
+            onSelect: function () { startFourK(source); },
+          });
+          anyQuality = true;
+        });
+        if (player.fourKActive) {
+          addPlayerMenuRow({
+            label: "Calidad nativa · " + qualityTrackLabel(tracks[player.nativeTrackIndex] || tracks[0] || {}),
+            detail: "Xuper · la misma película, en tu calidad de siempre",
+            selected: false,
+            section: "quality",
+            onSelect: function () { chooseNativeQuality(Number(player.nativeTrackIndex) || 0); },
+          });
+          anyQuality = true;
+        }
+      }
+      tracks.forEach(function (track, index) {
+        addPlayerMenuRow({
+          label: qualityTrackLabel(track),
+          detail: qualityTrackDetail(track),
+          selected: !player.fourKActive && index === player.trackIndex,
+          section: "quality",
+          onSelect: function () { chooseNativeQuality(index); },
+        });
+        anyQuality = true;
+      });
+      if (!anyQuality) addPlayerMenuNote("Esta transmisión se reproduce en su resolución nativa.");
+    }
+
+    addPlayerMenuTitle("Audio");
+    if (player.fourKActive) {
+      var fourKAudio = player.fourKAudioOptions || [];
+      if (fourKAudio.length > 1) {
+        fourKAudio.forEach(function (track) {
+          addPlayerMenuRow({
+            label: languageLabel(track.lang),
+            detail: (track.codec ? String(track.codec).toUpperCase() + " · " : "") + "Pista " + (Number(track.index) + 1) + " del archivo 4K",
+            selected: Number(track.index) === Number(player.fourKAudioIndex),
+            section: "audio",
+            onSelect: function () { switchFourKAudio(Number(track.index)); },
+          });
+        });
+      } else {
+        var onlyAudio = fourKAudio[0];
+        addPlayerMenuRow({
+          label: onlyAudio ? languageLabel(onlyAudio.lang) : "Audio del 4K",
+          detail: "Pista del archivo 4K; si no está en español, se mantienen los subtítulos del catálogo",
+          selected: true,
+          section: "audio",
+          onSelect: function () { closePlayerOptions(); },
+        });
+      }
+    } else if (audio.length) {
+      audio.forEach(function (code, index) {
+        addPlayerMenuRow({
+          label: languageLabel(code),
+          detail: "Pista " + (index + 1) + " · " + String(code || "").toUpperCase(),
+          selected: index === player.audioIndex,
+          section: "audio",
+          onSelect: function () { chooseAudioTrack(index); },
+        });
+      });
+    } else {
+      addPlayerMenuNote("Este título se reproduce con un solo audio.");
+    }
+
+    addPlayerMenuTitle("Subtítulos");
+    if (subtitles.length) {
+      addPlayerMenuRow({
+        label: "Desactivados",
+        detail: "Sin texto en pantalla",
+        selected: !player.subtitleEnabled || player.subtitleIndex < 0,
+        section: "subs",
+        onSelect: function () { chooseSubtitleTrack(-1); },
+      });
+      subtitles.forEach(function (track, index) {
+        addPlayerMenuRow({
+          label: subtitleTrackLabel(track),
+          detail: String((track && track.lang) || "Subtítulo").toUpperCase() + (track && track.format ? " · " + String(track.format).toUpperCase() : ""),
+          selected: player.subtitleEnabled && index === player.subtitleIndex,
+          section: "subs",
+          onSelect: function () { chooseSubtitleTrack(index); },
+        });
+      });
+    } else {
+      addPlayerMenuNote("Este título no trae subtítulos.");
+    }
+  }
+
+  function openPlayerOptions(section) {
+    if (state.screen !== "player" || !state.player.film) return;
+    var wanted = section || "quality";
+    if (wanted === "quality" && state.player.isLive) return;
+    state.player.optionsSection = wanted;
+    renderPlayerOptions();
+    $("#player-options-dialog").hidden = false;
+    showOsd();
+    clearTimeout(state.player.osdTimer);
+    setTimeout(function () {
+      var dialog = $("#player-options-dialog");
+      if (!dialog || dialog.hidden) return;
+      var target = $('[data-option-section="' + wanted + '"]', dialog);
+      if (wanted !== "quality") {
+        var selected = $('[data-option-section="' + wanted + '"].is-selected', dialog);
+        if (selected) target = selected;
+      }
+      if (!target) target = $$("[data-focusable]", dialog)[0] || null;
+      if (target) Focus.set(target);
+    }, 30);
+  }
+
+  function closePlayerOptions() {
+    var dialog = $("#player-options-dialog");
+    if (!dialog || dialog.hidden) return;
+    var section = state.player.optionsSection;
+    dialog.hidden = true;
+    state.player.optionsSection = "";
+    showOsd();
+    var trigger = playerOptionsTrigger(section);
+    if (trigger && !trigger.hidden) Focus.set(trigger);
+  }
+
+  function refreshPlayerOptions() {
+    if (!playerOptionsOpen()) return;
+    var section = state.player.optionsSection || "quality";
+    renderPlayerOptions();
+    var dialog = $("#player-options-dialog");
+    var target = $('[data-option-section="' + section + '"]', dialog);
+    if (!target) target = $$("[data-focusable]", dialog)[0] || null;
+    if (target) Focus.set(target);
+  }
+
+  function chooseNativeQuality(index) {
+    var player = state.player;
+    var wasFourK = player.fourKActive;
+    closePlayerOptions();
+    if (!wasFourK && index === player.trackIndex) {
+      showOsd();
+      return;
+    }
+    var seek = playerPosition();
+    player.fourKActive = false;
+    player.fourKSource = null;
+    player.externalActive = false;
+    clearTimeout(player.fourKStallTimer);
+    if (wasFourK) {
+      player.forceRelay = Boolean(player.nativeForceRelay);
+      player.audioIndex = Number(player.nativeAudioIndex) || 0;
+      player.audioExplicit = true;
+    }
+    reloadStream({
+      trackIndex: index,
+      audioIndex: player.audioIndex,
+      seekTo: seek,
+      forceRelay: player.forceRelay,
+    });
+  }
+
+  function chooseAudioTrack(index) {
+    var player = state.player;
+    var audio = player.audioTracks || [];
+    closePlayerOptions();
+    if (player.fourKActive) {
+      showOsd();
+      return;
+    }
+    if (index === player.audioIndex || !audio[index]) {
+      showOsd();
+      return;
+    }
+    player.audioExplicit = true;
+    var seek = playerPosition();
+    reloadStream({ audioIndex: index, seekTo: seek, forceRelay: true });
+    toast("Audio: " + languageLabel(audio[index]));
+  }
+
+  function chooseSubtitleTrack(index) {
+    var tracks = state.player.subtitleTracks || [];
+    state.player.subtitleExplicit = true;
+    if (index < 0 || !tracks[index]) {
+      state.player.subtitleEnabled = false;
+      state.player.subtitleIndex = -1;
+      state.player.subtitleCues = [];
+      state.settings.subs = "off";
+      $("#subtitle-overlay").textContent = "";
+      toast("Subtítulos desactivados");
+    } else {
+      selectSubtitle(index);
+      state.settings.subs = tracks[index].lang || "es";
+      toast("Subtítulos: " + subtitleTrackLabel(tracks[index]));
+    }
+    writeJson("vp_webos_settings", state.settings);
+    closePlayerOptions();
+    updateSettingsUi();
+    applyPlayerOptions();
+    updateOsd();
+    showOsd();
+  }
+
+  function fourKGuardUntil(film) {
+    if (!film || !film.id) return 0;
+    var guard = readJson("vp_webos_4k_guard", {});
+    var until = Number(guard[film.id]) || 0;
+    return until > Date.now() ? until : 0;
+  }
+
+  function blockFourK(film) {
+    if (!film || !film.id) return;
+    var guard = readJson("vp_webos_4k_guard", {});
+    guard[film.id] = Date.now() + 5 * 60 * 1000;
+    writeJson("vp_webos_4k_guard", guard);
+  }
+
+  function unblockFourK(film) {
+    if (!film || !film.id) return;
+    var guard = readJson("vp_webos_4k_guard", {});
+    if (!guard[film.id]) return;
+    delete guard[film.id];
+    writeJson("vp_webos_4k_guard", guard);
+  }
+
+  var hevcSupport = null;
+  function supportsHevcPlayback() {
+    if (hevcSupport !== null) return hevcSupport;
+    try {
+      var probe = document.createElement("video");
+      hevcSupport = Boolean(
+        probe.canPlayType('video/mp4; codecs="hvc1.1.6.L153.B0"') ||
+        probe.canPlayType('video/mp4; codecs="hev1.1.6.L153.B0"') ||
+        probe.canPlayType('video/mp4; codecs="hvc1.2.4.L153.B0"')
+      );
+    } catch (error) {
+      hevcSupport = false;
+    }
+    return hevcSupport;
+  }
+
+  function supportsFourK(player) {
+    if (!player || player.isLive || player.episode || player.externalUrl) return false;
+    var film = player.film;
+    if (!film) return false;
+    if (film.kind && film.kind !== "movie") return false;
+    return Boolean(film.title || film.tmdbId || film.imdb || film.imdbId);
+  }
+
+  function maybeScheduleFourKLookup() {
+    var player = state.player;
+    if (!supportsFourK(player) || player.fourKLookupStarted || player.fourKActive) return;
+    if (fourKGuardUntil(player.film)) return;
+    player.fourKLookupStarted = true;
+    clearTimeout(player.fourKLookupTimer);
+    player.fourKLookupTimer = setTimeout(lookupFourK, 6000);
+  }
+
+  function lookupFourK() {
+    var player = state.player;
+    var film = player.film;
+    if (!film || state.screen !== "player" || !supportsFourK(player) || player.fourKActive) return;
+    if (fourKGuardUntil(film)) return;
+    request("external4k", {
+      title: film.title || "",
+      original: film.originalTitle || "",
+      tmdb: film.tmdbId || 0,
+      year: film.year || 0,
+      imdb: film.imdbId || film.imdb || "",
+    }, 30000)
+      .then(function (data) {
+        if (state.player.film !== film || state.screen !== "player" || state.player.fourKActive) return;
+        var sources = (data && data.sources) || [];
+        if (!sources.length) return;
+        state.player.fourKSources = sources;
+        applyPlayerOptions();
+        refreshPlayerOptions();
+        var originalAudio = sources.every(function (source) {
+          return !source.language || source.language === "Original";
+        });
+        toast("Esta película está disponible en 4K" + (originalAudio ? " en su idioma original." : "."), 5200);
+      })
+      .catch(function () {
+        /* sin 4K: la reproducción nativa sigue igual */
+      });
+  }
+
+  function autoSpanishSubtitles() {
+    if (state.settings.subs === "off" || state.player.subtitleExplicit) return;
+    var tracks = state.player.subtitleTracks || [];
+    if (!tracks.length) return;
+    var current = activeSubtitleTrack();
+    if (current && langMatches(current.lang, "es")) return;
+    var index = tracks.findIndex(function (track) {
+      return langMatches(track && track.lang, "es");
+    });
+    if (index >= 0) selectSubtitle(index);
+  }
+
+  function startFourK(source, options) {
+    var player = state.player;
+    var film = player.film;
+    var opts = options || {};
+    if (!film || !source) return;
+    if (source.expiresAt && source.expiresAt < Date.now()) {
+      toast("La fuente 4K venció. Vuelve a abrir la película para renovarla.");
+      return;
+    }
+    if (!player.fourKActive && fourKGuardUntil(film)) {
+      toast("El 4K no está disponible en este equipo por unos minutos. Sigues en calidad nativa.");
+      closePlayerOptions();
+      return;
+    }
+    closePlayerOptions();
+    var seek = opts.seekTo !== undefined
+      ? Math.max(0, Math.floor(Number(opts.seekTo) || 0))
+      : Math.max(0, Math.floor(playerPosition()));
+    if (!player.fourKActive) {
+      player.nativeTrackIndex = Number(player.trackIndex) || 0;
+      player.nativeForceRelay = Boolean(player.forceRelay);
+      player.nativeAudioIndex = Number(player.audioIndex) || 0;
+      player.fourKAudioOptions = [];
+      player.fourKAudioIndex = 0;
+    }
+    var explicitAudio = opts.audioIndex !== undefined ? Number(opts.audioIndex) : null;
+    blockFourK(film);
+    player.fourKActive = true;
+    player.fourKSource = source;
+    player.fourKConfirmed = false;
+    player.fourKFailureNotice = "";
+    player.externalActive = true;
+    player.forceRelay = true;
+    player.trackIndex = player.nativeTrackIndex;
+    player.audioIndex = 0;
+    player.audioExplicit = false;
+    player.relayBase = "";
+    player.relayOffset = 0;
+    player.pendingSeek = 0;
+    player.retrying = false;
+    player.retryHint = false;
+    clearTimeout(player.loadingTimer);
+    clearTimeout(player.fourKStallTimer);
+    var video = $("#player-video");
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    $("#player-loading").hidden = false;
+    $("#player-loading-text").textContent = explicitAudio === null
+      ? "Abriendo 4K · " + (source.provider || "ULTRA HD")
+      : "Cambiando el audio del 4K";
+    $("#player-message").classList.remove("show");
+    $("#subtitle-overlay").textContent = "";
+    showOsd();
+    applyPlayerOptions();
+    var copyVideo = supportsHevcPlayback() && !source.isHls;
+    var payload = {
+      ref: source.url,
+      forceRelay: true,
+      vod: true,
+      isLive: false,
+      mime: source.mime || "",
+      codec: source.codec || (source.isHls ? "" : "HEVC"),
+      copyVideo: copyVideo,
+      audioAac: true,
+      probeAudio: true,
+      headers: { "User-Agent": "VisionPlusWebOS/0.2", Accept: "*/*" },
+    };
+    if (explicitAudio === null) payload.preferAudioLang = true;
+    else payload.audioTrack = explicitAudio;
+
+    request("resolve", payload, 60000)
+      .then(function (stream) {
+        if (state.player.film !== film || !state.player.fourKActive || state.player.fourKSource !== source) return;
+        if (!stream || stream.returnValue === false || !stream.proxyPath) {
+          throw new Error((stream && stream.errorText) || "El servicio no devolvió el 4K");
+        }
+        if (Array.isArray(stream.audioProbe) && stream.audioProbe.length) {
+          state.player.fourKAudioOptions = stream.audioProbe;
+        }
+        if (Number(stream.audioIndex) >= 0) state.player.fourKAudioIndex = Number(stream.audioIndex);
+        else if (explicitAudio !== null) state.player.fourKAudioIndex = explicitAudio;
+        refreshPlayerOptions();
+        state.player.relayBase = stream.isRelay ? String(stream.proxyPath || "").split("?")[0] : "";
+        state.player.relayOffset = seek;
+        if (Number(stream.duration) > 0) state.player.duration = Number(stream.duration);
+        video.src = state.player.relayBase ? relayUrlAt(seek) : stream.proxyPath;
+        video.load();
+        var playPromise = video.play();
+        if (playPromise && playPromise.catch) {
+          playPromise.catch(function () {
+            showPlayerMessage("Pulsa OK para iniciar la reproducción en 4K.");
+            $("#player-loading").hidden = true;
+          });
+        }
+        var fourKAudio = activeFourKAudio();
+        if (fourKAudio && langMatches(fourKAudio.lang, "es")) {
+          if (!state.player.subtitleExplicit) {
+            state.player.subtitleEnabled = false;
+            state.player.subtitleIndex = -1;
+            state.player.subtitleCues = [];
+            $("#subtitle-overlay").textContent = "";
+          }
+        } else {
+          autoSpanishSubtitles();
+        }
+        applyPlayerOptions();
+        updateOsd();
+        setPlayerLoadingTimeout(45000);
+      })
+      .catch(function (error) {
+        if (state.player.film !== film) return;
+        fallbackFromFourK("El 4K no se pudo abrir (" + error.message + "). Volvemos a la calidad nativa (1080p).");
+      });
+  }
+
+  function switchFourKAudio(index) {
+    var player = state.player;
+    if (!player.fourKActive || !player.fourKSource) {
+      closePlayerOptions();
+      return;
+    }
+    if (Number(index) === Number(player.fourKAudioIndex)) {
+      closePlayerOptions();
+      return;
+    }
+    startFourK(player.fourKSource, {
+      audioIndex: index,
+      seekTo: Math.floor(playerPosition()),
+    });
+  }
+
+  function confirmFourK() {
+    var player = state.player;
+    if (!player.fourKActive || player.fourKConfirmed) return;
+    var video = $("#player-video");
+    if (!video || video.readyState < 2 || Number(video.currentTime || 0) < 0.4) return;
+    player.fourKConfirmed = true;
+    clearTimeout(player.loadingTimer);
+    clearTimeout(player.fourKStallTimer);
+    unblockFourK(player.film);
+    applyPlayerOptions();
+    updateOsd();
+    toast("Reproduciendo en 4K", 2600);
+  }
+
+  function fallbackFromFourK(message) {
+    var player = state.player;
+    if (!player.fourKActive) return;
+    var seek = Math.max(0, Math.floor(playerPosition()));
+    var film = player.film;
+    player.fourKActive = false;
+    player.fourKSource = null;
+    player.externalActive = false;
+    player.fourKConfirmed = false;
+    player.fourKFailureNotice = message || "El 4K no se pudo reproducir en este equipo. Volvemos a la calidad nativa (1080p).";
+    player.fourKSources = [];
+    player.forceRelay = Boolean(player.nativeForceRelay);
+    player.trackIndex = Number(player.nativeTrackIndex) || 0;
+    player.audioIndex = Number(player.nativeAudioIndex) || 0;
+    player.audioExplicit = true;
+    player.retrying = false;
+    player.retryHint = false;
+    clearTimeout(player.loadingTimer);
+    clearTimeout(player.fourKStallTimer);
+    if (film) blockFourK(film);
+    closePlayerOptions();
+    reloadStream({
+      trackIndex: player.trackIndex,
+      audioIndex: player.audioIndex,
+      seekTo: seek,
+      forceRelay: player.forceRelay,
+    });
+  }
+
+  function scheduleFourKStall() {
+    var player = state.player;
+    if (!player.fourKActive || !player.fourKConfirmed) return;
+    clearTimeout(player.fourKStallTimer);
+    player.fourKStallTimer = setTimeout(function () {
+      if (state.player.fourKActive) {
+        fallbackFromFourK("El 4K se quedó sin datos. Volvemos a la calidad nativa (1080p).");
+      }
+    }, 30000);
+  }
+
+  function clearFourKStall() {
+    clearTimeout(state.player.fourKStallTimer);
+    state.player.fourKStallTimer = null;
+  }
+
   /* ============================ reproductor: teclas ============================ */
 
   function handlePlayerKey(code, event) {
@@ -2092,6 +2885,24 @@
         return true;
       }
       return false;
+    }
+    if (playerOptionsOpen()) {
+      if (code === 461 || code === 27) {
+        event.preventDefault();
+        closePlayerOptions();
+        return true;
+      }
+      if (code === 37 || code === 38 || code === 39 || code === 40) {
+        event.preventDefault();
+        Focus.move(code === 37 ? "left" : code === 39 ? "right" : code === 38 ? "up" : "down");
+        return true;
+      }
+      if (code === 13) {
+        event.preventDefault();
+        Focus.activate();
+        return true;
+      }
+      return true;
     }
     if (osdVisible && Focus.current && Focus.current.closest && Focus.current.closest("#match-hud")) {
       if (code === 37 || code === 38 || code === 39 || code === 40) {
@@ -5149,11 +5960,19 @@
     $("#osd-toggle").addEventListener("click", togglePlay);
     $("#osd-rew").addEventListener("click", function () { seekBy(-10); });
     $("#osd-ffw").addEventListener("click", function () { seekBy(10); });
-    $("#osd-subs").addEventListener("click", cycleSubtitles);
-    $("#osd-audio").addEventListener("click", cycleAudio);
+    $("#osd-subs").addEventListener("click", function () { openPlayerOptions("subs"); });
+    $("#osd-audio").addEventListener("click", function () { openPlayerOptions("audio"); });
     var imageButton = $("#osd-image");
-    if (imageButton) imageButton.addEventListener("click", toggleImageMode);
-    $("#osd-quality").addEventListener("click", cycleQuality);
+    if (imageButton) imageButton.addEventListener("click", function () { openPlayerOptions("image"); });
+    $("#osd-quality").addEventListener("click", function () { openPlayerOptions("quality"); });
+    var optionsClose = $("#player-options-close");
+    if (optionsClose) optionsClose.addEventListener("click", closePlayerOptions);
+    var optionsDialog = $("#player-options-dialog");
+    if (optionsDialog) {
+      optionsDialog.addEventListener("click", function (event) {
+        if (event.target === optionsDialog) closePlayerOptions();
+      });
+    }
     $("#grid-more").addEventListener("click", function () { loadGridPage(state.grid.page + 1, true); });
     var liveMore = $("#live-more");
     if (liveMore) liveMore.addEventListener("click", function () { toast("Ya se muestran todos los canales."); });
@@ -5294,18 +6113,39 @@
     video.addEventListener("playing", function () {
       $("#player-loading").hidden = true;
       clearTimeout(state.player.loadingTimer);
+      if (state.player.fourKFailureNotice) {
+        showPlayerMessage(state.player.fourKFailureNotice);
+        state.player.fourKFailureNotice = "";
+      }
+      if (state.player.fourKActive) confirmFourK();
+      else maybeScheduleFourKLookup();
+      clearFourKStall();
       updateOsd();
     });
     video.addEventListener("pause", updateOsd);
     video.addEventListener("timeupdate", function () {
       var current = playerPosition();
+      if (state.player.fourKActive) {
+        confirmFourK();
+        clearFourKStall();
+      }
       updateOsd();
       updateSubtitle(current);
       maybeSkipIntro(current);
       saveProgress(false);
     });
     video.addEventListener("progress", updateOsd);
+    video.addEventListener("waiting", function () {
+      if (state.player.fourKActive) scheduleFourKStall();
+    });
+    video.addEventListener("stalled", function () {
+      if (state.player.fourKActive) scheduleFourKStall();
+    });
     video.addEventListener("error", function () {
+      if (state.player.fourKActive) {
+        fallbackFromFourK("El 4K no se pudo reproducir en este equipo. Volvemos a la calidad nativa (1080p).");
+        return;
+      }
       if (state.player.isLive) {
         $("#player-loading").hidden = true;
         showPlayerMessage("La señal en vivo no está disponible. Pulsa OK para reintentar.");
@@ -5464,8 +6304,10 @@
   }
 
   function boot() {
-    state.settings = readJson("vp_webos_settings", { render: "direct", quality: "auto", subs: "es", skipIntro: "auto" });
+    state.settings = readJson("vp_webos_settings", { render: "direct", quality: "auto", subs: "es", skipIntro: "auto", aspect: "original", imagePreset: "off" });
     if (!state.settings.skipIntro) state.settings.skipIntro = "auto";
+    if (!state.settings.aspect) state.settings.aspect = "original";
+    if (!state.settings.imagePreset) state.settings.imagePreset = "off";
     if (PC) {
       var splashVersion = $(".splash-version");
       if (splashVersion) splashVersion.textContent = "PC";

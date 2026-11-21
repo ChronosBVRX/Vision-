@@ -1,6 +1,6 @@
 {
   "id": "com.chronosbvrx.visionplus.webos",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "vendor": "ChronosBVRX",
   "type": "web",
   "main": "index.html",

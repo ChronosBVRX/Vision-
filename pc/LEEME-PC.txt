@@ -9,18 +9,19 @@ SI RECIBISTE "VisionPlusPC-Portable.exe"
   Al abrirlo verás una pantalla de carga con barra de progreso
   mientras se prepara el motor y la interfaz.
 
-NOVEDADES 0.7.0
-  - Deportes en vivo igual que la TV: Principal/Todas las ligas,
-    deportes, Hoy/Mañana, ligas, bloques En vivo/Pronto/Terminados,
-    escudos, marcador, buscador, favoritos y Canales 24/7.
-  - Selector de transmisiones con senales de GeeSports, respaldo XTV,
-    disponibilidad y recordatorios.
-  - Películas y series en 1080p (FHD) y capítulo correcto en series.
-  - TV en vivo reparada con la licencia nueva del portal.
-  - Menús "Películas Infantiles" y "Series Infantiles".
-  - Fichas con sinopsis, reparto y país en español.
-  - Se corrigió el error de reproducción que cerraba el video
-    al empezar (ECONNRESET).
+NOVEDADES 0.8.0
+  - 4K manual: la pelicula arranca en 1080p y, unos segundos despues,
+    aparece la opcion 4K ULTRA HD dentro del selector de Calidad.
+  - Se comprueban las fuentes 4K y se descartan los espejos caidos.
+  - El audio del 4K se detecta del archivo (espanol, luego ingles) y
+    los subtitulos del catalogo siguen disponibles.
+  - Si el equipo no puede con el 4K, la app vuelve sola a 1080p y
+    oculta esa opcion 5 minutos, sin cerrar el reproductor.
+  - Selector de Calidad, Audio, Subtitulos e Imagen con listas, igual
+    que en la app original. Imagen incluye mejoras (Cine, Nitido,
+    Noche, Vivo, Calido, Frio, Original) y proporcion (Original,
+    Rellenar, 16:9 y 4:3).
+  - Se mantienen TV en vivo, Deportes, catalogo, favoritos y ajustes.
 
 SI RECIBISTE LA CARPETA "VisionPlusPC"
   Usa las instrucciones de abajo.

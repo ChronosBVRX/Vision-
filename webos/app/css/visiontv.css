@@ -1718,3 +1718,98 @@ body {
 .vt-sports-grid.is-channels { grid-template-columns: 1fr; }
 .vt-sports-group.is-live { color: #fff; }
 .vt-sports-group.is-live i { width: .55vw; height: .55vw; border-radius: 50%; background: #ef4444; display: inline-block; margin-right: .45vw; }
+
+/* ---------- menú del reproductor: calidad, audio, subtítulos e imagen ---------- */
+.player-options-dialog { z-index: 36; }
+.player-options-dialog .vt-player-options {
+  width: min(46vw, 780px);
+  max-height: 78vh;
+  padding: 2.4vh 2vw;
+}
+.player-options-dialog .dialog-sub {
+  color: var(--vt-muted);
+  font-size: .86vw;
+  margin: -.8vh 0 1.3vh;
+}
+.player-options-dialog .dialog-list {
+  gap: .55vh;
+  margin-bottom: 1.4vh;
+}
+.player-option-head {
+  margin: 1.1vh 0 .3vh;
+  color: #8fb4dd;
+  font-size: .76vw;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.player-option-head:first-child { margin-top: 0; }
+.player-option-note {
+  padding: .8vh .2vw 1vh;
+  color: var(--vt-muted);
+  font-size: .82vw;
+  line-height: 1.4;
+}
+.player-option-row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: .8vw;
+  width: 100%;
+  padding: 1.05vh .9vw;
+  border-radius: .55vw;
+  border: 1px solid rgba(255,255,255,.06);
+  background: rgba(255,255,255,.05);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+.player-option-row.is-selected {
+  border-color: rgba(56,189,248,.8);
+  background: rgba(30,64,110,.55);
+}
+.player-option-row.focused {
+  background: #2d7df6;
+  border-color: #7fb4ff;
+  box-shadow: 0 0 0 .14vw #fff;
+}
+.player-option-check {
+  flex: 0 0 1.25vw;
+  width: 1.25vw;
+  height: 1.25vw;
+  display: grid;
+  place-items: center;
+  color: var(--vt-cyan);
+}
+.player-option-check .icon { width: 1.1vw; height: 1.1vw; }
+.player-option-copy { min-width: 0; display: flex; flex-direction: column; gap: .12vh; }
+.player-option-copy b {
+  font-size: .94vw;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.player-option-copy span {
+  color: #9fb0c9;
+  font-size: .75vw;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.player-option-row.focused .player-option-copy span { color: rgba(255,255,255,.8); }
+.player-option-row.focused .player-option-check { color: #fff; }
+.player-options-dialog .secondary-btn { margin-top: .4vh; }
+
+/* Proporción de imagen elegida en el reproductor. */
+.player-screen #player-video.aspect-fill { object-fit: cover; }
+.player-screen #player-video.aspect-16-9 { object-fit: fill; }
+.player-screen #player-video.aspect-4-3 {
+  left: 12.5vw;
+  right: auto;
+  width: 75vw;
+  object-fit: fill;
+}

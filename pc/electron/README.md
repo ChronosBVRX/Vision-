@@ -92,6 +92,18 @@ ventana principal hasta llegar al 100 %.
 - La barra de progreso acepta clic y arrastre; muestra una vista previa del tiempo.
 - La duración total sale del metadato o, si falta, de una sonda de FFmpeg.
 
+## Selectores del reproductor
+
+- **Calidad**, **Audio** y **Subtítulos** abren listas con las pistas reales de la
+  transmisión; **Imagen** incluye las mejoras Cine, Nítido, Noche, Vivo, Cálido,
+  Frío y Original, además de las proporciones Original, Rellenar, 16:9 y 4:3.
+- La película siempre arranca en 1080p. Unos segundos después del primer cuadro se
+  buscan fuentes 4K y aparecen en **Calidad** como una opción manual.
+- El 4K se valida antes de ofrecerse. Si no carga o el equipo no lo decodifica, el
+  reproductor vuelve solo a 1080p y oculta esa opción 5 minutos.
+- En 4K se elige la pista de audio del archivo que coincida con español (o inglés)
+  y se convierte a AAC para que Chromium pueda reproducirla.
+
 ## Actualizaciones OTA
 
 - La app revisa `pc-version.json` del canal fijo `pc-latest` de GitHub Releases.
@@ -103,6 +115,12 @@ ventana principal hasta llegar al 100 %.
 ```bash
 ./pc/tools/build-single-exe.sh
 ./pc/tools/publish-pc-ota.sh
+```
+
+En Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\pc\tools\publish-pc-ota.ps1
 ```
 
 El canal `pc-latest` es una pre-release, así que **no reemplaza** el canal estable de Android.

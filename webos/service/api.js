@@ -216,6 +216,21 @@ function playVip(body) {
   return postJson("/v1/play/vip", body || {});
 }
 
+/**
+ * Fuentes 4K públicas del VPS (HdHub resuelto con la IP del servidor).
+ * El VPS acepta IMDb o, si falta, resuelve por TMDB/título/año.
+ */
+function external4k(params) {
+  const values = params || {};
+  return fetchJson("/v1/4k", {
+    imdb: values.imdb || "",
+    tmdb: values.tmdb || 0,
+    title: values.title || "",
+    original: values.original || "",
+    year: values.year || 0,
+  });
+}
+
 function geeEvents(day, days) {
   return fetchJson("/v1/gee38/events", { day: day || "", days: days || 1 });
 }
@@ -249,6 +264,7 @@ module.exports = {
   epgBulk,
   markers,
   playVip,
+  external4k,
   geeEvents,
   geeSports,
   sportsAgenda,

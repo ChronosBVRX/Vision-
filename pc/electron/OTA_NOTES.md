@@ -1,12 +1,25 @@
-# Vision+ PC 0.7.1 — Actualización OTA
+# Vision+ PC 0.8.0 — 4K manual y selectores completos
 
-Actualización del ejecutable portable de Vision+ PC con el motor webOS 0.5.1.
+Actualización del ejecutable portable de Vision+ PC (motor webOS 0.5.2).
 
-- **Deportes en vivo, igual que la TV**: «Principal / Todas las ligas», chips por deporte, Hoy/Mañana, ligas con logo, bloques En vivo / Comienzan pronto / Terminados, mosaico de escudos y marcador, hero del partido y estrellas de favoritos.
-- **Buscador de partidos** por equipo, liga, deporte o cadena.
-- **Canales 24/7 de GeeSports**: grupos, disponibilidad y selector de enlaces.
-- **Selector de transmisiones completo**: señales de GeeSports con Disponible/Caído/Sin verificar, `token_api` resuelto al abrir, respaldo XTV, marca de la señal que se está viendo y avisos/recordatorios para partidos que aún no comienzan.
-- **Al volver del reproductor** se reabre el mismo partido con la señal sintonizada marcada.
-- Incluye la 0.6.1: VOD 1080p, capítulo real de serie, vivo reparado, menús infantiles y fichas en español.
+## 4K en PC
 
-Los datos, la sesión local, favoritos e historial se conservan.
+- La película sigue arrancando en **1080p**, rápido y sin esperar al 4K.
+- Unos segundos después del primer cuadro, Vision+ busca fuentes **4K ULTRA HD** en segundo plano y avisa con un mensaje temporal.
+- El 4K se elige a mano desde el selector de **Calidad**, junto a 1080p, 720p y 480p.
+- Se comprueban las fuentes antes de ofrecerlas para no mostrar espejos caídos.
+- El audio del 4K se detecta del archivo: se prefiere **español**, luego inglés; si no hay español, se mantienen los subtítulos del catálogo.
+- Si el equipo no puede con el 4K, Vision+ vuelve sola a **1080p** sin cerrar el reproductor y oculta esa opción **5 minutos**.
+
+## Selectores como en la app original
+
+- **Calidad**: lista de resoluciones reales de la transmisión, con la opción 4K cuando está disponible.
+- **Audio**: lista de pistas reales del título. En 4K muestra los idiomas que trae el archivo.
+- **Subtítulos**: lista con **Desactivados** y cada idioma disponible.
+- **Imagen**: mejoras **Cine, Nítido, Noche, Vivo, Cálido, Frío y Original**, más la proporción Original, Rellenar, 16:9 y 4:3.
+- Todos los menús se manejan con el mouse, las flechas, Enter y Escape.
+
+## Se conserva
+
+- TV en vivo, Deportes, catálogo, fichas, favoritos, historial y ajustes.
+- La sesión local y la carpeta `VisionPlusPC-data/` no se tocan.
