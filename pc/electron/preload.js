@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("visionPC", {
   checkForUpdates: () => ipcRenderer.invoke("pc-update:check"),
   downloadUpdate: () => ipcRenderer.invoke("pc-update:download"),
   installUpdate: () => ipcRenderer.invoke("pc-update:install"),
+  openUpdateDownload: () => ipcRenderer.invoke("pc-update:open-download"),
   lastUpdateStatus: () => ipcRenderer.invoke("pc-update:last"),
   onUpdateStatus: (callback) => {
     const listener = (_event, status) => {

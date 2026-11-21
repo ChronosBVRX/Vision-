@@ -14,7 +14,7 @@ const path = require("path");
 const https = require("https");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
-const { app, ipcMain } = require("electron");
+const { app, ipcMain, shell } = require("electron");
 
 const DEFAULT_MANIFEST =
   process.env.VISION_PC_UPDATE_MANIFEST ||
@@ -22,6 +22,9 @@ const DEFAULT_MANIFEST =
 const DEFAULT_BASE =
   process.env.VISION_PC_UPDATE_BASE ||
   "https://github.com/ChronosBVRX/Vision-Releases/releases/download/pc-latest/";
+const MANUAL_URL =
+  process.env.VISION_PC_MANUAL_UPDATE ||
+  "https://github.com/ChronosBVRX/Vision-Releases/releases/download/pc-latest/VisionPlusPC-Portable.exe";
 const MAX_REDIRECTS = 5;
 
 let ctx = null;
@@ -195,7 +198,7 @@ function check() {
       return payload;
     })
     .catch((error) => {
-      const payload = { state: "error", message: error.message };
+      const payload = { state: "error", message: error.message, manualUrl: MANUAL_URL };
       send(payload);
       return payload;
     })
@@ -323,7 +326,7 @@ function download() {
     })
     .catch((error) => {
       try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (ignored) { /* noop */ }
-      const payload = { state: "error", message: error.message };
+      const payload = { state: "error", message: error.message, manualUrl: MANUAL_URL };
       send(payload);
       throw error;
     })
@@ -345,24 +348,68 @@ function executablePath() {
   return process.execPath;
 }
 
-function buildUpdaterScript(oldExe, newExe) {
+function buildUpdaterScript(oldExe, newExe, logFile) {
   const backup = oldExe + ".bak";
+  const oldDir = path.dirname(oldExe);
   return [
-    "$ErrorActionPreference = 'Stop'",
-    "try { Wait-Process -Id " + process.pid + " -ErrorAction SilentlyContinue | Out-Null } catch {}",
-    "Start-Sleep -Milliseconds 900",
-    "try {",
-    "  Copy-Item -LiteralPath " + psQuote(oldExe) + " -Destination " + psQuote(backup) + " -Force",
-    "  Copy-Item -LiteralPath " + psQuote(newExe) + " -Destination " + psQuote(oldExe) + " -Force",
-    "  Start-Process -FilePath " + psQuote(oldExe),
-    "  Start-Sleep -Milliseconds 1200",
-    "  Remove-Item -LiteralPath " + psQuote(newExe) + " -Force -ErrorAction SilentlyContinue",
-    "} catch {",
-    "  if (Test-Path -LiteralPath " + psQuote(backup) + ") { Copy-Item -LiteralPath " + psQuote(backup) + " -Destination " + psQuote(oldExe) + " -Force -ErrorAction SilentlyContinue }",
-    "  Start-Process -FilePath " + psQuote(oldExe) + " -ErrorAction SilentlyContinue",
+    "$ErrorActionPreference = 'Continue'",
+    "$log = " + psQuote(logFile),
+    "function Write-Log([string]$text) { try { Add-Content -LiteralPath $log -Value ((Get-Date).ToString('s') + ' ' + $text) -Encoding UTF8 } catch {} }",
+    "Write-Log " + psQuote(
+      "inicio pid=" + process.pid +
+      " old=" + oldExe +
+      " new=" + newExe +
+      " portableFile=" + String(process.env.PORTABLE_EXECUTABLE_FILE || "") +
+      " portableDir=" + String(process.env.PORTABLE_EXECUTABLE_DIR || "") +
+      " exec=" + process.execPath,
+    ),
+    "for ($w = 0; $w -lt 60; $w++) { if (-not (Get-Process -Id " + process.pid + " -ErrorAction SilentlyContinue)) { break }; Start-Sleep -Milliseconds 500 }",
+    "$copied = $false",
+    "$lastError = ''",
+    "for ($i = 0; $i -lt 120; $i++) {",
+    "  try {",
+    "    if (-not (Test-Path -LiteralPath " + psQuote(oldExe) + ")) { throw 'no existe el ejecutable antiguo' }",
+    "    if (-not (Test-Path -LiteralPath " + psQuote(newExe) + ")) { throw 'no existe la actualizacion descargada' }",
+    "    if (-not (Test-Path -LiteralPath " + psQuote(backup) + ")) {",
+    "      Copy-Item -LiteralPath " + psQuote(oldExe) + " -Destination " + psQuote(backup) + " -Force -ErrorAction Stop",
+    "      Write-Log 'respaldo creado'",
+    "    }",
+    "    $src = Get-Item -LiteralPath " + psQuote(newExe) + " -ErrorAction Stop",
+    "    $dstBefore = Get-Item -LiteralPath " + psQuote(oldExe) + " -ErrorAction Stop",
+    "    if ($dstBefore.IsReadOnly) { $dstBefore.IsReadOnly = $false }",
+    "    Copy-Item -LiteralPath " + psQuote(newExe) + " -Destination " + psQuote(oldExe) + " -Force -ErrorAction Stop",
+    "    $dst = Get-Item -LiteralPath " + psQuote(oldExe) + " -ErrorAction Stop",
+    "    if ($dst.Length -ne $src.Length) { throw 'el tamano copiado no coincide' }",
+    "    $copied = $true",
+    "    Write-Log ('copia correcta en el intento ' + $i)",
+    "    break",
+    "  } catch {",
+    "    $lastError = $_.Exception.Message",
+    "    Write-Log ('intento ' + $i + ': ' + $lastError)",
+    "    Start-Sleep -Milliseconds 500",
+    "  }",
     "}",
-    "Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue",
+    "if (-not $copied) {",
+    "  Write-Log ('FALLO tras 120 intentos: ' + $lastError)",
+    "  try { Start-Process -FilePath " + psQuote(oldExe) + " -WorkingDirectory " + psQuote(oldDir) + " -ErrorAction Stop | Out-Null } catch { Write-Log ('no se pudo reabrir: ' + $_.Exception.Message) }",
+    "  exit 1",
+    "}",
+    "try {",
+    "  $proc = Start-Process -FilePath " + psQuote(oldExe) + " -WorkingDirectory " + psQuote(oldDir) + " -PassThru -ErrorAction Stop",
+    "  Write-Log ('reiniciado pid ' + $proc.Id)",
+    "} catch {",
+    "  Write-Log ('no se pudo iniciar: ' + $_.Exception.Message)",
+    "  exit 1",
+    "}",
+    "Write-Log 'fin'",
   ].join("\r\n");
+}
+
+function failInstall(error) {
+  installing = false;
+  const message = error && error.message ? error.message : String(error || "error");
+  send({ state: "error", message, manualUrl: MANUAL_URL });
+  return Promise.reject(error);
 }
 
 function install() {
@@ -371,17 +418,27 @@ function install() {
     return Promise.reject(new Error("Todavía no hay una actualización descargada"));
   }
   if (!process.env.PORTABLE_EXECUTABLE_FILE && !process.env.PORTABLE_EXECUTABLE_DIR) {
-    return Promise.reject(new Error("La actualización automática solo está disponible en el .exe portable"));
+    return failInstall(new Error("La actualización automática solo está disponible en el .exe portable. Descarga manual: " + MANUAL_URL));
   }
   const oldExe = executablePath();
-  if (!/\.exe$/i.test(oldExe)) {
-    return Promise.reject(new Error("No se pudo localizar el ejecutable de Vision+ PC"));
+  const oldDir = path.dirname(oldExe);
+  if (!/\.exe$/i.test(oldExe) || !fs.existsSync(oldExe)) {
+    return failInstall(new Error("No se encontró el ejecutable de Vision+ PC (" + oldExe + "). Descarga manual: " + MANUAL_URL));
+  }
+  try {
+    const probe = path.join(oldDir, ".visionpc-write-" + process.pid);
+    fs.writeFileSync(probe, "ok", "utf8");
+    fs.unlinkSync(probe);
+  } catch (error) {
+    return failInstall(new Error("No se puede escribir en la carpeta del ejecutable (" + oldDir + "). Descarga manual: " + MANUAL_URL));
   }
   installing = true;
   send({ state: "installing", version: latest.version });
   try {
+    const logFile = path.join(path.dirname(latest.readyPath), "install.log");
     const script = path.join(path.dirname(latest.readyPath), "install-update.ps1");
-    fs.writeFileSync(script, buildUpdaterScript(oldExe, latest.readyPath), "utf8");
+    log("instalando", latest.version, "old=" + oldExe, "new=" + latest.readyPath);
+    fs.writeFileSync(script, buildUpdaterScript(oldExe, latest.readyPath, logFile), "utf8");
     const child = spawn(
       "powershell.exe",
       ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script],
@@ -395,12 +452,10 @@ function install() {
       } catch (error) {
         app.quit();
       }
-    }, 700);
-    return Promise.resolve({ ok: true });
+    }, 900);
+    return Promise.resolve({ ok: true, log: logFile });
   } catch (error) {
-    installing = false;
-    send({ state: "error", message: error.message });
-    return Promise.reject(error);
+    return failInstall(error);
   }
 }
 
@@ -411,6 +466,7 @@ function init(options) {
   ipcMain.handle("pc-update:download", () => download());
   ipcMain.handle("pc-update:install", () => install());
   ipcMain.handle("pc-update:last", () => lastStatus);
+  ipcMain.handle("pc-update:open-download", () => shell.openExternal(MANUAL_URL));
   log("canal", DEFAULT_MANIFEST);
 }
 
@@ -419,6 +475,7 @@ module.exports = {
   check,
   download,
   install,
+  buildUpdaterScript,
   compareVersions,
   normalizeManifest,
 };

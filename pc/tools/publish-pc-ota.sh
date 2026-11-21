@@ -52,4 +52,7 @@ gh release edit "$TAG" -R "$REPO" \
   --notes "Canal fijo de actualizaciones del ejecutable portable de Vision+ PC."
 
 gh release upload "$TAG" "$EXE" "$OUT_MANIFEST" -R "$REPO" --clobber
+if [ -f "$PC/tools/Actualizar-VisionPC.bat" ]; then
+  gh release upload "$TAG" "$PC/tools/Actualizar-VisionPC.bat" -R "$REPO" --clobber
+fi
 echo "==> Publicado: https://github.com/$REPO/releases/download/$TAG/pc-version.json"

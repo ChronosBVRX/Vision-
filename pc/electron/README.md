@@ -109,7 +109,14 @@ ventana principal hasta llegar al 100 %.
 - La app revisa `pc-version.json` del canal fijo `pc-latest` de GitHub Releases.
 - Si hay una versión nueva, aparece un aviso discreto con **Actualizar**.
 - La descarga se verifica con SHA-256 antes de instalar.
-- Al instalar, un script de PowerShell espera a que Vision+ cierre, reemplaza el `.exe` y lo vuelve a abrir. Los datos de `VisionPlusPC-data/` se conservan.
+- Al instalar, un script de PowerShell espera a que Vision+ cierre y **reintenta**
+  reemplazar el `.exe` hasta 60 s (Windows mantiene el portable bloqueado unos
+  segundos). Verifica el tamaño, guarda un `.bak` y escribe `install.log`.
+- Si no puede escribir en la carpeta o no encuentra el ejecutable, la app sigue
+  abierta y ofrece **Descargar manualmente**.
+- Para una transición desde una versión con el instalador viejo, usa una vez
+  `pc/tools/Actualizar-VisionPC.bat` o sustituye el `.exe` a mano. Después la OTA
+  funciona sola.
 - Para publicar una versión nueva:
 
 ```bash

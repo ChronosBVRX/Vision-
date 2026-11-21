@@ -15,6 +15,7 @@ $pc = Split-Path -Parent $tools
 $repoRoot = Split-Path -Parent $pc
 $exe = Join-Path $pc "build\VisionPlusPC-Portable.exe"
 $outManifest = Join-Path $pc "build\pc-version.json"
+$manualUpdater = Join-Path $pc "tools\Actualizar-VisionPC.bat"
 
 if (-not $NotesFile) { $NotesFile = Join-Path $pc "electron\OTA_NOTES.md" }
 
@@ -54,5 +55,9 @@ if ($LASTEXITCODE -ne 0) { throw "No se pudo actualizar el canal $Tag" }
 
 & gh release upload $Tag $exe $outManifest -R $Repo --clobber
 if ($LASTEXITCODE -ne 0) { throw "No se pudo subir la actualizacion" }
+if (Test-Path $manualUpdater) {
+    & gh release upload $Tag $manualUpdater -R $Repo --clobber
+    if ($LASTEXITCODE -ne 0) { throw "No se pudo subir el actualizador manual" }
+}
 
 Write-Host "==> Publicado: https://github.com/$Repo/releases/download/$Tag/pc-version.json"

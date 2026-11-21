@@ -411,10 +411,29 @@ function stopMedia() {
   }
 }
 
+function stopServer() {
+  try {
+    if (serverRuntime && typeof serverRuntime.shutdown === "function") {
+      serverRuntime.shutdown();
+      return;
+    }
+  } catch {
+    /* noop */
+  }
+  try {
+    if (serverRuntime && typeof serverRuntime.abortMedia === "function") {
+      serverRuntime.abortMedia();
+    }
+  } catch {
+    /* noop */
+  }
+}
+
 function quitApp() {
   quitting = true;
   log("cerrando Vision+ PC");
   stopMedia();
+  stopServer();
   closeSplash();
   try {
     if (tray) {

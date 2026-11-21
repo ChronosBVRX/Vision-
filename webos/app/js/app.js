@@ -5559,9 +5559,14 @@
       return;
     }
     if (status.state === "error") {
-      pcUpdate.mode = "error";
-      pcUpdateSetSettings("No disponible");
-      if (pcUpdate.manual) toast("No se pudo actualizar: " + (status.message || "error de red"));
+      pcUpdate.mode = "manual";
+      pcUpdate.info = Object.assign({}, pcUpdate.info || {}, status);
+      pcUpdateSetSettings("Descarga manual");
+      var errorText = status.message || "No se pudo completar la actualización.";
+      var errorTitle = /instal|escribir|ejecutable|portable|bloquead|acceso/i.test(errorText)
+        ? "No se pudo instalar la actualización"
+        : "No se pudo comprobar la actualización";
+      pcUpdateSetBanner(true, errorTitle, errorText, "Descargar manualmente", "manual");
       pcUpdate.manual = false;
     }
   }
@@ -5600,6 +5605,10 @@
       } else if (pcUpdate.mode === "ready") {
         api.installUpdate().catch(function (error) {
           toast("No se pudo instalar la actualización: " + error.message);
+        });
+      } else if (pcUpdate.mode === "manual" && api.openUpdateDownload) {
+        api.openUpdateDownload().catch(function (error) {
+          toast("No se pudo abrir la descarga: " + error.message);
         });
       }
     });

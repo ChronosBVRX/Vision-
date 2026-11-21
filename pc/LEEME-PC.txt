@@ -9,18 +9,15 @@ SI RECIBISTE "VisionPlusPC-Portable.exe"
   Al abrirlo verás una pantalla de carga con barra de progreso
   mientras se prepara el motor y la interfaz.
 
-NOVEDADES 0.8.0
-  - 4K manual: la pelicula arranca en 1080p y, unos segundos despues,
-    aparece la opcion 4K ULTRA HD dentro del selector de Calidad.
-  - Se comprueban las fuentes 4K y se descartan los espejos caidos.
-  - El audio del 4K se detecta del archivo (espanol, luego ingles) y
-    los subtitulos del catalogo siguen disponibles.
-  - Si el equipo no puede con el 4K, la app vuelve sola a 1080p y
-    oculta esa opcion 5 minutos, sin cerrar el reproductor.
-  - Selector de Calidad, Audio, Subtitulos e Imagen con listas, igual
-    que en la app original. Imagen incluye mejoras (Cine, Nitido,
-    Noche, Vivo, Calido, Frio, Original) y proporcion (Original,
-    Rellenar, 16:9 y 4:3).
+NOVEDADES 0.8.1
+  - Instalador OTA corregido: espera y reintenta reemplazar el .exe
+    hasta 60 segundos, comprueba la copia y conserva un respaldo.
+  - Si la carpeta no permite escribir, la app no se cierra y ofrece
+    descarga manual.
+  - Incluye el 4K manual y los selectores de calidad, audio,
+    subtitulos e imagen de la 0.8.0.
+  - Para esta primera transicion desde 0.7.x/0.8.0 usa una vez
+    Actualizar-VisionPC.bat o reemplaza el .exe manualmente.
   - Se mantienen TV en vivo, Deportes, catalogo, favoritos y ajustes.
 
 SI RECIBISTE LA CARPETA "VisionPlusPC"
