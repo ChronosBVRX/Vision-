@@ -7,11 +7,12 @@
 
 ## 1. Estado de publicación
 
-- **Beta:** 2.6.81 (vc577) — tag `beta` de `ChronosBVRX/Vision-Releases`.
-- **Estable:** 2.6.67 (vc563).
+- **Estable y beta:** 2.6.81 (vc577) — mismo APK/firma; la beta se promovió.
+- **Estable anterior:** 2.6.67 (vc563).
 - **Commit de la beta:** `f91d199`.
-- **Notas:** `ota_notes_2.6.81.md` (sin nombrar proveedores).
-- **Release:** https://github.com/ChronosBVRX/Vision-Releases/releases/tag/beta
+- **Notas:** `ota_notes_2.6.81_estable.md` (estable) y `ota_notes_2.6.81.md` (beta), sin nombrar proveedores.
+- **Release estable:** https://github.com/ChronosBVRX/Vision-Releases/releases/tag/v2.6.81
+- **Release beta:** https://github.com/ChronosBVRX/Vision-Releases/releases/tag/beta
 - **Proceso de publicación:** `tools/publish_ota.ps1` (bump + R8 + motor inyectado + firma
   histórica + `gh release`). Tras la suite completa se publica con `-SkipTests`.
 

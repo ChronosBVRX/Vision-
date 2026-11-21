@@ -11,5 +11,5 @@
 
 ## Notas
 
-- Publicado solo en el canal beta; la estable sigue en 2.6.67.
+- Publicado en el canal beta; promovido a estable el 2026-11-20 (tag v2.6.81).
 - El respaldo nativo a 720p/480p sigue activo.

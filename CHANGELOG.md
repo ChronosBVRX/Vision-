@@ -4,6 +4,7 @@
 > changelog conserva los hitos.
 
 ## 2.6.81 — Deportes: solo señales del evento
+- Promovida a estable con el mismo APK y firma (tag `v2.6.81`).
 - Se quitan los canales XTV de la casa del selector, del zapping y del respaldo del reproductor.
 - La agenda usa únicamente las señales del evento (`geePickRows`); si no hay señal, muestra error.
 - Se mantiene el blindaje 4K y el vivo aislado.

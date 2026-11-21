@@ -25,7 +25,8 @@
 ## Release
 
 - `tools/publish_ota.ps1` — bump, R8, motor inyectado, firma histórica y `gh release`.
-- `ota_notes_2.6.81.md` — notas de la beta vigente (sin proveedores).
+- `ota_notes_2.6.81_estable.md` — notas de la release estable 2.6.81 (sin proveedores).
+  Tag `v2.6.81` (mismo APK/firma que la beta).
 - `CHANGELOG.md` — hitos; el detalle por versión vive en `ota_notes_*.md`.
 
 ## Documentos históricos

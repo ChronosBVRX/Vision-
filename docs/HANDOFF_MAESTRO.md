@@ -1,7 +1,8 @@
 # Handoff maestro — Vision+ (para el agente que toma el proyecto)
 
-> **Actualizado 2026-11-20:** la beta actual es **2.6.81 (vc577)**; la estable sigue
-> en **2.6.67**. La sección 2 ("Estado actual") es histórica (2.5.177). Reglas
+> **Actualizado 2026-11-20:** la beta y la estable actuales son **2.6.81 (vc577)**
+> (mismo APK/firma); la estable anterior era 2.6.67. La sección 2 ("Estado actual")
+> es histórica (2.5.177). Reglas
 > vigentes del reproductor y Deportes: `docs/INVARIANTES_REGRESION.md`.
 
 **Fecha:** 2026-10-27. **Estado:** producto en producción, con usuarios reales.

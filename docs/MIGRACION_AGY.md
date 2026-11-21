@@ -1,7 +1,7 @@
 # Contexto de migración — Vision+ → Antigravity
 
-> **Actualizado 2026-11-20:** beta **2.6.81 (vc577)**; estable **2.6.67**. La
-> sección 2 es histórica (2.6.37). Estado y reglas vigentes:
+> **Actualizado 2026-11-20:** beta y estable **2.6.81 (vc577)** (mismo APK/firma);
+> estable anterior **2.6.67**. La sección 2 es histórica (2.6.37). Estado y reglas vigentes:
 > `docs/INVARIANTES_REGRESION.md` y `AGENTS.md`.
 
 **Generado:** 2026-11-14 · **Origen:** sesión de OpenCode en `C:\Users\Axel Rosete\Desktop\Proyectos\Vision Laptop`
@@ -57,8 +57,8 @@ El desbalance es real y es exactamente lo que el dueño quiere cerrar.
 
 ## 2. Estado actual e histórico
 
-- **Beta actual:** `2.6.81` (vc577) — tag `beta`.
-- **Estable:** `2.6.67` (vc563).
+- **Beta y estable:** `2.6.81` (vc577) — mismo APK/firma.
+- **Estable anterior:** `2.6.67` (vc563).
 - **Reglas del reproductor y Deportes:** `docs/INVARIANTES_REGRESION.md`.
 
 El resto de esta sección describe el estado del **2026-11-14** (2.6.37) y se conserva como histórico:
