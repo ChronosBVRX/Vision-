@@ -1,38 +1,30 @@
-# Vision+ PC 0.8.1 — Instalador OTA corregido
+# Vision+ PC 0.8.2 — Agenda deportiva y audio
 
 Actualización del ejecutable portable de Vision+ PC.
 
-## Qué se corrigió
+## Enlaces de la agenda deportiva
 
-- El instalador anterior esperaba solo **0.9 s** a que Windows liberara el `.exe`. El
-  lanzador portable mantiene el archivo bloqueado unos segundos más, la copia fallaba
-  y se volvía a abrir la versión vieja: el ciclo de «Actualizar → Instalar → reiniciar».
-- El instalador nuevo **espera y reintenta** el reemplazo hasta **60 segundos**, comprueba
-  que el tamaño copiado coincida y solo entonces abre la aplicación.
-- Antes de reiniciar se cierra el servidor local para que el proceso termine de verdad.
-- Se conserva un respaldo `VisionPlusPC-Portable.exe.bak` y la actualización descargada
-  ya no se borra al instante. Cada intento queda en `VisionPlusPC-data/update/<versión>/install.log`.
-- Si la carpeta no permite escribir o no se encuentra el ejecutable, la app **no se cierra**:
-  muestra el motivo y un botón **Descargar manualmente**.
+- Se resolvieron los enlaces que entregan su señal en el HTML de la página
+  (HLS/DASH) y los que apuntan directo al manifiesto.
+- Las páginas que solo publican la señal dentro de su reproductor web y que
+  bloquean o cuelgan Electron ahora se rechazan con un mensaje claro
+  («no está disponible en PC, prueba otra señal») en lugar de dejar la app
+  esperando o congelada.
+- Ya no se aceptan segmentos `.ts` ni videos `.mp4` sueltos como si fueran la
+  transmisión: eran avisos, intros o anuncios que duraban dos segundos.
 
-## Importante para esta primera transición
+## Audio raro / bucle
 
-El instalador roto vive en la 0.8.0 y anteriores, así que esta vez puede que el aviso
-automático siga fallando. Para pasar a la 0.8.1 una sola vez:
+- Se descartan los manifiestos de anuncios, intros y pre-roll.
+- El relay en vivo usa timestamps limpios (`+genpts`, `avoid_negative_ts`) y el
+  elemento de video ya no puede quedar en bucle.
+- El proceso principal ya no escribe a un stdout cerrado. El lanzador portable
+  cerraba la consola y los logs del relay podían bloquear el proceso; ahora el
+  diagnóstico va solo a `VisionPlusPC-data/server.log`. Esto también evita que
+  el reproductor se quede sin audio o se reinicie solo durante un partido.
 
-1. Descarga `Actualizar-VisionPC.bat` y ponlo junto a `VisionPlusPC-Portable.exe`.
-2. Ciérralo o deja que el .bat lo cierre.
-3. Ejecuta el .bat y espera. Descarga la última versión, la reemplaza con reintentos y abre Vision+.
+## Se mantiene
 
-También puedes descargar `VisionPlusPC-Portable.exe` y sustituir el archivo manualmente
-(cierra Vision+ y espera unos segundos antes de copiar).
-
-Después de esta instalación manual, las siguientes OTA ya se aplican solas.
-
-## Se mantiene de la 0.8.0
-
-- 4K manual con arranque en 1080p, fuentes verificadas y vuelta automática a 1080p.
-- Selectores de Calidad, Audio, Subtítulos e Imagen con listas reales.
-- Imagen con mejoras Cine, Nítido, Noche, Vivo, Cálido, Frío y Original, y proporciones
-  Original, Rellenar, 16:9 y 4:3.
+- Instalador OTA con reintentos de la 0.8.1.
+- 4K manual y selectores de calidad, audio, subtítulos e imagen.
 - TV en vivo, Deportes, catálogo, fichas, favoritos, historial y ajustes.

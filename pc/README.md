@@ -4,13 +4,13 @@ Port de escritorio de Vision+ que reutiliza **la misma interfaz de Smart TV** y
 **el mismo motor** del port de webOS. Añade lo necesario para que funcione en un
 PC Windows sin instalar nada y sin emulador.
 
-> **Actualización 0.8.1 (motor webOS 0.5.2):** instalador OTA corregido: espera y
-> reintenta el reemplazo del `.exe` hasta 60 s, verifica la copia y deja un botón
-> de descarga manual si la carpeta no permite escribir. Incluye **4K manual** con
-> arranque en 1080p, fuentes verificadas y vuelta automática a 1080p; y los
-> selectores de **calidad, audio, subtítulos e imagen** con listas, mejoras de
-> imagen y proporciones. Mantiene Deportes en vivo igual que la TV, VOD 1080p,
-> capítulo real de serie y fichas en español.
+> **Actualización 0.8.2 (motor webOS 0.5.2):** agenda deportiva más estable
+> (enlaces HLS/DASH directos y páginas con manifiesto; las páginas que solo
+> viven en su reproductor web se rechazan sin congelar la app), sin segmentos
+> ni anuncios sueltos que parecían un bucle de audio, y relay en vivo con
+> timestamps limpios. Incluye el instalador OTA con reintentos de la 0.8.1,
+> el **4K manual** y los selectores de calidad, audio, subtítulos e imagen.
+> Mantiene Deportes en vivo, VOD 1080p, capítulo real de serie y fichas en español.
 
 La UI del `.exe` se reconstruyó contra la app real de Smart TV (capturas del
 Chromecast): barra superior global con menús, Inicio, TV en vivo con EPG,

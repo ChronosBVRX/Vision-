@@ -104,6 +104,18 @@ ventana principal hasta llegar al 100 %.
 - En 4K se elige la pista de audio del archivo que coincida con español (o inglés)
   y se convierte a AAC para que Chromium pueda reproducirla.
 
+## Deportes: enlaces de la agenda
+
+- Los enlaces HLS/DASH directos y las páginas que publican el manifiesto en su
+  HTML se resuelven y reproducen en el relay.
+- Las páginas que solo exponen la señal dentro de su reproductor web (y que
+  bloquean o cuelgan Electron) se rechazan con un mensaje claro; la app no se
+  queda esperando ni se congela.
+- Se descartan anuncios, intros, pre-rolls y segmentos `.ts`/`.mp4` sueltos.
+  Así no aparece el audio corto que parecía un bucle.
+- El relay en vivo usa `+genpts` y `avoid_negative_ts` para que un corte del
+  proveedor no reinicie los timestamps del audio.
+
 ## Actualizaciones OTA
 
 - La app revisa `pc-version.json` del canal fijo `pc-latest` de GitHub Releases.

@@ -522,7 +522,31 @@ async function matchStats(params) {
 async function resolveEmbed(params) {
   const token = String((params && params.tokenApi) || "").trim();
   if (!token) throw new Error("Falta el token de la señal.");
-  return embedResolver.resolve(token);
+  // La página embed puede quedarse cargando para siempre (bloqueos, anuncios
+  // o un diálogo del navegador). El watchdog libera la petición del usuario.
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("La fuente tardó demasiado en publicar la señal. Prueba otra señal."));
+    }, 30000);
+    Promise.resolve(embedResolver.resolve(token)).then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        console.log("[core] resolveEmbed listo", value && value.url ? "url" : "sin-url");
+        resolve(value);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 async function markers(params) {

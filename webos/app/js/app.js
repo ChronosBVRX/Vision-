@@ -1337,6 +1337,7 @@
     var video = $("#player-video");
     debugLog("openPlayer " + (film && film.title) + " screen=" + state.screen);
     if (!video) return;
+    video.loop = false;
     state.player.film = film;
     state.player.episode = episode || null;
     state.player.season = season || null;

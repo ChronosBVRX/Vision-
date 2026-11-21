@@ -90,15 +90,26 @@ function appendLog(line) {
 
 const originalLog = console.log.bind(console);
 const originalError = console.error.bind(console);
+// El ejecutable portable no siempre tiene un lector de stdout. Escribir a un
+// pipe cerrado puede bloquear el proceso principal; el diagnóstico va al
+// archivo server.log y a la consola solo si existe.
 console.log = (...args) => {
-  const line = args.join(" ");
-  originalLog(line);
+  const line = args.map((value) => String(value)).join(" ");
   appendLog(line);
+  try {
+    if (process.stdout && process.stdout.isTTY) originalLog(line);
+  } catch {
+    /* la consola no está disponible */
+  }
 };
 console.error = (...args) => {
-  const line = args.join(" ");
-  originalError(line);
+  const line = args.map((value) => String(value)).join(" ");
   appendLog(`ERROR ${line}`);
+  try {
+    if (process.stderr && process.stderr.isTTY) originalError(line);
+  } catch {
+    /* la consola no está disponible */
+  }
 };
 
 const core = require(path.join(SERVICE_DIR, "core"));
@@ -325,6 +336,7 @@ function createServer() {
           return sendJson(res, 200, { returnValue: true, ...payload });
         }
         const payload = await handler(params);
+        if (method === "resolveEmbed") console.log("[pc] resolveEmbed listo");
         sendJson(res, 200, { returnValue: true, ...payload });
       } catch (error) {
         console.error(`[pc] ${method}:`, error.message);

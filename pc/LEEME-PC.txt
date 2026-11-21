@@ -9,16 +9,18 @@ SI RECIBISTE "VisionPlusPC-Portable.exe"
   Al abrirlo verás una pantalla de carga con barra de progreso
   mientras se prepara el motor y la interfaz.
 
-NOVEDADES 0.8.1
-  - Instalador OTA corregido: espera y reintenta reemplazar el .exe
-    hasta 60 segundos, comprueba la copia y conserva un respaldo.
-  - Si la carpeta no permite escribir, la app no se cierra y ofrece
-    descarga manual.
-  - Incluye el 4K manual y los selectores de calidad, audio,
-    subtitulos e imagen de la 0.8.0.
-  - Para esta primera transicion desde 0.7.x/0.8.0 usa una vez
-    Actualizar-VisionPC.bat o reemplaza el .exe manualmente.
-  - Se mantienen TV en vivo, Deportes, catalogo, favoritos y ajustes.
+NOVEDADES 0.8.2
+  - Agenda deportiva: se resuelven los enlaces HLS/DASH directos y las
+    paginas que publican el manifiesto en su HTML.
+  - Las paginas que solo funcionan en su reproductor web se rechazan
+    con un mensaje claro, sin dejar la app esperando ni congelada.
+  - Se descartan anuncios, intros y segmentos sueltos para evitar el
+    bucle de audio raro.
+  - El relay en vivo usa timestamps limpios y el video no queda en bucle.
+  - Los logs ya no bloquean el proceso cuando el lanzador cierra la
+    consola; el diagnostico queda en VisionPlusPC-data\server.log.
+  - Incluye el instalador OTA con reintentos de la 0.8.1, el 4K manual
+    y los selectores de calidad, audio, subtitulos e imagen.
 
 SI RECIBISTE LA CARPETA "VisionPlusPC"
   Usa las instrucciones de abajo.

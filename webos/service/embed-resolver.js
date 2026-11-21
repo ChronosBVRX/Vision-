@@ -16,9 +16,11 @@ const urlmod = require("url");
 const TTL_MS = 5 * 60 * 1000;
 const cache = new Map();
 
+// La fuente entrega páginas pensadas para el reproductor móvil. Un UA de
+// escritorio hace que algunos proveedores devuelvan una página vacía o bloqueada.
 const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
 
 function parseEmbed(tokenApi) {
   try {
@@ -52,6 +54,33 @@ function headersFor(api) {
     referer: api,
     origin,
   };
+}
+
+function cleanHeaders(input) {
+  const out = {};
+  Object.keys(input || {}).forEach((key) => {
+    const lower = String(key || "").toLowerCase();
+    if (!lower) return;
+    if (["host", "content-length", "connection", "accept-encoding", "range", "if-range"].includes(lower)) return;
+    const value = input[key];
+    if (value === undefined || value === null) return;
+    const text = String(value).trim();
+    if (text) out[lower] = text;
+  });
+  return out;
+}
+
+function mergeHeaders(base, extra) {
+  return Object.assign({}, base || {}, cleanHeaders(extra));
+}
+
+function safeUrl(raw) {
+  try {
+    const parsed = new URL(String(raw || ""));
+    return parsed.host + parsed.pathname;
+  } catch (error) {
+    return String(raw || "").slice(0, 120);
+  }
 }
 
 function requestText(target, headers, timeout, redirectsLeft) {
@@ -102,6 +131,24 @@ function requestText(target, headers, timeout, redirectsLeft) {
   });
 }
 
+function isMediaUrl(raw) {
+  return /\.m3u8(\?|$)|(?:\?|&)[^=]+=m3u8|\/m3u8(?:\?|$)|(?:\?|&)format=m3u8|\.mpd(\?|$)|\/manifest\.mpd/i.test(String(raw || ""));
+}
+
+/**
+ * Descarta manifiestos de anuncios, intros y pre-rolls. Muchos portales
+ * publican primero el anuncio y después la señal; devolver el primero hace que
+ * el reproductor reproduzca un audio corto que parece un bucle.
+ */
+function isAdLikeUrl(raw) {
+  const value = String(raw || "").toLowerCase();
+  if (!value) return false;
+  if (/(?:^|[/._-])(?:ads?|advert|adserver|advert(?:ising)?|preroll|pre-?roll|midroll|bumper|intro|promo|trailer|preview|sponsor)(?:[/._-]|$)/.test(value)) {
+    return true;
+  }
+  return /(?:selpath|d3\.php|ad_type|adtype|vast|vmap|doubleclick|googlesyndication)/.test(value);
+}
+
 function normalizeMediaUrl(raw, base) {
   let value = String(raw || "").trim();
   if (!value) return "";
@@ -127,7 +174,9 @@ function normalizeMediaUrl(raw, base) {
       return "";
     }
   }
-  if (!/\.m3u8(\?|$)|\.mpd(\?|$)|\.ts(\?|$)|\.mp4(\?|$)/i.test(value)) return "";
+  // Solo manifiestos HLS/DASH. Un .ts/.mp4 suelto suele ser un aviso, un
+  // intro o un segmento: reproducirlo parece "un bucle raro" de dos segundos.
+  if (!isMediaUrl(value) || isAdLikeUrl(value)) return "";
   return value;
 }
 
@@ -136,7 +185,7 @@ function findMedia(body, base) {
   const patterns = [
     /["'](?:playbackURL|playback_url|playbackUrl|file|source|src|url)["']\s*[:=]\s*["']([^"']+)["']/gi,
     /(?:playbackURL|playback_url|playbackUrl|file|source|src)\s*[:=]\s*["']([^"']+)["']/gi,
-    /https?:\\?\/\\?\/[^\s"'<>\\]+?\.(?:m3u8|mpd|ts|mp4)(?:\?[^\s"'<>\\]*)?/gi,
+    /https?:\\?\/\\?\/[^\s"'<>\\]+?\.(?:m3u8|mpd)(?:\?[^\s"'<>\\]*)?/gi,
   ];
   for (const pattern of patterns) {
     let match;
@@ -171,126 +220,6 @@ function findIframe(body) {
   return match ? match[1] : "";
 }
 
-function isMediaUrl(raw) {
-  return /\.m3u8(\?|$)|(?:\?|&)[^=]+=m3u8|\/m3u8(?:\?|$)|(?:\?|&)format=m3u8|\.mpd(\?|$)|\/manifest\.mpd/i.test(String(raw || ""));
-}
-
-function browserAvailable() {
-  return Boolean(process.versions && process.versions.electron) && process.env.VISION_PC === "1";
-}
-
-/**
- * Misma idea que el WebView oculto de Android: abre la página embed en una
- * ventana Electron invisible y escucha las peticiones de red. Algunos portales
- * (los que entregan la señal desde un reproductor JavaScript) no escriben la
- * URL en el HTML; solo aparecen cuando su player arranca.
- */
-function resolveWithBrowser(config, headers) {
-  return new Promise((resolve, reject) => {
-    let electron;
-    try {
-      electron = require("electron");
-    } catch (error) {
-      reject(error);
-      return;
-    }
-    if (!electron || !electron.BrowserWindow) {
-      reject(new Error("Electron no está disponible para resolver el embed."));
-      return;
-    }
-    let win = null;
-    let isolateSession = null;
-    let settled = false;
-    let timer = null;
-    function cleanup() {
-      clearTimeout(timer);
-      if (isolateSession) {
-        try { isolateSession.webRequest.onBeforeRequest(null); } catch (error) { /* noop */ }
-        isolateSession = null;
-      }
-      if (win && !win.isDestroyed()) {
-        try { win.webContents.debugger.detach(); } catch (error) { /* noop */ }
-        try { win.destroy(); } catch (error) { /* noop */ }
-      }
-      win = null;
-    }
-    function finish(url) {
-      if (settled) return;
-      const clean = String(url || "").trim();
-      if (!isMediaUrl(clean)) return;
-      settled = true;
-      cleanup();
-      resolve({ url: clean, headers });
-    }
-    function fail(message) {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(new Error(message || "La fuente no publicó la señal del canal."));
-    }
-    try {
-      win = new electron.BrowserWindow({
-        show: false,
-        focusable: false,
-        skipTaskbar: true,
-        width: 900,
-        height: 600,
-        backgroundColor: "#000000",
-        webPreferences: {
-          backgroundThrottling: false,
-          contextIsolation: true,
-          nodeIntegration: false,
-          sandbox: true,
-          partition: "vp-embed-" + Date.now() + "-" + Math.random().toString(36).slice(2),
-          autoplayPolicy: "no-user-gesture-required",
-        },
-      });
-      isolateSession = win.webContents.session;
-      isolateSession.webRequest.onBeforeRequest({ urls: ["*://*/*"] }, function (details, callback) {
-        try {
-          if (details && details.url) finish(details.url);
-        } finally {
-          if (typeof callback === "function") callback({});
-        }
-      });
-      win.webContents.setAudioMuted(true);
-      win.webContents.setWindowOpenHandler(function () { return { action: "deny" }; });
-      win.webContents.debugger.attach("1.3");
-      win.webContents.debugger.on("message", function (event, method, params) {
-        if (method === "Network.requestWillBeSent" && params && params.request) {
-          finish(params.request.url);
-        } else if (method === "Network.responseReceived" && params && params.response) {
-          finish(params.response.url);
-        } else if (method === "Network.loadingFinished" && params && params.requestId) {
-          /* la petición ya se vio en requestWillBeSent */
-        }
-      });
-      win.webContents.debugger.sendCommand("Network.enable").catch(function () {});
-      win.webContents.on("did-finish-load", function () {
-        // Algunos players esperan un gesto o un botón de play. Se intenta sin
-        // ruido; si la página ya arrancó sola, esto no cambia nada.
-        win.webContents.executeJavaScript(`(function(){
-          try {
-            var candidates = document.querySelectorAll('video,button,[class*=play],[id*=play],[class*=Play]');
-            for (var i = 0; i < candidates.length; i++) { try { candidates[i].click(); } catch (e) {} }
-            var videos = document.querySelectorAll('video');
-            for (var j = 0; j < videos.length; j++) {
-              try { videos[j].muted = true; videos[j].play && videos[j].play().catch(function(){}); } catch (e) {}
-            }
-          } catch (e) {}
-        })();`, true).catch(function () {});
-      });
-      win.loadURL(config.api, {
-        userAgent: headers["user-agent"],
-        extraHeaders: "Referer: " + headers.referer + "\nOrigin: " + headers.origin + "\n",
-      }).catch(function () { /* la página puede abortar una navegación hija; manda la captura o el timeout */ });
-      timer = setTimeout(function () { fail("La fuente tardó demasiado en publicar la señal."); }, 20000);
-    } catch (error) {
-      fail(error.message);
-    }
-  });
-}
-
 function resolveViaHttp(config, headers) {
   return requestText(config.api, headers, 8000, 3)
     .then((response) => {
@@ -321,12 +250,24 @@ function resolve(tokenApi) {
   const cached = cache.get(config.api);
   if (cached && Date.now() - cached.at < TTL_MS) return Promise.resolve(cached.value);
   const headers = headersFor(config.api);
+  // Un token puede apuntar directo al manifiesto. No hace falta abrir un
+  // navegador (y con una URL .m3u8 visible Windows puede abrir un diálogo de
+  // descarga que bloquea la app).
+  if (isMediaUrl(config.api) && !isAdLikeUrl(config.api)) {
+    const direct = { url: config.api, headers };
+    cache.set(config.api, { at: Date.now(), value: direct });
+    console.log("[embed] directo", safeUrl(config.api));
+    return Promise.resolve(direct);
+  }
+  console.log("[embed] inicio", safeUrl(config.api));
   return resolveViaHttp(config, headers)
     .catch(function () { return ""; })
     .then((media) => {
-      if (media) return { url: media, headers };
-      if (browserAvailable()) return resolveWithBrowser(config, headers);
-      throw new Error("La fuente no publicó la señal del canal.");
+      if (media) {
+        console.log("[embed] http", safeUrl(media));
+        return { url: media, headers };
+      }
+      throw new Error("Esta señal se prepara en el reproductor web de la fuente y no está disponible en PC. Prueba otra señal.");
     })
     .then((value) => {
       cache.set(config.api, { at: Date.now(), value });

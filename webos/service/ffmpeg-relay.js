@@ -265,6 +265,8 @@ function buildArgs(e, r, t) {
     // Chrome/Edge no reproducen HLS nativo. El relay entrega un MP4 fragmentado
     // H.264/AAC en vivo, igual que el port de XuperTV para Windows.
     n.push(
+      "-fflags",
+      "+genpts",
       "-i",
       e.url,
       "-map",
@@ -285,6 +287,8 @@ function buildArgs(e, r, t) {
       "aac",
       "-b:a",
       "128k",
+      "-avoid_negative_ts",
+      "make_zero",
       "-movflags",
       "frag_keyframe+empty_moov+default_base_moof",
       "-f",
