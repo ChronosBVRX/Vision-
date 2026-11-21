@@ -9,15 +9,15 @@ SI RECIBISTE "VisionPlusPC-Portable.exe"
   Al abrirlo verás una pantalla de carga con barra de progreso
   mientras se prepara el motor y la interfaz.
 
-NOVEDADES 0.8.3
-  - Se retiraron los nombres de fuentes y proveedores de la interfaz,
-    las fichas, el centro de partido y los ajustes.
-  - Las calidades se muestran solo por resolucion, idioma y tamano;
-    la opcion nativa se llama "Calidad nativa".
-  - Se mantiene la agenda deportiva estable, el instalador OTA con
-    reintentos, el 4K manual y los selectores de calidad, audio,
-    subtitulos e imagen.
-  - Se mantienen TV en vivo, Deportes, catalogo, favoritos y ajustes.
+NOVEDADES 0.8.4
+  - El relay en vivo normaliza el audio a AAC estereo 48 kHz y recalcula
+    sus timestamps para evitar tramos repetidos o superpuestos.
+  - Se mantiene una sola pista de audio por transmision.
+  - Si una transmision sigue repitiendo la narracion, el flujo de origen
+    trae un tramo duplicado; prueba otra senal del mismo evento.
+  - Se mantienen la agenda deportiva estable, el instalador OTA con
+    reintentos, el 4K manual, los selectores y la interfaz sin nombres
+    de fuentes.
 
 SI RECIBISTE LA CARPETA "VisionPlusPC"
   Usa las instrucciones de abajo.

@@ -113,8 +113,12 @@ ventana principal hasta llegar al 100 %.
   queda esperando ni se congela.
 - Se descartan anuncios, intros, pre-rolls y segmentos `.ts`/`.mp4` sueltos.
   Así no aparece el audio corto que parecía un bucle.
-- El relay en vivo usa `+genpts` y `avoid_negative_ts` para que un corte del
-  proveedor no reinicie los timestamps del audio.
+- El relay en vivo normaliza el audio a AAC estéreo 48 kHz y recalcula sus
+  timestamps (`aresample` + `asetpts`) para evitar tramos repetidos o
+  superpuestos. Se mantiene una sola pista de audio.
+- Si una transmisión concreta sigue repitiendo la narración, su playlist de
+  origen trae un tramo duplicado; el selector permite probar otra señal del
+  mismo evento.
 
 ## Actualizaciones OTA
 
