@@ -445,8 +445,7 @@ fun TvSportsScreen(onPlay: (LiveChannel) -> Unit) {
                 title = geeEventTitle(event),
                 subtitle = geeEventSubtitle(event),
                 links = event.links,
-                xtv = event.xtv,
-                onDismiss = {
+                    onDismiss = {
                     DeportesReturn.pickingId = null
                     DeportesReturn.forgetWatching()
                     pickingId = null

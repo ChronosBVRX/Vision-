@@ -343,19 +343,12 @@ internal fun GeeLinkPickDialog(
     reminderActive: Boolean = false,
     onRemind: ((Int) -> Unit)? = null,
     onClearReminder: (() -> Unit)? = null,
-    xtv: List<GeeSportsSource.XtvOption> = emptyList(),
 ) {
-    // Primero la segunda opción propia (XTV, ya confirmada por el servidor); debajo,
-    // las señales que publica GeeSports. No se toca la agenda ni sus enlaces.
-    val geeRows = remember(title, links, checks, playingUrl) {
+    // Solo las señales que publica la fuente deportiva para este evento. Los canales
+    // de la casa ya no se mezclan en el selector ni en el zapping.
+    val rows = remember(title, links, checks, playingUrl) {
         geePickRows(title, links, checks, playingUrl)
     }
-    // Fuentes del evento: señales de GeeSports (geforce) y opciones de Wiwi Súper/XTV,
-    // ambas visibles para que el usuario elija. Las opciones XTV abren el motor nativo.
-    val xtvRows = remember(xtv, playingUrl) {
-        xtvPickRows(xtv, playingUrl)
-    }
-    val rows = remember(geeRows, xtvRows) { geeRows + xtvRows }
     var resolving by remember { mutableStateOf<GeePickRow?>(null) }
     // Zapping dentro del bloque de opciones: la lista ORDENADA del evento queda armada
     // para el reproductor en línea, que la recoge al montar. Solo entran las señales que
@@ -375,10 +368,7 @@ internal fun GeeLinkPickDialog(
     }
 
     fun playZap(picked: LiveChannel) {
-        // Un canal XTV no entra al zapping de GeeSports: lo abre el reproductor XTV.
-        if (!picked.url.startsWith("xtvlive:", ignoreCase = true)) {
-            GeeZapSignals.arm(picked, zapOrder, eventInfo)
-        }
+        GeeZapSignals.arm(picked, zapOrder, eventInfo)
         onPlay(picked)
     }
     Dialog(
@@ -462,23 +452,13 @@ internal fun GeeLinkPickDialog(
                                 color = VisionTextSecondary,
                                 modifier = Modifier.padding(bottom = 2.dp),
                             )
-                            if (xtvRows.isNotEmpty()) {
-                                Text(
-                                    "GeeSports no publicó una señal utilizable; opciones de la casa como respaldo.",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = VisionBlueBright.copy(alpha = 0.8f),
-                                    modifier = Modifier.padding(bottom = 4.dp),
-                                )
-                            }
                         }
                         itemsIndexed(rows, key = { index, row -> "link_${index}_${row.link}_${row.title}" }) { _, row ->
                             val selected = row.playing
                             Surface(
                                 onClick = {
                                     if (row.playable) {
-                                        if (row.type == "xtv") {
-                                            playZap(row.channel)
-                                        } else if (row.link.isBlank() && row.tokenApi.isNotBlank()) {
+                                        if (row.link.isBlank() && row.tokenApi.isNotBlank()) {
                                             resolving = row
                                         } else {
                                             playZap(row.channel)

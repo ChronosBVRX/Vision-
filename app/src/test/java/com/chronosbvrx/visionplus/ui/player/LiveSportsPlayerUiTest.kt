@@ -131,18 +131,21 @@ class LiveSportsPlayerUiTest {
     }
 
     @Test
-    fun thePlayerFallsBackToTheHouseChannelByItselfWhenEverythingElseGivesUp() {
+    fun thePlayerDoesNotShowHouseChannelsWhenEventSignalsFail() {
         val player = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/player/PlayerScreen.kt")
-        // El respaldo es del reproductor: al agotarse las señales lo pide, con telemetría.
-        assertTrue("lo pide al agotarse", player.contains("PLAYER_FAILOVER_XTV"))
-        assertTrue("una sola vez", player.contains("fellBackToXtv"))
-        assertTrue("por el puente del proceso", player.contains("GeeZapSignals.requestFallback(back)"))
-        // Y el reproductor en vivo lo atiende abriendo el canal de la casa con el motor nativo.
-        assertTrue("atiende el pedido", player.contains("GeeZapSignals.consumeFallback()"))
-        assertTrue("con el reproductor nativo", player.contains("X4KApi.playLive("))
-        // La firma del reproductor NO crece: ART rechaza las composables con demasiados parámetros
-        // (VerifyError visto en vivo al agregar dos más).
-        assertFalse("sin parámetros nuevos", player.contains("xtvFallback: LiveChannel? = null"))
+        // La agenda deportiva usa solo las se?ales del evento: sin respaldo a la casa.
+        assertFalse("sin fallback a la casa", player.contains("PLAYER_FAILOVER_XTV"))
+        assertFalse("sin puente de fallback", player.contains("GeeZapSignals.requestFallback"))
+        assertFalse("sin consumo de fallback", player.contains("GeeZapSignals.consumeFallback"))
+        assertFalse("sin campo house", player.contains("house"))
+        assertTrue("error claro al agotarse", player.contains("No se pudo reproducir este canal."))
+
+        val tabs = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/sports/GeeSportsTabs.kt")
+        assertFalse("sin filas XTV de la casa", tabs.contains("xtvPickRows"))
+        assertFalse("sin variable xtvRows", tabs.contains("xtvRows"))
+
+        val signals = requireSource("src/main/java/com/chronosbvrx/visionplus/ui/sports/GeeZapSignals.kt")
+        assertFalse("sin fallbackRequest", signals.contains("fallbackRequest"))
     }
 
     @Test

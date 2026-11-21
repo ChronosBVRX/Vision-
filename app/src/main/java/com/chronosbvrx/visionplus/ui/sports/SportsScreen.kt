@@ -491,7 +491,6 @@ fun SportsScreen(
             title = geeEventTitle(event),
             subtitle = geeEventSubtitle(event),
             links = event.links,
-            xtv = event.xtv,
             onDismiss = {
                 DeportesReturn.pickingId = null
                 DeportesReturn.forgetWatching()
